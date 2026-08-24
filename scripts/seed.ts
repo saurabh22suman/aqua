@@ -2,7 +2,7 @@ import { Pool } from "pg";
 import { env } from "@/lib/env";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
-import { db, pool } from "../db/client";
+import { pool } from "../db/client";
 import { withTenant } from "@/db/tenant";
 import { batches, locations, members, programs } from "@/db/schema";
 import { sessions as sessionsTable } from "@/db/schema/scheduling";
@@ -95,12 +95,16 @@ async function main() {
   const memberIds: string[] = [];
   for (let i = 1; i <= MEMBER_COUNT; i++) {
     const code = `AQUA-${String(i).padStart(3, "0")}`;
-    const existing = await db
-      .select({ id: members.id })
-      .from(members)
-      .where(eq(members.memberCode, code));
-    if (existing.length > 0) {
-      memberIds.push(existing[0].id);
+    const existingMemberId = await withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(eq(members.memberCode, code))
+        .limit(1);
+      return rows[0]?.id ?? null;
+    });
+    if (existingMemberId) {
+      memberIds.push(existingMemberId);
       continue;
     }
     const created = await createMember(

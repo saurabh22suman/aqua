@@ -196,7 +196,7 @@ Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenan
 **Never:** store a derived `is_minor`. Compute sessions on read.
 
 ### B8 · Server Actions and seed
-**Delivers:** first vertical slice through C-03, C-18, C-19, C-22 · **Stop level:** GREEN
+**Delivers:** first vertical slice through C-03, C-18, C-19, C-22 · **Stop level:** GREEN · **Status:** complete
 **Depends:** B7
 **Build:** Actions for create member, enrol, generate sessions, mark attendance. Every action opens with (1) Zod parse, (2) permission check. Attendance upserts on (session_id, member_id) by client_id — replaying the same client_id twice produces one row; tested. Seed script: one tenant, one location, two batches, twelve members, four weeks of sessions. Synthetic names only — real academy data arrives later, with consent.
 **Done when:** `pnpm seed`, then a scripted run marks a full register, replays it, and the row count is unchanged.
