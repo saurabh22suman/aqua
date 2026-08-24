@@ -48,6 +48,17 @@ export async function bootstrapRoles(connectionString: string): Promise<void> {
         grant select, insert, update, delete on tables to app_user;
     `);
 
+    await client.query(`
+      grant usage, select
+        on all sequences in schema public
+        to app_user;
+    `);
+
+    await client.query(`
+      alter default privileges in schema public
+        grant usage, select on sequences to app_user;
+    `);
+
     console.log("Roles bootstrapped: app_user (nologin), app_login (login, noinherit).");
   } finally {
     await client.end();
