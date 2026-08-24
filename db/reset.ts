@@ -16,10 +16,10 @@ async function main(): Promise<void> {
 
   console.log("public schema dropped.");
 
-  await runMigrations(env.MIGRATION_DATABASE_URL);
-
-  console.log("re-bootstrapping roles (default privileges do not survive schema drops)...");
+  console.log("bootstrapping roles before migrating (invariant: bootstrap precedes migrate)...");
   await bootstrapRoles(env.MIGRATION_DATABASE_URL);
+
+  await runMigrations(env.MIGRATION_DATABASE_URL);
 }
 
 main().catch((err) => {

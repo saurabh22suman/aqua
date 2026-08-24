@@ -150,11 +150,13 @@ alter table members enable row level security;
 alter table members force row level security;
 
 create policy tenant_isolation on members
-  using (tenant_id = current_setting('app.tenant_id', true)::uuid)
-  with check (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  using (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  with check (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 ```
 
 `force row level security` matters — without it, the table owner bypasses policies entirely.
+
+The `nullif` wrapper is load-bearing: once a pooled connection has served a `set_config` transaction, `current_setting('app.tenant_id', true)` reverts to the empty string rather than NULL, so an unguarded cast turns any accidental unscoped query into a confusing `invalid input syntax for type uuid` error. With `nullif`, no context means zero rows — uniform, fail closed.
 
 The application connects as a role that is **not** the table owner and has no `BYPASSRLS`. Authentication is separated from privilege: `app_login` may connect but, being `NOINHERIT`, holds no grants of its own — only `SET ROLE` empowers it:
 
@@ -1258,7 +1260,7 @@ alter table audit_log enable row level security;
 alter table audit_log force row level security;
 
 create policy tenant_isolation on audit_log
-  using (tenant_id = current_setting('app.tenant_id', true)::uuid);
+  using (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 ```
 
 Rows with NULL `tenant_id` are platform actions; they are invisible to tenant-scoped requests, and platform reads go through the privileged role. Deliberately **not** allowlisted for F-08a: this table records who looked at pay data, and an allowlist would let any future unscoped query path read it across all tenants. Tenants read their own trail through the normal accessor — which is why index quality matters here despite the bigserial carve-out (§8.1).

@@ -92,6 +92,15 @@ batch, mutate the thing and confirm the test fails, then restore:
 - [ ] Weaken one assertion to `toBeDefined()` → mutation gate fails
       (once S-05b lands).
 
+The first three are built into the suite itself:
+`ISOLATION_MUTATE=drop-policy|no-force|bare-table pnpm exec vitest run tests/tier1/isolation.test.ts`
+must go RED in all three forms; a plain run goes back to green.
+
+Also verify the no-context contract on a WARM connection: after any
+`withTenant` call has run on the pool, an unscoped query must return
+zero rows (`nullif` policies), never error 22P02 and never leak rows.
+Covered by the fourth isolation test.
+
 Record what went red. A mutation that did NOT turn anything red is a
 coverage hole — open a task for it before moving on.
 

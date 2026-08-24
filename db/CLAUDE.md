@@ -11,6 +11,9 @@
   use relative imports (`./client`).
 - Migrations are forward-only plain SQL in `db/migrations`. Never edit
   an applied migration. Never put secrets in one.
+- Invariant: `bootstrap-roles` ALWAYS runs before migrations on any
+  fresh database — some migrations grant to `app_user`, and the roles
+  must exist by then. `db/reset.ts` maintains this order.
 - After any `drop schema` (e.g. `pnpm db:reset`) roles/default
   privileges must be re-bootstrapped — `db/reset.ts` chains this; keep
   it that way.

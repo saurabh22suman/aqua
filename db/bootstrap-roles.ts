@@ -5,8 +5,10 @@ function quotePassword(password: string): string {
   return `'${password.replace(/'/g, "''")}'`;
 }
 
-export async function bootstrapRoles(connectionString: string): Promise<void> {
-  const password = env.APP_LOGIN_PASSWORD;
+export async function bootstrapRoles(
+  connectionString: string,
+  password: string = env.APP_LOGIN_PASSWORD ?? "",
+): Promise<void> {
   if (!password || password.trim() === "") {
     throw new Error(
       "APP_LOGIN_PASSWORD is not set. Refusing to bootstrap app_login without a password.",

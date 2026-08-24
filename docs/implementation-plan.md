@@ -174,7 +174,7 @@ Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenan
 **Never:** read `app.tenant_id` from a cookie, header or request parameter — it comes from the validated route/session context.
 
 ### B5 · Isolation gate — BLOCKING
-**Delivers:** F-08, F-08a (+ S-05a harness) · **Stop level:** RED
+**Delivers:** F-08, F-08a (+ S-05a harness) · **Stop level:** RED · **Status:** complete
 **Depends:** B4
 **Build:** Testcontainers real Postgres 16. `tests/tier1/isolation.test.ts`: (1) unscoped query returns only current tenant's rows; (2) hostile query explicitly naming another tenant's id returns nothing; (3) `current_user` is `app_user` on a fresh connection; (4) catch-all querying pg_class for any public table where `relrowsecurity` or `relforcerowsecurity` is false, excluding the `RLS_EXEMPT_TABLES` allowlist from `db/allowlist.ts`; assert empty. Then prove the tests can fail: drop one policy → red → restore; remove force → catch-all red → restore; add a tenant_id table with no RLS → caught without a per-table test.
 **Done when:** suite green AND mutations (b), (c), (d) each demonstrably turn it red. A green test proves nothing; only the mutations prove it would notice a real failure. Blocks B6 and everything after.
