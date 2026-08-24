@@ -1,0 +1,298 @@
+STAGE 1 — SIX PROPOSALS FOR BLOCKING DEFECTS
+(No files edited. Awaiting approval before any change.)
+
+=====================================================================
+PROPOSAL 1 — persons.is_minor: computed at read, not stored
+=====================================================================
+
+RECOMMENDATION: remove the column; derive at read time. Minor-ness depends
+on current_date by definition, so ANY persisted value is either invalid DDL
+(generated) or stale (nightly job — wrong for up to 24 hours, precisely on
+the birthday that flips consent requirements).
+
+DDL (final form of the table region):
+
+    create table persons (
+      id            uuid primary key,
+      tenant_id     uuid not null references tenants(id),
+      full_name     text not null,
+      phone         text,
+      email         text,
+      date_of_birth date,
+      gender        text,
+      photo_key     text,
+      notes         text,
+      deleted_at    timestamptz,
+      created_at    timestamptz not null default now()
+    );
+    -- no is_minor column anywhere
+
+Canonical read expression, wrapped once in the schema layer so it exists in
+exactly one place:
+
+    // db/schema/persons.ts
+    export const IS_MINOR_SQL = sql`
+      (persons.date_of_birth is not null
+       and persons.date_of_birth > current_date - interval '18 years')`;
+
+    // lib/people.ts — application side
+    export function isMinor(dob: Date | null, todayIst: string): boolean {
+      return dob !== null && isoDate(dob) > shiftYears(todayIst, -18);
+    }
+
+Consent gating (C-05), parent-page logic, and reporting filters all use the
+same expression. If a filter-heavy report ever needs it indexed, add an
+expression index on the predicate — no schema change to persons.
+
+TRADE-OFFS
+
+  Option                        Correctness                    Cost
+  ----------------------------  -----------------------------  -------------------------
+  Computed at read (proposed)   Always correct, including      Expression repeated via
+                                mid-day birthday crossings     one shared helper; no
+                                                               bare column to index
+  View (v_persons) exposing     Same correctness               Second object to maintain;
+  is_minor                                                     Drizzle + RLS get murkier
+                                                               for marginal gain
+  Nightly job updating a        Stale up to 24h — fails        Job infra + drift risk
+  real column                   C-01's own acceptance          (exactly on birthdays)
+
+GUARDRAIL REQUIRED REGARDLESS: current_date follows the session timezone.
+Set the database (and every app session) to Asia/Kolkata, or compute the
+comparison date in IST in application code — otherwise a child born late
+evening flips status at the wrong instant.
+
+C-01 acceptance reworded to: "a person whose eighteenth birthday passes
+today reads as an adult immediately, without any batch process".
+
+=====================================================================
+PROPOSAL 2 — app_user: connect as a login role, then SET ROLE
+=====================================================================
+
+RECOMMENDATION: keep app_user NOLOGIN (architecture.md §5.3 stays as
+written) and connect as a dedicated login role that is a member of it.
+This separates authentication (rotatable credential) from privileges
+(grants on app_user), and leaves the doc's existing DDL untouched.
+
+DDL:
+
+    -- the privilege holder — unchanged from architecture.md §5.3
+    create role app_user nologin;
+    grant select, insert, update, delete on all tables in schema public to app_user;
+    alter default privileges in schema public
+      grant select, insert, update, delete on tables to app_user;
+
+    -- the authenticator — new
+    create role app_login login password '<from secret store>';
+    grant app_user to app_login;   -- membership authorises SET ROLE
+
+    -- migrations keep a separate privileged role (already implied by F-05)
+    -- MIGRATION_DATABASE_URL points at that role, never at app_login
+
+Connection-time code (db/client.ts) — drop privileges once per PHYSICAL
+connection; tenant context stays per-transaction via set_config, which is
+unaffected by role:
+
+    const pool = new Pool({ connectionString: env.DATABASE_URL });
+
+    pool.on("connect", (client) => {
+      return client.query("set role app_user");
+    });
+
+    export const db = drizzle(pool, { schema });
+
+WHY NOT SIMPLY "alter role app_user login": it works, but then the
+grant-holding role carries a live password forever, and credential rotation
+touches the role that owns the grants. The two-role split costs one line
+and one pool event.
+
+TRADE-OFF TO ACCEPT: with an external transaction-mode pooler (PgBouncer),
+SET ROLE per physical connection breaks. The stack (Railway/Render/Fly/
+Hetzner) implies direct connections today; if a transaction pooler is ever
+introduced, switch app_user to LOGIN and point DATABASE_URL at it — one-line
+operational change, no code change.
+
+F-05 gains one acceptance line: "a fresh physical connection cannot read
+tenant rows until SET ROLE app_user succeeds" (the isolation test already
+proves the substance).
+
+=====================================================================
+PROPOSAL 3 — plans DDL
+=====================================================================
+
+Platform-level table (no tenant_id, no RLS — joins the platform allowlist):
+
+    create table plans (
+      id          uuid primary key,
+      key         text unique not null,               -- 'standard'
+      name        text not null,
+      status      text not null default 'active',     -- active | deprecated
+      price_paise bigint,                             -- NULL = deliberately unpriced (see Proposal 6)
+      currency    text not null default 'INR',
+      is_default  boolean not null default false,
+      sort_order  int  not null default 0,
+      created_at  timestamptz not null default now(),
+      updated_at  timestamptz not null default now(),
+      updated_by  uuid
+    );
+
+Notes: deprecation instead of soft delete (plans are few and referenced by
+history); per-feature quotas stay where they already live —
+plan_features.limits jsonb; no billing-period column yet because our own
+SaaS subscription billing is Phase 4 and must not be guessed now.
+
+=====================================================================
+PROPOSAL 4 — Identity and authorisation DDL (five tables + linkage)
+=====================================================================
+
+LINKAGE DECISION FIRST: Better Auth manages its own internal tables and is
+flagged "young, moving fast" (architecture.md §3.2). Do NOT let its schema
+become canonical identity. Our users table stores a nullable better_auth_id
+reference — library churn then costs a data backfill, not a model rewrite.
+
+Chain: Better Auth user -> users -> persons <- staff
+
+    -- GLOBAL identity (no tenant_id — see allowlist note below)
+    create table users (
+      id              uuid primary key,
+      better_auth_id  text unique,                    -- Better Auth user.id, set at signup
+      person_id       uuid references persons(id),    -- nullable; linked when the human exists
+      phone           text unique not null,           -- primary auth factor
+      email           text,
+      last_login_at   timestamptz,
+      deleted_at      timestamptz,
+      created_at      timestamptz not null default now(),
+      updated_at      timestamptz not null default now(),
+      created_by      uuid,
+      updated_by      uuid
+    );
+    create index on users (person_id) where deleted_at is null;
+
+    -- TENANT-SCOPED
+    create table roles (
+      id          uuid primary key,
+      tenant_id   uuid not null references tenants(id),
+      key         text not null,                      -- template key ('coach'); seeding/analytics only
+      name        text not null,                      -- editable display name
+      is_system   boolean not null default false,     -- seeded-from-template flag, editable like any other
+      deleted_at  timestamptz,
+      created_at  timestamptz not null default now(),
+      updated_at  timestamptz not null default now(),
+      updated_by  uuid,
+      unique (tenant_id, key)
+    );
+
+    create table role_permissions (
+      role_id        uuid not null references roles(id) on delete cascade,
+      permission_key text not null references permissions(key),
+      granted_by     uuid,
+      granted_at     timestamptz not null default now(),
+      primary key (role_id, permission_key)
+    );
+
+    create table tenant_memberships (
+      id            uuid primary key,
+      tenant_id     uuid not null references tenants(id),
+      user_id       uuid not null references users(id),
+      role_id       uuid not null references roles(id),
+      all_locations boolean not null default true,    -- when true, location_ids is ignored
+      location_ids  uuid[] not null default '{}',
+      status        text not null default 'invited',  -- invited | active | revoked
+      invited_by    uuid,
+      joined_at     timestamptz,
+      created_at    timestamptz not null default now(),
+      updated_at    timestamptz not null default now(),
+      updated_by    uuid,
+      unique (tenant_id, user_id)
+    );
+    create index on tenant_memberships (tenant_id, user_id);
+
+    -- PLATFORM-LEVEL closed list (seeded by migrations, not editable per tenant)
+    create table permissions (
+      key         text primary key,                   -- 'members.read'
+      module      text not null,                      -- feature-module this belongs to
+      description text not null
+    );
+
+Staff linkage (one line added to C-04):
+
+    alter table staff add column user_id uuid references users(id);
+    -- one login per staff record; a coach who is also a member is one person
+    -- (users.person_id) with one login and two business roles
+
+RLS: roles and tenant_memberships are tenant-scoped and get the standard
+enable/force/policy treatment per db/CLAUDE.md; users and permissions carry
+no tenant_id and join the platform allowlist — this is the FIRST CONCRETE
+CONTENT of the allowlist F-08a assumes, and it feeds the Stage-3B audit_log
+decision.
+
+=====================================================================
+PROPOSAL 5 — webhook_events DDL
+=====================================================================
+
+    create table webhook_events (
+      id                uuid primary key,             -- OUR uuid v7, never the provider's id
+      provider          text not null,                -- 'razorpay'
+      provider_event_id text not null,
+      payload           jsonb not null,               -- raw body, stored before interpretation
+      received_at       timestamptz not null default now(),
+      processed_at      timestamptz,
+      unique (provider, provider_event_id)
+    );
+    create index on webhook_events (received_at);
+
+UNIQUENESS: (provider, provider_event_id) — the onConflictDoNothing() in
+architecture.md §10.2 dedupes against exactly this pair.
+
+CORRECTION REQUIRED ALONGSIDE: the §10.2 snippet currently inserts
+{ id: event.id } (Razorpay's id as our PK). The snippet changes to generate
+our own UUID and put theirs in provider_event_id — flagged so Stage 2 or
+the C-37 task picks it up.
+
+RETENTION RULE: 90 days. Disputes and settlement mismatches surface well
+inside that; beyond it the payment/invoice rows are the record of truth.
+Purge runs as a nightly job webhooks.purge added to the architecture.md §9
+table. Table is global (provider payloads carry no tenant_id at ingest; the
+worker resolves tenant during processing) — second confirmed member of the
+F-08a allowlist, with processed_at doubling as the debug handle for
+dead-lettered events.
+
+=====================================================================
+PROPOSAL 6 — F-01: unpriced "standard" plan (endorsed + 2 refinements)
+=====================================================================
+
+The proposed resolution is right and nothing better exists: entitlement
+resolution reads plan_features, not price. Prices are data on plans, so the
+undecided pricing question becomes a week-20 UPDATE, not a migration.
+Adopting with two refinements:
+
+  1. plans.price_paise is explicitly NULLABLE (Proposal 3) so "unpriced"
+     is a legal state rather than a sentinel 0.
+  2. tenants.plan_id defaults to the standard plan, so the provisioning CLI
+     (F-25) never invents ad-hoc plans.
+
+REWRITTEN F-01:
+
+> ### F-01 · Platform schema
+> **Depends:** S-04
+> **Build:** `plans`, `features`, `plan_features`, `presets`, `permissions`.
+> Platform-level, no RLS.
+> **Done when:** migration applies; seed inserts the feature catalogue and
+> exactly one plan — `standard`, `is_default = true`, `price_paise = NULL` —
+> holding every Phase-1 feature with empty limits; a test tenant resolves its
+> effective feature set through plan baseline alone; and applying the eventual
+> pricing decision (scope §2.5, options A/B/C) requires ONLY seed/data changes
+> — verified by inserting a second plan and flipping tenants.plan_id in a test
+> with zero schema edits.
+> **Never:** encode pricing-model assumptions (tiers, slabs, per-feature
+> prices) in schema or code while scope §2.5 is undecided.
+
+RELATED KNOCK-ON handled here rather than silently: scope §12's "Net revenue
+retention above 100% via slab upgrades" presumes slabs that §2.5 kills — it
+should be reworded to "via plan upgrades" when Stage 2 touches scope.
+Flagged so it isn't lost; to be included in Stage 2 unless overruled.
+
+=====================================================================
+END OF STAGE 1 PROPOSALS — STOPPED. No file edited.
+Awaiting approval or amendments before Stage 2.
+=====================================================================

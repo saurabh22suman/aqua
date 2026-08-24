@@ -1,0 +1,317 @@
+DOCUMENTATION REVIEW — AQUA
+Reviewed: docs/project-scope.md, docs/architecture.md, DESIGN.md,
+docs/implementation-plan.md, docs/testing-strategy.md, docs/agent-setup.md
+Scope of review: report only. Nothing was fixed.
+
+=====================================================================
+## 1. Understanding
+=====================================================================
+
+Aqua is a multi-tenant SaaS operating system for sports academies and
+recreation facilities in India, launched vertically into swimming clubs
+(reference tenant: Aqua Club, pool + café). Tenants configure the product
+through feature entitlements and presets rather than code forks — one
+deployment, shared Postgres schema, RLS-enforced isolation.
+
+The lead differentiator is batch profitability (revenue net of coach cost),
+which no competitor surfaces; secondary wedges are zero commission on
+payments and role-shaped interfaces (owner/coach/receptionist/worker/parent
+each get distinct surfaces; parents get WhatsApp magic links, never
+accounts).
+
+Competitive reality: collections/UPI auto-debit was the original wedge but
+GymForce already claims it in gyms; pricing must sit under ₹1,000–3,500/month
+against Sportia's ₹999 flat, so economics demand boring infrastructure
+(monolith, single DB, pg-boss) and metered WhatsApp costs.
+
+Delivery is AI-agent-driven against a 137-task plan (Phases 0–3, go-live at
+end of Phase 3), with tiered testing where humans own Tier 1 tests because
+agents cannot be trusted to test their own misunderstandings.
+
+Open strategic wound: distribution has no owner and no plan.
+
+=====================================================================
+## 2. Contradictions
+=====================================================================
+
+STRUCTURE ERRORS THAT MAKE CITATIONS AMBIGUOUS
+-----------------------------------------------
+1. project-scope.md has TWO sections numbered §2.5 ("Pricing model —
+   revised", line 109; "Unit economics — worked example", line 131) and TWO
+   numbered §5.11 ("Operations", line 422; "Café and commerce", line 432).
+   Every cross-reference to §2.5 or §5.11 in any document is ambiguous.
+
+2. architecture.md §17 repo structure lists root files "ARCHITECTURE.md"
+   and "DESIGN.md". There is no ARCHITECTURE.md anywhere; the architecture
+   doc lives at docs/architecture.md.
+
+3. DESIGN.md line 5: "Reference implementation: `sports-club-ui-direction.html`"
+   — no path given; the file exists only at docs/sports-club-ui-direction.html,
+   unresolvable relative to DESIGN.md at root. Conversely,
+   docs/how-it-works.html exists and is referenced by no document.
+
+NUMBERS THAT DISAGREE
+---------------------
+4. Font budget — project-scope.md §8 Design scope: "~40 KB total" vs
+   DESIGN.md §1.3: "Combined budget 45 KB" and implementation-plan.md S-02:
+   "total font payload under 45 KB".
+
+5. Task count — implementation-plan.md header: "Task count | 126".
+   Actual count: D:8 + S:9 (incl. S-05a/b) + F:27 (incl. F-08a) + C:48 +
+   V:45 (incl. V-15a) = 137.
+
+6. Duration — implementation-plan.md header: "Estimated duration | 22–26
+   weeks". Its own components sum to 23–27 (Phase 0: 2 wks + Setup: ~1 wk +
+   Phase 1: 5–6 + Phase 2: 8–10 + Phase 3: 7–8). Scope §10 and architecture
+   §19 agree with the components, not the header.
+
+7. Touch targets — project-scope.md §6.4: "Minimum touch target 44 × 44 px";
+   DESIGN.md §2: "Touch targets 44 × 44px minimum" vs implementation-plan.md
+   C-23: "separate 40 px present and absent targets".
+
+8. Pricing example — project-scope.md §2.5 (unit economics) bills
+   "A 300-member academy on the ₹2,900 slab". That price exists in no live
+   option: §2.5 (revised model) offers A ₹1,499 flat, B ₹999/₹2,499,
+   C ₹999/₹1,799/₹2,799/₹3,999. Also §2.4 sets the ceiling at
+   "roughly ₹1,000–3,500/month" — option C's top band ₹3,999 breaches it.
+
+9. DESIGN internal — §1.4: "Spacing: multiples of 4px only" vs its own
+   snippets using mb-1.5 (6px), px-2.5 (10px), py-3.5 (14px) (§3 lane strip,
+   status pill, primary action).
+
+PHASE/TIMING CONFLICTS
+----------------------
+10. Accent colour — project-scope.md §5.1: "Constrained accent colour, six
+    approved values | P4 — see §5.16" vs implementation-plan.md F-19
+    (Phase 1): "Frozen six-entry `ACCENTS` map…" and architecture.md §7.5
+    putting `accent` in tenant branding from creation.
+
+11. Daily reconciliation — project-scope.md §5.6: "Daily collection summary
+    and cash reconciliation | P3" vs implementation-plan.md C-34 (Phase 2):
+    "Daily reconciliation".
+
+12. Holiday calendar — project-scope.md §5.1: "Settings, business hours,
+    holidays, closures | P1" and F-23 (Phase 1) builds a "holiday calendar"
+    vs §5.10 shift section: "Holiday calendar per location | P3". Meanwhile
+    C-19 (Phase 2) must generate sessions "respecting holidays and closures"
+    — before §5.10 delivers them.
+
+13. In-app notification centre — project-scope.md §5.9: "In-app notification
+    centre | P3" vs §10 Phase 4 scope: "…referrals, waitlists, in-app
+    notifications, scheduled reports…".
+
+14. Expenses in P&L — implementation-plan.md V-37 (Phase 3): "Collections
+    minus staff cost minus recorded expenses" vs project-scope.md §5.6:
+    "Expenses and petty cash | P5".
+
+PROCESS/TOOLING CONFLICTS
+-------------------------
+15. Package manager — implementation-plan.md DoD: "`npm run typecheck`…"
+    and architecture.md §13.3: "npm run build / npx bundlesize" vs
+    testing-strategy.md §6 (`pnpm typecheck/test:unit/…`) and agent-setup.md
+    §2.1 ("pnpm | latest") plus the drafted CLAUDE.md ("pnpm typecheck && …").
+
+16. Stale task table — testing-strategy.md §7 presents S-05a, S-05b, F-08a as
+    additions "to insert" into the plan; all three already exist in
+    implementation-plan.md. Its other two entries — C-28a and V-33a — are
+    tasks that do NOT exist in implementation-plan.md.
+
+17. Misdirected cross-reference — architecture.md §3.2 (Better Auth risk):
+    "Budget extra time on F-04 and F-12." Better Auth work lives in
+    F-09/F-10/F-11; F-04 seeds role templates and involves no auth library.
+
+SCHEMA CONVENTIONS VS SCHEMA EXEMPLARS
+--------------------------------------
+18. Audit columns — architecture.md §8.1: "created_at, updated_at,
+    created_by, updated_by on every table. Applied without exception" vs
+    §8.2–8.9 DDL, which omits them almost everywhere (e.g., `tenants` has
+    only created_at; `batches`, `sessions`, `payments` have none).
+
+19. Primary keys — §8.1: "Primary keys are UUID v7 … Applied without
+    exception" vs §8.10: audit_log uses "bigserial primary key".
+
+20. Index rule — §8.1: "Every index begins with tenant_id" vs unique
+    constraints on enrolments(member_id, batch_id, enrolled_on),
+    sessions(batch_id, session_date), attendance(session_id, member_id),
+    shifts(staff_id, shift_date, start_at),
+    staff_attendance(staff_id, work_date), and the bookings exclusion
+    constraint keyed on facility_id.
+
+21. Invalid DDL — persons.is_minor (§8.3) is "generated always as
+    (… current_date - interval '18 years') stored". Postgres rejects
+    non-immutable expressions in generated columns; this migration will not
+    apply. It also contradicts C-01's own acceptance: "is_minor computes
+    correctly and updates as a date of birth crosses eighteen."
+
+22. Connection identity — architecture.md §5.3: "create role app_user
+    nologin" and F-05: "Application connects as `app_user`". A NOLOGIN role
+    cannot open a connection; the connect-as-login-role-then-SET ROLE
+    mechanic is unspecified.
+
+23. Vocabulary nit — project-scope.md §5.16 lists example words "swimmer,
+    player, student, member, trainee" while §5.15 gym preset terminology is
+    "trainer".
+
+=====================================================================
+## 3. Unstated assumptions
+=====================================================================
+
+Numbers and rules presented without source or derivation:
+
+- COACH PAY: "A 4-student batch with a coach on ₹800 a session loses ₹5,600
+  a month" (project-scope.md §1). Neither rate nor loss is derived; the real
+  figures are explicitly unknown until Phase 0 (D-03, D-06).
+
+- WHATSAPP COSTS: "~1,800 msgs @ ~₹0.15 incl. BSP markup" and 18% GST (§2.5
+  unit economics); "Marketing templates cost roughly seven to eight times
+  what utility templates cost" (§2.5, architecture.md §11.2, standing
+  rules). No BSP chosen (open question #4); pricing is a Meta/BSP claim
+  nobody has verified.
+
+- UNIT-ECONOMICS FILLERS: infrastructure share −₹150/month, support
+  "amortised, ~20 min/month" −₹250 (§2.5). Both invented; the 75%
+  contribution figure and the §12 ">70% gross margin" success metric
+  inherit them.
+
+- PRICING OPTIONS THEMSELVES: ₹1,499 / ₹999 / ₹2,499 / four-band ladder
+  (§2.5) — no willingness-to-pay or cost basis given; the ₹1,000–3,500
+  "ceiling" rests on vendor marketing the doc itself discredits (§2.2
+  research note).
+
+- MARKET DATA: 226 academy companies, $1.37M decade funding, $254M market @
+  6.85% CAGR (§2.3) — attributed to Tracxn but unverifiable in-repo; PayLap
+  "₹3,499 for twelve months" and Akton "₹89 per unit" (§2.2) use unexplained
+  units.
+
+- RBI MANDATE BAND: "recurring auto-debits up to ₹15,000 per transaction
+  clear without additional authentication" (§7.3, architecture.md §10.4)
+  asserted confidently while the adjacent notification window is flagged
+  "24 versus 72 — verify". Asymmetric confidence in two halves of the same
+  regulation.
+
+- TAX DEFAULT: tax_rate_bp int not null default 1800 (architecture.md §8.6)
+  hard-codes an assumption that everything is taxable at 18%; no SAC/HSN
+  mapping exists anywhere.
+
+- DUNNING INTERVALS 3/7/14/30 days (architecture.md §9, V-14) and config
+  defaults late_threshold_minutes: 10, max_days_ahead: 30,
+  cancellation_window_hours: 4 (§7.2) — plausible, entirely arbitrary.
+
+- SCALE PROJECTIONS: 25–50 tenants, ~50k people, 500k sessions/year, 6M
+  attendance rows/year, <200 concurrent, <50 writes/s (§2) — modelled from
+  nothing observable.
+
+- ENGINEERING THRESHOLDS: partition at ~10M rows, pg-boss to ~1,000
+  jobs/min, page at >1% error rate / >80% DB connections (§8.5, §3.1, §14).
+
+- UX BENCHMARKS USED AS ACCEPTANCE CRITERIA: member added "<ninety seconds"
+  (C-06), 16 students marked "under sixty seconds" (C-23), walk-in booked
+  "under a minute" (V-04), QR check-in "under five seconds" (V-25). None
+  observed; D-01 may falsify them.
+
+- POLICY CONSTANTS WITH NO ORIGIN: OTP 6 digits/5 min/5 attempts, magic-link
+  7-day expiry, brand assets 500 KB/512 px, backups 30-day retention,
+  sessions generated eight weeks ahead, uptime 99.5%.
+
+- LEAVE BALANCES: leave_types.annual_quota implies calendar-year grants, but
+  accrual/carryover/proration rules are nowhere stated, yet V-26's
+  acceptance is "balances decrement correctly".
+
+=====================================================================
+## 4. Gaps that block work
+=====================================================================
+
+- F-01 — Cannot complete as written. (a) Acceptance says "seed inserts the
+  plan slabs from scope §2.4": §2.4 contains no slabs (wrong
+  cross-reference; slabs are §2.5, which voids them), and the pricing model
+  is explicitly undecided "before Phase 3" — after F-01 runs.
+  (b) The `plans` table has NO DDL in any document, though `features`,
+  `plan_features`, and `tenants.plan_id` all reference it.
+
+- C-01 — Blocked by the invalid is_minor DDL (contradiction #21). Needs a
+  design decision (view, computed-at-read, or nightly update) before the
+  migration can exist.
+
+- F-03/F-04 — users, tenant_memberships, roles, permissions,
+  role_permissions are named but never specified in any schema section;
+  only architecture.md §19 mentions them in passing. Session linkage between
+  Better Auth identities and persons/staff is undefined.
+
+- C-37/C-38 — webhook_events table (used in architecture.md §10.2 code) has
+  no DDL; uniqueness key and retention unspecified.
+
+- C-12/C-14/C-15 — enquiries, trial outcomes, and conversion-attribution
+  fields have no schema.
+
+- C-07 — Documents table absent (only prose about R2 keys and signed URLs).
+
+- V-18 — Makeup credits: "an excused absence grants exactly one makeup
+  credit" requires an entitlement ledger and redemption rule defined nowhere.
+
+- V-21 — Per-member QR: format, storage, rotation, and session-matching
+  window unspecified.
+
+- V-15a/V-16 — The pre-debit window is unresolved by the documents' own
+  admission; mandates.prenotify runs at fixed 08:00 IST, which cannot be
+  validated against an unknown window. External Razorpay-doc dependency sits
+  on the critical path to auto-debit.
+
+- C-32 — Acceptance demands a "GST-valid" invoice including HSN/SAC codes;
+  no SAC mapping for coaching/swimming services exists in any document.
+
+- DPDP OBLIGATIONS WITH NO TASKS: project-scope.md §7.1 schedules privacy
+  policy/DPA per tenant (P2), consent withdrawal, data export,
+  deletion/erasure workflow, breach runbook (all P3) — none appears in any
+  Phase 2/3 task. V-44 (go-live gate) can pass while legally mandated
+  workflows are unbuilt.
+
+- EMAIL FALLBACK — §5.9 marks it P2; C-40–C-43 build WhatsApp only. No
+  email-sending task exists.
+
+- OPERATIONS MODULE — §5.11 marks task assignment, maintenance schedule/log,
+  and worker daily view P3; no tables and no tasks among V-01…V-44 build
+  them, yet architecture.md §13.2 reserves `(worker)/tasks` routes and F-22
+  ships worker navigation.
+
+- ENQUIRY FUNNEL REPORT — §5.12 marks "Enquiry funnel and conversion" P3;
+  C-15 only guarantees conversion-by-source. No funnel task.
+
+- PHASE-TAGGED ORPHANS — Recurring/block bookings (§5.7, P4), announcements
+  (§5.9, P4), bulk NEFT/RTGS payroll export (§5.10, P5) appear in no
+  Phase 4/5 epic list (implementation-plan.md, "Phases 4 to 6").
+
+- F-08a VS AUDIT_LOG — The catch-all RLS assertion queries for any table
+  without forced RLS outside an allowlist. audit_log has nullable
+  tenant_id; whether it is allowlisted or policied (and with what policy) is
+  undecided, so the gate's behaviour on it is undefined.
+
+- IMPORTER IDEMPOTENCY — architecture.md §16 requires "idempotent re-import
+  via an external reference column"; C-09/C-10/C-11 acceptance criteria omit
+  it.
+
+- TIER 1 INVENTORY — testing-strategy.md §2 budgets "roughly fifteen test
+  files" of human-owned tests but enumerates only five areas; guard.sh makes
+  these files read-only to agents, so the file set must exist before S-05b
+  and doesn't.
+
+=====================================================================
+## 5. First three questions
+=====================================================================
+
+1. WHICH PRICING MODEL — A, B, OR C? F-01 seeds plans in week ~4 of Phase 1,
+   F-13 builds entitlement resolution on it, quota limits and the §12 NRR
+   metric depend on it — yet the decision is deferred to "before Phase 3".
+   Everything platform-side downstream of plan_features is guesswork until
+   this lands.
+
+2. WHAT ARE AQUA CLUB'S ACTUAL COACH PAY STRUCTURES AND FEE ARRANGEMENTS?
+   (Phase 0, D-03/D-06.) The lead differentiator — batch profitability — is
+   a formula over data whose real shape nobody has written down; if pay is
+   not actually session-derived, V-30/V-36 and the entire positioning
+   statement change.
+
+3. WHERE DO TENANTS 2–10 COME FROM? Scope §11 rates distribution High
+   likelihood/High impact and admits "Nothing in this plan addresses
+   distribution"; open question #1 confirms no owner. If the answer is
+   "nobody knows", Phase 4's exit criteria (three to five paying tenants)
+   are fiction and the build order itself is arguable.

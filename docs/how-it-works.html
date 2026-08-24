@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aqua — how it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --deck:#EDF0EC; --paper:#fff; --ink:#0F1F1C; --ink-2:#3C534F; --ink-3:#7B918D;
+  --marine:#0D3B36; --water:#0E7C86; --water-soft:#E3F1F2;
+  --mango:#FF7A18; --mango-soft:#FFEEE1;
+  --good:#2E9E5B; --good-soft:#E4F4EA; --late:#D8453C; --late-soft:#FCE9E7;
+  --line:rgba(15,31,28,.1);
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"Instrument Sans",system-ui,-apple-system,sans-serif;
+  --sh:0 2px 6px rgba(15,31,28,.05), 0 14px 32px rgba(15,31,28,.07);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--body);background:var(--deck);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased}
+.wrap{max-width:920px;margin:0 auto;padding:0 22px}
+h1,h2,h3{font-family:var(--display);letter-spacing:-.02em;font-weight:600;line-height:1.2}
+h1{font-size:clamp(32px,6vw,50px)}
+h2{font-size:clamp(24px,4vw,32px);margin-bottom:10px}
+h3{font-size:19px}
+p{color:var(--ink-2)}
+section{padding:56px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:0}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mango);margin-bottom:12px}
+.lede{font-size:17px;max-width:62ch;margin-top:8px}
+
+header{background:var(--marine);color:#fff;padding:72px 0 80px;position:relative;overflow:hidden}
+header svg{position:absolute;bottom:-2px;left:0;width:100%;opacity:.13}
+header .wrap{position:relative}
+header h1{color:#fff;max-width:16ch}
+header p{color:#A9CCC6;font-size:18px;max-width:54ch;margin-top:18px}
+.tag{display:inline-block;background:rgba(255,255,255,.12);color:#CDE6E1;font-size:12.5px;font-weight:500;padding:6px 14px;border-radius:999px;margin-bottom:22px}
+
+.card{background:var(--paper);border-radius:20px;padding:24px;box-shadow:var(--sh)}
+.grid{display:grid;gap:16px;margin-top:26px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+
+.who .ic{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;font-size:19px;margin-bottom:14px}
+.who h3{margin-bottom:6px}
+.who p{font-size:14px}
+.who ul{list-style:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.who li{font-size:13.5px;color:var(--ink-2);padding:4px 0 4px 18px;position:relative}
+.who li::before{content:"";position:absolute;left:0;top:12px;width:6px;height:6px;border-radius:50%;background:var(--water)}
+
+.day{margin-top:28px;position:relative;padding-left:74px}
+.day::before{content:"";position:absolute;left:29px;top:14px;bottom:22px;width:2px;background:var(--line)}
+.step{position:relative;margin-bottom:20px}
+.step .t{position:absolute;left:-74px;top:16px;width:58px;text-align:right;font-family:var(--display);font-size:14px;font-weight:600;color:var(--ink-3)}
+.step::before{content:"";position:absolute;left:-51px;top:22px;width:12px;height:12px;border-radius:50%;background:var(--water);border:3px solid var(--deck)}
+.step.mo::before{background:var(--mango)}
+.step .card{padding:18px 20px}
+.step h3{font-size:16px;margin-bottom:4px}
+.step p{font-size:14px}
+.step .by{display:inline-block;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--water-soft);color:var(--water);margin-bottom:8px}
+.step .by.o{background:var(--mango-soft);color:#B84E00}
+.step .by.p{background:var(--good-soft);color:#1E7343}
+
+.flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;margin-top:26px}
+.node{flex:1 1 150px;background:var(--paper);border-radius:16px;padding:16px;box-shadow:var(--sh);min-width:140px}
+.node b{font-family:var(--display);font-size:14.5px;display:block;margin-bottom:4px}
+.node span{font-size:12.5px;color:var(--ink-3);line-height:1.45;display:block}
+.arw{display:grid;place-items:center;color:var(--ink-3);font-size:20px;flex:0 0 auto}
+@media(max-width:640px){.arw{transform:rotate(90deg);width:100%;padding:2px 0}.node{flex:1 1 100%}}
+
+.switch{margin-top:26px}
+.switch .hub{background:var(--marine);color:#fff;border-radius:20px;padding:22px 24px;text-align:center}
+.switch .hub b{font-family:var(--display);font-size:19px;font-weight:600;display:block}
+.switch .hub span{color:#9CC4BE;font-size:14px}
+.legs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-top:14px}
+.leg{background:var(--paper);border-radius:18px;padding:18px;box-shadow:var(--sh)}
+.leg b{font-family:var(--display);font-size:15px;display:block;margin-bottom:12px}
+.sw{display:flex;align-items:center;gap:9px;font-size:13px;padding:5px 0;color:var(--ink-2)}
+.pill{width:30px;height:17px;border-radius:99px;position:relative;flex:none;background:var(--deck)}
+.pill::after{content:"";position:absolute;top:2.5px;left:2.5px;width:12px;height:12px;border-radius:50%;background:#fff}
+.pill.on{background:var(--good)}
+.pill.on::after{left:15.5px}
+.off{color:var(--ink-3)}
+
+table{width:100%;border-collapse:collapse;margin-top:22px;background:var(--paper);border-radius:18px;overflow:hidden;box-shadow:var(--sh)}
+th,td{text-align:left;padding:14px 18px;font-size:14px;border-bottom:1px solid var(--line)}
+th{font-family:var(--display);font-weight:600;font-size:13px;background:var(--deck);color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td b{font-weight:600}
+.ph{font-family:var(--display);font-weight:600;color:var(--water)}
+
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin-top:26px}
+.cmp .card{padding:22px}
+.cmp h3{font-size:16px;margin-bottom:12px}
+.cmp li{list-style:none;font-size:14px;padding:7px 0 7px 26px;position:relative;color:var(--ink-2)}
+.cmp .them li::before{content:"×";position:absolute;left:2px;top:6px;color:var(--late);font-weight:600;font-size:16px}
+.cmp .us li::before{content:"✓";position:absolute;left:0;top:7px;color:var(--good);font-weight:600;font-size:14px}
+
+.big{background:var(--paper);border-radius:20px;padding:28px;box-shadow:var(--sh);margin-top:26px}
+.big .n{font-family:var(--display);font-size:40px;font-weight:600;color:var(--mango);letter-spacing:-.03em;line-height:1}
+.big p{font-size:15px;margin-top:8px}
+
+footer{background:var(--marine);color:#8FB8B2;padding:40px 0;margin-top:20px;font-size:13.5px}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
+
+@media print{body{background:#fff}.card,.node,.leg,table{box-shadow:none;border:1px solid var(--line)}section{page-break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<header>
+  <svg viewBox="0 0 1200 90" preserveAspectRatio="none" height="90"><path d="M0 45 Q150 5 300 45 T600 45 T900 45 T1200 45 V90 H0Z" fill="#fff"/></svg>
+  <div class="wrap">
+    <div class="tag">How it works · plain language</div>
+    <h1>One system that runs the whole club.</h1>
+    <p>Enquiries, batches, attendance, fees, pool bookings and the café — in one place, on a phone, for everyone who works there and everyone who pays for it.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <div class="eyebrow">The idea in one paragraph</div>
+  <h2>Right now, a club runs on four different things</h2>
+  <p class="lede">A paper register for attendance. A WhatsApp group for parents. An Excel sheet for fees. A notebook for who took a salary advance. And the owner's memory for everything else. Nothing talks to anything else, so the owner never actually knows how much money is owed, what the month really cost in staff wages, which batches are half empty, or which member is about to quit.</p>
+  <p class="lede" style="margin-top:14px">This replaces all four with one system — and, importantly, each person only ever sees the part that concerns them.</p>
+
+  <div class="big">
+    <div class="n">₹18,200</div>
+    <p>The number an owner can never answer today without going through a register and a spreadsheet: <b>how much money am I owed right now, and by whom?</b> That is the first screen of this product.</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">Who uses it</div>
+  <h2>Five people, five completely different screens</h2>
+  <p class="lede">This is the part most competitors get wrong. They give the owner, the coach and the parent the same dashboard. A coach standing at the pool at 6 AM does not need a revenue chart.</p>
+
+  <div class="grid g2 who">
+    <div class="card">
+      <div class="ic" style="background:var(--mango-soft);color:var(--mango)">◆</div>
+      <h3>The owner</h3>
+      <p>Wants to know if the business is healthy, in ten seconds, on a phone.</p>
+      <ul>
+        <li>Money collected and money owed</li>
+        <li>What the month is costing in staff wages</li>
+        <li>What needs attention today</li>
+        <li>Which batches are filling or emptying</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="ic" style="background:var(--water-soft);color:var(--water)">◉</div>
+      <h3>The coach</h3>
+      <p>Wants to mark who turned up and get back to teaching.</p>
+      <ul>
+        <li>Checks herself in at the start of the shift</li>
+        <li>Today's sessions and who is in them</li>
+        <li>Tap present or absent — works with no signal</li>
+        <li>Record how a swimmer is progressing</li>
+        <li>Sees her own payslip, nobody else's</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="ic" style="background:var(--good-soft);color:var(--good)">₹</div>
+      <h3>The front desk</h3>
+      <p>Handles walk-ins, takes money, books the pool.</p>
+      <ul>
+        <li>Log an enquiry, book a trial</li>
+        <li>Take cash or send a payment link</li>
+        <li>Book a pool slot for a walk-in</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="ic" style="background:var(--water-soft);color:var(--water)">◍</div>
+      <h3>The parent</h3>
+      <p>Gets everything on WhatsApp. Never installs an app.</p>
+      <ul>
+        <li>Session reminders and fee notices</li>
+        <li>Taps a link to pay by UPI</li>
+        <li>Sees their child's attendance and progress</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="ic" style="background:var(--deck);color:var(--ink-2)">▤</div>
+      <h3>The ground staff</h3>
+      <p>Sees a task list and nothing else. No numbers, no member data.</p>
+      <ul>
+        <li>Checks in and out of the shift</li>
+        <li>Today's jobs with times</li>
+        <li>Log pool cleaning and chlorine checks</li>
+        <li>Apply for leave, see days remaining</li>
+      </ul>
+    </div>
+    <div class="card" style="background:var(--marine);color:#fff">
+      <div class="ic" style="background:rgba(255,255,255,.14);color:#fff">⚙</div>
+      <h3 style="color:#fff">Us, behind the scenes</h3>
+      <p style="color:#A9CCC6">The club never sees this. It is how we set up each club differently without writing new software.</p>
+      <ul style="border-color:rgba(255,255,255,.16)">
+        <li style="color:#B6D4CF">Turn features on and off per club</li>
+        <li style="color:#B6D4CF">Set up a new club in minutes</li>
+        <li style="color:#B6D4CF">Help when something goes wrong</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">The flow</div>
+  <h2>A normal day at the club</h2>
+  <p class="lede">Nobody sits down to "use the software." It happens in thirty-second moments across the day. Here is one Saturday.</p>
+
+  <div class="day">
+    <div class="step">
+      <div class="t">6:40 AM</div>
+      <div class="card">
+        <span class="by">Coach</span>
+        <h3>Checks herself in</h3>
+        <p>One tap on arrival, or a scan of the QR code at the gate. That single tap is what her salary will be calculated from at the end of the month — nobody has to remember it, and nobody has to argue about it later.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="t">6:45 AM</div>
+      <div class="card">
+        <span class="by">Coach</span>
+        <h3>Opens the register on her phone</h3>
+        <p>Fourteen names for the 7 AM beginners batch. She taps present or absent as each child arrives. The pool has no signal — it saves anyway and syncs when she walks back to the office.</p>
+      </div>
+    </div>
+
+    <div class="step p">
+      <div class="t">7:05 AM</div>
+      <div class="card">
+        <span class="by p">Parent</span>
+        <h3>Gets a WhatsApp message</h3>
+        <p>"Aarav was marked present at the 7:00 AM session." No app to open. No password to remember.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="t">9:20 AM</div>
+      <div class="card">
+        <span class="by">Front desk</span>
+        <h3>A walk-in asks about swimming lessons</h3>
+        <p>Logged as an enquiry in fifteen seconds, with a free trial booked for Tuesday. A follow-up reminder is set automatically for Monday so nobody forgets to call.</p>
+      </div>
+    </div>
+
+    <div class="step mo">
+      <div class="t">10:00 AM</div>
+      <div class="card">
+        <span class="by o">Automatic</span>
+        <h3>Fee reminders go out on their own</h3>
+        <p>Seven members are overdue. Each parent gets one WhatsApp message with the amount and a payment link. Nobody had to make a list, and nobody had to make seven phone calls.</p>
+      </div>
+    </div>
+
+    <div class="step p">
+      <div class="t">10:14 AM</div>
+      <div class="card">
+        <span class="by p">Parent</span>
+        <h3>Pays by UPI in one tap</h3>
+        <p>The payment lands, the receipt goes back automatically, and the member's dues update instantly. Nobody at the club touched anything.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="t">1:00 PM</div>
+      <div class="card">
+        <span class="by">Ground staff</span>
+        <h3>Logs the chlorine reading</h3>
+        <p>Two numbers, one screen. If it had been missed, the owner would have seen it flagged on their home screen.</p>
+      </div>
+    </div>
+
+    <div class="step mo">
+      <div class="t">6:30 PM</div>
+      <div class="card">
+        <span class="by o">Owner</span>
+        <h3>Checks the business between meetings</h3>
+        <p>₹6,400 collected today. Four of the seven overdue members have paid. The 6 PM batch is only a quarter full — worth calling the three trial leads sitting in the pipeline.</p>
+      </div>
+    </div>
+
+    <div class="step mo">
+      <div class="t">2:00 AM</div>
+      <div class="card">
+        <span class="by o">Automatic</span>
+        <h3>The system does its housekeeping</h3>
+        <p>Next week's sessions are created, expiring memberships are flagged, invoices are raised for renewals, and tomorrow's reminder list is prepared. Nobody is awake for any of it.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">The money</div>
+  <h2>How a fee actually gets collected</h2>
+  <p class="lede">This is the part that pays for the software. Today it is a spreadsheet, a memory, and an awkward phone call.</p>
+
+  <div class="flow">
+    <div class="node"><b>Fee becomes due</b><span>The system knows, because it knows when the membership started</span></div>
+    <div class="arw">→</div>
+    <div class="node"><b>Reminder sent</b><span>WhatsApp, with the amount and a link</span></div>
+    <div class="arw">→</div>
+    <div class="node"><b>Parent pays</b><span>UPI, card, or cash at the desk</span></div>
+    <div class="arw">→</div>
+    <div class="node"><b>Receipt returns</b><span>Automatically, with a proper GST invoice</span></div>
+    <div class="arw">→</div>
+    <div class="node" style="background:var(--good-soft)"><b>Books update</b><span>Dues, reports and the owner's screen, instantly</span></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:26px">
+    <div class="card">
+      <h3>If they don't pay</h3>
+      <p style="font-size:14px;margin-top:8px">A polite reminder goes at three days, then seven, then fourteen, then thirty. Each one is automatic. The owner is only pulled in when it genuinely needs a human.</p>
+    </div>
+    <div class="card">
+      <h3>Cash still works</h3>
+      <p style="font-size:14px;margin-top:8px">A lot of money in this business is cash at the counter. It gets recorded against the right member, by the right staff member, and reconciled at the end of the day. If the software could not handle cash, the register would survive.</p>
+    </div>
+  </div>
+
+  <div class="big" style="background:var(--mango-soft)">
+    <p style="font-size:15.5px;color:#7A3200"><b>Worth saying plainly:</b> we take no percentage of the club's fees. The main competitor charges 2% on every online payment, on rails that cost them nothing. For a club collecting ₹4 lakh a month, that is ₹8,000 a month going to a middleman.</p>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">The other half of the money</div>
+  <h2>Paying the staff</h2>
+  <p class="lede">Wages are usually the single biggest expense a club has. Today it lives in a notebook: how many sessions did each coach take, who took an advance last month, who was on leave. It gets worked out by hand on the first of the month, and it is the most common thing for a club and its coaches to argue about.</p>
+  <p class="lede" style="margin-top:14px">The system already knows almost all of it — because it recorded every session, every check-in and every substitution as it happened.</p>
+
+  <div class="flow">
+    <div class="node"><b>Sessions get taken</b><span>Recorded as they happen, all month</span></div>
+    <div class="arw">→</div>
+    <div class="node"><b>Rates applied</b><span>Per session, per hour, or monthly salary</span></div>
+    <div class="arw">→</div>
+    <div class="node"><b>Draft sheet appears</b><span>On the 1st, calculated automatically</span></div>
+    <div class="arw">→</div>
+    <div class="node"><b>Owner approves</b><span>Reviews, adjusts, then locks it</span></div>
+    <div class="arw">→</div>
+    <div class="node" style="background:var(--good-soft)"><b>Paid and recorded</b><span>Payslip goes out on WhatsApp</span></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:26px">
+    <div class="card">
+      <h3>Nothing is paid automatically</h3>
+      <p style="font-size:14px;margin-top:8px">The system prepares the sheet. A human always looks at it, changes what needs changing, and approves it. Once approved it is locked — a correction goes into next month rather than quietly rewriting history.</p>
+    </div>
+    <div class="card">
+      <h3>Every number can be opened up</h3>
+      <p style="font-size:14px;margin-top:8px">When a coach says "I took more sessions than that," the owner taps the line and sees the exact thirty-four sessions, with dates. The argument ends in ten seconds instead of ten minutes.</p>
+    </div>
+    <div class="card">
+      <h3>Advances are tracked properly</h3>
+      <p style="font-size:14px;margin-top:8px">Staff take advances against salary — that is normal and it is not going away. The system records what was given, recovers it in instalments, and shows what is still outstanding. No more notebook.</p>
+    </div>
+    <div class="card">
+      <h3>Leave has a balance</h3>
+      <p style="font-size:14px;margin-top:8px">Staff apply, the manager approves, the roster updates, and if a coach is on leave the system flags which batches are left uncovered — before the morning it happens.</p>
+    </div>
+  </div>
+
+  <div class="big">
+    <div class="n">₹800 × 22</div>
+    <p style="margin-top:10px">Here is the thing this unlocks. Once the system knows what the coach costs and what the batch earns, it can answer a question no club owner can answer today: <b>which batches actually make money?</b></p>
+    <p style="margin-top:12px">A 6 PM batch with four students paying ₹3,000 a month brings in ₹12,000. The coach taking it twenty-two times at ₹800 a session costs ₹17,600. That batch loses ₹5,600 every month, and right now nobody would ever notice.</p>
+    <p style="margin-top:12px">Merge it into the 7 PM batch, or fill it — either way, the owner can only decide once they can see it.</p>
+  </div>
+
+  <p class="lede" style="margin-top:24px"><b>One thing this deliberately does not do:</b> the formal government side of payroll — provident fund, ESI, tax deduction, Form 16. That is a specialist product with real legal risk, and most clubs this size are below the size where it is required. Instead the system hands clean monthly figures to whatever the club's accountant already uses.</p>
+</section>
+
+<section>
+  <div class="eyebrow">The clever bit</div>
+  <h2>One product, many clubs, each set up differently</h2>
+  <p class="lede">A swimming club with a café needs different things from a football academy. Most software companies solve this by building a slightly different version for each customer, which becomes impossible to maintain by about the fifth customer.</p>
+  <p class="lede" style="margin-top:14px">Instead, everything is built once and turned on or off per club — like a switchboard. Adding an unusual customer takes minutes, not a new version of the software.</p>
+
+  <div class="switch">
+    <div class="hub">
+      <b>One system, built once</b>
+      <span>Every feature exists in it. Nothing is built twice.</span>
+    </div>
+    <div class="legs">
+      <div class="leg">
+        <b>Aqua Club — swimming + café</b>
+        <div class="sw"><span class="pill on"></span>Members and batches</div>
+        <div class="sw"><span class="pill on"></span>Attendance</div>
+        <div class="sw"><span class="pill on"></span>Fees and payments</div>
+        <div class="sw"><span class="pill on"></span>Pool booking</div>
+        <div class="sw"><span class="pill on"></span>Swimming levels</div>
+        <div class="sw"><span class="pill on"></span>Café counter</div>
+        <div class="sw off"><span class="pill"></span>Court booking</div>
+      </div>
+      <div class="leg">
+        <b>Elite Football Academy</b>
+        <div class="sw"><span class="pill on"></span>Members and batches</div>
+        <div class="sw"><span class="pill on"></span>Attendance</div>
+        <div class="sw"><span class="pill on"></span>Fees and payments</div>
+        <div class="sw"><span class="pill on"></span>Turf booking</div>
+        <div class="sw off"><span class="pill"></span>Swimming levels</div>
+        <div class="sw off"><span class="pill"></span>Café counter</div>
+        <div class="sw off"><span class="pill"></span>Court booking</div>
+      </div>
+      <div class="leg">
+        <b>Smash Badminton</b>
+        <div class="sw"><span class="pill on"></span>Members and batches</div>
+        <div class="sw"><span class="pill on"></span>Attendance</div>
+        <div class="sw"><span class="pill on"></span>Fees and payments</div>
+        <div class="sw"><span class="pill on"></span>Court booking</div>
+        <div class="sw off"><span class="pill"></span>Swimming levels</div>
+        <div class="sw off"><span class="pill"></span>Café counter</div>
+        <div class="sw off"><span class="pill"></span>Turf booking</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-top:22px">
+    <div class="card">
+      <h3 style="font-size:15px">Each club's data is separate</h3>
+      <p style="font-size:13.5px;margin-top:7px">One club can never see another club's members, money or records. This is enforced by the database itself, not just by the app.</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px">Each club looks like itself</h3>
+      <p style="font-size:13.5px;margin-top:7px">Its own logo and colours, and its own words — "swimmer" for one club, "player" for another, "member" for a third.</p>
+    </div>
+    <div class="card">
+      <h3 style="font-size:15px">Everyone gets every improvement</h3>
+      <p style="font-size:13.5px;margin-top:7px">Because there is only one system, a fix or a new feature reaches all clubs at once.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="eyebrow">The plan</div>
+  <h2>What gets built, and when</h2>
+  <p class="lede">Roughly five to six months to a first club running fully on the system, then a further stretch to make it easy for clubs two through ten to join.</p>
+
+  <table>
+    <tr><th style="width:22%">Stage</th><th style="width:16%">Time</th><th>What exists at the end of it</th></tr>
+    <tr><td class="ph">Watch</td><td>2 weeks</td><td>No software. We sit in the club and learn exactly how it really runs — including every exception and every unwritten rule.</td></tr>
+    <tr><td class="ph">Foundations</td><td>5–6 weeks</td><td>Nothing a customer would notice, but everything depends on it: logins, staff roles, permissions, and the walls that keep each club's data separate.</td></tr>
+    <tr><td class="ph">The core</td><td>8–10 weeks</td><td>The real product. Members, batches, attendance, memberships, fees, payments, WhatsApp reminders and the owner's dashboard.</td></tr>
+    <tr><td class="ph">Go live</td><td>7–8 weeks</td><td>Pool bookings, swimming levels and progress, automatic fee chasing, staff attendance and monthly pay, and the reports that show profit rather than just income. The first club stops using its register.</td></tr>
+    <tr><td class="ph">Open the doors</td><td>5–6 weeks</td><td>New clubs can sign up and set themselves up without us building anything. This is where it becomes a business rather than a project.</td></tr>
+    <tr><td class="ph">Café and depth</td><td>6–8 weeks</td><td>Café counter, menu, stock, staff shifts, expenses.</td></tr>
+    <tr><td class="ph">Later</td><td>—</td><td>The system starts answering questions: who is likely to quit, which batches are underused, why revenue moved.</td></tr>
+  </table>
+
+  <p class="lede" style="margin-top:20px"><b>Deliberately not built first:</b> the café. It matters, but getting clubs two through ten onto the system is worth more to the business than a second feature for club one.</p>
+</section>
+
+<section>
+  <div class="eyebrow">Why bother</div>
+  <h2>What makes this different from what already exists</h2>
+  <p class="lede">There are a dozen products in this market and they all list the same twenty features. Feature lists are not the reason anyone switches.</p>
+
+  <div class="cmp">
+    <div class="card them">
+      <h3>What exists today</h3>
+      <li>Same dashboard for the owner, the coach and the parent</li>
+      <li>A wall of numbers with no indication of what to do</li>
+      <li>Takes a percentage of every payment the club collects</li>
+      <li>Assumes parents will download an app — they will not</li>
+      <li>Stops working when the pool wifi drops</li>
+      <li>Tracks money coming in, but never what the club spends</li>
+      <li>Looks like every other product in the category</li>
+    </div>
+    <div class="card us">
+      <h3>What we are building</h3>
+      <li>A screen shaped around each person's actual job</li>
+      <li>The first thing you see is what needs your attention</li>
+      <li>Zero commission on fees, ever</li>
+      <li>Parents live in WhatsApp, so the product goes to them</li>
+      <li>Attendance works with no signal at all</li>
+      <li>Shows which batches actually make money, after wages</li>
+      <li>Designed to be the nicest thing in the category to use</li>
+    </div>
+  </div>
+
+  <div class="big">
+    <p style="font-size:15.5px"><b>The honest risk:</b> the hard part is not building this. It is reaching clubs two through fifty. Sports academies are sold to by walking in the door and by word of mouth, not through advertising. That problem needs its own plan, and it does not have one yet.</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Aqua — how it works · draft</span>
+    <span>Companion to the scope and architecture documents</span>
+  </div>
+</footer>
+
+</body>
+</html>

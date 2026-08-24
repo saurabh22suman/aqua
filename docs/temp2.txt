@@ -1,0 +1,303 @@
+STAGE 2 REPORT + STAGE 3 FINDINGS
+(Stage 1 applied with the five approved amendments. Nothing further changed.)
+
+=====================================================================
+STAGE 2 REPORT
+=====================================================================
+
+FILES CHANGED
+-------------
+
+docs/project-scope.md
+  - Duplicate §2.5 resolved: unit-economics section is now §2.6
+    ("Pricing model — revised" keeps §2.5).
+  - Duplicate §5.11 resolved by renumbering everything after Operations:
+    Café 5.12, Reporting 5.13, Intelligence 5.14, Automation 5.15,
+    Onboarding presets 5.16, Branding and vocabulary 5.17.
+  - Cross-references updated to match: Phase 4 narrative §5.15→§5.16;
+    risk-table onboarding row §5.15→§5.16; branding defaults line
+    §5.15→§5.16; three §5.1 rows "see §5.16"→"see §5.17".
+  - Accent colour row: P4 → P1, annotated "runtime token" (the Phase 4
+    epic "six-accent picker" remains the settings UI, not the mechanism).
+  - Daily collection summary/cash reconciliation: P3 → P2 (matches C-34).
+  - Holiday calendar per location: P3 → P1 (matches F-23, unblocks C-19).
+  - In-app notification centre: P3 → P4 (matches §10 Phase 4 scope).
+  - Monthly P&L row annotated: "collections minus staff cost; expense
+    lines join in Phase 5 (§5.6)".
+  - §12: "via slab upgrades" → "via plan upgrades".
+  - §8 fonts: "~40 KB total" → "45 KB total".
+
+docs/architecture.md
+  - §3.2 Better Auth mitigation: F-04 and F-12 → F-09, F-10 and F-11.
+  - §5.3: app_login login noinherit added with membership grant,
+    connection-time pool.on("connect") → SET ROLE app_user snippet,
+    NOINHERIT rationale, PgBouncer escape-hatch note.
+  - §5.6 isolation test: third assertion added (select current_user must
+    be app_user); explanatory sentence updated.
+  - §7.2: full plans DDL inserted before features; closing paragraph
+    documents nullable price_paise, data-only pricing change,
+    tenants.plan_id defaulting to standard.
+  - §8.2: new subsection "Identity and access (Phase 1)" — users (with
+    better_auth_id linkage), roles, permissions (created before its
+    referencing table per amendment 5a), role_permissions,
+    tenant_memberships (WITHOUT array — amendment 4), membership_locations
+    join table; RLS/allowlist notes included.
+  - §8.3: invalid generated is_minor removed; persons now carries full
+    audit columns (per amendment 1, no violation propagated); derivation
+    comment specifies cutoff computed from TENANTS.TIMEZONE, not session
+    timezone (amendment 2); staff.user_id added.
+  - §9 jobs table: webhooks.purge | Nightly 03:15 | Delete processed
+    webhook events older than 90 days.
+  - §10.2: snippet corrected — our UUID v7 as PK, providerEventId
+    separate; webhook_events DDL added with (provider, provider_event_id)
+    uniqueness and the 90-day retention rule.
+  - §17 repo structure: root ARCHITECTURE.md replaced with real paths
+    under docs/.
+  - §13.3 CI yaml: npm run build / npx bundlesize / npx lhci → pnpm build /
+    pnpm exec bundlesize / pnpm exec lhci autorun.
+
+docs/implementation-plan.md
+  - Header recount: task count 126 → 139 (D:8 + S:9 + F:27 + C:49 + V:46;
+    includes the two tasks created below). Duration 22–26 → 23–27 weeks
+    (2 + ~1 + 5–6 + 8–10 + 7–8).
+  - DoD and S-01: all "npm run …" → "pnpm …".
+  - F-01 rewritten per approved text: seeds feature catalogue + one
+    "standard" plan (is_default, price NULL, empty limits); done-when
+    proves pricing lands as seed/data-only; Never-clause forbids encoding
+    pricing-model assumptions.
+  - F-05 rewritten: app_login LOGIN+NOINHERIT, SET ROLE per physical
+    connection, current_user acceptance.
+  - F-08 extended: asserts current_user = 'app_user' on a fresh connection.
+  - C-01 rewritten: minor status derived at read using tenant timezone;
+    acceptance is "reads as an adult immediately, without any batch
+    process".
+  - C-04: staff links to login explicitly via staff.user_id.
+  - C-23: 40 px → 44 px targets.
+  - V-37 flagged dependency, not silently moved: builds collections minus
+    staff cost = contribution margin; schema accepts later expense lines
+    without migration. See EXPENSES FLAG below.
+  - C-28a created (after C-28) and V-33a created (after V-33), both
+    Tier 1 human-owned.
+
+docs/agent-setup.md
+  - db/CLAUDE.md draft: amendment 5b rule added — users reachable only via
+    tenant_memberships inside withTenant(); never queried directly from
+    tenant code (no tenant_id; one bad query enumerates every user).
+
+docs/testing-strategy.md
+  - §7 retitled "Tasks in the implementation plan"; all five rows (S-05a,
+    S-05b, F-08a, C-28a, V-33a) now reference existing tasks with their
+    locations.
+
+DESIGN.md
+  - Line 5 path fixed: docs/sports-club-ui-direction.html.
+
+Untouched as agreed: documentation-review.txt, temp1.txt (historical).
+
+EXPENSES FLAG — WHAT V-37 DELIVERS WITHOUT EXPENSES
+---------------------------------------------------
+Without the Phase 5 expenses module, V-37 delivers collections minus staff
+cost: a true view of batch-level delivery economics — whether fees cover
+coach cost, the product's lead differentiator. It cannot show rent,
+utilities, consumables (chlorine, equipment), or admin costs until Phase 5.
+It is a contribution report, not a full P&L, and the owner-facing label
+should say so.
+
+VERIFICATION SWEEPS RUN
+-----------------------
+No remaining npm/npx commands in implementation-plan.md or architecture.md
+(the phrase "Adding any npm dependency" is prose about packages, kept);
+section numbering clean (2.5/2.6, 5.11–5.17); no stale §5.15 refs to
+presets, no "slab upgrades", no "40 px", no "~40 KB", no "F-04 and F-12",
+no root ARCHITECTURE.md reference, no generated is_minor anywhere.
+Header count reconciles: D:8 + S:9 + F:27 + C:49 + V:46 = 139.
+
+=====================================================================
+STAGE 3 — FINDINGS FOR DECISION (NOTHING CHANGED)
+=====================================================================
+
+A) RULES VS THEIR OWN EXAMPLES
+------------------------------
+
+A1. Audit columns ("without exception", §8.1) vs DDL omitting them.
+    RECOMMENDATION: fix the examples, keep the rule absolute. The DoD
+    requires every mutation audited with actor attribution, and F-15 wants
+    a mechanical coverage test — both need updated_by to exist uniformly.
+    Carve-outs belong in an explicit exemption list in §8.1, not silent
+    omission. Proposed initial exemption list: audit_log
+    (self-referential), webhook_events (provider-owned payloads), platform
+    tables (plans, features, permissions, presets). Existing exemplar
+    tables get their columns through their own build tasks (persons
+    already does).
+
+A2. "UUID v7 without exception" vs audit_log bigserial.
+    Likely deliberate. RECOMMENDATION: amend the rule with a stated
+    carve-out — append-only tables that are partitioned by time and never
+    targeted by foreign keys may use bigserial; name audit_log as the sole
+    current instance. Sequential IDs suit append-only hot-partition
+    inserts, and nothing references an audit row by id. The defect was
+    silence, not the choice.
+
+A3. "Every index begins with tenant_id" vs unique constraints like
+    (session_id, member_id).
+    RECOMMENDATION: fix the examples. tenant_id is functionally dependent
+    on session_id here, so leading with it is semantically free and
+    preserves the locality/partition-readiness invariant — rewrite as
+    (tenant_id, session_id, member_id) etc. for enrolments, sessions,
+    attendance, shifts, staff_attendance, guardianships. Document one
+    sanctioned exemption class: GiST exclusion constraints (bookings),
+    where prepending tenant_id adds nothing. These constraint changes land
+    inside existing tasks' migrations (C-18/C-19/C-22/V-23/V-24) — no new
+    work, just corrected specs before those tasks execute.
+
+A4. DESIGN.md "multiples of 4px only" vs mb-1.5 / px-2.5 / py-3.5.
+    RECOMMENDATION: amend the rule. The snippets encode shipped visual
+    intent validated against real screens; retro-fitting them to a strict
+    4-grid changes spacing nobody asked to change. Proposed wording:
+    "Base-4 grid. Half-steps (×2px) permitted below 16px for micro-spacing
+    only." Makes the three snippets conforming, keeps the rule reviewable,
+    stays honest about how Tailwind is actually used.
+
+B) SCOPED WORK WITH NO TASK — DRAFTS, NOT INSERTED
+--------------------------------------------------
+
+B1. DPDP PACK — HIGHEST PRIORITY. Five drafted tasks; V-44 (go-live gate)
+    gains dependencies on all of them.
+
+> ### V-45 · Consent withdrawal
+> **Depends:** C-05, C-43
+> **Build:** Guardian-initiated withdrawal via magic link and staff UI;
+> sets withdrawn_at on the consent record (append-only — never deleted);
+> stops all non-essential communications for that child immediately;
+> audited.
+> **Done when:** a withdrawn child receives no templates from the next
+> queue drain onward, and the withdrawal itself is provable with timestamp
+> and evidence.
+
+> ### V-46 · Data export
+> **Depends:** C-06
+> **Build:** Export bundle per person — profile, guardianship, attendance
+> history, invoices/payments, assessments, consents — assembled
+> server-side, delivered as signed time-limited download; request and
+> fulfilment audited.
+> **Done when:** a parent's export contains exactly their child's rows and
+> nothing belonging to another person.
+
+> ### V-47 · Erasure with retention exceptions
+> **Depends:** V-46
+> **Build:** Anonymise-on-request workflow: scrub identity fields, delete
+> R2 media, retain financial rows under tax-law retention with the person
+> reduced to an opaque id; documented exceptions list.
+> **Done when:** an erased person leaves no recoverable identity in people
+> surfaces while invoice arithmetic still reconciles.
+> **FLAGGED DECISION NEEDED:** retention period is unstated anywhere (GST
+> practice commonly cited at 72 months; DPDP erasure rights collide).
+> Needs legal sign-off — do not let a developer pick this number.
+
+> ### V-48 · Breach notification runbook
+> **Depends:** —
+> **Build:** Written runbook — detection, containment, Data Protection
+> Board notification, affected-tenant and guardian notice templates,
+> timeline targets; one tabletop drill before go-live.
+> **Done when:** drill executed end-to-end with elapsed times recorded.
+
+> ### V-49 · Per-tenant DPA
+> **Depends:** F-25
+> **Build:** Standard DPA template; signature/version captured at
+> provisioning and stored on the tenant; surfaced during onboarding.
+> **Done when:** every live tenant has a signed DPA version recorded.
+> (Scope §7.1 places this P2 — if approved it would slot beside C-05
+> rather than Phase 3.)
+
+B2. EMAIL FALLBACK (§5.9, P2) — belongs in the C-40–C-43 cluster:
+
+> ### C-43a · Email fallback channel
+> **Depends:** C-42
+> **Build:** Second MessageProvider adapter (transactional email);
+> fallback routing when WhatsApp is undeliverable or no phone exists; same
+> metering and message_log.
+> **Done when:** a message that fails WhatsApp delivery arrives by email
+> and appears once in the log with correct cost.
+> **DECISION NEEDED:** provider unspecified anywhere (assumption today:
+> any SMTP; SES Mumbai plausible). Pick before C-43a executes.
+
+B3. OPERATIONS MODULE (§5.11, P3) — routes exist ((worker)/tasks), worker
+    nav ships in F-22, so the gap is visible to users the day Phase 3
+    opens:
+
+> ### V-50 · Worker tasks and maintenance log
+> **Depends:** C-04, F-22, V-13
+> **Build:** tasks (tenant_id, location_id, title, detail, assigned staff,
+> due_at, status open|done|cancelled, source manual|rule|inventory) and
+> maintenance_schedules (facility, cadence, last_done_at); worker daily
+> view shows only their day; overdue chemistry checks (V-13) auto-create
+> tasks.
+> **Done when:** a worker sees and completes today's tasks phone-only, and
+> a missed chlorine check becomes someone's task within 24 hours.
+> **DECISION NEEDED:** recurring-cadence semantics unstated (fixed
+> daily/weekly vs "N days since last done").
+
+B4. ENQUIRY FUNNEL REPORT (§5.13 Reporting, P3):
+
+> ### V-38a · Enquiry funnel report
+> **Depends:** C-15, V-35
+> **Build:** Counts and conversion by source and stage over time;
+> stage-duration distribution.
+> **Done when:** funnel figures reconcile to the enquiries table exactly
+> for any date range.
+
+B5. IMPORTER IDEMPOTENCY — amendments to existing tasks rather than a new
+    one:
+
+> C-09 (addition): mapping UI includes a required-or-explicitly-absent
+> external reference column per entity.
+> C-11 (done-when addition): re-importing the same file with identical
+> external references updates rather than duplicates — zero new rows, zero
+> orphans.
+
+B6. TIER 1 TEST INVENTORY — fifteen files, each born with its owning task;
+    guard.sh's tests/tier1/** glob is harmless before they exist:
+
+  #  File                                   Created with
+  -- -------------------------------------  ------------
+  1  isolation-hostile.test.ts              F-08
+  2  rls-enabled-and-forced.test.ts         F-08a
+  3  connection-role.test.ts (current_user) F-08
+  4  money-properties.test.ts               C-28a
+  5  invoice-numbering-gapless.test.ts      C-31
+  6  invoice-gst-arithmetic.test.ts         C-32
+  7  partial-payments.test.ts               C-33
+  8  webhook-idempotency.test.ts            C-37/C-38
+  9  refunds-credit-notes.test.ts           V-17
+  10 consent-minor-block.test.ts            C-05
+  11 consent-withdrawal-immutable.test.ts   V-45
+  12 predebit-notice-guard.test.ts          V-15a
+  13 mandate-optout-cycle.test.ts           V-15a/V-16
+  14 pay-permission-audit.test.ts           V-33a
+  15 magic-link-scope.test.ts               C-44
+
+  This also gives the "~fifteen files" budget in testing-strategy §2 a
+  concrete meaning.
+
+B7. AUDIT_LOG NULLABLE TENANT_ID — RECOMMENDATION: give it its own policy,
+    do NOT allowlist it.
+
+    Policy: strict tenant_id = current_setting('app.tenant_id',
+    true)::uuid — NULL rows (platform-level actions) are invisible to
+    tenant-scoped requests; platform reads go through the privileged role,
+    as they already must.
+
+    Consequence either way:
+    - Own policy (recommended): F-08a's catch-all passes naturally with no
+      special case; tenants can read their own audit trail (including the
+      pay-read audits V-33 depends on) without any second code path;
+      platform-action rows stay invisible to tenants by construction.
+    - Allowlist: one less policy, but the most sensitive table in the
+      system — it logs who looked at coach salaries — becomes readable by
+      any future unscoped query path, and the catch-all gate permanently
+      carries an exception someone must remember to justify. Rejected.
+
+=====================================================================
+END OF STAGE 2 REPORT AND STAGE 3 FINDINGS.
+No implementation tasks begun. No further files modified.
+=====================================================================

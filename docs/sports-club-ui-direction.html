@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aqua — UI direction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..700&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --deck:#EDF0EC;
+  --paper:#FFFFFF;
+  --ink:#0F1F1C;
+  --ink-2:#3C534F;
+  --ink-3:#7B918D;
+  --marine:#0D3B36;
+  --water:#0E7C86;
+  --water-soft:#E3F1F2;
+  --mango:#FF7A18;
+  --mango-soft:#FFEEE1;
+  --good:#2E9E5B;
+  --good-soft:#E4F4EA;
+  --late:#D8453C;
+  --late-soft:#FCE9E7;
+  --line:rgba(15,31,28,.09);
+  --r-card:20px;
+  --r-ctl:14px;
+  --sh-1:0 1px 2px rgba(15,31,28,.05);
+  --sh-2:0 2px 6px rgba(15,31,28,.05), 0 14px 32px rgba(15,31,28,.08);
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"Instrument Sans",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:var(--body);
+  background:var(--deck);
+  color:var(--ink);
+  padding:48px 24px 72px;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+}
+.page-head{max-width:1180px;margin:0 auto 40px;}
+.page-head h1{font-family:var(--display);font-size:30px;font-weight:600;letter-spacing:-.02em;}
+.page-head p{color:var(--ink-2);font-size:15px;margin-top:6px;max-width:52ch;line-height:1.6;}
+.swatches{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap;}
+.sw{display:flex;align-items:center;gap:8px;background:var(--paper);border-radius:999px;padding:6px 14px 6px 6px;font-size:12px;color:var(--ink-2);box-shadow:var(--sh-1);}
+.dot{width:20px;height:20px;border-radius:50%;}
+
+.rail{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:28px;max-width:1180px;margin:0 auto;align-items:start;}
+.phone{background:var(--paper);border-radius:34px;box-shadow:var(--sh-2);overflow:hidden;position:relative;}
+.status{display:flex;justify-content:space-between;padding:14px 22px 0;font-size:12px;font-weight:600;color:var(--ink-3);}
+.scr{padding:8px 18px 96px;}
+.caption{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:0 0 12px 4px;}
+
+.top{display:flex;align-items:center;gap:12px;padding:14px 0 18px;}
+.av{width:42px;height:42px;border-radius:14px;background:var(--water-soft);color:var(--water);display:grid;place-items:center;font-family:var(--display);font-weight:600;font-size:15px;flex:none;}
+.top h2{font-family:var(--display);font-size:19px;font-weight:600;letter-spacing:-.01em;line-height:1.2;}
+.top span{font-size:12.5px;color:var(--ink-3);}
+.bell{margin-left:auto;width:38px;height:38px;border-radius:12px;background:var(--deck);display:grid;place-items:center;position:relative;flex:none;}
+.bell::after{content:"";position:absolute;top:9px;right:10px;width:7px;height:7px;border-radius:50%;background:var(--mango);border:2px solid var(--paper);}
+
+.hero{background:var(--marine);border-radius:var(--r-card);padding:22px 20px 20px;position:relative;overflow:hidden;color:#fff;}
+.hero svg{position:absolute;left:0;bottom:-2px;width:100%;opacity:.14;}
+.hero .k{font-size:12.5px;color:#9CC4BE;font-weight:500;position:relative;}
+.hero .amt{font-family:var(--display);font-size:38px;font-weight:600;letter-spacing:-.03em;line-height:1.05;margin:6px 0 4px;position:relative;}
+.hero .sub{font-size:13px;color:#B6D4CF;position:relative;line-height:1.45;}
+.cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:18px;background:var(--mango);color:#fff;border:0;border-radius:999px;padding:14px;font-family:var(--body);font-size:14.5px;font-weight:600;position:relative;cursor:pointer;}
+
+.chips{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px;}
+.chip{background:var(--deck);border-radius:var(--r-ctl);padding:12px 10px;}
+.chip b{font-family:var(--display);font-size:17px;font-weight:600;display:block;letter-spacing:-.01em;}
+.chip span{font-size:11px;color:var(--ink-3);display:block;margin-top:2px;line-height:1.3;}
+
+.sec{font-family:var(--display);font-size:15px;font-weight:600;margin:26px 0 10px;}
+.row{display:flex;align-items:center;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-ctl);padding:13px 14px;margin-bottom:8px;}
+.ico{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;font-size:15px;}
+.row .t{font-size:14px;font-weight:500;line-height:1.3;}
+.row .d{font-size:12px;color:var(--ink-3);margin-top:2px;line-height:1.3;}
+.row .go{margin-left:auto;color:var(--ink-3);font-size:18px;flex:none;}
+
+.lane{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-card);padding:14px 15px;margin-bottom:10px;}
+.lane .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
+.lane .time{font-family:var(--display);font-size:15px;font-weight:600;}
+.lane .who{font-size:12.5px;color:var(--ink-3);margin-top:1px;}
+.lane .cap{font-family:var(--display);font-size:15px;font-weight:600;}
+.track{height:8px;border-radius:99px;background:var(--deck);overflow:hidden;display:flex;}
+.fill{height:100%;border-radius:99px;}
+.ropes{display:flex;justify-content:space-between;margin-top:7px;}
+.ropes i{width:4px;height:4px;border-radius:50%;background:var(--line);}
+
+.nav{position:absolute;left:16px;right:16px;bottom:14px;background:var(--paper);border-radius:22px;box-shadow:var(--sh-2);display:grid;grid-template-columns:repeat(4,1fr);padding:9px 6px;}
+.nav div{text-align:center;font-size:10.5px;color:var(--ink-3);font-weight:500;}
+.nav div span{display:block;font-size:19px;margin-bottom:1px;}
+.nav .on{color:var(--mango);}
+
+.bar{display:flex;align-items:center;gap:12px;padding:6px 0 16px;}
+.back{width:38px;height:38px;border-radius:12px;background:var(--deck);display:grid;place-items:center;font-size:17px;flex:none;}
+.bar h2{font-family:var(--display);font-size:18px;font-weight:600;}
+.bar span{font-size:12.5px;color:var(--ink-3);}
+
+.pupil{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);}
+.pav{width:38px;height:38px;border-radius:12px;background:var(--deck);display:grid;place-items:center;font-size:13px;font-weight:600;color:var(--ink-2);flex:none;}
+.pupil .n{font-size:14px;font-weight:500;flex:1;min-width:0;}
+.pupil .n em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-3);margin-top:1px;}
+.toggle{display:flex;gap:6px;flex:none;}
+.tg{width:40px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:16px;border:1px solid var(--line);background:var(--paper);color:var(--ink-3);}
+.tg.yes{background:var(--good-soft);border-color:transparent;color:var(--good);}
+.tg.no{background:var(--late-soft);border-color:transparent;color:var(--late);}
+
+.stick{position:absolute;left:16px;right:16px;bottom:14px;display:flex;gap:10px;align-items:center;background:var(--paper);border-radius:22px;box-shadow:var(--sh-2);padding:10px 10px 10px 18px;}
+.stick .c{font-size:12.5px;color:var(--ink-3);line-height:1.3;}
+.stick .c b{display:block;font-family:var(--display);font-size:15px;color:var(--ink);font-weight:600;}
+.stick button{margin-left:auto;background:var(--mango);color:#fff;border:0;border-radius:16px;padding:13px 20px;font-family:var(--body);font-weight:600;font-size:14px;cursor:pointer;}
+
+.next{background:var(--water);border-radius:var(--r-card);padding:20px;color:#fff;position:relative;overflow:hidden;}
+.next svg{position:absolute;right:-10px;top:-10px;opacity:.16;}
+.next .k{font-size:12px;color:#C6E7E9;font-weight:500;}
+.next .big{font-family:var(--display);font-size:27px;font-weight:600;letter-spacing:-.02em;margin:5px 0 3px;}
+.next .sub{font-size:13px;color:#D6EFF0;}
+
+.mem{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-card);padding:16px;margin-top:10px;}
+.mem .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:11px;}
+.mem .hd b{font-family:var(--display);font-size:15px;font-weight:600;}
+.mem .hd span{font-size:12.5px;color:var(--ink-3);}
+
+.skill{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);}
+.skill .nm{font-size:14px;font-weight:500;flex:1;}
+.pips{display:flex;gap:4px;}
+.pips i{width:22px;height:6px;border-radius:99px;background:var(--deck);}
+.pips i.f{background:var(--water);}
+.trend{font-size:12px;font-weight:600;color:var(--good);width:34px;text-align:right;}
+
+.note{max-width:1180px;margin:44px auto 0;background:var(--paper);border-radius:var(--r-card);padding:24px 26px;box-shadow:var(--sh-1);}
+.note h3{font-family:var(--display);font-size:17px;font-weight:600;margin-bottom:12px;}
+.note ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px 28px;}
+.note li{font-size:13.5px;color:var(--ink-2);line-height:1.55;}
+.note li b{color:var(--ink);font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>Aqua — visual direction</h1>
+  <p>Warm, rounded and confident, with zero raster illustration. Every screen below is pure CSS and inline SVG — the whole page is under 30&nbsp;KB plus two subset fonts.</p>
+  <div class="swatches">
+    <div class="sw"><span class="dot" style="background:#0F1F1C"></span>Ink</div>
+    <div class="sw"><span class="dot" style="background:#0D3B36"></span>Marine</div>
+    <div class="sw"><span class="dot" style="background:#0E7C86"></span>Water</div>
+    <div class="sw"><span class="dot" style="background:#FF7A18"></span>Mango — actions only</div>
+    <div class="sw"><span class="dot" style="background:#EDF0EC"></span>Deck</div>
+  </div>
+</div>
+
+<div class="rail">
+
+  <div>
+    <p class="caption">Owner · home</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>▮▮▮ ◆ ▰</span></div>
+      <div class="scr">
+        <div class="top">
+          <div class="av">AC</div>
+          <div>
+            <h2>Aqua Club</h2>
+            <span>Salt Lake · Saturday</span>
+          </div>
+          <div class="bell">🔔</div>
+        </div>
+
+        <div class="hero">
+          <svg viewBox="0 0 340 60" preserveAspectRatio="none" height="60"><path d="M0 30 Q42 6 85 30 T170 30 T255 30 T340 30 V60 H0Z" fill="#fff"/></svg>
+          <div class="k">To collect</div>
+          <div class="amt">₹18,200</div>
+          <div class="sub">7 members overdue · oldest is 34 days</div>
+          <button class="cta">Remind on WhatsApp →</button>
+        </div>
+
+        <div class="chips">
+          <div class="chip"><b>₹82,450</b><span>Collected in Aug</span></div>
+          <div class="chip"><b>126</b><span>Active members</span></div>
+          <div class="chip"><b>92%</b><span>Attendance</span></div>
+        </div>
+
+        <div class="sec">Needs you today</div>
+
+        <div class="row">
+          <div class="ico" style="background:var(--mango-soft);color:var(--mango)">◎</div>
+          <div><div class="t">3 trial enquiries</div><div class="d">No follow-up in 2 days</div></div>
+          <div class="go">›</div>
+        </div>
+        <div class="row">
+          <div class="ico" style="background:var(--late-soft);color:var(--late)">✕</div>
+          <div><div class="t">Coach Rehan absent</div><div class="d">6:00 PM batch uncovered</div></div>
+          <div class="go">›</div>
+        </div>
+        <div class="row">
+          <div class="ico" style="background:var(--water-soft);color:var(--water)">◆</div>
+          <div><div class="t">Chlorine check due</div><div class="d">Last logged 3 days ago</div></div>
+          <div class="go">›</div>
+        </div>
+
+        <div class="sec">Today's lanes</div>
+
+        <div class="lane">
+          <div class="hd">
+            <div><div class="time">07:00 Beginners</div><div class="who">Coach Meera · Lane 1–2</div></div>
+            <div class="cap">14<span style="color:var(--ink-3);font-weight:400">/16</span></div>
+          </div>
+          <div class="track"><div class="fill" style="width:87%;background:var(--water)"></div></div>
+          <div class="ropes"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+
+        <div class="lane">
+          <div class="hd">
+            <div><div class="time">18:00 Intermediate</div><div class="who">Uncovered · Lane 3</div></div>
+            <div class="cap" style="color:var(--mango)">4<span style="color:var(--ink-3);font-weight:400">/16</span></div>
+          </div>
+          <div class="track"><div class="fill" style="width:25%;background:var(--mango)"></div></div>
+          <div class="ropes"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+
+      <div class="nav">
+        <div class="on"><span>⌂</span>Home</div>
+        <div><span>◉</span>Attendance</div>
+        <div><span>₹</span>Fees</div>
+        <div><span>◍</span>Members</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="caption">Coach · mark attendance</p>
+    <div class="phone">
+      <div class="status"><span>7:02</span><span>▮▮▮ ◆ ▰</span></div>
+      <div class="scr">
+        <div class="bar">
+          <div class="back">‹</div>
+          <div><h2>Beginners</h2><span>07:00 · Lane 1–2 · 22 Aug</span></div>
+        </div>
+
+        <div class="lane" style="border:0;background:var(--water-soft);">
+          <div class="hd">
+            <div><div class="time" style="color:var(--water)">11 marked</div><div class="who">3 left · 2 absent</div></div>
+            <div class="cap" style="color:var(--water)">14</div>
+          </div>
+          <div class="track" style="background:#fff"><div class="fill" style="width:79%;background:var(--water)"></div></div>
+        </div>
+
+        <div style="margin-top:16px">
+          <div class="pupil">
+            <div class="pav">AR</div>
+            <div class="n">Aarav Roy<em>Level 2 · 91% this month</em></div>
+            <div class="toggle"><div class="tg yes">✓</div><div class="tg">✕</div></div>
+          </div>
+          <div class="pupil">
+            <div class="pav">DS</div>
+            <div class="n">Diya Sen<em>Level 2 · 88% this month</em></div>
+            <div class="toggle"><div class="tg yes">✓</div><div class="tg">✕</div></div>
+          </div>
+          <div class="pupil">
+            <div class="pav">KM</div>
+            <div class="n">Kabir Mitra<em>Level 1 · 64% this month</em></div>
+            <div class="toggle"><div class="tg">✓</div><div class="tg no">✕</div></div>
+          </div>
+          <div class="pupil">
+            <div class="pav">IN</div>
+            <div class="n">Ishaan Nair<em>Level 2 · 95% this month</em></div>
+            <div class="toggle"><div class="tg yes">✓</div><div class="tg">✕</div></div>
+          </div>
+          <div class="pupil">
+            <div class="pav">RB</div>
+            <div class="n">Riya Bose<em>Fees overdue 12 days</em></div>
+            <div class="toggle"><div class="tg">✓</div><div class="tg">✕</div></div>
+          </div>
+          <div class="pupil" style="border:0">
+            <div class="pav">TG</div>
+            <div class="n">Tara Ghosh<em>Level 1 · 79% this month</em></div>
+            <div class="toggle"><div class="tg">✓</div><div class="tg">✕</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stick">
+        <div class="c"><b>11 of 14</b>Saves offline too</div>
+        <button>Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="caption">Parent · Aarav</p>
+    <div class="phone">
+      <div class="status"><span>9:41</span><span>▮▮▮ ◆ ▰</span></div>
+      <div class="scr">
+        <div class="top">
+          <div class="av" style="background:var(--mango-soft);color:var(--mango)">AR</div>
+          <div>
+            <h2>Aarav's swimming</h2>
+            <span>Aqua Club · Level 2</span>
+          </div>
+          <div class="bell">🔔</div>
+        </div>
+
+        <div class="next">
+          <svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="#fff" stroke-width="14"/></svg>
+          <div class="k">Next session</div>
+          <div class="big">Today, 6:00 PM</div>
+          <div class="sub">Pool A · Lane 3 · Coach Meera</div>
+        </div>
+
+        <div class="mem">
+          <div class="hd"><b>Membership</b><span>23 days left</span></div>
+          <div class="track"><div class="fill" style="width:77%;background:var(--good)"></div></div>
+          <div style="font-size:12.5px;color:var(--ink-3);margin-top:9px;line-height:1.45">Renews 14 Sep · ₹3,000 per month</div>
+        </div>
+
+        <div class="sec">Progress</div>
+        <div class="mem" style="padding:4px 16px 8px">
+          <div class="skill">
+            <div class="nm">Freestyle</div>
+            <div class="pips"><i class="f"></i><i class="f"></i><i class="f"></i><i></i></div>
+            <div class="trend">↑ 1</div>
+          </div>
+          <div class="skill">
+            <div class="nm">Backstroke</div>
+            <div class="pips"><i class="f"></i><i class="f"></i><i></i><i></i></div>
+            <div class="trend" style="color:var(--ink-3)">—</div>
+          </div>
+          <div class="skill" style="border:0">
+            <div class="nm">Breathing</div>
+            <div class="pips"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+            <div class="trend">↑ 1</div>
+          </div>
+        </div>
+
+        <div class="sec">Attendance</div>
+        <div class="mem">
+          <div class="hd"><b>91%</b><span>20 of 22 sessions</span></div>
+          <div style="display:flex;gap:4px">
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--good-soft)"></i>
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--good-soft)"></i>
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--late-soft)"></i>
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--good-soft)"></i>
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--good-soft)"></i>
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--good-soft)"></i>
+            <i style="flex:1;height:26px;border-radius:6px;background:var(--deck)"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="nav">
+        <div class="on"><span>⌂</span>Home</div>
+        <div><span>▤</span>Schedule</div>
+        <div><span>₹</span>Fees</div>
+        <div><span>◍</span>Profile</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="note">
+  <h3>Why this stays light</h3>
+  <ul>
+    <li><b>No illustration.</b> The hero wave and the ring on the parent card are inline SVG paths — about 300 bytes together, versus 200–400 KB for a 3D character render.</li>
+    <li><b>Colour carries meaning.</b> Mango is only ever an action. Water is data. Green and red are payment and attendance state. Nothing is coloured for decoration.</li>
+    <li><b>Two fonts, subset.</b> Bricolage Grotesque for display and figures, Instrument Sans for body — roughly 40 KB self-hosted, and it is where the personality actually comes from.</li>
+    <li><b>Depth from two shadows.</b> One tight contact shadow, one soft ambient. Defined once as variables and never improvised per component.</li>
+    <li><b>The lane strip repeats.</b> Owner sees capacity, coach sees progress through the register, parent sees membership runway. One shape, three meanings.</li>
+    <li><b>Touch targets are 36–44px.</b> The coach's present and absent buttons are separate hit areas, not a swipe, because that screen gets used with wet hands in sunlight.</li>
+  </ul>
+</div>
+
+</body>
+</html>

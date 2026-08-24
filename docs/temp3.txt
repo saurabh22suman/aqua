@@ -1,0 +1,125 @@
+STAGE 3 APPLICATION REPORT
+(All Stage 3 decisions applied. Nothing further changed.)
+
+=====================================================================
+TASKS INSERTED (8)
+=====================================================================
+
+ID      Phase / section                        Task
+------  -------------------------------------  ------------------------------
+C-05a   Phase 2, People (beside C-05)          Per-tenant DPA — inserted as
+                                               C-05a rather than V-49 to
+                                               preserve the phase-prefix
+                                               convention; content as drafted
+C-43a   Phase 2, Messaging (after C-43)        Email fallback channel — AWS
+                                               SES Mumbai recorded; DECISION
+                                               NEEDED marker removed
+V-50    Phase 3, Operations (after V-22)       Worker tasks and maintenance
+                                               log — cadence fixed as "N days
+                                               since last_done_at", rationale
+                                               noted
+V-38a   Phase 3, Reporting (after V-38)        Enquiry funnel report
+V-45    Phase 3, new "DPDP — go-live blockers" Consent withdrawal — carries
+                                               the FLAGGED DEPENDENCY note;
+                                               category-split proposal
+                                               included but not decided
+V-46    same                                   Data export
+V-47    same                                   Erasure with retention
+                                               exceptions — FLAGGED DECISION
+                                               NEEDED marker retained, no
+                                               number picked
+V-48    same                                   Breach notification runbook
+
+GATE DEPENDENCY: V-44 now depends on "V-01 … V-43, plus V-45 – V-48 and
+C-05a", and sits physically after them so the gate reads last.
+
+=====================================================================
+EXISTING SPECS CHANGED
+=====================================================================
+
+docs/architecture.md
+  - §8.1: audit-column exemption list added (A1); bigserial carve-out
+    stated generally with audit_log as current instance + index-quality
+    note (A2); GiST exclusion-constraint exemption documented,
+    natural-key uniques must lead with tenant_id (A3).
+  - Six exemplar unique constraints prepended with tenant_id:
+    guardianships, enrolments, sessions, attendance, shifts,
+    staff_attendance; both prose mentions of the attendance upsert key
+    updated (§8.5, §12).
+  - §8.10: strict RLS policy for audit_log with full recorded
+    justification (B7).
+  - §11.1: email fallback provider AWS SES Mumbai recorded (B2).
+
+docs/implementation-plan.md
+  - F-08a: allowlist enumerated (plans, features, plan_features, presets,
+    permissions, users, webhook_events) with explicit note that audit_log
+    is deliberately excluded.
+  - C-09: external reference column requirement added (B5).
+  - C-11: re-import idempotency acceptance added (B5).
+  - C-22: uniqueness spec now (tenant_id, session_id, member_id) (A3).
+
+docs/testing-strategy.md
+  - §2: "roughly fifteen test files" replaced by the exact fifteen-file
+    inventory with owning tasks (B6). Note: files 11 (V-45) and 12/13
+    (V-15a interplay) assume the withdrawal guard question gets resolved
+    before Phase 3 collections work.
+
+docs/project-scope.md
+  - §13 open question 7 added: GST retention vs DPDP erasure, legal
+    counsel required before V-47 (B1c).
+
+DESIGN.md
+  - Four snippet classes rounded to grid: mb-1.5→mb-2, px-2.5→px-3,
+    mt-1.5→mt-2, py-3.5→py-4. Rule text unchanged (A4).
+
+=====================================================================
+COUNT RECONCILIATION
+=====================================================================
+
+Header: 147 = D:8 (table rows) + S:9 + F:27 + C:51 (49 + C-05a + C-43a)
++ V:52 (46 + V-38a, V-45, V-46, V-47, V-48, V-50).
+
+Duration header unchanged at 23–27 weeks; the eight inserted tasks sit
+inside existing phase envelopes. Watch item: V-47's legal-counsel
+dependency could add wall-clock time to Phase 3 if counsel is engaged
+late — worth watching, not re-estimating blind.
+
+VERIFICATION SWEEPS RUN
+-----------------------
+Header count reconciles against grep of task headers (S:9 + F:27 + C:51 +
+V:52 = 139 headers, + D:8 table rows = 147). No half-step spacing classes
+remain in DESIGN.md. All eight new tasks sit in their correct phases.
+Every natural-key unique constraint now leads with tenant_id.
+
+=====================================================================
+CROSS-REFERENCES UPDATED
+=====================================================================
+
+- Dependency map bottom edge V-40…44 → V-40…48.
+- V-44 dependency string.
+- architecture §8.10 <-> §8.1 carve-out cross-links.
+- F-08a <-> architecture §8.10 allowlist/policy cross-reference.
+- testing-strategy inventory → task IDs.
+- scope §13 item 7 → V-47.
+
+=====================================================================
+ONE OPEN FLAG AWAITING APPROVAL (per B1b)
+=====================================================================
+
+Withdrawal-vs-earlier-builders ordering on V-45. The proposed category
+split is written into the task as a proposal:
+
+  ESSENTIAL DESPITE WITHDRAWAL: fee reminders, receipts, RBI-mandated
+  pre-debit notices.
+
+  SUPPRESSED ON WITHDRAWAL: attendance alerts, progress notes,
+  announcements.
+
+If approved, the resolution belongs in scope §7.1 plus a guard note on
+V-14/V-15a — apply on request; otherwise it stays flagged for the
+pre-Phase-3 review.
+
+=====================================================================
+END OF STAGE 3 APPLICATION REPORT.
+No implementation tasks begun. No further files modified.
+=====================================================================
