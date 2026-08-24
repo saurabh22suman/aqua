@@ -46,6 +46,14 @@ export async function bootstrapRoles(
     `);
 
     await client.query(`
+      grant usage on schema public to app_user;
+    `);
+
+    await client.query(`
+      grant usage on schema public to app_login;
+    `);
+
+    await client.query(`
       alter default privileges in schema public
         grant select, insert, update, delete on tables to app_user;
     `);

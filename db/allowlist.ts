@@ -1,4 +1,10 @@
-export const PLATFORM_TABLES = ["users"] as const;
+export const PLATFORM_TABLES = [
+  "users",
+  "ba_user",
+  "ba_session",
+  "ba_account",
+  "ba_verification",
+] as const;
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];
 

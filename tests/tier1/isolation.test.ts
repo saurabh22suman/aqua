@@ -1,17 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  PostgreSqlContainer,
-  type StartedPostgreSqlContainer,
-} from "@testcontainers/postgresql";
 import { Pool, type PoolClient } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { bootstrapRoles } from "@/db/bootstrap-roles";
-import { runMigrations } from "@/db/migrate";
+import type { IsolatedDb } from "../helpers/isolated-db";
+import { startIsolatedDb } from "../helpers/isolated-db";
 import { RLS_EXEMPT_TABLES } from "@/db/allowlist";
 
-const APP_PASSWORD = "isolation-test-pw";
 
-let container: StartedPostgreSqlContainer;
+let isolated: IsolatedDb;
 let admin: Pool;
 let app: Pool;
 const tenantA = uuidv7();
@@ -34,20 +29,8 @@ async function inTenant<T>(
 }
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer("postgres:16").start();
-  const adminUri = container.getConnectionUri();
-
-  await bootstrapRoles(adminUri, APP_PASSWORD);
-  await runMigrations(adminUri);
-
-  admin = new Pool({ connectionString: adminUri });
-  app = new Pool({
-    connectionString: `postgresql://app_login:${encodeURIComponent(APP_PASSWORD)}@${container.getHost()}:${container.getPort()}/${container.getDatabase()}`,
-    max: 4,
-    onConnect: async (client) => {
-      await client.query("set role app_user");
-    },
-  });
+  isolated = await startIsolatedDb();
+  admin = isolated.admin;
 
   const mutate = process.env.ISOLATION_MUTATE;
 
@@ -79,12 +62,19 @@ beforeAll(async () => {
     "insert into locations (id, tenant_id, name, is_primary) values ($1,$2,'B Hall',true)",
     [uuidv7(), tenantB],
   );
+
+  app = new Pool({
+    connectionString: isolated.appUri,
+    max: 4,
+    onConnect: async (client) => {
+      await client.query("set role app_user");
+    },
+  });
 }, 180_000);
 
 afterAll(async () => {
   await app?.end();
-  await admin?.end();
-  await container?.stop();
+  await isolated?.stop();
 });
 
 describe("tenant isolation — the blocking gate", () => {
@@ -114,7 +104,7 @@ describe("tenant isolation — the blocking gate", () => {
 
   it("current_user is app_user on every connection, session_user is app_login", async () => {
     const fresh = new Pool({
-      connectionString: `postgresql://app_login:${encodeURIComponent(APP_PASSWORD)}@${container.getHost()}:${container.getPort()}/${container.getDatabase()}`,
+      connectionString: isolated.appUri,
       max: 1,
       onConnect: async (client) => {
         await client.query("set role app_user");
