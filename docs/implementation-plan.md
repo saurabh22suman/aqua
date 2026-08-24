@@ -139,6 +139,71 @@ Done when: {ACCEPTANCE}
 
 ---
 
+# Backend-first pilot
+
+Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenant`, auth context, domain tables, Server Actions and seed — before any UI exists. Same repo, no separate service. Each task cross-references the Phase 1/Core IDs it partially delivers; nothing here is throwaway. Every task carries a **stop level** (GREEN/AMBER/RED) defined in `.claude/skills/execute-task/SKILL.md`.
+
+### B1 · Foundation
+**Delivers:** S-01, S-03, S-04 · **Stop level:** GREEN · **Status:** complete — `8bb6f99`
+**Depends:** —
+**Build:** Next.js 15 App Router, TypeScript strict, pnpm, Vitest. Docker Compose Postgres 16 with `btree_gist`. Drizzle config; forward-only plain-SQL migrations in `db/migrations` applied by `db/migrate.ts` with a `_migrations` ledger, per-file transaction and ascending-number guard. Zod env parsing that fails loudly at boot. Scripts: `db:generate`, `db:migrate`, `db:reset`, `test`, `typecheck`, `lint`.
+**Done when:** a trivial migration applies on a clean database; idempotent re-run no-ops; `typecheck`, `lint`, `test`, `build` clean; dev serves a page.
+**Never:** secrets in migration files. Edit an applied migration.
+**Deferred:** Tailwind/tokens to S-02; CI to S-05.
+
+### B2 · Roles and connection identity
+**Delivers:** F-05 · **Stop level:** RED (identity/isolation) · **Status:** complete — `33e7726`, fixes `90be8a5`
+**Depends:** B1
+**Build:** `app_user` NOLOGIN holding CRUD grants on all tables plus default privileges for tables **and sequences**; `app_login` LOGIN **NOINHERIT**, member of `app_user`. Role creation lives in an idempotent `db/bootstrap-roles.ts` — not a migration — because the password comes from `APP_LOGIN_PASSWORD` env. Pool drops privileges per physical connection via the documented `onConnect` option. Migrations run only under `MIGRATION_DATABASE_URL`. Migration grants `USAGE` on schema public to `app_user` and revokes `CREATE` from `PUBLIC` (a manually recreated public schema lacks initdb ACLs). `db:reset` re-bootstraps roles automatically — default privileges are keyed by schema OID and die with the schema drop.
+**Done when:** verified — `current_user=app_user`, `session_user=app_login` after connect; raw `app_login` denied everything; post-SET ROLE CRUD passes while create/alter/drop are denied; `rolinherit=false`, `rolbypassrls=false` on both roles; migrations still apply; a future table is reachable without any manual grant.
+**Never:** password literals in checked-in files. `app_login` as owner or `BYPASSRLS`. Omit NOINHERIT — without it SET ROLE is a no-op.
+
+### B3 · Core tenancy schema
+**Delivers:** F-02, F-03 · **Stop level:** GREEN · **Status:** complete — `26a79fd`
+**Depends:** B2
+**Build:** `tenants` (slug unique, status check, timezone default Asia/Kolkata, `plan_id` bare uuid until F-01), `locations` (soft delete + partial index), `users` (global, allowlisted, phone unique, `better_auth_id`/`person_id` nullable), `tenant_memberships` (interim plain-text role check-constrained to owner|admin|coach|parent until F-04 — flagged in-migration), `membership_locations`. Join-table recipe: **denormalised `tenant_id`** + composite FKs `(membership_id, tenant_id)` / `(location_id, tenant_id)` so cross-tenant rows cannot exist; this is the precedent for every future join table. RLS enable+force+`tenant_isolation` in the same migration as each table; `tenants` policy is on `id`. UUID v7 PKs generated app-side. Allowlist constants live in `db/allowlist.ts`.
+**Done when:** verified — pg_class shows rls+forced true on all four scoped tables; two tenants insert; A-context sees only A rows and explicitly naming B's id returns zero; no context fails closed; duplicate slug rejected; cross-tenant join insert rejected by composite FK.
+**Never:** a join table without `tenant_id`. An index not leading with `tenant_id`. RLS in a later migration than its table.
+
+### B4 · withTenant — the sanctioned accessor
+**Delivers:** F-06, F-07 · **Stop level:** GREEN
+**Depends:** B3
+**Build:** `db/tenant.ts` exporting `withTenant(tenantId, fn)` — a transaction that runs `set_config('app.tenant_id', $1, true)` first; `true` scopes it to the transaction so it cannot leak across pooled connections. ESLint `no-restricted-imports` banning `@/db/client` outside `db/`. `db/CLAUDE.md` noting `users` is reached only by joining through `tenant_memberships` inside `withTenant()`.
+**Done when:** an unscoped query inside `withTenant` returns only that tenant's rows; importing the raw client outside `db/` fails lint.
+**Read first:** architecture §5.3, §5.4.
+**Never:** read `app.tenant_id` from a cookie, header or request parameter — it comes from the validated route/session context.
+
+### B5 · Isolation gate — BLOCKING
+**Delivers:** F-08, F-08a (+ S-05a harness) · **Stop level:** RED
+**Depends:** B4
+**Build:** Testcontainers real Postgres 16. `tests/tier1/isolation.test.ts`: (1) unscoped query returns only current tenant's rows; (2) hostile query explicitly naming another tenant's id returns nothing; (3) `current_user` is `app_user` on a fresh connection; (4) catch-all querying pg_class for any public table where `relrowsecurity` or `relforcerowsecurity` is false, excluding the `RLS_EXEMPT_TABLES` allowlist from `db/allowlist.ts`; assert empty. Then prove the tests can fail: drop one policy → red → restore; remove force → catch-all red → restore; add a tenant_id table with no RLS → caught without a per-table test.
+**Done when:** suite green AND mutations (b), (c), (d) each demonstrably turn it red. A green test proves nothing; only the mutations prove it would notice a real failure. Blocks B6 and everything after.
+**Never:** mock the database. SQLite. Skip the mutation proof.
+
+### B6 · Auth and request context
+**Delivers:** F-09, F-10, F-11 · **Stop level:** RED
+**Depends:** B5
+**Build:** Better Auth self-hosted, phone + OTP (6 digits, 5-minute expiry, 5 attempts then lockout, rate limits per phone and per IP, OTPs never logged — fetch current Better Auth docs before writing; the access-control plugin docs are sparse). `Ctx` resolved once per request in middleware: userId, tenantId, membershipId, locationIds, role. Tenant slug from the route validated against the session.
+**Done when:** valid session requesting another tenant's slug returns 404, not that tenant's data — tested; sixth wrong OTP locks out; no OTP in logs.
+**Read first:** current Better Auth documentation.
+**Never:** trust a client-supplied tenant id. Log an OTP.
+
+### B7 · Domain schema — people, programs, sessions
+**Delivers:** C-01, C-03, C-16, C-17, C-18, C-19 (schema), C-22 (schema) · **Stop level:** GREEN
+**Depends:** B4
+**Build:** `persons` — NO generated is_minor column; derived at read time using the tenant's timezone via one shared helper. `members` (person, location, member_code unique per tenant, status). `programs`, `batches` (capacity, days_of_week int[], start/end time), `enrolments` unique (tenant_id, member_id, batch_id, enrolled_on), `sessions` unique (tenant_id, batch_id, session_date), `attendance` unique (tenant_id, session_id, member_id) with `client_id text not null` and upsert semantics. Sessions materialised, not computed: generation job runs 4 weeks ahead in the tenant's timezone — a 07:00 batch lands at 07:00 IST regardless of server timezone; tested explicitly.
+**Done when:** migrations apply; uniqueness constraints reject duplicates; timezone test passes across a UTC-offset server clock.
+**Never:** store a derived `is_minor`. Compute sessions on read.
+
+### B8 · Server Actions and seed
+**Delivers:** first vertical slice through C-03, C-18, C-19, C-22 · **Stop level:** GREEN
+**Depends:** B7
+**Build:** Actions for create member, enrol, generate sessions, mark attendance. Every action opens with (1) Zod parse, (2) permission check. Attendance upserts on (session_id, member_id) by client_id — replaying the same client_id twice produces one row; tested. Seed script: one tenant, one location, two batches, twelve members, four weeks of sessions. Synthetic names only — real academy data arrives later, with consent.
+**Done when:** `pnpm seed`, then a scripted run marks a full register, replays it, and the row count is unchanged.
+**Never:** skip the parse/permission preamble in an action. Seed with real personal data.
+
+---
+
 # Phase 1 — Foundation
 
 **5–6 weeks.** Nothing a customer notices. Everything depends on it.
