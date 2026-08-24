@@ -678,6 +678,8 @@ The product will hold names, photographs, attendance patterns, medical notes and
 | Photography | Existing media deleted, future upload blocked. Membership continues |
 | Processing | The academy cannot lawfully record attendance or assessments for that child — membership cannot continue as normal. Undesigned; see open question 7 and task V-45a |
 
+**Why some messages survive a communications withdrawal:** fee reminders and receipts are addressed to the guardian regarding their own contractual obligation to the academy — they concern the guardian's data and obligations, not the processing of the child's personal data. Pre-debit notices are separately mandated by the RBI e-mandate framework regardless of consent state. Attendance alerts, progress notes and announcements exist only because we hold communications consent for the child; they end with it. The reasoning is written down deliberately — without it, someone will simplify this incorrectly later.
+
 Every tenant is a data fiduciary; we are a processor. The data processing agreement is part of onboarding, not an afterthought.
 
 ### 7.2 Tax and invoicing

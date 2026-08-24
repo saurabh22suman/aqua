@@ -663,6 +663,7 @@ Done when: {ACCEPTANCE}
 **Depends:** C-43, C-32
 **Build:** Automated reminders at 3, 7, 14 and 30 days overdue. Configurable intervals. Stops on payment.
 **Done when:** paying mid-ladder cancels remaining reminders immediately.
+**Guard:** consults the recipient's communications-consent state before sending and records which category each message falls into (scope §7.1). Fee reminders are essential and survive a communications withdrawal — the check and citation happen anyway.
 
 ### V-15 · Mandate registration
 **Depends:** C-35, C-30
@@ -675,6 +676,7 @@ Done when: {ACCEPTANCE}
 **Done when:** every scheduled debit has a recorded `notified_at` before execution, and opting out cancels one debit without cancelling the membership.
 **Read first:** architecture §10.4. **Verify the notification window against Razorpay's current docs — sources disagree between 24 and 72 hours.**
 **Never:** execute a debit without a recorded notice. Enforce it as a guard in the job, not a convention.
+**Guard:** pre-debit notices are RBI-mandated and essential — they send despite a communications withdrawal — but the send must check suppression state and cite its category in `message_log` like any other message.
 
 ### V-16 · Auto-debit
 **Depends:** V-15a, C-38
@@ -848,11 +850,11 @@ Done when: {ACCEPTANCE}
 ### V-45 · Consent withdrawal — per-purpose
 **Depends:** C-05, C-43
 **Build:** Guardian-initiated withdrawal via magic link and staff UI, scoped to a consent purpose (`communications` | `photography` | `processing`) — never a single global action. Sets `withdrawn_at` on the matching consent record (append-only — never deleted); audited. Consequences per purpose:
-- `communications` → suppressible messages stop. Membership continues. Proposed split, not decided: fee reminders, receipts and RBI-mandated pre-debit notices would stay essential despite withdrawal; attendance alerts, progress notes and announcements would be suppressed.
+- `communications` → suppressible messages stop per scope §7.1 (fee reminders, receipts and RBI-mandated pre-debit notices are essential and still send). Membership continues.
 - `photography` → that person's R2 media is deleted and future uploads blocked. Membership continues.
 - `processing` → not implemented here; hands off to V-45a.
-**FLAGGED AWAITING APPROVAL:** the communications category split above. If approved, the reasoning gets recorded in scope §7.1 with guard notes on V-14/V-15a; otherwise it stays flagged for the pre-Phase-3 review.
 **Done when:** withdrawing `communications` stops the next queued attendance alert while the same child's fee reminder still sends; withdrawing `photography` removes existing media and rejects new uploads; every withdrawal is provable with timestamp, purpose and evidence.
+**Read first:** scope §7.1 — the reasoning behind the essential/suppressible split is recorded there, not just the split.
 
 ### V-45a · Consent withdrawal offboarding
 **Depends:** V-45

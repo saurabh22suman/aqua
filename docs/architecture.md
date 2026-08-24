@@ -1423,6 +1423,7 @@ WhatsApp is the largest variable cost in the business and scales with member cou
 - **Meter per tenant per month.** Count and cost, recorded at send time.
 - **Enforce quota by plan.** Warn at 80%, soft-block marketing at 100%, never block a fee reminder or a receipt.
 - **Use the free service window.** When a parent replies, the following 24 hours are free — route support conversation into that window rather than sending templates.
+- **Check consent suppression at send.** Every send consults the recipient's per-purpose withdrawal state (scope §7.1); `message_log.consent_class` records whether the message was essential or suppressible, making suppression queryable and auditable rather than implicit in template names.
 
 ```sql
 create table message_log (
@@ -1431,6 +1432,7 @@ create table message_log (
   person_id   uuid,
   template    text not null,
   category    text not null,     -- whatsapp template category: utility|marketing|authentication
+  consent_class text not null,   -- 'essential'|'suppressible'; checked against withdrawal state at send
   provider_id text,
   cost_paise  int not null,
   status      text not null,     -- queued|sent|delivered|read|failed

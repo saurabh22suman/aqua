@@ -56,8 +56,6 @@ Uniform coverage targets waste effort on trivia and under-test the things that e
 | 14 | `pay-permission-audit.test.ts` | V-33a |
 | 15 | `magic-link-scope.test.ts` (a fee link cannot read progress) | C-44 |
 
-Note: files 11 (V-45) and 12/13 (V-15a interplay) assume the withdrawal guard question gets resolved before Phase 3 collections work.
-
 ---
 
 ## 3. The stack
