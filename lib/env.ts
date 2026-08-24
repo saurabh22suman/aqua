@@ -19,6 +19,7 @@ const postgresUrl = z
 const envSchema = z.object({
   DATABASE_URL: postgresUrl,
   MIGRATION_DATABASE_URL: z.preprocess(emptyAsUndefined, postgresUrl.optional()),
+  APP_LOGIN_PASSWORD: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 });
 
@@ -37,5 +38,6 @@ export const env = {
   DATABASE_URL: parsed.data.DATABASE_URL,
   MIGRATION_DATABASE_URL:
     parsed.data.MIGRATION_DATABASE_URL ?? parsed.data.DATABASE_URL,
+  APP_LOGIN_PASSWORD: parsed.data.APP_LOGIN_PASSWORD,
   NODE_ENV: parsed.data.NODE_ENV,
 };
