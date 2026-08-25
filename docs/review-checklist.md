@@ -83,23 +83,50 @@ from pg_default_acl;
 A green suite proves nothing. For each safety property touched by the
 batch, mutate the thing and confirm the test fails, then restore:
 
-- [ ] Drop one table's RLS policy → isolation suite goes RED → restore.
-- [ ] Remove `force row level security` from one table → catch-all
-      goes RED → restore.
-- [ ] Create a tenant_id table with no RLS → catch-all catches it with
-      no per-table test written → drop it.
-- [ ] Revoke a sequence grant → bigserial insert fails → restore.
-- [ ] Weaken one assertion to `toBeDefined()` → mutation gate fails
-      (once S-05b lands).
+### Named failure class: unscoped reads return ZERO, not errors
 
-The first three are built into the suite itself:
+RLS filters silently. A query that forgot its tenant context does not
+fail — it succeeds with fewer rows than reality. Symptoms are never
+permission errors; they are unique-key collisions, missing records,
+wrong counts, "data I just wrote is gone".
+
+Real examples from one batch:
+- Seed's member-existence check ran unscoped → saw zero members →
+  re-inserted → collided on `members_tenant_member_code_key`.
+- Pre-hardening, a warm pooled connection without context turned
+  `current_setting('app.tenant_id', true)` into `''` → cast error
+  22P02 instead of rows or silence.
+
+Detection is mechanical now (dev/test only): the application pool
+rewrites any out-of-scope statement to `raise exception 'Unscoped
+query…' (P0001)`. Tenant work goes through `withTenant()`; platform
+surfaces declare themselves with `withPlatform()`. If you bypass both,
+you have decided something — write it down.
+
+- [ ] Mutation: run any service call outside `withTenant` in dev →
+      must throw P0001 with guidance, not return empty.
+
+### Bugs the tests caught
+
+- The timezone converter's second-pass correction was computed against
+  the target instead of the current guess, silently cancelling pass
+  one — every wall time converted as if the server were UTC. Its own
+  tests failed before the code ever touched data.
+- Migration ordering (grants referencing a role created later) passed
+  locally forever because bootstrap happened to run first; the
+  clean-room Testcontainer caught it on day one.
+
+These two are the answer to "is the testing overhead worth it".
+
+The rest of this section is built into the suite itself:
 `ISOLATION_MUTATE=drop-policy|no-force|bare-table pnpm exec vitest run tests/tier1/isolation.test.ts`
 must go RED in all three forms; a plain run goes back to green.
 
 Also verify the no-context contract on a WARM connection: after any
 `withTenant` call has run on the pool, an unscoped query must return
 zero rows (`nullif` policies), never error 22P02 and never leak rows.
-Covered by the fourth isolation test.
+Covered by the fourth isolation test — and in dev it now throws via
+the scope guard instead of returning zero.
 
 Record what went red. A mutation that did NOT turn anything red is a
 coverage hole — open a task for it before moving on.

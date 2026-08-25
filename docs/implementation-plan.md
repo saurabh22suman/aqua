@@ -143,6 +143,17 @@ Done when: {ACCEPTANCE}
 
 Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenant`, auth context, domain tables, Server Actions and seed — before any UI exists. Same repo, no separate service. Each task cross-references the Phase 1/Core IDs it partially delivers; nothing here is throwaway. Every task carries a **stop level** (GREEN/AMBER/RED) defined in `.claude/skills/execute-task/SKILL.md`.
 
+**Pilot outcome.** All eight tasks are complete. Fully delivered:
+F-02, F-05, F-06, F-07 (via B4's lint rule), F-08, F-08a. Partially
+delivered — real work remains inside these tasks:
+F-03 (interim plain-text role until F-04's roles/permissions model),
+F-09 (OTP has no delivery channel and no staff email/password
+fallback), F-10 (rate limiting is Better Auth's global limiter; the
+per-phone lockout is plugin `allowedAttempts`), F-11 (`Ctx` lacks the
+permissions/features arrays F-12 will consume),
+C-01/C-03/C-16–C-19/C-22 (schema, constraints, generator and service
+layer exist; screens, job scheduling and the full task bodies do not).
+
 ### B1 · Foundation
 **Delivers:** S-01, S-03, S-04 · **Stop level:** GREEN · **Status:** complete — `8bb6f99`
 **Depends:** —
@@ -174,14 +185,14 @@ Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenan
 **Never:** read `app.tenant_id` from a cookie, header or request parameter — it comes from the validated route/session context.
 
 ### B5 · Isolation gate — BLOCKING
-**Delivers:** F-08, F-08a (+ S-05a harness) · **Stop level:** RED · **Status:** complete
+**Delivers:** F-08, F-08a (+ S-05a harness) · **Stop level:** RED · **Status:** complete — `8a73a52`
 **Depends:** B4
 **Build:** Testcontainers real Postgres 16. `tests/tier1/isolation.test.ts`: (1) unscoped query returns only current tenant's rows; (2) hostile query explicitly naming another tenant's id returns nothing; (3) `current_user` is `app_user` on a fresh connection; (4) catch-all querying pg_class for any public table where `relrowsecurity` or `relforcerowsecurity` is false, excluding the `RLS_EXEMPT_TABLES` allowlist from `db/allowlist.ts`; assert empty. Then prove the tests can fail: drop one policy → red → restore; remove force → catch-all red → restore; add a tenant_id table with no RLS → caught without a per-table test.
 **Done when:** suite green AND mutations (b), (c), (d) each demonstrably turn it red. A green test proves nothing; only the mutations prove it would notice a real failure. Blocks B6 and everything after.
 **Never:** mock the database. SQLite. Skip the mutation proof.
 
 ### B6 · Auth and request context
-**Delivers:** F-09, F-10, F-11 · **Stop level:** RED
+**Delivers:** F-09 (partial: no real OTP delivery channel, no email/password fallback), F-10, F-11 (partial: no permissions/features on Ctx yet) · **Stop level:** RED · **Status:** complete — `1b5bff6`
 **Depends:** B5
 **Build:** Better Auth self-hosted, phone + OTP (6 digits, 5-minute expiry, 5 attempts then lockout, rate limits per phone and per IP, OTPs never logged — fetch current Better Auth docs before writing; the access-control plugin docs are sparse). `Ctx` resolved once per request in middleware: userId, tenantId, membershipId, locationIds, role. Tenant slug from the route validated against the session.
 **Done when:** valid session requesting another tenant's slug returns 404, not that tenant's data — tested; sixth wrong OTP locks out; no OTP in logs.
@@ -189,14 +200,14 @@ Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenan
 **Never:** trust a client-supplied tenant id. Log an OTP.
 
 ### B7 · Domain schema — people, programs, sessions
-**Delivers:** C-01, C-03, C-16, C-17, C-18, C-19 (schema), C-22 (schema) · **Stop level:** GREEN
+**Delivers:** C-01/C-03/C-16–C-19 schema only (no screens, no job scheduling — generation runs inline via `generateSessions`), C-22 schema + upsert semantics · **Stop level:** GREEN · **Status:** complete — `69a9eed`, lint fix `0632d21`
 **Depends:** B4
 **Build:** `persons` — NO generated is_minor column; derived at read time using the tenant's timezone via one shared helper. `members` (person, location, member_code unique per tenant, status). `programs`, `batches` (capacity, days_of_week int[], start/end time), `enrolments` unique (tenant_id, member_id, batch_id, enrolled_on), `sessions` unique (tenant_id, batch_id, session_date), `attendance` unique (tenant_id, session_id, member_id) with `client_id text not null` and upsert semantics. Sessions materialised, not computed: generation job runs 4 weeks ahead in the tenant's timezone — a 07:00 batch lands at 07:00 IST regardless of server timezone; tested explicitly.
 **Done when:** migrations apply; uniqueness constraints reject duplicates; timezone test passes across a UTC-offset server clock.
 **Never:** store a derived `is_minor`. Compute sessions on read.
 
 ### B8 · Server Actions and seed
-**Delivers:** first vertical slice through C-03, C-18, C-19, C-22 · **Stop level:** GREEN · **Status:** complete
+**Delivers:** first vertical slice through C-03, C-18, C-19, C-22 (service layer + actions; UI still absent) · **Stop level:** GREEN · **Status:** complete — `9985c23`, scoping fix `faad9f8`
 **Depends:** B7
 **Build:** Actions for create member, enrol, generate sessions, mark attendance. Every action opens with (1) Zod parse, (2) permission check. Attendance upserts on (session_id, member_id) by client_id — replaying the same client_id twice produces one row; tested. Seed script: one tenant, one location, two batches, twelve members, four weeks of sessions. Synthetic names only — real academy data arrives later, with consent.
 **Done when:** `pnpm seed`, then a scripted run marks a full register, replays it, and the row count is unchanged.
