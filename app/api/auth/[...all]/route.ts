@@ -1,7 +1,8 @@
 import { auth } from "@/lib/auth/server";
+import { withPlatform } from "@/db/scope";
 
 async function handle(request: Request): Promise<Response> {
-  return auth.handler(request);
+  return withPlatform(() => auth.handler(request));
 }
 
 export const GET = handle;

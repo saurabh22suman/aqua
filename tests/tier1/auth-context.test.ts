@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth/server";
 import { NotFoundError, resolveCtxFor } from "@/lib/auth/context";
 import { setOtpSink } from "@/lib/auth/otp-delivery";
 import { env } from "@/lib/env";
+import { withPlatform } from "@/db/scope";
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
@@ -49,11 +50,11 @@ describe("auth and request context", () => {
   it("verifies a correct OTP, creates a session, links the platform user", async () => {
     const phone = "+919900000001";
 
-    await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone } });
+    await withPlatform(() => auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone } }));
     expect(capturedCodes.has(phone)).toBe(true);
 
     const code = capturedCodes.get(phone)!;
-    await auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code } });
+    await withPlatform(() => auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code } }));
 
     const ba = await admin.query(
       "select u.id from ba_user u where u.phone_number = $1 and u.phone_number_verified = true",
@@ -80,18 +81,20 @@ describe("auth and request context", () => {
   it("locks out after five wrong attempts — even the correct code is then rejected", async () => {
     const phone = "+919900000002";
 
-    await auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone } });
+    await withPlatform(() => auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone } }));
     const code = capturedCodes.get(phone)!;
 
     for (let i = 0; i < 5; i++) {
       const err = await expectApiError(
-        auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code: "000000" } }),
+          withPlatform(() =>
+          auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code: "000000" } }),
+        ),
       );
       if (i < 4) expect(err.status).not.toBe(403);
     }
 
     const finalErr = await expectApiError(
-      auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code } }),
+      withPlatform(() => auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code } })),
     );
     expect(finalErr.message).toMatch(/too many attempts/i);
 
