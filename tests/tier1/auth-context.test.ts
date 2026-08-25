@@ -50,10 +50,12 @@ describe("auth and request context", () => {
   it("verifies a correct OTP, creates a session, links the platform user", async () => {
     const phone = "+919900000001";
 
+    // better-auth does not propagate ALS; this wrap is load-bearing, do not remove
     await withPlatform(() => auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone } }));
     expect(capturedCodes.has(phone)).toBe(true);
 
     const code = capturedCodes.get(phone)!;
+    // better-auth does not propagate ALS; this wrap is load-bearing, do not remove
     await withPlatform(() => auth.api.verifyPhoneNumber({ body: { phoneNumber: phone, code } }));
 
     const ba = await admin.query(
@@ -81,6 +83,7 @@ describe("auth and request context", () => {
   it("locks out after five wrong attempts — even the correct code is then rejected", async () => {
     const phone = "+919900000002";
 
+    // better-auth does not propagate ALS; this wrap is load-bearing, do not remove
     await withPlatform(() => auth.api.sendPhoneNumberOTP({ body: { phoneNumber: phone } }));
     const code = capturedCodes.get(phone)!;
 
