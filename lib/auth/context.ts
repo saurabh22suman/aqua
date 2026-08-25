@@ -3,6 +3,7 @@ import { cache } from "react";
 import { auth } from "./server";
 import {
   resolveTenantAccessBySlug,
+  resolveDefaultMembership,
   resolveLocationIds,
 } from "../../db/platform";
 
@@ -42,8 +43,39 @@ export const requireCtx = cache(async (slug: string): Promise<Ctx> => {
   return resolveCtxFor(session.user.id, slug);
 });
 
+export async function requireDefaultCtx(): Promise<Ctx> {
+  const h = await headers();
+  const session = await withPlatformSafe(() => auth.api.getSession({ headers: h }));
+  if (!session?.user) throw new NotFoundError();
+
+  const membership = await resolveDefaultMembership(session.user.id);
+  if (!membership) throw new NotFoundError();
+
+  const locationIds = await resolveLocationIds(
+    membership.tenantId,
+    membership.tenantId,
+    true,
+  );
+
+  return {
+    userId: session.user.id,
+    tenantId: membership.tenantId,
+    membershipId: "",
+    role: membership.role,
+    slug: "",
+    allLocations: true,
+    locationIds,
+  };
+}
+
+async function withPlatformSafe<T>(fn: () => Promise<T>): Promise<T> {
+  const { withPlatform } = await import("@/db/scope");
+  return withPlatform(fn);
+}
+
 export async function sessionExists(): Promise<boolean> {
   const h = await headers();
-  return (await auth.api.getSession({ headers: h })) !== null;
+  const session = await withPlatformSafe(() => auth.api.getSession({ headers: h }));
+  return session !== null;
 }
 
