@@ -1024,3 +1024,42 @@ These apply to every task and override any local convenience.
 | Automated messages are utility category | Marketing costs 7–8× as much |
 | Terms never touch data, enums, permissions or exports | Vocabulary is presentation only |
 | No tracking on parent or student surfaces | DPDP obligation, not a preference |
+
+
+---
+
+# Screens-first sprint
+
+Coach first (highest frequency, hardest technical problem), then owner,
+then parent. DESIGN.md is the authority on tokens, spacing, type and
+the Never list — no invented values. Backend contract is B6–B8.
+
+### S1 · App shell and login
+**Delivers:** first surfaces for F-09/F-11 · **Stop level:** GREEN · **Status:** complete — see git log
+**Depends:** B6
+**Build:** Route groups `(coach)/(owner)/(parent)` with separate layouts — a coach bundle must not contain owner code. Phone + OTP login against B6; post-login each role routes to its own home. Bottom nav exactly four items per role, no More tab. Tokens from DESIGN.md only.
+**Done when:** three roles log in and land on three different surfaces; coach bundle contains no owner code.
+
+### S2 · Coach register
+**Delivers:** C-22 surface · **Stop level:** GREEN
+**Depends:** S1
+**Build:** Coach today-list → register screen. Separate 44px present/absent targets, never a swipe. Header shows marked-of-total. Optimistic update under 100ms. Rows ordered by lane where lanes exist (member_code until facilities land). Every row shows attendance percentage this month.
+**Done when:** 16 students markable one-handed in under 60 seconds on a real phone — timed and reported.
+
+### S3 · Offline sync
+**Delivers:** C-22 offline replay promise · **Stop level:** AMBER
+**Depends:** S2
+**Build:** client_id generated on device before any network call. IndexedDB queue with ordered replay on reconnect. Service worker caching shell plus today's sessions and rosters (roster payloads also snapshot to IDB — server actions are POST and not HTTP-cacheable). Persistent honest sync state: pending count, last synced, failures.
+**Done when:** with the network genuinely disabled a full register marks and persists; on reconnect it syncs exactly once; replaying the queue twice changes no row counts.
+
+### S4 · Owner home
+**Delivers:** owner dashboard surface · **Stop level:** GREEN
+**Depends:** S1
+**Build:** Per DESIGN.md reference: today's batches as capacity lanes (signature element), member count, attendance this week, needs-attention list where every item states why it is there. NO money tiles, no placeholders for absent data — honest empty states.
+**Done when:** an owner opening the home sees their day truthfully, including its emptiness.
+
+### S5 · Parent page
+**Stop level:** RED — propose before building
+**Depends:** S1
+**Build (proposed, not approved):** signed single-purpose scoped tokens with expiry and revocation; `/p/[token]` zero-JS server-rendered; child's next session and attendance this month; no analytics or tracking ever.
+**Never:** serve children's data behind an unguessable-but-unmanaged URL.
