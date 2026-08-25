@@ -1,14 +1,47 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+@import "tailwindcss";
+
+@theme {
+  --color-deck: #EDF0EC;
+  --color-paper: #FFFFFF;
+  --color-ink: #0F1F1C;
+  --color-ink-2: #3C534F;
+  --color-ink-3: #7B918D;
+  --color-marine: #0D3B36;
+  --color-water: #0E7C86;
+  --color-water-soft: #E3F1F2;
+  --color-line: rgba(15, 31, 28, 0.1);
+
+  --color-good: #2E9E5B;
+  --color-good-soft: #E4F4EA;
+  --color-late: #D8453C;
+  --color-late-soft: #FCE9E7;
+  --color-warn: #B8710A;
+  --color-warn-soft: #FDF0DC;
+
+  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
+
+  --radius-card: 20px;
+  --radius-ctl: 14px;
+  --radius-pill: 9999px;
+
+  --shadow-1: 0 1px 2px rgba(15, 31, 28, 0.05);
+  --shadow-2: 0 2px 6px rgba(15, 31, 28, 0.05), 0 14px 32px rgba(15, 31, 28, 0.08);
 }
 
-body {
-  margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+:root {
+  --accent: #FF7A18;
+  --accent-soft: #FFEEE1;
+  --accent-ink: #B84E00;
+}
+
+html {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

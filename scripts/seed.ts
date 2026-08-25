@@ -11,7 +11,7 @@ import { createMember, countAttendanceForSession, enrolMember, markAttendance } 
 
 const SLUG = "demo-academy";
 const TZ = "Asia/Kolkata";
-const MEMBER_COUNT = 12;
+const MEMBER_COUNT = 16;
 
 const adminPool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
@@ -179,6 +179,8 @@ async function main() {
     process.exitCode = 1;
   } else {
     console.log("replay idempotent ✓ row count unchanged");
+
+  await ensureLoginUsers(tenantId);
   }
 
   await pool.end();
@@ -192,3 +194,32 @@ main().catch(async (err) => {
   await adminPool.end().catch(() => {});
   process.exit(1);
 });
+
+const LOGIN_USERS = [
+  { phone: "+919000000001", role: "owner" },
+  { phone: "+919000000002", role: "coach" },
+  { phone: "+919000000003", role: "parent" },
+] as const;
+
+async function ensureLoginUsers(tenantId: string) {
+  for (const u of LOGIN_USERS) {
+    await adminPool.query(
+      `insert into users (id, phone)
+       select $1, $2
+       where not exists (select 1 from users where phone = $2)`,
+      [uuidv7(), u.phone],
+    );
+    await adminPool.query(
+      `insert into tenant_memberships (id, tenant_id, user_id, role, status)
+       select $1, $2, u.id, $3, 'active'
+       from users u where u.phone = $4
+       and not exists (
+         select 1 from tenant_memberships m
+         where m.user_id = u.id and m.tenant_id = $2 and m.role = $3
+       )`,
+      [uuidv7(), tenantId, u.role, u.phone],
+    );
+  }
+  console.log(`login users ready → ${LOGIN_USERS.map((u) => `${u.phone}=${u.role}`).join(", ")}`);
+}
+

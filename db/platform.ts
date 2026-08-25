@@ -85,3 +85,55 @@ export async function resolveLocationIds(
     await pool.end();
   }
 }
+
+const ROLE_HOME: Record<string, string> = {
+  owner: "/owner",
+  admin: "/owner",
+  coach: "/coach",
+  parent: "/parent",
+};
+
+export async function resolveHomePath(
+  betterAuthUserId: string,
+): Promise<string | null> {
+  const pool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+  try {
+    const result = await pool.query<{ role: string }>(
+      `
+      select m.role
+      from tenant_memberships m
+      join users u on u.id = m.user_id
+      where u.better_auth_id = $1 and m.status = 'active' and m.deleted_at is null
+      order by case m.role when 'owner' then 0 when 'admin' then 1 when 'coach' then 2 else 3 end
+      limit 1
+      `,
+      [betterAuthUserId],
+    );
+    const role = result.rows[0]?.role;
+    return role ? ROLE_HOME[role] ?? "/parent" : null;
+  } finally {
+    await pool.end();
+  }
+}
+
+export async function resolveDefaultMembership(
+  betterAuthUserId: string,
+): Promise<{ tenantId: string; role: string } | null> {
+  const pool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+  try {
+    const result = await pool.query<{ tenantId: string; role: string }>(
+      `
+      select m.tenant_id as "tenantId", m.role
+      from tenant_memberships m
+      join users u on u.id = m.user_id
+      where u.better_auth_id = $1 and m.status = 'active' and m.deleted_at is null
+      order by case m.role when 'owner' then 0 when 'admin' then 1 when 'coach' then 2 else 3 end
+      limit 1
+      `,
+      [betterAuthUserId],
+    );
+    return result.rows[0] ?? null;
+  } finally {
+    await pool.end();
+  }
+}
