@@ -246,6 +246,16 @@ layer exist; screens, job scheduling and the full task bodies do not).
 **Done when:** role templates seed per tenant and are editable.
 **Never:** hard-code behaviour to a role name anywhere in the codebase.
 
+### F-03a · Membership role_id cutover
+**Depends:** F-04
+**Build:** replace `tenant_memberships.role` (plain text) with
+`role_id uuid not null` referencing the per-tenant `roles` table, cutting over every
+consumer.
+**Done when:** no column, query or type carries a plain-text membership role; a membership
+cannot reference another tenant's role; `requireDefaultCtx` honours the membership's real
+location scope.
+**Never:** leave a code path that resolves authorization from a role name string.
+
 ## Isolation — the blocking gate
 
 ### F-05 · Database roles

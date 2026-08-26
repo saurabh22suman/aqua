@@ -36,6 +36,9 @@ afterAll(async () => {
     "delete from tenant_memberships where user_id in (select id from users where phone in ($1,$2))",
     ["+919900000001", "+919900000002"],
   );
+  await admin.query(
+    "delete from roles where tenant_id in (select id from tenants where slug like 'auth-a-%' or slug like 'auth-b-%')",
+  );
   await admin.query("delete from tenants where slug like 'auth-a-%' or slug like 'auth-b-%'");
   await admin.query(
     "delete from users where phone in ('+919900000001','+919900000002')",
@@ -122,9 +125,14 @@ describe("auth and request context", () => {
     );
 
     const membershipId = uuidv7();
+    const roleId = uuidv7();
     await admin.query(
-      "insert into tenant_memberships (id, tenant_id, user_id, role, status) values ($1,$2,$3,'owner','active')",
-      [membershipId, tenantA, linkedUserId],
+      "insert into roles (id, tenant_id, key, name, is_system) values ($1, $2, 'owner', 'Owner', true)",
+      [roleId, tenantA],
+    );
+    await admin.query(
+      "insert into tenant_memberships (id, tenant_id, user_id, role_id, status) values ($1,$2,$3,$4,'active')",
+      [membershipId, tenantA, linkedUserId, roleId],
     );
 
     const betterAuthId = (
@@ -135,7 +143,7 @@ describe("auth and request context", () => {
     ).rows[0].better_auth_id;
 
     const ctx = await resolveCtxFor(betterAuthId, `auth-a-${RUN}`);
-    expect(ctx.role).toBe("owner");
+    expect(ctx.roleKey).toBe("owner");
     expect(ctx.tenantId).toBe(tenantA);
     expect(ctx.locationIds).toEqual([]);
 

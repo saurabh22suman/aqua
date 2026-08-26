@@ -6,7 +6,8 @@ export type TenantAccess = {
   userId: string;
   tenantId: string;
   membershipId: string;
-  role: string;
+  roleKey: string;
+  roleId: string;
   allLocations: boolean;
 };
 
@@ -21,7 +22,8 @@ export async function resolveTenantAccessBySlug(
       select u.id            as "userId",
              t.id            as "tenantId",
              m.id            as "membershipId",
-             m.role          as "role",
+             r.key           as "roleKey",
+             r.id            as "roleId",
              m.all_locations as "allLocations"
       from tenants t
       join tenant_memberships m
@@ -29,6 +31,9 @@ export async function resolveTenantAccessBySlug(
        and m.status = 'active'
        and m.deleted_at is null
       join users u on u.id = m.user_id
+      join roles r
+        on r.id = m.role_id
+       and r.tenant_id = m.tenant_id
       where u.better_auth_id = $1
         and t.slug = $2
       limit 1
@@ -98,19 +103,22 @@ export async function resolveHomePath(
 ): Promise<string | null> {
   const pool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   try {
-    const result = await pool.query<{ role: string }>(
+    const result = await pool.query<{ roleKey: string }>(
       `
-      select m.role
+      select r.key as "roleKey"
       from tenant_memberships m
       join users u on u.id = m.user_id
+      join roles r
+        on r.id = m.role_id
+       and r.tenant_id = m.tenant_id
       where u.better_auth_id = $1 and m.status = 'active' and m.deleted_at is null
-      order by case m.role when 'owner' then 0 when 'admin' then 1 when 'coach' then 2 else 3 end
+      order by case r.key when 'owner' then 0 when 'admin' then 1 when 'coach' then 2 else 3 end
       limit 1
       `,
       [betterAuthUserId],
     );
-    const role = result.rows[0]?.role;
-    return role ? ROLE_HOME[role] ?? "/parent" : null;
+    const roleKey = result.rows[0]?.roleKey;
+    return roleKey ? ROLE_HOME[roleKey] ?? "/parent" : null;
   } finally {
     await pool.end();
   }
@@ -118,16 +126,35 @@ export async function resolveHomePath(
 
 export async function resolveDefaultMembership(
   betterAuthUserId: string,
-): Promise<{ tenantId: string; role: string } | null> {
+): Promise<{
+  tenantId: string;
+  membershipId: string;
+  roleKey: string;
+  roleId: string;
+  allLocations: boolean;
+} | null> {
   const pool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   try {
-    const result = await pool.query<{ tenantId: string; role: string }>(
+    const result = await pool.query<{
+      tenantId: string;
+      membershipId: string;
+      roleKey: string;
+      roleId: string;
+      allLocations: boolean;
+    }>(
       `
-      select m.tenant_id as "tenantId", m.role
+      select m.tenant_id     as "tenantId",
+             m.id            as "membershipId",
+             r.key           as "roleKey",
+             r.id            as "roleId",
+             m.all_locations as "allLocations"
       from tenant_memberships m
       join users u on u.id = m.user_id
+      join roles r
+        on r.id = m.role_id
+       and r.tenant_id = m.tenant_id
       where u.better_auth_id = $1 and m.status = 'active' and m.deleted_at is null
-      order by case m.role when 'owner' then 0 when 'admin' then 1 when 'coach' then 2 else 3 end
+      order by case r.key when 'owner' then 0 when 'admin' then 1 when 'coach' then 2 else 3 end
       limit 1
       `,
       [betterAuthUserId],

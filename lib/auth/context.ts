@@ -11,7 +11,8 @@ export type Ctx = {
   userId: string;
   tenantId: string;
   membershipId: string;
-  role: string;
+  roleKey: string;
+  roleId: string;
   slug: string;
   allLocations: boolean;
   locationIds: string[];
@@ -53,17 +54,18 @@ export async function requireDefaultCtx(): Promise<Ctx> {
 
   const locationIds = await resolveLocationIds(
     membership.tenantId,
-    membership.tenantId,
-    true,
+    membership.membershipId,
+    membership.allLocations,
   );
 
   return {
     userId: session.user.id,
     tenantId: membership.tenantId,
-    membershipId: "",
-    role: membership.role,
+    membershipId: membership.membershipId,
+    roleKey: membership.roleKey,
+    roleId: membership.roleId,
     slug: "",
-    allLocations: true,
+    allLocations: membership.allLocations,
     locationIds,
   };
 }

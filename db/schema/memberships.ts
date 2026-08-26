@@ -14,6 +14,7 @@ import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { users } from "./users";
 import { locations } from "./locations";
+import { roles } from "./roles";
 
 export const tenantMemberships = pgTable(
   "tenant_memberships",
@@ -25,7 +26,7 @@ export const tenantMemberships = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
-    role: text("role").notNull(),
+    roleId: uuid("role_id").notNull(),
     allLocations: boolean("all_locations").notNull().default(true),
     status: text("status").notNull().default("invited"),
     ...softDelete,
@@ -34,10 +35,11 @@ export const tenantMemberships = pgTable(
   (t) => [
     unique("tenant_memberships_tenant_user_key").on(t.tenantId, t.userId),
     unique("tenant_memberships_id_tenant_key").on(t.id, t.tenantId),
-    check(
-      "tenant_memberships_role_check",
-      sql`${t.role} in ('owner', 'admin', 'coach', 'parent')`,
-    ),
+    foreignKey({
+      name: "tenant_memberships_role_tenant_fkey",
+      columns: [t.roleId, t.tenantId],
+      foreignColumns: [roles.id, roles.tenantId],
+    }),
     check(
       "tenant_memberships_status_check",
       sql`${t.status} in ('invited', 'active', 'revoked')`,

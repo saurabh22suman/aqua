@@ -211,6 +211,16 @@ const LOGIN_USERS = [
 ] as const;
 
 async function ensureLoginUsers(tenantId: string) {
+  // `parent` is not an F-04 template (parents are not staff memberships);
+  // ensure the role exists before any membership references it. owner and
+  // coach already exist — seedRoleTemplates ran earlier in main().
+  await adminPool.query(
+    `insert into roles (id, tenant_id, key, name, is_system)
+     select $1, $2, 'parent', 'Parent', false
+     where not exists (select 1 from roles where tenant_id = $2 and key = 'parent')`,
+    [uuidv7(), tenantId],
+  );
+
   for (const u of LOGIN_USERS) {
     await adminPool.query(
       `insert into users (id, phone)
@@ -219,12 +229,14 @@ async function ensureLoginUsers(tenantId: string) {
       [uuidv7(), u.phone],
     );
     await adminPool.query(
-      `insert into tenant_memberships (id, tenant_id, user_id, role, status)
-       select $1, $2, u.id, $3, 'active'
-       from users u where u.phone = $4
+      `insert into tenant_memberships (id, tenant_id, user_id, role_id, status)
+       select $1, $2, u.id, r.id, 'active'
+       from users u
+       join roles r on r.tenant_id = $2 and r.key = $3
+       where u.phone = $4
        and not exists (
          select 1 from tenant_memberships m
-         where m.user_id = u.id and m.tenant_id = $2 and m.role = $3
+         where m.user_id = u.id and m.tenant_id = $2
        )`,
       [uuidv7(), tenantId, u.role, u.phone],
     );
