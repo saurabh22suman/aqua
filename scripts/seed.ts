@@ -8,6 +8,7 @@ import { batches, locations, members, programs } from "@/db/schema";
 import { sessions as sessionsTable } from "@/db/schema/scheduling";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { defaultPlanId, seedPlatformCatalogue } from "@/db/seed-platform";
 
 const SLUG = "demo-academy";
@@ -38,6 +39,9 @@ async function main() {
 
   const tenantId = await ensureTenant();
   console.log(`tenant demo-academy → ${tenantId}`);
+
+  await seedRoleTemplates(tenantId);
+  console.log("role templates seeded → owner, admin, receptionist, coach, accountant, worker");
 
   let mainLocationId = "";
   await withTenant(tenantId, async (tx) => {

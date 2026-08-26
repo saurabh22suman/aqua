@@ -22,6 +22,69 @@ const FEATURES: ReadonlyArray<{
   { key: "analytics.advanced", name: "Advanced analytics", category: "insight", status: "internal" },
 ];
 
+// The closed platform permission list. Invariant: every `module` value is
+// an F-01 feature key — that is the explicit feature mapping that
+// resolution (b) depends on. NOTE: the F-04 task text says "29 rows" but
+// lists 30; the list below is the verbatim list, all 30 rows.
+export const PERMISSIONS: ReadonlyArray<{
+  key: string;
+  module: string;
+  description: string;
+}> = [
+  { key: "members.read", module: "members", description: "View member records" },
+  { key: "members.write", module: "members", description: "Create and edit member records" },
+  { key: "members.delete", module: "members", description: "Archive member records" },
+  { key: "attendance.read", module: "attendance", description: "View attendance registers" },
+  { key: "attendance.mark", module: "attendance", description: "Mark and correct attendance" },
+  { key: "programs.read", module: "programs", description: "View programs and batches" },
+  { key: "programs.write", module: "programs", description: "Create and edit programs and batches" },
+  { key: "enquiries.read", module: "enquiries", description: "View enquiries and trials" },
+  { key: "enquiries.write", module: "enquiries", description: "Create and progress enquiries and trials" },
+  { key: "invoices.read", module: "billing", description: "View invoices" },
+  { key: "invoices.write", module: "billing", description: "Raise and edit invoices" },
+  { key: "payments.read", module: "billing", description: "View payments" },
+  { key: "payments.record", module: "billing", description: "Record a payment against an invoice" },
+  { key: "staff.read", module: "staff", description: "View staff records" },
+  { key: "staff.write", module: "staff", description: "Create and edit staff records" },
+  { key: "staff.invite", module: "staff", description: "Invite a staff member to the tenant" },
+  { key: "staff.attendance", module: "staff", description: "Mark staff attendance" },
+  { key: "staff.roster", module: "staff", description: "View and edit the staff roster" },
+  { key: "staff.pay.read", module: "staff", description: "View staff pay and earnings" },
+  { key: "staff.pay.write", module: "staff", description: "Set staff pay rates and record payouts" },
+  { key: "reports.operational", module: "reports", description: "View attendance and utilisation reports" },
+  { key: "reports.financial", module: "reports", description: "View revenue, cost and profitability reports" },
+  { key: "settings.read", module: "settings", description: "View tenant settings" },
+  { key: "settings.manage", module: "settings", description: "Change tenant settings, branding and terminology" },
+  { key: "messaging.send", module: "messaging", description: "Send WhatsApp and email messages" },
+  { key: "messaging.templates", module: "messaging", description: "Create and edit message templates" },
+  { key: "bookings.read", module: "pool.booking", description: "View facility bookings" },
+  { key: "bookings.write", module: "pool.booking", description: "Create and cancel facility bookings" },
+  { key: "levels.read", module: "swim.levels", description: "View skill levels and assessments" },
+  { key: "levels.assess", module: "swim.levels", description: "Record a skill assessment" },
+];
+
+export async function seedPermissions(
+  connectionString: string,
+): Promise<void> {
+  const client = new Client({ connectionString });
+  await client.connect();
+
+  try {
+    for (const p of PERMISSIONS) {
+      await client.query(
+        `insert into permissions (key, module, description)
+         values ($1, $2, $3)
+         on conflict (key) do update
+           set module = excluded.module,
+               description = excluded.description`,
+        [p.key, p.module, p.description],
+      );
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 export async function defaultPlanId(connectionString: string): Promise<string> {
   const client = new Client({ connectionString });
   await client.connect();
@@ -59,6 +122,8 @@ export async function seedPlatformCatalogue(
         [f.key, f.name, f.category, f.status],
       );
     }
+
+    await seedPermissions(connectionString);
 
     // price_paise stays NULL: the pricing-model decision (scope §2.5) is
     // deliberately not encoded here. Never seed a price.

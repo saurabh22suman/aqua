@@ -7,3 +7,4 @@ export * from "./people";
 export * from "./programs";
 export * from "./scheduling";
 export * from "./platform";
+export * from "./roles";
