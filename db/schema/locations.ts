@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
-import { boolean, index, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, text, unique, uuid } from "drizzle-orm/pg-core";
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 
@@ -13,6 +13,7 @@ export const locations = pgTable(
       .references(() => tenants.id),
     name: text("name").notNull(),
     isPrimary: boolean("is_primary").notNull().default(false),
+    address: jsonb("address").$type<Record<string, unknown>>(),
     ...softDelete,
     ...auditColumns,
   },

@@ -144,8 +144,11 @@ Done when: {ACCEPTANCE}
 Runs ahead of Phase 1 screens. Proves the data layer — schema, RLS, `withTenant`, auth context, domain tables, Server Actions and seed — before any UI exists. Same repo, no separate service. Each task cross-references the Phase 1/Core IDs it partially delivers; nothing here is throwaway. Every task carries a **stop level** (GREEN/AMBER/RED) defined in `.claude/skills/execute-task/SKILL.md`.
 
 **Pilot outcome.** All eight tasks are complete. Fully delivered:
-F-02, F-05, F-06, F-07 (via B4's lint rule), F-08, F-08a. Partially
+F-05, F-06, F-07 (via B4's lint rule), F-08, F-08a. Partially
 delivered — real work remains inside these tasks:
+F-02 (B3 shipped `tenants` and `locations` without the F-02 columns —
+currency, gstin, branding, terminology, preset columns, and
+`locations.address`; the F-02 reopen completed them),
 F-03 (interim plain-text role until F-04's roles/permissions model),
 F-09 (OTP has no delivery channel and no staff email/password
 fallback), F-10 (rate limiting is Better Auth's global limiter; the
