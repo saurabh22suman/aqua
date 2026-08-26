@@ -8,7 +8,7 @@ import { batches, locations, members, programs } from "@/db/schema";
 import { sessions as sessionsTable } from "@/db/schema/scheduling";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
-import { seedPlatformCatalogue } from "@/db/seed-platform";
+import { defaultPlanId, seedPlatformCatalogue } from "@/db/seed-platform";
 
 const SLUG = "demo-academy";
 const TZ = "Asia/Kolkata";
@@ -24,9 +24,10 @@ async function ensureTenant(): Promise<string> {
   if (existing.rows.length > 0) return existing.rows[0].id;
 
   const id = uuidv7();
+  const planId = await defaultPlanId(env.MIGRATION_DATABASE_URL);
   await adminPool.query(
-    "insert into tenants (id, slug, name, status) values ($1,$2,'Demo Academy','active')",
-    [id, SLUG],
+    "insert into tenants (id, slug, name, status, plan_id) values ($1,$2,'Demo Academy','active',$3)",
+    [id, SLUG, planId],
   );
   return id;
 }

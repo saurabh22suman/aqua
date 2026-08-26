@@ -22,6 +22,25 @@ const FEATURES: ReadonlyArray<{
   { key: "analytics.advanced", name: "Advanced analytics", category: "insight", status: "internal" },
 ];
 
+export async function defaultPlanId(connectionString: string): Promise<string> {
+  const client = new Client({ connectionString });
+  await client.connect();
+
+  try {
+    const { rows } = await client.query<{ id: string }>(
+      "select id from plans where is_default = true",
+    );
+    if (rows.length !== 1) {
+      throw new Error(
+        `defaultPlanId: expected exactly one default plan, found ${rows.length}`,
+      );
+    }
+    return rows[0].id;
+  } finally {
+    await client.end();
+  }
+}
+
 export async function seedPlatformCatalogue(
   connectionString: string,
 ): Promise<void> {

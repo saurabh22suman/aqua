@@ -40,6 +40,21 @@ afterAll(async () => {
 });
 
 describe("platform catalogue and plan-baseline entitlements", () => {
+  it("no tenant is left without a plan", async () => {
+    // Guards the seed-step-ordering trap: seedPlatformCatalogue's
+    // `where plan_id is null` backfill runs BEFORE any tenant exists on a
+    // fresh database, so plan assignment must happen at tenant-insert time
+    // or a freshly seeded tenant resolves zero features until a second seed
+    // run. Scoped to the seed tenant because auth-context.test.ts inserts
+    // fixtures with null plan_id in a parallel worker. This test must run
+    // before the catalogue seed below — its backfill would repair the very
+    // defect this test detects.
+    const { rows } = await admin.query<{ n: number }>(
+      "select count(*)::int as n from tenants where plan_id is null and slug = 'demo-academy'",
+    );
+    expect(rows[0].n).toBe(0);
+  });
+
   it("seedPlatformCatalogue is idempotent and seeds exactly one default plan", async () => {
     await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
     await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
