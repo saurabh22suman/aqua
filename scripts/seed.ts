@@ -8,6 +8,7 @@ import { batches, locations, members, programs } from "@/db/schema";
 import { sessions as sessionsTable } from "@/db/schema/scheduling";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
+import { seedPlatformCatalogue } from "@/db/seed-platform";
 
 const SLUG = "demo-academy";
 const TZ = "Asia/Kolkata";
@@ -31,6 +32,9 @@ async function ensureTenant(): Promise<string> {
 }
 
 async function main() {
+  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  console.log("platform catalogue seeded → standard plan + ga features");
+
   const tenantId = await ensureTenant();
   console.log(`tenant demo-academy → ${tenantId}`);
 

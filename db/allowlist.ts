@@ -4,6 +4,11 @@ export const PLATFORM_TABLES = [
   "ba_session",
   "ba_account",
   "ba_verification",
+  "plans",
+  "features",
+  "plan_features",
+  "presets",
+  "permissions",
 ] as const;
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];
