@@ -77,7 +77,7 @@ export async function markAttendance(
         clientId: input.clientId,
       })
       .onConflictDoUpdate({
-        target: [attendance.tenantId, attendance.clientId],
+        target: [attendance.tenantId, attendance.sessionId, attendance.memberId],
         set: { status: input.status, markedAt: new Date() },
       });
   });
