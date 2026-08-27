@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import { todayInZone } from "@/lib/time/tz";
 import { markAttendance, sessionExistsInTenant } from "@/lib/services/register";
+import { markAttendanceSchema } from "@/lib/schemas";
 
 export type TodaySession = {
   id: string;
@@ -154,12 +155,13 @@ export async function getRosterAction(
   });
 }
 
-export async function markAttendanceSessionAction(input: {
+export async function markAttendanceSessionAction(raw: {
   sessionId: string;
   memberId: string;
   status: "present" | "absent" | "late";
   clientId: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  const input = markAttendanceSchema.parse(raw);
   const ctx = await requireDefaultCtx();
   assertStaff(ctx);
 
