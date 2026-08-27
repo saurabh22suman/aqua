@@ -70,13 +70,34 @@ from pg_default_acl;
 
 ## 5. The accessor is the only door
 
-- [ ] `grep -rn "@/db/client" --include="*.ts" --include="*.tsx" .`
-      hits nothing outside `db/` (and the platform module). The ESLint
-      rule enforces this — a lint bypass comment is a finding.
+- [ ] `pnpm exec eslint .` is clean. The rule (`import/no-restricted-paths`
+      in `eslint.config.mjs`) matches resolved module identity, not import
+      text — it catches `../../db/client` the same as `@/db/client`. Do
+      not "verify" this with a literal-string grep instead: an earlier
+      version of this checklist did exactly that
+      (`grep -rn "@/db/client" ...`), reported clean, and missed two real
+      call sites reaching the same file by relative path. A verification
+      that passes while the thing it verifies is already violated is
+      worse than no verification — it spends the reviewer's trust for
+      nothing. A lint bypass comment (`eslint-disable`) anywhere near this
+      rule is a finding.
+- [ ] `db/auth-db.ts` and `db/client.ts` are the only two files that may
+      hold the raw client; everything else reaches data through
+      `withTenant()` / `withUser()` / `withPlatform()`.
 - [ ] Tenant context never originates from client input: no cookie /
-      header / query param feeds `set_config` or `withTenant`.
-- [ ] `users` is only queried via joins through `tenant_memberships`
-      inside `withTenant()`.
+      header / query param feeds `set_config`, `withTenant`, or `withUser`.
+- [ ] `users` is only queried via joins through `tenant_memberships`,
+      inside `withTenant()` for tenant-scoped reads or `withUser()` for
+      pre-tenant resolution — never on a superuser/migration connection.
+- [ ] `grep -rln "MIGRATION_DATABASE_URL" --include="*.ts" .` matches only
+      `db/migrate.ts`, `db/bootstrap-roles.ts`, `db/reset.ts`,
+      `db/seed-platform.ts`, `scripts/seed.ts`, `lib/env.ts`,
+      `tests/**`. Zero matches under `app/`, `components/`, or `lib/`
+      outside `lib/env.ts`'s schema declaration. `aqua`, the role behind
+      that connection string, is a real Postgres superuser
+      (`rolsuper=t`) — it bypasses RLS unconditionally regardless of
+      `FORCE ROW LEVEL SECURITY`. It has no business on any path a live
+      request can reach.
 
 ## 6. Break it and see red
 
@@ -115,8 +136,18 @@ you have decided something — write it down.
 - Migration ordering (grants referencing a role created later) passed
   locally forever because bootstrap happened to run first; the
   clean-room Testcontainer caught it on day one.
+- The "accessor is the only door" checklist item itself was checked by
+  literal-string `grep -rn "@/db/client"`, which reported clean while
+  `lib/auth/server.ts` and `scripts/seed.ts` reached the same file by
+  relative import (`../../db/client`), evading both the grep and the
+  `no-restricted-imports` ESLint rule it was meant to confirm. A
+  verification that passes while the thing it verifies is already
+  violated is worse than no verification: no verification leaves you
+  uncertain; a false-green one leaves you confidently wrong. Fixed by
+  matching resolved module identity (`import/no-restricted-paths`)
+  instead of import text — see §5.
 
-These two are the answer to "is the testing overhead worth it".
+These three are the answer to "is the testing overhead worth it".
 
 The rest of this section is built into the suite itself:
 `ISOLATION_MUTATE=drop-policy|no-force|bare-table pnpm exec vitest run tests/tier1/isolation.test.ts`

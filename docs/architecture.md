@@ -217,19 +217,27 @@ Note the query has no `tenant_id` clause. It does not need one — RLS applies i
 ### 5.5 Making it mandatory
 
 ```js
-// eslint.config.js
+// eslint.config.mjs — import/no-restricted-paths, not no-restricted-imports
 {
-  files: ['app/**', 'lib/**'],
+  files: ['**/*.ts', '**/*.tsx'],
   rules: {
-    'no-restricted-imports': ['error', {
-      paths: [{
-        name: '@/db/client',
-        message: 'Import withTenant from @/db/tenant instead. Raw client is platform-only.',
+    'import/no-restricted-paths': ['error', {
+      zones: [{
+        target: './{app,components,lib}/**/*',
+        from: './db/client.ts',
+        message: 'Raw client bypasses tenant scoping — use withTenant()/withUser() or withPlatform(). The only other sanctioned handle is @/db/auth-db.',
       }],
     }],
   },
 }
 ```
+
+This resolves module identity, not import text on purpose: an earlier
+version matched the literal string `@/db/client` (`no-restricted-imports`)
+and missed a relative import (`../../db/client`) resolving to the same
+file — two real call sites reached the raw client that way and the rule
+reported clean. `import/no-restricted-paths` catches both spellings
+identically because it resolves to a file path before comparing.
 
 Now "did this query get scoped?" is a build failure rather than a code review question.
 
@@ -256,6 +264,62 @@ test('tenant A cannot read tenant B data under any query shape', async () => {
 ```
 
 The second and third assertions are the important ones: even an explicitly hostile query returns nothing, and a mis-configured pool that skipped `SET ROLE` fails loudly instead of inheriting privileges silently.
+
+### 5.7 Pre-tenant resolution
+
+`withTenant()` needs a tenant. Better-auth authenticates a *user* first — the request has an identity before it has a tenant. Mapping identity to "which tenant, which membership, which role" (slug validation, the default-membership landing page) genuinely cannot run inside `withTenant()`: the tenant is the output of this step, not its input.
+
+The original build resolved this by connecting as `aqua` — the Postgres superuser behind `MIGRATION_DATABASE_URL` — and trusting hand-written `WHERE` clauses to scope the query correctly. That is a real superuser: `rolsuper=t`, `rolbypassrls=t`. It bypasses RLS unconditionally, `FORCE ROW LEVEL SECURITY` included. An independent review found it live on the authenticated request path (`db/platform.ts`), sitting directly in front of every request's tenant resolution, defended by nothing but the correctness of the SQL. `MIGRATION_DATABASE_URL` is migrations-only now, full stop — no exception, anywhere, for any reason.
+
+The fix is symmetric to `withTenant()`, not a bypass of it:
+
+```ts
+// db/tenant.ts
+export async function withUser<T>(
+  userId: string,
+  fn: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
+    return fn(tx);
+  });
+}
+```
+
+paired with a second, `for select`-only, permissive RLS policy on the three tables resolution touches:
+
+```sql
+create policy user_resolution on tenant_memberships
+  for select
+  using (user_id = nullif(current_setting('app.user_id', true), '')::uuid);
+
+create policy user_resolution on tenants
+  for select
+  using (id in (
+    select tenant_id from tenant_memberships
+    where user_id = nullif(current_setting('app.user_id', true), '')::uuid
+  ));
+
+create policy user_resolution on roles
+  for select
+  using (id in (
+    select role_id from tenant_memberships
+    where user_id = nullif(current_setting('app.user_id', true), '')::uuid
+  ));
+```
+
+Postgres OR's permissive policies together. This widens visibility only for a transaction that called `withUser()` and set `app.user_id`; `withTenant()` never sets it, so ordinary tenant-scoped code is unaffected — the OR's second branch is always false there. The connection identity does not change: still `app_user`, still no `BYPASSRLS`, still no superuser. A query with no `WHERE` clause at all, run inside `withUser(userId, ...)`, is confined to that user's own rows by Postgres — not by whoever wrote the SQL getting it right. That is the actual point of RLS, applied to the one place it had been skipped.
+
+Two things are load-bearing and easy to get wrong:
+
+- **`for select`, never `for all`.** A `for all` policy's `WITH CHECK` could only constrain `user_id` — there is no tenant to check against during resolution. That would let a user `INSERT` a `tenant_memberships` row for themselves against any `tenant_id`: a self-granted membership into a tenant they were never invited to. Writes stay exclusively under the pre-existing tenant-scoped policy, reached only through `withTenant()`.
+- **`withTenant()` and `withUser()` must not nest.** Both set a session variable RLS branches on; nesting either inside the other would let a single transaction carry both `app.tenant_id` and `app.user_id`, OR-ing their policies into a wider view than either mode intends alone. `db/scope.ts`'s `enterScope()` throws if one is entered while the other is active. `withPlatform()` sets no session variable and nests freely with either — better-auth's own call chain relies on this (an outer `withPlatform()` around `auth.api.verifyPhoneNumber` legitimately triggers an inner `withPlatform()` around `linkBetterAuthUser`, via `callbackOnVerification`).
+
+`resolveLocationIds` is not part of this: by the time it runs, `tenantId` is already known, so it is ordinary `withTenant()` work, not resolution.
+
+Mechanical guarantees, not code review: `tests/tier1/user-scope.test.ts` proves an unscoped read inside `withUser()` stays confined, a write inside `withUser()` is rejected (Postgres `42501`), a read inside `withTenant()` cannot see a row only the user-scoped policy would expose, and dropping the `user_resolution` policy turns both that suite and `auth-context.test.ts`'s slug-resolution test red. `tests/tier1/no-superuser-on-request-path.test.ts` asserts `MIGRATION_DATABASE_URL` appears only in migration/bootstrap/reset/seed tooling and test fixtures.
+
+**A note on defense in depth, not a gap in this fix:** the dev/test ALS scope guard (`db/client.ts`, "Unscoped query" P0001) is disabled when `NODE_ENV=production` — RLS is the layer that's still supposed to hold in production, by design (§5.2, §5.3). That means the `withPlatform()` wraps around every better-auth call site (commented "load-bearing" at each site) are exercised as a hard failure only in dev/test; in a production build, an accidentally-removed wrap would not throw — better-auth's own tables have no RLS to fall back on either (they're platform-exempt, §5.3's allowlist). This has not been exercised under an actual production build. Recorded in `implementation-plan.md` at B6.
 
 ---
 

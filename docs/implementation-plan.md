@@ -201,6 +201,16 @@ layer exist; screens, job scheduling and the full task bodies do not).
 **Done when:** valid session requesting another tenant's slug returns 404, not that tenant's data — tested; sixth wrong OTP locks out; no OTP in logs.
 **Read first:** current Better Auth documentation.
 **Never:** trust a client-supplied tenant id. Log an OTP.
+**Known gap:** every better-auth call site (`app/api/auth/[...all]/route.ts`,
+`lib/auth/context.ts`, `lib/actions/auth-ui.ts`) wraps its call in
+`withPlatform()`, commented load-bearing. That's enforced as a hard
+failure (P0001) only in dev/test — `db/client.ts`'s ALS scope guard is
+disabled when `NODE_ENV=production` (RLS is the layer meant to hold in
+production, not the guard). Better-auth's own tables (`ba_user`,
+`ba_session`, etc.) are RLS-exempt platform tables, so there is no RLS
+fallback either if a wrap were accidentally removed. This has not been
+exercised under a production build — do so before relying on it. See
+architecture §5.7.
 
 ### B7 · Domain schema — people, programs, sessions
 **Delivers:** C-01/C-03/C-16–C-19 schema only (no screens, no job scheduling — generation runs inline via `generateSessions`), C-22 schema + upsert semantics · **Stop level:** GREEN · **Status:** complete — `69a9eed`, lint fix `0632d21`
@@ -242,8 +252,8 @@ layer exist; screens, job scheduling and the full task bodies do not).
 
 ### F-04 · Roles and permissions
 **Depends:** F-03
-**Build:** `roles` per tenant, `permissions` as a platform-level closed list, `role_permissions`. Seed role templates: owner, admin, receptionist, coach, accountant, worker.
-**Done when:** role templates seed per tenant and are editable.
+**Build:** `roles` per tenant, `permissions` as a platform-level closed list, `role_permissions`. Seed role templates: owner, admin, receptionist, coach, accountant, worker. `roles.home_path` and `roles.home_ordinal` (migration `0012_roles_home_routing.sql`) carry the landing route and default-membership tie-break priority as data — added after independent review found `db/platform.ts` branching on `roles.key` string literals (`ROLE_HOME`, `order by case r.key when 'owner'...`) to pick a home path, in direct violation of the Never below; nothing in the schema stops a future `UPDATE roles set key = ...`, so that was one rename away from silently misrouting to `/parent`. `resolveHomePath`/`resolveDefaultMembership` now order by `roles.home_ordinal` and return `roles.home_path`.
+**Done when:** role templates seed per tenant and are editable; a role renamed or re-keyed after seeding still resolves the correct home path (`tests/tier1/user-scope.test.ts`).
 **Never:** hard-code behaviour to a role name anywhere in the codebase.
 
 ### F-03a · Membership role_id cutover
@@ -269,10 +279,63 @@ location scope.
 **Done when:** a query inside `withTenant` with no `WHERE tenant_id` returns only that tenant's rows.
 **Read first:** architecture §5.3, §5.4.
 
+### F-06a · Pre-tenant resolution — user-scoped RLS
+**Depends:** F-06 · **Status:** complete — fixes a design error surfaced by
+independent review, not an implementation slip. F-07 (below) originally
+pre-authorized "the platform module" as a lint exception without examining
+what that module would connect as; it connected as `aqua`, a real Postgres
+superuser (`rolsuper=t`, `rolbypassrls=t`), on the authenticated request
+path (`db/platform.ts`, before this fix) — bypassing RLS unconditionally,
+regardless of `FORCE ROW LEVEL SECURITY`. There is no exception for
+"platform module" anymore. `MIGRATION_DATABASE_URL` is migrations-only,
+full stop, exactly as this document already claimed at F-05's build note
+before the exception undermined it.
+**Build:** `withUser(userId, fn)` in `db/tenant.ts`, symmetric to
+`withTenant()` — opens a transaction, sets `app.user_id` (transaction-
+scoped), and is the only sanctioned way to resolve which tenant a request
+belongs to before that tenant is known. A second, `for select`-only,
+permissive RLS policy (migration `0011_user_scoped_resolution.sql`) on
+`tenant_memberships`, `tenants`, and `roles`, keyed on
+`nullif(current_setting('app.user_id', true), '')::uuid`. Permissive
+policies OR together, so this only ever widens visibility for a session
+that called `withUser()`; ordinary `withTenant()` sessions never set
+`app.user_id` and are unaffected. `enterScope()` in `db/scope.ts` makes
+`withTenant()` and `withUser()` mutually exclusive — entering one while
+inside the other throws, so the two session variables can never coexist
+on one transaction. `withPlatform()` nests freely with either, since it
+sets no session variable at all.
+**Done when:** every `db/platform.ts` resolution function runs through
+`withUser()`/`withTenant()`/`withPlatform()` on the guarded pool — zero
+raw `pg.Pool` construction, zero `MIGRATION_DATABASE_URL` reference,
+anywhere in `db/platform.ts` or `lib/actions/auth-ui.ts`; a query with no
+`WHERE` clause at all, run inside `withUser()`, still returns only that
+user's own rows (`tests/tier1/user-scope.test.ts`); a write attempt inside
+`withUser()` is rejected with Postgres `42501`, not silently permitted; a
+read inside `withTenant()` never sees a row only the user-scoped policy
+would expose; dropping the `user_resolution` policy turns both
+`user-scope.test.ts` and `auth-context.test.ts`'s slug-resolution test
+red; `tests/tier1/no-superuser-on-request-path.test.ts` asserts
+`MIGRATION_DATABASE_URL` appears only in migration/bootstrap/reset/seed
+tooling and test fixtures, never in `app/`, `components/`, or `db/platform.ts`/`db/client.ts`.
+**Never:** widen the `user_resolution` policy from `for select` to `for
+all` — its `WITH CHECK` could only constrain `user_id`, not `tenant_id`,
+which would let a user self-insert a `tenant_memberships` row into any
+tenant. See the migration's comment before touching this.
+**Read first:** architecture §5.7 (pre-tenant resolution).
+
 ### F-07 · Lint rule
 **Depends:** F-06
-**Build:** ESLint `no-restricted-imports` banning `@/db/client` outside `db/` and the platform module.
-**Done when:** importing the raw client in a route file fails lint.
+**Build:** ESLint `import/no-restricted-paths` (resolved module identity,
+not import text — `no-restricted-imports`'s literal-string matching missed
+`../../db/client`, a relative import resolving to the same file as
+`@/db/client`) banning `db/client.ts` from `app/`, `components/`, and
+`lib/`. No "platform module" exception: the one remaining legitimate need
+outside `db/` — wiring better-auth's drizzle adapter at construction time
+— goes through the single named re-export `db/auth-db.ts`, not a direct
+import of `db/client.ts` from arbitrary application code.
+**Done when:** importing the raw client in a route file fails lint by
+either import form; `docs/review-checklist.md` §5 verifies by running
+`pnpm exec eslint .`, not by grepping import text.
 
 ### F-08 · Isolation test — CI gate
 **Depends:** F-06, F-07
@@ -1031,7 +1094,7 @@ These apply to every task and override any local convenience.
 | Timestamps `timestamptz`, stored UTC | Tenant timezone drives display and scheduling |
 | Every mutation writes audit in the same transaction | Partial audit is worse than none |
 | Every job is idempotent and tenant-scoped | Retries are guaranteed |
-| Files under 300 lines | Generated code degrades badly beyond this |
+| Files under 300 lines — test files too, no exemption | Generated code degrades badly beyond this; a test file over budget is fixed by splitting along the concern it tests (see `tests/tier1/roles-permissions.test.ts`'s F-06-review split into roles-permissions / platform-entitlements / membership-role-scope), not by carving out an exception |
 | No new dependency without approval | Every dependency is a bundle and a liability |
 | Tokens only, no raw hex | The palette is the design thesis |
 | Automated messages are utility category | Marketing costs 7–8× as much |
