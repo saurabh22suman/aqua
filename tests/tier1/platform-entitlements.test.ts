@@ -19,6 +19,43 @@ const PLATFORM_TABLES = [
   "permissions",
 ];
 
+// The F-04 approved list, hardcoded here as an independent cross-check
+// against db/seed-platform.ts — same duplication pattern as
+// tests/tier1/roles-permissions.test.ts's ROLE_MATRIX. NOTE: the task
+// text says "29 permissions" but lists 30; this is the verbatim list.
+const ALL_PERMISSION_KEYS = [
+  "members.read",
+  "members.write",
+  "members.delete",
+  "attendance.read",
+  "attendance.mark",
+  "programs.read",
+  "programs.write",
+  "enquiries.read",
+  "enquiries.write",
+  "invoices.read",
+  "invoices.write",
+  "payments.read",
+  "payments.record",
+  "staff.read",
+  "staff.write",
+  "staff.invite",
+  "staff.attendance",
+  "staff.roster",
+  "staff.pay.read",
+  "staff.pay.write",
+  "reports.operational",
+  "reports.financial",
+  "settings.read",
+  "settings.manage",
+  "messaging.send",
+  "messaging.templates",
+  "bookings.read",
+  "bookings.write",
+  "levels.read",
+  "levels.assess",
+];
+
 let tenantId = "";
 let pilotPlanId = "";
 
@@ -139,6 +176,32 @@ describe("platform catalogue and plan-baseline entitlements", () => {
     // and a tenant repoint landed through insert/update alone — no new
     // migration, no DDL.
     expect(after).toBe(before);
+  });
+
+  it("every permissions.module value is a features.key row", async () => {
+    const { rows } = await admin.query<{ module: string }>(
+      `select distinct p.module
+       from permissions p
+       where not exists (select 1 from features f where f.key = p.module)`,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("the permission catalogue is a closed list and the seed is idempotent", async () => {
+    await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+    await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+
+    const permCount = await admin.query<{ n: number }>(
+      "select count(*)::int as n from permissions",
+    );
+    expect(permCount.rows[0].n).toBe(ALL_PERMISSION_KEYS.length);
+
+    const keys = await admin.query<{ key: string }>(
+      "select key from permissions order by key",
+    );
+    expect(keys.rows.map((r) => r.key)).toEqual(
+      [...ALL_PERMISSION_KEYS].sort(),
+    );
   });
 
   it("the five platform tables are RLS-free by design", async () => {
