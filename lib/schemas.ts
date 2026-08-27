@@ -15,6 +15,8 @@ export const enrolSchema = z.object({
   enrolledOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+export const sessionIdSchema = z.string().uuid();
+
 export const markAttendanceSchema = z.object({
   sessionId: z.string().uuid(),
   memberId: z.string().uuid(),
