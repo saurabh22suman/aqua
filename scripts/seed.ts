@@ -1,10 +1,10 @@
 import { Pool } from "pg";
 import { env } from "@/lib/env";
 import { v7 as uuidv7 } from "uuid";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { pool } from "../db/client";
 import { withTenant } from "@/db/tenant";
-import { batches, locations, members, programs } from "@/db/schema";
+import { batches, locations, members, programs, roles, tenantMemberships } from "@/db/schema";
 import { sessions as sessionsTable } from "@/db/schema/scheduling";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
@@ -214,13 +214,26 @@ async function ensureLoginUsers(tenantId: string) {
   // `parent` is not an F-04 template (parents are not staff memberships);
   // ensure the role exists before any membership references it. owner and
   // coach already exist — seedRoleTemplates ran earlier in main().
-  await adminPool.query(
-    `insert into roles (id, tenant_id, key, name, is_system)
-     select $1, $2, 'parent', 'Parent', false
-     where not exists (select 1 from roles where tenant_id = $2 and key = 'parent')`,
-    [uuidv7(), tenantId],
-  );
+  // roles and tenant_memberships are tenant-scoped tables — write them
+  // through withTenant(), not the raw admin pool (the same class of bug
+  // already fixed at the member lookup above, in faad9f8).
+  await withTenant(tenantId, async (tx) => {
+    await tx
+      .insert(roles)
+      .values({
+        id: uuidv7(),
+        tenantId,
+        key: "parent",
+        name: "Parent",
+        homePath: "/parent",
+        homeOrdinal: 3,
+        isSystem: false,
+      })
+      .onConflictDoNothing({ target: [roles.tenantId, roles.key] });
+  });
 
+  // users is the one platform table with no tenant scoping — stays on the
+  // admin pool, unrelated to the tenant-scoped fix above.
   for (const u of LOGIN_USERS) {
     await adminPool.query(
       `insert into users (id, phone)
@@ -228,19 +241,32 @@ async function ensureLoginUsers(tenantId: string) {
        where not exists (select 1 from users where phone = $2)`,
       [uuidv7(), u.phone],
     );
-    await adminPool.query(
-      `insert into tenant_memberships (id, tenant_id, user_id, role_id, status)
-       select $1, $2, u.id, r.id, 'active'
-       from users u
-       join roles r on r.tenant_id = $2 and r.key = $3
-       where u.phone = $4
-       and not exists (
-         select 1 from tenant_memberships m
-         where m.user_id = u.id and m.tenant_id = $2
-       )`,
-      [uuidv7(), tenantId, u.role, u.phone],
-    );
   }
+
+  await withTenant(tenantId, async (tx) => {
+    for (const u of LOGIN_USERS) {
+      const userRow = await adminPool.query<{ id: string }>(
+        "select id from users where phone = $1",
+        [u.phone],
+      );
+      const userId = userRow.rows[0]?.id;
+      if (!userId) continue;
+
+      const roleRow = await tx
+        .select({ id: roles.id })
+        .from(roles)
+        .where(and(eq(roles.tenantId, tenantId), eq(roles.key, u.role)))
+        .limit(1);
+      const roleId = roleRow[0]?.id;
+      if (!roleId) continue;
+
+      await tx
+        .insert(tenantMemberships)
+        .values({ id: uuidv7(), tenantId, userId, roleId, status: "active" })
+        .onConflictDoNothing({ target: [tenantMemberships.tenantId, tenantMemberships.userId] });
+    }
+  });
+
   console.log(`login users ready → ${LOGIN_USERS.map((u) => `${u.phone}=${u.role}`).join(", ")}`);
 }
 
