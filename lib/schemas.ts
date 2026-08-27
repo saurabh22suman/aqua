@@ -16,6 +16,7 @@ export const enrolSchema = z.object({
 });
 
 export const sessionIdSchema = z.string().uuid();
+export const phoneNumberSchema = z.string().min(8).max(20);
 
 export const markAttendanceSchema = z.object({
   sessionId: z.string().uuid(),
