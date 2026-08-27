@@ -67,12 +67,32 @@ Use for: the single primary action on a screen, active nav state, focus rings.
 
 ```js
 fontFamily: {
-  display: ['Bricolage Grotesque Variable', 'system-ui', 'sans-serif'],
-  sans:    ['Instrument Sans Variable', 'system-ui', 'sans-serif'],
+  display: ['Bricolage Grotesque', 'system-ui', 'sans-serif'],
+  sans:    ['Instrument Sans', 'system-ui', 'sans-serif'],
 }
 ```
 
-Self-hosted, subset to Latin, `font-display: swap`. Combined budget **45 KB**.
+Static weight files, not variable — the variable axis pays for a weight
+range (100–900, both families) nothing in the type scale below ever
+renders. Shipped weights, latin subset only:
+
+| Family | Weight | Role |
+|---|---|---|
+| Bricolage Grotesque | 600 | display only — nothing renders it at 400/500 |
+| Instrument Sans | 400, 500 | body/emphasis |
+
+Self-hosted, subset to Latin only (`latin-ext`/`vietnamese` dropped —
+nothing in this product needs them today; Devanagari/Bengali are a
+Phase 4 problem, solved separately), `font-display: swap`.
+
+**Combined budget 45 KB — currently 55.2 KB (measured), over budget.**
+The three static latin files (`instrument-sans-latin-400`,
+`instrument-sans-latin-500`, `bricolage-grotesque-latin-600`, woff2) are
+16.5 + 16.8 + 21.9 KB. Switching off the variable axis was the
+authorized fix for the 76 KB variable-font measurement; it wasn't enough
+on its own to close the gap, and dropping a weight to force it under 45
+KB wasn't authorized — this is a known, open gap, not a silently
+accepted one.
 
 | Role | Size | Family | Weight |
 |---|---|---|---|

@@ -1,7 +1,12 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import "@fontsource-variable/bricolage-grotesque";
-import "@fontsource-variable/instrument-sans";
+// Static weights only, latin subset only — DESIGN.md §1.3. Bricolage
+// Grotesque is display-only (600 never renders at 400/500); Instrument
+// Sans is body/emphasis (400, 500). latin-ext/vietnamese dropped: nothing
+// in this product needs them today.
+import "@fontsource/bricolage-grotesque/latin-600.css";
+import "@fontsource/instrument-sans/latin-400.css";
+import "@fontsource/instrument-sans/latin-500.css";
 import "@/lib/env";
 import "./globals.css";
 

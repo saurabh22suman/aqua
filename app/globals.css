@@ -18,8 +18,8 @@
   --color-warn: #B8710A;
   --color-warn-soft: #FDF0DC;
 
-  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
-  --font-sans: "Instrument Sans Variable", system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", system-ui, sans-serif;
+  --font-sans: "Instrument Sans", system-ui, sans-serif;
 
   --radius-card: 20px;
   --radius-ctl: 14px;
