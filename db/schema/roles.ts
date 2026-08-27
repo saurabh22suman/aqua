@@ -4,6 +4,7 @@ import {
   boolean,
   foreignKey,
   index,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -25,6 +26,11 @@ export const roles = pgTable(
     key: text("key").notNull(),
     name: text("name").notNull(),
     isSystem: boolean("is_system").notNull().default(false),
+    // Data, not a role-name branch (F-04's Never): the landing route and
+    // the tie-break priority when a user holds several memberships. See
+    // db/migrations/0012_roles_home_routing.sql.
+    homePath: text("home_path").notNull().default("/parent"),
+    homeOrdinal: integer("home_ordinal").notNull().default(3),
     ...softDelete,
     ...auditColumns,
   },
