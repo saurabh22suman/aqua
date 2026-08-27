@@ -146,6 +146,18 @@ you have decided something — write it down.
   uncertain; a false-green one leaves you confidently wrong. Fixed by
   matching resolved module identity (`import/no-restricted-paths`)
   instead of import text — see §5.
+- `markAttendanceSessionAction` was missing its Zod-parse preamble
+  (standing rule: every Server Action opens with (1) parse, (2)
+  permission check). Fixed by hand. Then found by hand a second time in
+  `getRosterAction`, and a third time in `devCodeAction` — three
+  independent occurrences of the identical shape, each only found because
+  someone happened to read that specific file closely. A fix applied by
+  hand at one call site is not a fix, it is a coincidence: it says
+  nothing about the next file. `tests/tier1/server-action-preamble.test.ts`
+  now walks the TypeScript AST of every `"use server"` file and asserts
+  every exported action taking input calls `.parse()`/`.safeParse()` as
+  its first statement — mechanical, not review-dependent, and it runs on
+  every `pnpm test`.
 
 These three are the answer to "is the testing overhead worth it".
 
