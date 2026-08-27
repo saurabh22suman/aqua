@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { db } from "../../db/client";
+import { db } from "@/db/auth-db";
 import { betterAuthSchema } from "../../db/schema/better-auth";
 import { linkBetterAuthUser } from "../../db/platform";
 import { deliverOtp } from "./otp-delivery";

@@ -14,14 +14,23 @@ const config = [
   {
     files: ["**/*.ts", "**/*.tsx"],
     rules: {
-      "no-restricted-imports": [
+      // Resolved-path based, not import-text based: a relative import
+      // (../../db/client) resolves to the same file as the @/db/client
+      // alias and is caught identically. String-pattern matching
+      // (no-restricted-imports) missed exactly this — verified two real
+      // call sites evaded it silently before this rule existed. See
+      // docs/review-checklist.md, "a verification that passes while the
+      // thing it verifies is already violated is worse than no
+      // verification."
+      "import/no-restricted-paths": [
         "error",
         {
-          patterns: [
+          zones: [
             {
-              group: ["@/db/client", "@/db/client/*"],
+              target: "./{app,components,lib}/**/*",
+              from: "./db/client.ts",
               message:
-                "Raw client bypasses tenant scoping — use withTenant() from @/db/tenant. Platform code inside db/ imports it relatively.",
+                "Raw client bypasses tenant scoping — use withTenant()/withUser() from @/db/tenant or withPlatform() from @/db/scope. The only other sanctioned handle is @/db/auth-db, for wiring better-auth's adapter.",
             },
           ],
         },
