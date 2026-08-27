@@ -9,6 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "pretest": "tsx db/seed-platform.ts",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",

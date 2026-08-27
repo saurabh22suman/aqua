@@ -161,3 +161,16 @@ export async function seedPlatformCatalogue(
     await client.end();
   }
 }
+
+async function main(): Promise<void> {
+  const { env } = await import("@/lib/env");
+  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  console.log("platform catalogue seeded.");
+}
+
+if (process.argv[1] && process.argv[1].endsWith("seed-platform.ts")) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
