@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: aqua
+          POSTGRES_PASSWORD: aqua
+          POSTGRES_DB: aqua
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aqua -d aqua"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://app_login:ci-only-app-pw@localhost:5432/aqua
+      MIGRATION_DATABASE_URL: postgresql://aqua:aqua@localhost:5432/aqua
+      APP_LOGIN_PASSWORD: ci-only-app-pw
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm lint
+
+      - name: db:reset (bootstrap roles + migrate against the CI Postgres service)
+        run: pnpm db:reset
+
+      # pretest seeds the platform catalogue automatically (see T0) —
+      # tests/tier1/isolation.test.ts spins up its own disposable
+      # Testcontainers Postgres and needs only the Docker daemon, already
+      # present on GitHub-hosted runners.
+      - run: pnpm test
+
+      # First-load JS budget (DESIGN.md §5: 150 KB gzipped, per route).
+      # No bundlesize/size-limit dependency — parses `next build`'s own
+      # summary table. See scripts/check-bundle-budget.ts.
+      - run: pnpm exec tsx scripts/check-bundle-budget.ts
