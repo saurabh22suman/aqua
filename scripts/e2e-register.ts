@@ -41,14 +41,28 @@ async function main() {
 
     await page.locator("a[href^='/coach/register/']").first().click();
     await page.waitForURL("**/coach/register/**");
-    await page.locator("li button", { hasText: "Present" }).first().waitFor();
+    await page.locator('li button[aria-label="Present"]').first().waitFor();
 
     const rows = await page.locator("ul > li").count();
     console.log(`roster rows: ${rows}`);
 
+    // U1: how many rows are visible without scrolling, at the 390px
+    // width this whole flow is measured at. This is the number the
+    // un-carding was for — more rows visible one-handed at a poolside,
+    // not just a smaller diff.
+    const visibleWithoutScrolling = await page.evaluate(() => {
+      const viewportHeight = window.innerHeight;
+      const items = Array.from(document.querySelectorAll("ul > li"));
+      return items.filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.top >= 0 && r.bottom <= viewportHeight;
+      }).length;
+    });
+    console.log(`rows fully visible without scrolling (390x844 viewport): ${visibleWithoutScrolling} of ${rows}`);
+
     const probe = `(async () => {
       const buttons = Array.from(document.querySelectorAll("ul li button")).filter(
-        (b) => b.textContent === "Present",
+        (b) => b.getAttribute("aria-label") === "Present",
       );
       const latencies = [];
       const t0 = performance.now();
