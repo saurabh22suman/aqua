@@ -17,7 +17,7 @@ import {
   waitForQueueDrain,
   waitForServer,
 } from "./lib/offline-page";
-import { runVerify5, runVerify6 } from "./lib/offline-verify";
+import { runVerify5, runVerify6, runVerifyColdStart } from "./lib/offline-verify";
 
 const BASE = "http://localhost:3215";
 const MEMBER_COUNT = 16;
@@ -218,10 +218,14 @@ async function main() {
     // VERIFY 6 — two devices, one offline, marking the same member.
     // Reconnect. Last write wins, no crossed rows. (scripts/lib/offline-verify.ts)
     await runVerify6(browser, admin, fixture, BASE, COACH_PHONE, record);
+
+    // COLD START — never-visited session, offline: a clear message, not
+    // the browser's generic error. (scripts/lib/offline-verify.ts)
+    await runVerifyColdStart(browser, fixture, BASE, COACH_PHONE, record);
   } catch (err) {
     console.error("FATAL:", err);
     for (const name of [
-      "VERIFY 1", "VERIFY 2", "VERIFY 3", "VERIFY 4", "VERIFY 5", "VERIFY 6",
+      "VERIFY 1", "VERIFY 2", "VERIFY 3", "VERIFY 4", "VERIFY 5", "VERIFY 6", "COLD START",
     ]) {
       if (!results.some((r) => r.name.startsWith(name))) {
         record(name, "UNCERTAIN", `script aborted before this ran: ${(err as Error).message}`);

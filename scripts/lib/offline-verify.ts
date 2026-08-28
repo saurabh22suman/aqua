@@ -105,3 +105,53 @@ export async function runVerify6(
   await contextA.close();
   await contextB.close();
 }
+
+// COLD START — a session's register page that was never opened in this
+// browser context, visited for the first time while offline. Rule 1:
+// visible error over graceful mystery, not the browser's own generic
+// "can't reach this page" screen.
+//
+// Important scope limit, checked precisely by this test's own setup: the
+// service worker can only intercept a request if it's registered at all,
+// which requires at least one prior ONLINE page load in this context — a
+// device that has NEVER opened the app, ever, has nothing to intercept
+// with and no fix here changes that (no offline strategy can serve what
+// was never downloaded once). What this covers, and what's realistic for
+// a coach at a poolside, is: the app shell was opened before (so the
+// service worker is registered and active), but THIS session's register
+// page specifically was not — logging in here first, then hitting an
+// unvisited register URL, not skipping login entirely.
+export async function runVerifyColdStart(
+  browser: Browser,
+  fixture: OfflineFixture,
+  base: string,
+  coachPhone: string,
+  record: Record_,
+): Promise<void> {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await loginAsCoach(context, base, coachPhone);
+  // Shell is now cached (login page assets + the /coach navigate + the
+  // service worker itself). This specific session's register page has
+  // never been requested in this context.
+  await page.waitForTimeout(1500);
+
+  await context.setOffline(true);
+  await page.goto(`${base}/coach/register/${fixture.sessionId}`).catch(() => {});
+  const bodyText = await page.locator("body").textContent().catch(() => "");
+
+  if (bodyText?.includes("hasn't been downloaded yet")) {
+    record(
+      "COLD START: never-visited session, offline — clear message, not a mystery",
+      "PASS",
+      "service worker served the offline-not-downloaded fallback",
+    );
+  } else {
+    record(
+      "COLD START: never-visited session, offline — clear message, not a mystery",
+      "FAIL",
+      `body did not contain the expected message: ${JSON.stringify(bodyText?.slice(0, 200))}`,
+    );
+  }
+
+  await context.close();
+}
