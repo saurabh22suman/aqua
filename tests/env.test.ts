@@ -1,10 +1,26 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 async function loadEnv() {
   vi.resetModules();
   vi.stubEnv("AQUA_NO_DOTENV", "1");
   return import("@/lib/env");
 }
+
+// CI's job-level `env:` block (see .github/workflows/ci.yml) sets several
+// of these ambiently for every step, including this test file's own
+// process — APP_LOGIN_PASSWORD in particular. Without this, a test that
+// only stubs DATABASE_URL still inherits CI's real APP_LOGIN_PASSWORD and
+// trips the password-match check added for D2b, passing locally (nothing
+// ambient) and failing only in CI. Neutralise the whole set every test,
+// then let individual tests opt back in to whatever they're exercising.
+beforeEach(() => {
+  vi.stubEnv("MIGRATION_DATABASE_URL", "");
+  vi.stubEnv("APP_LOGIN_PASSWORD", "");
+  vi.stubEnv("BETTER_AUTH_SECRET", "");
+  vi.stubEnv("BETTER_AUTH_URL", "");
+  vi.stubEnv("NEXT_PHASE", "");
+  vi.stubEnv("NODE_ENV", "test");
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -16,7 +32,6 @@ describe("lib/env", () => {
       "DATABASE_URL",
       "postgresql://aqua:aqua@localhost:5432/aqua",
     );
-    vi.stubEnv("MIGRATION_DATABASE_URL", "");
 
     const { env } = await loadEnv();
     expect(env.DATABASE_URL).toBe("postgresql://aqua:aqua@localhost:5432/aqua");
