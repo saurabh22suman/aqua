@@ -2,7 +2,15 @@
 
 **The visual system for Aqua. Loaded on every UI task. Non-negotiable.**
 
-Reference implementation: `docs/sports-club-ui-direction.html`.
+This file encodes the tokens — colour, type, spacing, radii, shadow.
+`docs/sports-club-ui-direction.html` is the canonical **layout**
+reference — hierarchy, density, what leads a screen, how an attention
+item reads, the lane strip and its three reuses. **Read both before
+building any new screen.** Tokens alone don't tell you that one thing
+per screen should dominate, or that an attention item states a reason
+and not just a count — that's composition, and it lives in the HTML
+file, not here. A screen that uses the right tokens in the wrong
+composition still reads as generic.
 
 ---
 
