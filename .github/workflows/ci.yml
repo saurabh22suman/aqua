@@ -29,6 +29,12 @@ jobs:
       MIGRATION_DATABASE_URL: postgresql://aqua:aqua@localhost:5432/aqua
       APP_LOGIN_PASSWORD: ci-only-app-pw
       NODE_ENV: test
+      # Not a secret, not required for anything to pass — better-auth logs
+      # a "you are using the default secret" error (non-fatal; nothing
+      # reads it, nothing fails without it) whenever it's unset. Setting
+      # it here is purely to keep that noise out of a first-run log
+      # someone is reading at 1am. See docs/ci-first-run.md.
+      BETTER_AUTH_SECRET: ci-build-only-not-a-real-secret
 
     steps:
       - uses: actions/checkout@v4
@@ -49,10 +55,21 @@ jobs:
       - name: db:reset (bootstrap roles + migrate against the CI Postgres service)
         run: pnpm db:reset
 
-      # pretest seeds the platform catalogue automatically (see T0) —
-      # tests/tier1/isolation.test.ts spins up its own disposable
-      # Testcontainers Postgres and needs only the Docker daemon, already
-      # present on GitHub-hosted runners.
+      # pretest seeds the platform catalogue automatically (see T0).
+      #
+      # Two Postgres instances are in play here on purpose, not
+      # redundantly: the `postgres` service above is the long-lived DB
+      # every other test file uses via MIGRATION_DATABASE_URL/DATABASE_URL
+      # (fixed connection, matches local `pnpm db:reset` + `pnpm test`).
+      # tests/tier1/isolation.test.ts alone spins up its OWN disposable
+      # Testcontainers Postgres, because it deliberately drops RLS
+      # policies as part of its mutation proofs — doing that against the
+      # shared service DB would corrupt state for every other test file
+      # running in the same job. Testcontainers needs only the Docker
+      # daemon, which GitHub-hosted ubuntu-latest runners provide already
+      # (no `services:`/`container:` entry needed for it) — this is the
+      # one thing in this workflow that hasn't been observed working on
+      # actual GitHub infrastructure yet. See docs/ci-first-run.md.
       - run: pnpm test
 
       # First-load JS budget (DESIGN.md §5: 150 KB gzipped, per route).
