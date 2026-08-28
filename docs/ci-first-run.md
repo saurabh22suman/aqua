@@ -73,10 +73,52 @@ Which test files touch which database, precisely:
 | `server-action-preamble.test.ts` | | | ✓ (reads the TS AST) |
 | `timezone.test.ts` | | | ✓ (pure functions) |
 | `env.test.ts` | | | ✓ (mocks `process.env`) |
+| `scripts/e2e-offline.ts` | ✓ (fixture setup/verify) | | |
 
 If `isolation.test.ts` is ever changed to use the shared service instead
 of Testcontainers "to simplify CI," that's the isolation gate quietly
 losing its clean-room guarantee — don't do that.
+
+## The offline suite (S3) — what's automated and what isn't
+
+All six VERIFY scenarios from the S3 offline-sync work run in CI, headless,
+via `pnpm exec tsx scripts/e2e-offline.ts`. This is real protection, not a
+restatement of "it worked on my machine" — the script disables the network
+for real (Playwright's `context.setOffline()`, not throttling), creates its
+own isolated batch/roster/session inside the demo-academy tenant so row-count
+assertions are exact, and cleans up after itself whether it passes or throws.
+
+All six were judged safe to automate. Five are effectively deterministic —
+timing is controlled by explicit waits and polling (`waitForQueueDrain`),
+not fixed sleeps hoping a network call lands in time. **VERIFY 5 (offline
+mid-sync) is the one with genuine timing sensitivity**: it goes online for
+400ms, then offline again, aiming to catch the queue with some entries
+synced and some not. On a loaded runner, that window could land with
+everything synced or nothing synced instead of a genuine split. This does
+NOT weaken the test — its actual assertions (no duplicate rows, no missing
+rows) are invariants that hold regardless of how many entries happened to
+land in the window — but if VERIFY 5 is ever flaky in a way the others
+aren't, this is why, and the fix is widening the window, not disabling the
+scenario.
+
+Two extra CI-only steps this requires, that nothing else in the workflow
+needed before:
+
+- `pnpm exec playwright install --with-deps chromium` — `pnpm install`
+  only installs the `playwright` npm package, not an actual browser
+  binary. `--with-deps` also installs the OS-level libraries Chromium
+  needs that a bare `ubuntu-latest` image doesn't ship by default.
+- `pnpm seed` — the offline fixture (`scripts/lib/offline-fixture.ts`)
+  reuses the demo-academy tenant and the coach login user `pnpm seed`
+  creates, exactly like local dev. Nothing offline-specific is bootstrapped
+  separately.
+
+If this step is red: reproduce with the exact same command locally first
+(`pnpm seed && pnpm exec tsx scripts/e2e-offline.ts` against a freshly
+reset local Postgres). If it's green locally and red in CI, the two most
+likely differences are (a) the Chromium/OS-deps install genuinely failing
+on the runner image — check that step's own log before assuming the test
+itself is broken — or (b) VERIFY 5's timing window, per above.
 
 ## Every step, and what failure looks like
 
@@ -148,6 +190,23 @@ losing its clean-room guarantee — don't do that.
    `.woff2` bytes. Currently 55.2 KB against a 60 KB budget. Same as
    above: a failure is real, reproduce locally with the same command.
 
+10. **`pnpm exec playwright install --with-deps chromium`** — downloads
+    a Chromium binary plus OS libraries. Failure here is almost always
+    network/registry access on the runner, not this repo; retrying the
+    job is a reasonable first move if this specific step is what's red.
+
+11. **`pnpm seed`** — same script, same output as local dev (see the
+    seed log in any of the other docs for what success looks like).
+    Failure here means something upstream (schema, roles, platform
+    catalogue) is broken — steps 6/7 should have already caught that,
+    so a failure only at this step and not before is worth a second look.
+
+12. **`pnpm exec tsx scripts/e2e-offline.ts`** — see "The offline suite"
+    above for what's automated, what's timing-sensitive, and how to
+    reproduce it. On failure the script prints which of the six VERIFY
+    scenarios failed and the actual detail (row counts, sync state),
+    not just pass/fail.
+
 ## If something is red and it isn't obvious why
 
 Reproduce the exact failing step locally against a *fresh* container,
@@ -158,9 +217,11 @@ CI" happens:
 ```
 docker compose down -v && docker compose up -d db
 pnpm db:reset
-pnpm test                              # step 7
+pnpm test                                      # step 7
 pnpm exec tsx scripts/check-bundle-budget.ts   # step 8
 pnpm exec tsx scripts/check-font-budget.ts     # step 9
+pnpm seed                                      # step 11
+pnpm exec tsx scripts/e2e-offline.ts           # step 12
 ```
 
 If that's green and CI is still red, the difference is genuinely
