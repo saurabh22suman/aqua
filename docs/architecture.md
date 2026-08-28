@@ -938,7 +938,7 @@ create index on attendance (tenant_id, member_id, marked_at desc);
 create index on attendance (tenant_id, session_id);
 ```
 
-`client_id` is generated on the device before the network call, which makes offline replay idempotent. Upsert on `(tenant_id, session_id, member_id)`, last write wins.
+`client_id` is generated on the device before the network call, which makes offline replay idempotent. Upsert on `(tenant_id, session_id, member_id)`, last write wins — meaning last request the database receives, not last human decision. See §12 for what that means when two devices mark the same session and one is offline.
 
 Partition by month once this passes roughly 10 million rows. Not before.
 
@@ -1531,7 +1531,9 @@ Coach marks     → optimistic UI update (<100ms)
       reconnect   → replay queue in order, upsert by (tenant_id, session_id, member_id)
 ```
 
-Conflict resolution is last-write-wins by `marked_at`, which is correct here: the most recent human judgement about who was in the pool is the right answer.
+Conflict resolution is last-write-**to-the-server**-wins — the upsert on `(tenant_id, session_id, member_id)` simply applies whichever request the database receives last, with `marked_at` set to that request's execution time. It does **not** compare timestamps to find the most recent human decision. This is coach-visible behaviour, not an implementation detail: if a device goes offline after marking, then reconnects after a second device has already marked the same member online, the offline device's mark wins on reconnect — even though it was the *earlier* decision in wall-clock time. Verified directly (S3): two devices, one offline, mark the same member differently; the offline device's mark was made first but reached the server last, and it won.
+
+This is the correct rule for this product — a coach handing off a register mid-session with patchy signal needs their device's marks to land, not silently lose to whoever happened to have signal first — but it means a substitution handover (two coaches marking the same session, one offline) resolves by reconnect order, not by who decided later. Worth knowing before it gets "discovered" as a bug during a handover and re-litigated as one.
 
 The UI always shows sync state — "11 of 14 marked · saves offline too" — because silent queues erode trust as badly as lost data.
 
