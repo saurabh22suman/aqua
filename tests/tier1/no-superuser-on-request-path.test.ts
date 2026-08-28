@@ -29,6 +29,10 @@ import { describe, expect, it } from "vitest";
 //                            the privileged pool, never the app pool — a
 //                            documented pattern (see comments in those
 //                            files), not request-path code
+//   scripts/e2e-offline.ts  - same fixture-setup pattern as scripts/seed.ts,
+//                            plus reads attendance rows directly to verify
+//                            sync outcomes — a Playwright driver script,
+//                            not request-path code
 const ALLOWLIST = new Set([
   "db/migrate.ts",
   "db/bootstrap-roles.ts",
@@ -44,6 +48,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/tenants-locations.test.ts",
   "tests/tier1/user-scope.test.ts",
   "tests/tier1/membership-role-scope.test.ts",
+  "scripts/e2e-offline.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist
 ]);
 
