@@ -82,17 +82,31 @@ renders. Shipped weights, latin subset only:
 | Instrument Sans | 400, 500 | body/emphasis |
 
 Self-hosted, subset to Latin only (`latin-ext`/`vietnamese` dropped —
-nothing in this product needs them today; Devanagari/Bengali are a
-Phase 4 problem, solved separately), `font-display: swap`.
+nothing in this product needs them today), `font-display: swap`.
 
-**Combined budget 45 KB — currently 55.2 KB (measured), over budget.**
+**Combined budget 60 KB, latin only — actual 55.2 KB, inside budget.**
 The three static latin files (`instrument-sans-latin-400`,
 `instrument-sans-latin-500`, `bricolage-grotesque-latin-600`, woff2) are
-16.5 + 16.8 + 21.9 KB. Switching off the variable axis was the
-authorized fix for the 76 KB variable-font measurement; it wasn't enough
-on its own to close the gap, and dropping a weight to force it under 45
-KB wasn't authorized — this is a known, open gap, not a silently
-accepted one.
+16.5 + 16.8 + 21.9 KB. The original 45 KB figure was set before any
+static-weight measurement existed — a guess, and wrong once real numbers
+came in. Raised to 60 KB rather than compromise the type: the three
+weights are load-bearing for the design, and against a 102 KB shared JS
+baseline and a 150 KB total budget there's headroom to pay for it.
+Enforced in CI as its own gate (`scripts/check-font-budget.ts`), same
+shape as the JS bundle gate — adding a fourth weight or a new subset
+fails the build, not a later "someone noticed."
+
+**Phase 4 (Hindi, Bengali) will need revisiting this budget, not just
+extending it.** Neither Bricolage Grotesque nor Instrument Sans ships a
+Devanagari or Bengali subset at all (checked both packages' `metadata.json`
+— `subsets: ['latin', 'latin-ext']` and `['latin', 'latin-ext', 'vietnamese']`
+respectively) — Phase 4 is a new typeface decision, not a bigger latin
+budget. Measured for real against Noto Sans Devanagari/Bengali (400+500+600,
+each script's own subset, woff2) as a size anchor, not a guess: Devanagari
+~154 KB, Bengali ~136 KB. Either alone is roughly 2.5–3x this entire latin
+budget; loading both unconditionally for every user is not viable at any
+budget. Phase 4 needs a decision on per-locale conditional loading (ship a
+user's script, not everyone's), before it needs a bigger number.
 
 | Role | Size | Family | Weight |
 |---|---|---|---|

@@ -59,3 +59,9 @@ jobs:
       # No bundlesize/size-limit dependency — parses `next build`'s own
       # summary table. See scripts/check-bundle-budget.ts.
       - run: pnpm exec tsx scripts/check-bundle-budget.ts
+
+      # Font budget (DESIGN.md §1.3: 60 KB, latin subset only, woff2).
+      # Runs its own build too (self-contained, same as the bundle check
+      # above) — the small duplicate build cost buys a script that's
+      # correct standalone regardless of step order.
+      - run: pnpm exec tsx scripts/check-font-budget.ts
