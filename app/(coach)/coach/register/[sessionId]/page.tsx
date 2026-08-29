@@ -37,7 +37,11 @@ export default async function RegisterPage({
       </h1>
 
       <div className="mt-4">
-        <RegisterBoard sessionId={sessionId} rows={data.rows} />
+        <RegisterBoard
+          sessionId={sessionId}
+          rows={data.rows}
+          offlineSyncEnabled={data.offlineSyncEnabled}
+        />
       </div>
     </main>
   );

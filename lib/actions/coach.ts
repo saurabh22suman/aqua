@@ -80,6 +80,7 @@ export async function getRosterAction(
   batchName: string;
   startsAt: string;
   rows: RosterRow[];
+  offlineSyncEnabled: boolean;
 } | null> {
   const sessionId = sessionIdSchema.parse(rawSessionId);
   const ctx = await requireDefaultCtx();
@@ -97,6 +98,11 @@ export async function getRosterAction(
       .innerJoin(batches, eq(batches.id, sessions.batchId))
       .where(and(eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId)));
     if (!session) return null;
+
+    const [tenant] = await tx
+      .select({ offlineSyncEnabled: tenants.offlineSyncEnabled })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
 
     const roster = await tx
       .select({
@@ -152,6 +158,7 @@ export async function getRosterAction(
       batchName: session.batchName,
       startsAt: session.startsAt.toISOString(),
       rows,
+      offlineSyncEnabled: tenant.offlineSyncEnabled,
     };
   });
 }

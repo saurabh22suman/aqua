@@ -1601,6 +1601,28 @@ The blast radius is bounded and self-correcting, not silent: each `mark()` write
 
 **So: a coach can lose a mark.** Exactly one, only the most recent, only if the app is killed inside a single-digit-millisecond window, and it's visibly missing rather than silently wrong. That is the stated limit of "works offline" for this feature — not a guess.
 
+### 12.2 The kill switch
+
+Issue #4 was wrong-then-right-then-wrong-then-right about being closed twice over (5/5 CI failing → 2/5 → 5/5 clean, across three real mechanisms). A subsystem with that track record needs a way to turn itself off that doesn't require a deploy — the whole value of a kill switch is that it survives being needed at 2am.
+
+`tenants.offline_sync_enabled` (migration `0013`), **default `false`, per tenant** — not a single global env var. Rollout is a canary onto one specific tenant, not an all-or-nothing switch for every tenant sharing a plan; a per-tenant column keeps that possible without building the full plan/entitlement-override machinery (`db/features.ts`) for what is a safety switch, not a product tier.
+
+With the flag off, `useOfflineRegister` (`lib/hooks/use-offline-register.ts`) takes a different path entirely, not a disabled version of the same one:
+
+- No IndexedDB queue, no `enqueueMark`, no background `flush()`. `mark()` calls `markAttendanceSessionAction` directly.
+- **No optimistic update.** The DOM only shows a mark once the server has confirmed it — the opposite of the enabled path, deliberately. A coach must never be shown a mark that might not have landed.
+- **Offline means refused, not queued.** If `navigator.onLine` is false, `mark()` doesn't call the server at all — it sets an error and returns. Nothing is silently accepted for later.
+- **The banner is proactive.** The moment the browser's `offline` event fires, a full banner appears (`data-testid="offline-banner"`) — not only after a tap fails. A coach who hasn't tried to mark anything yet still finds out their connection is gone.
+
+Verified in `scripts/e2e-offline-disabled.ts`: the online path still marks and persists, the banner appears with zero taps attempted, and a tap made while offline produces no DOM change and no database row. Wired into CI alongside `scripts/e2e-offline.ts` (which explicitly sets the flag `true` on its own fixture tenant — each script owns its tenant's flag state, never assumes what a previous CI step left behind).
+
+**Evidence gate before flipping any tenant's flag on** — CI passing is necessary, not sufficient:
+
+1. Sustained clean CI on `main` — not one green run. CI's `context.setOffline()` is a clean toggle; it doesn't prove the write path survives a real, degrading connection.
+2. A real Android device over real mobile data, marking a register more than once through actual signal loss — a different failure surface than anything CI exercises.
+3. The reference business specifically, first, as a canary — one tenant, watched closely, before any other tenant's flag moves.
+4. The residual risk in §12.1 (loss of at most one mark, inside a millisecond window) disclosed to that tenant's coach beforehand, not discovered by them after the fact.
+
 ---
 
 ## 13. Frontend architecture

@@ -7,18 +7,38 @@ import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register"
 export function RegisterBoard({
   sessionId,
   rows,
+  offlineSyncEnabled,
 }: {
   sessionId: string;
   rows: RosterRow[];
+  offlineSyncEnabled: boolean;
 }) {
   const initialStatuses = Object.fromEntries(
     rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
   );
   const { marks, mark, markedCount, pending, online, syncedLabel, hasActiveFailure, saving } =
-    useOfflineRegister(sessionId, rows, initialStatuses);
+    useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled);
 
   return (
     <div>
+      {/* Kill switch off (issue #4 postmortem, docs/architecture.md §12.2):
+          this must appear the INSTANT connectivity drops, not only after
+          a failed tap — the whole point is that a coach never believes a
+          mark saved when it didn't, and a banner that only shows up after
+          a failure is a banner that shows up too late. */}
+      {!offlineSyncEnabled && !online ? (
+        <div
+          className="mb-2 rounded-card border border-late bg-late-soft px-4 py-3"
+          role="alert"
+          data-testid="offline-banner"
+        >
+          <p className="text-[13px] font-semibold text-late">You&apos;re offline</p>
+          <p className="mt-0.5 text-[12px] text-late">
+            Marking is unavailable until you reconnect. Nothing you tap right now will be saved.
+          </p>
+        </div>
+      ) : null}
+
       {/* The lane strip: a coloured surface, not a bare progress bar —
           this is the same signature element the coach today-list and (once
           built) the owner/parent screens reuse. See DESIGN.md §"the lane
@@ -33,18 +53,26 @@ export function RegisterBoard({
               of {rows.length} marked
             </p>
             <p className="text-[11px] text-ink-3" data-testid="sync-state">
-              {/* "saving" outranks everything else: it means a write hasn't
-                  even committed to this device yet, which is a truer and
-                  more urgent state than "offline" or "syncing" (both of
-                  which describe already-durable writes). See
-                  docs/architecture.md §12.1. */}
-              {saving > 0
-                ? "saving…"
-                : !online
-                  ? "offline — saved on device"
-                  : pending > 0
-                    ? `syncing ${pending}…`
-                    : `synced ${syncedLabel}`}
+              {offlineSyncEnabled ? (
+                // "saving" outranks everything else: it means a write
+                // hasn't even committed to this device yet, which is a
+                // truer and more urgent state than "offline" or "syncing"
+                // (both of which describe already-durable writes). See
+                // docs/architecture.md §12.1.
+                saving > 0 ? (
+                  "saving…"
+                ) : !online ? (
+                  "offline — saved on device"
+                ) : pending > 0 ? (
+                  `syncing ${pending}…`
+                ) : (
+                  `synced ${syncedLabel}`
+                )
+              ) : !online ? (
+                "offline"
+              ) : (
+                `synced ${syncedLabel}`
+              )}
             </p>
           </div>
           <div className="mt-2 h-1.5 rounded-pill bg-paper overflow-hidden">
@@ -61,7 +89,9 @@ export function RegisterBoard({
             actually succeeds. */}
         {hasActiveFailure ? (
           <p className="mt-2 text-[12px] text-late" data-testid="sync-error">
-            Sync failed — retrying. Your marks are saved on this device.
+            {offlineSyncEnabled
+              ? "Sync failed — retrying. Your marks are saved on this device."
+              : "That mark did not save. Try again once you're online."}
           </p>
         ) : null}
       </div>
