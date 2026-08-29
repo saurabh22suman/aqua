@@ -1,0 +1,87 @@
+# For LOCAL VERIFICATION of the Docker setup (D3) — build the image, run
+# all three services, confirm the app works end to end and the worker
+# picks up a job. Dokploy (D4) manages web/worker/Postgres itself and
+# supplies its own real secrets per service; this file's credentials are
+# throwaway local-only values, same convention as the existing
+# docker-compose.yml.
+#
+# Explicit project name: without it, Compose defaults to the directory
+# name ("aqua") for BOTH this file and the plain dev docker-compose.yml,
+# and treats them as the same project. Running this file previously
+# reconciled away the dev compose's fixed-named `aqua-db` container
+# (removed and recreated) — no data was lost only because its volume
+# (`aqua_aqua-pgdata`) has a different name than this file's
+# (`aqua-pgdata-prod`), but it was a genuine near-miss. This name keeps
+# the two projects, and their container/network namespaces, from ever
+# overlapping again.
+name: aqua-prod
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: aqua
+      POSTGRES_PASSWORD: aqua
+      POSTGRES_DB: aqua
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aqua -d aqua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - aqua-pgdata-prod:/var/lib/postgresql/data
+
+  # One-shot: bootstrap roles, run migrations, bootstrap pg-boss's schema
+  # and per-tenant schedules, grant app_user access to it. Runs under the
+  # privileged role and exits — web/worker never see MIGRATION_DATABASE_URL
+  # (tests/tier1/no-superuser-on-request-path.test.ts enforces that at the
+  # source level).
+  migrate:
+    build: .
+    command: ["node_modules/.bin/tsx", "db/deploy.ts"]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:aqua@db:5432/aqua
+      APP_LOGIN_PASSWORD: local-compose-verification-pw
+      DATABASE_URL: postgresql://app_login:local-compose-verification-pw@db:5432/aqua
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build: .
+    command: ["node", "server.js"]
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://app_login:local-compose-verification-pw@db:5432/aqua
+      BETTER_AUTH_SECRET: local-compose-verification-secret-not-real
+      BETTER_AUTH_URL: http://localhost:3000
+      OFFLINE_SYNC_ENABLED: ""
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    command: ["node_modules/.bin/tsx", "worker/index.ts"]
+    environment:
+      DATABASE_URL: postgresql://app_login:local-compose-verification-pw@db:5432/aqua
+      # Explicit, not just inherited from the image's ENV NODE_ENV=production
+      # (Dockerfile) — the worker is a plain node process, not something
+      # Next's CLI sets this for automatically the way `next start` does
+      # for web. Silently running in development mode here is a real trap
+      # (D2 audit finding).
+      NODE_ENV: production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  aqua-pgdata-prod:

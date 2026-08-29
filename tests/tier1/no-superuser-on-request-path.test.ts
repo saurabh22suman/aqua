@@ -15,6 +15,9 @@ import { describe, expect, it } from "vitest";
 //   db/migrate.ts          - runs migrations, explicitly named in the ask
 //   db/bootstrap-roles.ts  - "the bootstrap script", explicitly named
 //   db/reset.ts            - orchestrates migrate+bootstrap for `pnpm db:reset`
+//   db/deploy.ts           - the production deploy-time equivalent of
+//                            db:reset, minus the destructive schema drop
+//                            (D3) — runs once, before web/worker start
 //   db/seed-platform.ts    - `pretest` hook (package.json) and `pnpm seed`;
 //                            seeds the RLS-exempt platform catalogue only
 //   scripts/seed.ts        - dev seed script, not request-path; the
@@ -37,11 +40,13 @@ const ALLOWLIST = new Set([
   "db/migrate.ts",
   "db/bootstrap-roles.ts",
   "db/reset.ts",
+  "db/deploy.ts",
   "db/seed-platform.ts",
   "scripts/seed.ts",
   "lib/env.ts",
   "tests/env.test.ts",
   "tests/tier1/attendance-upsert.test.ts",
+  "tests/tier1/sessions-generate-job.test.ts",
   "tests/tier1/auth-context.test.ts",
   "tests/tier1/platform-entitlements.test.ts",
   "tests/tier1/roles-permissions.test.ts",
