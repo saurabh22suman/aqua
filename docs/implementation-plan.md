@@ -472,12 +472,12 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Done when:** codes are unique per tenant and never reused.
 
 ### C-04 · Staff records
-**Depends:** C-01
+**Depends:** C-01, C-03
 **Build:** `staff` typed as coach, receptionist, worker, accountant, linked to a person and optionally to a login via `staff.user_id`.
 **Done when:** one person can be both a coach and a member.
 
 ### C-05 · Consent — DPDP
-**Depends:** C-02
+**Depends:** C-02, C-03
 **Build:** Append-only `consents` with purpose, policy version, granting party, timestamp and evidence. Registration blocks on missing guardian consent for a minor.
 **Done when:** a minor cannot be activated without recorded guardian consent; withdrawal is recorded, not deleted.
 **Read first:** scope §7.1.
@@ -489,7 +489,7 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Read first:** scope §7.1.
 
 ### C-06 · People screens
-**Depends:** C-03, C-04, C-05
+**Depends:** C-02, C-03, C-04, C-05
 **Build:** List with search and filters, detail view, create and edit. Mobile-first.
 **Done when:** a receptionist adds a member with a guardian in under ninety seconds.
 
@@ -554,6 +554,8 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Build:** `batches` with capacity, days, times, coach, facility, start and end dates.
 **Done when:** capacity is enforced at enrolment.
 
+> **Open plan gap, not resolved here:** "coach" needs C-04 (Staff, not in Depends) and "facility" needs a facilities module that doesn't exist anywhere in Phase 2 — facilities are scoped to Phase 3 (project-scope.md §5.7). `batches.coach_id` exists as a bare user id as of the coach-assignment-scoping fix (see C-20's note), independent of whether C-04 lands first. `facility` has no such interim answer yet — decide whether Phase 2 batches reference a stub facility, a free-text venue field, or nothing until Phase 3, before building the rest of this task.
+
 ### C-18 · Enrolments
 **Depends:** C-17, C-03
 **Build:** `enrolments` linking members to batches with dates, capacity check.
@@ -565,8 +567,8 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Done when:** a 7:00 AM batch generates sessions at 07:00 IST regardless of server timezone.
 
 ### C-20 · Session changes and substitution
-**Depends:** C-19
-**Build:** Cancel with reason, reschedule, and **substitute coach — recording who actually took the session**.
+**Depends:** C-19, C-04
+**Build:** Cancel with reason, reschedule, and **substitute coach — recording who actually took the session**. `batches.coach_id` and `sessions.coach_id` exist as of the coach-assignment-scoping fix (item 1/2, docs/architecture.md §9.2) — currently a bare user id, not yet a `staff` foreign key, since C-04 didn't exist when they were added. Migrate the reference once C-04 lands; don't leave two competing notions of "the coach."
 **Done when:** a substituted session reports the substitute as its coach.
 
 > **This task feeds V-31.** Payout computation reads `sessions.coach_id`. If substitution does not record the actual coach, the wrong person gets paid. Build it deliberately.
@@ -604,7 +606,7 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Done when:** the coach can always tell whether their marks are saved.
 
 ### C-27 · Attendance history
-**Depends:** C-22
+**Depends:** C-22, C-06
 **Build:** Per-member history, per-batch summary, percentage over a period.
 **Done when:** a member page shows accurate monthly attendance.
 
@@ -712,15 +714,17 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Done when:** a fee link cannot read progress data; an expired token fails cleanly.
 
 ### C-45 · Parent pages
-**Depends:** C-44, F-17
+**Depends:** C-44, F-17, C-32
 **Build:** Server-rendered, **zero client JavaScript**, tenant-branded. Fees, schedule, attendance, progress.
 **Done when:** the page works with JavaScript disabled and ships no analytics.
 **Never:** tracking of any kind on this surface.
 
+> **Open plan gap, partially resolved:** the "fees" element needs C-32 (Invoices) to exist — added above, was missing entirely. This is also S5 (RED — propose before building, S-series). The proposal should state whether "fees" ships in the first version or is added once C-32 lands, rather than assuming both are ready at once.
+
 ## Dashboard and jobs
 
 ### C-46 · Owner dashboard
-**Depends:** C-33, C-27, C-13
+**Depends:** C-33, C-27, C-13, C-17, C-19
 **Build:** Per the UI direction — overdue amount with a WhatsApp action, three supporting figures, a needs-attention list where every item carries its reason, today's batches as capacity lanes.
 **Done when:** it loads in under 2.5 s on a mid-tier Android over 4G.
 
