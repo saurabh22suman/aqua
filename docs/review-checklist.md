@@ -120,6 +120,43 @@ from pg_default_acl;
 A green suite proves nothing. For each safety property touched by the
 batch, mutate the thing and confirm the test fails, then restore:
 
+### Named failure class: scoping the list, not the direct path
+
+Tenant isolation (§5) answers "which tenant." It does not answer
+"which row within that tenant" — a caller can be a legitimate member
+of the tenant and still not be the right person to see a specific row
+(a coach and another coach's session; eventually a parent and another
+parent's child). **Scoping a list view without scoping the matching
+direct-access action is not a fix** — it hides the row from a menu
+while leaving the door to it unlocked. Real example: `getTodayAction`
+was scoped to a coach's own sessions, and `getRosterAction` (open one
+specific session by id) and `markAttendanceSessionAction` (mark one)
+were left checking tenant membership only — anyone who wanted another
+coach's roster just typed the session id into the URL, bypassing the
+list entirely. This was the fifth recurrence of "fixed one instance,
+missed the sibling" in this project.
+
+- [ ] Whenever an action is scoped to something narrower than "is a
+      tenant member" (a specific assignment, a specific relationship,
+      a specific owner), grep every other exported action in the SAME
+      FILE that takes an id and returns tenant data. For each one: does
+      it check the caller may see THAT row, or only that they're in the
+      tenant? Fix every real sibling found before closing the task —
+      finding one and reporting the rest as future work is the
+      recurrence, not the fix.
+- [ ] A caller denied by row-level scoping gets the same response as
+      "this row doesn't exist" (404-shaped), never a distinct
+      forbidden/403-shaped response — the latter confirms the id was
+      real to someone who shouldn't get that confirmation.
+- [ ] Prove the scoping test actually exercises the real authorization
+      path, not a fabricated context. A test that constructs `ctx`
+      directly with a hand-picked id can pass while the real resolution
+      path (session → user → tenant membership) is still broken — this
+      happened in the same fix: the unit tests passed because they used
+      a matching id by construction, and the real bug (`ctx.userId` was
+      the wrong id space entirely) was only caught by running the
+      actual E2E flow against a real login.
+
 ### Named failure class: unscoped reads return ZERO, not errors
 
 RLS filters silently. A query that forgot its tenant context does not
@@ -185,6 +222,20 @@ you have decided something — write it down.
   instead of taking one green run as proof. See the named failure class
   above, and `docs/architecture.md` §12.1 for the durability boundary
   this settled on.
+- `getTodayAction` (coach's session list) was scoped to the caller's
+  own assignments while `getRosterAction` and
+  `markAttendanceSessionAction`, in the SAME file, kept checking tenant
+  membership only — a coach could still open and mark another coach's
+  register directly by session id, bypassing the scoped list entirely.
+  The fifth recurrence of fixing one instance and missing its sibling
+  in this project. Fixing it surfaced a second, unrelated bug that made
+  the fix a no-op for every real user: `ctx.userId` was returning
+  better-auth's own id in one of two `Ctx`-construction paths, not the
+  platform `users.id` the new scoping columns actually stored — the
+  unit tests passed anyway because they fabricated a matching id
+  directly, and only running the real E2E flow against a real login
+  caught it. See the named failure class above, and
+  `docs/architecture.md` §9.2.
 
 These three are the answer to "is the testing overhead worth it".
 
