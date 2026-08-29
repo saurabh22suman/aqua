@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { batches, locations, programs } from "@/db/schema";
 import { generateSessions } from "@/lib/jobs/session-generator";
-import { listTodaySessions } from "@/lib/services/register";
+import { getRosterForSession, listTodaySessions, sessionVisibleToCaller } from "@/lib/services/register";
 import { todayInZone } from "@/lib/time/tz";
 
 // tenants has FORCE row level security, so fixture rows must be created
@@ -20,6 +20,8 @@ const coachA = uuidv7();
 const coachB = uuidv7();
 let batchAName = "";
 let batchBName = "";
+let sessionForBatchA = "";
+let sessionForBatchB = "";
 
 beforeAll(async () => {
   tenantId = uuidv7();
@@ -75,6 +77,16 @@ beforeAll(async () => {
   });
 
   await withTenant(tenantId, (tx) => generateSessions(tx, tenantId, TZ));
+
+  const sessRows = await admin.query<{ id: string; batch_name: string }>(
+    `select s.id, b.name as batch_name
+     from sessions s join batches b on b.id = s.batch_id
+     where s.tenant_id = $1
+     order by s.starts_at`,
+    [tenantId],
+  );
+  sessionForBatchA = sessRows.rows.find((r) => r.batch_name === batchAName)!.id;
+  sessionForBatchB = sessRows.rows.find((r) => r.batch_name === batchBName)!.id;
 });
 
 afterAll(async () => {
@@ -113,5 +125,55 @@ describe("coach's own sessions are scoped, not tenant-wide", () => {
     expect(rows.map((r) => r.batchName).sort()).toEqual(
       [batchAName, batchBName].sort(),
     );
+  });
+});
+
+// getRosterAction and markAttendanceSessionAction (lib/actions/coach.ts)
+// both take a session id directly and, before this fix, only checked
+// tenant membership -- scoping the list view (above) while leaving
+// direct access open is not a fix: a coach who knows or guesses a
+// session id in their own tenant could still open and mark another
+// coach's register. Both call sites gate on sessionVisibleToCaller;
+// tested once here rather than duplicated per call site.
+describe("direct access to a specific session is scoped the same way as the list", () => {
+  it("sessionVisibleToCaller is true for the assigned coach", async () => {
+    const visible = await sessionVisibleToCaller(
+      { tenantId, userId: coachA, roleKey: "coach" },
+      sessionForBatchA,
+    );
+    expect(visible).toBe(true);
+  });
+
+  it("sessionVisibleToCaller is false for a DIFFERENT coach, same tenant", async () => {
+    const visible = await sessionVisibleToCaller(
+      { tenantId, userId: coachA, roleKey: "coach" },
+      sessionForBatchB,
+    );
+    expect(visible).toBe(false);
+  });
+
+  it("sessionVisibleToCaller is true for a non-coach staff role regardless of assignment", async () => {
+    const visible = await sessionVisibleToCaller(
+      { tenantId, userId: coachA, roleKey: "owner" },
+      sessionForBatchB,
+    );
+    expect(visible).toBe(true);
+  });
+
+  it("getRosterForSession returns null (not an error, not partial data) for an unassigned coach — this is the 404, not a 403", async () => {
+    const roster = await getRosterForSession(
+      { tenantId, userId: coachA, roleKey: "coach" },
+      sessionForBatchB,
+    );
+    expect(roster).toBeNull();
+  });
+
+  it("getRosterForSession returns the roster for the assigned coach", async () => {
+    const roster = await getRosterForSession(
+      { tenantId, userId: coachA, roleKey: "coach" },
+      sessionForBatchA,
+    );
+    expect(roster).not.toBeNull();
+    expect(roster?.batchName).toBe(batchAName);
   });
 });
