@@ -47,6 +47,22 @@ order by 1;
 - [ ] Each scoped table's policy lives in the SAME migration file as
       the table (`grep -l "enable row level security" db/migrations/*`).
 
+**Known limitation, not yet closed:** this sweep proves RLS is *on*
+(`relrowsecurity`/`relforcerowsecurity`), not that the policies attached
+to a table are *correct*. It is blind to policy content (a second,
+overly-permissive policy added to an already-RLS'd table changes
+nothing this query sees) and blind to `SECURITY DEFINER` functions
+entirely (they live in `pg_proc`, outside a `pg_class` sweep — a
+function granted to `app_user` that quietly bypasses RLS would pass
+this checklist item clean). Surfaced designing D3's cross-tenant job
+scheduling (`docs/architecture.md` §9.1) while rejecting a proposed RLS
+policy bypass — none of the options considered there changed this gap,
+for better or worse. If it's ever closed, the two natural extensions
+are a policy-content check (e.g. flag any policy referencing a
+session variable outside `app.tenant_id`/`app.user_id`) and a
+`pg_proc`-based allowlist for `SECURITY DEFINER` grants to `app_user`,
+mirroring `RLS_EXEMPT_TABLES`'s shape.
+
 ## 4. Connection identity
 
 ```sql

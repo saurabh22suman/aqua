@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "./client";
 import { withPlatform } from "./scope";
@@ -194,4 +194,11 @@ export async function resolveDefaultMembership(
 
     return rows[0] ?? null;
   });
+}
+
+// The web service's health endpoint (app/api/health/route.ts) needs to
+// prove DB connectivity, not just process liveness — a container that
+// answers HTTP but can't reach Postgres is not healthy.
+export async function pingDatabase(): Promise<void> {
+  await withPlatform(() => db.execute(sql`select 1`));
 }

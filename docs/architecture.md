@@ -1355,6 +1355,55 @@ pg-boss, on the same database. Transactional job enqueueing is a real benefit: a
 
 **Time zone trap:** all schedules are IST. Session generation must use the tenant's timezone, not the server's, or a 6:00 AM batch lands at the wrong instant.
 
+### 9.1 Cross-tenant job scheduling
+
+**The constraint.** A nightly job needs to enumerate tenants before it can enter `withTenant()` for each one. `tenants` itself has RLS (§8.1's model applies to it same as any tenant-scoped table), and its two policies are:
+
+```sql
+create policy tenant_isolation on tenants
+  using (id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+
+create policy user_resolution on tenants
+  using (id in (select tenant_id from tenant_memberships
+                where user_id = nullif(current_setting('app.user_id', true), '')::uuid));
+```
+
+Both require already knowing a tenant or a user. Neither is satisfiable by code whose entire job *is* discovering which tenants exist — by design, not oversight: the whole point of `user_resolution` is that a session shouldn't learn other tenants exist at all. `withPlatform()` sets neither variable (it never calls `set_config` — see §7), so a platform-scoped read of `tenants` returns zero rows, silently. This surfaced building the worker (D3): `sessions.generate` needs every active tenant's id and timezone, and nothing in this codebase had ever needed that before.
+
+**Three options were considered.**
+
+1. **A reusable session marker** (`app.platform_job`, set by a new `withPlatformJob()`, checked in a new RLS policy on `tenants`). Rejected outright. A marker is a *convention*, not a structure — nothing stops the next job's policy from also trusting it, then a third, until it's a general RLS bypass spelled differently, and nothing forces that growth to be reviewed as such. It's also invisible to the existing gate: F-08a's catch-all (`tests/tier1/isolation.test.ts`) only checks `pg_class.relrowsecurity`/`relforcerowsecurity` — whether RLS is *on* — never the content of a table's policies. A new policy referencing an existing marker changes nothing F-08a sees.
+
+2. **A `SECURITY DEFINER` function**, named and individually granted. Better than the marker on every axis: extending it means creating a *new* named object (a visible diff), not editing an existing trust boundary, and it slots into the same "explicit allowlist, mechanically enforced" idiom this codebase already uses twice (`RLS_EXEMPT_TABLES`/F-08a, the `MIGRATION_DATABASE_URL` allowlist in `tests/tier1/no-superuser-on-request-path.test.ts`). Checked against §9's job table before ruling it out for D3's actual need: every job here needs at most `(id, timezone, status)` from the enumeration step — the tenant-scoped tables each job actually operates on (`subscriptions`, `invoices`, …) already carry their own `tenant_id` and are read normally once inside `withTenant`. Recorded here, not built, so a future reader doesn't have to re-derive it if the winning option below ever stops covering a new job's needs:
+
+   ```sql
+   create function platform_list_job_tenants()
+   returns table (tenant_id uuid, timezone text)
+   language sql security definer set search_path = public
+   as $$ select id, timezone from tenants where status in ('trial', 'active') $$;
+
+   revoke all on function platform_list_job_tenants() from public;
+   grant execute on function platform_list_job_tenants() to app_user;
+   ```
+
+   ```ts
+   // tests/tier1/no-unreviewed-security-definer-grants.test.ts
+   const ALLOWED = new Set(["platform_list_job_tenants"]);
+   it("app_user has EXECUTE only on explicitly allowlisted SECURITY DEFINER functions", async () => {
+     const { rows } = await admin.query(`
+       select proname from pg_proc
+       where prosecdef and has_function_privilege('app_user', oid, 'execute')
+     `);
+     expect(rows.map(r => r.proname).filter(n => !ALLOWED.has(n))).toEqual([]);
+   });
+   ```
+
+3. **Per-tenant schedules — the one built.** `pg-boss`'s `pgboss.schedule` table keys on `(name, key)`, so a single queue can hold one schedule per tenant, each carrying its own `data: { tenantId }` and keyed by that tenant's id. `db/deploy.ts`'s `syncSessionGenerateSchedules` enumerates tenants **once, at deploy time, under the already-privileged `MIGRATION_DATABASE_URL` connection** — the same trusted zone `bootstrap-roles.ts`/`db/migrate.ts` already use — and registers or removes schedules to match. The worker never enumerates anything: `.work()` receives `job.data.tenantId` directly. This is why it won, decisively, over both options above: **there is no new exemption object.** No new marker, no new function, no new grant, no new policy — `isolation.test.ts` and `no-superuser-on-request-path.test.ts` cover it unmodified, because nothing about the RLS or privilege surface changed at all.
+
+   A schedule can go stale — a tenant suspended or churned after its schedule was created, before the next deploy's sync removes it. The job handler (`lib/jobs/sessions-generate-job.ts`) defuses this itself: inside `withTenant(tenantId, ...)`, it reads the tenant's own `status` row — already permitted by the existing `tenant_isolation` policy, since a tenant may always read its own row — and no-ops if not `trial`/`active`. No new exemption for this either; it's a read the isolation model already allows, used defensively.
+
+   **Known gap:** a tenant created *between* deploys gets no schedule until the next sync runs. Not yet exercisable — tenant creation isn't self-serve (F-13–21 aren't built; today it's operator-run via `scripts/seed.ts`, which already coincides with a deploy) — but tracked as issue #7: the moment signup is self-serve, provisioning must call the sync directly, or a new tenant's sessions silently never generate.
+
 ---
 
 ## 10. Payments integration
