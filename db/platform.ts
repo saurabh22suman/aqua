@@ -159,6 +159,7 @@ export async function resolveHomePath(
 export async function resolveDefaultMembership(
   betterAuthUserId: string,
 ): Promise<{
+  userId: string;
   tenantId: string;
   membershipId: string;
   roleKey: string;
@@ -192,7 +193,9 @@ export async function resolveDefaultMembership(
       .orderBy(roles.homeOrdinal)
       .limit(1);
 
-    return rows[0] ?? null;
+    const row = rows[0];
+    if (!row) return null;
+    return { userId, ...row };
   });
 }
 

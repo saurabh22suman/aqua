@@ -146,5 +146,14 @@ describe("F-03a: a membership's role is always the same tenant's role", () => {
     expect(ctx.membershipId).toBe(mid);
     expect(ctx.allLocations).toBe(false);
     expect(ctx.locationIds).toEqual([locScoped]);
+    // ctx.userId must be the platform users.id (uid), not
+    // session.user.id (betterAuthId) -- a different id space entirely.
+    // Found while adding coach-assignment scoping (docs/architecture.md
+    // §9.2): comparing session.user.id against a stored users.id never
+    // matched for a real logged-in user. resolveCtxFor (the other
+    // Ctx-building path) already returned the resolved platform id;
+    // requireDefaultCtx silently didn't.
+    expect(ctx.userId).toBe(uid);
+    expect(ctx.userId).not.toBe(betterAuthId);
   });
 });
