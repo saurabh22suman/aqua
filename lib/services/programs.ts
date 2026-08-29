@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { batches, programs, type Batch, type Program } from "@/db/schema/programs";
 import type { Ctx } from "@/lib/auth/context";
@@ -7,7 +7,11 @@ type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
 
 export async function listPrograms(ctx: ActionCtx): Promise<Program[]> {
   return withTenant(ctx.tenantId, (tx) =>
-    tx.select().from(programs).where(eq(programs.tenantId, ctx.tenantId)).orderBy(programs.name),
+    tx
+      .select()
+      .from(programs)
+      .where(and(eq(programs.tenantId, ctx.tenantId), isNull(programs.deletedAt)))
+      .orderBy(programs.name),
   );
 }
 
@@ -53,7 +57,7 @@ export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[
       })
       .from(batches)
       .innerJoin(programs, eq(programs.id, batches.programId))
-      .where(eq(batches.tenantId, ctx.tenantId))
+      .where(and(eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
       .orderBy(programs.name, batches.name),
   );
 }

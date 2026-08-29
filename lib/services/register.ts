@@ -61,10 +61,19 @@ export async function enrolMember(
   input: { memberId: string; batchId: string; enrolledOn?: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
+    // FOR UPDATE: count-then-insert across two round trips is a TOCTOU
+    // race — ten concurrent callers can all read the same under-capacity
+    // count before any of them commits their insert (reproduced directly:
+    // ten concurrent enrolments into a five-capacity batch all succeeded
+    // without this lock). Locking the batch row serializes concurrent
+    // enrolments into it: the second transaction's read blocks until the
+    // first commits, then sees the now-updated count. Same shape as C-31
+    // invoice numbering's documented `select ... for update`.
     const [batch] = await tx
       .select({ capacity: batches.capacity })
       .from(batches)
-      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId)));
+      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId)))
+      .for("update");
     if (!batch) return { ok: false, error: "Batch not found." };
 
     const alreadyEnrolled = await tx

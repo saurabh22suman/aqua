@@ -119,6 +119,68 @@ describe("enrolMember refuses to oversell a batch's capacity", () => {
   });
 });
 
+// The three tests above are sequential — they prove the check works,
+// not that it's race-free. Count-then-insert across two round trips is
+// a classic TOCTOU: concurrent callers can all read the same
+// under-capacity count before any of them commits their insert.
+// testing-strategy.md §4.3's own pattern (fifty parallel invoices) is
+// exactly this shape of test, for exactly this reason.
+describe("enrolMember under real concurrency", () => {
+  it("ten concurrent enrolments into a five-capacity batch never exceed five", async () => {
+    const capacity = 5;
+    const contenders = 10;
+
+    let raceBatchId = "";
+    await withTenant(tenantId, async (tx) => {
+      const [p] = await tx
+        .select({ id: programs.id })
+        .from(programs)
+        .where(eq(programs.tenantId, tenantId))
+        .limit(1);
+      const [b] = await tx
+        .insert(batches)
+        .values({
+          tenantId,
+          programId: p.id,
+          name: "Race Batch",
+          capacity,
+          daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+          startTime: "07:00",
+          endTime: "08:00",
+        })
+        .returning({ id: batches.id });
+      raceBatchId = b.id;
+    });
+
+    const raceMemberIds: string[] = [];
+    for (let i = 0; i < contenders; i++) {
+      const created = await createMember(
+        { tenantId, userId: undefined as unknown as string },
+        {
+          fullName: `Race Member ${i}`,
+          locationId: mainLocationId,
+          memberCode: `RACE-${RUN}-${i}`,
+        },
+      );
+      raceMemberIds.push(created.memberId);
+    }
+
+    const results = await Promise.all(
+      raceMemberIds.map((memberId) =>
+        enrolMember({ tenantId }, { memberId, batchId: raceBatchId }),
+      ),
+    );
+
+    const succeeded = results.filter((r) => r.ok).length;
+    expect(succeeded).toBe(capacity);
+
+    const rows = await withTenant(tenantId, (tx) =>
+      tx.select().from(enrolments).where(eqBatch(raceBatchId)),
+    );
+    expect(rows).toHaveLength(capacity);
+  });
+});
+
 function eqBatch(id: string) {
   return eq(enrolments.batchId, id);
 }
