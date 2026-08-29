@@ -158,6 +158,17 @@ you have decided something — write it down.
   every exported action taking input calls `.parse()`/`.safeParse()` as
   its first statement — mechanical, not review-dependent, and it runs on
   every `pnpm test`.
+- Issue #4 (offline attendance durability) had three mechanisms, not
+  two. `tx()` resolved on `request.onsuccess` instead of
+  `transaction.oncomplete`, and `mark()`'s write ran inside a detached,
+  unawaited IIFE — two real races, fixed together, took CI from 5/5
+  failing to 2/5 failing. That looked like "fixed, residual flakiness"
+  until it wasn't: a third mechanism (nothing observed in-flight writes
+  before a reload could race them) was still fully open, just narrower.
+  Only surfaced by re-running CI five more times after the first fix
+  instead of taking one green run as proof. See the named failure class
+  above, and `docs/architecture.md` §12.1 for the durability boundary
+  this settled on.
 
 These three are the answer to "is the testing overhead worth it".
 
@@ -173,6 +184,27 @@ the scope guard instead of returning zero.
 
 Record what went red. A mutation that did NOT turn anything red is a
 coverage hole — open a task for it before moving on.
+
+### Named failure class: a narrowed window looks like a closed one
+
+**A fix that reduces a failure rate is not a fix.** Measure repeatedly,
+on the environment that reliably fails, both before and after — not
+once. A race that fails 5/5 and, after a fix, fails 2/5 has not been
+fixed; the failure has been made rarer, and rarer is indistinguishable
+from fixed on a single green run. Real example (issue #4): two real
+mechanisms were diagnosed and fixed together, CI went from 5/5 failing
+to 2/5 failing, and that read as "fixed, remaining failures are CI
+flakiness" — it wasn't. It was a third, undiagnosed mechanism, now just
+less likely to lose the race than before. Only found because CI was run
+5 times again after the fix instead of once.
+
+- [ ] If the batch fixes a race, a timing-dependent bug, or a flaky
+      test: it was measured repeatedly (5+ runs), on the environment
+      that reliably reproduces the failure, both before the fix (to
+      confirm it's real and not noise) and after (to confirm it's gone,
+      not just rarer). One green run after a fix for a probabilistic
+      failure is not evidence — report the actual run count, not "it
+      passed."
 
 ## 7. Offline sync — the last-write-wins rule is not a test detail
 
