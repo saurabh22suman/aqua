@@ -54,6 +54,8 @@ const ALLOWLIST = new Set([
   "tests/tier1/user-scope.test.ts",
   "tests/tier1/membership-role-scope.test.ts",
   "tests/tier1/coach-session-scope.test.ts",
+  "tests/tier1/enrolment-capacity.test.ts",
+  "tests/tier1/programs-batches-crud.test.ts",
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist

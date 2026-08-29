@@ -50,17 +50,52 @@ export async function createMember(
   });
 }
 
+// C-18's own done-when: "enrolling beyond capacity is refused with a
+// clear message." Previously a raw insert with no check at all -- a
+// full batch would silently oversell. Capacity limits distinct
+// members in the batch, not enrolment rows: a member already enrolled
+// (re-enrolling on a new date, matching the existing upsert-by-day
+// semantics below) never counts against capacity a second time.
 export async function enrolMember(
   ctx: ActionCtx,
   input: { memberId: string; batchId: string; enrolledOn?: string },
-): Promise<void> {
-  await withTenant(ctx.tenantId, async (tx) => {
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const [batch] = await tx
+      .select({ capacity: batches.capacity })
+      .from(batches)
+      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId)));
+    if (!batch) return { ok: false, error: "Batch not found." };
+
+    const alreadyEnrolled = await tx
+      .select({ memberId: enrolments.memberId })
+      .from(enrolments)
+      .where(
+        and(
+          eq(enrolments.tenantId, ctx.tenantId),
+          eq(enrolments.batchId, input.batchId),
+          eq(enrolments.memberId, input.memberId),
+        ),
+      )
+      .limit(1);
+
+    if (alreadyEnrolled.length === 0) {
+      const [{ n }] = await tx
+        .select({ n: sql<number>`count(distinct ${enrolments.memberId})::int` })
+        .from(enrolments)
+        .where(and(eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, input.batchId)));
+      if (n >= batch.capacity) {
+        return { ok: false, error: `This batch is full (capacity ${batch.capacity}).` };
+      }
+    }
+
     const enrolledOn = input.enrolledOn ?? new Date().toISOString().slice(0, 10);
     await tx.execute(sql`
       insert into enrolments (id, tenant_id, member_id, batch_id, enrolled_on)
       values (${uuidv7()}, ${ctx.tenantId}, ${input.memberId}, ${input.batchId}, ${enrolledOn}::date)
       on conflict (tenant_id, member_id, batch_id, enrolled_on) do nothing
     `);
+    return { ok: true };
   });
 }
 
