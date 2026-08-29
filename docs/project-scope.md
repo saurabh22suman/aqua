@@ -431,8 +431,19 @@ A receptionist who can mark staff attendance must not be able to see what the he
 
 ### 5.12 Café and commerce
 
+**Member account charging is in MVP scope (Phase 2). Full café POS is not, and stays Phase 5.**
+
+A parent's child buys something at the café; staff charge it to the member account; it appears as a line item on the member's next invoice. One screen, a charges table, an invoice line. It reuses the billing infrastructure (C-28 money primitives, C-32 invoices) rather than standing up a parallel system — this is a billing feature that happens to originate at a café counter, not a commerce module.
+
+Full POS — menu, modifiers, inventory, tables, thermal printing, shift-end cash reconciliation — stays Phase 5, deliberately. Reasons:
+
+1. **Offline-first is mandatory there and higher-stakes than attendance.** A dropped attendance mark is invisible until someone checks; a dropped café order loses money with a customer standing at the counter waiting for their change. That is a harder offline problem than the one this session just spent a full TDD cycle closing for attendance, not an easier one.
+2. **It requires hardware integration** — thermal printers, cash drawers, possibly card readers — which member charging does not.
+3. **The market has specialists** (café/restaurant POS vendors) we will not beat on POS features. Member-account charging is not a POS feature; it is a billing feature, and billing is the wedge (§1).
+
 | Capability | Phase |
 |---|---|
+| **Charge to member account — staff find member, add a charge, it lands on the next invoice** | **P2** |
 | Menu and product catalogue | P5 |
 | POS order entry, **offline-capable** | P5 |
 | Table and counter management | P5 |
@@ -441,6 +452,12 @@ A receptionist who can mark staff attendance must not be able to see what the he
 | Daily sales and expense reporting | P5 |
 | Kitchen display / thermal printing | L |
 | Supplier and purchase orders | L |
+
+**Open decisions, not made here:**
+
+1. Does a charge require the member to be present and identified (e.g. a QR/ID scan), or can staff charge from a name search alone? Affects both fraud surface and how fast the staff screen needs to be at a counter with a queue.
+2. What happens to unbilled charges when a member leaves (C-08 lifecycle)? Silently written off, blocks the leave transition until settled, or converted to a one-off final invoice?
+3. Is there a credit limit per member, and if so, is it a hard block or a warning to staff?
 
 ### 5.13 Reporting
 
@@ -797,7 +814,7 @@ Tenancy, identity, authorisation, entitlements, audit. The reusable engine.
 
 The part the customer actually pays for.
 
-**Scope:** people and guardians, enquiries and follow-ups, programs, batches, session generation, attendance with offline sync, membership plans and subscriptions, invoicing, payment recording for cash and online, Razorpay integration with idempotent webhooks, WhatsApp utility templates with per-tenant metering, magic-link parent pages, owner dashboard, Excel importer, consent capture.
+**Scope:** people and guardians, enquiries and follow-ups, programs, batches, session generation, attendance with offline sync, membership plans and subscriptions, invoicing, payment recording for cash and online, **member account charging** (§5.12 — the café line item, not the POS), Razorpay integration with idempotent webhooks, WhatsApp utility templates with per-tenant metering, magic-link parent pages, owner dashboard, Excel importer, consent capture.
 
 **Deliverables:** a business can run its full monthly cycle in the product.
 
@@ -906,3 +923,4 @@ The value here comes from the data model, not the model. It is not a moat on its
 5. What is the actual cash-versus-online split at the reference business? This determines how much reconciliation tooling Phase 2 needs.
 6. Trial length and structure — free trial, paid pilot, or founding-customer pricing?
 7. Retention versus erasure under DPDP — GST record retention against erasure rights, AND what happens when core processing consent is withdrawn for an enrolled member (active subscription, live UPI mandate, attendance history, member status; task V-45a). Same Indian legal counsel conversation; required before V-47 and V-45a execute.
+8. Member account charging (§5.12): does a charge require the member present and identified, or can staff charge from a name search alone? What happens to unbilled charges when a member leaves? Is there a credit limit, and is it a hard block or a warning?
