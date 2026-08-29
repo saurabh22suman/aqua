@@ -14,7 +14,7 @@ export function RegisterBoard({
   const initialStatuses = Object.fromEntries(
     rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
   );
-  const { marks, mark, markedCount, pending, online, syncedLabel, hasActiveFailure } =
+  const { marks, mark, markedCount, pending, online, syncedLabel, hasActiveFailure, saving } =
     useOfflineRegister(sessionId, rows, initialStatuses);
 
   return (
@@ -33,11 +33,18 @@ export function RegisterBoard({
               of {rows.length} marked
             </p>
             <p className="text-[11px] text-ink-3" data-testid="sync-state">
-              {!online
-                ? "offline — saved on device"
-                : pending > 0
-                  ? `syncing ${pending}…`
-                  : `synced ${syncedLabel}`}
+              {/* "saving" outranks everything else: it means a write hasn't
+                  even committed to this device yet, which is a truer and
+                  more urgent state than "offline" or "syncing" (both of
+                  which describe already-durable writes). See
+                  docs/architecture.md §12.1. */}
+              {saving > 0
+                ? "saving…"
+                : !online
+                  ? "offline — saved on device"
+                  : pending > 0
+                    ? `syncing ${pending}…`
+                    : `synced ${syncedLabel}`}
             </p>
           </div>
           <div className="mt-2 h-1.5 rounded-pill bg-paper overflow-hidden">

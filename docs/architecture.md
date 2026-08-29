@@ -1539,6 +1539,19 @@ The UI always shows sync state — "11 of 14 marked · saves offline too" — be
 
 Service worker caches the app shell, today's sessions and today's rosters. Nothing else needs to work offline in Phases 1–3.
 
+### 12.1 The durability boundary
+
+A mark is durable once its IndexedDB transaction's `oncomplete` fires — not when its request's `onsuccess` fires (a request succeeding means the operation was accepted into the transaction, not that the transaction has committed; issue #4 was exactly this gap, closed in `lib/offline/idb.ts`'s `tx()`). What `oncomplete` firing actually guarantees:
+
+- It **does** survive a page reload, a tab close, and normal navigation — the browser has committed the write to its storage backend.
+- It does **not** survive an OS or browser process crash that happens before the OS itself flushes that storage to physical disk. No web API can promise that; it's outside what any web app controls.
+
+Between a coach's tap and that transaction committing (normally low single-digit milliseconds) there is a real, unclosed window: if the app is killed inside it — most realistically the OS backgrounding/suspending the tab on a phone, not a desktop tab close — that one mark is lost. This is deliberately not guarded against (no `beforeunload`/navigation block): `beforeunload` cannot reliably await async work on modern browsers and mobile OS suspension can cut in ahead of it regardless, so a guard would protect a case nobody here has (desktop tab close) while doing nothing for the case that matters (mobile app kill) — a fix that reads closed without being closed.
+
+The blast radius is bounded and self-correcting, not silent: each `mark()` write is its own isolated transaction (writes are never batched), so a kill mid-write can cost at most the single most-recent tap — never an earlier mark, never another member. The coach is looking at the register when it happens; a missing checkmark on next load is visible and one more tap fixes it. Confirmed empirically, not just argued: `scripts/e2e-offline.ts` VERIFY 1 kills 16 rapid taps with a reload immediately after the last one, and the result is consistently 15/16 — never fewer.
+
+**So: a coach can lose a mark.** Exactly one, only the most recent, only if the app is killed inside a single-digit-millisecond window, and it's visibly missing rather than silently wrong. That is the stated limit of "works offline" for this feature — not a guess.
+
 ---
 
 ## 13. Frontend architecture

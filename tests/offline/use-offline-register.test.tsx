@@ -107,3 +107,60 @@ describe("useOfflineRegister — mark() write durability", () => {
     unmount();
   });
 });
+
+// issue #4, mechanism 3: mark() now returns a promise that resolves on
+// commit (mechanisms 1+2, above) — but its only real caller,
+// components/register-board.tsx's `onClick={() => mark(...)}`, discards
+// that promise. A click handler can't block a real navigation, so this
+// is not "add an await" — but as of today NOTHING a caller in that exact
+// shape (or a test driving the UI the same way) can reach knows whether
+// the write has landed. Proven at the hook level, not the DOM level:
+// this is a property of useOfflineRegister's public surface, not of
+// register-board.tsx's JSX.
+describe("useOfflineRegister — observing settlement without awaiting mark() itself", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("exposes a way to wait for in-flight writes even when the caller discards mark()'s own promise", async () => {
+    let committed = false;
+    installFakeIndexedDB({
+      onTransactionComplete: () => {
+        committed = true;
+      },
+    });
+
+    const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}));
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    committed = false;
+
+    // Exactly register-board.tsx's onClick shape: the returned promise
+    // is never assigned, never awaited — mimicking `onClick={() => mark(...)}`.
+    act(() => {
+      result.current.mark("member-3", "present");
+    });
+
+    // True both before and after any fix — not what's under test.
+    expect(committed).toBe(false);
+
+    // The gap itself: a caller shaped like the real onClick handler has
+    // no primitive on the hook to ask "have my in-flight writes landed
+    // yet?". Today this is undefined — there is nothing to call.
+    const waitForPendingWrites = (
+      result.current as unknown as { waitForPendingWrites?: () => Promise<void> }
+    ).waitForPendingWrites;
+    expect(typeof waitForPendingWrites).toBe("function");
+    await waitForPendingWrites!();
+    expect(committed).toBe(true);
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    unmount();
+  });
+});

@@ -14,6 +14,7 @@ import {
   loginAsCoach,
   makeRecorder,
   markAll,
+  waitForPendingWrites,
   waitForQueueDrain,
   waitForServer,
 } from "./lib/offline-page";
@@ -56,6 +57,12 @@ async function main() {
 
       await context.setOffline(true);
       await markAll(page, fixture.memberIds, "Present");
+      // Mechanism 3 (issue #4): markAll's clicks don't await mark() — that's
+      // the real onClick shape. Wait on the hook's own settlement signal
+      // before reloading, or the last click's local write can lose the
+      // race against the reload below regardless of how correct the
+      // layers under it are.
+      await waitForPendingWrites(page);
 
       const beforeReload = await domStatuses(page);
       const markedBeforeReload = Object.values(beforeReload).filter((s) => s === "present").length;

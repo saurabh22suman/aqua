@@ -54,6 +54,16 @@ export async function domStatuses(page: Page): Promise<Record<string, string>> {
   });
 }
 
+// issue #4, mechanism 3: markAll() clicks fire mark() without awaiting it
+// (the real onClick shape — a click handler can't block navigation). A
+// reload immediately after clicking races whatever local writes haven't
+// committed yet. This waits on the hook's own settlement signal instead
+// of a guessed sleep — deterministic in the same sense waitForQueueDrain
+// is: it's polling a real, product-owned promise, not padding time.
+export async function waitForPendingWrites(page: Page): Promise<void> {
+  await page.evaluate(() => window.__waitForPendingWrites?.());
+}
+
 export async function waitForQueueDrain(page: Page, timeoutMs = 20_000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {

@@ -19,6 +19,10 @@ declare global {
     // Test hook only — lets scripts/e2e-offline.ts trigger a sync attempt
     // deterministically instead of racing the 4s interval.
     __flushQueue?: () => Promise<void>;
+    // Test hook only — lets scripts/e2e-offline.ts wait for in-flight
+    // local writes to commit before doing something (like a reload) that
+    // would otherwise race them (issue #4, mechanism 3).
+    __waitForPendingWrites?: () => Promise<void>;
   }
 }
 
@@ -35,7 +39,16 @@ export function useOfflineRegister(
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [lastError, setLastError] = useState<LastError | null>(null);
   const [online, setOnline] = useState(true);
+  const [saving, setSaving] = useState(0);
   const runningRef = useRef(false);
+  // Counts writes that have started but not yet committed to IndexedDB —
+  // incremented synchronously in mark(), decremented when enqueueMark's
+  // own promise settles (issue #4, mechanism 3). `saving` (state) drives
+  // the UI; this ref is what waitForPendingWrites() below actually reads,
+  // since it needs a synchronously-current value, not one that lags a
+  // render behind.
+  const inFlightRef = useRef(0);
+  const waitersRef = useRef<Array<() => void>>([]);
 
   // Re-reads the whole queue and recomputes state scoped to THIS session —
   // the queue is shared across every session a coach has visited offline,
@@ -117,6 +130,7 @@ export function useOfflineRegister(
 
   useEffect(() => {
     window.__flushQueue = () => flush.current();
+    window.__waitForPendingWrites = () => waitForPendingWrites();
 
     void kvGet<{ at: number }>("lastSynced").then((ls) => {
       if (ls) setLastSynced(ls.at);
@@ -159,8 +173,11 @@ export function useOfflineRegister(
   // could ever observe whether the write had actually landed, and an
   // exception from enqueueMark became a silent unhandled rejection
   // (issue #4). Callers in the UI still don't await it — a click
-  // handler can't block a real navigation regardless — but the write
-  // itself is now a single connected chain, not a fire-and-forget one.
+  // handler can't block a real navigation regardless (see
+  // docs/architecture.md §12.1 for why that's a deliberate, documented
+  // limit and not an oversight) — but the write itself is now a single
+  // connected chain, not a fire-and-forget one, and its settlement is
+  // independently observable via waitForPendingWrites() below.
   function mark(memberId: string, next: Mark): Promise<void> {
     // Idempotency key: generated on-device, before any network call, and
     // never regenerated for this mark — retries reuse the same clientId
@@ -170,18 +187,42 @@ export function useOfflineRegister(
 
     setMarks((m) => ({ ...m, [memberId]: next }));
 
-    return enqueueMark({
+    inFlightRef.current += 1;
+    setSaving((n) => n + 1);
+
+    const written = enqueueMark({
       clientId,
       sessionId,
       memberId,
       status: next,
       savedAt: Date.now(),
       attempts: 0,
-    })
+    }).finally(() => {
+      inFlightRef.current -= 1;
+      setSaving((n) => n - 1);
+      if (inFlightRef.current === 0) {
+        const waiters = waitersRef.current;
+        waitersRef.current = [];
+        for (const resolve of waiters) resolve();
+      }
+    });
+
+    return written
       .then(() => refreshFromQueue())
       .then(() => {
         void flush.current();
       });
+  }
+
+  // Lets a caller that did NOT await mark() itself — the real onClick
+  // handler's shape, and the E2E harness driving the same UI — find out
+  // when every write started so far has actually committed. Resolves
+  // immediately if nothing is in flight.
+  function waitForPendingWrites(): Promise<void> {
+    if (inFlightRef.current === 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      waitersRef.current.push(resolve);
+    });
   }
 
   const markedCount = useMemo(
@@ -202,5 +243,15 @@ export function useOfflineRegister(
   const hasActiveFailure =
     lastError !== null && (!lastSynced || lastError.at > lastSynced);
 
-  return { marks, mark, markedCount, pending, online, syncedLabel, hasActiveFailure };
+  return {
+    marks,
+    mark,
+    markedCount,
+    pending,
+    online,
+    syncedLabel,
+    hasActiveFailure,
+    saving,
+    waitForPendingWrites,
+  };
 }
