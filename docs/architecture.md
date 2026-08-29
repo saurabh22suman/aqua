@@ -1404,6 +1404,16 @@ Both require already knowing a tenant or a user. Neither is satisfiable by code 
 
    **Known gap:** a tenant created *between* deploys gets no schedule until the next sync runs. Not yet exercisable — tenant creation isn't self-serve (F-13–21 aren't built; today it's operator-run via `scripts/seed.ts`, which already coincides with a deploy) — but tracked as issue #7: the moment signup is self-serve, provisioning must call the sync directly, or a new tenant's sessions silently never generate.
 
+### 9.2 Coach assignment and session visibility
+
+`getTodayAction` (`lib/actions/coach.ts`) showed every session in the tenant to any staff member calling it — no scoping to the caller's own assignments at all. Not cross-tenant (RLS still held), but a coach could see, and via `getRosterAction`, mark another coach's register. Real exposure inside a tenant, found by re-reading the plan's own dependency graph rather than by a test catching it in the act.
+
+Closing it needed to know which coach a session belongs to, and nothing did — `batches` and `sessions` had no coach column at all, despite `docs/implementation-plan.md`'s own note (C-20) that V-31's payout computation reads `sessions.coach_id`. That was a doc describing a column that didn't exist. Chosen fix: **add the column**, not correct the doc down to match reality, since the scoping fix needed it anyway.
+
+`batches.coach_id` and `sessions.coach_id` (migration `0014`) are bare `uuid` columns, no foreign key — same shape as `attendance.marked_by`. They reference a user id directly, not a `staff` row, because `staff` (C-04) doesn't exist yet; migrating the reference onto `staff.user_id` once C-04 lands is noted on C-20 in the plan so it isn't forgotten. `lib/jobs/session-generator.ts` copies `batches.coach_id` onto each session it materialises; C-20 (substitution, not yet built) will update a session's own `coach_id` independently of its batch once it exists, which is exactly the "who actually took the session, not who was assigned" distinction the plan asks for.
+
+`lib/services/register.ts`'s `listTodaySessions` does the actual scoping: a caller with `roleKey === "coach"` sees only sessions whose `coach_id` matches their own user id; every other staff role (owner, admin, receptionist, accountant) keeps full tenant-wide visibility, since their job requires oversight across every coach, not just their own sessions. `getRosterAction` (view/mark a *specific* session by id) is not scoped by this fix — a coach who knows or guesses a session id in their own tenant can still open and mark it regardless of assignment. Related exposure, same class of bug, not closed here; flagged, not silently left for someone to rediscover.
+
 ---
 
 ## 10. Payments integration

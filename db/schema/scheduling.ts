@@ -60,6 +60,10 @@ export const sessions = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("scheduled"),
+    // Copied from the batch at generation time; independently
+    // updatable for substitution (C-20). Bare user id, no FK -- see
+    // migration 0014's comment.
+    coachId: uuid("coach_id"),
     ...auditColumns,
   },
   (t) => [

@@ -43,6 +43,19 @@ async function main() {
   await seedRoleTemplates(tenantId);
   console.log("role templates seeded → owner, admin, receptionist, coach, accountant, worker");
 
+  // Moved ahead of batch creation (was after session generation): a
+  // batch needs the coach's user id to assign coachId at insert time,
+  // and generateSessions copies it onto each session it creates —
+  // creating the login user after sessions already exist would leave
+  // every seeded session's coach_id null regardless of what the batch
+  // is updated to afterwards (onConflictDoNothing skips existing rows,
+  // it doesn't update them).
+  await ensureLoginUsers(tenantId);
+  const coachUser = await adminPool.query<{ id: string }>(
+    "select id from users where phone = '+919000000002'",
+  );
+  const coachId = coachUser.rows[0]?.id;
+
   let mainLocationId = "";
   await withTenant(tenantId, async (tx) => {
     const existing = await tx.select({ id: locations.id }).from(locations).where(eq(locations.isPrimary, true));
@@ -94,6 +107,7 @@ async function main() {
           startTime: spec.startTime,
           endTime: spec.endTime,
           name: spec.name,
+          coachId,
         })
         .returning({ id: batches.id });
       batchIds.push(b.id);
@@ -188,8 +202,6 @@ async function main() {
     process.exitCode = 1;
   } else {
     console.log("replay idempotent ✓ row count unchanged");
-
-  await ensureLoginUsers(tenantId);
   }
 
   await pool.end();

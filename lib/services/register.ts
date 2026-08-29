@@ -2,7 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant } from "@/db/tenant";
 import { members, persons } from "@/db/schema";
-import { attendance, sessions } from "@/db/schema/scheduling";
+import { batches } from "@/db/schema/programs";
+import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { Ctx } from "@/lib/auth/context";
 
 type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
@@ -93,6 +94,50 @@ export async function countAttendanceForSession(
       .from(attendance)
       .where(and(eq(attendance.tenantId, ctx.tenantId), eq(attendance.sessionId, sessionId)));
     return rows[0].n;
+  });
+}
+
+export type TodaySessionRow = {
+  id: string;
+  batchName: string;
+  startsAt: Date;
+  endsAt: Date;
+  marked: number;
+  total: number;
+};
+
+// getTodayAction (lib/actions/coach.ts) showed every session in the
+// tenant to any staff member -- a coach could see (and, via
+// getRosterAction, mark) another coach's register. A coach only ever
+// sees sessions from batches assigned to them; every other staff role
+// (owner, admin, receptionist, accountant) keeps full tenant-wide
+// visibility -- their job requires oversight across all coaches, a
+// coach's does not.
+export async function listTodaySessions(
+  ctx: ActionCtx & { roleKey: string },
+  today: string,
+): Promise<TodaySessionRow[]> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const conditions = [eq(sessions.tenantId, ctx.tenantId), eq(sessions.sessionDate, today)];
+    if (ctx.roleKey === "coach") {
+      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+    }
+
+    const rows = await tx
+      .select({
+        id: sessions.id,
+        batchName: batches.name,
+        startsAt: sessions.startsAt,
+        endsAt: sessions.endsAt,
+        marked: sql<number>`(select count(*)::int from ${attendance} a where a.session_id = ${sessions.id})`,
+        total: sql<number>`(select count(*)::int from ${enrolments} e where e.batch_id = ${sessions.batchId} and e.enrolled_on <= ${today} and e.tenant_id = ${ctx.tenantId})`,
+      })
+      .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .where(and(...conditions))
+      .orderBy(sessions.startsAt);
+
+    return rows;
   });
 }
 

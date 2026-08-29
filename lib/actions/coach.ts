@@ -14,7 +14,7 @@ import {
   tenants,
 } from "@/db/schema";
 import { todayInZone } from "@/lib/time/tz";
-import { markAttendance, sessionExistsInTenant } from "@/lib/services/register";
+import { listTodaySessions, markAttendance, sessionExistsInTenant } from "@/lib/services/register";
 import { markAttendanceSchema, sessionIdSchema } from "@/lib/schemas";
 
 export type TodaySession = {
@@ -32,38 +32,26 @@ export async function getTodayAction(): Promise<{
   const ctx = await requireDefaultCtx();
   assertStaff(ctx);
 
-  return withTenant(ctx.tenantId, async (tx) => {
-    const [tenant] = await tx
-      .select({ timezone: tenants.timezone })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId));
-    const today = todayInZone(tenant.timezone);
+  const [tenant] = await withTenant(ctx.tenantId, (tx) =>
+    tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)),
+  );
+  const today = todayInZone(tenant.timezone);
 
-    const rows = await tx
-      .select({
-        id: sessions.id,
-        batchName: batches.name,
-        startsAt: sessions.startsAt,
-        endsAt: sessions.endsAt,
-        marked: sql<number>`(select count(*)::int from ${attendance} a where a.session_id = ${sessions.id})`,
-        total: sql<number>`(select count(*)::int from ${enrolments} e where e.batch_id = ${sessions.batchId} and e.enrolled_on <= ${today} and e.tenant_id = ${ctx.tenantId})`,
-      })
-      .from(sessions)
-      .innerJoin(batches, eq(batches.id, sessions.batchId))
-      .where(and(eq(sessions.tenantId, ctx.tenantId), eq(sessions.sessionDate, today)))
-      .orderBy(sessions.startsAt);
+  const rows = await listTodaySessions(
+    { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+    today,
+  );
 
-    return {
-      sessions: rows.map((r) => ({
-        id: r.id,
-        batchName: r.batchName,
-        startsAt: r.startsAt.toISOString(),
-        endsAt: r.endsAt.toISOString(),
-        marked: r.marked,
-        total: r.total,
-      })),
-    };
-  });
+  return {
+    sessions: rows.map((r) => ({
+      id: r.id,
+      batchName: r.batchName,
+      startsAt: r.startsAt.toISOString(),
+      endsAt: r.endsAt.toISOString(),
+      marked: r.marked,
+      total: r.total,
+    })),
+  };
 }
 
 export type RosterRow = {

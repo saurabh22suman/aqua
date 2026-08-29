@@ -39,6 +39,7 @@ export async function generateSessions(
           sessionDate: date,
           startsAt,
           endsAt,
+          coachId: batch.coachId,
         })
         .onConflictDoNothing()
         .returning({ id: sessions.id });
