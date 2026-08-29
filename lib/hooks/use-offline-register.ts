@@ -153,7 +153,15 @@ export function useOfflineRegister(
     void kvSet(`roster:${sessionId}`, { rows, savedAt: Date.now() });
   }, [sessionId, rows]);
 
-  function mark(memberId: string, next: Mark) {
+  // Returns a promise a caller CAN await (a test, or a future
+  // navigation guard) — previously this fired the write inside a
+  // detached, unawaited `void (async () => {...})()` IIFE, so nothing
+  // could ever observe whether the write had actually landed, and an
+  // exception from enqueueMark became a silent unhandled rejection
+  // (issue #4). Callers in the UI still don't await it — a click
+  // handler can't block a real navigation regardless — but the write
+  // itself is now a single connected chain, not a fire-and-forget one.
+  function mark(memberId: string, next: Mark): Promise<void> {
     // Idempotency key: generated on-device, before any network call, and
     // never regenerated for this mark — retries reuse the same clientId
     // (see flush(), above), which is what makes replay safe against the
@@ -162,18 +170,18 @@ export function useOfflineRegister(
 
     setMarks((m) => ({ ...m, [memberId]: next }));
 
-    void (async () => {
-      await enqueueMark({
-        clientId,
-        sessionId,
-        memberId,
-        status: next,
-        savedAt: Date.now(),
-        attempts: 0,
+    return enqueueMark({
+      clientId,
+      sessionId,
+      memberId,
+      status: next,
+      savedAt: Date.now(),
+      attempts: 0,
+    })
+      .then(() => refreshFromQueue())
+      .then(() => {
+        void flush.current();
       });
-      await refreshFromQueue();
-      void flush.current();
-    })();
   }
 
   const markedCount = useMemo(

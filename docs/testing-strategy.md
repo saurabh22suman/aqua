@@ -69,6 +69,7 @@ Uniform coverage targets waste effort on trivia and under-test the things that e
 | **Playwright** | E2E on critical journeys | Also available to the agent as an MCP server, so it can verify its own UI |
 | **MSW** | Razorpay and WhatsApp stubs | Contract-level, no live calls in CI |
 | **Lighthouse CI + bundlesize** | Performance budget | Already in the plan at S-05 |
+| **jsdom + @testing-library/react** | Component/hook behaviour | Added for issue #4 (see §3.3) — the first tests in this repo that render React |
 
 ### 3.1 Why Testcontainers rather than a mock
 
@@ -116,6 +117,14 @@ npx stryker run --incremental \
 `--incremental` reuses prior results, which makes this affordable on every PR rather than nightly.
 
 **This is the metric to watch, because it cannot be faked by a model optimising for line coverage.** A surviving mutant is a direct measurement of a test that verifies nothing.
+
+### 3.3 Component/hook testing — jsdom + @testing-library/react
+
+Added while fixing issue #4 (a real, twice-confirmed data-loss bug in offline attendance sync), not before — this repo had zero component or hook tests until then, deliberately: `vitest.config.ts`'s default `environment: "node"` is faster for everything that doesn't need a DOM, which is most of this codebase. `mark()` (`lib/hooks/use-offline-register.ts`) fired its write inside a detached, unawaited async IIFE — proving that behaviourally (not just by reading the code) required actually rendering the hook and asserting on the promise it returns, which needs a DOM. Structural checks (grepping for the anti-pattern's shape, or an AST walk like `server-action-preamble.test.ts`'s) were considered and rejected for this specific bug: they prove the code doesn't *look* like the bug, not that the behaviour is correct, and a refactor reintroducing the same defect in a different shape would pass clean. See `tests/offline/use-offline-register.test.tsx` for the pattern.
+
+**How to use it:** put `// @vitest-environment jsdom` as the first line of a test file to opt that file alone into a DOM — the rest of the suite stays on the fast `node` environment. Use `@testing-library/react`'s `renderHook`/`act` for hooks; nothing here is React-Testing-Library specific about *how* to write assertions, only about how to get a hook running at all outside a real page.
+
+**When to reach for it:** Tier 1/2 UI behaviour that a structural check would only prove the shape of, not the behaviour — exactly the class of bug F-08a's own limitation entry in `docs/review-checklist.md` describes for RLS. Prefer this over a structural/AST check whenever the thing that matters is what the code *does* at runtime, not what it looks like. This repo has roughly 130 tasks remaining, mostly UI-facing — this capability exists now specifically so it's available deliberately, not added in a hurry under a future deadline.
 
 ---
 

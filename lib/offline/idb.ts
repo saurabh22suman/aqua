@@ -38,9 +38,23 @@ async function tx<T>(
   return new Promise<T>((resolve, reject) => {
     const t = db.transaction(store, mode);
     const req = fn(t.objectStore(store));
-    req.onsuccess = () => resolve(req.result as T);
+    // A request's `onsuccess` means the operation was accepted into the
+    // transaction — not that the transaction has committed. Resolving
+    // here (as this used to) let a caller believe a write was durable
+    // before it actually was; a reload landing in that gap could lose
+    // it (issue #4). Capture the result, but only resolve on the
+    // transaction's own `oncomplete`, which fires strictly after every
+    // request in it has succeeded AND the transaction has committed.
+    let result: T;
+    req.onsuccess = () => {
+      result = req.result as T;
+    };
     req.onerror = () => reject(req.error);
-    t.oncomplete = () => db.close();
+    t.oncomplete = () => {
+      db.close();
+      resolve(result);
+    };
+    t.onerror = () => reject(t.error);
   });
 }
 

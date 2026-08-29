@@ -1096,6 +1096,7 @@ These apply to every task and override any local convenience.
 | Every job is idempotent and tenant-scoped | Retries are guaranteed |
 | Files under 300 lines — test files too, no exemption | Generated code degrades badly beyond this; a test file over budget is fixed by splitting along the concern it tests (see `tests/tier1/roles-permissions.test.ts`'s F-06-review split into roles-permissions / platform-entitlements / membership-role-scope), not by carving out an exception |
 | No new dependency without approval | Every dependency is a bundle and a liability |
+| jsdom + @testing-library/react (dev-only) are the one granted exception — not a precedent | Granted specifically for issue #4's regression test: a hook's internal await behaviour needed to be proven at runtime, not by reading the code, and structural/AST checks would have proven the code's shape, not its behaviour. Dev-only, zero production bundle impact (confirmed against the bundle budget check). Cite the reasoning, not the outcome, before adding another runtime or dev dependency — "we added one before" is not a justification on its own |
 | Tokens only, no raw hex | The palette is the design thesis |
 | Automated messages are utility category | Marketing costs 7–8× as much |
 | Terms never touch data, enums, permissions or exports | Vocabulary is presentation only |
