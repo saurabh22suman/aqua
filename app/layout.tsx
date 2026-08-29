@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import "@fontsource/bricolage-grotesque/latin-600.css";
 import "@fontsource/instrument-sans/latin-400.css";
 import "@fontsource/instrument-sans/latin-500.css";
+import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import "@/lib/env";
 import "./globals.css";
 
@@ -31,7 +32,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="bg-deck text-ink font-sans antialiased">{children}</body>
+      <body className="bg-deck text-ink font-sans antialiased">
+        {children}
+        <ServiceWorkerRegistrar />
+      </body>
     </html>
   );
 }

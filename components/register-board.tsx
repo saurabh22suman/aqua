@@ -1,11 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
 import { Check, X } from "lucide-react";
-import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import type { RosterRow } from "@/lib/actions/coach";
-
-type Mark = "present" | "absent";
+import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register";
 
 export function RegisterBoard({
   sessionId,
@@ -14,34 +11,11 @@ export function RegisterBoard({
   sessionId: string;
   rows: RosterRow[];
 }) {
-  const [marks, setMarks] = useState<Record<string, Mark | "late">>(() =>
-    Object.fromEntries(
-      rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
-    ),
+  const initialStatuses = Object.fromEntries(
+    rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
   );
-  const [failed, setFailed] = useState<Record<string, boolean>>({});
-  const [, startTransition] = useTransition();
-
-  const markedCount = useMemo(
-    () => Object.values(marks).filter(Boolean).length,
-    [marks],
-  );
-
-  function mark(memberId: string, next: Mark) {
-    const clientId = crypto.randomUUID();
-    setMarks((m) => ({ ...m, [memberId]: next }));
-    setFailed((f) => ({ ...f, [memberId]: false }));
-
-    startTransition(async () => {
-      const res = await markAttendanceSessionAction({
-        sessionId,
-        memberId,
-        status: next,
-        clientId,
-      });
-      if (!res.ok) setFailed((f) => ({ ...f, [memberId]: true }));
-    });
-  }
+  const { marks, mark, markedCount, pending, online, syncedLabel, hasActiveFailure, saving } =
+    useOfflineRegister(sessionId, rows, initialStatuses);
 
   return (
     <div>
@@ -51,12 +25,28 @@ export function RegisterBoard({
           strip". */}
       <div className="sticky top-0 z-10 -mx-5 px-5 pt-3 pb-3 bg-deck/95 backdrop-blur-sm">
         <div className="rounded-card bg-water-soft px-4 py-3">
-          <p className="text-[13px] text-ink-2">
-            <span className="font-display font-semibold text-[15px] text-water">
-              {markedCount}
-            </span>{" "}
-            of {rows.length} marked
-          </p>
+          <div className="flex items-baseline justify-between">
+            <p className="text-[13px] text-ink-2">
+              <span className="font-display font-semibold text-[15px] text-water">
+                {markedCount}
+              </span>{" "}
+              of {rows.length} marked
+            </p>
+            <p className="text-[11px] text-ink-3" data-testid="sync-state">
+              {/* "saving" outranks everything else: it means a write hasn't
+                  even committed to this device yet, which is a truer and
+                  more urgent state than "offline" or "syncing" (both of
+                  which describe already-durable writes). See
+                  docs/architecture.md §12.1. */}
+              {saving > 0
+                ? "saving…"
+                : !online
+                  ? "offline — saved on device"
+                  : pending > 0
+                    ? `syncing ${pending}…`
+                    : `synced ${syncedLabel}`}
+            </p>
+          </div>
           <div className="mt-2 h-1.5 rounded-pill bg-paper overflow-hidden">
             <div
               className="h-full rounded-pill bg-water transition-[width] duration-150"
@@ -64,11 +54,26 @@ export function RegisterBoard({
             />
           </div>
         </div>
+
+        {/* Rule 1: a mark that fails to sync must be SEEN, not folded into
+            the neutral "syncing" text or left to a console.warn no one
+            reads. Distinct colour, distinct copy, stays up until a sync
+            actually succeeds. */}
+        {hasActiveFailure ? (
+          <p className="mt-2 text-[12px] text-late" data-testid="sync-error">
+            Sync failed — retrying. Your marks are saved on this device.
+          </p>
+        ) : null}
       </div>
 
       <ul className="mt-2 pb-8">
         {rows.map((r) => (
-          <li key={r.memberId} className="border-b border-line py-2 last:border-0">
+          <li
+            key={r.memberId}
+            data-member-id={r.memberId}
+            data-status={marks[r.memberId] ?? ""}
+            className="border-b border-line py-2 last:border-0"
+          >
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-medium truncate">{r.name}</p>
@@ -119,11 +124,6 @@ export function RegisterBoard({
                 </button>
               </div>
             </div>
-            {failed[r.memberId] ? (
-              <p className="mt-1 text-[12px] text-warn">
-                Not saved — check connection and mark again.
-              </p>
-            ) : null}
           </li>
         ))}
       </ul>

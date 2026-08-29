@@ -82,3 +82,26 @@ jobs:
       # above) — the small duplicate build cost buys a script that's
       # correct standalone regardless of step order.
       - run: pnpm exec tsx scripts/check-font-budget.ts
+
+      # scripts/e2e-offline.ts needs a real Chromium binary — `pnpm install`
+      # only installs the `playwright` package, not the browser itself.
+      # --with-deps also installs the OS libraries Chromium needs on a bare
+      # runner image.
+      - run: pnpm exec playwright install --with-deps chromium
+
+      # The offline fixture (scripts/lib/offline-fixture.ts) reuses the
+      # demo-academy tenant and coach login user `pnpm seed` creates —
+      # same as local dev, not a CI-only bootstrap path.
+      - run: pnpm seed
+
+      # Offline attendance sync (S3) — the six VERIFY scenarios from
+      # docs/ci-first-run.md's offline section, run for real: network
+      # genuinely disabled via Playwright's context.setOffline(), not
+      # throttled. Six clean manual runs is not the same as protection;
+      # this is that protection. See docs/ci-first-run.md for what a
+      # failure here looks like and the one scenario (VERIFY 5, "mid-sync")
+      # that's timing-sensitive by nature — its assertions (no duplicates,
+      # no losses) hold regardless of exact timing, but the precise
+      # "some landed, some didn't" moment it's aiming for isn't guaranteed
+      # on a loaded runner.
+      - run: pnpm exec tsx scripts/e2e-offline.ts

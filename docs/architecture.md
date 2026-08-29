@@ -938,7 +938,7 @@ create index on attendance (tenant_id, member_id, marked_at desc);
 create index on attendance (tenant_id, session_id);
 ```
 
-`client_id` is generated on the device before the network call, which makes offline replay idempotent. Upsert on `(tenant_id, session_id, member_id)`, last write wins.
+`client_id` is generated on the device before the network call, which makes offline replay idempotent. Upsert on `(tenant_id, session_id, member_id)`, last write wins — meaning last request the database receives, not last human decision. See §12 for what that means when two devices mark the same session and one is offline.
 
 Partition by month once this passes roughly 10 million rows. Not before.
 
@@ -1531,11 +1531,26 @@ Coach marks     → optimistic UI update (<100ms)
       reconnect   → replay queue in order, upsert by (tenant_id, session_id, member_id)
 ```
 
-Conflict resolution is last-write-wins by `marked_at`, which is correct here: the most recent human judgement about who was in the pool is the right answer.
+Conflict resolution is last-write-**to-the-server**-wins — the upsert on `(tenant_id, session_id, member_id)` simply applies whichever request the database receives last, with `marked_at` set to that request's execution time. It does **not** compare timestamps to find the most recent human decision. This is coach-visible behaviour, not an implementation detail: if a device goes offline after marking, then reconnects after a second device has already marked the same member online, the offline device's mark wins on reconnect — even though it was the *earlier* decision in wall-clock time. Verified directly (S3): two devices, one offline, mark the same member differently; the offline device's mark was made first but reached the server last, and it won.
+
+This is the correct rule for this product — a coach handing off a register mid-session with patchy signal needs their device's marks to land, not silently lose to whoever happened to have signal first — but it means a substitution handover (two coaches marking the same session, one offline) resolves by reconnect order, not by who decided later. Worth knowing before it gets "discovered" as a bug during a handover and re-litigated as one.
 
 The UI always shows sync state — "11 of 14 marked · saves offline too" — because silent queues erode trust as badly as lost data.
 
 Service worker caches the app shell, today's sessions and today's rosters. Nothing else needs to work offline in Phases 1–3.
+
+### 12.1 The durability boundary
+
+A mark is durable once its IndexedDB transaction's `oncomplete` fires — not when its request's `onsuccess` fires (a request succeeding means the operation was accepted into the transaction, not that the transaction has committed; issue #4 was exactly this gap, closed in `lib/offline/idb.ts`'s `tx()`). What `oncomplete` firing actually guarantees:
+
+- It **does** survive a page reload, a tab close, and normal navigation — the browser has committed the write to its storage backend.
+- It does **not** survive an OS or browser process crash that happens before the OS itself flushes that storage to physical disk. No web API can promise that; it's outside what any web app controls.
+
+Between a coach's tap and that transaction committing (normally low single-digit milliseconds) there is a real, unclosed window: if the app is killed inside it — most realistically the OS backgrounding/suspending the tab on a phone, not a desktop tab close — that one mark is lost. This is deliberately not guarded against (no `beforeunload`/navigation block): `beforeunload` cannot reliably await async work on modern browsers and mobile OS suspension can cut in ahead of it regardless, so a guard would protect a case nobody here has (desktop tab close) while doing nothing for the case that matters (mobile app kill) — a fix that reads closed without being closed.
+
+The blast radius is bounded and self-correcting, not silent: each `mark()` write is its own isolated transaction (writes are never batched), so a kill mid-write can cost at most the single most-recent tap — never an earlier mark, never another member. The coach is looking at the register when it happens; a missing checkmark on next load is visible and one more tap fixes it. Confirmed empirically, not just argued: `scripts/e2e-offline.ts` VERIFY 1 kills 16 rapid taps with a reload immediately after the last one, and the result is consistently 15/16 — never fewer.
+
+**So: a coach can lose a mark.** Exactly one, only the most recent, only if the app is killed inside a single-digit-millisecond window, and it's visibly missing rather than silently wrong. That is the stated limit of "works offline" for this feature — not a guess.
 
 ---
 

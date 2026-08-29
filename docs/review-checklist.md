@@ -174,7 +174,32 @@ the scope guard instead of returning zero.
 Record what went red. A mutation that did NOT turn anything red is a
 coverage hole — open a task for it before moving on.
 
-## 7. Conventions sweep
+## 7. Offline sync — the last-write-wins rule is not a test detail
+
+`attendance` upserts on `(tenant_id, session_id, member_id)` — whichever
+write reaches the database last wins, full stop. It does **not** compare
+`marked_at` to find the most recent human decision, even though it's
+tempting to describe it that way (architecture.md §12 used to, and was
+wrong).
+
+This is coach-visible behaviour: a device that went offline after
+marking, then reconnects after a second device already marked the same
+member while online, overwrites that second mark on reconnect — even
+though the offline device's mark was the *earlier* decision in
+wall-clock time. Verified directly (S3, `scripts/e2e-offline.ts` VERIFY
+6): two devices, one offline, mark the same member differently; the
+offline device's mark reached the server last and won, regardless of
+which coach decided more recently.
+
+- [ ] If touching the register service or the offline queue: re-run
+      VERIFY 6 (or the CI equivalent) and confirm this is still the
+      behaviour, not just that *a* row exists.
+- [ ] Do not "fix" this into timestamp-based conflict resolution without
+      raising it as a design change first — it is the correct rule for
+      this product (an offline coach's marks must land, not silently
+      lose to whoever had signal first), not an accident to clean up.
+
+## 8. Conventions sweep
 
 - [ ] New tables: uuid v7 PK, `tenant_id uuid not null` where scoped,
       timestamptz UTC, all four audit columns, `deleted_at` + partial
@@ -184,7 +209,7 @@ coverage hole — open a task for it before moving on.
 - [ ] Interim designs carry their in-migration flag comment (e.g. the
       B3 role column) and a plan cross-reference.
 
-## 8. Report shape
+## 9. Report shape
 
 The batch report arrived as ONE block containing: completed tasks +
 hashes, condensed evidence per task, deferred/noticed items, why it
