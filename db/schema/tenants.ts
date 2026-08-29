@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import {
+  boolean,
   check,
   foreignKey,
   integer,
@@ -35,6 +36,10 @@ export const tenants = pgTable(
     presetKey: text("preset_key"),
     presetVersion: integer("preset_version"),
     presetAppliedAt: timestamp("preset_applied_at", { withTimezone: true }),
+    // Kill switch for the offline attendance write path (issue #4).
+    // Per-tenant, default off — a canary is one specific tenant, not
+    // every tenant on a plan. See docs/architecture.md §12.2.
+    offlineSyncEnabled: boolean("offline_sync_enabled").notNull().default(false),
     ...auditColumns,
   },
   (t) => [

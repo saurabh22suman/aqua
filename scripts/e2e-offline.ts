@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import {
   attendanceRows,
   cleanupOfflineFixture,
+  setOfflineSyncEnabled,
   setupOfflineFixture,
   type OfflineFixture,
 } from "./lib/offline-fixture";
@@ -40,6 +41,11 @@ async function main() {
   try {
     await waitForServer(BASE);
     fixture = await setupOfflineFixture(admin, RUN, MEMBER_COUNT);
+    // This whole script exists to test the offline QUEUE, which is now
+    // opt-in per tenant, default off (issue #4 postmortem's kill switch).
+    // Set explicitly rather than relying on it having been left on by
+    // something else — order-independent, self-contained.
+    await setOfflineSyncEnabled(admin, fixture.tenantId, true);
     console.log(`fixture ready — session ${fixture.sessionId}, ${fixture.memberIds.length} members`);
 
     // ============================================================

@@ -26,7 +26,7 @@ describe("useOfflineRegister — mark() write durability", () => {
     installFakeIndexedDB();
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
-    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}));
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true));
 
     // Let mount-time effects (kvGet x2, refreshFromQueue) settle first —
     // real timers, real event loop, nothing to fake here.
@@ -64,7 +64,7 @@ describe("useOfflineRegister — mark() write durability", () => {
     });
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
-    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}));
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true));
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -132,7 +132,7 @@ describe("useOfflineRegister — observing settlement without awaiting mark() it
     });
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
-    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}));
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true));
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));

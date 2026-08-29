@@ -64,6 +64,28 @@ export async function waitForPendingWrites(page: Page): Promise<void> {
   await page.evaluate(() => window.__waitForPendingWrites?.());
 }
 
+// Kill switch off: mark() reaches the DOM only after the server
+// confirms, and the onClick handler doesn't await it — so a script
+// clicking and immediately reading domStatuses would race the real
+// network round trip. This polls the one row's actual attribute
+// instead of guessing a sleep long enough to cover it.
+export async function waitForMemberStatus(
+  page: Page,
+  memberId: string,
+  status: string,
+  timeoutMs = 10_000,
+): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const current = await page
+      .locator(`li[data-member-id="${memberId}"]`)
+      .getAttribute("data-status");
+    if (current === status) return true;
+    await page.waitForTimeout(200);
+  }
+  return false;
+}
+
 export async function waitForQueueDrain(page: Page, timeoutMs = 20_000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {

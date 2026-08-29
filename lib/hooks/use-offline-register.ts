@@ -33,6 +33,7 @@ export function useOfflineRegister(
   sessionId: string,
   rows: RosterRow[],
   initialStatuses: Record<string, Mark>,
+  offlineSyncEnabled: boolean,
 ) {
   const [marks, setMarks] = useState<Record<string, Mark>>(initialStatuses);
   const [pending, setPending] = useState(0);
@@ -129,6 +130,28 @@ export function useOfflineRegister(
   });
 
   useEffect(() => {
+    // With the flag off there is no queue to drain or restore from —
+    // marking either lands directly or is refused (mark(), below).
+    // Connectivity tracking still runs unconditionally: it is what
+    // drives the proactive "you're offline" banner (register-board.tsx),
+    // which must appear the instant connectivity drops, not only after
+    // a failed tap.
+    const goOnline = () => {
+      setOnline(true);
+      if (offlineSyncEnabled) void flush.current();
+    };
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    setOnline(navigator.onLine);
+
+    if (!offlineSyncEnabled) {
+      return () => {
+        window.removeEventListener("online", goOnline);
+        window.removeEventListener("offline", goOffline);
+      };
+    }
+
     window.__flushQueue = () => flush.current();
     window.__waitForPendingWrites = () => waitForPendingWrites();
 
@@ -139,15 +162,6 @@ export function useOfflineRegister(
       if (e) setLastError(e);
     });
     void refreshFromQueue();
-
-    const goOnline = () => {
-      setOnline(true);
-      void flush.current();
-    };
-    const goOffline = () => setOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    setOnline(navigator.onLine);
 
     const tick = setInterval(() => {
       setOnline(navigator.onLine);
@@ -161,7 +175,7 @@ export function useOfflineRegister(
       clearInterval(tick);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, offlineSyncEnabled]);
 
   useMemo(() => {
     void kvSet(`roster:${sessionId}`, { rows, savedAt: Date.now() });
@@ -184,6 +198,34 @@ export function useOfflineRegister(
     // (see flush(), above), which is what makes replay safe against the
     // (tenant_id, session_id, member_id) upsert in the register service.
     const clientId = crypto.randomUUID();
+
+    // Kill switch off (issue #4 postmortem): no optimistic update, no
+    // IndexedDB write, no queue. A tap is refused outright while
+    // offline — not silently accepted, not queued for later — and
+    // online it only reaches the DOM once the server has actually
+    // confirmed it. "Marking does not report success" is the literal
+    // contract here, not a figure of speech.
+    if (!offlineSyncEnabled) {
+      if (!navigator.onLine) {
+        const e = { at: Date.now(), message: "Offline — marking is unavailable until you reconnect." };
+        setLastError(e);
+        return Promise.resolve();
+      }
+      return markAttendanceSessionAction({ sessionId, memberId, status: next, clientId })
+        .then((res) => {
+          if (!res.ok) {
+            setLastError({ at: Date.now(), message: res.error ?? "Mark failed." });
+            return;
+          }
+          setMarks((m) => ({ ...m, [memberId]: next }));
+          setLastError(null);
+          setLastSynced(Date.now());
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          setLastError({ at: Date.now(), message });
+        });
+    }
 
     setMarks((m) => ({ ...m, [memberId]: next }));
 

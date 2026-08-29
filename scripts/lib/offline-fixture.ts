@@ -83,6 +83,21 @@ export async function setupOfflineFixture(
   return { tenantId, batchId, sessionId, memberIds, personIds };
 }
 
+// Each e2e-offline* script sets the flag it needs on its own fixture's
+// tenant at setup, rather than relying on whatever the previous script
+// in the CI job left behind — order-independent, self-contained, and
+// exactly what "per-tenant, not a global env var" is for.
+export async function setOfflineSyncEnabled(
+  admin: Pool,
+  tenantId: string,
+  enabled: boolean,
+): Promise<void> {
+  await admin.query("update tenants set offline_sync_enabled = $1 where id = $2", [
+    enabled,
+    tenantId,
+  ]);
+}
+
 export async function cleanupOfflineFixture(admin: Pool, f: OfflineFixture): Promise<void> {
   await admin.query(
     "delete from attendance where tenant_id = $1 and session_id in (select id from sessions where batch_id = $2)",
