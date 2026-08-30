@@ -48,6 +48,7 @@ export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[
         daysOfWeek: batches.daysOfWeek,
         startTime: batches.startTime,
         endTime: batches.endTime,
+        coachId: batches.coachId,
         deletedAt: batches.deletedAt,
         createdAt: batches.createdAt,
         updatedAt: batches.updatedAt,
