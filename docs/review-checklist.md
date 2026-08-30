@@ -314,3 +314,39 @@ The batch report arrived as ONE block containing: completed tasks +
 hashes, condensed evidence per task, deferred/noticed items, why it
 stopped, proposed next step. Missing sections get bounced back before
 review continues.
+
+## 10. Delegated work — a fork's report is not evidence, its output is
+
+Applies whenever work is farmed out to a subagent/fork rather than
+done directly: **check the branch and the diff yourself before
+treating any part of the report as true.** A report is a claim about
+what happened, written by the same process that did the work — it can
+be wrong in either direction, confidently.
+
+Two real failures from one session, back to back:
+
+- **Silent no-op.** A fork asked to build a feature returned a status
+  line with zero tool calls and no branch changes — it never actually
+  started, but the response read like a plausible summary. Caught only
+  by checking `git worktree list`/the branch diff before believing
+  "done."
+- **600-second stall.** A different fork, mid-way through its own
+  manual verification step, stopped responding entirely and was killed
+  by the stream watchdog. It had already produced real, substantial,
+  correct work on its branch — discarding it and redoing from scratch
+  would have wasted it. Checking the actual branch state first (not
+  just the failure notification) was what made it possible to recover
+  the work instead of re-running the whole task.
+
+- [ ] Read the actual diff of every file a fork touched before citing
+      any of its claims (test count, "confirmed red," "verified
+      end-to-end") in your own report upward.
+- [ ] Re-run the fork's own verification commands yourself
+      (`pnpm typecheck && pnpm lint && pnpm test`, plus anything
+      E2E) rather than trusting a pasted "clean" in its report.
+- [ ] A fork that returns with zero tool calls or an implausibly short
+      duration for the task size is a signal to check the branch/
+      worktree directly, not to accept the report at face value.
+- [ ] A fork that stalls or fails is not necessarily a fork that did
+      nothing — check for a branch and uncommitted work before
+      deciding whether to resume, extract, or redo.
