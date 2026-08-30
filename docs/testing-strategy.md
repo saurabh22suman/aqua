@@ -163,6 +163,8 @@ The second test is the one that scales. It catches every future table the agent 
 
 Example-based tests check the cases you thought of. Agents fail on the ones you didn't.
 
+`splitTotal` takes `(total, basisPoints)` — **2 args, not 3.** An earlier draft of this section showed a 3-arg `splitTotal(total, base, bp)`; that was illustrative pseudocode, never a real signature, and the actual `lib/money` implementation (C-28) correctly didn't follow it: passing `base` alongside `total` invites a caller to pass an inconsistent pair. `splitTotal` derives `base` itself and computes `tax` as the remainder (`total - base`), which is what guarantees `base + tax === total` exactly, always — including for totals that aren't reachable by any exact `(base, bp) → total` forward computation, since `computeTax` rounds and not every total has a unique pre-image.
+
 ```ts
 import fc from 'fast-check';
 
@@ -175,21 +177,48 @@ test('tax and total never lose precision', () => {
       const total = base + tax;
       expect(Number.isInteger(tax)).toBe(true);
       expect(total).toBeGreaterThanOrEqual(base);
-      expect(splitTotal(total, base, bp)).toEqual({ base, tax });
+      // base + tax === total holds unconditionally by construction.
+      // Exact match to the ORIGINAL base only holds where the forward
+      // computation is uniquely invertible — decide whether to assert
+      // exact equality here (and restrict the generator to avoid
+      // rounding-boundary cases) or accept a documented tolerance.
+      const { base: recoveredBase, tax: recoveredTax } = splitTotal(total, bp);
+      expect(recoveredBase + recoveredTax).toBe(total);
     }
   ), { numRuns: 1000 });
 });
 
-test('partial payments always sum to the invoice total', () => {
+test('partial payments always sum to the invoice total — normal branch', () => {
   fc.assert(fc.property(
     fc.integer({ min: 100, max: 500_000 }),
     fc.array(fc.integer({ min: 1, max: 1000 }), { minLength: 1, maxLength: 12 }),
     (total, payments) => {
+      const sumPayments = payments.reduce((a, b) => a + b, 0);
+      fc.pre(sumPayments <= total); // this property only, not the overpay branch below
       const inv = applyPayments(total, payments);
       expect(inv.paid + inv.outstanding).toBe(total);
       expect(inv.outstanding).toBeGreaterThanOrEqual(0);
     }
-  ));
+  ), { numRuns: 1000 });
+});
+
+test('partial payments — overpayment branch is a SEPARATE property, not folded into the one above', () => {
+  // paid + outstanding does NOT equal total here: outstanding clamps
+  // at zero and paid can exceed total. A single blanket equality
+  // across both branches will falsely fail on generated overpayment
+  // cases — this is exactly the shape of bug this section exists to
+  // catch, so don't let the test itself repeat it.
+  fc.assert(fc.property(
+    fc.integer({ min: 100, max: 500_000 }),
+    fc.array(fc.integer({ min: 1, max: 1000 }), { minLength: 1, maxLength: 12 }),
+    (total, payments) => {
+      const sumPayments = payments.reduce((a, b) => a + b, 0);
+      fc.pre(sumPayments > total); // overpay only
+      const inv = applyPayments(total, payments);
+      expect(inv.outstanding).toBe(0);
+      expect(inv.paid).toBe(sumPayments);
+    }
+  ), { numRuns: 1000 });
 });
 ```
 

@@ -1095,6 +1095,7 @@ These apply to every task and override any local convenience.
 |---|---|
 | All tenant data through `withTenant()` | Isolation is the one unrecoverable failure |
 | Money is `bigint` paise | Float rounding on money is unrecoverable trust damage |
+| **One exception to the row above, not a precedent:** `lib/money/format.ts`'s `formatINR` converts paise to `Number` once, to call `Intl.NumberFormat` (which requires a `Number`, not a `bigint`), purely to produce a display string — the result is never fed back into arithmetic. Isolated to that one function, which does nothing else; guarded by `tests/money.test.ts`'s "no paise-to-Number conversion outside formatINR" check. Cite the reasoning (display-only terminal step, API constraint, mechanically guarded), not the outcome, before treating this as license for another float anywhere near money |
 | Timestamps `timestamptz`, stored UTC | Tenant timezone drives display and scheduling |
 | Every mutation writes audit in the same transaction | Partial audit is worse than none |
 | Every job is idempotent and tenant-scoped | Retries are guaranteed |
