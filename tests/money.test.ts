@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { applyPayments, computeTax, splitTotal } from "@/lib/money/arithmetic";
 import { formatINR, parsePaise } from "@/lib/money/format";
@@ -103,5 +104,40 @@ describe("parsePaise — round-trips formatINR exactly", () => {
   it("rejects malformed input rather than silently truncating", () => {
     expect(() => parsePaise("not money")).toThrow();
     expect(() => parsePaise("₹1.5")).toThrow(); // not exactly 2 fractional digits
+  });
+});
+
+// Standing rule (docs/implementation-plan.md): money is bigint paise,
+// never a float. formatINR is the one granted exception -- display
+// only, isolated to that single function, never fed back into
+// arithmetic (see the comment at its definition). Mechanical, not
+// just a comment someone could drift away from: the only "/ 100"
+// division anywhere under lib/money must be that one line.
+describe("no paise-to-Number conversion outside formatINR", () => {
+  it("the only float division in lib/money is the one inside formatINR", () => {
+    let output = "";
+    try {
+      output = execFileSync("grep", ["-rn", "/ 100", "--include=*.ts", "lib/money"], {
+        cwd: process.cwd(),
+        encoding: "utf8",
+      });
+    } catch (err) {
+      // grep exits 1 when it finds nothing -- that would mean formatINR
+      // itself no longer matches the expected shape, which the second
+      // assertion below catches; re-throw anything else (e.g. grep
+      // itself failing).
+      const e = err as { status?: number };
+      if (e.status !== 1) throw err;
+    }
+
+    const lines = output.split("\n").filter(Boolean);
+    const outsideFormat = lines.filter((l) => !l.startsWith("lib/money/format.ts:"));
+    expect(outsideFormat, "found a '/ 100' division outside lib/money/format.ts").toEqual([]);
+
+    const insideFormat = lines.filter((l) => l.startsWith("lib/money/format.ts:"));
+    expect(
+      insideFormat.length,
+      "expected exactly one '/ 100' in lib/money/format.ts (formatINR's own conversion)",
+    ).toBe(1);
   });
 });

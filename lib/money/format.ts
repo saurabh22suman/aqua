@@ -18,11 +18,19 @@ const RUPEE_FORMATTER = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+// The one deliberate exception to "money is bigint paise, never a
+// float" (docs/implementation-plan.md, Standing rules) in this whole
+// module. Display only: the Number this produces is handed straight
+// to Intl.NumberFormat (which requires a Number, not a bigint, and
+// has no integer-cents mode) and returned as a string -- it never
+// goes back into arithmetic.ts or anywhere else money is computed.
+// This is the ONLY place that conversion may happen; guarded by
+// tests/money.test.ts's "no paise-to-Number conversion outside
+// formatINR" check, not just this comment.
 export function formatINR(paise: number): string {
   if (!Number.isInteger(paise) || paise < 0) {
     throw new Error(`formatINR expects a non-negative integer paise value, got ${paise}`);
   }
-  // paise/100 for display only -- see module note above.
   return RUPEE_FORMATTER.format(paise / 100);
 }
 
