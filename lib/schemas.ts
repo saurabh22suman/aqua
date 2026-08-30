@@ -39,5 +39,21 @@ export const markRegisterSchema = z.object({
     .max(60),
 });
 
+export const createProgramSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+});
+
+export const createBatchSchema = z.object({
+  programId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  capacity: z.number().int().positive(),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+});
+
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type MarkRegisterInput = z.infer<typeof markRegisterSchema>;
+export type CreateProgramInput = z.infer<typeof createProgramSchema>;
+export type CreateBatchInput = z.infer<typeof createBatchSchema>;

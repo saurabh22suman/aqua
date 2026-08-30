@@ -87,7 +87,10 @@ async function main() {
 
   const batchSpecs = [
     { name: "Morning Squad", startTime: "07:00", endTime: "08:00", daysOfWeek: [1, 2, 3, 4, 5, 6], capacity: 20 },
-    { name: "Evening Juniors", startTime: "17:00", endTime: "18:00", daysOfWeek: [2, 4, 6], capacity: 12 },
+    // Capacity must be >= MEMBER_COUNT (16): every synthetic member below
+    // enrols into both batches, and enrolMember now enforces capacity
+    // (C-18) -- this used to silently oversell past 12.
+    { name: "Evening Juniors", startTime: "17:00", endTime: "18:00", daysOfWeek: [2, 4, 6], capacity: 20 },
   ];
   const batchIds: string[] = [];
   await withTenant(tenantId, async (tx) => {
