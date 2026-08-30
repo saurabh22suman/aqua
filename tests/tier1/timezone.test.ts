@@ -45,6 +45,17 @@ describe("timezone helpers", () => {
     expect(isMinor(dob18thBirthdayToday, "Asia/Kolkata", atUtcAfterBoundary)).toBe(false);
   });
 
+  // C-05: a null date of birth must never silently resolve to "not a
+  // minor" -- "unknown" is not "adult". Before this fix, a null/undefined
+  // dateOfBirth reached `.split("-")` directly and threw a bare
+  // TypeError ("Cannot read properties of null (reading 'split')"), not
+  // a deliberate, callable-facing error -- easy for a caller to
+  // misdiagnose as their own bug rather than "this function refuses to
+  // guess."
+  it("refuses to guess minor status from a null date of birth, with a clear error", () => {
+    expect(() => isMinor(null, "Asia/Kolkata")).toThrow(/date of birth/i);
+  });
+
   it("weekday and addDays agree with UTC calendar math on ISO dates", () => {
     expect(weekdayOf("2026-08-25")).toBe(2);
     expect(addDays("2026-08-31", 1)).toBe("2026-09-01");

@@ -63,7 +63,16 @@ export function zonedWallTimeToInstant(
   return new Date(guess);
 }
 
-export function isMinor(dateOfBirth: string, timeZone: string, now = Date.now()): boolean {
+export function isMinor(
+  dateOfBirth: string | null | undefined,
+  timeZone: string,
+  now = Date.now(),
+): boolean {
+  if (dateOfBirth == null) {
+    throw new Error(
+      "isMinor: date of birth is required to determine minor status — refusing to guess",
+    );
+  }
   const today = todayInZone(timeZone, now);
   const [ty, tm, td] = today.split("-").map(Number);
   const [by, bm, bd] = dateOfBirth.split("-").map(Number);

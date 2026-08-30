@@ -137,12 +137,20 @@ async function main() {
       { tenantId, userId: undefined as unknown as string },
       {
         fullName: `Synthetic Member ${String(i).padStart(2, "0")}`,
-        dateOfBirth: `20${10 + (i % 8)}-0${(i % 9) + 1}-1${i % 9}`,
+        // Adult -- this data exists for attendance/offline-sync testing,
+        // not C-05. The original range (2010-2017) made every synthetic
+        // member a minor, which would now require a guardian and
+        // consent this script has no reason to fabricate.
+        dateOfBirth: `19${80 + (i % 8)}-0${(i % 9) + 1}-1${i % 9}`,
         gender: i % 2 === 0 ? "female" : "male",
         locationId: mainLocationId,
         memberCode: code,
+        consents: [
+          { purpose: "processing", policyVersion: "2026.1", evidence: { channel: "seed-script" } },
+        ],
       },
     );
+    if (!created.ok) throw new Error(`seed: createMember failed for ${code} — ${created.error}`);
     memberIds.push(created.memberId);
   }
   console.log(`members seeded → ${memberIds.length}`);

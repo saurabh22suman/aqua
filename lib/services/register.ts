@@ -6,22 +6,57 @@ import { tenants } from "@/db/schema/tenants";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { Ctx } from "@/lib/auth/context";
+import { isMinor } from "@/lib/time/tz";
+import { createGuardianship, recordConsent, type ConsentGrantInput } from "@/lib/services/consent";
 
 type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
 
+export type GuardianInput =
+  | { existingPersonId: string; relationship: string }
+  | { fullName: string; phone?: string; relationship: string };
+
+// C-05 (Consent — DPDP), proposed and reviewed before building. A minor
+// cannot be created without a guardian and a processing consent grant
+// -- checked BEFORE any row is inserted, so a rejection leaves nothing
+// behind (drizzle only rolls back on a thrown error, not an early
+// return, so every check that can still say no lives above the first
+// insert). Minor status is always derived server-side from
+// dateOfBirth via isMinor() -- there is no "isMinor" input field for a
+// caller to supply or spoof.
 export async function createMember(
   ctx: ActionCtx,
   input: {
     fullName: string;
-    dateOfBirth?: string;
+    dateOfBirth: string;
     gender?: string;
     locationId: string;
     memberCode: string;
     medicalNotes?: string;
+    guardian?: GuardianInput;
+    consents: ConsentGrantInput[];
+    witnessedByUserId?: string;
   },
-): Promise<{ memberId: string; personId: string }> {
+): Promise<{ ok: true; memberId: string; personId: string } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const [person] = await tx
+    const [tenant] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const minor = isMinor(input.dateOfBirth, tenant.timezone);
+
+    const processingGrant = input.consents.find((c) => c.purpose === "processing");
+    if (!processingGrant) {
+      return { ok: false, error: "Processing consent is required to register a member." };
+    }
+    if (minor && !input.guardian) {
+      return { ok: false, error: "A guardian is required to register a minor." };
+    }
+
+    // Past this point every check that can still say no has run --
+    // nothing has been inserted yet. From here on, any failure (a bad
+    // guardian id, a duplicate member code) must THROW, not return, so
+    // the transaction rolls back instead of leaving a partial row.
+    const [subject] = await tx
       .insert(persons)
       .values({
         tenantId: ctx.tenantId,
@@ -34,11 +69,63 @@ export async function createMember(
       })
       .returning({ id: persons.id });
 
+    let granterId = subject.id;
+    let granterName = input.fullName;
+    let granterRelationship = "self";
+
+    if (minor && input.guardian) {
+      if ("existingPersonId" in input.guardian) {
+        const [existing] = await tx
+          .select({ id: persons.id, fullName: persons.fullName })
+          .from(persons)
+          .where(and(eq(persons.id, input.guardian.existingPersonId), eq(persons.tenantId, ctx.tenantId)));
+        if (!existing) {
+          throw new Error(`createMember: guardian ${input.guardian.existingPersonId} not found in this tenant`);
+        }
+        granterId = existing.id;
+        granterName = existing.fullName;
+      } else {
+        const [guardianPerson] = await tx
+          .insert(persons)
+          .values({
+            tenantId: ctx.tenantId,
+            fullName: input.guardian.fullName,
+            createdBy: ctx.userId,
+            updatedBy: ctx.userId,
+          })
+          .returning({ id: persons.id });
+        granterId = guardianPerson.id;
+        granterName = input.guardian.fullName;
+      }
+      granterRelationship = input.guardian.relationship;
+
+      await createGuardianship(tx, {
+        tenantId: ctx.tenantId,
+        minorId: subject.id,
+        guardianId: granterId,
+        relationship: input.guardian.relationship,
+        isPrimary: true,
+        createdBy: ctx.userId,
+      });
+    }
+
+    for (const grant of input.consents) {
+      await recordConsent(tx, {
+        tenantId: ctx.tenantId,
+        personId: subject.id,
+        grantedBy: granterId,
+        witnessedByUserId: input.witnessedByUserId ?? ctx.userId,
+        granterName,
+        granterRelationship,
+        grant,
+      });
+    }
+
     const [member] = await tx
       .insert(members)
       .values({
         tenantId: ctx.tenantId,
-        personId: person.id,
+        personId: subject.id,
         locationId: input.locationId,
         memberCode: input.memberCode,
         createdBy: ctx.userId,
@@ -46,7 +133,7 @@ export async function createMember(
       })
       .returning({ id: members.id });
 
-    return { memberId: member.id, personId: person.id };
+    return { ok: true, memberId: member.id, personId: subject.id };
   });
 }
 

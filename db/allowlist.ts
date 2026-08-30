@@ -9,6 +9,11 @@ export const PLATFORM_TABLES = [
   "plan_features",
   "presets",
   "permissions",
+  // OUR standard consent notice text, shown to every guardian/adult
+  // member across every tenant -- not a per-tenant document (C-05a's
+  // operator DPA is the separate, tenant-specific one). Same shape as
+  // plans/features.
+  "policy_versions",
 ] as const;
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];
