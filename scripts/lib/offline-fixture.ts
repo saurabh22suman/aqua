@@ -39,6 +39,16 @@ export async function setupOfflineFixture(
   );
   const programId = prog.rows[0].id;
 
+  // Same demo coach the e2e scripts log in as (loginAsCoach's
+  // COACH_PHONE) — assigning it keeps getTodayAction's coach scoping
+  // (lib/services/register.ts's listTodaySessions) consistent for this
+  // persona too, even though these scripts navigate straight to a
+  // known session id rather than through the "today" list.
+  const coach = await admin.query<{ id: string }>(
+    "select id from users where phone = '+919000000002'",
+  );
+  const coachId = coach.rows[0]?.id;
+
   let batchId = "";
   await withTenant(tenantId, async (tx) => {
     const [b] = await tx
@@ -51,6 +61,7 @@ export async function setupOfflineFixture(
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
         startTime: "06:00",
         endTime: "07:00",
+        coachId,
       })
       .returning({ id: batches.id });
     batchId = b.id;

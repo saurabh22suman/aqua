@@ -2,7 +2,9 @@ import { and, eq, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant } from "@/db/tenant";
 import { members, persons } from "@/db/schema";
-import { attendance, sessions } from "@/db/schema/scheduling";
+import { tenants } from "@/db/schema/tenants";
+import { batches } from "@/db/schema/programs";
+import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { Ctx } from "@/lib/auth/context";
 
 type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
@@ -96,16 +98,179 @@ export async function countAttendanceForSession(
   });
 }
 
-export async function sessionExistsInTenant(
-  ctx: ActionCtx,
+export type TodaySessionRow = {
+  id: string;
+  batchName: string;
+  startsAt: Date;
+  endsAt: Date;
+  marked: number;
+  total: number;
+};
+
+// getTodayAction (lib/actions/coach.ts) showed every session in the
+// tenant to any staff member -- a coach could see (and, via
+// getRosterAction, mark) another coach's register. A coach only ever
+// sees sessions from batches assigned to them; every other staff role
+// (owner, admin, receptionist, accountant) keeps full tenant-wide
+// visibility -- their job requires oversight across all coaches, a
+// coach's does not.
+export async function listTodaySessions(
+  ctx: ActionCtx & { roleKey: string },
+  today: string,
+): Promise<TodaySessionRow[]> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const conditions = [eq(sessions.tenantId, ctx.tenantId), eq(sessions.sessionDate, today)];
+    if (ctx.roleKey === "coach") {
+      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+    }
+
+    const rows = await tx
+      .select({
+        id: sessions.id,
+        batchName: batches.name,
+        startsAt: sessions.startsAt,
+        endsAt: sessions.endsAt,
+        marked: sql<number>`(select count(*)::int from ${attendance} a where a.session_id = ${sessions.id})`,
+        total: sql<number>`(select count(*)::int from ${enrolments} e where e.batch_id = ${sessions.batchId} and e.enrolled_on <= ${today} and e.tenant_id = ${ctx.tenantId})`,
+      })
+      .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .where(and(...conditions))
+      .orderBy(sessions.startsAt);
+
+    return rows;
+  });
+}
+
+// Renamed from sessionExistsInTenant: that name was the bug. Tenant
+// membership is not the same question as "may this caller see this
+// row" -- a coach is a tenant member for every session in the tenant,
+// including every other coach's. Same coach-scoping condition as
+// listTodaySessions and getRosterForSession, so all three answer
+// "which sessions can THIS caller act on" identically rather than
+// three independent, driftable checks.
+export async function sessionVisibleToCaller(
+  ctx: ActionCtx & { roleKey: string },
   sessionId: string,
 ): Promise<boolean> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const conditions = [eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId)];
+    if (ctx.roleKey === "coach") {
+      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+    }
     const rows = await tx
       .select({ id: sessions.id })
       .from(sessions)
-      .where(and(eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId)))
+      .where(and(...conditions))
       .limit(1);
     return rows.length > 0;
+  });
+}
+
+export type RosterRow = {
+  memberId: string;
+  name: string;
+  code: string;
+  status: "present" | "absent" | "late" | null;
+  pct: number | null;
+};
+
+export type RosterData = {
+  batchName: string;
+  startsAt: Date;
+  offlineSyncEnabled: boolean;
+  rows: RosterRow[];
+};
+
+// getRosterAction (lib/actions/coach.ts) took a session id and only
+// checked tenant membership before this fix -- a coach who knew or
+// guessed another coach's session id could open (and, through
+// markAttendanceSessionAction, mark) that register. Returns null for
+// "not visible to this caller" with the SAME shape as "does not
+// exist" -- the caller must not be able to tell those two apart,
+// which is what makes this a 404, not a 403.
+export async function getRosterForSession(
+  ctx: ActionCtx & { roleKey: string },
+  sessionId: string,
+): Promise<RosterData | null> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const conditions = [eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId)];
+    if (ctx.roleKey === "coach") {
+      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+    }
+
+    const [session] = await tx
+      .select({
+        id: sessions.id,
+        batchName: batches.name,
+        startsAt: sessions.startsAt,
+        batchId: batches.id,
+      })
+      .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .where(and(...conditions));
+    if (!session) return null;
+
+    const [tenant] = await tx
+      .select({ offlineSyncEnabled: tenants.offlineSyncEnabled })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+
+    const roster = await tx
+      .select({
+        memberId: members.id,
+        name: persons.fullName,
+        code: members.memberCode,
+        status: attendance.status,
+        presentCount: sql<number>`(
+          select count(*)::int from ${attendance} a
+          where a.tenant_id = ${ctx.tenantId}
+            and a.member_id = ${members.id}
+            and a.status in ('present', 'late')
+            and a.marked_at >= date_trunc('month', now())
+        )`,
+        totalCount: sql<number>`(
+          select count(*)::int from ${attendance} a
+          where a.tenant_id = ${ctx.tenantId}
+            and a.member_id = ${members.id}
+            and a.marked_at >= date_trunc('month', now())
+        )`,
+      })
+      .from(enrolments)
+      .innerJoin(members, eq(members.id, enrolments.memberId))
+      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(
+        attendance,
+        and(eq(attendance.memberId, members.id), eq(attendance.sessionId, sessionId)),
+      )
+      .where(
+        and(
+          eq(enrolments.tenantId, ctx.tenantId),
+          eq(enrolments.batchId, session.batchId),
+        ),
+      )
+      .orderBy(members.memberCode);
+
+    const seen = new Set<string>();
+    const rows: RosterRow[] = [];
+    for (const r of roster) {
+      if (seen.has(r.memberId)) continue;
+      seen.add(r.memberId);
+      rows.push({
+        memberId: r.memberId,
+        name: r.name,
+        code: r.code,
+        status: (r.status as RosterRow["status"]) ?? null,
+        pct:
+          r.totalCount > 0 ? Math.round((r.presentCount / r.totalCount) * 100) : null,
+      });
+    }
+
+    return {
+      batchName: session.batchName,
+      startsAt: session.startsAt,
+      offlineSyncEnabled: tenant.offlineSyncEnabled,
+      rows,
+    };
   });
 }

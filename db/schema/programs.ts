@@ -41,6 +41,9 @@ export const batches = pgTable(
     daysOfWeek: integer("days_of_week").array().notNull().default([]),
     startTime: time("start_time").notNull(),
     endTime: time("end_time").notNull(),
+    // Bare user id, no FK -- staff (C-04) doesn't exist yet. See
+    // migration 0014's comment.
+    coachId: uuid("coach_id"),
     ...softDelete,
     ...auditColumns,
   },

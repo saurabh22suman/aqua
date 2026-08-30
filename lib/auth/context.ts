@@ -59,7 +59,17 @@ export async function requireDefaultCtx(): Promise<Ctx> {
   );
 
   return {
-    userId: session.user.id,
+    // membership.userId is the resolved platform users.id -- NOT
+    // session.user.id, which is better-auth's own id, a different id
+    // space (found while adding coach-assignment scoping: comparing
+    // session.user.id against a stored users.id never matched for a
+    // real logged-in user, only in tests that fabricated a matching
+    // value directly). resolveCtxFor (the other Ctx-building path,
+    // used by requireCtx) already got this right via
+    // resolveTenantAccessBySlug's TenantAccess.userId; this brings
+    // requireDefaultCtx into agreement with it instead of leaving two
+    // paths that silently disagree on what ctx.userId means.
+    userId: membership.userId,
     tenantId: membership.tenantId,
     membershipId: membership.membershipId,
     roleKey: membership.roleKey,
