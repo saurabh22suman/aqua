@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 
@@ -74,21 +75,32 @@ export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
         </div>
       ) : (
         <ul>
-          {data.needsAttention.map((item, i) => (
-            <li
-              key={i}
-              className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 py-3 mb-2"
-            >
-              <div className="h-9 w-9 rounded-[11px] bg-warn-soft text-warn grid place-items-center flex-none">
-                <AlertTriangle size={16} strokeWidth={2} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[14px] font-medium leading-tight">{item.title}</p>
-                <p className="mt-0.5 text-[12px] text-ink-3 leading-tight truncate">{item.detail}</p>
-              </div>
-              <ChevronRight size={18} className="ml-auto text-ink-3 flex-none" />
-            </li>
-          ))}
+          {data.needsAttention.map((item, i) => {
+            const row = (
+              <>
+                <div className="h-9 w-9 rounded-[11px] bg-warn-soft text-warn grid place-items-center flex-none">
+                  <AlertTriangle size={16} strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium leading-tight">{item.title}</p>
+                  <p className="mt-0.5 text-[12px] text-ink-3 leading-tight truncate">{item.detail}</p>
+                </div>
+                <ChevronRight size={18} className="ml-auto text-ink-3 flex-none" />
+              </>
+            );
+            const className = "flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 py-3 mb-2";
+            return item.href ? (
+              <li key={i}>
+                <Link href={item.href} className={className}>
+                  {row}
+                </Link>
+              </li>
+            ) : (
+              <li key={i} className={className}>
+                {row}
+              </li>
+            );
+          })}
         </ul>
       )}
 
