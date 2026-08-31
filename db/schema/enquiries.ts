@@ -5,6 +5,7 @@ import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { members } from "./people";
 import { batches } from "./programs";
+import type { TenantId, MemberId, UserId } from "@/lib/ids";
 
 export const enquiries = pgTable(
   "enquiries",
@@ -12,14 +13,15 @@ export const enquiries = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
     source: text("source").notNull(),
     stage: text("stage").notNull().default("new"),
     // Bare user id, no FK -- see migration 0019's comment.
-    assignedToUserId: uuid("assigned_to_user_id"),
-    memberId: uuid("member_id"),
+    assignedToUserId: uuid("assigned_to_user_id").$type<UserId>(),
+    memberId: uuid("member_id").$type<MemberId>(),
     trialBatchId: uuid("trial_batch_id"),
     notes: text("notes"),
     ...softDelete,
@@ -58,12 +60,13 @@ export const enquiryFollowUps = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     enquiryId: uuid("enquiry_id").notNull(),
     dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
     note: text("note"),
     doneAt: timestamp("done_at", { withTimezone: true }),
-    assignedToUserId: uuid("assigned_to_user_id"),
+    assignedToUserId: uuid("assigned_to_user_id").$type<UserId>(),
     ...auditColumns,
   },
   (t) => [

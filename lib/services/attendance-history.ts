@@ -2,9 +2,8 @@ import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
-import type { Ctx } from "@/lib/auth/context";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import type { ActionCtx } from "@/lib/auth/context";
+import { asMemberId } from "@/lib/ids";
 
 export type Period = { from: string; to: string };
 
@@ -59,7 +58,7 @@ export async function getMemberAttendanceHistory(
       .where(
         and(
           eq(attendance.tenantId, ctx.tenantId),
-          eq(attendance.memberId, memberId),
+          eq(attendance.memberId, asMemberId(memberId)),
           gte(sessions.sessionDate, period.from),
           lt(sessions.sessionDate, period.to),
         ),

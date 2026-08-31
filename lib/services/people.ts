@@ -5,10 +5,9 @@ import { guardianships, consents } from "@/db/schema/consent";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import { memberStatusTransitions } from "@/db/schema/people";
-import type { Ctx } from "@/lib/auth/context";
+import type { ActionCtx } from "@/lib/auth/context";
 import { isMinor } from "@/lib/time/tz";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import { asMemberId } from "@/lib/ids";
 
 // isMinor() deliberately throws on a null date of birth -- correct at
 // registration, where createMemberSchema makes it mandatory (C-05).
@@ -158,7 +157,7 @@ export async function getMemberDetail(
       .from(members)
       .innerJoin(persons, eq(persons.id, members.personId))
       .innerJoin(locations, eq(locations.id, members.locationId))
-      .where(and(eq(members.id, memberId), eq(members.tenantId, ctx.tenantId)));
+      .where(and(eq(members.id, asMemberId(memberId)), eq(members.tenantId, ctx.tenantId)));
     if (!row) return null;
 
     const guardianRows = await tx
@@ -201,7 +200,7 @@ export async function getMemberDetail(
       .where(
         and(
           eq(memberStatusTransitions.tenantId, ctx.tenantId),
-          eq(memberStatusTransitions.memberId, memberId),
+          eq(memberStatusTransitions.memberId, asMemberId(memberId)),
         ),
       )
       .orderBy(desc(memberStatusTransitions.changedAt));
@@ -247,7 +246,7 @@ export async function updateMember(
     const [member] = await tx
       .select({ personId: members.personId })
       .from(members)
-      .where(and(eq(members.id, memberId), eq(members.tenantId, ctx.tenantId)));
+      .where(and(eq(members.id, asMemberId(memberId)), eq(members.tenantId, ctx.tenantId)));
     if (!member) return { ok: false, error: "Member not found." };
 
     await tx
@@ -266,7 +265,7 @@ export async function updateMember(
     await tx
       .update(members)
       .set({ locationId: input.locationId, updatedAt: new Date(), updatedBy: ctx.userId })
-      .where(eq(members.id, memberId));
+      .where(eq(members.id, asMemberId(memberId)));
 
     return { ok: true };
   });

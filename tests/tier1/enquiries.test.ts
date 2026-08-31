@@ -19,6 +19,7 @@ import {
 } from "@/lib/services/enquiries";
 import { getRosterForSession } from "@/lib/services/register";
 import { generateSessions } from "@/lib/jobs/session-generator";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // Non-Tier-1 safety net, same pattern as the other lib/services/*
 // test files. Covers C-12 (capture), C-13 (pipeline + follow-ups),
@@ -30,12 +31,12 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let batchId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );

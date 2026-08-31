@@ -4,6 +4,7 @@ import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { seedPlatformCatalogue } from "@/db/seed-platform";
 import { resolveTenantFeatureKeys } from "@/db/features";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so setup/teardown rows must be
 // inserted through the privileged migration pool, never the app pool.
@@ -56,7 +57,7 @@ const ALL_PERMISSION_KEYS = [
   "levels.assess",
 ];
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let pilotPlanId = "";
 
 async function gaFeatureKeys(): Promise<string[]> {
@@ -132,7 +133,7 @@ describe("platform catalogue and plan-baseline entitlements", () => {
     );
     expect(standard.rows).toHaveLength(1);
 
-    tenantId = uuidv7();
+    tenantId = asTenantId(uuidv7());
     await admin.query(
       "insert into tenants (id, slug, name, plan_id) values ($1, $2, 'F-01 baseline', $3)",
       [tenantId, `f01-${RUN}`, standard.rows[0].id],

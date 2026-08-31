@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { roles, rolePermissions } from "@/db/schema/roles";
 import { seedRoleTemplates } from "@/lib/services/roles";
+import { asTenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so tenant fixtures must be created
 // through the privileged migration pool, never the app pool. The role
@@ -14,8 +15,8 @@ import { seedRoleTemplates } from "@/lib/services/roles";
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
-const tenantA = uuidv7();
-const tenantB = uuidv7();
+const tenantA = asTenantId(uuidv7());
+const tenantB = asTenantId(uuidv7());
 const TENANT_IDS = [tenantA, tenantB];
 
 // The F-04 approved matrix, hardcoded here as an independent cross-check

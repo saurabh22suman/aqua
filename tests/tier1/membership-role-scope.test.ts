@@ -4,6 +4,7 @@ import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { requireDefaultCtx } from "@/lib/auth/context";
+import { asTenantId } from "@/lib/ids";
 
 // requireDefaultCtx needs a session; stub only the framework edges
 // (better-auth session + next/headers). The database path it exercises —
@@ -25,8 +26,8 @@ vi.mock("next/headers", () => ({
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
-const tenantA = uuidv7();
-const tenantB = uuidv7();
+const tenantA = asTenantId(uuidv7());
+const tenantB = asTenantId(uuidv7());
 
 async function expectPgError(
   promise: Promise<unknown>,

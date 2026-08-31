@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { roles } from "@/db/schema/roles";
 import { PERMISSIONS } from "@/db/seed-platform";
+import type { TenantId } from "@/lib/ids";
 
 const ALL_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
@@ -98,7 +99,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
   },
 ];
 
-export async function seedRoleTemplates(tenantId: string): Promise<void> {
+export async function seedRoleTemplates(tenantId: TenantId): Promise<void> {
   await withTenant(tenantId, async (tx) => {
     for (const template of ROLE_TEMPLATES) {
       const [created] = await tx

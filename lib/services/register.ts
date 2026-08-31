@@ -6,12 +6,11 @@ import type { MemberStatus } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
-import type { Ctx } from "@/lib/auth/context";
+import type { ActionCtx } from "@/lib/auth/context";
 import { isMinor } from "@/lib/time/tz";
 import { createGuardianship, recordConsent, type ConsentGrantInput } from "@/lib/services/consent";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import { asPersonId, asMemberId, type MemberId, type PersonId, type UserId } from "@/lib/ids";
 
 export type GuardianInput =
   | { existingPersonId: string; relationship: string }
@@ -37,7 +36,7 @@ export async function createMember(
     medicalNotes?: string;
     guardian?: GuardianInput;
     consents: ConsentGrantInput[];
-    witnessedByUserId?: string;
+    witnessedByUserId?: UserId;
     // C-14: a trial booking creates the member with status 'trial'
     // instead of the default 'active' -- an initial value, not a
     // transition, so it bypasses transitionMemberStatus's allowed-
@@ -45,7 +44,7 @@ export async function createMember(
     // exist yet).
     initialStatus?: MemberStatus;
   },
-): Promise<{ ok: true; memberId: string; personId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; memberId: MemberId; personId: PersonId } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
@@ -88,7 +87,7 @@ export async function createMember(
         const [existing] = await tx
           .select({ id: persons.id, fullName: persons.fullName })
           .from(persons)
-          .where(and(eq(persons.id, input.guardian.existingPersonId), eq(persons.tenantId, ctx.tenantId)));
+          .where(and(eq(persons.id, asPersonId(input.guardian.existingPersonId)), eq(persons.tenantId, ctx.tenantId)));
         if (!existing) {
           throw new Error(`createMember: guardian ${input.guardian.existingPersonId} not found in this tenant`);
         }
@@ -192,7 +191,7 @@ export async function enrolMember(
         and(
           eq(enrolments.tenantId, ctx.tenantId),
           eq(enrolments.batchId, input.batchId),
-          eq(enrolments.memberId, input.memberId),
+          eq(enrolments.memberId, asMemberId(input.memberId)),
         ),
       )
       .limit(1);
@@ -227,7 +226,7 @@ export async function markAttendance(
       .values({
         tenantId: ctx.tenantId,
         sessionId: input.sessionId,
-        memberId: input.memberId,
+        memberId: asMemberId(input.memberId),
         status: input.status,
         clientId: input.clientId,
       })

@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { consents, locations } from "@/db/schema";
 import { createMember } from "@/lib/services/register";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // Deliberately NOT named tests/tier1/consent-minor-block.test.ts or
 // tests/tier1/consent-withdrawal-immutable.test.ts -- those are files
@@ -22,11 +23,11 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 const POLICY_VERSION = "2026.1";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );

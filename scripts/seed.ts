@@ -10,6 +10,7 @@ import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { defaultPlanId, seedPlatformCatalogue } from "@/db/seed-platform";
+import { asTenantId, asUserId, asStaffId, type TenantId, type UserId, type StaffId } from "@/lib/ids";
 
 const SLUG = "demo-academy";
 const TZ = "Asia/Kolkata";
@@ -17,14 +18,14 @@ const MEMBER_COUNT = 16;
 
 const adminPool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
-async function ensureTenant(): Promise<string> {
+async function ensureTenant(): Promise<TenantId> {
   const existing = await adminPool.query<{ id: string }>(
     "select id from tenants where slug = $1",
     [SLUG],
   );
-  if (existing.rows.length > 0) return existing.rows[0].id;
+  if (existing.rows.length > 0) return asTenantId(existing.rows[0].id);
 
-  const id = uuidv7();
+  const id = asTenantId(uuidv7());
   const planId = await defaultPlanId(env.MIGRATION_DATABASE_URL);
   await adminPool.query(
     "insert into tenants (id, slug, name, status, plan_id) values ($1,$2,'Demo Academy','active',$3)",
@@ -54,12 +55,12 @@ async function main() {
   const coachUser = await adminPool.query<{ id: string }>(
     "select id from users where phone = '+919000000002'",
   );
-  const coachUserId = coachUser.rows[0]?.id;
+  const coachUserId = coachUser.rows[0]?.id ? asUserId(coachUser.rows[0].id) : undefined;
 
   // C-04: batches/sessions.coach_id is a real FK to staff now, not a
   // bare user id -- the demo coach needs a person and a staff row
   // before any batch can reference them.
-  let coachStaffId: string | undefined;
+  let coachStaffId: StaffId | undefined;
   if (coachUserId) {
     coachStaffId = await withTenant(tenantId, async (tx) => {
       const existingStaff = await tx
@@ -67,7 +68,7 @@ async function main() {
         .from(staff)
         .where(and(eq(staff.tenantId, tenantId), eq(staff.userId, coachUserId)))
         .limit(1);
-      if (existingStaff.length > 0) return existingStaff[0].id;
+      if (existingStaff.length > 0) return asStaffId(existingStaff[0].id);
 
       const [person] = await tx
         .insert(persons)
@@ -77,7 +78,7 @@ async function main() {
         .insert(staff)
         .values({ tenantId, personId: person.id, userId: coachUserId, staffType: "coach" })
         .returning({ id: staff.id });
-      return staffRow.id;
+      return asStaffId(staffRow.id);
     });
   }
 
@@ -170,7 +171,7 @@ async function main() {
       continue;
     }
     const created = await createMember(
-      { tenantId, userId: undefined as unknown as string },
+      { tenantId, userId: undefined as unknown as UserId },
       {
         fullName: `Synthetic Member ${String(i).padStart(2, "0")}`,
         // Adult -- this data exists for attendance/offline-sync testing,
@@ -269,7 +270,7 @@ const LOGIN_USERS = [
   { phone: "+919000000003", role: "parent" },
 ] as const;
 
-async function ensureLoginUsers(tenantId: string) {
+async function ensureLoginUsers(tenantId: TenantId) {
   // `parent` is not an F-04 template (parents are not staff memberships);
   // ensure the role exists before any membership references it. owner and
   // coach already exist — seedRoleTemplates ran earlier in main().
@@ -308,7 +309,7 @@ async function ensureLoginUsers(tenantId: string) {
         "select id from users where phone = $1",
         [u.phone],
       );
-      const userId = userRow.rows[0]?.id;
+      const userId = userRow.rows[0]?.id ? asUserId(userRow.rows[0].id) : undefined;
       if (!userId) continue;
 
       const roleRow = await tx

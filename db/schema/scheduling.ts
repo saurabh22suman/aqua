@@ -16,6 +16,7 @@ import { tenants } from "./tenants";
 import { members } from "./people";
 import { batches } from "./programs";
 import { staff } from "./staff";
+import type { TenantId, MemberId, StaffId, UserId } from "@/lib/ids";
 
 export const enrolments = pgTable(
   "enrolments",
@@ -23,8 +24,9 @@ export const enrolments = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
-    memberId: uuid("member_id").notNull(),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    memberId: uuid("member_id").notNull().$type<MemberId>(),
     batchId: uuid("batch_id").notNull(),
     enrolledOn: date("enrolled_on").notNull().defaultNow(),
     ...auditColumns,
@@ -55,7 +57,8 @@ export const sessions = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     batchId: uuid("batch_id").notNull(),
     sessionDate: date("session_date").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
@@ -64,7 +67,8 @@ export const sessions = pgTable(
     // Copied from the batch at generation time; independently
     // updatable for substitution (C-20). Real FK to staff as of
     // migration 0018 -- see that migration's comment for the backfill.
-    coachId: uuid("coach_id"),
+    // Branded StaffId (M3) -- see programs.ts's batches.coachId comment.
+    coachId: uuid("coach_id").$type<StaffId>(),
     ...auditColumns,
   },
   (t) => [
@@ -94,12 +98,13 @@ export const attendance = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     sessionId: uuid("session_id").notNull(),
-    memberId: uuid("member_id").notNull(),
+    memberId: uuid("member_id").notNull().$type<MemberId>(),
     status: text("status").notNull().default("present"),
     clientId: text("client_id").notNull(),
-    markedBy: uuid("marked_by"),
+    markedBy: uuid("marked_by").$type<UserId>(),
     markedAt: timestamp("marked_at", { withTimezone: true }).notNull().defaultNow(),
     ...auditColumns,
   },

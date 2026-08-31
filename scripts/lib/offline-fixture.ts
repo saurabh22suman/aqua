@@ -3,6 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { batches } from "@/db/schema";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, enrolMember } from "@/lib/services/register";
+import { asTenantId, asStaffId, type UserId } from "@/lib/ids";
 
 export type OfflineFixture = {
   tenantId: string;
@@ -25,7 +26,7 @@ export async function setupOfflineFixture(
   const tenant = await admin.query<{ id: string }>(
     "select id from tenants where slug = 'demo-academy'",
   );
-  const tenantId = tenant.rows[0].id;
+  const tenantId = asTenantId(tenant.rows[0].id);
 
   const loc = await admin.query<{ id: string }>(
     "select id from locations where tenant_id = $1 and is_primary = true limit 1",
@@ -54,7 +55,7 @@ export async function setupOfflineFixture(
      where u.phone = '+919000000002' and s.tenant_id = $1 and s.staff_type = 'coach'`,
     [tenantId],
   );
-  const coachId = coach.rows[0]?.id;
+  const coachId = coach.rows[0]?.id ? asStaffId(coach.rows[0].id) : undefined;
 
   let batchId = "";
   await withTenant(tenantId, async (tx) => {
@@ -78,7 +79,7 @@ export async function setupOfflineFixture(
   const personIds: string[] = [];
   for (let i = 1; i <= memberCount; i++) {
     const created = await createMember(
-      { tenantId, userId: undefined as unknown as string },
+      { tenantId, userId: undefined as unknown as UserId },
       {
         fullName: `Offline Test Member ${run} ${String(i).padStart(2, "0")}`,
         dateOfBirth: "1990-01-01", // adult -- this fixture isn't testing C-05, sidesteps the guardian/consent flow entirely

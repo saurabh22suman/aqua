@@ -14,14 +14,19 @@ import {
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { locations } from "./locations";
+import type { TenantId, PersonId, MemberId, UserId } from "@/lib/ids";
 
 export const persons = pgTable(
   "persons",
   {
-    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7())
+      .$type<PersonId>(),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     fullName: text("full_name").notNull(),
     phone: text("phone"),
     dateOfBirth: date("date_of_birth"),
@@ -44,11 +49,15 @@ export const persons = pgTable(
 export const members = pgTable(
   "members",
   {
-    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7())
+      .$type<MemberId>(),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
-    personId: uuid("person_id").notNull(),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    personId: uuid("person_id").notNull().$type<PersonId>(),
     locationId: uuid("location_id").notNull(),
     memberCode: text("member_code").notNull(),
     status: text("status").notNull().default("active"),
@@ -87,12 +96,13 @@ export const memberStatusTransitions = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
-    memberId: uuid("member_id").notNull(),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    memberId: uuid("member_id").notNull().$type<MemberId>(),
     fromStatus: text("from_status").notNull(),
     toStatus: text("to_status").notNull(),
     reason: text("reason"),
-    changedBy: uuid("changed_by"),
+    changedBy: uuid("changed_by").$type<UserId>(),
     changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

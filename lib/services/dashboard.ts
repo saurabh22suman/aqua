@@ -6,8 +6,7 @@ import { batches, programs } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import { todayInZone } from "@/lib/time/tz";
 import { listOverdueFollowUps } from "@/lib/services/enquiries";
-
-type ActionCtx = { tenantId: string };
+import type { ActionCtx } from "@/lib/auth/context";
 
 export type NeedsAttentionItem = {
   title: string;

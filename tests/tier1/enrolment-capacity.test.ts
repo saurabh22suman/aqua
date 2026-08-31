@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { batches, enrolments, locations, programs } from "@/db/schema";
 import { createMember, enrolMember } from "@/lib/services/register";
+import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -14,13 +15,13 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const CAPACITY = 2;
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let batchId = "";
 let mainLocationId = "";
 const memberIds: string[] = [];
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );
@@ -58,7 +59,7 @@ beforeAll(async () => {
 
   for (let i = 0; i < 3; i++) {
     const created = await createMember(
-      { tenantId, userId: undefined as unknown as string },
+      { tenantId, userId: undefined as unknown as UserId },
       {
         fullName: `Capacity Member ${i}`,
         dateOfBirth: "1990-01-01",
@@ -162,7 +163,7 @@ describe("enrolMember under real concurrency", () => {
     const raceMemberIds: string[] = [];
     for (let i = 0; i < contenders; i++) {
       const created = await createMember(
-        { tenantId, userId: undefined as unknown as string },
+        { tenantId, userId: undefined as unknown as UserId },
         {
           fullName: `Race Member ${i}`,
           dateOfBirth: "1990-01-01",

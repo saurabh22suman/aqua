@@ -13,6 +13,7 @@ import {
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { staff } from "./staff";
+import type { TenantId, StaffId } from "@/lib/ids";
 
 export const programs = pgTable(
   "programs",
@@ -20,7 +21,8 @@ export const programs = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     name: text("name").notNull(),
     description: text("description"),
     ...softDelete,
@@ -35,7 +37,8 @@ export const batches = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     programId: uuid("program_id").notNull(),
     name: text("name").notNull(),
     capacity: integer("capacity").notNull(),
@@ -44,7 +47,11 @@ export const batches = pgTable(
     endTime: time("end_time").notNull(),
     // C-04: real FK to staff, migrated from a bare user id in
     // migration 0018. See that migration's comment for the backfill.
-    coachId: uuid("coach_id"),
+    // Branded StaffId (M3) -- this is the exact column whose meaning
+    // changed from "a user id" to "a staff id" and left a stale
+    // comparison against ctx.userId compiling cleanly. See
+    // lib/ids.ts and docs/agent-lanes.md's history.
+    coachId: uuid("coach_id").$type<StaffId>(),
     ...softDelete,
     ...auditColumns,
   },

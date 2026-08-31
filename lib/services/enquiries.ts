@@ -1,14 +1,13 @@
 import { and, asc, desc, eq, isNull, lt, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { enquiries, enquiryFollowUps, type EnquiryStage, type EnquirySource } from "@/db/schema/enquiries";
-import type { Ctx } from "@/lib/auth/context";
+import type { ActionCtx } from "@/lib/auth/context";
 import { ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
 import { createMember, enrolMember, type GuardianInput } from "@/lib/services/register";
 import { transitionMemberStatus } from "@/lib/services/member-status";
 import { nextMemberCode } from "@/lib/services/people";
 import type { ConsentGrantInput } from "@/lib/services/consent";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import type { MemberId } from "@/lib/ids";
 
 export type EnquiryRow = {
   id: string;
@@ -16,7 +15,7 @@ export type EnquiryRow = {
   phone: string | null;
   source: EnquirySource;
   stage: EnquiryStage;
-  memberId: string | null;
+  memberId: MemberId | null;
   createdAt: Date;
 };
 
@@ -259,7 +258,7 @@ export type NewMemberDetails = {
 export async function bookTrial(
   ctx: ActionCtx,
   input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
-): Promise<{ ok: true; memberId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
   const enquiry = await withTenant(ctx.tenantId, (tx) =>
     tx
       .select({ id: enquiries.id, stage: enquiries.stage, memberId: enquiries.memberId, fullName: enquiries.fullName, phone: enquiries.phone })
@@ -328,7 +327,7 @@ export async function bookTrial(
 export async function convertEnquiry(
   ctx: ActionCtx,
   input: { enquiryId: string; reason: string; newMember?: NewMemberDetails },
-): Promise<{ ok: true; memberId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
   const enquiry = await withTenant(ctx.tenantId, (tx) =>
     tx
       .select({ id: enquiries.id, stage: enquiries.stage, memberId: enquiries.memberId, fullName: enquiries.fullName, phone: enquiries.phone })

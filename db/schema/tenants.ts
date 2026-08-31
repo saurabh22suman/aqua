@@ -13,11 +13,15 @@ import {
 } from "drizzle-orm/pg-core";
 import { auditColumns } from "./_shared";
 import { presets } from "./platform";
+import type { TenantId } from "@/lib/ids";
 
 export const tenants = pgTable(
   "tenants",
   {
-    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7())
+      .$type<TenantId>(),
     slug: text("slug").notNull().unique(),
     name: text("name").notNull(),
     status: text("status").notNull().default("trial"),

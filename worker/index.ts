@@ -1,5 +1,6 @@
 import { createAppScopedBoss } from "@/db/queue";
 import { runSessionsGenerateJob } from "@/lib/jobs/sessions-generate-job";
+import { asTenantId } from "@/lib/ids";
 
 // Connects as app_user (via db/queue.ts's drizzle-backed adapter) —
 // never the privileged migration role. No tenant enumeration happens
@@ -20,7 +21,11 @@ async function main(): Promise<void> {
   await boss.start();
 
   await boss.work<{ tenantId: string }>(QUEUE, async ([job]) => {
-    await runSessionsGenerateJob(job.data.tenantId);
+    // Job payload deserialized from pg-boss's queue table (untrusted
+    // input boundary, same class of cast as a Zod-validated request
+    // body) -- db/deploy.ts's syncSessionGenerateSchedules is the only
+    // enqueuer, and it always writes a real tenants.id.
+    await runSessionsGenerateJob(asTenantId(job.data.tenantId));
   });
 
   console.log(`[worker] started — listening on ${QUEUE}`);
