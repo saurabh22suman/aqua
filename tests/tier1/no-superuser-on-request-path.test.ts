@@ -56,6 +56,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/coach-session-scope.test.ts",
   "tests/tier1/enrolment-capacity.test.ts",
   "tests/tier1/programs-batches-crud.test.ts",
+  "tests/tier1/programs-batches-completion.test.ts",
   "tests/tier1/owner-dashboard.test.ts",
   "tests/tier1/consent-schema.test.ts",
   "tests/tier1/staff-records.test.ts",
