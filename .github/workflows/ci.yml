@@ -37,7 +37,11 @@ jobs:
       BETTER_AUTH_SECRET: ci-build-only-not-a-real-secret
 
     steps:
+      # fetch-depth: 0 -- M2's lane-overlap check needs origin/<base>
+      # to diff against; the default shallow clone doesn't carry it.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -51,6 +55,15 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm lint
+
+      # M1: fails fast (~1s) on a migration numbering collision or a
+      # non-conforming filename, before the ~2min db:reset step below
+      # would discover the same problem at runtime. See
+      # scripts/check-migration-naming.ts and docs/agent-lanes.md.
+      - run: pnpm check:migrations
+
+      # M2: non-blocking by design -- see docs/agent-lanes.md.
+      - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
       - name: db:reset (bootstrap roles + migrate against the CI Postgres service)
         run: pnpm db:reset
