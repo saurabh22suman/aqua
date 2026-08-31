@@ -7,6 +7,7 @@ import {
   index,
   pgTable,
   text,
+  timestamp,
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -56,7 +57,10 @@ export const members = pgTable(
     index("members_tenant_location_live_idx")
       .on(t.tenantId, t.locationId)
       .where(sql`deleted_at is null`),
-    check("members_status_check", sql`${t.status} in ('active', 'inactive', 'left')`),
+    check(
+      "members_status_check",
+      sql`${t.status} in ('trial', 'active', 'paused', 'lapsed', 'left')`,
+    ),
     foreignKey({
       name: "members_person_tenant_fkey",
       columns: [t.personId, t.tenantId],
@@ -70,5 +74,38 @@ export const members = pgTable(
   ],
 );
 
+// C-08: one row per status change, insert-only (transitionMemberStatus
+// in lib/services/member-status.ts is the only writer). See
+// db/migrations/0016 for why this isn't the generic F-14 audit_log.
+export const memberStatusTransitions = pgTable(
+  "member_status_transitions",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    memberId: uuid("member_id").notNull(),
+    fromStatus: text("from_status").notNull(),
+    toStatus: text("to_status").notNull(),
+    reason: text("reason"),
+    changedBy: uuid("changed_by"),
+    changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("member_status_transitions_tenant_member_idx").on(
+      t.tenantId,
+      t.memberId,
+      t.changedAt,
+    ),
+    foreignKey({
+      name: "member_status_transitions_member_tenant_fkey",
+      columns: [t.memberId, t.tenantId],
+      foreignColumns: [members.id, members.tenantId],
+    }),
+  ],
+);
+
 export type Person = typeof persons.$inferSelect;
 export type Member = typeof members.$inferSelect;
+export type MemberStatusTransition = typeof memberStatusTransitions.$inferSelect;
+export type MemberStatus = "trial" | "active" | "paused" | "lapsed" | "left";
