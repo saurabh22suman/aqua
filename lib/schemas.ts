@@ -68,6 +68,62 @@ export const listMembersFilterSchema = z.object({
 
 export const searchPersonsSchema = z.string().min(1).max(200);
 
+export const enquirySourceSchema = z.enum(["walk-in", "phone", "referral", "online", "other"]);
+export const enquiryStageSchema = z.enum([
+  "new",
+  "contacted",
+  "trial_scheduled",
+  "trial_completed",
+  "converted",
+  "lost",
+]);
+
+export const createEnquirySchema = z.object({
+  fullName: z.string().min(1).max(200),
+  phone: z.string().min(8).max(20).optional(),
+  source: enquirySourceSchema,
+  notes: z.string().max(2000).optional(),
+});
+
+export const listEnquiriesFilterSchema = z.object({
+  stage: enquiryStageSchema.optional(),
+});
+
+export const transitionEnquiryStageSchema = z.object({
+  enquiryId: z.string().uuid(),
+  toStage: enquiryStageSchema,
+});
+
+export const addFollowUpSchema = z.object({
+  enquiryId: z.string().uuid(),
+  dueAt: z.string().datetime({ offset: true }),
+  note: z.string().max(1000).optional(),
+});
+
+export const completeFollowUpSchema = z.string().uuid();
+
+const newMemberDetailsSchema = z.object({
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  gender: z.enum(["male", "female", "other"]).optional(),
+  locationId: z.string().uuid(),
+  medicalNotes: z.string().max(2000).optional(),
+  guardian: guardianInputSchema.optional(),
+  consents: z.array(consentGrantSchema).min(1),
+});
+
+export const bookTrialSchema = z.object({
+  enquiryId: z.string().uuid(),
+  batchId: z.string().uuid(),
+  phone: z.string().min(8).max(20).optional(),
+  details: newMemberDetailsSchema,
+});
+
+export const convertEnquirySchema = z.object({
+  enquiryId: z.string().uuid(),
+  reason: z.string().min(1).max(500),
+  newMember: newMemberDetailsSchema.optional(),
+});
+
 export const enrolSchema = z.object({
   memberId: z.string().uuid(),
   batchId: z.string().uuid(),

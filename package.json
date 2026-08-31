@@ -16,6 +16,8 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset.ts",
     "db:deploy": "tsx db/deploy.ts",
+    "db:new-migration": "tsx scripts/new-migration.ts",
+    "check:migrations": "tsx scripts/check-migration-naming.ts",
     "worker": "tsx worker/index.ts",
     "seed": "tsx scripts/seed.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",

@@ -60,6 +60,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/consent-schema.test.ts",
   "tests/tier1/member-status-lifecycle.test.ts",
   "tests/tier1/people-screens.test.ts",
+  "tests/tier1/enquiries.test.ts",
   "tests/tier1/attendance-history.test.ts",
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
