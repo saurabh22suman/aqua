@@ -1,12 +1,40 @@
 import { z } from "zod";
 
+// C-05: a consent grant, as captured at member registration. Shape
+// only -- the business rule "processing is required" lives in
+// createMember (lib/services/register.ts), not here.
+export const consentGrantSchema = z.object({
+  purpose: z.enum(["processing", "photography", "communications"]),
+  policyVersion: z.string().min(1),
+  evidence: z.object({
+    channel: z.string().min(1),
+    ipAddress: z.string().optional(),
+    userAgent: z.string().optional(),
+  }),
+});
+
+export const guardianInputSchema = z.union([
+  z.object({ existingPersonId: z.string().uuid(), relationship: z.string().min(1).max(50) }),
+  z.object({
+    fullName: z.string().min(1).max(200),
+    phone: z.string().optional(),
+    relationship: z.string().min(1).max(50),
+  }),
+]);
+
 export const createMemberSchema = z.object({
   fullName: z.string().min(1).max(200),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // Mandatory, not optional -- C-05. Minor status is derived from this
+  // server-side (isMinor, lib/time/tz.ts); "unknown" cannot be treated
+  // as "adult" by omitting it.
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   gender: z.enum(["male", "female", "other"]).optional(),
   locationId: z.string().uuid(),
   memberCode: z.string().min(1).max(50),
   medicalNotes: z.string().max(2000).optional(),
+  guardian: guardianInputSchema.optional(),
+  consents: z.array(consentGrantSchema).min(1),
+  witnessedByUserId: z.string().uuid().optional(),
 });
 
 export const enrolSchema = z.object({

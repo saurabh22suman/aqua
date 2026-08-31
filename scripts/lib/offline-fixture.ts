@@ -74,10 +74,15 @@ export async function setupOfflineFixture(
       { tenantId, userId: undefined as unknown as string },
       {
         fullName: `Offline Test Member ${run} ${String(i).padStart(2, "0")}`,
+        dateOfBirth: "1990-01-01", // adult -- this fixture isn't testing C-05, sidesteps the guardian/consent flow entirely
         locationId,
         memberCode: `OFF-${run}-${String(i).padStart(2, "0")}`,
+        consents: [
+          { purpose: "processing", policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
+        ],
       },
     );
+    if (!created.ok) throw new Error(`offline fixture: createMember failed — ${created.error}`);
     memberIds.push(created.memberId);
     personIds.push(created.personId);
     await enrolMember({ tenantId }, { memberId: created.memberId, batchId });
@@ -117,6 +122,8 @@ export async function cleanupOfflineFixture(admin: Pool, f: OfflineFixture): Pro
   await admin.query("delete from sessions where batch_id = $1", [f.batchId]);
   await admin.query("delete from enrolments where batch_id = $1", [f.batchId]);
   await admin.query("delete from members where id = any($1)", [f.memberIds]);
+  await admin.query("delete from consents where person_id = any($1)", [f.personIds]);
+  await admin.query("delete from guardianships where minor_id = any($1) or guardian_id = any($1)", [f.personIds]);
   await admin.query("delete from persons where id = any($1)", [f.personIds]);
   await admin.query("delete from batches where id = $1", [f.batchId]);
 }

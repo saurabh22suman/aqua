@@ -51,6 +51,8 @@ afterAll(async () => {
     await admin.query("delete from batches where tenant_id = $1", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
+    await admin.query("delete from consents where tenant_id = $1", [tenantId]);
+    await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
@@ -61,8 +63,17 @@ afterAll(async () => {
 async function makeMember(label: string): Promise<string> {
   const created = await createMember(
     { tenantId, userId: undefined as unknown as string },
-    { fullName: `Dashboard Member ${label}`, locationId, memberCode: `DASH-${RUN}-${label}` },
+    {
+      fullName: `Dashboard Member ${label}`,
+      dateOfBirth: "1990-01-01",
+      locationId,
+      memberCode: `DASH-${RUN}-${label}`,
+      consents: [
+        { purpose: "processing", policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
+      ],
+    },
   );
+  if (!created.ok) throw new Error(`fixture setup: createMember failed — ${created.error}`);
   return created.memberId;
 }
 

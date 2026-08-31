@@ -157,6 +157,21 @@ export async function seedPlatformCatalogue(
        set plan_id = (select id from plans where key = 'standard')
        where plan_id is null`,
     );
+
+    // Platform-level (C-05): every consent row references a
+    // policy_versions row by version -- an immutable text snapshot, not
+    // just a label. Placeholder content until a real privacy notice is
+    // drafted; the point right now is that the FK target exists and the
+    // shape is real, not that this specific text is final.
+    await client.query(
+      `insert into policy_versions (version, content)
+       values ($1, $2)
+       on conflict (version) do nothing`,
+      [
+        "2026.1",
+        "Placeholder consent notice — replace with the real DPDP-compliant privacy notice before go-live.",
+      ],
+    );
   } finally {
     await client.end();
   }

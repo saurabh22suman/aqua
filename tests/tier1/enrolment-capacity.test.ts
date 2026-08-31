@@ -61,10 +61,15 @@ beforeAll(async () => {
       { tenantId, userId: undefined as unknown as string },
       {
         fullName: `Capacity Member ${i}`,
+        dateOfBirth: "1990-01-01",
         locationId: mainLocationId,
         memberCode: `CAP-${RUN}-${i}`,
+        consents: [
+          { purpose: "processing", policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
+        ],
       },
     );
+    if (!created.ok) throw new Error(`fixture setup: createMember failed — ${created.error}`);
     memberIds.push(created.memberId);
   }
 });
@@ -75,6 +80,8 @@ afterAll(async () => {
     await admin.query("delete from batches where tenant_id = $1", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
+    await admin.query("delete from consents where tenant_id = $1", [tenantId]);
+    await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
@@ -158,10 +165,15 @@ describe("enrolMember under real concurrency", () => {
         { tenantId, userId: undefined as unknown as string },
         {
           fullName: `Race Member ${i}`,
+          dateOfBirth: "1990-01-01",
           locationId: mainLocationId,
           memberCode: `RACE-${RUN}-${i}`,
+          consents: [
+            { purpose: "processing", policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
+          ],
         },
       );
+      if (!created.ok) throw new Error(`fixture setup: createMember failed — ${created.error}`);
       raceMemberIds.push(created.memberId);
     }
 

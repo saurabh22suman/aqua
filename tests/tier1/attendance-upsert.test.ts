@@ -68,22 +68,30 @@ beforeAll(async () => {
     batchId = b.id;
   });
 
+  const consents = [
+    { purpose: "processing" as const, policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
+  ];
   const a = await createMember(
     { tenantId, userId: undefined as unknown as string },
     {
       fullName: "Upsert Member A",
+      dateOfBirth: "1990-01-01",
       locationId: mainLocationId,
       memberCode: `UP-${RUN}-A`,
+      consents,
     },
   );
   const b = await createMember(
     { tenantId, userId: undefined as unknown as string },
     {
       fullName: "Upsert Member B",
+      dateOfBirth: "1990-01-01",
       locationId: mainLocationId,
       memberCode: `UP-${RUN}-B`,
+      consents,
     },
   );
+  if (!a.ok || !b.ok) throw new Error("fixture setup: createMember failed");
   memberA = a.memberId;
   memberB = b.memberId;
 
@@ -108,6 +116,8 @@ afterAll(async () => {
     await admin.query("delete from batches where tenant_id = $1", [tenantId]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
+    await admin.query("delete from consents where tenant_id = $1", [tenantId]);
+    await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
