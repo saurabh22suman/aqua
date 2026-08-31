@@ -166,7 +166,11 @@ export const createBatchSchema = z.object({
   daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  coachId: z.string().uuid().optional(),
 });
+
+export const deleteProgramSchema = z.string().uuid();
+export const deleteBatchSchema = z.string().uuid();
 
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type MarkRegisterInput = z.infer<typeof markRegisterSchema>;

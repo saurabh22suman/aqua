@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant } from "@/db/tenant";
 import { members, persons } from "@/db/schema";
@@ -168,10 +168,20 @@ export async function enrolMember(
     // enrolments into it: the second transaction's read blocks until the
     // first commits, then sees the now-updated count. Same shape as C-31
     // invoice numbering's documented `select ... for update`.
+    // isNull(deletedAt): a soft-deleted batch (C-17 completion) reads
+    // as "not found", the same as a nonexistent one -- not a distinct
+    // error, since a deleted batch isn't a valid enrolment target
+    // either way.
     const [batch] = await tx
       .select({ capacity: batches.capacity })
       .from(batches)
-      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId)))
+      .where(
+        and(
+          eq(batches.id, input.batchId),
+          eq(batches.tenantId, ctx.tenantId),
+          isNull(batches.deletedAt),
+        ),
+      )
       .for("update");
     if (!batch) return { ok: false, error: "Batch not found." };
 
