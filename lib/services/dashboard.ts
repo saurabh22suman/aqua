@@ -5,12 +5,14 @@ import { tenants } from "@/db/schema/tenants";
 import { batches, programs } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import { todayInZone } from "@/lib/time/tz";
+import { listOverdueFollowUps } from "@/lib/services/enquiries";
 
 type ActionCtx = { tenantId: string };
 
 export type NeedsAttentionItem = {
   title: string;
   detail: string;
+  href?: string;
 };
 
 export type TodaysLane = {
@@ -44,7 +46,15 @@ export type OwnerDashboardData = {
 // Every figure here comes from a real query against data that exists
 // today (sessions, attendance, batches, enrolments, members). Nothing
 // is invented to fill a slot the mockup happens to have.
+//
+// Still no money tiles (this update only adds overdue follow-ups,
+// C-13's own done-when: "overdue follow-ups surface on the owner
+// dashboard"). listOverdueFollowUps opens its own withTenant() and
+// withTenant() cannot nest (db/scope.ts) -- called here, before the
+// dashboard's own withTenant() below, not inside it.
 export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardData> {
+  const overdueFollowUps = await listOverdueFollowUps(ctx);
+
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
       .select({ timezone: tenants.timezone, name: tenants.name })
@@ -109,6 +119,18 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
         title: "Register not started",
         detail: `${s.batchName} — session began, nothing marked yet`,
       }));
+
+    // C-13 done-when: "overdue follow-ups surface on the owner
+    // dashboard." Every item still states why it's here -- how many
+    // days overdue, and the enquiry it belongs to -- not a bare count.
+    for (const f of overdueFollowUps) {
+      const daysOverdue = Math.max(1, Math.floor((now - f.dueAt.getTime()) / (24 * 60 * 60 * 1000)));
+      needsAttention.push({
+        title: "Follow-up overdue",
+        detail: `${f.enquiryName} — due ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} ago${f.note ? `: ${f.note}` : ""}`,
+        href: `/owner/enquiries/${f.enquiryId}`,
+      });
+    }
 
     const todaysLanes: TodaysLane[] = todaysSessions.map((s) => ({
       batchId: s.batchId,
