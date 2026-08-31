@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
-import { batches, locations, programs } from "@/db/schema";
+import { batches, locations, persons, programs, staff } from "@/db/schema";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { getRosterForSession, listTodaySessions, sessionVisibleToCaller } from "@/lib/services/register";
 import { todayInZone } from "@/lib/time/tz";
@@ -16,8 +16,12 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let tenantId = "";
-const coachA = uuidv7();
-const coachB = uuidv7();
+// ctx.userId in these tests -- the real users.id, since coach scoping
+// (lib/services/staff.ts's coachStaffIdSubquery) resolves a caller's
+// own staff row via staff.user_id = ctx.userId. batches/sessions.
+// coach_id itself stores the resulting staff.id, not this user id.
+let coachA = "";
+let coachB = "";
 let batchAName = "";
 let batchBName = "";
 let sessionForBatchA = "";
@@ -33,8 +37,21 @@ beforeAll(async () => {
     [tenantId, `coach-scope-${RUN}`, plan.rows[0]?.id ?? null],
   );
 
+  const userA = await admin.query<{ id: string }>(
+    "insert into users (id, phone) values ($1, $2) returning id",
+    [uuidv7(), `+91coachA${RUN}`.slice(0, 15)],
+  );
+  const userB = await admin.query<{ id: string }>(
+    "insert into users (id, phone) values ($1, $2) returning id",
+    [uuidv7(), `+91coachB${RUN}`.slice(0, 15)],
+  );
+  coachA = userA.rows[0].id;
+  coachB = userB.rows[0].id;
+
   let locationId = "";
   let programId = "";
+  let coachAStaffId = "";
+  let coachBStaffId = "";
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -46,6 +63,25 @@ beforeAll(async () => {
       .values({ tenantId, name: "Coach Scope Program" })
       .returning({ id: programs.id });
     programId = p.id;
+
+    const [personA] = await tx
+      .insert(persons)
+      .values({ tenantId, fullName: "Coach A" })
+      .returning({ id: persons.id });
+    const [personB] = await tx
+      .insert(persons)
+      .values({ tenantId, fullName: "Coach B" })
+      .returning({ id: persons.id });
+    const [staffA] = await tx
+      .insert(staff)
+      .values({ tenantId, personId: personA.id, userId: coachA, staffType: "coach" })
+      .returning({ id: staff.id });
+    const [staffB] = await tx
+      .insert(staff)
+      .values({ tenantId, personId: personB.id, userId: coachB, staffType: "coach" })
+      .returning({ id: staff.id });
+    coachAStaffId = staffA.id;
+    coachBStaffId = staffB.id;
   });
   void locationId;
 
@@ -61,7 +97,7 @@ beforeAll(async () => {
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
         startTime: "07:00",
         endTime: "08:00",
-        coachId: coachA,
+        coachId: coachAStaffId,
       },
       {
         tenantId,
@@ -71,7 +107,7 @@ beforeAll(async () => {
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
         startTime: "09:00",
         endTime: "10:00",
-        coachId: coachB,
+        coachId: coachBStaffId,
       },
     ]);
   });
@@ -93,10 +129,14 @@ afterAll(async () => {
   if (tenantId) {
     await admin.query("delete from sessions where tenant_id = $1", [tenantId]);
     await admin.query("delete from batches where tenant_id = $1", [tenantId]);
+    await admin.query("delete from staff where tenant_id = $1", [tenantId]);
+    await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
+  if (coachA) await admin.query("delete from users where id = $1", [coachA]);
+  if (coachB) await admin.query("delete from users where id = $1", [coachB]);
   await admin.end();
 });
 
