@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Pencil, ShieldCheck, Users } from "lucide-react";
+import { CalendarCheck, Pencil, ShieldCheck, Users } from "lucide-react";
 import { getMemberDetailAction } from "@/lib/actions/people";
+import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 
@@ -11,7 +12,10 @@ export default async function MemberDetailPage({
   params: Promise<{ memberId: string }>;
 }) {
   const { memberId } = await params;
-  const member = await getMemberDetailAction(memberId);
+  const [member, attendanceHistory] = await Promise.all([
+    getMemberDetailAction(memberId),
+    getMemberAttendanceHistoryAction(memberId),
+  ]);
   if (!member) notFound();
 
   return (
@@ -125,6 +129,45 @@ export default async function MemberDetailPage({
           </ul>
         </section>
       ) : null}
+
+      <section className="mt-4">
+        <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
+          <CalendarCheck size={15} className="text-ink-3" />
+          Attendance this month
+        </h2>
+        <div className="mt-2 rounded-card border border-line bg-paper p-3.5">
+          <p className="font-display text-[24px] font-semibold">
+            {attendanceHistory.pct === null ? "—" : `${attendanceHistory.pct}%`}
+          </p>
+          <p className="text-[12px] text-ink-3">
+            {attendanceHistory.totalCount === 0
+              ? "No sessions marked yet this month."
+              : `${attendanceHistory.presentCount} of ${attendanceHistory.totalCount} sessions present`}
+          </p>
+        </div>
+        {attendanceHistory.rows.length > 0 ? (
+          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
+            {attendanceHistory.rows.map((r) => (
+              <li key={r.sessionId} className="flex items-center justify-between px-3.5 py-2.5 text-[13px]">
+                <span>
+                  {r.sessionDate} · {r.batchName}
+                </span>
+                <span
+                  className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${
+                    r.status === "present"
+                      ? "bg-good-soft text-good"
+                      : r.status === "late"
+                        ? "bg-warn-soft text-warn"
+                        : "bg-late-soft text-late"
+                  }`}
+                >
+                  {r.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
     </main>
   );
 }
