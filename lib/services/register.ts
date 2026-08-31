@@ -27,6 +27,7 @@ export async function createMember(
   ctx: ActionCtx,
   input: {
     fullName: string;
+    phone?: string;
     dateOfBirth: string;
     gender?: string;
     locationId: string;
@@ -61,6 +62,7 @@ export async function createMember(
       .values({
         tenantId: ctx.tenantId,
         fullName: input.fullName,
+        phone: input.phone,
         dateOfBirth: input.dateOfBirth,
         gender: input.gender,
         medicalNotes: input.medicalNotes,
@@ -90,6 +92,7 @@ export async function createMember(
           .values({
             tenantId: ctx.tenantId,
             fullName: input.guardian.fullName,
+            phone: input.guardian.phone,
             createdBy: ctx.userId,
             updatedBy: ctx.userId,
           })
