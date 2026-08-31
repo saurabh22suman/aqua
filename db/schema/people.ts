@@ -23,6 +23,7 @@ export const persons = pgTable(
       .notNull()
       .references(() => tenants.id),
     fullName: text("full_name").notNull(),
+    phone: text("phone"),
     dateOfBirth: date("date_of_birth"),
     gender: text("gender"),
     medicalNotes: text("medical_notes"),
@@ -32,6 +33,9 @@ export const persons = pgTable(
   (t) => [
     index("persons_tenant_live_idx")
       .on(t.tenantId)
+      .where(sql`deleted_at is null`),
+    index("persons_tenant_phone_live_idx")
+      .on(t.tenantId, t.phone)
       .where(sql`deleted_at is null`),
     unique("persons_id_tenant_key").on(t.id, t.tenantId),
   ],

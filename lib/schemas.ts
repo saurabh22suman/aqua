@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+// Matches the seeded row in policy_versions (db/seed-platform.ts) --
+// the version every consent grant captured through the UI cites.
+export const CURRENT_POLICY_VERSION = "2026.1";
+
 // C-05: a consent grant, as captured at member registration. Shape
 // only -- the business rule "processing is required" lives in
 // createMember (lib/services/register.ts), not here.
@@ -24,6 +28,7 @@ export const guardianInputSchema = z.union([
 
 export const createMemberSchema = z.object({
   fullName: z.string().min(1).max(200),
+  phone: z.string().min(8).max(20).optional(),
   // Mandatory, not optional -- C-05. Minor status is derived from this
   // server-side (isMinor, lib/time/tz.ts); "unknown" cannot be treated
   // as "adult" by omitting it.
@@ -36,6 +41,32 @@ export const createMemberSchema = z.object({
   consents: z.array(consentGrantSchema).min(1),
   witnessedByUserId: z.string().uuid().optional(),
 });
+
+export const updateMemberSchema = z.object({
+  memberId: z.string().uuid(),
+  fullName: z.string().min(1).max(200),
+  phone: z.string().min(8).max(20).optional(),
+  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  gender: z.enum(["male", "female", "other"]).optional(),
+  locationId: z.string().uuid(),
+  medicalNotes: z.string().max(2000).optional(),
+});
+
+export const memberStatusValueSchema = z.enum(["trial", "active", "paused", "lapsed", "left"]);
+
+export const transitionMemberStatusSchema = z.object({
+  memberId: z.string().uuid(),
+  toStatus: memberStatusValueSchema,
+  reason: z.string().min(1).max(500),
+});
+
+export const listMembersFilterSchema = z.object({
+  search: z.string().max(200).optional(),
+  status: memberStatusValueSchema.optional(),
+  locationId: z.string().uuid().optional(),
+});
+
+export const searchPersonsSchema = z.string().min(1).max(200);
 
 export const enrolSchema = z.object({
   memberId: z.string().uuid(),

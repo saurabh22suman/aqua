@@ -2,19 +2,9 @@ import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { members, memberStatusTransitions, type MemberStatus } from "@/db/schema/people";
 import type { Ctx } from "@/lib/auth/context";
+import { MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
 
 type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
-
-// C-08's allowed graph. Nothing is a dead end -- "left" rejoins to
-// "active" rather than being terminal, per the done-when: "each
-// transition is audited and reversible."
-const ALLOWED_TRANSITIONS: Record<MemberStatus, MemberStatus[]> = {
-  trial: ["active", "lapsed", "left"],
-  active: ["paused", "lapsed", "left"],
-  paused: ["active", "left"],
-  lapsed: ["active", "left"],
-  left: ["active"],
-};
 
 export type TransitionResult = { ok: true } | { ok: false; error: string };
 
@@ -41,7 +31,7 @@ export async function transitionMemberStatus(
     if (fromStatus === input.toStatus) {
       return { ok: false, error: `Member is already ${input.toStatus}.` };
     }
-    const allowed = ALLOWED_TRANSITIONS[fromStatus] ?? [];
+    const allowed = MEMBER_STATUS_TRANSITIONS[fromStatus] ?? [];
     if (!allowed.includes(input.toStatus)) {
       return {
         ok: false,
