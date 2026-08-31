@@ -6,6 +6,7 @@ import { withTenant } from "@/db/tenant";
 import { batches, locations, programs, sessions } from "@/db/schema";
 import { createMember, enrolMember, markAttendance } from "@/lib/services/register";
 import { getOwnerDashboard } from "@/lib/services/dashboard";
+import { addFollowUp, createEnquiry } from "@/lib/services/enquiries";
 import { todayInZone } from "@/lib/time/tz";
 
 // tenants has FORCE row level security, so fixture rows must be created
@@ -45,6 +46,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (tenantId) {
+    await admin.query("delete from enquiry_follow_ups where tenant_id = $1", [tenantId]);
+    await admin.query("delete from enquiries where tenant_id = $1", [tenantId]);
     await admin.query("delete from attendance where tenant_id = $1", [tenantId]);
     await admin.query("delete from sessions where tenant_id = $1", [tenantId]);
     await admin.query("delete from enrolments where tenant_id = $1", [tenantId]);
@@ -234,6 +237,29 @@ describe("getOwnerDashboard", () => {
     expect(lane).toBeDefined();
     expect(lane?.capacity).toBe(4);
     expect(lane?.enrolled).toBeGreaterThanOrEqual(1);
+  });
+
+  it("surfaces an overdue follow-up in needsAttention, stating why and linking to the enquiry", async () => {
+    const enquiry = await createEnquiry({ tenantId }, { fullName: `Overdue Enquiry ${RUN}`, source: "walk-in" });
+    const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    await addFollowUp({ tenantId }, { enquiryId: enquiry.id, dueAt: past, note: "call back" });
+
+    const data = await getOwnerDashboard({ tenantId });
+    const item = data.needsAttention.find((i) => i.detail.includes(`Overdue Enquiry ${RUN}`));
+    expect(item).toBeDefined();
+    expect(item!.title).toBe("Follow-up overdue");
+    expect(item!.detail).toMatch(/due 3 days ago: call back/);
+    expect(item!.href).toBe(`/owner/enquiries/${enquiry.id}`);
+  });
+
+  it("does not surface a completed or future follow-up", async () => {
+    const enquiry = await createEnquiry({ tenantId }, { fullName: `Not Overdue Enquiry ${RUN}`, source: "walk-in" });
+    const future = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await addFollowUp({ tenantId }, { enquiryId: enquiry.id, dueAt: future });
+
+    const data = await getOwnerDashboard({ tenantId });
+    const item = data.needsAttention.find((i) => i.detail.includes(`Not Overdue Enquiry ${RUN}`));
+    expect(item).toBeUndefined();
   });
 
   it("returns an honest empty needsAttention array, not fabricated items, when nothing is wrong", async () => {

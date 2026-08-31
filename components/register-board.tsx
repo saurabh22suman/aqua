@@ -106,7 +106,14 @@ export function RegisterBoard({
           >
             <div className="flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] font-medium truncate">{r.name}</p>
+                <p className="text-[14px] font-medium truncate flex items-center gap-1.5">
+                  {r.name}
+                  {r.isTrial ? (
+                    <span className="rounded-pill bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn flex-none">
+                      Trial
+                    </span>
+                  ) : null}
+                </p>
                 <p className="text-[12px] text-ink-3">
                   {r.pct === null ? "—" : `${r.pct}% this month`}
                 </p>
