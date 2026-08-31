@@ -1,10 +1,10 @@
 import { Pool } from "pg";
 import { env } from "@/lib/env";
 import { v7 as uuidv7 } from "uuid";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { pool } from "../db/client";
 import { withTenant } from "@/db/tenant";
-import { batches, locations, members, programs, roles, tenantMemberships } from "@/db/schema";
+import { batches, locations, members, persons, programs, roles, staff, tenantMemberships } from "@/db/schema";
 import { sessions as sessionsTable } from "@/db/schema/scheduling";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
@@ -44,7 +44,7 @@ async function main() {
   console.log("role templates seeded → owner, admin, receptionist, coach, accountant, worker");
 
   // Moved ahead of batch creation (was after session generation): a
-  // batch needs the coach's user id to assign coachId at insert time,
+  // batch needs the coach's staff id to assign coachId at insert time,
   // and generateSessions copies it onto each session it creates —
   // creating the login user after sessions already exist would leave
   // every seeded session's coach_id null regardless of what the batch
@@ -54,7 +54,32 @@ async function main() {
   const coachUser = await adminPool.query<{ id: string }>(
     "select id from users where phone = '+919000000002'",
   );
-  const coachId = coachUser.rows[0]?.id;
+  const coachUserId = coachUser.rows[0]?.id;
+
+  // C-04: batches/sessions.coach_id is a real FK to staff now, not a
+  // bare user id -- the demo coach needs a person and a staff row
+  // before any batch can reference them.
+  let coachStaffId: string | undefined;
+  if (coachUserId) {
+    coachStaffId = await withTenant(tenantId, async (tx) => {
+      const existingStaff = await tx
+        .select({ id: staff.id })
+        .from(staff)
+        .where(and(eq(staff.tenantId, tenantId), eq(staff.userId, coachUserId)))
+        .limit(1);
+      if (existingStaff.length > 0) return existingStaff[0].id;
+
+      const [person] = await tx
+        .insert(persons)
+        .values({ tenantId, fullName: "Demo Coach" })
+        .returning({ id: persons.id });
+      const [staffRow] = await tx
+        .insert(staff)
+        .values({ tenantId, personId: person.id, userId: coachUserId, staffType: "coach" })
+        .returning({ id: staff.id });
+      return staffRow.id;
+    });
+  }
 
   let mainLocationId = "";
   await withTenant(tenantId, async (tx) => {
@@ -98,6 +123,17 @@ async function main() {
       const existing = await tx.select({ id: batches.id }).from(batches).where(eq(batches.name, spec.name));
       if (existing.length > 0) {
         batchIds.push(existing[0].id);
+        // A batch created by an older run of this script predates C-04's
+        // staff table and has coach_id null (onConflictDoNothing-style
+        // early return skips existing rows, it doesn't update them) --
+        // backfill it here so re-running the seed script against an
+        // already-seeded dev database still ends up coach-assigned.
+        if (coachStaffId) {
+          await tx
+            .update(batches)
+            .set({ coachId: coachStaffId })
+            .where(and(eq(batches.id, existing[0].id), isNull(batches.coachId)));
+        }
         continue;
       }
       const [b] = await tx
@@ -110,7 +146,7 @@ async function main() {
           startTime: spec.startTime,
           endTime: spec.endTime,
           name: spec.name,
-          coachId,
+          coachId: coachStaffId,
         })
         .returning({ id: batches.id });
       batchIds.push(b.id);

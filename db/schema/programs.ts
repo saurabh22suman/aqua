@@ -12,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
+import { staff } from "./staff";
 
 export const programs = pgTable(
   "programs",
@@ -41,8 +42,8 @@ export const batches = pgTable(
     daysOfWeek: integer("days_of_week").array().notNull().default([]),
     startTime: time("start_time").notNull(),
     endTime: time("end_time").notNull(),
-    // Bare user id, no FK -- staff (C-04) doesn't exist yet. See
-    // migration 0014's comment.
+    // C-04: real FK to staff, migrated from a bare user id in
+    // migration 0018. See that migration's comment for the backfill.
     coachId: uuid("coach_id"),
     ...softDelete,
     ...auditColumns,
@@ -54,6 +55,11 @@ export const batches = pgTable(
       name: "batches_program_tenant_fkey",
       columns: [t.programId, t.tenantId],
       foreignColumns: [programs.id, programs.tenantId],
+    }),
+    foreignKey({
+      name: "batches_coach_tenant_fkey",
+      columns: [t.coachId, t.tenantId],
+      foreignColumns: [staff.id, staff.tenantId],
     }),
   ],
 );

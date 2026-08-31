@@ -15,6 +15,7 @@ import { auditColumns } from "./_shared";
 import { tenants } from "./tenants";
 import { members } from "./people";
 import { batches } from "./programs";
+import { staff } from "./staff";
 
 export const enrolments = pgTable(
   "enrolments",
@@ -61,8 +62,8 @@ export const sessions = pgTable(
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     status: text("status").notNull().default("scheduled"),
     // Copied from the batch at generation time; independently
-    // updatable for substitution (C-20). Bare user id, no FK -- see
-    // migration 0014's comment.
+    // updatable for substitution (C-20). Real FK to staff as of
+    // migration 0018 -- see that migration's comment for the backfill.
     coachId: uuid("coach_id"),
     ...auditColumns,
   },
@@ -78,6 +79,11 @@ export const sessions = pgTable(
       name: "sessions_batch_tenant_fkey",
       columns: [t.batchId, t.tenantId],
       foreignColumns: [batches.id, batches.tenantId],
+    }),
+    foreignKey({
+      name: "sessions_coach_tenant_fkey",
+      columns: [t.coachId, t.tenantId],
+      foreignColumns: [staff.id, staff.tenantId],
     }),
   ],
 );

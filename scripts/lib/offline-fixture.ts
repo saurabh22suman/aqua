@@ -44,8 +44,15 @@ export async function setupOfflineFixture(
   // (lib/services/register.ts's listTodaySessions) consistent for this
   // persona too, even though these scripts navigate straight to a
   // known session id rather than through the "today" list.
+  // batches.coach_id is a real FK to staff (C-04, migration 0018) --
+  // the coach's staff row, not their bare user id. Requires `pnpm
+  // seed` to have run first, same as every other assumption this
+  // fixture makes about the demo-academy tenant already existing.
   const coach = await admin.query<{ id: string }>(
-    "select id from users where phone = '+919000000002'",
+    `select s.id from staff s
+     join users u on u.id = s.user_id
+     where u.phone = '+919000000002' and s.tenant_id = $1 and s.staff_type = 'coach'`,
+    [tenantId],
   );
   const coachId = coach.rows[0]?.id;
 

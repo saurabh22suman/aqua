@@ -9,6 +9,7 @@ import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { Ctx } from "@/lib/auth/context";
 import { isMinor } from "@/lib/time/tz";
 import { createGuardianship, recordConsent, type ConsentGrantInput } from "@/lib/services/consent";
+import { coachStaffIdSubquery } from "@/lib/services/staff";
 
 type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
 
@@ -263,7 +264,7 @@ export async function listTodaySessions(
   return withTenant(ctx.tenantId, async (tx) => {
     const conditions = [eq(sessions.tenantId, ctx.tenantId), eq(sessions.sessionDate, today)];
     if (ctx.roleKey === "coach") {
-      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+      conditions.push(eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)));
     }
 
     const rows = await tx
@@ -298,7 +299,7 @@ export async function sessionVisibleToCaller(
   return withTenant(ctx.tenantId, async (tx) => {
     const conditions = [eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId)];
     if (ctx.roleKey === "coach") {
-      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+      conditions.push(eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)));
     }
     const rows = await tx
       .select({ id: sessions.id })
@@ -343,7 +344,7 @@ export async function getRosterForSession(
   return withTenant(ctx.tenantId, async (tx) => {
     const conditions = [eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId)];
     if (ctx.roleKey === "coach") {
-      conditions.push(eq(sessions.coachId, ctx.userId ?? ""));
+      conditions.push(eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)));
     }
 
     const [session] = await tx
