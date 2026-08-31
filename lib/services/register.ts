@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant } from "@/db/tenant";
 import { members, persons } from "@/db/schema";
+import type { MemberStatus } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
@@ -36,6 +37,12 @@ export async function createMember(
     guardian?: GuardianInput;
     consents: ConsentGrantInput[];
     witnessedByUserId?: string;
+    // C-14: a trial booking creates the member with status 'trial'
+    // instead of the default 'active' -- an initial value, not a
+    // transition, so it bypasses transitionMemberStatus's allowed-
+    // graph entirely (there is no "from" status on a row that doesn't
+    // exist yet).
+    initialStatus?: MemberStatus;
   },
 ): Promise<{ ok: true; memberId: string; personId: string } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -131,6 +138,7 @@ export async function createMember(
         personId: subject.id,
         locationId: input.locationId,
         memberCode: input.memberCode,
+        status: input.initialStatus,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })
@@ -307,6 +315,11 @@ export type RosterRow = {
   code: string;
   status: "present" | "absent" | "late" | null;
   pct: number | null;
+  // C-14 done-when: "a trial appears on the coach's register flagged
+  // as a trial." A trial IS a member (status 'trial', bookTrial in
+  // lib/services/enquiries.ts) enrolled the same way any other member
+  // is -- this is the one place that distinction surfaces to the coach.
+  isTrial: boolean;
 };
 
 export type RosterData = {
@@ -355,6 +368,7 @@ export async function getRosterForSession(
         memberId: members.id,
         name: persons.fullName,
         code: members.memberCode,
+        memberStatus: members.status,
         status: attendance.status,
         presentCount: sql<number>`(
           select count(*)::int from ${attendance} a
@@ -397,6 +411,7 @@ export async function getRosterForSession(
         status: (r.status as RosterRow["status"]) ?? null,
         pct:
           r.totalCount > 0 ? Math.round((r.presentCount / r.totalCount) * 100) : null,
+        isTrial: r.memberStatus === "trial",
       });
     }
 
