@@ -1,29 +1,31 @@
-# Five-day batch — handover prompt
+# Five-phase batch — handover prompt
 
 Paste this into a fresh session to start the control-plane and onboarding batch.
-main contains branded IDs (PR #29), CI green. Full task list — 42 days-1-5 + 35
-reserve — is in `docs/five-day-work-guide.md`.
+main contains branded IDs (PR #29), CI green. Full task list — 5 phases, 42 tasks +
+35 reserve (R.1–R.35) — is in `docs/five-day-work-guide.md`. **Phases are work units,
+not calendar days; sessions are calendar units. Progress is read off the checklist.**
 
 ## Read, in this order
 
 1. **`CLAUDE.md`** at repo root (lands with PR #1; if missing, `docs/agent-setup.md` §3).
-2. **`docs/agent-onboarding.md`** — full. "Never do this" list and access invariants.
+2. **`docs/agent-onboarding.md`** — full. The "Never do this" list and the access invariants.
 3. **`DESIGN.md`** and **`docs/sports-club-ui-direction.html`** — both, before any screen.
 4. **`docs/agent-lanes.md`** — pick your lane before opening an editor.
-5. **`docs/five-day-work-guide.md`** — task list. Days 1–5 ordered; reserve R.1–R.35.
+5. **`docs/five-day-work-guide.md`** — task list. Phases 1–5; reserve R.1–R.35.
 6. **`docs/review-checklist.md`** — satisfy it before opening the PR if you can.
 7. **Per task:** `db/CLAUDE.md`, `docs/testing-strategy.md §"Tier 1"`, the architecture
    section the task names, the task's `Read first:` line if it has one.
 
 ## Working method
 
-- **Batch PRs by coherent unit.** Aim for 8–12 PRs across the five days. Each task
-  within a batch still gets full TDD and CI — batching is about review capacity,
-  not rigour.
-- **Rebase on main** before opening a batch.
+- **Open a PR when a unit is coherent and reviewable.** Some tasks are naturally their
+  own PR; others belong in a batch. Don't wait for a phase to finish. Each task within a
+  batch still gets full TDD and CI — batching is about review capacity, not rigour.
+- **Rebase on main** before opening.
 - **TDD.** Test red before implementation, every time.
 - **Test the test.** Break the implementation, confirm red, restore.
-- **Mark the checklist** in `five-day-work-guide.md` as you complete each task.
+- **Mark the checklist in the same commit as the work.** An unmarked checklist with
+  committed work is a state I cannot interpret — do not batch the marks to phase end.
 
 ## Mechanically enforced vs depends on you
 
@@ -57,7 +59,7 @@ Two genuine attempts, then stop. Write what you tried and what you need. Move to
 next independent task. Never guess a product decision.
 
 **RED-while-waiting:** hit a RED task, write the proposal, move to the next GREEN task.
-Do not idle, do not build it anyway. Note it in the daily report.
+Do not idle, do not build it anyway. Note it in the session report.
 
 ## Sibling hunt — seven for seven
 
@@ -74,20 +76,21 @@ Seven for seven so far — every recurrence has been real. Known shapes:
 A bug found and a sibling queued for "future work" is the recurrence, not the fix. Fix
 the sibling before closing the task.
 
-## Daily report
+## Session report
+
+One per session, written when you stop. Same shape regardless of how many tasks
+landed that session (including zero, if you stopped for a RED that needs the human):
 
 ```
-DAY N
+SESSION
 
 Completed:      task ids, PR numbers, CI status
 Blocked:        task id, what you tried, what you need
 Bugs found:     each one, and whether you checked for a sibling
 Deferred:       what and why
 Scope drift:    anything you noticed but did not act on
-Tomorrow:       what you intend to start
+Next session:   what you intend to start
 ```
-
-One per day. No code without a daily report.
 
 ## After the reserve
 

@@ -1,13 +1,15 @@
-# Five-day work guide — control plane and tenant onboarding
+# Five-phase work guide — control plane and tenant onboarding
 
 **For an agent working largely unsupervised. The human is reachable but not continuously present.**
 
 | | |
 |---|---|
 | Scope | Platform control plane, tenant provisioning, presets, staff, documents, reporting |
-| Tasks | 42 |
+| Phases | 5 (Phase 1 – Phase 5), totalling 42 substantive tasks. Reserve: R.1 – R.35. |
 | Deliberately excluded | The money chain (C-28a onward). See §0 |
 | Companions | `CLAUDE.md`, `DESIGN.md`, `architecture.md`, `implementation-plan.md`, `agent-lanes.md`, `agent-onboarding.md` |
+
+The "five-day" framing was a planning convenience that conflated phases with calendar time. It has been reframed: **phases are ordered work units; sessions are calendar units**. A phase may take several sessions; a session may complete zero, one, or several tasks. Progress is read off the checklist, not the calendar.
 
 ---
 
@@ -27,11 +29,12 @@ The reason is not sequencing — it is that `membership_plans` and `subscription
 
 ### Working method
 
-- **Batch PRs by coherent unit, not by task.** At working speed, one PR per task produces more than the reviewer can hold. Group: the whole platform control plane is one PR, the whole onboarding wizard another, the reporting surface another. Aim for **8–12 PRs across the five days**, not one per task. **Each task within a batch still gets full TDD and CI** — the batching is about review capacity, not rigour. Commit per task inside the batch so the diff is navigable; squash on merge if the reviewer prefers.
-- **Rebase on main** before opening a batch.
+- **Open a PR when a unit is coherent and reviewable.** Some tasks are naturally their own PR (a single coherent capability, a new SQL table plus its tests, a single screen that stands alone). Others belong in a batch (the three steps of an onboarding wizard; the read + write + list surfaces for the same entity). The batching guidance was about review capacity, not a rule to hold against a natural boundary — small reviewable PRs beat one giant one. Open when ready; don't wait for a phase to finish.
+- **Each task within a batch still gets full TDD and CI** — the batching is about review capacity, not rigour. Commit per task inside the batch so the diff is navigable; squash on merge if the reviewer prefers.
+- **Rebase on main** before opening.
 - **TDD.** Test red before implementation, every time.
 - **Test the test.** Break the implementation, confirm red, restore.
-- **Mark the checklist** in this file as you complete each task, and commit the update with the task's PR.
+- **Mark the checklist in the same commit as the work.** The checklist is how progress is read without opening reports; an unmarked checklist with committed work is a state I cannot interpret. Do not batch the marks to the end of a phase.
 - Tasks are ordered. Where a task lists dependencies, respect them. Otherwise work in order.
 
 ### Autonomy
@@ -61,11 +64,11 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 
 ---
 
-## Day 1 — Platform foundation
+## Phase 1 — Platform foundation
 
 The control plane has schema but no surface. Nothing here touches tenant data.
 
-- [ ] **1.1** Platform auth — separate session from tenant users, own table, mandatory 2FA. Platform staff must not be reachable through the tenant login. `GREEN`
+- [x] **1.1** Platform auth — separate session from tenant users, own table, mandatory 2FA. Platform staff must not be reachable through the tenant login. `GREEN`
 - [ ] **1.2** Platform layout and shell — `(platform)` route group, own navigation, visually distinct from tenant surfaces so nobody confuses the two. `GREEN`
 - [ ] **1.3** Tenant list — all tenants, status, plan, member count, created date. Search and filter. `GREEN`
 - [ ] **1.4** Tenant detail — settings, locations, feature state, usage, activity. Read-only in this task. `GREEN`
@@ -74,11 +77,11 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [ ] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `GREEN`
 - [ ] **1.8** Per-tenant feature toggles — override plan baseline, with expiry for trials and betas. Toggling changes both API behaviour and rendered navigation. `GREEN`
 
-**Day 1 gate:** a platform admin creates a tenant, enables features, and the tenant's owner sees exactly those features. No CLI involved.
+**Phase 1 gate:** a platform admin creates a tenant, enables features, and the tenant's owner sees exactly those features. No CLI involved.
 
 ---
 
-## Day 2 — Onboarding and presets
+## Phase 2 — Onboarding and presets
 
 - [ ] **2.1** Preset definitions — write the full **swimming** and **multi-sport** definitions per `architecture.md` §7.4. Others stay documented stubs. **No prices** — plan shapes only, amount null. `GREEN`
 - [ ] **2.2** `applyPreset` UI — pick a preset at tenant creation, preview what it will seed, apply in one transaction. `GREEN`
@@ -91,11 +94,11 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [ ] **2.9** Tenant branding UI — logo and square mark upload to R2, club name, short name. Fallback initials mark renders when nothing is uploaded. `GREEN`
 - [ ] **2.10** Terminology editor — the eight closed `TERM_KEYS`, singular and plural, per locale. Changing "member" to "swimmer" updates the app and leaves `member_code` untouched. `GREEN`
 
-**Day 2 gate:** a tenant is created, preset-seeded, branded and owner-invited entirely through the UI.
+**Phase 2 gate:** a tenant is created, preset-seeded, branded and owner-invited entirely through the UI.
 
 ---
 
-## Day 3 — Documents, staff, support
+## Phase 3 — Documents, staff, support
 
 - [ ] **3.1** **Documents — token scheme** `RED`. Propose before building. Option B (app-issued proxy token) was recommended and is approved in principle, but the revocation question is open: does a token need to be revocable before expiry, and if so does that need a `token_id` denylist? Propose, then wait.
 - [ ] **3.2** Documents schema and upload — `documents` table, R2 private bucket, tenant-prefixed keys, RLS. Requires the new dependency flagged in the C-07 proposal — **ask before adding it**. `GREEN` (after 3.1 approved)
@@ -107,11 +110,11 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [ ] **3.8** Support impersonation `RED`. Propose before building. Platform staff acting as a tenant user. Must require a stated reason, be fully audited, show a persistent banner to the impersonating user, and be impossible to initiate from a tenant session. `RED`
 - [ ] **3.9** Platform activity log — who did what across tenants, filterable, append-only. `GREEN`
 
-**Day 3 gate:** a child's photograph is uploadable and viewable, and no unauthenticated URL resolves to it. Prove it.
+**Phase 3 gate:** a child's photograph is uploadable and viewable, and no unauthenticated URL resolves to it. Prove it.
 
 ---
 
-## Day 4 — Reporting and views
+## Phase 4 — Reporting and views
 
 Everything here reads data that already exists. No money.
 
@@ -125,11 +128,11 @@ Everything here reads data that already exists. No money.
 - [ ] **4.8** Coach home — today's sessions, this week's schedule, their own roster. Scoped to their sessions only. `GREEN`
 - [ ] **4.9** Member detail completion — attendance, documents, guardians, consent, status history in one coherent view. `GREEN`
 
-**Day 4 gate:** an owner can answer "how is my club doing" without asking anyone.
+**Phase 4 gate:** an owner can answer "how is my club doing" without asking anyone.
 
 ---
 
-## Day 5 — Import, polish, hardening
+## Phase 5 — Import, polish, hardening
 
 - [ ] **5.1** Importer — upload and column mapping. CSV and XLSX, header detection, saved mapping presets. **Ask before adding the parsing dependency.** `GREEN`
 - [ ] **5.2** Importer — validation and dry run. A preview showing exactly what will be created, a downloadable per-row error file, nothing written. `GREEN`
@@ -140,9 +143,9 @@ Everything here reads data that already exists. No money.
 - [ ] **5.7** Bundle audit — per-route first-load JS. Report every route and flag anything approaching 150 KB. `GREEN`
 - [ ] **5.8** Permission matrix test — every role against every action, asserting allowed and denied. This is the test that catches a role gaining access nobody intended. `GREEN`
 - [ ] **5.9** Documentation sync — reconcile `implementation-plan.md` task states against reality, and check `architecture.md` still describes what the code does. It has been wrong twice before (`sessions.coach_id`, the platform module exception). `GREEN`
-- [ ] **5.10** Self-review — run `docs/review-checklist.md` against everything built in these five days, as if you had not written it. Verify by running, not reading. `GREEN`
+- [ ] **5.10** Self-review — run `docs/review-checklist.md` against everything built in these phases, as if you had not written it. Verify by running, not reading. `GREEN`
 
-**Day 5 gate:** a new club can be onboarded, imported, and operating without a developer.
+**Phase 5 gate:** a new club can be onboarded, imported, and operating without a developer.
 
 ---
 
@@ -234,7 +237,7 @@ f. **STOP and report.** Do not start speculative work. The report is the day's o
 
 ### Output shape
 
-The exhaustion report follows the same daily-report format (§"Daily report format"):
+The exhaustion report follows the same session-report format (§"Session report format"):
 
 ```
 RESERVE EXHAUSTED
@@ -249,19 +252,19 @@ Stopped:            yes
 
 ---
 
-## Daily report format
+## Session report format
 
-At the end of each day, one report:
+Phases are work units, not calendar days; sessions are calendar units. At the end of each session — wherever you stop, whatever you reached — one report in this format. A session may complete zero tasks (only useful if you stopped for a RED that needs the human before continuing) or several, but the report is per-session regardless.
 
 ```
-DAY N
+SESSION
 
 Completed:      task ids, PR numbers, CI status
 Blocked:        task id, what you tried, what you need
 Bugs found:     each one, and whether you checked for a sibling
 Deferred:       what and why
 Scope drift:    anything you noticed but did not act on
-Tomorrow:       what you intend to start
+Next session:   what you intend to start
 ```
 
 ---
