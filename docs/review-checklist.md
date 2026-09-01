@@ -214,6 +214,22 @@ you have decided something — write it down.
   every exported action taking input calls `.parse()`/`.safeParse()` as
   its first statement — mechanical, not review-dependent, and it runs on
   every `pnpm test`.
+- A CI run of the offline suite failed `VERIFY 1`/`VERIFY 2` at 15/16,
+  then passed on a rerun of the identical commit. The instinct to call
+  this noise and move on was wrong: **a flake you cannot explain is a
+  bug you have not found.** 51 local runs of the exact sequence did not
+  reproduce it — but CI's own log didn't need a local repro to diagnose
+  it. `rows=15` came from a direct Postgres query, independent of any
+  DOM read, ruling out a test-counting artifact; `drained=true` meant
+  the client's own sync loop believed it had sent everything it had,
+  ruling out a server-side persistence bug. That left exactly one
+  explanation — the 16th mark was never durably written to IndexedDB in
+  the first place — which pointed straight at two real races in the
+  write path: `mark()` firing `enqueueMark()` inside a detached,
+  unawaited promise, and `tx()` resolving on `request.onsuccess` instead
+  of `transaction.oncomplete`. See issue #4. Evidence eliminated three
+  of four possible layers before a single line of application code was
+  read.
 - Issue #4 (offline attendance durability) had three mechanisms, not
   two. `tx()` resolved on `request.onsuccess` instead of
   `transaction.oncomplete`, and `mark()`'s write ran inside a detached,
