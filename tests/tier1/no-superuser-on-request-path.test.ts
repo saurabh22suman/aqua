@@ -36,6 +36,10 @@ import { describe, expect, it } from "vitest";
 //                            plus reads attendance rows directly to verify
 //                            sync outcomes — a Playwright driver script,
 //                            not request-path code
+//   scripts/e2e-offline-disabled.ts - same pattern as e2e-offline.ts: the
+//                            OFFLINE_SYNC_ENABLED=false counterpart,
+//                            verifying the fail-loud UI instead of offline
+//                            queueing — still just a driver script
 const ALLOWLIST = new Set([
   "db/migrate.ts",
   "db/bootstrap-roles.ts",

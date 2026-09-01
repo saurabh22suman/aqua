@@ -23,6 +23,14 @@ import {
 // offline banner is proactive (appears the instant connectivity drops,
 // not only after a failed tap), and a tap made while offline is
 // refused outright — no DOM update, no DB row — never silently queued.
+//
+// Note on env var: PR #6 added OFFLINE_SYNC_ENABLED (lib/feature-flags.ts)
+// as a hard global default-off. We don't need to set it explicitly here —
+// it's unset by default — but the page gate now requires BOTH the env var
+// AND the per-tenant flag to be true for offline sync to be active
+// (app/(coach)/coach/register/[sessionId]/page.tsx). setOfflineSyncEnabled
+// below flips the per-tenant side; the env var is already in its safe
+// default state.
 const BASE = "http://localhost:3216";
 const MEMBER_COUNT = 2;
 const RUN = Date.now().toString(36);
@@ -32,6 +40,10 @@ const { results, record } = makeRecorder();
 
 async function main() {
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+  // OFFLINE_SYNC_ENABLED (PR #6, lib/feature-flags.ts) is left unset — its
+  // safe default is "off", which is what we're testing here. The
+  // per-tenant kill switch (PR #12, tenants.offlineSync_enabled) is
+  // flipped to false explicitly below so the test is self-contained.
   const server = spawn("pnpm", ["next", "dev", "-p", "3216"], {
     stdio: "ignore",
     detached: true,

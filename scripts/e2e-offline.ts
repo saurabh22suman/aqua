@@ -30,9 +30,13 @@ const { results, record } = makeRecorder();
 
 async function main() {
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+  // This suite specifically exercises offline queueing/sync — off by
+  // default everywhere else (lib/feature-flags.ts, issue #4), but this is
+  // the one process that must turn it on to test the thing it's testing.
   const server = spawn("pnpm", ["next", "dev", "-p", "3215"], {
     stdio: "ignore",
     detached: true,
+    env: { ...process.env, OFFLINE_SYNC_ENABLED: "true" },
   });
 
   let fixture: OfflineFixture | undefined;

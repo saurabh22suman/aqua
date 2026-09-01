@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getRosterAction } from "@/lib/actions/coach";
 import { RegisterBoard } from "@/components/register-board";
+import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 
 export default async function RegisterPage({
   params,
@@ -40,7 +41,7 @@ export default async function RegisterPage({
         <RegisterBoard
           sessionId={sessionId}
           rows={data.rows}
-          offlineSyncEnabled={data.offlineSyncEnabled}
+          offlineSyncEnabled={data.offlineSyncEnabled && OFFLINE_SYNC_ENABLED}
         />
       </div>
     </main>

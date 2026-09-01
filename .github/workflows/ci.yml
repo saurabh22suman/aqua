@@ -119,10 +119,11 @@ jobs:
       # on a loaded runner.
       - run: pnpm exec tsx scripts/e2e-offline.ts
 
-      # The counterpart: every tenant ships with the flag OFF by default
-      # (issue #4 postmortem's kill switch, docs/architecture.md §12.2).
-      # Confirms the online happy path is unaffected, the offline banner
-      # is proactive, and a tap made while offline is refused outright —
-      # not silently queued. Own dev server on a different port so it
-      # can't collide with the run above if step ordering ever changes.
+      # The counterpart: every tenant ships with offline sync OFF by default
+      # (OFFLINE_SYNC_ENABLED unset — see lib/feature-flags.ts; issue #4
+      # postmortem's kill switch, docs/architecture.md §12.2). Proves the
+      # online happy path is unaffected, the offline banner is proactive,
+      # and a tap made while offline is refused outright — not silently
+      # queued. Own dev server on a different port so it can't collide
+      # with the run above if step ordering ever changes.
       - run: pnpm exec tsx scripts/e2e-offline-disabled.ts
