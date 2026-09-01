@@ -71,7 +71,7 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [x] **1.1** Platform auth — separate session from tenant users, own table, mandatory 2FA. Platform staff must not be reachable through the tenant login. `GREEN`
 - [x] **1.2** Platform layout and shell — `(platform)` route group, dark marine sidebar (operators work from laptops, not poolside), login + 2FA verify + home under it. Visually distinct from tenant surfaces. `GREEN`
 - [x] **1.3** Tenant list — all tenants with status, plan, member count, location count, created date. Searchable by name/slug; filterable by status. New `withPlatformAdmin()` scope + `platform_admin_select` RLS policy grant cross-tenant read for the operator. `GREEN`
-- [ ] **1.4** Tenant detail — settings, locations, feature state, usage, activity. Read-only in this task. `GREEN`
+- [x] **1.4** Tenant detail — settings (timezone, plan, currency, GSTIN, preset, offline-sync flag), locations (active, soft-deleted hidden), feature state (resolved from plan; overrides come in 1.8), usage stats (members, locations, sessions this month), recent platform activity. Read-only. `GREEN`
 - [ ] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `GREEN`
 - [ ] **1.6** Tenant status lifecycle — trial, active, suspended, churned, with reasons and audit. A suspended tenant's users cannot log in and see a clear message. `GREEN`
 - [ ] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `GREEN`
