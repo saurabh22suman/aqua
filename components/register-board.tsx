@@ -69,7 +69,7 @@ export function RegisterBoard({
                   `synced ${syncedLabel}`
                 )
               ) : !online ? (
-                "offline"
+                "offline — can't save"
               ) : (
                 `synced ${syncedLabel}`
               )}

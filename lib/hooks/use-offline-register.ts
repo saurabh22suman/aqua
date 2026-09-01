@@ -205,6 +205,13 @@ export function useOfflineRegister(
     // online it only reaches the DOM once the server has actually
     // confirmed it. "Marking does not report success" is the literal
     // contract here, not a figure of speech.
+    //
+    // PR #6's variant of this branch used `void (async () => {...})()` —
+    // the detached, unawaited IIFE shape diagnosed as issue #4 mechanism 2.
+    // Reintroducing it silently undoes that fix; rejected here in favour of
+    // the chained-Promise form below. saveError (PR #6's flag) is dropped
+    // for the same reason: lastError (with timestamp) already records
+    // save failures and the rest of the UI reads from it.
     if (!offlineSyncEnabled) {
       if (!navigator.onLine) {
         const e = { at: Date.now(), message: "Offline — marking is unavailable until you reconnect." };
@@ -284,6 +291,7 @@ export function useOfflineRegister(
   // showing red forever even though sync recovered.
   const hasActiveFailure =
     lastError !== null && (!lastSynced || lastError.at > lastSynced);
+
 
   return {
     marks,
