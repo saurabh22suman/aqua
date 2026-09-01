@@ -58,11 +58,23 @@ export function LoginForm() {
         return;
       }
       const home = await homeForSessionAction();
-      if (!home) {
-        setError("No membership found for this number.");
+      if (home.kind === "ok") {
+        router.push(home.path);
         return;
       }
-      router.push(home);
+      if (home.kind === "suspended") {
+        // Phase 1.6 — the operator paused or churned this tenant.
+        // Show the names so the user knows which one; the previous
+        // "No membership found" message conflated this with the
+        // no-account case and left users wondering.
+        const list = home.tenantSlugs.join(", ");
+        setError(
+          `Your club (${list}) is paused. Reach out to your operator to reactivate it.`,
+        );
+        return;
+      }
+      // 'none'
+      setError("No membership found for this number.");
     } finally {
       setBusy(false);
     }

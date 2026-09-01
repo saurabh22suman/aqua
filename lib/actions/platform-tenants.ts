@@ -6,23 +6,21 @@ import {
   createTenant,
   type CreateTenantResult,
 } from "@/db/platform-tenant-create";
+import {
+  transitionInput,
+  transitionTenantStatus,
+  type TransitionResult,
+} from "@/db/platform-tenant-status";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
-import { asUserId } from "@/lib/ids";
+import { asUserId, asTenantId } from "@/lib/ids";
 
-// Phase 1.5 — server action backing `/platform/tenants/new`. Sits
-// alongside `lib/actions/platform-auth.ts`; server actions belong
-// in this folder, full stop. The new-tenant form posts a plain
-// object; the action parses, gates on the platform session, then
-// delegates to `createTenant()` in db/.
-//
-// Per the standing rule (every Server Action opens with (1) parse,
-// (2) permission check), the first statement is the input parse.
-// The form posts `locationIsPrimary` as `"on"` (HTML checkbox) or
-// absent — normalise to a boolean here so the service's zod parses
-// cleanly. The deep zod schema is `createTenantInput` from the
-// service; this file re-declares only the surface-shape first pass.
+// Phase 1.5 + 1.6 — server actions for the operator surface:
+// createTenantAction backs /platform/tenants/new; transitionTenantStatus
+// backs the controls on /platform/tenants/[tenantId]. Both open
+// with the (1) zod-parse preamble, (2) platform-session permission
+// check — the standing rule every Server Action must follow.
 
-const formInputSchema = z.object({
+const createFormInputSchema = z.object({
   name: z.string(),
   slug: z.string(),
   timezone: z.string(),
@@ -33,7 +31,7 @@ const formInputSchema = z.object({
   locationIsPrimary: z.boolean(),
 });
 
-export type CreateTenantFormInput = z.input<typeof formInputSchema>;
+export type CreateTenantFormInput = z.input<typeof createFormInputSchema>;
 
 export async function createTenantAction(
   input: unknown,
@@ -41,7 +39,7 @@ export async function createTenantAction(
   // (1) parse — required preamble. Form posts `locationIsPrimary`
   // as a string when ticked. Coerce and pass into the service
   // schema, which is the source of truth for validation.
-  const surface = formInputSchema.safeParse(input);
+  const surface = createFormInputSchema.safeParse(input);
   if (!surface.success) {
     return {
       kind: "error",
@@ -67,4 +65,49 @@ export async function createTenantAction(
   }
 
   return createTenant(normalised, { actorId: asUserId(status.userId) });
+}
+
+// ---- Phase 1.6 — status transitions ----
+
+// Surface schema for the status-controls form. tenantId arrives
+// from the route parameter on the page; never trust the form to
+// supply it (a hidden field is just a cookie replier away).
+const transitionFormInputSchema = z.object({
+  targetStatus: z.enum(["active", "suspended", "churned"]),
+  reason: z.string().optional(),
+});
+
+export type TransitionFormInput = z.input<typeof transitionFormInputSchema>;
+
+export async function transitionTenantStatusAction(
+  tenantId: string,
+  input: unknown,
+): Promise<TransitionResult> {
+  // (1) parse
+  const surface = transitionFormInputSchema.safeParse(input);
+  if (!surface.success) {
+    return {
+      kind: "error",
+      code: "invalid",
+      message: surface.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+  const normalised: z.input<typeof transitionInput> = {
+    targetStatus: surface.data.targetStatus,
+    reason: surface.data.reason?.trim() || undefined,
+  };
+
+  // (2) permission check — same shape as createTenant.
+  const status = await platformAuthStatusAction();
+  if (status.kind !== "authenticated") {
+    return {
+      kind: "error",
+      code: "invalid",
+      message: "Your session has expired. Sign in again.",
+    };
+  }
+
+  return transitionTenantStatus(asTenantId(tenantId), normalised, {
+    actorId: asUserId(status.userId),
+  });
 }
