@@ -1,9 +1,13 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./client";
 import { withPlatformAdmin } from "./scope";
+import { withTenant } from "./tenant";
 import { tenants } from "./schema/tenants";
 import { plans } from "./schema/platform";
+import { platformAuditLog } from "./schema/platform-users";
+import { locations } from "./schema/locations";
+import { resolveTenantFeatureKeys } from "./features";
 import type { TenantId } from "@/lib/ids";
 
 // Aggregated row for the operator tenant list. Member count and
@@ -154,4 +158,187 @@ export async function listTenants(
       total: totalRow ? Number(totalRow.total) : 0,
     };
   });
+}
+
+// Phase 1.4 — read-only tenant detail. Settings, locations, feature
+// state, usage, activity. Cross-tenant visibility comes from
+// withPlatformAdmin() (the same scope listTenants uses); per-tenant
+// reads (locations, features, sessions-this-month) go through
+// withTenant() so the page reuses the same access path the tenant's
+// own users do.
+export type TenantDetail = {
+  id: TenantId;
+  slug: string;
+  name: string;
+  status: "trial" | "active" | "suspended" | "churned";
+  planId: string | null;
+  planName: string | null;
+  timezone: string;
+  currency: string;
+  gstin: string | null;
+  presetKey: string | null;
+  presetVersion: number | null;
+  offlineSyncEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  memberCount: number;
+  locationCount: number;
+  sessionsThisMonth: number;
+  featureKeys: string[];
+  locations: Array<{
+    id: string;
+    name: string;
+    isPrimary: boolean;
+    createdAt: Date;
+  }>;
+  recentActivity: Array<{
+    id: string;
+    action: string;
+    actorId: string | null;
+    detail: Record<string, unknown>;
+    createdAt: Date;
+  }>;
+};
+
+export type TenantDetailResult = TenantDetail | null;
+
+export async function getTenantDetail(
+  tenantId: TenantId,
+): Promise<TenantDetailResult> {
+  // The header row: tenant + plan + denormalised counts, including
+  // sessions-this-month for the activity signal. Single SELECT under
+  // withPlatformAdmin() so it shares the same visibility scope as the
+  // list — the existence check happens in the WHERE.
+  const header = await withPlatformAdmin(async (tx) => {
+    const data = await tx.execute(sql`
+      select
+        ${tenants.id}                  as id,
+        ${tenants.slug}                as slug,
+        ${tenants.name}                as name,
+        ${tenants.status}              as status,
+        ${tenants.planId}              as "planId",
+        ${plans.name}                  as "planName",
+        ${tenants.timezone}            as timezone,
+        ${tenants.currency}            as currency,
+        ${tenants.gstin}               as gstin,
+        ${tenants.presetKey}           as "presetKey",
+        ${tenants.presetVersion}       as "presetVersion",
+        ${tenants.offlineSyncEnabled}  as "offlineSyncEnabled",
+        ${tenants.createdAt}           as "createdAt",
+        ${tenants.updatedAt}           as "updatedAt",
+        coalesce(members.cnt, 0)       as "memberCount",
+        coalesce(locations.cnt, 0)     as "locationCount",
+        coalesce(sessions.cnt, 0)      as "sessionsThisMonth"
+      from ${tenants}
+      left join ${plans} on ${plans.id} = ${tenants.planId}
+      left join (
+        select tenant_id, count(*)::int as cnt
+        from members
+        group by tenant_id
+      ) members on members.tenant_id = ${tenants.id}
+      left join (
+        select tenant_id, count(*)::int as cnt
+        from locations
+        where deleted_at is null
+        group by tenant_id
+      ) locations on locations.tenant_id = ${tenants.id}
+      left join (
+        select tenant_id, count(*)::int as cnt
+        from sessions
+        where starts_at >= date_trunc('month', now())
+        group by tenant_id
+      ) sessions on sessions.tenant_id = ${tenants.id}
+      where ${tenants.id} = ${tenantId}
+    `);
+    return (data as unknown as { rows: Array<{
+      id: string;
+      slug: string;
+      name: string;
+      status: "trial" | "active" | "suspended" | "churned";
+      planId: string | null;
+      planName: string | null;
+      timezone: string;
+      currency: string;
+      gstin: string | null;
+      presetKey: string | null;
+      presetVersion: number | null;
+      offlineSyncEnabled: boolean;
+      createdAt: string;
+      updatedAt: string;
+      memberCount: number;
+      locationCount: number;
+      sessionsThisMonth: number;
+    } | undefined> }).rows[0];
+  });
+
+  if (!header) return null;
+
+  // Tenant-scoped reads via withTenant — same path the tenant's own
+  // owner would take. Reads locations, resolved feature keys, and the
+  // last 20 platform_audit_log entries scoped to this tenant.
+  const [locationsList, featureKeys, activity] = await Promise.all([
+    withTenant(tenantId, async (tx) => {
+      const rows = await tx
+        .select({
+          id: locations.id,
+          name: locations.name,
+          isPrimary: locations.isPrimary,
+          createdAt: locations.createdAt,
+        })
+        .from(locations)
+        .where(sql`${locations.deletedAt} is null`)
+        .orderBy(sql`${locations.isPrimary} desc, ${locations.name} asc`);
+      return rows;
+    }),
+    resolveTenantFeatureKeys(tenantId),
+    withPlatformAdmin(async (tx) => {
+      const rows = await tx
+        .select({
+          id: platformAuditLog.id,
+          action: platformAuditLog.action,
+          actorId: platformAuditLog.actorId,
+          detail: platformAuditLog.detail,
+          createdAt: platformAuditLog.createdAt,
+        })
+        .from(platformAuditLog)
+        .where(eq(platformAuditLog.tenantId, tenantId))
+        .orderBy(sql`${platformAuditLog.createdAt} desc`)
+        .limit(20);
+      return rows;
+    }),
+  ]);
+
+  return {
+    id: header.id as TenantId,
+    slug: header.slug,
+    name: header.name,
+    status: header.status,
+    planId: header.planId,
+    planName: header.planName,
+    timezone: header.timezone,
+    currency: header.currency,
+    gstin: header.gstin,
+    presetKey: header.presetKey,
+    presetVersion: header.presetVersion,
+    offlineSyncEnabled: header.offlineSyncEnabled,
+    createdAt: new Date(header.createdAt),
+    updatedAt: new Date(header.updatedAt),
+    memberCount: Number(header.memberCount),
+    locationCount: Number(header.locationCount),
+    sessionsThisMonth: Number(header.sessionsThisMonth),
+    featureKeys,
+    locations: locationsList.map((l) => ({
+      id: l.id,
+      name: l.name,
+      isPrimary: l.isPrimary,
+      createdAt: l.createdAt,
+    })),
+    recentActivity: activity.map((a) => ({
+      id: a.id,
+      action: a.action,
+      actorId: a.actorId,
+      detail: (a.detail ?? {}) as Record<string, unknown>,
+      createdAt: a.createdAt,
+    })),
+  };
 }
