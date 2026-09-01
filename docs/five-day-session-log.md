@@ -239,21 +239,20 @@ top.
 
 ### Next pickup
 
-Pick up at **1.7 — feature catalogue**. The platform sidebar
-already links to `/platform/features` (`app/(platform)/layout.tsx`)
-and 1.4's tenant detail references it in
-`recentActivity` ("feature toggle changes…"). The catalogue page
-sits on `db/schema/platform.ts::features` (already in the DB and
-seeded by `db/seed-platform.ts`). The page lists every feature
-with its category and status (`'ga' | 'beta' | 'internal'`),
-allows editing name / category / status, and write-protection on
-`feature_key` (the immutable analytics key per architecture §7).
-The status field is what 1.8 will eventually override per-tenant.
+Pick up at **1.8 — per-tenant feature toggles**. The `tenant_features`
+table sits between `plan_features` (already in the schema) and the
+operator's resolution layer. Per architecture §7.1, the resolution
+order is: `tenant_features` (with optional expiry) → `plan_features`
+→ absent → off. Service-layer work in
+`db/features.ts::resolveTenantFeatureKeys` needs to consume the new
+table once it exists.
 
-Stack state: PR #35 (1.5) and PR #36 (1.6) are open. #36 is off
-`feat/1.5-create-tenant` (it includes 1.5's commits ahead of
-`main`); once #35 merges to main, rebase #36 onto the new main
-head so the diff is small and reviewable.
+PR-stack reminder for the next agent: this file's history mixes
+the 1.5 / 1.6 / 1.7 doc commits across three independent branches.
+Each section is a snapshot of when its PR was committed, not a
+live document. When later phases land, do not retro-edit the older
+sections to "fix" later reality — the prose there was true when it
+was committed.
 
 ---
 
@@ -451,3 +450,78 @@ After 1.5: 1.6 (status lifecycle). The detail page (1.4) needs a
 audit-aware transition machinery. Suspension writes `platform_audit_log`,
 notifies the tenant users, blocks tenant login. Stack on top of 1.5's
 platform-write path.
+
+---
+
+## Sessions
+
+### Session N — Phase 1.1–1.4 (history; superseded by N+1, N+2, N+3)
+
+### Session N+1 — Phase 1.5 (history; on `feat/1.5-create-tenant`, PR #35)
+
+### Session N+2 — Phase 1.6 (history; on `feat/1.6-status-lifecycle`, PR #36)
+
+### Session N+3 — Phase 1.7 (this session)
+
+What landed:
+- 1.7 feature catalogue: branched directly off `main` (PRs #35
+  for 1.5 and #36 for 1.6 still open — independent PR keeps
+  this one's diff small and reviewable). Single commit `6b3d2c2`.
+  PR #37 OPEN.
+- **`db/platform-features.ts`** — `listFeatures()`, `getFeature()`,
+  `updateFeature()`. Read path through `withPlatform()` (the
+  standing convention for any platform-side read); write path
+  through `db.transaction()` directly inside `withPlatform()`,
+  atomic with the `platform_audit_log` insert. The `key` column
+  is the immutable analytics identity — updateFeature rejects
+  any input that tries to rename it. No-op short-circuit skips
+  a redundant audit row when name / category / status match the
+  current row.
+- **`lib/actions/platform-features.ts`** — `updateFeatureAction`:
+  standard parse → permission → service. The feature key
+  arrives from the URL (the page is keyed by feature) rather
+  than the form body, so a cookie replier can't move an edit
+  to a different key.
+- **`app/(platform)/platform/features/{page.tsx,feature-catalogue.tsx`** —
+  server-rendered page (auth-gated) + per-row client island.
+  Each section is a category; rows are view / edit dual-mode.
+  Status pill colour-coded per design system (`ga` = good-soft,
+  `beta` = warn-soft, `internal` = deck — DESIGN.md §1.1
+  reservations: semantic palette is reserved for money/attendance
+  state; status here is operational). Edit form locks the key
+  with a grayed `font-mono` display. `router.refresh()` on Save
+  so the audit timeline re-fetches.
+
+Architectural position (no new RLS):
+- `features` is in the platform allowlist (`db/allowlist.ts`) so
+  RLS-exempt by design.
+- `app_user` has `select, insert, update, delete on all tables`
+  from `db/bootstrap-roles.ts` — no new grant needed.
+- The service scopes reads and writes through `withPlatform()` per
+  the standing convention for any platform-side read; the
+  platform_admin_X policies 1.5/1.6 added are specifically for
+  tenant-scoped tables the platform surface writes, not needed
+  here.
+
+Tests (13 new; 271 / 271 total):
+- `tests/tier1/platform-features.test.ts` — 8: listFeatures
+  returns seed + fixtures; updateFeature happy path with
+  audit-row `before`/`after` capture; no-op skips audit;
+  `not_found` for unknown key; `invalid` for malformed name;
+  `invalid` for out-of-set status. **Mutation-proofed**:
+  skipping the audit insert breaks 2 tests.
+- `tests/tier1/platform-features-action.test.ts` — 5: full
+  Server Action with real auth — happy path, no cookie,
+  out-of-enum status, `not_found`, empty-name parse.
+- `tests/tier1/no-superuser-on-request-path.test.ts` — added
+  the two new test files to the allowlist.
+
+Verification:
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build &&
+   pnpm exec tsx scripts/check-bundle-budget.ts` — all green.
+  `/platform/features` ships at 1.94 kB First Load JS. All 26
+  routes within budget.
+
+Velocity: 1 substantive task shipped with full TDD + mutation
+proof + UI integration. Matches the standing calibration ("1-3
+substantive tasks per session").
