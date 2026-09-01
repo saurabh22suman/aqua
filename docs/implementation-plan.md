@@ -1106,6 +1106,7 @@ These apply to every task and override any local convenience.
 | Automated messages are utility category | Marketing costs 7–8× as much |
 | Terms never touch data, enums, permissions or exports | Vocabulary is presentation only |
 | No tracking on parent or student surfaces | DPDP obligation, not a preference |
+| Feature branch → PR into `main` → merge only when `ci` is green, no admin bypass | `main` auto-deploys once D5 lands; a red `main` was previously discovered after the fact, from a direct push. `docs/branch-protection.md` is the enforcement, `CLAUDE.md` is the reminder |
 
 
 ---
