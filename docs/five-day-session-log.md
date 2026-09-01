@@ -13,12 +13,6 @@ repo state. When the next agent picks up, they should:
 
 ---
 
-## Mark here when work resumes below
-
-<!-- marker -->
-
----
-
 ## Branches and PRs as of last session
 
 - `feat/day1-platform-control-plane` — PR #30 against `main`. Phase 1.1 + 1.2
@@ -239,34 +233,132 @@ top.
 
 ### Next pickup
 
-Pick up at **1.5 — create tenant**. The route `/platform/tenants/new`
-is already linked from the list page. The natural shape:
+Pick up at **1.6 — tenant status lifecycle**: trial, active,
+suspended, churned. 1.4's read-only detail page already shows a
+status pill — 1.6 adds the audit-aware transition (suspend /
+unsuspend / churn) the page then reflects. Will need a sibling
+`platform_admin_update` policy on `tenants.status`; same shape as
+the `platform_admin_insert` policy 1.5 landed. Each transition
+writes a `platform_audit_log` row with `action =
+'tenant.suspend'` / `'tenant.unsuspend'` / `'tenant.churn'` and a
+`reason` field; suspended tenants must be denied at the tenant
+login path.
 
-1. Form page: name + slug + timezone + plan (default selected) + first
-   location name (suggested: "Main") + currency + GSTIN (optional).
-2. Server action: create tenant row + first location row + apply a
-   chosen preset (or no preset, "start from scratch" is one of the
-   seven documented presets in `docs/project-scope.md` §5.16).
-3. After creation, redirect to the new tenant's detail page
-   (/platform/tenants/[id]).
+---
 
-The "Replaces the CLI path in F-25" in 1.5's task body is the
-explicit goal — `db/seed-platform.ts`'s demo-academy is what 1.5 will
-supersede for new tenants.
+## Sessions
 
-Things 1.5 will need that don't exist yet:
-- A create-tenant server action schema (Zod). Tenant input is
-  tenant-scoped data, so the action calls `db.query.insert(tenants)…`
-  directly under withPlatformAdmin() (the cross-tenant write path;
-  see the architectural note above about writes).
-- A preset-application pathway. Day 2 (2.1–2.4) covers
-  `applyPreset()`, which doesn't exist yet. 1.5's create should still
-  work without presets — creating a tenant with no preset applied is
-  a valid starting state, and the wizard's preset step (2.2 / 2.6) can
-  apply one later. **DO NOT block 1.5 on the preset pathway.**
+### Session N — Phase 1.1–1.4 (this session, ended before compaction)
 
-Before opening 1.5, read `db/seed-platform.ts` to see how the existing
-CLI creates a tenant — the new code replaces that path with a UI.
+What landed:
+- 1.1 platform auth: `db/platform-auth.ts`, `lib/actions/platform-auth.ts`,
+  `app/(platform)/platform/login/page.tsx` + login form, scrypt password
+  hashing + RFC 6238 TOTP, 23 tests with mutation proof.
+- 1.2 platform layout: `(platform)` route group, dark-marine sidebar layout,
+  `/platform/login` and `/platform/verify` consumed by 1.1's service,
+  `/platform` empty home (intentional). 10 server-action tests.
+- 1.3 tenant list: `db/platform-tenants.ts:listTenants` (single SELECT with
+  denormalised counts), `withPlatformAdmin()` scope, new
+  `platform_admin_select` RLS policies, `/platform/tenants` page with
+  search + status filter, 7 tests. Migration
+  `20260901162028_platform_admin_tenant_read.sql`.
+- 1.4 tenant detail: `db/platform-tenants.ts:getTenantDetail` (composes
+  withPlatformAdmin + withTenant), `/platform/tenants/[tenantId]` page,
+  8 tests. Migration `20260901171804_platform_admin_sessions_read.sql`.
+
+Bug found:
+- sessions table needed its own `platform_admin_select` policy; the
+  count subquery returned 0 with the platform_admin scope, even with the
+  session row actually present. Fixed with the dedicated migration.
+
+Scope drift:
+- Added `withPlatformAdmin()` scope — it's the third scope kind the
+  codebase needs (alongside `withTenant` and `withUser`).
+  Documented above for the next agent.
+
+Velocity calibration (per the human's note mid-session):
+"Phases are work units, not calendar days; sessions are calendar units.
+A phase may take several sessions; a session may complete zero, one, or
+several tasks. Progress is read off the checklist."
+"Don't accelerate to hit a number. 1-3 substantive tasks per session
+with full TDD is better than 8 rushed ones."
+
+That calibration held: 4 substantive tasks shipped (1.1–1.4), each
+with TDD and mutation proof, plus the platform-admin architecture on
+top.
+
+### Session N+1 — Phase 1.5 (this session)
+
+What landed:
+- 1.5 create tenant: stack #30/#31/#32 first merged into main
+  (`main` ← #30 ← #31 ← #32, all CI green). Then
+  `feat/1.5-create-tenant` off `main`, single commit
+  `19f1b96`. PR #35 OPEN.
+- `db/migrations/20260902200000_platform_admin_tenant_write.sql` —
+  additive INSERT policies on `tenants` + `locations` keyed on
+  `app.platform_admin = 'true'`. First cross-tenant write path the
+  request surface can reach; the existing CLI used
+  `MIGRATION_DATABASE_URL`, which architecture §5.6 bans from
+  request-path code.
+- `db/platform-tenant-create.ts` — `createTenant()`: one
+  `withPlatformAdmin()` transaction (tenant + first location +
+  `platform_audit_log` action=`tenant.create`); Zod at the boundary;
+  slug uniqueness → `code:'slug_taken'`; plan lookup →
+  `code:'plan_not_found'`. Exports `listActivePlans()` for the form's
+  plan `<select>`.
+- `lib/actions/platform-tenants.ts` — `createTenantAction`: parse
+  preamble → platform-session permission check → service. Same
+  `CreateTenantResult` shape throughout.
+- `app/(platform)/platform/tenants/new/{page.tsx,new-tenant-form.tsx}`:
+  server-rendered page (auth-gated, fetches plans) + client form per
+  DESIGN.md (16px inputs to avoid iOS zoom, `--accent` primary action,
+  error pill, sentence case, no emoji). Form 2.11kB First Load JS,
+  within bundle budget.
+
+Architectural decision (1.5):
+- ADDED `platform_admin_insert` RLS policies on `tenants` +
+  `locations`. Mirrors the `platform_admin_select` pattern from 1.3.
+  Postgres OR-combines permissive policies; with `withPlatformAdmin()`
+  setting `app.platform_admin='true'`, the new policy's WITH CHECK
+  passes while the existing `tenant_isolation.with check` (which
+  requires `id = app.tenant_id`) still safely denies (no tenant context
+  on a write). App_user without `app.platform_admin='true'` still
+  cannot INSERT — the policy is additive, not a weakening. Phase 1.6
+  will add a sibling `platform_admin_update` policy for status
+  transitions; no UPDATE/DELETE was opened here.
+
+Tests:
+- `tests/tier1/platform-admin-tenant-write-rls.test.ts` — 6 tests:
+  (1) `withPlatformAdmin()` INSERT succeeds, (2) `app.platform_admin =
+  'false'` fails (RLS denies), (3) unset fails, (4) both-deny
+  fails, (5) cross-connection leak guard (a fresh connection reads
+  `app.platform_admin` as empty, not the value the previous
+  connection set), (6) idempotent under repeated `withPlatformAdmin()`
+  calls. Mutation-proofed: dropping the policy turns tests 1 + 6 red.
+- `tests/tier1/platform-tenants-create.test.ts` — 7 tests: happy
+  path (tenant + first location + audit row captured), trim
+  normalisation, gstin upper-casing, duplicate slug → `slug_taken`,
+  unknown plan → `plan_not_found`, zod-rejected input, atomicity
+  proof. Mutation-proofed: commenting out the audit insert breaks
+  2 tests.
+- `tests/tier1/platform-tenants-create-action.test.ts` — 5 tests:
+  happy via Server Action with full 2FA, no cookie / unauthenticated,
+  half-authenticated (login but no TOTP verify), zod rejection, slug
+  collision.
+- `tests/tier1/no-superuser-on-request-path.test.ts` — added 3 new
+  files to the allowlist (the existing test already enforces the
+  invariant; the new files only reference `MIGRATION_DATABASE_URL` for
+  fixture cleanup, never in request-path code).
+
+Verification:
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build` — all
+  green. Full suite 276/276 (was 257). Bundle audit: all 26 routes
+  within budget; new `/platform/tenants/new` ships at 2.11kB First
+  Load JS.
+
+Velocity: 1 substantive task shipped with full TDD + mutation proof
++ migration. Matches the standing calibration ("1-3 substantive
+tasks per session").
 
 After 1.5: 1.6 (status lifecycle). The detail page (1.4) needs a
 "Status" action button — but 1.6 is not the action button, it's the
