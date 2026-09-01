@@ -3,9 +3,8 @@ import { withTenant } from "@/db/tenant";
 import { batches, programs, type Batch, type Program } from "@/db/schema/programs";
 import { staff } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
-import type { Ctx } from "@/lib/auth/context";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import type { ActionCtx } from "@/lib/auth/context";
+import { asStaffId } from "@/lib/ids";
 
 export async function listPrograms(ctx: ActionCtx): Promise<Program[]> {
   return withTenant(ctx.tenantId, (tx) =>
@@ -123,7 +122,7 @@ export async function createBatch(
         daysOfWeek: input.daysOfWeek,
         startTime: input.startTime,
         endTime: input.endTime,
-        coachId: input.coachId,
+        coachId: input.coachId ? asStaffId(input.coachId) : undefined,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })
@@ -140,7 +139,7 @@ export async function createBatch(
         .select({ fullName: persons.fullName })
         .from(staff)
         .innerJoin(persons, eq(persons.id, staff.personId))
-        .where(eq(staff.id, input.coachId));
+        .where(eq(staff.id, asStaffId(input.coachId)));
       coachName = coach?.fullName ?? null;
     }
 

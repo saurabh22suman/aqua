@@ -1,5 +1,6 @@
 import type { TenantTx } from "@/db/tenant";
 import { consents, guardianships, type ConsentPurpose } from "@/db/schema/consent";
+import type { TenantId, PersonId, UserId } from "@/lib/ids";
 
 export type ConsentEvidenceInput = {
   channel: string;
@@ -21,10 +22,10 @@ export type ConsentGrantInput = {
 export async function recordConsent(
   tx: TenantTx,
   params: {
-    tenantId: string;
-    personId: string;
-    grantedBy: string;
-    witnessedByUserId?: string;
+    tenantId: TenantId;
+    personId: PersonId;
+    grantedBy: PersonId;
+    witnessedByUserId?: UserId;
     granterName: string;
     granterRelationship: string;
     grant: ConsentGrantInput;
@@ -48,12 +49,12 @@ export async function recordConsent(
 export async function createGuardianship(
   tx: TenantTx,
   params: {
-    tenantId: string;
-    minorId: string;
-    guardianId: string;
+    tenantId: TenantId;
+    minorId: PersonId;
+    guardianId: PersonId;
     relationship: string;
     isPrimary: boolean;
-    createdBy?: string;
+    createdBy?: UserId;
   },
 ): Promise<void> {
   await tx.insert(guardianships).values({

@@ -16,6 +16,7 @@ import {
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { persons } from "./people";
+import type { TenantId, PersonId, UserId } from "@/lib/ids";
 
 export const guardianships = pgTable(
   "guardianships",
@@ -23,9 +24,10 @@ export const guardianships = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
-    minorId: uuid("minor_id").notNull(),
-    guardianId: uuid("guardian_id").notNull(),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    minorId: uuid("minor_id").notNull().$type<PersonId>(),
+    guardianId: uuid("guardian_id").notNull().$type<PersonId>(),
     relationship: text("relationship").notNull(),
     isPrimary: boolean("is_primary").notNull().default(false),
     ...softDelete,
@@ -73,14 +75,19 @@ export const consents = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
-    personId: uuid("person_id").notNull(),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    personId: uuid("person_id").notNull().$type<PersonId>(),
     purpose: text("purpose").notNull(),
-    grantedBy: uuid("granted_by").notNull(),
+    grantedBy: uuid("granted_by").notNull().$type<PersonId>(),
     // Staff who facilitated/witnessed capture, distinct from who
-    // consented -- bare user id, no FK, same shape as
-    // batches.coachId/sessions.coachId (staff/C-04 doesn't exist yet).
-    witnessedByUserId: uuid("witnessed_by_user_id"),
+    // consented. Genuinely a UserId (the logged-in staff member's own
+    // identity), not a StaffId -- witnessing consent isn't a staff-role
+    // action, it's "whoever was signed in." The comment this replaced
+    // ("staff/C-04 doesn't exist yet") was stale: C-04 shipped, this
+    // column's semantics didn't change, and branding confirms that --
+    // no compile error here, on purpose.
+    witnessedByUserId: uuid("witnessed_by_user_id").$type<UserId>(),
     policyVersion: text("policy_version")
       .notNull()
       .references(() => policyVersions.version),

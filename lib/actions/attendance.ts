@@ -14,11 +14,12 @@ import {
   type BatchAttendanceSummary,
   type MemberAttendanceHistory,
 } from "@/lib/services/attendance-history";
+import type { TenantId } from "@/lib/ids";
 
 const memberIdSchema = z.string().uuid();
 const batchIdSchema = z.string().uuid();
 
-async function tenantToday(tenantId: string): Promise<string> {
+async function tenantToday(tenantId: TenantId): Promise<string> {
   const [tenant] = await withTenant(tenantId, (tx) =>
     tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantId)),
   );

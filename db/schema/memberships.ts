@@ -15,6 +15,7 @@ import { tenants } from "./tenants";
 import { users } from "./users";
 import { locations } from "./locations";
 import { roles } from "./roles";
+import type { TenantId, UserId } from "@/lib/ids";
 
 export const tenantMemberships = pgTable(
   "tenant_memberships",
@@ -22,10 +23,12 @@ export const tenantMemberships = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     userId: uuid("user_id")
       .notNull()
-      .references(() => users.id),
+      .references(() => users.id)
+      .$type<UserId>(),
     roleId: uuid("role_id").notNull(),
     allLocations: boolean("all_locations").notNull().default(true),
     status: text("status").notNull().default("invited"),
@@ -54,7 +57,8 @@ export const membershipLocations = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     membershipId: uuid("membership_id").notNull(),
     locationId: uuid("location_id").notNull(),
     ...auditColumns,

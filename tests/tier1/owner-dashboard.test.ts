@@ -8,6 +8,7 @@ import { createMember, enrolMember, markAttendance } from "@/lib/services/regist
 import { getOwnerDashboard } from "@/lib/services/dashboard";
 import { addFollowUp, createEnquiry } from "@/lib/services/enquiries";
 import { todayInZone } from "@/lib/time/tz";
+import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -16,12 +17,12 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let programId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );
@@ -65,7 +66,7 @@ afterAll(async () => {
 
 async function makeMember(label: string): Promise<string> {
   const created = await createMember(
-    { tenantId, userId: undefined as unknown as string },
+    { tenantId, userId: undefined as unknown as UserId },
     {
       fullName: `Dashboard Member ${label}`,
       dateOfBirth: "1990-01-01",
@@ -263,7 +264,7 @@ describe("getOwnerDashboard", () => {
   });
 
   it("returns an honest empty needsAttention array, not fabricated items, when nothing is wrong", async () => {
-    const freshTenantId = uuidv7();
+    const freshTenantId = asTenantId(uuidv7());
     await admin.query(
       "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Empty Dashboard', $3)",
       [freshTenantId, `owner-dash-empty-${RUN}`, TZ],

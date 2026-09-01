@@ -3,14 +3,15 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { createBatch, createProgram, listBatches, listPrograms } from "@/lib/services/programs";
+import { asTenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
-const tenantA = uuidv7();
-const tenantB = uuidv7();
+const tenantA = asTenantId(uuidv7());
+const tenantB = asTenantId(uuidv7());
 
 beforeAll(async () => {
   const plan = await admin.query<{ id: string }>(

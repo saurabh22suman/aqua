@@ -12,6 +12,7 @@ import {
   searchPersons,
   updateMember,
 } from "@/lib/services/people";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // Non-Tier-1 safety net, same shape as consent-schema.test.ts and
 // member-status-lifecycle.test.ts. C-06's own done-when: "a
@@ -25,12 +26,12 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let otherLocationId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );

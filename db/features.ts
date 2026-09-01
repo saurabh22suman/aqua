@@ -2,9 +2,10 @@ import { and, eq } from "drizzle-orm";
 import { planFeatures, plans } from "./schema/platform";
 import { tenants } from "./schema/tenants";
 import { withTenant } from "./tenant";
+import type { TenantId } from "@/lib/ids";
 
 export async function resolveTenantFeatureKeys(
-  tenantId: string,
+  tenantId: TenantId,
 ): Promise<string[]> {
   return withTenant(tenantId, async (tx) => {
     const rows = await tx

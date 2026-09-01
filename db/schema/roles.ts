@@ -15,6 +15,7 @@ import {
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { permissions } from "./platform";
+import type { TenantId, UserId } from "@/lib/ids";
 
 export const roles = pgTable(
   "roles",
@@ -22,7 +23,8 @@ export const roles = pgTable(
     id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     key: text("key").notNull(),
     name: text("name").notNull(),
     isSystem: boolean("is_system").notNull().default(false),
@@ -48,10 +50,11 @@ export const rolePermissions = pgTable(
   {
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
     roleId: uuid("role_id").notNull(),
     permissionKey: text("permission_key").notNull(),
-    grantedBy: uuid("granted_by"),
+    grantedBy: uuid("granted_by").$type<UserId>(),
     grantedAt: timestamp("granted_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

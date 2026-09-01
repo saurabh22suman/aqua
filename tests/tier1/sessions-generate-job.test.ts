@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { batches, programs } from "@/db/schema";
 import { runSessionsGenerateJob } from "@/lib/jobs/sessions-generate-job";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows (and the status
 // flip below) must go through the privileged migration pool, never the
@@ -13,10 +14,10 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );

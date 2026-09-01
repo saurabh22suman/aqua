@@ -10,6 +10,7 @@ import {
   enrolMember,
   markAttendance,
 } from "@/lib/services/register";
+import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -18,13 +19,13 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let sessionId = "";
 let memberA = "";
 let memberB = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );
@@ -72,7 +73,7 @@ beforeAll(async () => {
     { purpose: "processing" as const, policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
   ];
   const a = await createMember(
-    { tenantId, userId: undefined as unknown as string },
+    { tenantId, userId: undefined as unknown as UserId },
     {
       fullName: "Upsert Member A",
       dateOfBirth: "1990-01-01",
@@ -82,7 +83,7 @@ beforeAll(async () => {
     },
   );
   const b = await createMember(
-    { tenantId, userId: undefined as unknown as string },
+    { tenantId, userId: undefined as unknown as UserId },
     {
       fullName: "Upsert Member B",
       dateOfBirth: "1990-01-01",

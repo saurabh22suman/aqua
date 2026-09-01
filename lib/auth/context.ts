@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./server";
+import type { UserId, TenantId } from "@/lib/ids";
 import {
   resolveTenantAccessBySlug,
   resolveDefaultMembership,
@@ -8,8 +9,8 @@ import {
 } from "../../db/platform";
 
 export type Ctx = {
-  userId: string;
-  tenantId: string;
+  userId: UserId;
+  tenantId: TenantId;
   membershipId: string;
   roleKey: string;
   roleId: string;
@@ -17,6 +18,16 @@ export type Ctx = {
   allLocations: boolean;
   locationIds: string[];
 };
+
+// M3: every lib/services/*.ts file independently redeclared this as
+// `Pick<Ctx, "tenantId"> & { userId?: string }` -- the `userId` half
+// hand-typed as a plain string rather than derived from Ctx, in all
+// eight files, identically. That's exactly why branding UserId didn't
+// close the gap it was meant to: every service function's userId
+// parameter accepted any string, unbranded, no matter how carefully
+// the schema columns were typed. One shared type instead of eight
+// independently-drifting copies.
+export type ActionCtx = Pick<Ctx, "tenantId"> & Partial<Pick<Ctx, "userId">>;
 
 export class NotFoundError extends Error {
   constructor() {

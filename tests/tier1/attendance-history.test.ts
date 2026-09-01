@@ -12,6 +12,7 @@ import {
   getBatchAttendanceSummary,
   getMemberAttendanceHistory,
 } from "@/lib/services/attendance-history";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // Non-Tier-1 safety net. C-27's own done-when: "a member page shows
 // accurate monthly attendance" (per-member) plus the Build's other
@@ -23,7 +24,7 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 const TODAY = "2026-06-15"; // fixed, so period math is deterministic regardless of when this runs
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let batchId = "";
 let memberId = "";
@@ -31,7 +32,7 @@ let sessionInMonthId = "";
 let sessionOutOfMonthId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );

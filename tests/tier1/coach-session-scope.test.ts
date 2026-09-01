@@ -7,6 +7,7 @@ import { batches, locations, persons, programs, staff } from "@/db/schema";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { getRosterForSession, listTodaySessions, sessionVisibleToCaller } from "@/lib/services/register";
 import { todayInZone } from "@/lib/time/tz";
+import { asTenantId, asUserId, asStaffId, type TenantId, type UserId, type StaffId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -15,20 +16,20 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 // ctx.userId in these tests -- the real users.id, since coach scoping
 // (lib/services/staff.ts's coachStaffIdSubquery) resolves a caller's
 // own staff row via staff.user_id = ctx.userId. batches/sessions.
 // coach_id itself stores the resulting staff.id, not this user id.
-let coachA = "";
-let coachB = "";
+let coachA: UserId = asUserId("");
+let coachB: UserId = asUserId("");
 let batchAName = "";
 let batchBName = "";
 let sessionForBatchA = "";
 let sessionForBatchB = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );
@@ -45,13 +46,13 @@ beforeAll(async () => {
     "insert into users (id, phone) values ($1, $2) returning id",
     [uuidv7(), `+91coachB${RUN}`.slice(0, 15)],
   );
-  coachA = userA.rows[0].id;
-  coachB = userB.rows[0].id;
+  coachA = asUserId(userA.rows[0].id);
+  coachB = asUserId(userB.rows[0].id);
 
   let locationId = "";
   let programId = "";
-  let coachAStaffId = "";
-  let coachBStaffId = "";
+  let coachAStaffId: StaffId = asStaffId("");
+  let coachBStaffId: StaffId = asStaffId("");
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -80,8 +81,8 @@ beforeAll(async () => {
       .insert(staff)
       .values({ tenantId, personId: personB.id, userId: coachB, staffType: "coach" })
       .returning({ id: staff.id });
-    coachAStaffId = staffA.id;
-    coachBStaffId = staffB.id;
+    coachAStaffId = asStaffId(staffA.id);
+    coachBStaffId = asStaffId(staffB.id);
   });
   void locationId;
 

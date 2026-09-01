@@ -1,10 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { members, memberStatusTransitions, type MemberStatus } from "@/db/schema/people";
-import type { Ctx } from "@/lib/auth/context";
+import type { ActionCtx } from "@/lib/auth/context";
 import { MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import { asMemberId } from "@/lib/ids";
 
 export type TransitionResult = { ok: true } | { ok: false; error: string };
 
@@ -23,7 +22,7 @@ export async function transitionMemberStatus(
     const [member] = await tx
       .select({ status: members.status })
       .from(members)
-      .where(and(eq(members.id, input.memberId), eq(members.tenantId, ctx.tenantId)))
+      .where(and(eq(members.id, asMemberId(input.memberId)), eq(members.tenantId, ctx.tenantId)))
       .for("update");
     if (!member) return { ok: false, error: "Member not found." };
 
@@ -42,11 +41,11 @@ export async function transitionMemberStatus(
     await tx
       .update(members)
       .set({ status: input.toStatus, updatedAt: new Date(), updatedBy: ctx.userId })
-      .where(eq(members.id, input.memberId));
+      .where(eq(members.id, asMemberId(input.memberId)));
 
     await tx.insert(memberStatusTransitions).values({
       tenantId: ctx.tenantId,
-      memberId: input.memberId,
+      memberId: asMemberId(input.memberId),
       fromStatus,
       toStatus: input.toStatus,
       reason: input.reason,
@@ -98,7 +97,7 @@ export async function listMemberStatusHistory(
       .where(
         and(
           eq(memberStatusTransitions.tenantId, ctx.tenantId),
-          eq(memberStatusTransitions.memberId, memberId),
+          eq(memberStatusTransitions.memberId, asMemberId(memberId)),
         ),
       )
       .orderBy(memberStatusTransitions.changedAt),

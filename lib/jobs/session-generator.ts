@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { TenantTx } from "@/db/tenant";
 import { batches, sessions } from "@/db/schema";
+import type { TenantId } from "@/lib/ids";
 import {
   addDays,
   todayInZone,
@@ -12,7 +13,7 @@ const DAYS_AHEAD = 28;
 
 export async function generateSessions(
   tx: TenantTx,
-  tenantId: string,
+  tenantId: TenantId,
   tenantTimezone: string,
 ): Promise<number> {
   const activeBatches = await tx

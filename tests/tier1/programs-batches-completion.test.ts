@@ -15,6 +15,7 @@ import {
 } from "@/lib/services/programs";
 import { enrolMember, createMember } from "@/lib/services/register";
 import { locations } from "@/db/schema/locations";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // C-16/C-17 completion: coach picker, soft delete, list-refresh data
 // shape. Non-Tier-1 safety net, same pattern as programs-batches-
@@ -23,12 +24,12 @@ import { locations } from "@/db/schema/locations";
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let coachStaffId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );

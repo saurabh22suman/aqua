@@ -5,6 +5,7 @@ import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { persons } from "./people";
 import { users } from "./users";
+import type { TenantId, PersonId, StaffId, UserId } from "@/lib/ids";
 
 // C-04: one person can be both a coach and a member (persons is the
 // single identity table -- see architecture.md §8.3). staffType is a
@@ -13,14 +14,18 @@ import { users } from "./users";
 export const staff = pgTable(
   "staff",
   {
-    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7())
+      .$type<StaffId>(),
     tenantId: uuid("tenant_id")
       .notNull()
-      .references(() => tenants.id),
-    personId: uuid("person_id").notNull(),
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    personId: uuid("person_id").notNull().$type<PersonId>(),
     // Optional: a staff member does not necessarily have a login
     // (e.g. a worker paid cash with no app access yet).
-    userId: uuid("user_id").references(() => users.id),
+    userId: uuid("user_id").references(() => users.id).$type<UserId>(),
     staffType: text("staff_type").notNull(),
     employedOn: date("employed_on"),
     ...softDelete,

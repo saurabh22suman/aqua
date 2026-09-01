@@ -10,10 +10,11 @@ import { roles } from "./schema/roles";
 import { locations } from "./schema/locations";
 import { membershipLocations } from "./schema/memberships";
 import { baVerification } from "./schema/better-auth";
+import { asUserId, type UserId, type TenantId } from "@/lib/ids";
 
 export type TenantAccess = {
-  userId: string;
-  tenantId: string;
+  userId: UserId;
+  tenantId: TenantId;
   membershipId: string;
   roleKey: string;
   roleId: string;
@@ -23,7 +24,7 @@ export type TenantAccess = {
 // Identity is global and RLS-exempt by design (db/CLAUDE.md) — no scope
 // needed beyond withPlatform to map better-auth's id to the internal
 // platform user id.
-async function platformUserId(betterAuthUserId: string): Promise<string | null> {
+async function platformUserId(betterAuthUserId: string): Promise<UserId | null> {
   return withPlatform(async () => {
     const rows = await db
       .select({ id: users.id })
@@ -94,7 +95,7 @@ export async function linkBetterAuthUser(
   await withPlatform(() =>
     db
       .insert(users)
-      .values({ id: uuidv7(), betterAuthId: betterAuthUserId, phone: phoneNumber })
+      .values({ id: asUserId(uuidv7()), betterAuthId: betterAuthUserId, phone: phoneNumber })
       .onConflictDoUpdate({
         target: users.phone,
         set: { betterAuthId: betterAuthUserId, updatedAt: new Date() },
@@ -105,7 +106,7 @@ export async function linkBetterAuthUser(
 // tenantId is already known by the time this is called — an ordinary
 // tenant-scoped read, not pre-tenant resolution.
 export async function resolveLocationIds(
-  tenantId: string,
+  tenantId: TenantId,
   membershipId: string,
   allLocations: boolean,
 ): Promise<string[]> {
@@ -159,8 +160,8 @@ export async function resolveHomePath(
 export async function resolveDefaultMembership(
   betterAuthUserId: string,
 ): Promise<{
-  userId: string;
-  tenantId: string;
+  userId: UserId;
+  tenantId: TenantId;
   membershipId: string;
   roleKey: string;
   roleId: string;

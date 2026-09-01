@@ -11,6 +11,7 @@ import {
   resumeMember,
   transitionMemberStatus,
 } from "@/lib/services/member-status";
+import { asTenantId, type TenantId, type MemberId } from "@/lib/ids";
 
 // Non-Tier-1 safety net -- same shape as consent-schema.test.ts. C-03/
 // C-08's own done-when: "codes are unique per tenant and never reused"
@@ -21,11 +22,11 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-let tenantId = "";
+let tenantId: TenantId = asTenantId("");
 let locationId = "";
 
 beforeAll(async () => {
-  tenantId = uuidv7();
+  tenantId = asTenantId(uuidv7());
   const plan = await admin.query<{ id: string }>(
     "select id from plans where is_default = true",
   );
@@ -71,7 +72,7 @@ async function newMember(label: string) {
   return created.memberId;
 }
 
-async function statusOf(memberId: string): Promise<string> {
+async function statusOf(memberId: MemberId): Promise<string> {
   const [row] = await withTenant(tenantId, (tx) =>
     tx.select({ status: members.status }).from(members).where(eq(members.id, memberId)),
   );

@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { withTenant, withUser } from "@/db/tenant";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { resolveHomePath, resolveDefaultMembership } from "@/db/platform";
+import { asTenantId, asUserId, type UserId } from "@/lib/ids";
 
 // tenants/roles/tenant_memberships carry FORCE row level security, so
 // fixtures are written through the privileged migration pool, never the
@@ -13,11 +14,11 @@ import { resolveHomePath, resolveDefaultMembership } from "@/db/platform";
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
-const tenantX = uuidv7();
-const tenantY = uuidv7();
+const tenantX = asTenantId(uuidv7());
+const tenantY = asTenantId(uuidv7());
 
-let userA = "";
-let userB = "";
+let userA: UserId = asUserId("");
+let userB: UserId = asUserId("");
 let roleXId = "";
 let roleYId = "";
 let membershipA_X = "";
@@ -41,8 +42,8 @@ beforeAll(async () => {
     [roleYId, tenantY],
   );
 
-  userA = uuidv7();
-  userB = uuidv7();
+  userA = asUserId(uuidv7());
+  userB = asUserId(uuidv7());
   await admin.query(
     "insert into users (id, phone, better_auth_id) values ($1,$2,$3), ($4,$5,$6)",
     [userA, `uscope-a-${RUN}`, `uscope-ba-a-${RUN}`, userB, `uscope-b-${RUN}`, `uscope-ba-b-${RUN}`],

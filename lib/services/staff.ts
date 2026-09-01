@@ -2,15 +2,14 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { staff, type StaffType } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
-import type { Ctx } from "@/lib/auth/context";
-
-type ActionCtx = Pick<Ctx, "tenantId"> & { userId?: string };
+import type { ActionCtx } from "@/lib/auth/context";
+import { asPersonId, type StaffId, type PersonId, type TenantId, type UserId } from "@/lib/ids";
 
 export type StaffRow = {
-  id: string;
-  personId: string;
+  id: StaffId;
+  personId: PersonId;
   fullName: string;
-  userId: string | null;
+  userId: UserId | null;
   staffType: StaffType;
   employedOn: string | null;
 };
@@ -37,7 +36,7 @@ export async function listStaff(
       .where(and(...conditions))
       .orderBy(persons.fullName);
 
-    return rows.map((r) => ({ ...r, staffType: r.staffType as StaffType }));
+    return rows.map((r) => ({ ...r, userId: r.userId ?? null, staffType: r.staffType as StaffType }));
   });
 }
 
@@ -49,16 +48,16 @@ export async function listStaff(
 export async function createStaff(
   ctx: ActionCtx,
   input:
-    | { existingPersonId: string; staffType: StaffType; userId?: string; employedOn?: string }
-    | { fullName: string; staffType: StaffType; userId?: string; employedOn?: string },
-): Promise<{ ok: true; staffId: string } | { ok: false; error: string }> {
+    | { existingPersonId: string; staffType: StaffType; userId?: UserId; employedOn?: string }
+    | { fullName: string; staffType: StaffType; userId?: UserId; employedOn?: string },
+): Promise<{ ok: true; staffId: StaffId } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
-    let personId: string;
+    let personId: PersonId;
     if ("existingPersonId" in input) {
       const [existing] = await tx
         .select({ id: persons.id })
         .from(persons)
-        .where(and(eq(persons.id, input.existingPersonId), eq(persons.tenantId, ctx.tenantId)));
+        .where(and(eq(persons.id, asPersonId(input.existingPersonId)), eq(persons.tenantId, ctx.tenantId)));
       if (!existing) return { ok: false, error: "Person not found in this tenant." };
       personId = existing.id;
     } else {
@@ -102,6 +101,13 @@ export async function createStaff(
 // caller who isn't a coach or has no staff record resolves to a
 // subquery that matches nothing, which is the correct "sees no
 // sessions" behaviour, not an error.
-export function coachStaffIdSubquery(tenantId: string, userId: string | undefined) {
+//
+// M3: tenantId/userId are branded here on purpose, not left as plain
+// string -- this is the exact function whose fix (comparing
+// sessions.coach_id against a resolved StaffId instead of ctx.userId
+// directly) closed the original bug. Branding the signature means a
+// future caller passing the wrong id kind fails to compile instead of
+// silently matching nothing (or worse, matching the wrong row).
+export function coachStaffIdSubquery(tenantId: TenantId, userId: UserId | undefined) {
   return sql`(select ${staff.id} from ${staff} where ${staff.tenantId} = ${tenantId} and ${staff.userId} = ${userId ?? null} and ${staff.staffType} = 'coach' and ${staff.deletedAt} is null limit 1)`;
 }
