@@ -69,7 +69,7 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 The control plane has schema but no surface. Nothing here touches tenant data.
 
 - [x] **1.1** Platform auth — separate session from tenant users, own table, mandatory 2FA. Platform staff must not be reachable through the tenant login. `GREEN`
-- [ ] **1.2** Platform layout and shell — `(platform)` route group, own navigation, visually distinct from tenant surfaces so nobody confuses the two. `GREEN`
+- [x] **1.2** Platform layout and shell — `(platform)` route group, dark marine sidebar (operators work from laptops, not poolside), login + 2FA verify + home under it. Visually distinct from tenant surfaces. `GREEN`
 - [ ] **1.3** Tenant list — all tenants, status, plan, member count, created date. Search and filter. `GREEN`
 - [ ] **1.4** Tenant detail — settings, locations, feature state, usage, activity. Read-only in this task. `GREEN`
 - [ ] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `GREEN`
