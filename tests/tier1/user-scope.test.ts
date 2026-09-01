@@ -75,7 +75,7 @@ afterAll(async () => {
 });
 
 describe("pre-tenant resolution — user-scoped RLS (F-06 follow-up)", () => {
-  it("pg_policies: tenant_memberships/tenants/roles each carry exactly two policies, user_resolution is SELECT-only", async () => {
+  it("pg_policies: tenant_memberships/tenants/roles each carry the user_resolution + tenant_isolation policies, plus the platform_admin_select on the ones the platform reads", async () => {
     const { rows } = await admin.query<{ tablename: string; policyname: string; cmd: string }>(
       `select tablename, policyname, cmd from pg_policies
        where tablename in ('tenant_memberships', 'tenants', 'roles')
@@ -83,11 +83,26 @@ describe("pre-tenant resolution — user-scoped RLS (F-06 follow-up)", () => {
     );
     for (const table of ["tenant_memberships", "tenants", "roles"]) {
       const forTable = rows.filter((r) => r.tablename === table);
-      expect(forTable, table).toHaveLength(2);
+      // tenants + tenant_memberships have the platform_admin_select policy
+      // added in migration 20260901162028; roles does not (the platform
+      // doesn't read roles cross-tenant in 1.3 — the list only joins plans).
+      const expectedMin =
+        table === "roles" ? 2 : 3;
+      expect(forTable.length, `${table} policy count`).toBeGreaterThanOrEqual(
+        expectedMin,
+      );
       const userPolicy = forTable.find((r) => r.policyname === "user_resolution");
       expect(userPolicy?.cmd, `${table} user_resolution cmd`).toBe("SELECT");
       const tenantPolicy = forTable.find((r) => r.policyname === "tenant_isolation");
       expect(tenantPolicy?.cmd, `${table} tenant_isolation cmd`).toBe("ALL");
+      if (table !== "roles") {
+        const platformPolicy = forTable.find(
+          (r) => r.policyname === "platform_admin_select",
+        );
+        expect(platformPolicy?.cmd, `${table} platform_admin_select cmd`).toBe(
+          "SELECT",
+        );
+      }
     }
   });
 
