@@ -38,3 +38,9 @@ built.
       exist (D4), inspect a real `Set-Cookie` response header and confirm
       `Secure` is present. Don't assume better-auth adds it automatically
       just because the origin is HTTPS — check the actual header.
+
+- [ ] **Pilot OTP relay is pilot-week only.** `docs/pilot-otp-runbook.md`
+      (D2a option e — a human reads the real OTP from `ba_verification`
+      and relays it, since WhatsApp/SMS delivery, C-40, isn't built yet)
+      must not survive past the pilot. C-40 replaces it entirely; delete
+      the runbook once it lands, and never use it for a second tenant.
