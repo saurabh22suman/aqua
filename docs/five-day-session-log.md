@@ -239,21 +239,20 @@ top.
 
 ### Next pickup
 
-Pick up at **1.7 — feature catalogue**. The platform sidebar
-already links to `/platform/features` (`app/(platform)/layout.tsx`)
-and 1.4's tenant detail references it in
-`recentActivity` ("feature toggle changes…"). The catalogue page
-sits on `db/schema/platform.ts::features` (already in the DB and
-seeded by `db/seed-platform.ts`). The page lists every feature
-with its category and status (`'ga' | 'beta' | 'internal'`),
-allows editing name / category / status, and write-protection on
-`feature_key` (the immutable analytics key per architecture §7).
-The status field is what 1.8 will eventually override per-tenant.
+Pick up at **1.8 — per-tenant feature toggles**. The `tenant_features`
+table sits between `plan_features` (already in the schema) and the
+operator's resolution layer. Per architecture §7.1, the resolution
+order is: `tenant_features` (with optional expiry) → `plan_features`
+→ absent → off. Service-layer work in
+`db/features.ts::resolveTenantFeatureKeys` needs to consume the new
+table once it exists.
 
-Stack state: PR #35 (1.5) and PR #36 (1.6) are open. #36 is off
-`feat/1.5-create-tenant` (it includes 1.5's commits ahead of
-`main`); once #35 merges to main, rebase #36 onto the new main
-head so the diff is small and reviewable.
+PR-stack reminder for the next agent: this file's history mixes
+the 1.5 / 1.6 / 1.7 doc commits across three independent branches.
+Each section is a snapshot of when its PR was committed, not a
+live document. When later phases land, do not retro-edit the older
+sections to "fix" later reality — the prose there was true when it
+was committed.
 
 ---
 
