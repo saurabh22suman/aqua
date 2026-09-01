@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
+import { StatusTransitionControls } from "./status-transitions";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -74,6 +75,19 @@ export default async function PlatformTenantDetailPage({
         <StatusPill status={detail.status} />
       </div>
       <p className="mt-1 font-mono text-[13px] text-ink-3">{detail.slug}</p>
+
+      <section className="mt-6">
+        <SectionHeader
+          title="Status"
+          subtitle="Suspends and reactivations take effect immediately and write to the audit log."
+        />
+        <div className="rounded-card bg-paper border border-line px-4 py-3">
+          <StatusTransitionControls
+            tenantId={detail.id}
+            currentStatus={detail.status}
+          />
+        </div>
+      </section>
 
       <section className="mt-8">
         <SectionHeader title="Settings" />

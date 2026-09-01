@@ -206,3 +206,77 @@ export async function resolveDefaultMembership(
 export async function pingDatabase(): Promise<void> {
   await withPlatform(() => db.execute(sql`select 1`));
 }
+
+// Phase 1.6 — session suspension gate. The same call path that
+// resolves a home route also resolves whether the user should be
+// told the tenant is paused. A suspended (or churned) tenant blocks
+// its users from the operator's tenants; if every tenant the user
+// has an active membership in is non-operational, `homeForSession`
+// returns a 'suspended' flag so the login form renders a clear
+// "your club is paused" message instead of the role home.
+//
+// 'ok' shape carries the home path under the existing semantics:
+// at least one operational tenant resolves a normal landing. The
+// next phase that touches role resolution will want both
+// 'ok' and 'suspended' readable here without round-tripping.
+export type SessionResolution =
+  | { kind: "ok"; path: string }
+  | { kind: "suspended"; tenantSlugs: string[] }
+  | { kind: "none" };
+
+export async function resolveSessionForLogin(
+  betterAuthUserId: string,
+): Promise<SessionResolution> {
+  const userId = await platformUserId(betterAuthUserId);
+  if (!userId) return { kind: "none" };
+
+  return withUser(userId, async (tx) => {
+    const rows = await tx
+      .select({
+        tenantId: tenants.id,
+        tenantSlug: tenants.slug,
+        tenantStatus: tenants.status,
+        homePath: roles.homePath,
+        homeOrdinal: roles.homeOrdinal,
+      })
+      .from(tenantMemberships)
+      .innerJoin(
+        tenants,
+        and(eq(tenants.id, tenantMemberships.tenantId)),
+      )
+      .innerJoin(
+        roles,
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+      )
+      .where(
+        and(
+          eq(tenantMemberships.userId, userId),
+          eq(tenantMemberships.status, "active"),
+          isNull(tenantMemberships.deletedAt),
+        ),
+      )
+      .orderBy(roles.homeOrdinal);
+    if (rows.length === 0) return { kind: "none" };
+
+    // Pick the lowest homeOrdinal among *operational* tenants
+    // (trial/active). If at least one operational tenant exists,
+    // that's the destination; suspended/churned ones are filtered
+    // out from the home decision without dropping the
+    // membership — owners may come back.
+    const operational = rows.filter(
+      (r) => r.tenantStatus === "trial" || r.tenantStatus === "active",
+    );
+    if (operational.length > 0) {
+      return { kind: "ok", path: operational[0]!.homePath };
+    }
+
+    // All of the user's tenants are non-operational. Surface the
+    // suspended slugs so the login form can name them in the
+    // message; the form's existing "no membership" path doesn't
+    // know what suspension looks like.
+    const blocked = rows
+      .filter((r) => r.tenantStatus === "suspended" || r.tenantStatus === "churned")
+      .map((r) => r.tenantSlug);
+    return { kind: "suspended", tenantSlugs: blocked };
+  });
+}
