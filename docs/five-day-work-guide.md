@@ -1,0 +1,281 @@
+# Five-day work guide — control plane and tenant onboarding
+
+**For an agent working largely unsupervised. The human is reachable but not continuously present.**
+
+| | |
+|---|---|
+| Scope | Platform control plane, tenant provisioning, presets, staff, documents, reporting |
+| Tasks | 42 |
+| Deliberately excluded | The money chain (C-28a onward). See §0 |
+| Companions | `CLAUDE.md`, `DESIGN.md`, `architecture.md`, `implementation-plan.md`, `agent-lanes.md`, `agent-onboarding.md` |
+
+---
+
+## 0. Read this before starting
+
+### What this batch is
+
+Everything needed before a **second** club exists. Today the product serves one tenant provisioned by a CLI script. At the end of this batch, a platform admin can create a club, enable its features, onboard it with a preset, and hand its owner a working, branded instance.
+
+### What is deliberately excluded, and why
+
+**No money work.** Membership plans, subscriptions, invoicing, payments and WhatsApp are all out of scope for these five days.
+
+The reason is not sequencing — it is that `membership_plans` and `subscriptions` need to support shapes nobody has confirmed yet: sibling discounts, proration on mid-month joins, pause-and-extend versus pause-and-forfeit, partial payment against an active membership. Those are schema, not configuration. Building them against assumptions means rebuilding them.
+
+**If you find yourself needing a fee rule to complete a task, you have wandered out of scope. Stop and report it.**
+
+### Working method
+
+- **Batch PRs by coherent unit, not by task.** At working speed, one PR per task produces more than the reviewer can hold. Group: the whole platform control plane is one PR, the whole onboarding wizard another, the reporting surface another. Aim for **8–12 PRs across the five days**, not one per task. **Each task within a batch still gets full TDD and CI** — the batching is about review capacity, not rigour. Commit per task inside the batch so the diff is navigable; squash on merge if the reviewer prefers.
+- **Rebase on main** before opening a batch.
+- **TDD.** Test red before implementation, every time.
+- **Test the test.** Break the implementation, confirm red, restore.
+- **Mark the checklist** in this file as you complete each task, and commit the update with the task's PR.
+- Tasks are ordered. Where a task lists dependencies, respect them. Otherwise work in order.
+
+### Autonomy
+
+| Level | Meaning |
+|---|---|
+| **GREEN** | Build, verify, commit, open PR, continue to the next task. Do not wait. |
+| **RED** | Stop before building. Write a proposal. Wait for approval. Move to the next GREEN task while waiting — do not idle. |
+
+The human merges. You never merge a code or schema change yourself.
+
+### When you are blocked
+
+1. Two genuine attempts, then stop that task.
+2. Write what you tried and what you need.
+3. Move to the next independent task.
+4. Never guess a product decision. Never invent a business rule.
+
+### Standing rules — non-negotiable
+
+Most are mechanically enforced and will stop you. These are the ones that are **not**, so they depend on you:
+
+- `DESIGN.md` carries tokens; `docs/sports-club-ui-direction.html` carries composition. Read both before any screen.
+- Every list gets a designed empty state with a verb CTA, built with the list.
+- Scope discipline: build what the task asks, nothing adjacent.
+- **When you find a bug, search for a second instance of the same shape before closing.** Seven for seven in this codebase so far.
+
+---
+
+## Day 1 — Platform foundation
+
+The control plane has schema but no surface. Nothing here touches tenant data.
+
+- [ ] **1.1** Platform auth — separate session from tenant users, own table, mandatory 2FA. Platform staff must not be reachable through the tenant login. `GREEN`
+- [ ] **1.2** Platform layout and shell — `(platform)` route group, own navigation, visually distinct from tenant surfaces so nobody confuses the two. `GREEN`
+- [ ] **1.3** Tenant list — all tenants, status, plan, member count, created date. Search and filter. `GREEN`
+- [ ] **1.4** Tenant detail — settings, locations, feature state, usage, activity. Read-only in this task. `GREEN`
+- [ ] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `GREEN`
+- [ ] **1.6** Tenant status lifecycle — trial, active, suspended, churned, with reasons and audit. A suspended tenant's users cannot log in and see a clear message. `GREEN`
+- [ ] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `GREEN`
+- [ ] **1.8** Per-tenant feature toggles — override plan baseline, with expiry for trials and betas. Toggling changes both API behaviour and rendered navigation. `GREEN`
+
+**Day 1 gate:** a platform admin creates a tenant, enables features, and the tenant's owner sees exactly those features. No CLI involved.
+
+---
+
+## Day 2 — Onboarding and presets
+
+- [ ] **2.1** Preset definitions — write the full **swimming** and **multi-sport** definitions per `architecture.md` §7.4. Others stay documented stubs. **No prices** — plan shapes only, amount null. `GREEN`
+- [ ] **2.2** `applyPreset` UI — pick a preset at tenant creation, preview what it will seed, apply in one transaction. `GREEN`
+- [ ] **2.3** Sample data flagging — seeded example batches and programs carry `is_sample`, with a one-tap "remove sample data" action that disappears once anything real attaches. `GREEN`
+- [ ] **2.4** Preset lock — `applyPreset` refuses once a non-sample member exists. Test it. `GREEN`
+- [ ] **2.5** Onboarding wizard, step 1 — club details, timezone, first location. `GREEN`
+- [ ] **2.6** Onboarding wizard, step 2 — preset selection with preview. `GREEN`
+- [ ] **2.7** Onboarding wizard, step 3 — invite the owner, assign role. `GREEN`
+- [ ] **2.8** Onboarding checklist — the new tenant's owner sees what remains: add members, create batches, assign coaches. Each item links to where it is done. `GREEN`
+- [ ] **2.9** Tenant branding UI — logo and square mark upload to R2, club name, short name. Fallback initials mark renders when nothing is uploaded. `GREEN`
+- [ ] **2.10** Terminology editor — the eight closed `TERM_KEYS`, singular and plural, per locale. Changing "member" to "swimmer" updates the app and leaves `member_code` untouched. `GREEN`
+
+**Day 2 gate:** a tenant is created, preset-seeded, branded and owner-invited entirely through the UI.
+
+---
+
+## Day 3 — Documents, staff, support
+
+- [ ] **3.1** **Documents — token scheme** `RED`. Propose before building. Option B (app-issued proxy token) was recommended and is approved in principle, but the revocation question is open: does a token need to be revocable before expiry, and if so does that need a `token_id` denylist? Propose, then wait.
+- [ ] **3.2** Documents schema and upload — `documents` table, R2 private bucket, tenant-prefixed keys, RLS. Requires the new dependency flagged in the C-07 proposal — **ask before adding it**. `GREEN` (after 3.1 approved)
+- [ ] **3.3** Document proxy route — `/api/documents/[token]`, server-side role check, streams from R2, never exposes an R2 URL, logs every access. `GREEN` (after 3.1)
+- [ ] **3.4** Document UI — upload and view on the person detail screen, role-gated: owner/admin/receptionist full, coach read-only for their own roster. `GREEN` (after 3.1)
+- [ ] **3.5** Staff directory — list, detail, create, edit. `C-04` shipped schema and services; this is the missing UI. `GREEN`
+- [ ] **3.6** Staff invitations — invite by phone, assign role and locations, accept, revoke, resend. Completes `F-24`. `GREEN`
+- [ ] **3.7** Seed a receptionist login — `scripts/seed.ts` has no receptionist, so the `assertStaff` permission fix was never verified in a real session. Add one and verify. `GREEN`
+- [ ] **3.8** Support impersonation `RED`. Propose before building. Platform staff acting as a tenant user. Must require a stated reason, be fully audited, show a persistent banner to the impersonating user, and be impossible to initiate from a tenant session. `RED`
+- [ ] **3.9** Platform activity log — who did what across tenants, filterable, append-only. `GREEN`
+
+**Day 3 gate:** a child's photograph is uploadable and viewable, and no unauthenticated URL resolves to it. Prove it.
+
+---
+
+## Day 4 — Reporting and views
+
+Everything here reads data that already exists. No money.
+
+- [ ] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. `GREEN`
+- [ ] **4.2** Per-batch attendance summary — deferred in `C-27` to avoid a merge conflict with `#23`. That has landed; wire it in. `GREEN`
+- [ ] **4.3** Attendance report — by batch, by program, by period, with CSV export using canonical field names, not tenant vocabulary. `GREEN`
+- [ ] **4.4** Enquiry funnel report — counts and conversion by source and stage over time, stage duration. Figures must reconcile to the `enquiries` table exactly. `GREEN`
+- [ ] **4.5** Retention view — members at risk by attendance signal. **Aggregate and batch-level only.** Do not score individual minors — see `project-scope.md` §7.1 on DPDP profiling restrictions. `GREEN`
+- [ ] **4.6** Coach load view — sessions per coach per week, utilisation. `GREEN`
+- [ ] **4.7** Owner dashboard — capacity lanes for today, needs-attention with reasons, member and attendance figures. Still **no money tiles**. `GREEN`
+- [ ] **4.8** Coach home — today's sessions, this week's schedule, their own roster. Scoped to their sessions only. `GREEN`
+- [ ] **4.9** Member detail completion — attendance, documents, guardians, consent, status history in one coherent view. `GREEN`
+
+**Day 4 gate:** an owner can answer "how is my club doing" without asking anyone.
+
+---
+
+## Day 5 — Import, polish, hardening
+
+- [ ] **5.1** Importer — upload and column mapping. CSV and XLSX, header detection, saved mapping presets. **Ask before adding the parsing dependency.** `GREEN`
+- [ ] **5.2** Importer — validation and dry run. A preview showing exactly what will be created, a downloadable per-row error file, nothing written. `GREEN`
+- [ ] **5.3** Importer — commit and undo. Single transaction, import batch record, 24-hour undo, idempotent re-import via an external reference column. `GREEN`
+- [ ] **5.4** Empty-state audit — every list in the product. Each gets a designed empty state with a verb CTA. The first screen a new tenant sees is empty; competitors leave it blank. `GREEN`
+- [ ] **5.5** Loading-state audit — skeletons everywhere, no spinners. `GREEN`
+- [ ] **5.6** Mobile audit — every screen at 390px. 44px touch targets, 16px inputs, no horizontal scroll. Report any screen that fails. `GREEN`
+- [ ] **5.7** Bundle audit — per-route first-load JS. Report every route and flag anything approaching 150 KB. `GREEN`
+- [ ] **5.8** Permission matrix test — every role against every action, asserting allowed and denied. This is the test that catches a role gaining access nobody intended. `GREEN`
+- [ ] **5.9** Documentation sync — reconcile `implementation-plan.md` task states against reality, and check `architecture.md` still describes what the code does. It has been wrong twice before (`sessions.coach_id`, the platform module exception). `GREEN`
+- [ ] **5.10** Self-review — run `docs/review-checklist.md` against everything built in these five days, as if you had not written it. Verify by running, not reading. `GREEN`
+
+**Day 5 gate:** a new club can be onboarded, imported, and operating without a developer.
+
+---
+
+## Reserve — only if the list above is finished
+
+Forty-two tasks at working speed is under five days. The reserve is therefore expanded to **thirty-five items**, ordered by dependency and grouped by coherent unit. **None of these may require a fee rule** — that is the filter. If a task needs one, it does not go in. Tasks that touch messaging do so via in-app delivery only (the WhatsApp chain is excluded).
+
+### Coach integrity and scheduling
+
+- [ ] **R.1** Coach substitution — records who actually took the session. `C-20`. **Critical for `V-31` payout computation**, which reads `sessions.coach_id`. If substitution does not write the substitute, the wrong coach is paid and the bug is invisible from the register surface. `GREEN`
+- [ ] **R.2** Coach conflict detection — a coach double-booked across overlapping sessions warns on assignment, with the warning emitted before the save, not after. `C-21`. `GREEN`
+- [ ] **R.3** Holiday and closure calendar — annual holidays the owner declares; one-off closures that block bookings; the session generator skips both. Without this, a national holiday still generates a session and a coach registers against an empty pool. `GREEN`
+- [ ] **R.4** Session cancellation and rescheduling — closed reason vocabulary; reschedule preserves the `client_id` linkage so the offline queue still drains. Guardian notification surfaces in-app; WhatsApp delivery is excluded. `GREEN`
+
+### Capacity and movement
+
+- [ ] **R.5** Waitlists for full batches — a member joins a queue when capacity is hit and auto-enrols on the next withdrawal. In-app notification on promotion; WhatsApp excluded. `GREEN`
+- [ ] **R.6** Batch transfer — move a member between batches preserving attendance history, enrolment rows and the subscription. `V-19`. `GREEN`
+- [ ] **R.7** Makeup sessions — compensatory entitlement from an excused absence; redeemable against another batch within a window. `V-18`. **Do not let this drift into a fee credit.** One free session against the absent batch; no refund, no subscription adjustment. `GREEN`
+- [ ] **R.8** Absence alerts — daily job detecting streaks and low monthly attendance; surfaces in-app to coach and parent surfaces. Dedupe key is `(member_id, batch_id, alert_kind, calendar_week)` — three consecutive absences trigger one alert, not three. `V-20`. `GREEN`
+
+### Facilities and lanes
+
+- [ ] **R.9** Facilities and sub-units — pool with lanes, court, turf, studio. The swimming preset creates them. **Slots and pricing (`V-03`) is excluded — fee-rule work.** `V-01`. `GREEN`
+- [ ] **R.10** Facility booking exclusion — `btree_gist` constraint on `(facility_id, sub_unit, tstzrange)` for held and confirmed bookings. Fifty concurrent identical attempts produce exactly one success; check-then-insert in application code is forbidden. `V-02`. `GREEN`
+- [ ] **R.11** Lane allocation — assign members to lanes within a batch; the register groups by lane. `V-12`. `GREEN`
+- [ ] **R.12** Facility logs — chemistry, maintenance, incidents. Overdue chemistry check surfaces on the owner dashboard within 24 hours. Cadence is "N days since last done", not fixed calendar recurrence — this is how pool maintenance actually works and it degrades gracefully when a check is missed. `V-13`. `GREEN`
+- [ ] **R.13** Worker tasks — `tasks` and `maintenance_schedules`. Worker daily view is phone-only; overdue chemistry auto-creates tasks; "N days since last done" cadence. `V-50`. `GREEN`
+
+### Skills and progress
+
+- [ ] **R.14** Skill ladder — `skill_levels`, `skills`, rubric JSON. The swimming preset seeds the ladder. `V-09`. `GREEN`
+- [ ] **R.15** Assessments — band 1–4, assessor and timestamp. Coach entry from the session view; three swimmers assessed in under a minute. `V-10`. `GREEN`
+- [ ] **R.16** Progress view — pips per DESIGN.md, history over time. **No client JS on the parent page surface** (the C-45 zero-JS rule still binds). `V-11`. `GREEN`
+
+### Self-service and engagement
+
+- [ ] **R.17** QR self check-in — per-member QR, scanner view, marks attendance for the current session. An out-of-window scan is rejected, not silently dropped. `V-21`. `GREEN`
+- [ ] **R.18** Public self-registration — public page with consent capture, creating an **enquiry** rather than a member. A minor registration cannot complete without guardian details and consent. **Public booking (`V-05`) is excluded — fee-rule work.** `V-22`. `GREEN`
+- [ ] **R.19** Notification centre — in-app, per role. Essential categories (session cancellation, absence, promotion off a waitlist) survive a communications withdrawal; non-essential do not. **In-app only — no email, no WhatsApp** (the messaging chain is excluded). `GREEN`
+
+### Configuration, language, presets
+
+- [ ] **R.20** Hindi and Bengali terminology scaffolding — translation tables for the closed `TERM_KEYS` in each locale; `titleCase` and plural work; per-locale override UI; default locale picked at tenant creation from the preset's home region. `GREEN`
+- [ ] **R.21** Custom fields on core entities — admin-defined extra columns on members, sessions and batches. Schema decision is open: jsonb on the row, sparse columns, or a separate `entity_custom_fields` table — each has different cost profiles for index, export and search. **RED — propose the storage shape before building.**
+- [ ] **R.22** Remaining preset definitions — football, badminton/racquet, gym/fitness, dance/martial arts, start-from-scratch. Day 2 covers swimming and multi-sport only. **One commit per preset** so a single broken definition does not block the others; each gets TDD and the same lock rule (refuses once a non-sample member exists). `GREEN`
+- [ ] **R.23** Six-accent picker UI — owner picks from the frozen `ACCENTS` map; the picker lives in tenant branding settings; applies to buttons but not status colours (paid, overdue, late). The token plumbing is in `F-19`; this is the missing surface. `GREEN`
+
+### Trials and pipeline
+
+- [ ] **R.24** Trial sessions — an enquiry books into a real batch as a trial; the trial is flagged on the register; outcome recorded. `C-14`. `GREEN`
+- [ ] **R.25** Trial-to-member conversion — convert an enquiry to a member, preserving source attribution so conversion rate by source is reportable. `C-15`. `GREEN`
+- [ ] **R.26** Pipeline follow-ups overdue view — overdue follow-ups surface on the owner dashboard; reassign and complete from the same surface. `C-13` completion. `GREEN`
+
+### Platform extensions
+
+- [ ] **R.27** Per-tenant usage meter — read-only display in the platform tenant detail (member count, sessions this month, storage used). **Display only — no billing derived.** Subscription billing for our own SaaS is excluded money work. `GREEN`
+- [ ] **R.28** Per-location feature override — feature toggles become per-location, not just per-tenant. A pool-only venue turns off football features at the location it never operates, while keeping them on for the tenant's other locations. `GREEN`
+- [ ] **R.29** Demo-data reset action — per-tenant, only on tenants flagged as demo; full wipe to fresh sample. Distinct from "remove sample data" (Day 2 2.3), which only clears `is_sample` markers without touching real rows. **RED — confirm the action cannot be invoked against a non-demo tenant, even from a platform session, before building.**
+
+### Test coverage
+
+- [ ] **R.30** Integration test: programmes and batches edge cases — capacity races, day-of-week conflicts on the same coach, programme renaming with active batches. **Prove the test can fail** (review-checklist §6) before declaring done; a green suite proves nothing.
+- [ ] **R.31** Integration test: enquiry stage transitions and follow-up overdue rollup — every legal transition succeeds, every illegal one is rejected, the overdue rollup counts exactly once per follow-up.
+- [ ] **R.32** Integration test: dashboard services under concurrent mutation — owner dashboard rebuild when sessions, members and enquiries all change in the same window. No double-counted tiles; no zero rows from a scope miss (the §6 named failure class).
+- [ ] **R.33** Integration test: register race coverage — two devices, one offline, marking the same member. Assert the offline mark lands exactly once; the offline-queue drain is idempotent. Mirrors `scripts/e2e-offline.ts` VERIFY 6. **Run five times** before declaring green — the named failure class is "a narrowed window looks like a closed one."
+- [ ] **R.34** Test sweep — every service in `lib/services/` without an integration test in `tests/tier1/`. For each, write the missing test and prove it can fail. If a service genuinely does not need one, write the test that documents why and link it from the PR.
+- [ ] **R.35** Audit coverage assertion — every business mutation writes exactly one audit row keyed by `tenant_id`. Coverage test reads schema, mutates each table, reads `audit_log`, fails if any mutation is unrecorded. Extends `F-15`.
+
+---
+
+## When the reserve is exhausted
+
+When every item in the reserve is checked off, **stop inventing work.** Run the following in order. Each step has a defined output; do not skip ahead and do not start speculative items.
+
+### Procedure
+
+a. **Run `docs/review-checklist.md` against everything on main.** Every numbered check, every named failure class. Mechanical, not interpretive. Record the result per section.
+
+b. **Independent review as if you had not written it.** Open the diffs cold. For each safety property touched in the batch, mutate the thing and confirm the test fails, then restore (review-checklist §6). A green suite proves nothing; the mutations prove the suite would notice.
+
+c. **Hunt siblings.** For every bug found in the last two weeks, search for a second instance of the same shape. **Seven for seven so far** — the recurrence pattern is real and not yet broken. The known shapes: parse/permission preamble skipped in a Server Action (three recurrences so far — `markAttendanceSessionAction`, `getRosterAction`, `devCodeAction`); row-level scope applied to a list but not to its direct-access sibling (one — `getTodayAction`); happy-path unit test that fabricated `ctx` and missed a real-resolution bug (one — `ctx.userId` in two id spaces); verification by literal-string grep that missed a sibling reached by relative import (one — `@/db/client` vs `../../db/client`); an offline durability fix that read as "fixed, residual flakiness" on one green run and was actually a third undiagnosed mechanism (one).
+
+d. **Reconcile the documents against the code.** `implementation-plan.md` task states against reality. `architecture.md` against what the code actually does. It has been wrong twice before (`sessions.coach_id` shape; the platform-module exception in `F-06a`). Flag every drift, even small ones.
+
+e. **Write the integration tests that do not exist yet.** Any service in `lib/services/` without a tier-1 test. Any mutation without an audit row. Any list without a designed empty state.
+
+f. **STOP and report.** Do not start speculative work. The report is the day's output; nothing else.
+
+### Output shape
+
+The exhaustion report follows the same daily-report format (§"Daily report format"):
+
+```
+RESERVE EXHAUSTED
+
+Checklist run:      sections passed, sections failed, mechanical findings
+Independent review: mutations attempted, what went red, what did not
+Siblings found:     each instance, where, fix landed or queued
+Doc drift:          each mismatch between document and code
+Tests written:      paths covered, mutations proving each can fail
+Stopped:            yes
+```
+
+---
+
+## Daily report format
+
+At the end of each day, one report:
+
+```
+DAY N
+
+Completed:      task ids, PR numbers, CI status
+Blocked:        task id, what you tried, what you need
+Bugs found:     each one, and whether you checked for a sibling
+Deferred:       what and why
+Scope drift:    anything you noticed but did not act on
+Tomorrow:       what you intend to start
+```
+
+---
+
+## Hard boundaries
+
+Do not, under any circumstances:
+
+1. Build anything in the money chain — plans, subscriptions, invoices, payments, WhatsApp.
+2. Invent a business rule. If a task seems to need one, stop and report.
+3. Merge your own code or schema PR.
+4. Add a dependency without asking.
+5. Edit anything under `tests/tier1/**`.
+6. Weaken a lint rule, a test, or a CI gate to make something pass.
+7. Build a RED task before its proposal is approved.
+8. Touch `db/migrations/` from a UI-lane branch — see `agent-lanes.md`.
+9. Invent work after the reserve is exhausted. Follow §"When the reserve is exhausted" instead.
