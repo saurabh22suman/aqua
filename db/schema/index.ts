@@ -9,5 +9,6 @@ export * from "./consent";
 export * from "./programs";
 export * from "./scheduling";
 export * from "./platform";
+export * from "./platform-users";
 export * from "./roles";
 export * from "./enquiries";
