@@ -13,6 +13,12 @@ repo state. When the next agent picks up, they should:
 
 ---
 
+## Mark here when work resumes below
+
+<!-- marker -->
+
+---
+
 ## Branches and PRs as of last session
 
 - `feat/day1-platform-control-plane` — PR #30 against `main`. Phase 1.1 + 1.2
@@ -233,16 +239,21 @@ top.
 
 ### Next pickup
 
-Pick up at **1.6 — tenant status lifecycle**: trial, active,
-suspended, churned. 1.4's read-only detail page already shows a
-status pill — 1.6 adds the audit-aware transition (suspend /
-unsuspend / churn) the page then reflects. Will need a sibling
-`platform_admin_update` policy on `tenants.status`; same shape as
-the `platform_admin_insert` policy 1.5 landed. Each transition
-writes a `platform_audit_log` row with `action =
-'tenant.suspend'` / `'tenant.unsuspend'` / `'tenant.churn'` and a
-`reason` field; suspended tenants must be denied at the tenant
-login path.
+Pick up at **1.7 — feature catalogue**. The platform sidebar
+already links to `/platform/features` (`app/(platform)/layout.tsx`)
+and 1.4's tenant detail references it in
+`recentActivity` ("feature toggle changes…"). The catalogue page
+sits on `db/schema/platform.ts::features` (already in the DB and
+seeded by `db/seed-platform.ts`). The page lists every feature
+with its category and status (`'ga' | 'beta' | 'internal'`),
+allows editing name / category / status, and write-protection on
+`feature_key` (the immutable analytics key per architecture §7).
+The status field is what 1.8 will eventually override per-tenant.
+
+Stack state: PR #35 (1.5) and PR #36 (1.6) are open. #36 is off
+`feat/1.5-create-tenant` (it includes 1.5's commits ahead of
+`main`); once #35 merges to main, rebase #36 onto the new main
+head so the diff is small and reviewable.
 
 ---
 
@@ -359,6 +370,81 @@ Verification:
 Velocity: 1 substantive task shipped with full TDD + mutation proof
 + migration. Matches the standing calibration ("1-3 substantive
 tasks per session").
+
+### Session N+2 — Phase 1.6 (this session)
+
+What landed:
+- 1.6 tenant status lifecycle: `feat/1.6-status-lifecycle` off
+  `feat/1.5-create-tenant` (PR #35 still open; will need rebase
+  after #35 merges). Single commit `703b276`. PR #36 OPEN.
+- **migration `20260902210000_platform_admin_tenant_update.sql`** —
+  additive UPDATE policy on `tenants` keyed on
+  `app.platform_admin = 'true'`. Sibling of `platform_admin_insert`
+  (1.5). The platform surface can now write `tenants.status`
+  through `withPlatformAdmin()`; `tenant_isolation` keeps the
+  default closed for any tenant user who somehow opens the path.
+- **`db/platform-tenant-status.ts`** — `transitionTenantStatus()`:
+  one `withPlatformAdmin()` transaction. `SELECT FOR UPDATE` on
+  the tenant row, state-machine guard (trial/active/suspended can
+  move to any of the three; churned is terminal), UPDATE
+  `tenants.status`, INSERT `platform_audit_log` with action
+  `tenant.activate` / `tenant.suspend` / `tenant.churn` and detail
+  `{from, to, reason?}`. Reasons required on suspend/churn;
+  activate/reactivate reason-less. Distinct error codes for
+  `no_change` (same status) and `terminal_state` (out of churned).
+- **`db/platform.ts`** — added `resolveSessionForLogin()` returning
+  a discriminated union `{kind: 'ok' | 'suspended' | 'none'}`.
+  One call resolves both the home route AND whether to gate the
+  login on tenant suspension. `resolveHomePath()` kept for any
+  future reader that wants only the path.
+- **`lib/actions/auth-ui.ts`** — `homeForSessionAction` now
+  returns the `SessionResolution` union instead of `string | null`.
+- **`components/login-form.tsx`** — clear tenant-suspended message
+  carrying the actual slugs ("Your club (xyz, acme) is paused.
+  Reach out to your operator to reactivate it."), instead of the
+  previous `No membership found` which conflated paused-tenant
+  with no-account.
+- **`lib/actions/platform-tenants.ts`** — added
+  `transitionTenantStatusAction`: same parse → permission →
+  service preamble as `createTenantAction`. TenantId comes from
+  the route param, never from the form (a hidden field is just a
+  cookie replier away).
+- **`app/(platform)/platform/tenants/[tenantId]/status-transitions.tsx`** —
+  client controls wired into the existing detail page. Suspend /
+  churn open a reason-typed modal; activate runs inline.
+  `router.refresh()` after each commit so the status pill, the
+  activity timeline, and the audit log all reflect.
+
+Tests (20 new; 297 / 297 total):
+- `tests/tier1/platform-admin-tenant-update-rls.test.ts` — 4:
+  UPDATE policy proof + 'app.platform_admin = false' deny + unset
+  deny + idempotent repeat. **Mutation-proofed**: drop the policy,
+  1 test red.
+- `tests/tier1/platform-tenants-status.test.ts` — 11: every state
+  machine edge, reason-required on suspend/churn, no_change vs
+  terminal_state, tenant_not_found, invalid input, atomicity.
+  **Mutation-proofed**: skipping the audit insert breaks 5 tests.
+- `tests/tier1/platform-tenants-status-action.test.ts` — 5: full
+  Server Action with real auth (provision + login + TOTP verify
+  like the other action tests), parse rejection, terminal-state,
+  malformed input.
+
+Verification:
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build &&
+   pnpm check:migrations && pnpm exec tsx
+   scripts/check-bundle-budget.ts` — all green. Detail page
+  `/platform/tenants/[tenantId]` went from `171 B` to `1.86 kB`
+  First Load JS (the new client island for the transition
+  controls); still well within the 150 KB bundle budget.
+
+Velocity: 1 substantive task shipped with full TDD + migration +
+mutation proof + UI integration. Matches the standing calibration
+("1-3 substantive tasks per session").
+
+Stack note for the next agent: this branch is off
+`feat/1.5-create-tenant`, not off `main`. PRs #35 (1.5) and
+#36 (1.6) are stacked 1.5 → 1.6. When #35 lands, rebase #36 onto
+`main` to drop the 1.5 commits and keep the diff small.
 
 After 1.5: 1.6 (status lifecycle). The detail page (1.4) needs a
 "Status" action button — but 1.6 is not the action button, it's the
