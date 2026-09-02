@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
+import { getSampleDataState } from "@/db/sample-data-state";
 import { asTenantId } from "@/lib/ids";
 import { StatusTransitionControls } from "./status-transitions";
 import { TenantFeatureToggles } from "./tenant-feature-toggles";
 import { InviteOwnerForm } from "./invite-owner-form";
+import { RemoveSampleDataButton } from "./remove-sample-data-button";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -60,6 +62,7 @@ export default async function PlatformTenantDetailPage({
   const { tenantId } = await params;
   const detail = await getTenantDetail(asTenantId(tenantId));
   if (!detail) notFound();
+  const sampleState = await getSampleDataState(tenantId);
 
   return (
     <div className="max-w-5xl">
@@ -188,6 +191,21 @@ export default async function PlatformTenantDetailPage({
           })}
         />
       </section>
+
+      {sampleState.hasSample && !sampleState.hasReal ? (
+        <section className="mt-8">
+          <SectionHeader
+            title="Sample data"
+            subtitle="The preset engine seeded this tenant with example programs, batches, and supporting rows. They are flagged is_sample so you can wipe them with one click before adding real data. Once a real (non-sample) program or batch exists, the button hides — edit by hand from then on."
+          />
+          <div className="rounded-card bg-paper border border-line px-4 py-3">
+            <p className="text-[13px] text-ink-2">
+              This tenant still has only preset-seeded sample data.
+            </p>
+            <RemoveSampleDataButton tenantId={detail.id} />
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <SectionHeader
