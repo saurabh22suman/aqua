@@ -1,6 +1,5 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db } from "./client";
 import { withPlatformAdmin } from "./scope";
 import { withTenant } from "./tenant";
 import { tenants } from "./schema/tenants";

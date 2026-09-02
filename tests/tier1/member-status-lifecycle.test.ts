@@ -180,6 +180,16 @@ describe("members.status check constraint", () => {
     for (const status of ["trial", "active", "paused", "lapsed", "left"]) {
       const memberId = await newMember(`ck-${status}`);
       await admin.query("update members set status = $1 where id = $2", [status, memberId]);
+      // Read back — without this assertion, a future migration that
+      // drops the check constraint without informing anyone (or a bug
+      // in the UPDATE path) would let this test pass while the row
+      // sat at its previous status. A green run with no read-back is
+      // decoration, not a test (review-checklist §6).
+      const got = await admin.query<{ status: string }>(
+        "select status from members where id = $1",
+        [memberId],
+      );
+      expect(got.rows[0]?.status).toBe(status);
     }
   });
 

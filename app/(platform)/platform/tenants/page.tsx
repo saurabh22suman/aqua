@@ -21,18 +21,20 @@ const STATUS_LABEL: Record<string, string> = {
 // Status pills — accessible word+colour per DESIGN.md §3. Every
 // status carries a word even if the colour is identical to its
 // neighbours; otherwise a colourblind reader can't tell 'trial' from
-// 'active'.
+// 'active'. None of the four statuses are money/attendance state —
+// warn/late/water are reserved for that — so the pills stay on the
+// neutral ink palette. The label is the source of truth.
 function StatusPill({ status }: { status: string }) {
   if (status === "suspended") {
     return (
-      <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-late-soft text-late">
+      <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-ink-2/15 text-ink-2">
         {STATUS_LABEL[status]}
       </span>
     );
   }
   if (status === "trial") {
     return (
-      <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-warn-soft text-warn">
+      <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-deck text-ink">
         {STATUS_LABEL[status]}
       </span>
     );

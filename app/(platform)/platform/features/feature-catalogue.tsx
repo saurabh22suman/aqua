@@ -63,61 +63,74 @@ export function FeatureCatalogue({
           {error}
         </p>
       ) : null}
-      <div className="mt-6 space-y-6">
-        {orderedCategories.map((cat) => (
-          <section key={cat}>
-            <h2 className="mb-2 text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-              {cat}
-            </h2>
-            <div className="rounded-card bg-paper border border-line overflow-hidden">
-              <ul>
-                {(grouped.get(cat) ?? []).map((feature, idx) => (
-                  <li
-                    key={feature.key}
-                    className={`px-4 py-3 ${
-                      idx > 0 ? "border-t border-line" : ""
-                    }`}
-                  >
-                    {editingKey === feature.key ? (
-                      <FeatureEditRow
-                        feature={feature}
-                        isPending={isPending}
-                        onCancel={() => {
-                          setEditingKey(null);
-                          setError(null);
-                        }}
-                        onSubmit={(next) => {
-                          startTransition(async () => {
-                            const result = await updateFeatureAction(
-                              feature.key,
-                              next,
-                            );
-                            if (result.kind === "ok") {
-                              setEditingKey(null);
-                              setError(null);
-                              router.refresh();
-                              return;
-                            }
-                            setError(result.message);
-                          });
-                        }}
-                      />
-                    ) : (
-                      <FeatureViewRow
-                        feature={feature}
-                        onEdit={() => {
-                          setEditingKey(feature.key);
-                          setError(null);
-                        }}
-                      />
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </section>
-        ))}
-      </div>
+      {initial.length === 0 ? (
+        <div className="mt-8 rounded-card bg-paper border border-line px-5 py-12 text-center">
+          <p className="text-[15px] font-medium text-ink">No features yet</p>
+          <p className="mt-2 text-[13px] text-ink-3">
+            The catalogue is empty — \`pnpm db:seed\` populates it from
+            \`db/seed-platform.ts\` on a fresh database.
+          </p>
+          <code className="mt-4 inline-block rounded-ctl bg-deck px-3 py-1 text-[12px] font-mono text-ink-2">
+            pnpm db:seed
+          </code>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-6">
+          {orderedCategories.map((cat) => (
+            <section key={cat}>
+              <h2 className="mb-2 text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+                {cat}
+              </h2>
+              <div className="rounded-card bg-paper border border-line overflow-hidden">
+                <ul>
+                  {(grouped.get(cat) ?? []).map((feature, idx) => (
+                    <li
+                      key={feature.key}
+                      className={`px-4 py-3 ${
+                        idx > 0 ? "border-t border-line" : ""
+                      }`}
+                    >
+                      {editingKey === feature.key ? (
+                        <FeatureEditRow
+                          feature={feature}
+                          isPending={isPending}
+                          onCancel={() => {
+                            setEditingKey(null);
+                            setError(null);
+                          }}
+                          onSubmit={(next) => {
+                            startTransition(async () => {
+                              const result = await updateFeatureAction(
+                                feature.key,
+                                next,
+                              );
+                              if (result.kind === "ok") {
+                                setEditingKey(null);
+                                setError(null);
+                                router.refresh();
+                                return;
+                              }
+                              setError(result.message);
+                            });
+                          }}
+                        />
+                      ) : (
+                        <FeatureViewRow
+                          feature={feature}
+                          onEdit={() => {
+                            setEditingKey(feature.key);
+                            setError(null);
+                          }}
+                        />
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </>
   );
 }

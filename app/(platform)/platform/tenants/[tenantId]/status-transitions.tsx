@@ -37,13 +37,19 @@ const BUTTON_LABEL: Record<Action, string> = {
 };
 
 function buttonClass(action: Action): string {
+  // Status actions are operator workflow controls, not money or
+  // attendance state — DESIGN.md §1.1 reserves warn / late / water
+  // for those meanings. We use the accent token (the only token
+  // DESIGN.md §1.2 explicitly endorses for non-status primary
+  // actions) and the neutral ink palette for the rest. The label is
+  // the source of truth.
   if (action === "tenant.churn") {
-    return "rounded-pill px-4 py-2 text-[13px] font-medium text-late bg-late-soft hover:bg-late hover:text-white transition-colors duration-150";
+    return "rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-ink-2 hover:bg-ink transition-colors duration-150";
   }
   if (action === "tenant.suspend") {
-    return "rounded-pill px-4 py-2 text-[13px] font-medium text-late border border-late/40 hover:bg-late-soft transition-colors duration-150";
+    return "rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck transition-colors duration-150";
   }
-  return "rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-water hover:opacity-90 transition-colors duration-150";
+  return "rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-[var(--accent)] hover:opacity-90 transition-colors duration-150";
 }
 
 export function StatusTransitionControls({

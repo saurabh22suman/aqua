@@ -24,8 +24,11 @@ export function currentScope(): Scope | undefined {
 // direction (better-auth's own call chain does this: an outer
 // withPlatform around auth.api.verifyPhoneNumber legitimately triggers an
 // inner withPlatform around linkBetterAuthUser via callbackOnVerification).
-const SQL_SCOPED_KINDS = new Set<Scope["kind"]>(["tenant", "user", "platform_admin"]);
-
+//
+// The set of scopes that DO set a Postgres session variable is the
+// union of the two below. The platform scope (`withPlatform()`) is
+// the only scope that opens a session-scoped variable other than the
+// tenant/user pair (via withPlatformAdmin).
 const PLATFORM_ADMIN_SQL_SCOPED_KINDS = new Set<Scope["kind"]>([
   "tenant",
   "user",
