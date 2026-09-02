@@ -83,6 +83,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-features-action.test.ts",
   "tests/tier1/platform-tenant-features.test.ts",
   "tests/tier1/platform-tenant-features-action.test.ts",
+  "tests/tier1/platform-presets.test.ts",
   "tests/tier1/platform-admin-tenant-features-rls.test.ts",
   "tests/tier1/tenant-feature-resolution.test.ts",
   "scripts/e2e-offline.ts",

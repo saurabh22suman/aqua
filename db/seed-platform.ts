@@ -1,5 +1,47 @@
 import { Client } from "pg";
 import { v7 as uuidv7 } from "uuid";
+import {
+  SWIMMING_PRESET_DEFINITION,
+  MULTI_SPORT_PRESET_DEFINITION,
+} from "./preset-definitions";
+
+// Phase 2.1 — preset catalogue seed entries. Authored as
+// constants in db/preset-definitions.ts (Zod-validated at module
+// load, so a typo here surfaces as a build error rather than a
+// runtime surprise). The seedPlatformCatalogue function below
+// inserts the rows on a fresh database; production onboarding
+// reads them via the applyPreset engine in 2.2.
+const PRESETS: ReadonlyArray<{
+  key: string;
+  version: number;
+  name: string;
+  description: string;
+  definition: object;
+  status: "active";
+}> = [
+  {
+    key: "swimming",
+    version: 1,
+    name: "Swimming academy",
+    description:
+      "Aqua + lane booking + skill levels. Three swim-stroke programs, " +
+      "Beginner/Intermediate/Advanced ladder with rubrics, monthly and " +
+      "quarterly plan shapes, four-lane pool facility.",
+    definition: SWIMMING_PRESET_DEFINITION,
+    status: "active",
+  },
+  {
+    key: "multi-sport",
+    version: 1,
+    name: "Multi-sport club",
+    description:
+      "All program modules and multiple facilities, no vertical-specific " +
+      "content. Operator adds the sport(s) from the catalogue after " +
+      "onboarding; we provide the empty shell and the standard plan shapes.",
+    definition: MULTI_SPORT_PRESET_DEFINITION,
+    status: "active",
+  },
+];
 
 const FEATURES: ReadonlyArray<{
   key: string;
@@ -172,6 +214,29 @@ export async function seedPlatformCatalogue(
         "Placeholder consent notice — replace with the real DPDP-compliant privacy notice before go-live.",
       ],
     );
+
+    // Phase 2.1 — preset catalogue. The schema is fixed by
+    // migration 0007; this seed populates v1 of the two presets
+    // the work-guide ships today (swimming + multi-sport). Each
+    // call is idempotent on the (key, version) PK, so re-running
+    // seedPlatformCatalogue against an already-seeded database is
+    // a no-op. New presets or new versions land via future
+    // migration-style additions; we do not extend this array.
+    for (const preset of PRESETS) {
+      await client.query(
+        `insert into presets (key, version, name, description, definition, status)
+         values ($1, $2, $3, $4, $5::jsonb, $6)
+         on conflict (key, version) do nothing`,
+        [
+          preset.key,
+          preset.version,
+          preset.name,
+          preset.description,
+          JSON.stringify(preset.definition),
+          preset.status,
+        ],
+      );
+    }
   } finally {
     await client.end();
   }
