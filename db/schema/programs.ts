@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import {
+  boolean,
   check,
   foreignKey,
   integer,
@@ -25,6 +26,11 @@ export const programs = pgTable(
       .$type<TenantId>(),
     name: text("name").notNull(),
     description: text("description"),
+    // Phase 2.2a — applyPreset engine flags every seeded program
+    // as is_sample so 2.3's "remove sample data" affordance can
+    // bulk-delete the engine's output without touching the
+    // operator's later additions.
+    isSample: boolean("is_sample").notNull().default(false),
     ...softDelete,
     ...auditColumns,
   },
@@ -45,6 +51,11 @@ export const batches = pgTable(
     daysOfWeek: integer("days_of_week").array().notNull().default([]),
     startTime: time("start_time").notNull(),
     endTime: time("end_time").notNull(),
+    // Phase 2.2a — applyPreset engine flags every seeded batch
+    // as is_sample so 2.3's "remove sample data" affordance can
+    // bulk-delete the engine's output without touching the
+    // operator's later additions.
+    isSample: boolean("is_sample").notNull().default(false),
     // C-04: real FK to staff, migrated from a bare user id in
     // migration 0018. See that migration's comment for the backfill.
     // Branded StaffId (M3) -- this is the exact column whose meaning

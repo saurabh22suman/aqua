@@ -200,6 +200,42 @@ export async function seedPlatformCatalogue(
        where plan_id is null`,
     );
 
+    // Phase 2.1 — preset catalogue. The schema is fixed by
+    // migration 0007; this seed populates v1 of the two presets
+    // the work-guide ships today (swimming + multi-sport). Each
+    // call is idempotent on the (key, version) PK, so re-running
+    // seedPlatformCatalogue against an already-seeded database is
+    // a no-op. New presets or new versions land via future
+    // migration-style additions; we do not extend this array.
+    //
+    // ON CONFLICT DO UPDATE on definition: differs from the
+    // architecture's "applied once, then inert" rule. That rule
+    // applies to *tenants* (a tenant with the preset applied isn't
+    // reseeded). The seed populating the *catalogue* row is a
+    // different question — here, a definition-shape change during
+    // Phase 2 development (e.g. Phase 2.2a's `programName` field
+    // on exampleBatches) needs to overwrite v1 of the catalogue.
+    // New versions go via fresh rows, not by mutating v1 in place.
+    for (const preset of PRESETS) {
+      await client.query(
+        `insert into presets (key, version, name, description, definition, status)
+         values ($1, $2, $3, $4, $5::jsonb, $6)
+         on conflict (key, version) do update
+           set name = excluded.name,
+               description = excluded.description,
+               definition = excluded.definition,
+               status = excluded.status`,
+        [
+          preset.key,
+          preset.version,
+          preset.name,
+          preset.description,
+          JSON.stringify(preset.definition),
+          preset.status,
+        ],
+      );
+    }
+
     // Platform-level (C-05): every consent row references a
     // policy_versions row by version -- an immutable text snapshot, not
     // just a label. Placeholder content until a real privacy notice is

@@ -82,6 +82,7 @@ export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[
         startTime: batches.startTime,
         endTime: batches.endTime,
         coachId: batches.coachId,
+        isSample: batches.isSample,
         deletedAt: batches.deletedAt,
         createdAt: batches.createdAt,
         updatedAt: batches.updatedAt,
