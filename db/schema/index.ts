@@ -10,5 +10,6 @@ export * from "./programs";
 export * from "./scheduling";
 export * from "./platform";
 export * from "./platform-users";
+export * from "./tenant-features";
 export * from "./roles";
 export * from "./enquiries";

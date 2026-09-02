@@ -21,8 +21,8 @@
     "worker": "tsx worker/index.ts",
     "seed": "tsx scripts/seed.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
-    "check:lines": "tsx scripts/check-line-count.ts",
-    "check:fonts": "tsx scripts/check-font-budget.ts"
+    "check:fonts": "tsx scripts/check-font-budget.ts",
+    "check:lines": "tsx scripts/check-line-count.ts"
   },
   "dependencies": {
     "@fontsource/bricolage-grotesque": "^5.3.0",
