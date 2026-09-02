@@ -5,7 +5,8 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { assertStaff } from "@/lib/auth/permissions";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema";
-import { todayInZone } from "@/lib/time/tz";
+import { addDays, todayInZone } from "@/lib/time/tz";
+import { listCoachRoster, listCoachSchedule } from "@/lib/services/coach-schedule";
 import {
   getRosterForSession,
   listTodaySessions,
@@ -13,7 +14,8 @@ import {
   sessionVisibleToCaller,
   type RosterRow,
 } from "@/lib/services/register";
-import { markAttendanceSchema, sessionIdSchema } from "@/lib/schemas";
+import { coachScheduleSchema, markAttendanceSchema, sessionIdSchema } from "@/lib/schemas";
+import type { CoachRosterRow, CoachScheduleRow } from "@/lib/services/coach-schedule";
 
 export type TodaySession = {
   id: string;
@@ -53,6 +55,46 @@ export async function getTodayAction(): Promise<{
 }
 
 export type { RosterRow };
+
+export async function getScheduleAction(raw: {
+  days?: number;
+}): Promise<{
+  from: string;
+  to: string;
+  days: Array<{ date: string; sessions: CoachScheduleRow[] }>;
+}> {
+  const input = coachScheduleSchema.parse(raw);
+  const ctx = await requireDefaultCtx();
+  assertStaff(ctx);
+
+  const [tenant] = await withTenant(ctx.tenantId, (tx) =>
+    tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)),
+  );
+  const daysAhead = input.days ?? 7;
+  const from = todayInZone(tenant.timezone);
+  const to = addDays(from, daysAhead - 1);
+
+  const rows = await listCoachSchedule(
+    { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+    from,
+    to,
+  );
+
+  const byDate = new Map<string, CoachScheduleRow[]>();
+  for (const r of rows) {
+    const list = byDate.get(r.sessionDate) ?? [];
+    list.push(r);
+    byDate.set(r.sessionDate, list);
+  }
+
+  const days: Array<{ date: string; sessions: CoachScheduleRow[] }> = [];
+  for (let i = 0; i < daysAhead; i++) {
+    const date = addDays(from, i);
+    days.push({ date, sessions: byDate.get(date) ?? [] });
+  }
+
+  return { from, to, days };
+}
 
 export async function getRosterAction(
   rawSessionId: string,
@@ -105,4 +147,10 @@ export async function markAttendanceSessionAction(raw: {
 
   await markAttendance(ctx, input);
   return { ok: true };
+}
+
+export async function getCoachRosterAction(): Promise<CoachRosterRow[]> {
+  const ctx = await requireDefaultCtx();
+  assertStaff(ctx);
+  return listCoachRoster({ tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey });
 }

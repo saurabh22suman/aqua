@@ -7,6 +7,8 @@ import {
   createProgramSchema,
   deleteBatchSchema,
   deleteProgramSchema,
+  updateBatchSchema,
+  updateProgramSchema,
 } from "@/lib/schemas";
 import {
   createBatch,
@@ -16,6 +18,8 @@ import {
   listBatches,
   listCoaches,
   listPrograms,
+  updateBatch,
+  updateProgram,
   type BatchWithProgramName,
   type CoachOption,
 } from "@/lib/services/programs";
@@ -84,4 +88,31 @@ export async function deleteBatchAction(
   const ctx = await requireDefaultCtx();
   assertManagement(ctx);
   return deleteBatch(ctx, batchId);
+}
+
+export async function updateProgramAction(raw: {
+  programId: string;
+  name: string;
+  description?: string;
+}): Promise<{ ok: true; program: Program } | { ok: false; error: string }> {
+  const input = updateProgramSchema.parse(raw);
+  const ctx = await requireDefaultCtx();
+  assertManagement(ctx);
+  return updateProgram(ctx, input);
+}
+
+export async function updateBatchAction(raw: {
+  batchId: string;
+  programId: string;
+  name: string;
+  capacity: number;
+  daysOfWeek: number[];
+  startTime: string;
+  endTime: string;
+  coachId?: string;
+}): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
+  const input = updateBatchSchema.parse(raw);
+  const ctx = await requireDefaultCtx();
+  assertManagement(ctx);
+  return updateBatch(ctx, input);
 }

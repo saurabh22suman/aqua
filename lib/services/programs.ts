@@ -153,6 +153,76 @@ export async function createBatch(
 // generateSessions only selects batches with deleted_at is null, so no
 // new ones are created; enrolMember (lib/services/register.ts) refuses
 // new enrolments the same way.
+export async function updateProgram(
+  ctx: ActionCtx,
+  input: { programId: string; name: string; description?: string },
+): Promise<{ ok: true; program: Program } | { ok: false; error: string }> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const [program] = await tx
+      .update(programs)
+      .set({
+        name: input.name,
+        description: input.description,
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(and(eq(programs.id, input.programId), eq(programs.tenantId, ctx.tenantId), isNull(programs.deletedAt)))
+      .returning();
+    if (!program) return { ok: false, error: "Program not found." };
+    return { ok: true, program };
+  });
+}
+
+export async function updateBatch(
+  ctx: ActionCtx,
+  input: {
+    batchId: string;
+    programId: string;
+    name: string;
+    capacity: number;
+    daysOfWeek: number[];
+    startTime: string;
+    endTime: string;
+    coachId?: string;
+  },
+): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const [batch] = await tx
+      .update(batches)
+      .set({
+        programId: input.programId,
+        name: input.name,
+        capacity: input.capacity,
+        daysOfWeek: input.daysOfWeek,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        coachId: input.coachId ? asStaffId(input.coachId) : null,
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
+      .returning();
+    if (!batch) return { ok: false, error: "Batch not found." };
+
+    const [program] = await tx
+      .select({ name: programs.name })
+      .from(programs)
+      .where(eq(programs.id, input.programId));
+
+    let coachName: string | null = null;
+    if (input.coachId) {
+      const [coach] = await tx
+        .select({ fullName: persons.fullName })
+        .from(staff)
+        .innerJoin(persons, eq(persons.id, staff.personId))
+        .where(eq(staff.id, asStaffId(input.coachId)));
+      coachName = coach?.fullName ?? null;
+    }
+
+    return { ok: true, batch: { ...batch, programName: program.name, coachName } };
+  });
+}
+
 export async function deleteBatch(
   ctx: ActionCtx,
   batchId: string,

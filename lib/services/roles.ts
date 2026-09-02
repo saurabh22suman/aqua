@@ -53,7 +53,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
   {
     key: "receptionist",
     name: "Receptionist",
-    homePath: "/parent",
+    homePath: "/reception",
     homeOrdinal: 3,
     // Deliberately excludes every staff.pay.* permission — scope §420: a
     // receptionist who marks staff attendance must not see what the head

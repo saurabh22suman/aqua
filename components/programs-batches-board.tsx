@@ -1,17 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2, X, Check } from "lucide-react";
 import {
-  createBatchAction,
   createProgramAction,
   deleteBatchAction,
   deleteProgramAction,
+  updateProgramAction,
 } from "@/lib/actions/programs";
+import { BatchEditForm, type BatchEditFormState } from "@/components/batch-edit-form";
+import { BatchCreateForm } from "@/components/batch-create-form";
 import type { Program } from "@/db/schema/programs";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export function ProgramsBatchesBoard({
   initialPrograms,
@@ -28,17 +28,13 @@ export function ProgramsBatchesBoard({
   const [programError, setProgramError] = useState<string | null>(null);
   const [busyProgram, setBusyProgram] = useState(false);
   const [confirmDeleteProgram, setConfirmDeleteProgram] = useState<string | null>(null);
+  const [editingProgram, setEditingProgram] = useState<string | null>(null);
+  const [editingProgramName, setEditingProgramName] = useState("");
 
-  const [batchProgramId, setBatchProgramId] = useState(programs[0]?.id ?? "");
-  const [batchName, setBatchName] = useState("");
-  const [capacity, setCapacity] = useState("20");
-  const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [startTime, setStartTime] = useState("07:00");
-  const [endTime, setEndTime] = useState("08:00");
-  const [coachId, setCoachId] = useState("");
   const [batchError, setBatchError] = useState<string | null>(null);
-  const [busyBatch, setBusyBatch] = useState(false);
   const [confirmDeleteBatch, setConfirmDeleteBatch] = useState<string | null>(null);
+  const [editingBatch, setEditingBatch] = useState<string | null>(null);
+  const [editBatchForm, setEditBatchForm] = useState<BatchEditFormState | null>(null);
 
   async function submitProgram() {
     if (!programName.trim()) return;
@@ -51,7 +47,6 @@ export function ProgramsBatchesBoard({
         return;
       }
       setPrograms((p) => [...p, res.program].sort((a, b) => a.name.localeCompare(b.name)));
-      if (!batchProgramId) setBatchProgramId(res.program.id);
       setProgramName("");
     } finally {
       setBusyProgram(false);
@@ -70,32 +65,25 @@ export function ProgramsBatchesBoard({
     setConfirmDeleteProgram(null);
   }
 
-  function toggleDay(day: number) {
-    setDays((d) => (d.includes(day) ? d.filter((x) => x !== day) : [...d, day].sort()));
+  function startEditProgram(program: Program) {
+    setEditingProgram(program.id);
+    setEditingProgramName(program.name);
   }
 
-  async function submitBatch() {
-    if (!batchName.trim() || !batchProgramId || days.length === 0) return;
-    setBusyBatch(true);
-    setBatchError(null);
+  async function saveProgram(programId: string) {
+    if (!editingProgramName.trim()) return;
+    setBusyProgram(true);
+    setProgramError(null);
     try {
-      const res = await createBatchAction({
-        programId: batchProgramId,
-        name: batchName.trim(),
-        capacity: Number(capacity),
-        daysOfWeek: days,
-        startTime,
-        endTime,
-        coachId: coachId || undefined,
-      });
+      const res = await updateProgramAction({ programId, name: editingProgramName.trim() });
       if (!res.ok) {
-        setBatchError(res.error);
+        setProgramError(res.error);
         return;
       }
-      setBatches((b) => [...b, res.batch].sort((a, c) => a.programName.localeCompare(c.programName) || a.name.localeCompare(c.name)));
-      setBatchName("");
+      setPrograms((p) => p.map((x) => (x.id === programId ? res.program : x)).sort((a, b) => a.name.localeCompare(b.name)));
+      setEditingProgram(null);
     } finally {
-      setBusyBatch(false);
+      setBusyProgram(false);
     }
   }
 
@@ -111,6 +99,34 @@ export function ProgramsBatchesBoard({
     setConfirmDeleteBatch(null);
   }
 
+  function startEditBatch(batch: BatchWithProgramName) {
+    setEditingBatch(batch.id);
+    setEditBatchForm({
+      programId: batch.programId,
+      name: batch.name,
+      capacity: String(batch.capacity),
+      days: [...batch.daysOfWeek],
+      startTime: batch.startTime.slice(0, 5),
+      endTime: batch.endTime.slice(0, 5),
+      coachId: batch.coachId ?? "",
+    });
+  }
+
+  function cancelEditBatch() {
+    setEditingBatch(null);
+    setEditBatchForm(null);
+  }
+
+  function onBatchSaved(saved: BatchWithProgramName) {
+    setBatches((b) => b.map((x) => (x.id === saved.id ? saved : x)).sort((a, c) => a.programName.localeCompare(c.programName) || a.name.localeCompare(c.name)));
+    setEditingBatch(null);
+    setEditBatchForm(null);
+  }
+
+  function onBatchCreated(created: BatchWithProgramName) {
+    setBatches((b) => [...b, created].sort((a, c) => a.programName.localeCompare(c.programName) || a.name.localeCompare(c.name)));
+  }
+
   return (
     <div className="space-y-6">
       <section>
@@ -118,34 +134,77 @@ export function ProgramsBatchesBoard({
         <ul className="mt-2 divide-y divide-line" data-testid="programs-list">
           {programs.map((p) => (
             <li key={p.id} className="py-2 flex items-center gap-2">
-              <span className="flex-1 text-[14px]">{p.name}</span>
-              {confirmDeleteProgram === p.id ? (
+              {editingProgram === p.id ? (
+                <input
+                  type="text"
+                  value={editingProgramName}
+                  onChange={(e) => setEditingProgramName(e.target.value)}
+                  className="flex-1 rounded-ctl border border-line bg-deck px-2.5 py-1.5 text-[14px]"
+                  data-testid={`edit-program-input-${p.id}`}
+                />
+              ) : (
+                <span className="flex-1 text-[14px]">{p.name}</span>
+              )}
+              {editingProgram === p.id ? (
                 <>
                   <button
                     type="button"
-                    onClick={() => removeProgram(p.id)}
-                    className="text-[12px] font-medium text-late"
-                    data-testid={`confirm-delete-program-${p.id}`}
+                    onClick={() => saveProgram(p.id)}
+                    disabled={busyProgram || !editingProgramName.trim()}
+                    className="h-8 w-8 grid place-items-center rounded-ctl text-good"
+                    aria-label="Save program"
+                    data-testid={`save-program-${p.id}`}
                   >
-                    Confirm
+                    <Check size={16} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => setConfirmDeleteProgram(null)}
-                    className="text-[12px] text-ink-3"
+                    onClick={() => setEditingProgram(null)}
+                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3"
+                    aria-label="Cancel"
                   >
-                    Cancel
+                    <X size={16} />
                   </button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteProgram(p.id)}
-                  aria-label={`Delete ${p.name}`}
-                  className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-late"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => startEditProgram(p)}
+                    aria-label={`Edit ${p.name}`}
+                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  {confirmDeleteProgram === p.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => removeProgram(p.id)}
+                        className="text-[12px] font-medium text-late"
+                        data-testid={`confirm-delete-program-${p.id}`}
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteProgram(null)}
+                        className="text-[12px] text-ink-3"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteProgram(p.id)}
+                      aria-label={`Delete ${p.name}`}
+                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-late"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </>
               )}
             </li>
           ))}
@@ -174,39 +233,62 @@ export function ProgramsBatchesBoard({
         <h2 className="font-display text-[15px] font-semibold text-ink-2">Batches</h2>
         <ul className="mt-2 divide-y divide-line" data-testid="batches-list">
           {batches.map((b) => (
-            <li key={b.id} className="py-2 flex items-center gap-2">
-              <div className="flex-1 min-w-0 text-[14px]">
-                <span className="font-medium">{b.name}</span>
-                <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {b.startTime}–{b.endTime}</span>
-                {b.coachName ? <span className="text-ink-3"> · coach {b.coachName}</span> : null}
-              </div>
-              {confirmDeleteBatch === b.id ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => removeBatch(b.id)}
-                    className="text-[12px] font-medium text-late"
-                    data-testid={`confirm-delete-batch-${b.id}`}
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteBatch(null)}
-                    className="text-[12px] text-ink-3"
-                  >
-                    Cancel
-                  </button>
-                </>
+            <li key={b.id} className="py-2">
+              {editingBatch === b.id && editBatchForm ? (
+                <BatchEditForm
+                  batchId={b.id}
+                  initial={editBatchForm}
+                  programs={programs}
+                  coaches={coaches}
+                  error={batchError}
+                  onCancel={cancelEditBatch}
+                  onSaved={onBatchSaved}
+                  onError={setBatchError}
+                />
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteBatch(b.id)}
-                  aria-label={`Delete ${b.name}`}
-                  className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-late flex-none"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 text-[14px]">
+                    <span className="font-medium">{b.name}</span>
+                    <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {b.startTime}–{b.endTime}</span>
+                    {b.coachName ? <span className="text-ink-3"> · coach {b.coachName}</span> : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => startEditBatch(b)}
+                    aria-label={`Edit ${b.name}`}
+                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2 flex-none"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  {confirmDeleteBatch === b.id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => removeBatch(b.id)}
+                        className="text-[12px] font-medium text-late"
+                        data-testid={`confirm-delete-batch-${b.id}`}
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteBatch(null)}
+                        className="text-[12px] text-ink-3"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteBatch(b.id)}
+                      aria-label={`Delete ${b.name}`}
+                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-late flex-none"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
               )}
             </li>
           ))}
@@ -216,84 +298,7 @@ export function ProgramsBatchesBoard({
         {programs.length === 0 ? (
           <p className="mt-3 text-[13px] text-ink-3">Add a program first.</p>
         ) : (
-          <div className="mt-3 space-y-2 rounded-card border border-line p-3">
-            <select
-              value={batchProgramId}
-              onChange={(e) => setBatchProgramId(e.target.value)}
-              className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
-            >
-              {programs.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              value={batchName}
-              onChange={(e) => setBatchName(e.target.value)}
-              placeholder="Batch name"
-              className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
-            />
-            <div className="flex gap-2">
-              <input
-                type="number"
-                min={1}
-                value={capacity}
-                onChange={(e) => setCapacity(e.target.value)}
-                className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
-                aria-label="Capacity"
-              />
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
-              />
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
-              />
-            </div>
-            <select
-              value={coachId}
-              onChange={(e) => setCoachId(e.target.value)}
-              className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
-              data-testid="batch-coach-picker"
-            >
-              <option value="">No coach assigned</option>
-              {coaches.map((c) => (
-                <option key={c.staffId} value={c.staffId}>
-                  {c.fullName}
-                </option>
-              ))}
-            </select>
-            <div className="flex gap-1.5">
-              {DAY_LABELS.map((label, day) => (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() => toggleDay(day)}
-                  aria-pressed={days.includes(day)}
-                  className={`h-9 flex-1 rounded-ctl border text-[12px] ${
-                    days.includes(day) ? "bg-water-soft border-water text-water" : "bg-deck border-line text-ink-3"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={submitBatch}
-              disabled={busyBatch || !batchName.trim() || days.length === 0}
-              className="rounded-ctl bg-mango px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
-            >
-              Add batch
-            </button>
-          </div>
+          <BatchCreateForm programs={programs} coaches={coaches} onCreated={onBatchCreated} />
         )}
       </section>
     </div>

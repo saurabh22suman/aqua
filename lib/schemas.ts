@@ -133,6 +133,10 @@ export const enrolSchema = z.object({
 export const sessionIdSchema = z.string().uuid();
 export const phoneNumberSchema = z.string().min(8).max(20);
 
+export const coachScheduleSchema = z.object({
+  days: z.number().int().min(1).max(28).optional(),
+});
+
 export const markAttendanceSchema = z.object({
   sessionId: z.string().uuid(),
   memberId: z.string().uuid(),
@@ -171,6 +175,23 @@ export const createBatchSchema = z.object({
 
 export const deleteProgramSchema = z.string().uuid();
 export const deleteBatchSchema = z.string().uuid();
+
+export const updateProgramSchema = z.object({
+  programId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+});
+
+export const updateBatchSchema = z.object({
+  batchId: z.string().uuid(),
+  programId: z.string().uuid(),
+  name: z.string().min(1).max(200),
+  capacity: z.number().int().positive(),
+  daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  coachId: z.string().uuid().optional(),
+});
 
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type MarkRegisterInput = z.infer<typeof markRegisterSchema>;

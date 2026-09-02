@@ -9,7 +9,10 @@ export type NavItem = {
 
 export function BottomNav({ items, active }: { items: NavItem[]; active: string }) {
   return (
-    <nav className="fixed bottom-0 inset-x-0 h-16 bg-paper border-t border-line shadow-2 grid grid-cols-4">
+    <nav
+      className="fixed bottom-0 inset-x-0 h-16 bg-paper border-t border-line shadow-2 grid"
+      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+    >
       {items.map((item) => {
         const isActive = active === item.href;
         return (
