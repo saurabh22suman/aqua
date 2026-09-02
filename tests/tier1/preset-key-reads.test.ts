@@ -58,6 +58,15 @@ const ALLOWED_READERS = new Set<string[]>([
   // schema-level.
   ["db", "seed-platform.ts"],
   ["db", "migrations"],
+  // The 2.2b operator UI surfaces the applied preset key for
+  // display. The detail form needs presetKey to disambiguate
+  // "this tenant already has preset X applied" from "no preset
+  // yet" — that's a display signal, not a runtime branch.
+  ["app", "(platform)", "platform", "presets", "page.tsx"],
+  ["app", "(platform)", "platform", "presets", "preset-catalogue.tsx"],
+  ["app", "(platform)", "platform", "presets", "preset-card.tsx"],
+  ["app", "(platform)", "platform", "presets", "[key]", "page.tsx"],
+  ["app", "(platform)", "platform", "presets", "[key]", "preset-detail-form.tsx"],
   // Tests read preset key state freely; the rule is about
   // production-runtime code.
   ["tests"],
