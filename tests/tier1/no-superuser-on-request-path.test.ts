@@ -86,6 +86,19 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-presets.test.ts",
   "tests/tier1/platform-admin-tenant-features-rls.test.ts",
   "tests/tier1/tenant-feature-resolution.test.ts",
+  "tests/tier1/preset-engine.test.ts",
+  "tests/tier1/preset-key-reads.test.ts",
+  "tests/tier1/apply-preset-action.test.ts",
+  "tests/tier1/preset-preview-source.test.ts",
+  "tests/tier1/preset-sample-data.test.ts",
+  "tests/tier1/sample-data-hide-rule.test.ts",
+  "tests/tier1/invite-owner-action.test.ts",
+  // Tenant detail page reads sample/real state via the
+  // privileged pool for the "remove sample data" gate. Same shape
+  // as 1.5's tenant list page: the production code goes through
+  // withPlatformAdmin() for cross-tenant data; the test fixture
+  // uses the admin pool for setup and the post-action assertions.
+  "app/(platform)/platform/tenants/[tenantId]/page.tsx",
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist

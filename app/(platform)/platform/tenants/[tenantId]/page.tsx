@@ -5,6 +5,7 @@ import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
 import { StatusTransitionControls } from "./status-transitions";
 import { TenantFeatureToggles } from "./tenant-feature-toggles";
+import { InviteOwnerForm } from "./invite-owner-form";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -219,6 +220,16 @@ export default async function PlatformTenantDetailPage({
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="mt-8">
+        <SectionHeader
+          title="Owner"
+          subtitle="Step 3 of the onboarding wizard: send an invite. The owner accepts by signing in with the same phone number."
+        />
+        <div className="rounded-card bg-paper border border-line px-5 py-5">
+          <InviteOwnerForm tenantId={detail.id} />
+        </div>
       </section>
     </div>
   );
