@@ -37,6 +37,15 @@ export const tenants = pgTable(
       .notNull()
       .default({})
       .$type<Record<string, unknown>>(),
+    // Phase 2.2a — preset engine writes the ordered list of card
+    // keys here. The operator home reads this to render the
+    // dashboard grid (architecture §7.4). JSONB rather than a
+    // separate table because the list is short, ordered, and
+    // single-tenant — no analytics query touches it.
+    dashboardCards: jsonb("dashboard_cards")
+      .notNull()
+      .default([])
+      .$type<string[]>(),
     presetKey: text("preset_key"),
     presetVersion: integer("preset_version"),
     presetAppliedAt: timestamp("preset_applied_at", { withTimezone: true }),

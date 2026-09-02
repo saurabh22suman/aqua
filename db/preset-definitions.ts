@@ -96,6 +96,13 @@ export const roleSpecSchema = z.object({
 });
 
 export const exampleBatchSchema = z.object({
+  // exampleBatches attach to a program by name — the engine's
+  // exampleBatches resolution does an exact-string match. Letting
+  // the definition author name batches with descriptive labels
+  // ("Beginners MWF 06:00") meant the engine had to fuzzy-match,
+  // which is brittle. The explicit programName field is the
+  // minimal way to make the linkage readable.
+  programName: z.string().trim().min(1).max(120),
   name: z.string().trim().min(1).max(120),
   daysOfWeek: z.array(z.number().int().min(0).max(6)).min(1),
   startTime: z.string().regex(dashedTime),
@@ -306,12 +313,14 @@ export const SWIMMING_PRESET_DEFINITION: PresetDefinition = {
     // §7.4 rule 4). The flag is owned by the engine; the data
     // shape here stays shape-only.
     {
+      programName: "Learn to swim",
       name: "Beginners MWF 06:00",
       daysOfWeek: [1, 3, 5],
       startTime: "06:00",
       capacity: 16,
     },
     {
+      programName: "Junior competitive",
       name: "Junior TTS 17:00",
       daysOfWeek: [2, 4, 6],
       startTime: "17:00",
