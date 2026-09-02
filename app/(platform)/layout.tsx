@@ -55,6 +55,7 @@ function PlatformNav({
       <PlatformNavItem href="/platform" label="Overview" />
       <PlatformNavItem href="/platform/tenants" label="Tenants" />
       <PlatformNavItem href="/platform/features" label="Feature catalogue" />
+      <PlatformNavItem href="/platform/presets" label="Presets" />
     </ul>
   );
 }
