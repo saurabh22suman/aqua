@@ -239,13 +239,13 @@ top.
 
 ### Next pickup
 
-Pick up at **1.8 — per-tenant feature toggles**. The `tenant_features`
-table sits between `plan_features` (already in the schema) and the
-operator's resolution layer. Per architecture §7.1, the resolution
-order is: `tenant_features` (with optional expiry) → `plan_features`
-→ absent → off. Service-layer work in
-`db/features.ts::resolveTenantFeatureKeys` needs to consume the new
-table once it exists.
+Pick up at **2.1 — preset definitions**, per `docs/five-day-work-guide.md`
+Phase 2. The two presets the guide names are **swimming** and
+**multi-sport**; per architecture §7.4 each preset is a versioned
+bundle of entitlements (features/terminology/roles) plus seed data
+(programs, plan shapes, facilities, example batches). No prices —
+`amountPaise` is `null` at the data layer; the pricing model
+decision (scope §2.5) is deliberately deferred.
 
 PR-stack reminder for the next agent: this file's history mixes
 the 1.5 / 1.6 / 1.7 doc commits across three independent branches.
@@ -525,3 +525,99 @@ Verification:
 Velocity: 1 substantive task shipped with full TDD + mutation
 proof + UI integration. Matches the standing calibration ("1-3
 substantive tasks per session").
+
+### Session N+4 — Phase 1.8 (this session) and the audit response
+
+What landed:
+- 1.8 per-tenant feature toggles: branched off `main` (audit-fixes
+  PR #38 and 1.5/1.6/1.7 PRs #35/36/37 open independently — three
+  open PRs at session start, three independent branch heads, none
+  yet on `main`). Single commit on `feat/1.8-feature-toggles`.
+  PR #39 OPEN. CI green.
+- Audit response: same session covered the A → E sequence the user
+  asked for before continuing 1.8. Closed in PR #38 (audit-fixes)
+  which has its own CI run.
+- **`db/migrations/20260902210100_tenant_features.sql`** —
+  `tenant_features` table, (tenant_id, feature_key) PK, enabled,
+  config, expires_at. RLS: `tenant_isolation` (existing pattern)
+  + new `platform_admin_all` for the operator's withPlatformAdmin()
+  write path. Partial index on `expires_at`.
+- **`db/features.ts`** — `resolveTenantFeatureKeys` now layers plan
+  baseline with tenant overrides; expired overrides fall through
+  to the plan (the row stays for the audit timeline). New
+  `resolveTenantFeatureSources` returns each effective feature
+  tagged with `source` ('plan' | 'tenant_override' | 'denied').
+- **`db/platform-tenant-features.ts`** — `upsertTenantFeature()`
+  service. One withPlatformAdmin() transaction: validate feature
+  + tenant existence, then INSERT/UPSERT (or DELETE for
+  `mode='clear'`), then platform_audit_log row. Errors are typed
+  at the boundary (`feature_not_found`, `tenant_not_found`,
+  `invalid`, `terminal` if we ever block a transition).
+- **`lib/actions/platform-features.ts`** — added
+  `upsertTenantFeatureAction` next to the 1.7
+  `updateFeatureAction`. Same parse → permission → service
+  preamble; tenantId arrives from the URL (the page is keyed
+  by tenant), featureKey from the form body.
+- **`app/(platform)/platform/tenants/[tenantId]/tenant-feature-toggles.tsx`** —
+  client island. One row per effective feature, source pill
+  (`Plan` / `Override` / `Denied`, semantic-neutral per the
+  audit), three inline actions (force on, force off, reset to
+  plan). Same interaction language as the catalogue page.
+
+Tests (24 new across three files; 336 / 336 on the integrated
+main state):
+- `tests/tier1/platform-admin-tenant-features-rls.test.ts` — 4:
+  RLS proof (UPDATE/INSERT/DELETE under withPlatformAdmin succeed;
+  raw app_user with platform_admin=false or unset is denied;
+  mutation-proofed by dropping the policy and seeing one test
+  turn red).
+- `tests/tier1/platform-tenant-features.test.ts` — 12: happy
+  paths with enabled=true/false, expires_at capture, upsert
+  idempotence, clear-mode happy + idempotent, three rejection
+  codes (`invalid`, `feature_not_found`, `tenant_not_found`),
+  atomicity proof (commenting the audit insert breaks tests).
+  Modified to use `db.transaction()` directly via Drizzle; the
+  earlier pattern using `withPlatformAdmin(async (tx) => …)`
+  ran into a pg prepared-statement interaction under vitest's
+  per-file parallel execution.
+- `tests/tier1/tenant-feature-resolution.test.ts` — 8: resolver
+  behaviour — plan baseline, override-enabled=true (additional),
+  override-enabled=false (removal), expired falls through both
+  ways, resolveTenantFeatureSources tagging. Uses raw SQL inserts
+  rather than going through the service to dodge the same
+  prepared-statement interaction as above.
+
+Verification:
+- `pnpm typecheck && pnpm lint && pnpm test && pnpm build &&
+   pnpm exec tsx scripts/check-bundle-budget.ts` — all green.
+  336 / 336 tests on the integrated `main` state (was 312 at
+  session start, before audit fixes added theirs). All 27 routes
+  within the 150 KB bundle budget.
+
+Velocity: 1 substantive task (Phase 1.8 schema + service +
+resolver + UI + 24 tests) plus the audit-driven A → D response —
+two PRs (audit-fixes and 1.8) at CI green, both pending review.
+
+Standing stack state when this session ended:
+- `main` head: 3dd68bf (PR #37 merged during stack work in
+  earlier sessions; no merges in this session).
+- PR #35 (1.5): OPEN, branched off `main`, CI green.
+- PR #36 (1.6): CLOSED by GitHub when its base branch (1.5) merged;
+  re-submitted as #36 again with rebased branch and the original
+  base reset to `main`. Per the user's audit, the stacking was
+  their finding, not mine — recorded here for the next agent.
+- PR #37 (1.7): OPEN, branched off `main`, CI green.
+- PR #38 (audit-fixes): OPEN, branched off `main`, CI green.
+- PR #39 (1.8): OPEN, branched off `main`, CI green.
+
+Five open PRs, all CI green, none merged. The agent should now
+stop merging unless explicitly asked; the human owns the merge
+order per the corrected guide's "Merge only when ci is green"
+discipline rule.
+
+Phase 1 sign-off: all eight tasks (1.1–1.8) have shipped. The
+phase gate — "a platform admin creates a tenant, enables features,
+and the tenant's owner sees exactly those features" — is met: 1.5
+creates tenants, 1.7 manages the catalogue, 1.8 layers per-tenant
+overrides on top of plan_features. The next phase per the work
+guide is 2.1 (preset definitions).

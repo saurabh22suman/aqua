@@ -6,7 +6,7 @@ import { tenants } from "./schema/tenants";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
 import { locations } from "./schema/locations";
-import { resolveTenantFeatureKeys, resolveTenantFeatureSources } from "./features";
+import { resolveTenantFeatureSources } from "./features";
 import type { TenantId } from "@/lib/ids";
 
 // Aggregated row for the operator tenant list. Member count and
