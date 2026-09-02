@@ -34,14 +34,14 @@ export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
           the honest substitute for the mockup's money figure. Null
           (not 0%) when nothing is scheduled today at all; that's a
           different, truthful state, not a fabricated zero. */}
-      <div className="rounded-card bg-marine px-5 py-5 text-white">
-        <p className="text-[12.5px] font-medium text-[#9CC4BE]">Today&apos;s registers</p>
+      <div className="rounded-card bg-marine px-5 py-5 text-paper">
+        <p className="text-[12.5px] font-medium text-paper/70">Today&apos;s registers</p>
         {data.todayTotal > 0 ? (
           <>
             <p className="mt-1.5 mb-1 font-display text-[38px] font-semibold tracking-tight leading-none">
               {todayPct}%
             </p>
-            <p className="text-[13px] text-[#B6D4CF]">
+            <p className="text-[13px] text-paper/80">
               {data.todayMarked} of {data.todayTotal} marked across {data.todaysLanes.length}{" "}
               {data.todaysLanes.length === 1 ? "session" : "sessions"}
             </p>

@@ -29,16 +29,7 @@ not calendar days; sessions are calendar units. Progress is read off the checkli
 
 ## Mechanically enforced vs depends on you
 
-| Safe to forget (the system stops you) | Not safe to forget (only you will) |
-|---|---|
-| RLS — `pg_class` sweep + mutation gate, CI-blocked | DESIGN.md composition (only caught on read) |
-| Money chain — schema + lint will stop you | Empty state with verb CTA on every list |
-| `tests/tier1/**` ownership — AST walk guards it | Sibling-hunt on every bug (below) |
-| `db/migrations/` lane separation — `agent-lanes.md` blocks it | RED-while-waiting (no idling, no building anyway) |
-| Raw `db/client` outside `db/` — `no-restricted-paths` | Reserve ordering — your call, not the system's |
-
-**Shape of an enforced thing:** lint rule, CI gate, migration-ledger invariant, AST walk.
-**Shape of a remembered thing:** habit, re-read, manual sweep before opening the PR.
+See `agent-onboarding.md`'s "Mechanically enforced vs. memory-dependent" table — already read in step 2 of the reading order above. Not repeated here.
 
 ## Hard boundaries — all nine
 

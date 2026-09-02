@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import { listTenants } from "@/db/platform-tenants";
 import { withTenant } from "@/db/tenant";
-import { locations, members, persons } from "@/db/schema";
+import { locations } from "@/db/schema";
 import { createMember } from "@/lib/services/register";
 
 // Phase 1.3 — tenant list with denormalised counts.
@@ -28,8 +28,6 @@ const TENANT_IDS = {
 
 let defaultPlanId: string;
 let aliceLocationId = "";
-let bobLocationId = "";
-let carolLocationId = "";
 
 beforeAll(async () => {
   const plan = await admin.query<{ id: string }>(
@@ -68,14 +66,14 @@ beforeAll(async () => {
       .insert(locations)
       .values({ tenantId: TENANT_IDS.bob, name: "Pool" })
       .returning({ id: locations.id });
-    bobLocationId = loc!.id;
+    void loc;
   });
   await withTenant(TENANT_IDS.carol, async (tx) => {
     const [loc] = await tx
       .insert(locations)
       .values({ tenantId: TENANT_IDS.carol, name: "Court 1" })
       .returning({ id: locations.id });
-    carolLocationId = loc!.id;
+    void loc;
   });
 
   // Alice has 3 members across 1 location; Bob has 0; Carol has 0.

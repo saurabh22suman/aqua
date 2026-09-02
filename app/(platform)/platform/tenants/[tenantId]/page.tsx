@@ -132,7 +132,13 @@ export default async function PlatformTenantDetailPage({
         />
         {detail.locations.length === 0 ? (
           <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-            <p className="text-[14px] text-ink-2">No locations yet.</p>
+            <p className="text-[14px] font-medium text-ink">
+              No locations yet
+            </p>
+            <p className="mt-2 text-[13px] text-ink-3">
+              New tenants ship with one location from the create-tenant
+              form. Adding more is part of the onboarding wizard.
+            </p>
           </div>
         ) : (
           <div className="rounded-card bg-paper border border-line overflow-hidden">
@@ -169,8 +175,12 @@ export default async function PlatformTenantDetailPage({
         />
         {detail.featureKeys.length === 0 ? (
           <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-            <p className="text-[14px] text-ink-2">
-              No features enabled on this plan.
+            <p className="text-[14px] font-medium text-ink">
+              No features on this plan
+            </p>
+            <p className="mt-2 text-[13px] text-ink-3">
+              The tenant&apos;s plan has no GA features attached. The
+              catalogue is editable; per-tenant overrides land in 1.8.
             </p>
           </div>
         ) : (
@@ -194,12 +204,12 @@ export default async function PlatformTenantDetailPage({
         />
         {detail.recentActivity.length === 0 ? (
           <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-            <p className="text-[14px] text-ink-2">
-              No activity yet.
+            <p className="text-[14px] font-medium text-ink">
+              No activity yet
             </p>
-            <p className="mt-2 text-[12px] text-ink-3">
-              Status changes, suspensions and impersonation events will
-              appear here.
+            <p className="mt-2 text-[13px] text-ink-3">
+              Status changes, suspensions, churns, and feature edits
+              write to the audit log and surface here once they happen.
             </p>
           </div>
         ) : (
@@ -213,6 +223,7 @@ export default async function PlatformTenantDetailPage({
                 <p className="mt-0.5 text-[12px] text-ink-3">
                   {DATETIME_FMT.format(event.createdAt)}
                 </p>
+                <ActivityDetail detail={event.detail} />
               </li>
             ))}
           </ul>
@@ -284,6 +295,60 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <p className="mt-2 font-display text-[28px] font-semibold text-marine tabular-nums">
         {value}
       </p>
+    </div>
+  );
+}
+
+// Renders the structured detail JSON written by the platform-side
+// service actions. The audit row carries enough to answer "why did
+// this happen" without re-opening the row — show the reason if there
+// is one, then any before/after diff. Falls back to the raw JSON for
+// unknown action shapes so the timeline never silently drops detail.
+function ActivityDetail({ detail }: { detail: Record<string, unknown> }) {
+  if (!detail || Object.keys(detail).length === 0) return null;
+
+  const reason =
+    typeof detail.reason === "string" && detail.reason.length > 0
+      ? detail.reason
+      : null;
+
+  const fromTo =
+    typeof detail.from === "string" && typeof detail.to === "string"
+      ? `${detail.from} → ${detail.to}`
+      : null;
+
+  const before =
+    detail.before && typeof detail.before === "object"
+      ? (detail.before as Record<string, unknown>)
+      : null;
+  const after =
+    detail.after && typeof detail.after === "object"
+      ? (detail.after as Record<string, unknown>)
+      : null;
+
+  return (
+    <div className="mt-1.5 text-[12px] text-ink-2 space-y-1">
+      {reason ? (
+        <p>
+          <span className="text-ink-3">Reason:</span> {reason}
+        </p>
+      ) : null}
+      {fromTo ? (
+        <p>
+          <span className="text-ink-3">Status:</span> {fromTo}
+        </p>
+      ) : null}
+      {before && after ? (
+        <p className="font-mono text-[11px] text-ink-3 break-all">
+          {Object.keys(after)
+            .map((k) => {
+              const b = before[k];
+              const a = after[k];
+              return `${k}: ${String(b)} → ${String(a)}`;
+            })
+            .join(" · ")}
+        </p>
+      ) : null}
     </div>
   );
 }

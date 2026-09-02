@@ -323,25 +323,79 @@ That last one is the cheapest habit with the highest return. When the agent repo
 
 ## 6. CI pipeline
 
+What this repo actually runs today — transcribed from
+`.github/workflows/ci.yml`, not a designed-but-unbuilt pipeline:
+
 ```yaml
-on: [pull_request]
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
 jobs:
-  verify:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        # ... env, ports, healthcheck, MIGRATION_DATABASE_URL setup ...
+    env:
+      DATABASE_URL: postgresql://app_login:ci-only-app-pw@localhost:5432/aqua
+      MIGRATION_DATABASE_URL: postgresql://aqua:aqua@localhost:5432/aqua
+      APP_LOGIN_PASSWORD: ci-only-app-pw
+      NODE_ENV: test
+      BETTER_AUTH_SECRET: ci-build-only-not-a-real-secret
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: pnpm lint --max-warnings=0
-      - run: pnpm test:unit
-      - run: pnpm test:integration      # Testcontainers
-      - run: pnpm test:isolation        # BLOCKING
-      - run: pnpm build
-      - run: pnpm bundlesize            # 150KB gz
-      - run: pnpm mutate:changed        # Stryker, Tier 1+2 only
-      - run: pnpm test:e2e              # merge to main only
+      - run: pnpm lint
+      - run: pnpm check:migrations                       # M1: filename/ordering
+      - run: pnpm exec tsx scripts/check-lane-overlap.ts # M2: non-blocking
+      - run: pnpm db:reset                              # bootstrap roles + migrate
+      - run: pnpm test                                  # vitest, all tiers
+      - run: pnpm exec tsx scripts/check-bundle-budget.ts
+      - run: pnpm exec tsx scripts/check-font-budget.ts
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm seed                                  # demo-academy fixture
+      - run: pnpm exec tsx scripts/e2e-offline.ts        # S3 sync, six VERIFYs
+      - run: pnpm exec tsx scripts/e2e-offline-disabled.ts # online-only counterpart
 ```
 
-**Timing targets:** unit under 30s, integration under 3 min, E2E under 8 min. Past that, the agent starts waiting and you start skipping.
+Two things this list does not contain that the previous version
+claimed:
+- `pnpm lint --max-warnings=0` — `pnpm lint` is run, but **without
+  `--max-warnings=0`**. Known gap; fix in flight.
+- `pnpm test:unit` / `pnpm test:integration` / `pnpm test:isolation`
+  — there's a single `pnpm test`. The `vitest.config.ts`
+  `fileParallelism: false` is what keeps the cross-file state-sharing
+  test files (which currently live in `tests/tier1/**`) from racing.
+  Tier-1 isolation tests that need disposable Postgres use
+  Testcontainers spun up inside the test itself, not a separate
+  npm script.
 
-**The pipeline must be able to say no.** An agent that can merge past a red CI has no guardrails at all.
+`scripts/e2e-offline.ts` and `scripts/e2e-offline-disabled.ts` are
+the only test-time scripts not part of the standard `pnpm test` run.
+They live in `scripts/` because they need a real dev server and a
+real Chromium — both are heavier than what vitest is set up for.
+Their timing-sensitive failure mode (VERIFY 5) is the documented
+exception; everything else either passes deterministically or
+points at a real bug.
+
+**The pipeline must be able to say no.** An agent that can merge
+past a red CI has no guardrails at all. Today that gate is enforced
+by `gh`'s merge queue respecting the `ci` status check (combined
+with the standing rule that nothing merges without an explicit
+human-issued `gh pr merge`); see `docs/branch-protection.md` for the
+runbook to convert that discipline rule into a platform-level
+guarantee.
 
 ---
 

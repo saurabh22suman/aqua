@@ -31,6 +31,7 @@ The reason is not sequencing — it is that `membership_plans` and `subscription
 
 - **Open a PR when a unit is coherent and reviewable.** Some tasks are naturally their own PR (a single coherent capability, a new SQL table plus its tests, a single screen that stands alone). Others belong in a batch (the three steps of an onboarding wizard; the read + write + list surfaces for the same entity). The batching guidance was about review capacity, not a rule to hold against a natural boundary — small reviewable PRs beat one giant one. Open when ready; don't wait for a phase to finish.
 - **Each task within a batch still gets full TDD and CI** — the batching is about review capacity, not rigour. Commit per task inside the batch so the diff is navigable; squash on merge if the reviewer prefers.
+- **Before opening a new branch, run `gh pr list --state open`.** If a same-phase task's PR is already open and unmerged, stack the new work on it rather than forking off `main` — unless the new task shares no files with the open PR, in which case state "no shared files" in the new PR's description.
 - **Rebase on main** before opening.
 - **TDD.** Test red before implementation, every time.
 - **Test the test.** Break the implementation, confirm red, restore.
@@ -43,6 +44,11 @@ The reason is not sequencing — it is that `membership_plans` and `subscription
 |---|---|
 | **GREEN** | Build, verify, commit, open PR, continue to the next task. Do not wait. |
 | **RED** | Stop before building. Write a proposal. Wait for approval. Move to the next GREEN task while waiting — do not idle. |
+
+A short human acknowledgement ("ok", "sounds good", a thumbs-up) on a
+session report is not an instruction to stop. It means "continue."
+Only a RED proposal, a stated blocker, or an explicit "stop" ends a
+session.
 
 The human merges. You never merge a code or schema change yourself.
 
@@ -61,6 +67,10 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 - Every list gets a designed empty state with a verb CTA, built with the list.
 - Scope discipline: build what the task asks, nothing adjacent.
 - **When you find a bug, search for a second instance of the same shape before closing.** Seven for seven in this codebase so far.
+
+### Pre-flight (before Phase 1)
+
+- [ ] **Apply branch protection on `main`** — follow `docs/branch-protection.md` and verify with the GitHub API afterwards (`gh api repos/saurabh22suman/aqua/branches/main/protection` should return `require_pr: true`, `enforce_admins.enabled: true`, and `required_status_checks.contexts` containing `ci`). Until this is true, the merge discipline above is a documentation rule, not a platform guarantee; the diff between the two states is whether direct pushes are blocked by GitHub or by self-restraint.
 
 ---
 

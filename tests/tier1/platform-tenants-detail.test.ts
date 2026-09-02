@@ -1,16 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
-import { asTenantId, type TenantId } from "@/lib/ids";
+import { asTenantId } from "@/lib/ids";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { withTenant } from "@/db/tenant";
 import {
   batches,
   locations,
-  members,
-  persons,
   programs,
   sessions as sessionsTable,
 } from "@/db/schema";
@@ -28,7 +26,6 @@ const TENANT_ID = asTenantId(uuidv7());
 
 let defaultPlanId: string;
 let aliceLocationId = "";
-let annexLocationId = "";
 let primaryBatchId = "";
 
 beforeAll(async () => {
@@ -54,7 +51,10 @@ beforeAll(async () => {
       .insert(locations)
       .values({ tenantId: TENANT_ID, name: "Annex" })
       .returning({ id: locations.id });
-    annexLocationId = annex!.id;
+    // annex is inserted only so the live-locations count is 2 (Annex
+    // + Main); its id is not used elsewhere — the soft-deleted
+    // "Closed Wing" row below covers the deleted-row count assertion.
+    void annex;
 
     const [soft] = await tx
       .insert(locations)
@@ -198,7 +198,11 @@ describe("getTenantDetail", () => {
     if (!detail) return;
     expect(detail.presetKey).toBeNull();
     expect(detail.presetVersion).toBeNull();
-    expect(detail.planName).not.toBeNull();
+    // The seed inserts the "standard" plan with name "Standard" — a
+    // bug that swallowed the JOIN and returned `null` or an empty
+    // string would slip past `not.toBeNull()`. Match the actual
+    // value so the test fails on the real regression.
+    expect(detail.planName).toBe("Standard");
   });
 
   it("returns an empty activity array when there are no audit rows", async () => {
