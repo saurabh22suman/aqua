@@ -14,6 +14,18 @@ import { env } from "@/lib/env";
 import { asTenantId, type TenantId } from "../lib/ids";
 import { todayInZone } from "../lib/time/tz";
 
+// Demo seed must not run unless DEMO_MODE is on. The flag is the only
+// thing distinguishing "the operator wants synthetic demo data on their
+// machine" from "an env var was misconfigured and a real club is about
+// to receive 16 fake members." Exit before any DB write.
+if (!env.DEMO_MODE) {
+  console.error(
+    "DEMO_MODE is not enabled — refusing to seed demo data.\n" +
+      "Set DEMO_MODE=true in your environment to permit this script.",
+  );
+  process.exit(1);
+}
+
 // EDIT-ME: the real academy's details.
 const DEMO_TENANT = {
   slug: "demo-academy",

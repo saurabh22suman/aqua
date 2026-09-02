@@ -54,23 +54,38 @@ So the operator doesn't notice a missing screen mid-demo:
 
 ## Starting the demo
 
+`pnpm demo:reset` does it all. One command, gated on `DEMO_MODE=true`:
+
 ```bash
-# From the repo root:
+# From the repo root, with DEMO_MODE exported in the shell:
+DEMO_MODE=true pnpm demo:reset
 
-# 1. Reset the DB, then apply the demo-academy seed.
-#    Reset-then-seed is REQUIRED: the seed's member rows are not
-#    idempotent (re-running without reset hits the member-code
-#    unique constraint).
-pnpm db:reset
-pnpm tsx scripts/seed-demo.ts
-
-# 2. Seed the platform operator (prints the password + TOTP secret
-#    to use at /platform/login).
-pnpm tsx scripts/seed-platform-user.ts
-
-# 3. Start the dev server.
-PORT=3211 pnpm next dev &
+# Equivalent if you prefer a one-liner with the env inline:
+DEMO_MODE=true pnpm demo:reset && DEMO_MODE=true PORT=3211 pnpm next dev
 ```
+
+`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` in that order. If `DEMO_MODE` is **not** set, `demo:reset` exits before any DB write — the guard fires first so a misfired command does nothing, not even a `db:reset`. The same guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
+
+```bash
+DEMO_MODE=true pnpm db:reset
+DEMO_MODE=true pnpm tsx scripts/seed-demo.ts
+DEMO_MODE=true pnpm tsx scripts/seed-platform-user.ts
+DEMO_MODE=true PORT=3211 pnpm next dev
+```
+
+When `DEMO_MODE=true`, a sticky banner sits at the top of every surface
+(login, owner, coach, reception, parent, platform) reading
+**"Demo data — this is a demo tenant. None of this is real academy data."**
+The banner is the only place in the runtime that reads `DEMO_MODE`
+besides the parser itself; the source-scan test in
+`tests/tier1/demo-mode-reads.test.ts` enforces this confinement so
+the flag never becomes a feature flag.
+
+**Production hard-fail.** `lib/env.ts` refuses to parse if
+`DEMO_MODE=true` and `NODE_ENV=production` (build phase exempt, for
+the same reason `BETTER_AUTH_SECRET` is exempt). A real club's
+deployment cannot accidentally seed demo members into a real
+database.
 
 To log in as a phone-role user, type the phone with or without
 spaces (the form normalises):

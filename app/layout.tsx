@@ -8,6 +8,7 @@ import "@fontsource/bricolage-grotesque/latin-600.css";
 import "@fontsource/instrument-sans/latin-400.css";
 import "@fontsource/instrument-sans/latin-500.css";
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
+import { DemoBanner } from "@/components/demo-banner";
 import "@/lib/env";
 import "./globals.css";
 
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-deck text-ink font-sans antialiased">
+        <DemoBanner />
         {children}
         <ServiceWorkerRegistrar />
       </body>

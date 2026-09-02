@@ -12,6 +12,18 @@ import { randomBytes, createHmac } from "node:crypto";
 import { env } from "@/lib/env";
 import { provisionPlatformUser, markTotpEnrolled } from "../db/platform-auth";
 
+// Demo reset path. The operator provisioning the platform login via
+// this script is doing demo / local-dev work — gate it the same way
+// scripts/seed-demo.ts is gated, so an accidental run against a real
+// environment can't write a platform operator.
+if (!env.DEMO_MODE) {
+  console.error(
+    "DEMO_MODE is not enabled — refusing to seed platform operator.\n" +
+      "Set DEMO_MODE=true in your environment to permit this script.",
+  );
+  process.exit(1);
+}
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const out: Record<string, string> = {};
