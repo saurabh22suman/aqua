@@ -48,6 +48,7 @@ const ALLOWLIST = new Set([
   "db/seed-platform.ts",
   "scripts/seed.ts",
   "scripts/seed-platform-user.ts",
+  "scripts/seed-demo.ts",
   "lib/env.ts",
   "tests/env.test.ts",
   "tests/tier1/attendance-upsert.test.ts",

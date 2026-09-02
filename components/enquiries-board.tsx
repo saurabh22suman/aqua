@@ -8,7 +8,13 @@ import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
 
 const SOURCES = ["walk-in", "phone", "referral", "online", "other"] as const;
 
-export function EnquiriesBoard({ initialEnquiries }: { initialEnquiries: EnquiryRow[] }) {
+export function EnquiriesBoard({
+  initialEnquiries,
+  detailHrefPrefix = "/owner/enquiries",
+}: {
+  initialEnquiries: EnquiryRow[];
+  detailHrefPrefix?: string;
+}) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -81,7 +87,7 @@ export function EnquiriesBoard({ initialEnquiries }: { initialEnquiries: Enquiry
         ) : (
           enquiries.map((e) => (
             <li key={e.id} className="border-b border-line last:border-0">
-              <Link href={`/owner/enquiries/${e.id}`} className="flex items-center gap-3 py-3">
+              <Link href={`${detailHrefPrefix}/${e.id}`} className="flex items-center gap-3 py-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-medium">{e.fullName}</p>
                   <p className="mt-0.5 text-[12px] text-ink-3">

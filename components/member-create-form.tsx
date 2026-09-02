@@ -25,7 +25,16 @@ type GuardianChoice =
   | { mode: "existing"; personId: string; label: string }
   | { mode: "new" };
 
-export function MemberCreateForm({ locations }: { locations: LocationOption[] }) {
+export function MemberCreateForm({
+  locations,
+  successPath,
+}: {
+  locations: LocationOption[];
+  // Optional static route to push to after a successful create. When
+  // omitted, the owner default is used (member detail). Surfaces
+  // without a member detail page (reception) pass their own home route.
+  successPath?: string;
+}) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -118,7 +127,7 @@ export function MemberCreateForm({ locations }: { locations: LocationOption[] })
         setError(result.error);
         return;
       }
-      router.push(`/owner/members/${result.memberId}`);
+      router.push(successPath ?? `/owner/members/${result.memberId}`);
     } finally {
       setBusy(false);
     }
