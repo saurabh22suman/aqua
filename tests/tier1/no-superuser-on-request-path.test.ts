@@ -81,6 +81,10 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-tenants-status-action.test.ts",
   "tests/tier1/platform-features.test.ts",
   "tests/tier1/platform-features-action.test.ts",
+  "tests/tier1/platform-tenant-features.test.ts",
+  "tests/tier1/platform-tenant-features-action.test.ts",
+  "tests/tier1/platform-admin-tenant-features-rls.test.ts",
+  "tests/tier1/tenant-feature-resolution.test.ts",
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist

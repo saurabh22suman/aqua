@@ -4,6 +4,7 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
 import { StatusTransitionControls } from "./status-transitions";
+import { TenantFeatureToggles } from "./tenant-feature-toggles";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -171,30 +172,20 @@ export default async function PlatformTenantDetailPage({
       <section className="mt-8">
         <SectionHeader
           title="Feature state"
-          subtitle="Resolved from the plan; per-tenant overrides land in 1.8"
+          subtitle="Resolved from the plan; per-tenant overrides toggle each row on or off (and may carry an expiry)"
         />
-        {detail.featureKeys.length === 0 ? (
-          <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-            <p className="text-[14px] font-medium text-ink">
-              No features on this plan
-            </p>
-            <p className="mt-2 text-[13px] text-ink-3">
-              The tenant&apos;s plan has no GA features attached. The
-              catalogue is editable; per-tenant overrides land in 1.8.
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {detail.featureKeys.map((key) => (
-              <span
-                key={key}
-                className="text-[12px] font-medium px-3 py-1 rounded-pill bg-water-soft text-water"
-              >
-                {key}
-              </span>
-            ))}
-          </div>
-        )}
+        <TenantFeatureToggles
+          tenantId={detail.id}
+          initial={detail.featureKeys.map((f) => {
+            const out: {
+              key: string;
+              source: "plan" | "tenant_override" | "denied";
+              expiresAt?: Date;
+            } = { key: f.key, source: f.source };
+            if (f.expiresAt) out.expiresAt = f.expiresAt;
+            return out;
+          })}
+        />
       </section>
 
       <section className="mt-8">

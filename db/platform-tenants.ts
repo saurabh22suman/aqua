@@ -6,7 +6,7 @@ import { tenants } from "./schema/tenants";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
 import { locations } from "./schema/locations";
-import { resolveTenantFeatureKeys } from "./features";
+import { resolveTenantFeatureSources } from "./features";
 import type { TenantId } from "@/lib/ids";
 
 // Aggregated row for the operator tenant list. Member count and
@@ -183,12 +183,16 @@ export type TenantDetail = {
   memberCount: number;
   locationCount: number;
   sessionsThisMonth: number;
-  featureKeys: string[];
   locations: Array<{
     id: string;
     name: string;
     isPrimary: boolean;
     createdAt: Date;
+  }>;
+  featureKeys: Array<{
+    key: string;
+    source: "plan" | "tenant_override" | "denied";
+    expiresAt?: Date;
   }>;
   recentActivity: Array<{
     id: string;
@@ -273,9 +277,11 @@ export async function getTenantDetail(
   if (!header) return null;
 
   // Tenant-scoped reads via withTenant — same path the tenant's own
-  // owner would take. Reads locations, resolved feature keys, and the
-  // last 20 platform_audit_log entries scoped to this tenant.
-  const [locationsList, featureKeys, activity] = await Promise.all([
+  // owner would take. Reads locations, feature state (plan baseline
+  // layered with tenant_features overrides, each tagged with
+  // source), and the last 20 platform_audit_log entries scoped to
+  // this tenant.
+  const [locationsList, featureSources, activity] = await Promise.all([
     withTenant(tenantId, async (tx) => {
       const rows = await tx
         .select({
@@ -289,7 +295,7 @@ export async function getTenantDetail(
         .orderBy(sql`${locations.isPrimary} desc, ${locations.name} asc`);
       return rows;
     }),
-    resolveTenantFeatureKeys(tenantId),
+    resolveTenantFeatureSources(tenantId),
     withPlatformAdmin(async (tx) => {
       const rows = await tx
         .select({
@@ -325,7 +331,15 @@ export async function getTenantDetail(
     memberCount: Number(header.memberCount),
     locationCount: Number(header.locationCount),
     sessionsThisMonth: Number(header.sessionsThisMonth),
-    featureKeys,
+    featureKeys: featureSources.map((s) => {
+      const entry: {
+        key: string;
+        source: "plan" | "tenant_override" | "denied";
+        expiresAt?: Date;
+      } = { key: s.key, source: s.source };
+      if (s.expiresAt) entry.expiresAt = s.expiresAt;
+      return entry;
+    }),
     locations: locationsList.map((l) => ({
       id: l.id,
       name: l.name,
