@@ -82,6 +82,9 @@ afterAll(async () => {
     // every seeded row is_sample=true so the affordance can do
     // soft-delete on the operator's tenant without breaking the
     // tenant FK.)
+    // E1 — applyPreset now materialises sessions for example batches
+    // in the same transaction; clear those before batches (FK).
+    await admin.query("delete from sessions where tenant_id = $1::uuid", [tid]);
     await admin.query("delete from batches where tenant_id = $1::uuid", [tid]);
     await admin.query("delete from programs where tenant_id = $1::uuid", [tid]);
     await admin.query("delete from members where tenant_id = $1::uuid", [tid]);
@@ -232,6 +235,20 @@ describe("applyPreset (swimming)", () => {
       [tenantId],
     );
     expect(allSample.rows[0]?.all).toBe(true);
+
+    // E1 — example batches must materialise sessions in the same
+    // transaction, not sit empty until something else generates
+    // them. Both batches get at least one session each in the
+    // 28-day window.
+    const sessionsPerBatch = await admin.query<{ batch_id: string; count: string }>(
+      `select batch_id, count(*)::text
+       from sessions
+       where tenant_id = $1::uuid
+       group by batch_id`,
+      [tenantId],
+    );
+    expect(sessionsPerBatch.rows.length).toBe(2);
+    expect(sessionsPerBatch.rows.every((r) => Number(r.count) > 0)).toBe(true);
 
     // message templates: three.
     const tpl = await admin.query<{ key: string }>(
