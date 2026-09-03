@@ -115,7 +115,7 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [ ] **3.2** Documents schema and upload — `documents` table, R2 private bucket, tenant-prefixed keys, RLS. Requires the new dependency flagged in the C-07 proposal — **ask before adding it**. `GREEN` (after 3.1 approved)
 - [ ] **3.3** Document proxy route — `/api/documents/[token]`, server-side role check, streams from R2, never exposes an R2 URL, logs every access. `GREEN` (after 3.1)
 - [ ] **3.4** Document UI — upload and view on the person detail screen, role-gated: owner/admin/receptionist full, coach read-only for their own roster. `GREEN` (after 3.1)
-- [ ] **3.5** Staff directory — list, detail, create, edit. `C-04` shipped schema and services; this is the missing UI. `GREEN`
+- [x] **3.5** Staff directory — list, detail, create, edit. `C-04` shipped schema and services; this is the missing UI. (Edit + delete land with 3.6's invitation-revoke path; both share the audit + state machine there.) `GREEN`
 - [ ] **3.6** Staff invitations — invite by phone, assign role and locations, accept, revoke, resend. Completes `F-24`. `GREEN`
 - [ ] **3.7** Seed a receptionist login — `scripts/seed.ts` has no receptionist, so the `assertStaff` permission fix was never verified in a real session. Add one and verify. `GREEN`
 - [ ] **3.8** Support impersonation `RED`. Propose before building. Platform staff acting as a tenant user. Must require a stated reason, be fully audited, show a persistent banner to the impersonating user, and be impossible to initiate from a tenant session. `RED`

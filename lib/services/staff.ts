@@ -51,6 +51,15 @@ export async function createStaff(
     | { existingPersonId: string; staffType: StaffType; userId?: UserId; employedOn?: string }
     | { fullName: string; staffType: StaffType; userId?: UserId; employedOn?: string },
 ): Promise<{ ok: true; staffId: StaffId } | { ok: false; error: string }> {
+  // Closed-key guard up front — the schema's CHECK constraint
+  // would catch a typo too, but a typed error here is a
+  // cleaner signal than a 23514 surfacing as an exception in
+  // the calling action.
+  const ALLOWED: ReadonlyArray<StaffType> = ["coach", "receptionist", "worker", "accountant"];
+  if (!ALLOWED.includes(input.staffType)) {
+    return { ok: false, error: `Unknown staff type "${input.staffType}".` };
+  }
+
   return withTenant(ctx.tenantId, async (tx) => {
     let personId: PersonId;
     if ("existingPersonId" in input) {
