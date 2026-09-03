@@ -5,7 +5,7 @@ import { Loader2, RotateCcw, Save } from "lucide-react";
 import {
   DEFAULT_TERMS,
   titleCase,
-  resolveTerm,
+  type Locale,
   type TermKey,
   type TerminologyState,
 } from "@/lib/terminology/keys";
@@ -14,8 +14,11 @@ import {
   clearTermOverrideAction,
 } from "@/lib/actions/terminology";
 
-// Phase 2.10 — terminology editor. Eight rows, each with
-// singular + plural forms. One primary CTA on the row saves
+// Phase 2.10 + 4.20 — terminology editor. Eight rows, each
+// with singular + plural forms, scoped to a single locale at a
+// time (the page at /owner/settings/terminology/[locale] picks
+// the locale; the URL is the source of truth so the form has no
+// internal locale toggle). One primary CTA on the row saves
 // just that row — saves are granular so the owner doesn't
 // draft across all eight and find one row's input has rotted
 // by the time they save. "Use default" restores the locale
@@ -23,10 +26,9 @@ import {
 // picks up automatically (deletes the override key).
 //
 // Composition: the dominant element here is the row itself —
-// each row shows the current rendering ("Active members", "1
-// member marked present") so the owner sees the change in
-// place. The page DOES the same for the whole list at the top,
-// rendering a sample sentence pre/post override.
+// each row shows the current rendering so the owner sees the
+// change in place. The locale picker lives at the form level
+// (the page route above) so this component stays locale-narrow.
 
 type RowState = {
   one: string;
@@ -36,29 +38,49 @@ type RowState = {
 const ROW_KEYS: ReadonlyArray<{
   key: TermKey;
   label: string;
-  sampleSentenceSingular: string;
-  sampleSentencePlural: string;
 }> = [
-  { key: "member", label: "Member", sampleSentenceSingular: "1 member marked present", sampleSentencePlural: "12 members marked present" },
-  { key: "batch", label: "Batch", sampleSentenceSingular: "1 batch running today", sampleSentencePlural: "4 batches running today" },
-  { key: "coach", label: "Coach", sampleSentenceSingular: "1 coach on duty", sampleSentencePlural: "3 coaches on duty" },
-  { key: "session", label: "Session", sampleSentenceSingular: "1 session today", sampleSentencePlural: "7 sessions today" },
-  { key: "program", label: "Program", sampleSentenceSingular: "1 program running", sampleSentencePlural: "3 programs running" },
-  { key: "facility", label: "Facility", sampleSentenceSingular: "1 facility open", sampleSentencePlural: "2 facilities open" },
-  { key: "guardian", label: "Guardian", sampleSentenceSingular: "1 guardian on record", sampleSentencePlural: "2 guardians on record" },
-  { key: "enquiry", label: "Enquiry", sampleSentenceSingular: "1 enquiry to follow up", sampleSentencePlural: "5 enquiries to follow up" },
+  { key: "member", label: "Member" },
+  { key: "batch", label: "Batch" },
+  { key: "coach", label: "Coach" },
+  { key: "session", label: "Session" },
+  { key: "program", label: "Program" },
+  { key: "facility", label: "Facility" },
+  { key: "guardian", label: "Guardian" },
+  { key: "enquiry", label: "Enquiry" },
 ];
 
-export function TerminologyForm({ initial }: { initial: TerminologyState }) {
-  // Local form state — starts at the resolved values (override
-  // wins on the row, otherwise locale default). User edits
-  // surface immediately on the "current rendering" line; save
-  // commits only this row.
+// Per-locale sample sentence so the preview rendering shows
+// the same language the user is editing. Defaults to English
+// placeholders — translations land in the data-only R.20 pass.
+const SAMPLE_SENTENCES: Record<Locale, { singular: (n: string) => string; plural: (n: string) => string }> = {
+  en: {
+    singular: (n: string) => `1 ${n} marked present`,
+    plural: (n: string) => `12 ${n}s marked present`,
+  },
+  hi: {
+    singular: (n: string) => `1 ${n} उपस्थित`,
+    plural: (n: string) => `12 ${n} उपस्थित`,
+  },
+  bn: {
+    singular: (n: string) => `1 ${n} উপস্থিত`,
+    plural: (n: string) => `12 ${n} উপস্থিত`,
+  },
+};
+
+export function TerminologyForm({
+  initial,
+  locale,
+}: {
+  initial: TerminologyState;
+  locale: Locale;
+}) {
+  // Local form state — starts at the resolved values for *this*
+  // locale (override wins on the row, otherwise locale default).
   const [overrides, setOverrides] = useState<Record<TermKey, RowState | undefined>>(() => {
     const out = {} as Record<TermKey, RowState | undefined>;
     for (const row of ROW_KEYS) {
-      const en = initial.overrides[row.key]?.en;
-      out[row.key] = en ? { one: en.one, other: en.other } : undefined;
+      const loc = initial.overrides[row.key]?.[locale];
+      out[row.key] = loc ? { one: loc.one, other: loc.other } : undefined;
     }
     return out;
   });
@@ -66,17 +88,20 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
   const [errors, setErrors] = useState<Partial<Record<TermKey, string>>>({});
   const [saved, setSaved] = useState<Partial<Record<TermKey, Date>>>({});
 
+  // Preview state — keyed to the active locale — drives the
+  // "Reads as:" sentence at the row top so the user sees the
+  // change in place across all terms.
   const previewState: TerminologyState = {
     overrides: Object.fromEntries(
-      Object.entries(overrides).map(([k, v]) => [k, v ? { en: v } : undefined]),
+      Object.entries(overrides).map(([k, v]) => [k, v ? { [locale]: v } : undefined]),
     ) as TerminologyState["overrides"],
-    locale: initial.locale,
+    locale,
   };
 
   function setRow(key: TermKey, partial: Partial<RowState>) {
     const prev = overrides[key] ?? {
-      one: DEFAULT_TERMS.en[key].one,
-      other: DEFAULT_TERMS.en[key].other,
+      one: DEFAULT_TERMS[locale][key].one,
+      other: DEFAULT_TERMS[locale][key].other,
     };
     setOverrides({ ...overrides, [key]: { ...prev, ...partial } });
     setSaved({ ...saved, [key]: undefined });
@@ -89,7 +114,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
     setErrors({ ...errors, [key]: undefined });
     updateTermOverrideAction({
       key,
-      locale: "en",
+      locale,
       one: row.one.trim(),
       other: row.other.trim(),
     }).then((result) => {
@@ -105,7 +130,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
   function resetRow(key: TermKey) {
     setPendingKey(key);
     setErrors({ ...errors, [key]: undefined });
-    clearTermOverrideAction({ key, locale: "en" }).then((result) => {
+    clearTermOverrideAction({ key, locale }).then((result) => {
       setPendingKey(null);
       if (result.kind === "error") {
         setErrors({ ...errors, [key]: result.message });
@@ -118,11 +143,14 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
     });
   }
 
+  const sample = SAMPLE_SENTENCES[locale];
+
   return (
-    <ul className="space-y-3">
+    <ul className="space-y-3" data-testid={`terminology-form-${locale}`}>
       {ROW_KEYS.map((row) => {
-        const oneRaw = overrides[row.key]?.one ?? DEFAULT_TERMS.en[row.key].one;
-        const otherRaw = overrides[row.key]?.other ?? DEFAULT_TERMS.en[row.key].other;
+        const defaults = DEFAULT_TERMS[locale][row.key];
+        const oneRaw = overrides[row.key]?.one ?? defaults.one;
+        const otherRaw = overrides[row.key]?.other ?? defaults.other;
         const oneInput = overrides[row.key]?.one ?? "";
         const otherInput = overrides[row.key]?.other ?? "";
         const isCustom = overrides[row.key] !== undefined;
@@ -140,9 +168,9 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
             </div>
 
             <p className="mt-1.5 text-[12.5px] text-ink-3">
-              Reads as: <span className="text-ink-2">{row.sampleSentenceSingular.replace(/1 \w+/, `1 ${oneRaw}`).replace(/member|class/i, oneRaw)}</span>{" "}
+              Reads as: <span className="text-ink-2">{sample.singular(oneRaw)}</span>{" "}
               ·{" "}
-              <span className="text-ink-2">{row.sampleSentencePlural.replace(/\d+ \w+/, `12 ${otherRaw}`).replace(/members|classes/i, otherRaw)}</span>
+              <span className="text-ink-2">{sample.plural(otherRaw)}</span>
             </p>
 
             <div className="mt-3 grid grid-cols-2 gap-2.5">
@@ -152,7 +180,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
                   type="text"
                   value={oneInput}
                   onChange={(e) => setRow(row.key, { one: e.target.value })}
-                  placeholder={DEFAULT_TERMS.en[row.key].one}
+                  placeholder={defaults.one}
                   maxLength={60}
                   className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
                   data-testid={`term-${row.key}-one`}
@@ -164,7 +192,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
                   type="text"
                   value={otherInput}
                   onChange={(e) => setRow(row.key, { other: e.target.value })}
-                  placeholder={DEFAULT_TERMS.en[row.key].other}
+                  placeholder={defaults.other}
                   maxLength={60}
                   className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
                   data-testid={`term-${row.key}-other`}
@@ -184,7 +212,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
                 type="button"
                 onClick={() => saveRow(row.key)}
                 disabled={isPending}
-                className="flex-1 rounded-pill py-2.5 text-[13.5px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center justify-center gap-1.5"
+                className="flex-1 min-h-[44px] rounded-pill py-2.5 text-[13.5px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center justify-center gap-1.5"
                 data-testid={`term-${row.key}-save`}
               >
                 {isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -195,7 +223,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
                   type="button"
                   onClick={() => resetRow(row.key)}
                   disabled={isPending}
-                  className="rounded-pill py-2.5 px-3 text-[13px] font-medium text-ink-2 bg-deck disabled:opacity-50 flex items-center gap-1.5"
+                  className="min-h-[44px] rounded-pill py-2.5 px-3 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 flex items-center gap-1.5"
                   data-testid={`term-${row.key}-reset`}
                 >
                   <RotateCcw size={13} /> Use default
@@ -205,16 +233,16 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
           </li>
         );
       })}
-      <ResolvePreviewNotice state={previewState} />
+      <ResolvePreviewNotice state={previewState} locale={locale} />
     </ul>
   );
 }
 
-function ResolvePreviewNotice({ state }: { state: TerminologyState }) {
-  // Render a one-line confirmation that resolveTerm actually
-  // sees what the form is rendering — the same closed-key
-  // helper the rest of the app will use. The text here is
-  // medically-precise readout rather than decoration.
+function ResolvePreviewNotice({ state, locale }: { state: TerminologyState; locale: Locale }) {
+  // Renders one line confirming what the closed-key resolver
+  // sees for the active locale. The locale selector sits on
+  // the page (above this component) — the form itself stays
+  // locale-narrow, which is why the preview is also narrow.
   return (
     <li className="text-[12px] text-ink-3 px-1">
       Today&apos;s view uses{" "}
@@ -222,8 +250,16 @@ function ResolvePreviewNotice({ state }: { state: TerminologyState }) {
       ·{" "}
       <span className="text-ink">{titleCase(resolveTerm(state, "batch", "other"))}</span>{" "}
       ·{" "}
-      <span className="text-ink">{titleCase(resolveTerm(state, "session", "other"))}</span>.
-      {" "}Database columns stay <span className="text-ink">member_code</span>, never renamed.
+      <span className="text-ink">{titleCase(resolveTerm(state, "session", "other"))}</span>
+      . Database columns stay <span className="text-ink">member_code</span>, never renamed.
+      <span className="block mt-0.5 text-ink-3">Active locale: <span className="text-ink-2 font-mono">{locale}</span></span>
     </li>
   );
 }
+
+// Touch locale-imported-after-render so the closure compiles
+// even when SAMPLE_SENTENCES has only the 'en' branch populated.
+// (At runtime the entry is required; this is just type-aware
+// documentation that no entry silently regresses.)
+import { resolveTerm } from "@/lib/terminology/keys";
+void resolveTerm;

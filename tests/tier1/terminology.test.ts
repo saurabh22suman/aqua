@@ -12,7 +12,7 @@ import {
   type UpdateTermOverrideInput,
 } from "@/lib/services/terminology";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
-import { resolveTerm, DEFAULT_TERMS, TERM_KEYS } from "@/lib/terminology/keys";
+import { resolveTerm, DEFAULT_TERMS, LOCALES, TERM_KEYS, type TerminologyState } from "@/lib/terminology/keys";
 
 // Phase 2.10 — terminology service tests (TDD; the
 // implementation arrives in the same PR).
@@ -211,5 +211,55 @@ describe("resolveTerm invariants (Phase 2.10)", () => {
     const data = await getTerminology({ tenantId });
     expect(resolveTerm(data, "session", 1)).toBe("class");
     expect(resolveTerm(data, "session", "other")).toBe("classes");
+  });
+});
+
+describe("locale-defaults table (Phase 4.20 / R.20)", () => {
+  // Pure-data invariant: adding a locale to the closed key set
+  // is data, not schema. Hindi and Bengali ship alongside
+  // English; each is a non-empty mapping for every TERM_KEY so
+  // resolveTerm() never falls through to a missing entry.
+
+  it("LOCALES includes en, hi, bn — closed by the type system", () => {
+    expect(LOCALES).toEqual(["en", "hi", "bn"]);
+  });
+
+  it("every locale carries a non-empty forms entry for every term key", () => {
+    for (const locale of LOCALES) {
+      for (const key of TERM_KEYS) {
+        const entry = DEFAULT_TERMS[locale][key];
+        expect(entry.one.length, locale + "/" + key + " one").toBeGreaterThan(0);
+        expect(entry.other.length, locale + "/" + key + " other").toBeGreaterThan(0);
+        // Hindi and Bengali often do not pluralize closed-class
+        // nouns (member, coach, batch all share one/other), so we
+        // don't require a strict inequality here. English does;
+        // pin that on en only.
+        if (locale === "en") expect(entry.one).not.toBe(entry.other);
+      }
+    }
+  });
+
+  it("resolveTerm picks the locale's defaults when no override is set", () => {
+    for (const locale of LOCALES) {
+      expect(resolveTerm({ overrides: {}, locale }, "member", "other"))
+        .toBe(DEFAULT_TERMS[locale].member.other);
+    }
+  });
+
+  it("resolveTerm surfaces an override set on one locale but not another (per-locale scoping)", () => {
+    // Override 'member' on en only — a hi query still gets the
+    // hi default. This is the architecture §7.5 rule 2 ("overrides
+    // layer over locale defaults, per locale").
+    const state: TerminologyState = {
+      overrides: {
+        member: { en: { one: "swimmer", other: "swimmers" } },
+      },
+      locale: "en",
+    };
+    expect(resolveTerm(state, "member", 1)).toBe("swimmer");
+    // Same query but with locale=hi: still the hi default.
+    expect(
+      resolveTerm({ ...state, locale: "hi" }, "member", 1),
+    ).toBe(DEFAULT_TERMS.hi.member.one);
   });
 });
