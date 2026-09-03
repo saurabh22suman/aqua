@@ -103,7 +103,7 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [x] **2.8** Onboarding checklist — the new tenant's owner sees what remains: add members, create batches, assign coaches. Each item links to where it is done. `GREEN`
 - [x] **2.9a** Tenant branding UI — club name, short name, accent editor (six-key picker, runtime accent via `--accent`, never a hex). Fallback initials mark renders when nothing is uploaded (inline SVG, no external request). Editor is management-only; coach/receptionist keep the read-only surfaces. `GREEN`
 - [ ] **2.9b** Logo and square mark upload to R2 — **blocked on dependency approval** (`@aws-sdk/client-s3` or equivalent; R2 has no client in this repo today, F-17's setup, also C-07 documents share the same need). Proposing the storage + upload-path architecture as a RED before adding the dependency.
-- [ ] **2.10** Terminology editor — the eight closed `TERM_KEYS`, singular and plural, per locale. Changing "member" to "swimmer" updates the app and leaves `member_code` untouched. `GREEN`
+- [x] **2.10** Terminology editor — the eight closed `TERM_KEYS`, singular and plural, per locale. Changing "member" to "swimmer" updates the app and leaves `member_code` untouched. Owner dashboard now reads `members`/`batches`/`sessions` through the closed-key resolver, proving the wiring end-to-end. Database columns stay canonical. `GREEN`
 
 **Phase 2 gate:** a tenant is created, preset-seeded, branded and owner-invited entirely through the UI.
 
