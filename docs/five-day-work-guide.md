@@ -119,7 +119,9 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [x] **3.6** Staff invitations — invite by phone, assign role and locations, accept, revoke, resend. Completes `F-24`. Accept happens via better-auth OTP on first login (no separate UI); resend is a no-op pending the messaging chain. `GREEN`
 - [x] **3.7** Seed a receptionist login — `scripts/seed.ts` had no receptionist row, so the `assertStaff` permission path was exercised only in unit tests with hand-fabricated ctx. Added `+919000000005=receptionist` to LOGIN_USERS. `GREEN`
 - [ ] **3.8** Support impersonation `RED`. Propose before building. Platform staff acting as a tenant user. Must require a stated reason, be fully audited, show a persistent banner to the impersonating user, and be impossible to initiate from a tenant session. `RED`
-- [ ] **3.9** Platform activity log — who did what across tenants, filterable, append-only. `GREEN`
+- [x] **3.9** Platform activity log — who did what across tenants, filterable, append-only. Action / tenant / date filters; tenant-name join on the row so the UI doesn't need a second round trip; total count independent of pagination. `GREEN`
+- [ ] **3.1** Documents — token scheme **RED**. Proposal in `docs/red-proposals.md`. Implementing once approved.
+- [ ] **3.8** Impersonation **RED**. Proposal in `docs/red-proposals.md`. Implementing once approved.
 
 **Phase 3 gate:** a child's photograph is uploadable and viewable, and no unauthenticated URL resolves to it. Prove it.
 
