@@ -103,6 +103,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/terminology.test.ts",
   "tests/tier1/staff-directory.test.ts",
   "tests/tier1/staff-invitations.test.ts",
+  "tests/tier1/platform-activity.test.ts",
   // Tenant detail page reads sample/real state via the
   // privileged pool for the "remove sample data" gate. Same shape
   // as 1.5's tenant list page: the production code goes through
