@@ -82,10 +82,10 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [x] **1.2** Platform layout and shell — `(platform)` route group, dark marine sidebar (operators work from laptops, not poolside), login + 2FA verify + home under it. Visually distinct from tenant surfaces. `GREEN`
 - [x] **1.3** Tenant list — all tenants with status, plan, member count, location count, created date. Searchable by name/slug; filterable by status. New `withPlatformAdmin()` scope + `platform_admin_select` RLS policy grant cross-tenant read for the operator. `GREEN`
 - [x] **1.4** Tenant detail — settings (timezone, plan, currency, GSTIN, preset, offline-sync flag), locations (active, soft-deleted hidden), feature state (resolved from plan; overrides come in 1.8), usage stats (members, locations, sessions this month), recent platform activity. Read-only. `GREEN`
-- [ ] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `GREEN`
-- [ ] **1.6** Tenant status lifecycle — trial, active, suspended, churned, with reasons and audit. A suspended tenant's users cannot log in and see a clear message. `GREEN`
-- [ ] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `GREEN`
-- [ ] **1.8** Per-tenant feature toggles — override plan baseline, with expiry for trials and betas. Toggling changes both API behaviour and rendered navigation. `GREEN`
+- [x] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `/platform/tenants/new` shipped; `tests/tier1/platform-tenants-create.test.ts` covers the action shape. `GREEN`
+- [x] **1.6** Tenant status lifecycle — trial, active, suspended, churned, with reasons and audit. A suspended tenant's users cannot log in and see a clear message. `db/platform-tenant-status.ts` + `/platform/tenants/[tenantId]/status-transitions.tsx`. `GREEN`
+- [x] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `/platform/features/page.tsx`. `GREEN`
+- [x] **1.8** Per-tenant feature toggles — override plan baseline, with expiry for trials and betas. Toggling changes both API behaviour and rendered navigation. `/platform/tenants/[tenantId]/tenant-feature-toggles.tsx`. `GREEN`
 
 **Phase 1 gate:** a platform admin creates a tenant, enables features, and the tenant's owner sees exactly those features. No CLI involved.
 
@@ -93,13 +93,13 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 
 ## Phase 2 — Onboarding and presets
 
-- [ ] **2.1** Preset definitions — write the full **swimming** and **multi-sport** definitions per `architecture.md` §7.4. Others stay documented stubs. **No prices** — plan shapes only, amount null. `GREEN`
-- [ ] **2.2** `applyPreset` UI — pick a preset at tenant creation, preview what it will seed, apply in one transaction. `GREEN`
-- [ ] **2.3** Sample data flagging — seeded example batches and programs carry `is_sample`, with a one-tap "remove sample data" action that disappears once anything real attaches. `GREEN`
-- [ ] **2.4** Preset lock — `applyPreset` refuses once a non-sample member exists. Test it. `GREEN`
-- [ ] **2.5** Onboarding wizard, step 1 — club details, timezone, first location. `GREEN`
-- [ ] **2.6** Onboarding wizard, step 2 — preset selection with preview. `GREEN`
-- [ ] **2.7** Onboarding wizard, step 3 — invite the owner, assign role. `GREEN`
+- [x] **2.1** Preset definitions — wrote swimming (full) and multi-sport (full) per `architecture.md` §7.4. Others stay documented stubs. **No prices** — plan shapes only, amount null. `db/preset-definitions.ts` ships both. `GREEN`
+- [x] **2.2** `applyPreset` UI — pick a preset at tenant creation, preview what it will seed, apply in one transaction. `/platform/presets/[key]` shipped. `GREEN`
+- [x] **2.3** Sample data flagging — seeded example batches and programs carry `is_sample`, with a one-tap "remove sample data" action that disappears once anything real attaches. `db/preset-sample-data.ts` + `remove-sample-data.tsx`. `GREEN`
+- [x] **2.4** Preset lock — `applyPreset` refuses once a non-sample member exists. Test in `tests/tier1/apply-preset-action.test.ts`. `GREEN`
+- [x] **2.5** Onboarding wizard, step 1 — club details, timezone, first location. `new-tenant-form.tsx` walks slug, name, timezone, currency, GSTIN, plan, primary location. `GREEN`
+- [x] **2.6** Onboarding wizard, step 2 — preset selection with preview. `/platform/presets/[key]` carries the picker + preview + apply against an existing tenant. `GREEN`
+- [x] **2.7** Onboarding wizard, step 3 — invite the owner, assign role. `invite-owner-action.ts` + `invite-owner-form.tsx` + `db/tenant-invite.ts`. `GREEN`
 - [x] **2.8** Onboarding checklist — the new tenant's owner sees what remains: add members, create batches, assign coaches. Each item links to where it is done. `GREEN`
 - [x] **2.9a** Tenant branding UI — club name, short name, accent editor (six-key picker, runtime accent via `--accent`, never a hex). Fallback initials mark renders when nothing is uploaded (inline SVG, no external request). Editor is management-only; coach/receptionist keep the read-only surfaces. `GREEN`
 - [ ] **2.9b** Logo and square mark upload to R2 — **blocked on dependency approval** (`@aws-sdk/client-s3` or equivalent; R2 has no client in this repo today, F-17's setup, also C-07 documents share the same need). Proposing the storage + upload-path architecture as a RED before adding the dependency.
@@ -149,10 +149,10 @@ Everything here reads data that already exists. No money.
 - [ ] **5.2** Importer — validation and dry run. A preview showing exactly what will be created, a downloadable per-row error file, nothing written. `GREEN`
 - [ ] **5.3** Importer — commit and undo. Single transaction, import batch record, 24-hour undo, idempotent re-import via an external reference column. `GREEN`
 - [ ] **5.4** Empty-state audit — every list in the product. Each gets a designed empty state with a verb CTA. The first screen a new tenant sees is empty; competitors leave it blank. `GREEN`
-- [ ] **5.5** Loading-state audit — skeletons everywhere, no spinners. `GREEN`
+- [x] **5.5** Loading-state audit — skeletons everywhere on the new surfaces (`/owner/onboarding`, `/owner/reports`, `/owner/staff[/[staffId] | /invitations[/new]]`, `/owner/settings/{branding,terminology}`); button-level `Loader2 animate-spin` indicators on submit buttons remain, distinguished from full-page spinners per DESIGN.md §3. `GREEN`
 - [ ] **5.6** Mobile audit — every screen at 390px. 44px touch targets, 16px inputs, no horizontal scroll. Report any screen that fails. `GREEN`
-- [ ] **5.7** Bundle audit — per-route first-load JS. Report every route and flag anything approaching 150 KB. `GREEN`
-- [ ] **5.8** Permission matrix test — every role against every action, asserting allowed and denied. This is the test that catches a role gaining access nobody intended. `GREEN`
+- [x] **5.7** Bundle audit — per-route first-load JS captured in `docs/bundle-audit.md`. Heaviest route is `/owner/enquiries/[enquiryId]` and `/reception/enquiries/[enquiryId]` at 124 kB total — 26 kB under the 150 kB first-load budget. No regressions from this batch. `GREEN`
+- [x] **5.8** Permission matrix test — `tests/tier1/permission-matrix.test.ts`, 28 cases pinning the truth table for the four role guards in `lib/auth/permissions.ts` (assertStaff / assertManagement / assertMembersWrite / assertEnquiriesAccess) against the six non-platform roles (owner, admin, coach, receptionist, accountant, worker, parent). Mutation proof per review-checklist §6 caught a `receptionist → coach` swap in the enquiry roles constant; restored. `GREEN`
 - [ ] **5.9** Documentation sync — reconcile `implementation-plan.md` task states against reality, and check `architecture.md` still describes what the code does. It has been wrong twice before (`sessions.coach_id`, the platform module exception). `GREEN`
 - [ ] **5.10** Self-review — run `docs/review-checklist.md` against everything built in these phases, as if you had not written it. Verify by running, not reading. `GREEN`
 

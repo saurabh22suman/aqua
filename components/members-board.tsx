@@ -109,6 +109,14 @@ export function MembersBoard({
             <p className="text-[13px] text-ink-3">
               {search || status || locationId ? "No members match." : "No members yet."}
             </p>
+            {search || status || locationId ? null : (
+              <Link
+                href="/owner/members/new"
+                className="mt-4 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent)]"
+              >
+                Add your first member
+              </Link>
+            )}
           </li>
         ) : (
           members.map((m) => (
