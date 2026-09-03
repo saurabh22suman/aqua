@@ -73,6 +73,25 @@ DEMO_MODE=true pnpm tsx scripts/seed-platform-user.ts
 DEMO_MODE=true PORT=3211 pnpm next dev
 ```
 
+**Warm up the platform login before he sits down.** `next dev` compiles
+each route on its first visit, not at server start — the platform
+login → verify → landing sequence measured ~2.5s of pure compile time
+stacked across three routes on a cold server (server-side auth itself
+is fast: ~100ms). Do one throwaway login (wrong code is fine, or a
+real one) right after starting the dev server so `/platform/login`,
+`/platform/verify`, and `/platform` are already compiled. After that,
+the flow is fast for the rest of the session.
+
+**A stale-server-action 404 can appear on the very first submit to any
+route that just compiled.** In dev mode, submitting a form on a
+freshly-compiled route occasionally throws `UnrecognizedActionError:
+Server Action ... was not found on the server` in the browser console
+— a Fast-Refresh/action-manifest artifact, not a data problem (nothing
+gets written on the failed attempt). A page reload always clears it
+and the retry succeeds. If a button click seems to do nothing on a
+screen you haven't visited yet this session, reload once before
+assuming something is broken.
+
 **Re-running `seed-platform-user.ts` signs out any open operator tab.**
 It deletes and re-provisions the `platform_users` row for that email
 (re-runnable by design); `platform_sessions.user_id` cascades on
