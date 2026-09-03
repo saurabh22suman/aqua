@@ -7,6 +7,7 @@ import { tenants } from "./schema/tenants";
 import { locations } from "./schema/locations";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
 // Phase 1.5 — platform-side tenant creation. Replaces the CLI path
@@ -22,10 +23,11 @@ import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 // leaving tenant_isolation intact for every other caller.
 //
 // Single transaction by design: a partially-created tenant (header
-// row but no first location, or both rows but no audit trail) is a
-// state nobody can reason about. Either everything commits or nothing
-// does. The preset pathway (Phase 2.2) will hook in alongside this
-// transaction later — for now, preset fields stay null.
+// row but no first location, no role templates, or all of those but
+// no audit trail) is a state nobody can reason about. Either
+// everything commits or nothing does. The preset pathway (Phase 2.2)
+// will hook in alongside this transaction later — for now, preset
+// fields stay null.
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -187,6 +189,14 @@ export async function createTenant(
       if (!tenant) {
         throw new Error("createTenant: tenants insert returned no row");
       }
+
+      // C1 — same transaction as the tenant/location/audit rows. A
+      // tenant with no role templates is not a valid tenant: invite-
+      // owner (db/tenant-invite.ts) looks up the owner role by key
+      // and fails outright without it. scripts/seed.ts and
+      // scripts/seed-demo.ts both call this right after creating the
+      // tenant row; this was the one step createTenant was missing.
+      await seedRoleTemplates(tenant.id, tx);
 
       await tx.insert(locations).values({
         id: uuidv7(),
