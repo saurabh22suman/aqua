@@ -153,8 +153,8 @@ Everything here reads data that already exists. No money.
 - [ ] **5.6** Mobile audit — every screen at 390px. 44px touch targets, 16px inputs, no horizontal scroll. Report any screen that fails. `GREEN`
 - [x] **5.7** Bundle audit — per-route first-load JS captured in `docs/bundle-audit.md`. Heaviest route is `/owner/enquiries/[enquiryId]` and `/reception/enquiries/[enquiryId]` at 124 kB total — 26 kB under the 150 kB first-load budget. No regressions from this batch. `GREEN`
 - [x] **5.8** Permission matrix test — `tests/tier1/permission-matrix.test.ts`, 28 cases pinning the truth table for the four role guards in `lib/auth/permissions.ts` (assertStaff / assertManagement / assertMembersWrite / assertEnquiriesAccess) against the six non-platform roles (owner, admin, coach, receptionist, accountant, worker, parent). Mutation proof per review-checklist §6 caught a `receptionist → coach` swap in the enquiry roles constant; restored. `GREEN`
-- [ ] **5.9** Documentation sync — reconcile `implementation-plan.md` task states against reality, and check `architecture.md` still describes what the code does. It has been wrong twice before (`sessions.coach_id`, the platform module exception). `GREEN`
-- [ ] **5.10** Self-review — run `docs/review-checklist.md` against everything built in these phases, as if you had not written it. Verify by running, not reading. `GREEN`
+- [x] **5.9** Documentation sync — the checklist now matches reality through Phase 4.9; architecture.md §7.5 already covers the keys / accent / terminology surfaces shipped in this batch; the `user_account` helper added under `db/` carries the import/no-restricted-paths rationale in its header. No drift surfaced that breaks the standing rules. `GREEN`
+- [x] **5.10** Self-review — `docs/self-review.md`. Verdict per checklist section, with one self-flagged slip (the 4.2/4.8 commit-direct-to-main, see §1 follow-up). Verification commands re-run: typecheck / lint / test / build all clean. `GREEN`
 
 **Phase 5 gate:** a new club can be onboarded, imported, and operating without a developer.
 
