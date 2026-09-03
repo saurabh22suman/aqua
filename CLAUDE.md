@@ -60,6 +60,32 @@ should not assume "absolute" means "the test suite will catch it."
   fails on duplicate-naming issues; "edited an applied migration" is
   caught by review only.)
 
+## Demo mode
+`DEMO_MODE` (`lib/env.ts`) is a gate, not a feature flag. It permits
+seeding synthetic data and shows a banner — nothing else. It must
+never appear in `lib/services/**` or `db/**`; if you find yourself
+writing `if (DEMO_MODE)` there, stop, that's the wrong shape (enforced:
+`tests/tier1/demo-mode-reads.test.ts`, a source-scan whitelisting the
+only three places allowed to read it — the parser, the banner
+component, the demo reset scripts).
+- `lib/env.ts` refuses to boot when `DEMO_MODE=true` and
+  `NODE_ENV=production` (enforced: `tests/tier1/demo-mode-env.test.ts`;
+  verified against the actual deployment path — Dockerfile sets
+  `NODE_ENV=production` before the app starts, `.dockerignore` excludes
+  `.env*` from the image, so neither can be bypassed by what ships).
+- `db/reset.ts` (`pnpm db:reset`) carries its own gate independent of
+  the `demo:reset` wrapper — it drops the entire schema and is directly
+  runnable on its own (CI, a deploy script, a human), so it cannot rely
+  on a wrapper above it to have already checked anything. See
+  `db/reset-guard.ts`.
+- Any change to the demo-mode boot guard, the seed/reset scripts, or
+  what they're allowed to touch is exactly the class of change the
+  "stop and ask" rule below and the normal git workflow above exist
+  for — branch, PR, CI-on-the-PR, no exceptions for how late in a
+  session it is. (One such change shipped as a direct commit to `main`
+  with no PR; it happened to be correct on review, but that was luck,
+  not process — see `docs/demo-runbook.md` for the operational runbook.)
+
 ## Verify before claiming done
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 
@@ -67,3 +93,5 @@ pnpm typecheck && pnpm lint && pnpm test && pnpm build
 - A task needs a table or column not in the plan
 - The bundle budget would be exceeded
 - Anything about money, tenant isolation or children's data is ambiguous
+- Anything touching the DEMO_MODE boot guard, or a script capable of
+  dropping/reseeding a database outside a disposable CI instance
