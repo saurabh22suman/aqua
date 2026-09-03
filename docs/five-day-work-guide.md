@@ -130,13 +130,13 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 Everything here reads data that already exists. No money.
 
 - [x] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. `GREEN`
-- [ ] **4.2** Per-batch attendance summary — deferred in `C-27` to avoid a merge conflict with `#23`. That has landed; wire it in. `GREEN`
+- [x] **4.2** Per-batch attendance summary — `/owner/batches/[batchId]` shows the month's headline figure and present-marks detail. The existing programs board's batch name is now a Link to this page. `GREEN`
 - [x] **4.3** Attendance report — by batch, by program, by period, with CSV export using canonical field names, not tenant vocabulary. `GREEN`
 - [x] **4.4** Enquiry funnel report — counts and conversion by source and stage over time. Figures reconcile to the `enquiries` table exactly. `GREEN`
 - [x] **4.5** Retention view — members at risk by attendance signal. **Aggregate and batch-level only.** No per-minor profiling. `GREEN`
 - [x] **4.6** Coach load view — sessions per coach per week, utilisation. `GREEN`
 - [x] **4.7** Owner dashboard — capacity lanes for today, needs-attention with reasons, member and attendance figures. **No money tiles.** Wired through Phase 2.9/2.10 (branding + terminology) and Phase 4.1 (attendance history) — verified still resolves through the closed-key helpers. `GREEN`
-- [ ] **4.8** Coach home — today's sessions, this week's schedule, their own roster. `GREEN`
+- [x] **4.8** Coach home — today's sessions, this week's schedule, their own roster. Coach-scoped reads via `coach-scope` queries; the roster surface shows each coached member's name and batches. `GREEN`
 - [x] **4.9** Member detail completion — attendance, documents, guardians, consent, status history in one coherent view. The phase-2 member detail page already carries every panel; this was a verification rather than build. `GREEN`
 
 **Phase 4 gate:** an owner can answer "how is my club doing" without asking anyone. *(Partial — 4.2 per-batch summary and 4.8 coach home still open.)*

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Pencil, Trash2, X, Check } from "lucide-react";
 import {
   createProgramAction,
@@ -248,7 +249,12 @@ export function ProgramsBatchesBoard({
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="flex-1 min-w-0 text-[14px]">
-                    <span className="font-medium">{b.name}</span>
+                    <Link
+                      href={`/owner/batches/${b.id}`}
+                      className="font-medium hover:underline underline-offset-2"
+                    >
+                      {b.name}
+                    </Link>
                     <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {b.startTime}–{b.endTime}</span>
                     {b.coachName ? <span className="text-ink-3"> · coach {b.coachName}</span> : null}
                   </div>
