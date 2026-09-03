@@ -3,6 +3,10 @@ import { Client } from "pg";
 import { bootstrapRoles } from "@/db/bootstrap-roles";
 import { runMigrations } from "@/db/migrate";
 import { env } from "@/lib/env";
+import {
+  SESSIONS_GENERATE_QUEUE,
+  scheduleSessionsGenerate,
+} from "@/lib/jobs/sessions-generate-schedule";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -11,7 +15,7 @@ type JobTenant = { id: string; timezone: string };
 // DDL right app_user deliberately does not have (see
 // grantAppUserOnPgBossSchema below) — so it belongs here, in the
 // privileged deploy step, not in the worker.
-const QUEUES = ["sessions.generate"];
+const QUEUES = [SESSIONS_GENERATE_QUEUE];
 
 // pg-boss owns its own schema and version history (pgboss.version table) —
 // deliberately NOT vendored into db/migrations alongside our own SQL.
@@ -37,31 +41,29 @@ async function ensurePgBossQueues(boss: PgBoss): Promise<void> {
 async function syncSessionGenerateSchedules(boss: PgBoss, tenants: JobTenant[]): Promise<void> {
   const desired = new Set(tenants.map((t) => t.id));
 
-  const existing = await boss.getSchedules("sessions.generate");
+  const existing = await boss.getSchedules(SESSIONS_GENERATE_QUEUE);
   for (const sched of existing) {
     if (sched.key && !desired.has(sched.key)) {
-      await boss.unschedule("sessions.generate", sched.key);
+      await boss.unschedule(SESSIONS_GENERATE_QUEUE, sched.key);
     }
   }
 
   for (const t of tenants) {
-    await boss.schedule(
-      "sessions.generate",
-      "0 2 * * *",
-      { tenantId: t.id },
-      { tz: t.timezone, key: t.id },
-    );
+    await scheduleSessionsGenerate(boss, t.id, t.timezone);
   }
 }
 
 // Read directly under the privileged connection — the one place in this
 // codebase that legitimately needs every tenant, and the one place
 // that's already exempt from needing a tenant/user scope to read
-// `tenants` (superuser bypasses RLS unconditionally). Known gap: a
-// tenant created between deploys gets no schedule until the next sync —
-// tracked as an issue against F-13-21 (self-serve provisioning), since
-// today tenant creation is operator-run (scripts/seed.ts) and already
-// coincides with a deploy.
+// `tenants` (superuser bypasses RLS unconditionally). D2 — this sync is
+// no longer the only path to a schedule: createTenant()
+// (db/platform-tenant-create.ts) registers a tenant's schedule
+// immediately, right after its create transaction commits. This bulk
+// sync remains the reconciliation pass: it catches tenants whose
+// immediate registration failed (best-effort, logged, non-fatal — see
+// createTenant), and removes schedules for tenants that churned or
+// were suspended since the last deploy.
 async function fetchJobTenants(connectionString: string): Promise<JobTenant[]> {
   const client = new Client({ connectionString });
   await client.connect();

@@ -422,4 +422,31 @@ describe("createTenant", () => {
     await admin.query("delete from roles where tenant_id = $1", [directTenantId]);
     await admin.query("delete from tenants where id = $1", [directTenantId]);
   });
+
+  it("D2: registers a sessions.generate schedule for the new tenant immediately", async () => {
+    // Previously only db/deploy.ts's bulk sync (at deploy time) ever
+    // wrote a pgboss schedule row — a tenant created between deploys
+    // had no nightly session generation until the next one. This
+    // proves createTenant() itself registers the schedule, keyed by
+    // the new tenant's id, without waiting for a deploy.
+    const slug = uniqueSlug("schedule");
+    const tenantId = await expectOk(await createTenant(baseInput(slug), { actorId }));
+    try {
+      const rows = (
+        await admin.query<{ timezone: string; cron: string }>(
+          `select timezone, cron from pgboss.schedule
+           where name = 'sessions.generate' and key = $1`,
+          [tenantId],
+        )
+      ).rows;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.timezone).toBe("Asia/Kolkata");
+      expect(rows[0]?.cron).toBe("0 2 * * *");
+    } finally {
+      await admin.query(
+        `delete from pgboss.schedule where name = 'sessions.generate' and key = $1`,
+        [tenantId],
+      );
+    }
+  });
 });

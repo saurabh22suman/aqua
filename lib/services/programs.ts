@@ -3,6 +3,8 @@ import { withTenant } from "@/db/tenant";
 import { batches, programs, type Batch, type Program } from "@/db/schema/programs";
 import { staff } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
+import { tenants } from "@/db/schema/tenants";
+import { generateSessions } from "@/lib/jobs/session-generator";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asStaffId } from "@/lib/ids";
 
@@ -143,6 +145,19 @@ export async function createBatch(
         .where(eq(staff.id, asStaffId(input.coachId)));
       coachName = coach?.fullName ?? null;
     }
+
+    // D2 — a batch with no sessions is an empty register the day
+    // after it's created; nothing else materialises them until the
+    // nightly sessions.generate job runs. Same function the job and
+    // both seed scripts call (lib/jobs/session-generator.ts) — it
+    // already re-scans every active batch and no-ops on rows that
+    // exist (onConflictDoNothing), so calling it here is safe to
+    // repeat on every batch creation, not just this one's rows.
+    const [tenant] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    await generateSessions(tx, ctx.tenantId, tenant.timezone);
 
     return { ...batch, programName: program.name, coachName };
   });
