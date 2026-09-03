@@ -64,7 +64,7 @@ DEMO_MODE=true pnpm demo:reset
 DEMO_MODE=true pnpm demo:reset && DEMO_MODE=true PORT=3211 pnpm next dev
 ```
 
-`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` in that order. If `DEMO_MODE` is **not** set, `demo:reset` exits before any DB write — the guard fires first so a misfired command does nothing, not even a `db:reset`. The same guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
+`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` in that order. If `DEMO_MODE` is **not** set, `demo:reset` itself exits before spawning any of the three steps — a misfired `pnpm demo:reset` does nothing. `db/reset.ts` (`pnpm db:reset`) is *also* directly runnable on its own — as a standalone script, as CI's own `db:reset` step, or by a deploy process — so it carries its own gate rather than relying on the wrapper above it: it refuses unconditionally when `NODE_ENV=production`, and otherwise refuses unless `DEMO_MODE=true` or `--i-understand` is passed explicitly (`pnpm db:reset -- --i-understand`), printing the target host and database name and — when run from an interactive terminal — requiring you to type the database name back before it drops the schema. The same `DEMO_MODE` guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
 
 ```bash
 DEMO_MODE=true pnpm db:reset

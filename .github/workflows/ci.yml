@@ -65,8 +65,13 @@ jobs:
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
+      # db/reset.ts refuses to run unless DEMO_MODE=true or --i-understand
+      # is passed explicitly (see db/reset-guard.ts) — CI's Postgres
+      # service is scratch/ephemeral, but the script has no way to know
+      # that on its own, so this is an explicit declaration of intent
+      # rather than a silent bypass.
       - name: db:reset (bootstrap roles + migrate against the CI Postgres service)
-        run: pnpm db:reset
+        run: pnpm db:reset -- --i-understand
 
       # pretest seeds the platform catalogue automatically (see T0).
       #

@@ -48,8 +48,16 @@ const ALLOWED_READERS = new Set<string[]>([
   ["scripts", "seed-platform-user.ts"],
   // The demo-reset wrapper. Same gate as the seed scripts; runs the
   // reset chain only after the guard fires, so `pnpm demo:reset` with
-  // DEMO_MODE off does nothing — not even `db:reset`.
+  // DEMO_MODE off does nothing before spawning db:reset.
   ["scripts", "demo-reset.ts"],
+  // db/reset.ts drops and recreates the entire public schema — a
+  // bigger blast radius than the wrapper above it was ever gating.
+  // It's directly runnable on its own (`pnpm db:reset`, CI's own
+  // db:reset step), so it carries its own DEMO_MODE-or-`--i-understand`
+  // gate rather than trusting the wrapper. db/reset-guard.ts holds the
+  // pure guard logic reset.ts reads env.DEMO_MODE into.
+  ["db", "reset.ts"],
+  ["db", "reset-guard.ts"],
   // Tests read freely; the rule is about production-runtime code.
   ["tests"],
 ]);
