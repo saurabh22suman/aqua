@@ -4,6 +4,7 @@ import { CalendarCheck, Pencil, ShieldCheck, Users } from "lucide-react";
 import { getMemberDetailAction } from "@/lib/actions/people";
 import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
 import { MemberStatusPanel } from "@/components/member-status-panel";
+import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 
 export default async function MemberDetailPage({
@@ -44,6 +45,8 @@ export default async function MemberDetailPage({
         </p>
         <MemberStatusPanel memberId={member.memberId} status={member.status} />
       </div>
+
+      <MemberEnrolmentPanel memberId={member.memberId} />
 
       <dl className="mt-4 rounded-card border border-line bg-paper p-3.5 space-y-2 text-[13px]">
         <div className="flex justify-between">

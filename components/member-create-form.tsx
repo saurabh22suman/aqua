@@ -27,13 +27,14 @@ type GuardianChoice =
 
 export function MemberCreateForm({
   locations,
-  successPath,
+  memberDetailBasePath = "/owner/members",
 }: {
   locations: LocationOption[];
-  // Optional static route to push to after a successful create. When
-  // omitted, the owner default is used (member detail). Surfaces
-  // without a member detail page (reception) pass their own home route.
-  successPath?: string;
+  // Base path for the new member's detail page, e.g. "/owner/members"
+  // or "/reception/members" — each surface has its own detail route so
+  // staff land somewhere they can immediately enrol the member in a
+  // batch (B3), not a generic "done" screen.
+  memberDetailBasePath?: string;
 }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
@@ -127,7 +128,7 @@ export function MemberCreateForm({
         setError(result.error);
         return;
       }
-      router.push(successPath ?? `/owner/members/${result.memberId}`);
+      router.push(`${memberDetailBasePath}/${result.memberId}`);
     } finally {
       setBusy(false);
     }

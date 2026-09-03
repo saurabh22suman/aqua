@@ -25,7 +25,12 @@ export default async function ReceptionEnquiryDetailPage({
         {enquiry.phone ? ` · ${enquiry.phone}` : ""}
       </p>
       <div className="mt-4">
-        <EnquiryDetailView enquiry={enquiry} locations={locations} batches={batches} />
+        <EnquiryDetailView
+          enquiry={enquiry}
+          locations={locations}
+          batches={batches}
+          memberDetailBasePath="/reception/members"
+        />
       </div>
     </main>
   );

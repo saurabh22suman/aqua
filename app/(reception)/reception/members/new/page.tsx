@@ -8,7 +8,7 @@ export default async function ReceptionNewMemberPage() {
     <main className="px-5 pt-10 pb-8">
       <h1 className="font-display text-[19px] font-semibold">Add member</h1>
       <div className="mt-4">
-        <MemberCreateForm locations={locations} successPath="/reception" />
+        <MemberCreateForm locations={locations} memberDetailBasePath="/reception/members" />
       </div>
     </main>
   );

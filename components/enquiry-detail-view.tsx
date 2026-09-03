@@ -21,10 +21,16 @@ export function EnquiryDetailView({
   enquiry,
   locations,
   batches,
+  memberDetailBasePath = "/owner/members",
 }: {
   enquiry: EnquiryDetail;
   locations: LocationOption[];
   batches: BatchWithProgramName[];
+  // Where to send staff after converting — the member's own detail
+  // page, where the Enrolment section (B3) picks up: a direct
+  // conversion (no prior trial) has no batchId field on this form, so
+  // enrolling is always this page's job, not this one's.
+  memberDetailBasePath?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +122,7 @@ export function EnquiryDetailView({
         return;
       }
       setShowConvertNoTrial(false);
-      router.refresh();
+      router.push(`${memberDetailBasePath}/${result.memberId}`);
     } finally {
       setBusy(false);
     }
