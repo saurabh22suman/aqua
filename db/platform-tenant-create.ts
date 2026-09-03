@@ -67,7 +67,12 @@ export const createTenantInput = z.object({
     .min(1)
     .default("Asia/Kolkata")
     .refine(isCanonicalTimezone, "Time zone is not a recognised IANA identifier."),
-  planKey: z.string().trim().min(1).default("standard"),
+  // No hardcoded default key: which plan is "the default" is
+  // plans.is_default (schema-enforced unique-partial-index, seeded by
+  // db/seed-platform.ts), not a string this form has to keep in sync
+  // with it. Omitting planKey resolves to whichever plan carries
+  // is_default at request time.
+  planKey: z.string().trim().min(1).optional(),
   currency: z
     .string()
     .trim()
@@ -151,17 +156,28 @@ export async function createTenant(
       // Plan lookup is a straight read on a platform-scoped table
       // (allowlist). No need for withPlatform() — the surrounding
       // platform_admin session doesn't change that visibility.
+      // planKey omitted -> resolve is_default rather than assuming a
+      // hardcoded key: the key of "the default plan" and the string
+      // this form falls back to were two sources of truth that only
+      // happened to agree because nothing had renamed the default
+      // plan yet.
       const planRows = await tx
-        .select({ id: plans.id, name: plans.name })
+        .select({ id: plans.id, name: plans.name, key: plans.key })
         .from(plans)
-        .where(and(eq(plans.key, input.planKey), eq(plans.status, "active")))
+        .where(
+          input.planKey
+            ? and(eq(plans.key, input.planKey), eq(plans.status, "active"))
+            : and(eq(plans.isDefault, true), eq(plans.status, "active")),
+        )
         .limit(1);
       const plan = planRows[0];
       if (!plan) {
         return {
           kind: "error",
           code: "plan_not_found",
-          message: `No active plan with key "${input.planKey}".`,
+          message: input.planKey
+            ? `No active plan with key "${input.planKey}".`
+            : "No default plan is configured.",
         };
       }
 
@@ -221,7 +237,7 @@ export async function createTenant(
           name: input.name,
           slug: input.slug,
           timezone: input.timezone,
-          planKey: input.planKey,
+          planKey: plan.key,
           planName: plan.name,
           currency: input.currency,
           ...(input.gstin ? { gstin: input.gstin } : {}),

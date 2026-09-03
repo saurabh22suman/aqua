@@ -263,6 +263,44 @@ describe("createTenant", () => {
     await admin.query("delete from tenants where id = $1", [first]);
   });
 
+  it("resolves the plan by is_default (not a hardcoded key) when planKey is omitted", async () => {
+    // Two sources of truth that only happened to coincide: a
+    // hardcoded "standard" default on this form vs. plans.is_default,
+    // the actual schema-enforced default. This proves omitting
+    // planKey follows is_default, not a string literal.
+    const slug = uniqueSlug("default-plan");
+    const withoutPlanKey: CreateTenantInput = {
+      name: "Create Test Academy",
+      slug,
+      timezone: "Asia/Kolkata",
+      currency: "INR",
+      locationName: "Main",
+      locationIsPrimary: true,
+    };
+    const tenantId = await expectOk(await createTenant(withoutPlanKey, { actorId }));
+
+    const defaultPlan = (
+      await admin.query<{ id: string; key: string }>(
+        "select id, key from plans where is_default = true",
+      )
+    ).rows[0]!;
+    const tenant = (
+      await admin.query<{ plan_id: string }>(
+        "select plan_id from tenants where id = $1",
+        [tenantId],
+      )
+    ).rows[0]!;
+    expect(tenant.plan_id).toBe(defaultPlan.id);
+
+    const audit = (
+      await admin.query<{ detail: Record<string, unknown> }>(
+        "select detail from platform_audit_log where tenant_id = $1",
+        [tenantId],
+      )
+    ).rows[0]!;
+    expect((audit.detail as { planKey?: string }).planKey).toBe(defaultPlan.key);
+  });
+
   it("rejects an unknown plan key with code: 'plan_not_found' and writes nothing", async () => {
     const slug = uniqueSlug("bad-plan");
     await expectError(
