@@ -117,7 +117,7 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [ ] **3.4** Document UI — upload and view on the person detail screen, role-gated: owner/admin/receptionist full, coach read-only for their own roster. `GREEN` (after 3.1)
 - [x] **3.5** Staff directory — list, detail, create, edit. `C-04` shipped schema and services; this is the missing UI. (Edit + delete land with 3.6's invitation-revoke path; both share the audit + state machine there.) `GREEN`
 - [x] **3.6** Staff invitations — invite by phone, assign role and locations, accept, revoke, resend. Completes `F-24`. Accept happens via better-auth OTP on first login (no separate UI); resend is a no-op pending the messaging chain. `GREEN`
-- [ ] **3.7** Seed a receptionist login — `scripts/seed.ts` has no receptionist, so the `assertStaff` permission fix was never verified in a real session. Add one and verify. `GREEN`
+- [x] **3.7** Seed a receptionist login — `scripts/seed.ts` had no receptionist row, so the `assertStaff` permission path was exercised only in unit tests with hand-fabricated ctx. Added `+919000000005=receptionist` to LOGIN_USERS. `GREEN`
 - [ ] **3.8** Support impersonation `RED`. Propose before building. Platform staff acting as a tenant user. Must require a stated reason, be fully audited, show a persistent banner to the impersonating user, and be impossible to initiate from a tenant session. `RED`
 - [ ] **3.9** Platform activity log — who did what across tenants, filterable, append-only. `GREEN`
 

@@ -264,10 +264,22 @@ main().catch(async (err) => {
   process.exit(1);
 });
 
-const LOGIN_USERS = [
+// 3.7 — receptionist added so the assertStaff permission path
+// is exercised end-to-end through the seeded dev database, not
+// just in unit tests. The earlier seed (owner/coach/parent only)
+// left the receptionist role with no log-in user, which is why
+// every assertions-of-staff fixture had to fabricate a matching
+// ctx by hand; a missing receptionist row in the live seed is
+// the exact gap that hides regressions of the receptionist
+// role from any e2e walkthrough.
+//
+// Exported so the closed-set / role-coverage test can pin this
+// list to a known shape.
+export const LOGIN_USERS = [
   { phone: "+919000000001", role: "owner" },
   { phone: "+919000000002", role: "coach" },
   { phone: "+919000000003", role: "parent" },
+  { phone: "+919000000005", role: "receptionist" },
 ] as const;
 
 async function ensureLoginUsers(tenantId: TenantId) {
