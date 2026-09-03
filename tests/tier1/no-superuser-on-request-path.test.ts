@@ -72,6 +72,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/staff-records.test.ts",
   "tests/tier1/platform-auth.test.ts",
   "tests/tier1/platform-auth-actions.test.ts",
+  "tests/tier1/platform-user-delete-cascade.test.ts",
   "tests/tier1/platform-tenants-list.test.ts",
   "tests/tier1/platform-tenants-detail.test.ts",
   "tests/tier1/platform-admin-tenant-write-rls.test.ts",

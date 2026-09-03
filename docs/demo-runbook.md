@@ -73,6 +73,17 @@ DEMO_MODE=true pnpm tsx scripts/seed-platform-user.ts
 DEMO_MODE=true PORT=3211 pnpm next dev
 ```
 
+**Re-running `seed-platform-user.ts` signs out any open operator tab.**
+It deletes and re-provisions the `platform_users` row for that email
+(re-runnable by design); `platform_sessions.user_id` cascades on
+delete, so every session belonging to that user — including the one
+in a browser tab you're mid-demo in — disappears immediately. The
+next request from that tab gets redirected to `/platform/login`, not
+because anything in the tenant-creation or auth code is broken, but
+because the session it was relying on genuinely no longer exists.
+`demo:reset` chains this script, so the same applies there. Close or
+refresh the platform tab after re-seeding.
+
 When `DEMO_MODE=true`, a sticky banner sits at the top of every surface
 (login, owner, coach, reception, parent, platform) reading
 **"Demo data — this is a demo tenant. None of this is real academy data."**
