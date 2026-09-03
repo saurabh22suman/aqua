@@ -1,23 +1,25 @@
 import Link from "next/link";
-import { ChevronRight, ListChecks } from "lucide-react";
+import { ChevronRight, ListChecks, Palette } from "lucide-react";
 
-// F-23 — settings surface. Most sections land with Phase 2.9
-// (branding) and 2.10 (terminology); today it carries only the
-// onboarding checklist, so a brand-new tenant still has a way to
-// reach the in-progress setup from the bottom-nav Settings entry.
-// Each future section adopts the same row pattern below.
+// F-23 — settings surface. Branding (Phase 2.9) and Terminology
+// (Phase 2.10) live here; future settings (locations, business
+// hours, holiday calendar) accumulate in the same list. The
+// onboarding row stays for a fresh tenant until they've finished
+// setup — see Phase 2.8's checklist service for what "finished"
+// means. Style follows the row pattern of the bottom-nav cards:
+// icon | title + sub | chevron.
 export default function Page() {
   return (
     <main className="px-5 pt-6 pb-8">
       <h1 className="font-display text-[19px] font-semibold capitalize">settings</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Tenant configuration. Branding and vocabulary editing land in the next two phases.
+        Tenant configuration — branding, vocabulary, locations, hours.
       </p>
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Setup</h2>
       <Link
         href="/owner/onboarding"
-        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
       >
         <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-warn-soft text-warn">
           <ListChecks size={16} strokeWidth={2} />
@@ -26,6 +28,23 @@ export default function Page() {
           <p className="text-[14px] font-medium leading-tight">Onboarding checklist</p>
           <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
             See what&apos;s left before members and coaches are ready to go.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+
+      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Academy</h2>
+      <Link
+        href="/owner/settings/branding"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+      >
+        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
+          <Palette size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Branding</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Display name, short name and accent.
           </p>
         </div>
         <ChevronRight size={18} className="text-ink-3 flex-none" />
