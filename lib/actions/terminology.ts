@@ -11,7 +11,7 @@ import {
   type GetTerminologyResult,
   type UpdateTermOverrideResult,
 } from "@/lib/services/terminology";
-import { TERM_KEYS, type TermKey } from "@/lib/terminology/keys";
+import { TERM_KEYS, type Locale, type TermKey } from "@/lib/terminology/keys";
 
 // Phase 2.10 — server actions for the terminology editor.
 //
@@ -61,7 +61,7 @@ export async function updateTermOverrideAction(
 }
 
 export async function clearTermOverrideAction(
-  input: { key: TermKey; locale: "en" },
+  input: { key: TermKey; locale: Locale },
 ): Promise<ClearTermOverrideResult> {
   const parsed = clearSchema.safeParse(input);
   if (!parsed.success) {

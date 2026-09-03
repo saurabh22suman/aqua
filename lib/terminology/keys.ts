@@ -42,7 +42,13 @@ export const TERM_KEYS = [
 
 export type TermKey = (typeof TERM_KEYS)[number];
 
-export type Locale = "en";
+// Phase 4 language rollout. The schema (tenants.terminology
+// jsonb) and the closed-key shape accept arbitrary locales —
+// adding a locale is data, not schema. Hindi and Bengali land
+// here; the per-locale override picker and the locale-default
+// at tenant creation land separately (R.20 follow-up).
+export const LOCALES = ["en", "hi", "bn"] as const;
+export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "en";
 
@@ -65,6 +71,26 @@ export const DEFAULT_TERMS: Record<Locale, Record<TermKey, TermForms>> = {
     facility: { one: "facility", other: "facilities" },
     guardian: { one: "guardian", other: "guardians" },
     enquiry: { one: "enquiry", other: "enquiries" },
+  },
+  hi: {
+    member: { one: "सदस्य", other: "सदस्य" },
+    batch: { one: "बैच", other: "बैच" },
+    coach: { one: "कोच", other: "कोच" },
+    session: { one: "सत्र", other: "सत्र" },
+    program: { one: "कार्यक्रम", other: "कार्यक्रम" },
+    facility: { one: "सुविधा", other: "सुविधाएँ" },
+    guardian: { one: "अभिभावक", other: "अभिभावक" },
+    enquiry: { one: "पूछताछ", other: "पूछताछें" },
+  },
+  bn: {
+    member: { one: "সদস্য", other: "সদস্য" },
+    batch: { one: "ব্যাচ", other: "ব্যাচ" },
+    coach: { one: "কোচ", other: "কোচ" },
+    session: { one: "সেশন", other: "সেশন" },
+    program: { one: "প্রোগ্রাম", other: "প্রোগ্রাম" },
+    facility: { one: "সুবিধা", other: "সুবিধা" },
+    guardian: { one: "অভিভাবক", other: "অভিভাবক" },
+    enquiry: { one: "অনুসন্ধান", other: "অনুসন্ধান" },
   },
 };
 
