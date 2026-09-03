@@ -16,6 +16,7 @@ import { tenants } from "./schema/tenants";
 import { tenantFeatures } from "./schema/tenant-features";
 import { sql as drizzleSql, sql } from "drizzle-orm";
 import { getActivePreset } from "./platform-presets";
+import { generateSessions } from "@/lib/jobs/session-generator";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // Phase 2.2a — applyPreset engine. Architecture §7.4.
@@ -78,6 +79,7 @@ export async function applyPreset(
         id: tenants.id,
         presetKey: tenants.presetKey,
         presetVersion: tenants.presetVersion,
+        timezone: tenants.timezone,
       })
       .from(tenants)
       .where(eq(tenants.id, tenantId))
@@ -513,6 +515,18 @@ export async function applyPreset(
           on conflict (id, tenant_id) do nothing
         `);
       }
+
+      // E1 — fifth instance of the same divergence class (D2, D3):
+      // this loop inserts batches directly rather than through
+      // createBatch() (lib/services/programs.ts), which is what
+      // materialises sessions for a new batch. createBatch() opens
+      // its own withTenant() transaction, so it can't be called from
+      // inside this one — same generateSessions() call the job,
+      // both seed scripts, and createBatch() all already use, run
+      // here in the same transaction as the batch inserts instead.
+      // Idempotent (onConflictDoNothing), so calling it even when
+      // exampleBatches produced zero rows costs nothing extra.
+      await generateSessions(tx, tenantId, tenant.timezone);
     }
 
     // 4i. Message templates — keyed by (tenant, key); re-runs

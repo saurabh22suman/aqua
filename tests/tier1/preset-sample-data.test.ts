@@ -104,6 +104,9 @@ async function cleanupTenant(id: string): Promise<void> {
   await admin.query("delete from plan_shapes where tenant_id = $1::uuid", [id]);
   await admin.query("delete from skills where tenant_id = $1::uuid", [id]);
   await admin.query("delete from skill_levels where tenant_id = $1::uuid", [id]);
+  // E1 — applyPreset now materialises sessions for example batches
+  // in the same transaction; clear those before batches (FK).
+  await admin.query("delete from sessions where tenant_id = $1::uuid", [id]);
   await admin.query("delete from batches where tenant_id = $1::uuid", [id]);
   await admin.query("delete from programs where tenant_id = $1::uuid", [id]);
   await admin.query("delete from members where tenant_id = $1::uuid", [id]);

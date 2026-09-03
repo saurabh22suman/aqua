@@ -64,12 +64,13 @@ DEMO_MODE=true pnpm demo:reset
 DEMO_MODE=true pnpm demo:reset && DEMO_MODE=true PORT=3211 pnpm next dev
 ```
 
-`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` in that order. If `DEMO_MODE` is **not** set, `demo:reset` itself exits before spawning any of the three steps — a misfired `pnpm demo:reset` does nothing. `db/reset.ts` (`pnpm db:reset`) is *also* directly runnable on its own — as a standalone script, as CI's own `db:reset` step, or by a deploy process — so it carries its own gate rather than relying on the wrapper above it: it refuses unconditionally when `NODE_ENV=production`, and otherwise refuses unless `DEMO_MODE=true` or `--i-understand` is passed explicitly (`pnpm db:reset -- --i-understand`), printing the target host and database name and — when run from an interactive terminal — requiring you to type the database name back before it drops the schema. The same `DEMO_MODE` guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
+`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` → `db:deploy` in that order. The fourth step is reconciliation, not seeding: `db:reset` only drops and recreates the `public` schema, and pg-boss's own `pgboss` schema — where every `sessions.generate` cron row lives — sits outside it and survives untouched. Without a reconciliation pass, every tenant a previous demo session ever created (via the platform UI or a preset apply) leaves an orphaned schedule row behind once its tenant is gone; `db:deploy` (`db/deploy.ts`) is the same sync that runs before a real deploy, and running it here prunes anything whose tenant no longer exists. If `DEMO_MODE` is **not** set, `demo:reset` itself exits before spawning any of the four steps — a misfired `pnpm demo:reset` does nothing. `db/reset.ts` (`pnpm db:reset`) is *also* directly runnable on its own — as a standalone script, as CI's own `db:reset` step, or by a deploy process — so it carries its own gate rather than relying on the wrapper above it: it refuses unconditionally when `NODE_ENV=production`, and otherwise refuses unless `DEMO_MODE=true` or `--i-understand` is passed explicitly (`pnpm db:reset -- --i-understand`), printing the target host and database name and — when run from an interactive terminal — requiring you to type the database name back before it drops the schema. The same `DEMO_MODE` guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
 
 ```bash
 DEMO_MODE=true pnpm db:reset
 DEMO_MODE=true pnpm tsx scripts/seed-demo.ts
 DEMO_MODE=true pnpm tsx scripts/seed-platform-user.ts
+DEMO_MODE=true pnpm tsx db/deploy.ts
 DEMO_MODE=true PORT=3211 pnpm next dev
 ```
 

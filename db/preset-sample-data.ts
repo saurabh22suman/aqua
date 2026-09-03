@@ -9,6 +9,7 @@ import {
   skills,
 } from "./schema/preset-engine";
 import { programs, batches } from "./schema/programs";
+import { sessions } from "./schema/scheduling";
 import { platformAuditLog } from "./schema/platform-users";
 import type { TenantId, UserId } from "@/lib/ids";
 
@@ -120,13 +121,38 @@ export async function removeSampleData(
     }
 
     // 3. Delete sample rows on every preset-seeded table. One
-    // transaction. Order: batches → programs (FK on batches.program_id)
-    // → skill_levels → skills (FK on skills.skill_level_id) → plan_shapes
-    // → facilities → facility_sub_units (FK on sub_units.facility_id)
-    // → message_templates. The CASCADE order matters — the
-    // architecture's FK constraints don't ON DELETE CASCADE for these
-    // tables; explicit ordering keeps the test fixture's cleanup
-    // happy and the audit log row count consistent.
+    // transaction. Order: sessions (FK on sessions.batch_id, E1 —
+    // applyPreset materialises sessions for example batches now, so
+    // a sample batch can carry real session rows by the time this
+    // runs) → batches → programs (FK on batches.program_id) →
+    // skill_levels → skills (FK on skills.skill_level_id) →
+    // plan_shapes → facilities → facility_sub_units (FK on
+    // sub_units.facility_id) → message_templates. The CASCADE order
+    // matters — the architecture's FK constraints don't ON DELETE
+    // CASCADE for these tables; explicit ordering keeps the test
+    // fixture's cleanup happy and the audit log row count consistent.
+    const sampleBatchIds = await tx
+      .select({ id: batches.id })
+      .from(batches)
+      .where(
+        and(
+          eq(batches.tenantId, tenantId),
+          eq(batches.isSample, true),
+          isNull(batches.deletedAt),
+        ),
+      );
+    if (sampleBatchIds.length > 0) {
+      await tx.delete(sessions).where(
+        and(
+          eq(sessions.tenantId, tenantId),
+          inArray(
+            sessions.batchId,
+            sampleBatchIds.map((b) => b.id),
+          ),
+        ),
+      );
+    }
+
     const deletedBatches = await tx
       .delete(batches)
       .where(

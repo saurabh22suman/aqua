@@ -7,6 +7,7 @@ import { createTenant, type CreateTenantInput } from "@/db/platform-tenant-creat
 import { inviteOwner } from "@/db/tenant-invite";
 import { activateInvitedMemberships } from "@/db/membership-activation";
 import { createProgram, createBatch } from "@/lib/services/programs";
+import { applyPreset } from "@/db/preset-engine";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, asUserId, type UserId, type TenantId } from "@/lib/ids";
@@ -198,5 +199,48 @@ describe("tenant creation: production path vs seed path", () => {
     const seedDates = await sessionDates(seedTenantId, seedBatchId);
     expect(prodDates.length).toBeGreaterThan(0);
     expect(prodDates).toEqual(seedDates);
+  });
+
+  it("E1: the preset provisioning path (applyPreset) also materialises sessions for its example batches", async () => {
+    // The parity test above drives batch creation through
+    // createBatch() only — it missed that applyPreset() is a
+    // *second* production path that provisions batches (its example
+    // batches, inserted directly rather than through createBatch()).
+    // That gap is exactly how E1 went unnoticed: a parity test that
+    // only covers one of two provisioning paths is half a gate.
+    const prodInput: CreateTenantInput = {
+      name: "Parity Preset Academy",
+      slug: `parity-preset-${RUN}`,
+      timezone: TZ,
+      planKey: "standard",
+      currency: "INR",
+      locationName: "Main",
+      locationIsPrimary: true,
+    };
+    const prodResult = await createTenant(prodInput, { actorId: await actor() });
+    expect(prodResult.kind).toBe("ok");
+    if (prodResult.kind !== "ok") return;
+    const prodTenantId = prodResult.tenantId;
+    tenantIdsToClean.push(prodTenantId);
+
+    const applied = await applyPreset(prodTenantId, "swimming", { actorId: await actor() });
+    expect(applied.kind).toBe("ok");
+
+    // swimming's example batches (db/preset-definitions.ts): two,
+    // "Beginners MWF 06:00" and "Junior TTS 17:00". Both must have
+    // sessions the moment the preset lands — the same guarantee
+    // createBatch() gives, not a gap that waits for the next batch
+    // created through the UI to backfill it.
+    const batchRows = (
+      await admin.query<{ id: string; name: string }>(
+        "select id, name from batches where tenant_id = $1 and is_sample = true",
+        [prodTenantId],
+      )
+    ).rows;
+    expect(batchRows).toHaveLength(2);
+    for (const batch of batchRows) {
+      const dates = await sessionDates(prodTenantId, batch.id);
+      expect(dates.length, `batch "${batch.name}" has no sessions`).toBeGreaterThan(0);
+    }
   });
 });
