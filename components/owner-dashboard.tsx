@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
+import type { BrandingData } from "@/lib/services/branding";
+import { TenantMark } from "@/components/branding/tenant-mark";
 
 // S4 (Owner home) — composition follows docs/sports-club-ui-direction.html's
 // "Owner · home" mockup: one dominant hero, three stat chips, a
@@ -12,20 +14,31 @@ import type { OwnerDashboardData } from "@/lib/services/dashboard";
 // codebase yet (C-28 through C-39 unbuilt), so those are replaced
 // with today's real attendance-marking progress and a real member
 // count. Never a rupee sign, never an invented number.
-export function OwnerDashboard({ data }: { data: OwnerDashboardData }) {
+export function OwnerDashboard({
+  data,
+  branding,
+}: {
+  data: OwnerDashboardData;
+  branding: BrandingData;
+}) {
   const dayLabel = new Date(`${data.today}T00:00:00`).toLocaleDateString("en-IN", {
     weekday: "long",
   });
   const todayPct = data.todayTotal > 0 ? Math.round((data.todayMarked / data.todayTotal) * 100) : null;
+  // The display name surfaces the tenant's preferred name when
+  // it has one (Phase 2.9 editable); falls back to the column
+  // name when it doesn't. data.tenantName is the column-level
+  // fallback, branding.displayName is the override.
+  const displayName = branding.displayName ?? data.tenantName;
 
   return (
     <main className="px-5 pt-6 pb-8">
       <div className="flex items-center gap-3 pb-4">
-        <div className="h-11 w-11 rounded-ctl bg-water-soft text-water grid place-items-center font-display font-semibold text-[15px] flex-none">
-          {data.tenantName.slice(0, 2).toUpperCase()}
+        <div className="flex-none">
+          <TenantMark initials={branding.initials} accent={branding.accent} size={44} />
         </div>
         <div>
-          <h1 className="font-display text-[19px] font-semibold leading-tight">{data.tenantName}</h1>
+          <h1 className="font-display text-[19px] font-semibold leading-tight">{displayName}</h1>
           <p className="text-[12.5px] text-ink-3">{dayLabel}</p>
         </div>
       </div>
