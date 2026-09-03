@@ -64,7 +64,7 @@ DEMO_MODE=true pnpm demo:reset
 DEMO_MODE=true pnpm demo:reset && DEMO_MODE=true PORT=3211 pnpm next dev
 ```
 
-`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` in that order. If `DEMO_MODE` is **not** set, `demo:reset` exits before any DB write — the guard fires first so a misfired command does nothing, not even a `db:reset`. The same guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
+`pnpm demo:reset` runs `db:reset` → `seed-demo` → `seed-platform-user` in that order. If `DEMO_MODE` is **not** set, `demo:reset` itself exits before spawning any of the three steps — a misfired `pnpm demo:reset` does nothing. `db/reset.ts` (`pnpm db:reset`) is *also* directly runnable on its own — as a standalone script, as CI's own `db:reset` step, or by a deploy process — so it carries its own gate rather than relying on the wrapper above it: it refuses unconditionally when `NODE_ENV=production`, and otherwise refuses unless `DEMO_MODE=true` or `--i-understand` is passed explicitly (`pnpm db:reset -- --i-understand`), printing the target host and database name and — when run from an interactive terminal — requiring you to type the database name back before it drops the schema. The same `DEMO_MODE` guard is also on `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` if you ever want to run the steps by hand:
 
 ```bash
 DEMO_MODE=true pnpm db:reset
@@ -72,6 +72,36 @@ DEMO_MODE=true pnpm tsx scripts/seed-demo.ts
 DEMO_MODE=true pnpm tsx scripts/seed-platform-user.ts
 DEMO_MODE=true PORT=3211 pnpm next dev
 ```
+
+**Warm up the platform login before he sits down.** `next dev` compiles
+each route on its first visit, not at server start — the platform
+login → verify → landing sequence measured ~2.5s of pure compile time
+stacked across three routes on a cold server (server-side auth itself
+is fast: ~100ms). Do one throwaway login (wrong code is fine, or a
+real one) right after starting the dev server so `/platform/login`,
+`/platform/verify`, and `/platform` are already compiled. After that,
+the flow is fast for the rest of the session.
+
+**A stale-server-action 404 can appear on the very first submit to any
+route that just compiled.** In dev mode, submitting a form on a
+freshly-compiled route occasionally throws `UnrecognizedActionError:
+Server Action ... was not found on the server` in the browser console
+— a Fast-Refresh/action-manifest artifact, not a data problem (nothing
+gets written on the failed attempt). A page reload always clears it
+and the retry succeeds. If a button click seems to do nothing on a
+screen you haven't visited yet this session, reload once before
+assuming something is broken.
+
+**Re-running `seed-platform-user.ts` signs out any open operator tab.**
+It deletes and re-provisions the `platform_users` row for that email
+(re-runnable by design); `platform_sessions.user_id` cascades on
+delete, so every session belonging to that user — including the one
+in a browser tab you're mid-demo in — disappears immediately. The
+next request from that tab gets redirected to `/platform/login`, not
+because anything in the tenant-creation or auth code is broken, but
+because the session it was relying on genuinely no longer exists.
+`demo:reset` chains this script, so the same applies there. Close or
+refresh the platform tab after re-seeding.
 
 When `DEMO_MODE=true`, a sticky banner sits at the top of every surface
 (login, owner, coach, reception, parent, platform) reading

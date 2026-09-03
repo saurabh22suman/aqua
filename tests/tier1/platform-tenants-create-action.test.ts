@@ -57,6 +57,14 @@ afterAll(async () => {
     [`${SLUG_PREFIX}%`],
   );
   for (const r of rows.rows) {
+    // roles.tenant_id -> tenants(id) has no ON DELETE clause — C1
+    // (createTenant now seeds role templates) means the tenant row
+    // can't be deleted until its roles are gone first.
+    await admin.query(
+      "delete from role_permissions where tenant_id = $1",
+      [r.id],
+    );
+    await admin.query("delete from roles where tenant_id = $1", [r.id]);
     await admin.query("delete from locations where tenant_id = $1", [r.id]);
     await admin.query(
       "delete from platform_audit_log where tenant_id = $1",

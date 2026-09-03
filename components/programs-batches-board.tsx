@@ -221,7 +221,7 @@ export function ProgramsBatchesBoard({
             type="button"
             onClick={submitProgram}
             disabled={busyProgram || !programName.trim()}
-            className="rounded-ctl bg-mango px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+            className="rounded-ctl bg-[var(--accent)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
           >
             Add
           </button>

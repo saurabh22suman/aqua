@@ -7,13 +7,21 @@ import {
   type CreateTenantInput,
   type CreateTenantResult,
 } from "@/db/platform-tenant-create";
-import { asUserId, type UserId, type TenantId } from "@/lib/ids";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asTenantId, asUserId, type UserId, type TenantId } from "@/lib/ids";
 
 // Phase 1.5 — service-level proof for createTenant(): one
-// transaction inserts the tenant row, the first location, and the
-// audit row, all atomic; rejects unique-slug collisions as
-// `slug_taken`, missing plans as `plan_not_found`, and bad inputs as
-// `invalid` — never throws to the caller.
+// transaction inserts the tenant row, the first location, the role
+// templates, and the audit row, all atomic; rejects unique-slug
+// collisions as `slug_taken`, missing plans as `plan_not_found`, and
+// bad inputs as `invalid` — never throws to the caller.
+//
+// Role seeding (C1) was added after a live QA pass found invite-owner
+// broken for every platform-created tenant: createTenant never called
+// seedRoleTemplates, unlike both scripts/seed.ts and
+// scripts/seed-demo.ts, which do. "Same shape as the enrolMember gap"
+// — a seed script does something the production path doesn't, so it
+// looks correct until someone uses the UI.
 //
 // Tests within this file run in parallel (vitest default, per
 // vitest.config.ts). Each test mints a per-test counter into its
@@ -54,6 +62,14 @@ afterAll(async () => {
     [`${SLUG_PREFIX}%`],
   );
   for (const r of rows.rows) {
+    // roles.tenant_id -> tenants(id) has no ON DELETE clause (NO
+    // ACTION) — once createTenant seeds role templates, the tenant
+    // row can't be deleted until its roles are gone first.
+    await admin.query(
+      "delete from role_permissions where tenant_id = $1",
+      [r.id],
+    );
+    await admin.query("delete from roles where tenant_id = $1", [r.id]);
     await admin.query("delete from locations where tenant_id = $1", [r.id]);
     await admin.query(
       "delete from platform_audit_log where tenant_id = $1",
@@ -232,13 +248,57 @@ describe("createTenant", () => {
     ).rows[0]!;
     expect(Number(rows.count)).toBe(1);
     // Roll back the audit row the first call wrote, so the parallel
-    // sweep's afterAll doesn't see a leftover.
+    // sweep's afterAll doesn't see a leftover. roles first — no
+    // cascade from tenants.
+    await admin.query(
+      "delete from role_permissions where tenant_id = $1",
+      [first],
+    );
+    await admin.query("delete from roles where tenant_id = $1", [first]);
     await admin.query(
       "delete from platform_audit_log where tenant_id = $1",
       [first],
     );
     await admin.query("delete from locations where tenant_id = $1", [first]);
     await admin.query("delete from tenants where id = $1", [first]);
+  });
+
+  it("resolves the plan by is_default (not a hardcoded key) when planKey is omitted", async () => {
+    // Two sources of truth that only happened to coincide: a
+    // hardcoded "standard" default on this form vs. plans.is_default,
+    // the actual schema-enforced default. This proves omitting
+    // planKey follows is_default, not a string literal.
+    const slug = uniqueSlug("default-plan");
+    const withoutPlanKey: CreateTenantInput = {
+      name: "Create Test Academy",
+      slug,
+      timezone: "Asia/Kolkata",
+      currency: "INR",
+      locationName: "Main",
+      locationIsPrimary: true,
+    };
+    const tenantId = await expectOk(await createTenant(withoutPlanKey, { actorId }));
+
+    const defaultPlan = (
+      await admin.query<{ id: string; key: string }>(
+        "select id, key from plans where is_default = true",
+      )
+    ).rows[0]!;
+    const tenant = (
+      await admin.query<{ plan_id: string }>(
+        "select plan_id from tenants where id = $1",
+        [tenantId],
+      )
+    ).rows[0]!;
+    expect(tenant.plan_id).toBe(defaultPlan.id);
+
+    const audit = (
+      await admin.query<{ detail: Record<string, unknown> }>(
+        "select detail from platform_audit_log where tenant_id = $1",
+        [tenantId],
+      )
+    ).rows[0]!;
+    expect((audit.detail as { planKey?: string }).planKey).toBe(defaultPlan.key);
   });
 
   it("rejects an unknown plan key with code: 'plan_not_found' and writes nothing", async () => {
@@ -301,5 +361,130 @@ describe("createTenant", () => {
     expect(Number(tenantsCount.count)).toBe(1);
     expect(Number(locationsCount.count)).toBe(1);
     expect(Number(auditCount.count)).toBe(1);
+  });
+
+  it("seeds all six role templates in the same transaction as tenant creation", async () => {
+    const slug = uniqueSlug("roles");
+    const tenantId = await expectOk(await createTenant(baseInput(slug), { actorId }));
+
+    const rows = (
+      await admin.query<{ key: string; is_system: boolean }>(
+        "select key, is_system from roles where tenant_id = $1 order by key",
+        [tenantId],
+      )
+    ).rows;
+    expect(rows.map((r) => r.key)).toEqual(
+      ["accountant", "admin", "coach", "owner", "receptionist", "worker"],
+    );
+    expect(rows.every((r) => r.is_system)).toBe(true);
+
+    // The owner role specifically is what invite-owner
+    // (db/tenant-invite.ts) looks up — the exact thing that was
+    // broken.
+    const owner = (
+      await admin.query<{ id: string }>(
+        "select id from roles where tenant_id = $1 and key = 'owner'",
+        [tenantId],
+      )
+    ).rows[0];
+    expect(owner).toBeTruthy();
+
+    const ownerPermCount = (
+      await admin.query<{ count: string }>(
+        "select count(*)::text from role_permissions where tenant_id = $1 and role_id = $2",
+        [tenantId, owner!.id],
+      )
+    ).rows[0]!;
+    // Owner gets every permission — mirrors ALL_PERMISSION_KEYS in
+    // lib/services/roles.ts, cross-checked independently here rather
+    // than importing that constant (same reasoning as
+    // roles-permissions.test.ts).
+    expect(Number(ownerPermCount.count)).toBeGreaterThan(20);
+  });
+
+  it("produces a role structure functionally identical to seedRoleTemplates called directly", async () => {
+    // The mechanical version of the by-hand comparison that found the
+    // C1 gap: diff what a UI-created tenant ends up with against what
+    // the seed scripts' own seedRoleTemplates call produces for an
+    // independent tenant. Any future divergence between the two
+    // paths fails this test instead of surfacing as a broken
+    // invite-owner flow discovered by hand.
+    const slug = uniqueSlug("compare");
+    const uiTenantId = await expectOk(await createTenant(baseInput(slug), { actorId }));
+
+    const directTenantId = asTenantId(uuidv7());
+    await admin.query(
+      `insert into tenants (id, slug, name, plan_id)
+       select $1, $2, 'Direct Seed Compare', id from plans where is_default = true`,
+      [directTenantId, `${SLUG_PREFIX}-direct-compare`],
+    );
+    await seedRoleTemplates(directTenantId);
+
+    type RoleShape = { key: string; name: string; home_path: string; home_ordinal: number; is_system: boolean };
+    const uiRoles = (
+      await admin.query<RoleShape>(
+        "select key, name, home_path, home_ordinal, is_system from roles where tenant_id = $1 order by key",
+        [uiTenantId],
+      )
+    ).rows;
+    const directRoles = (
+      await admin.query<RoleShape>(
+        "select key, name, home_path, home_ordinal, is_system from roles where tenant_id = $1 order by key",
+        [directTenantId],
+      )
+    ).rows;
+    expect(uiRoles.map((r) => ({ ...r }))).toEqual(
+      directRoles.map((r) => ({ ...r })),
+    );
+
+    async function permKeysByRole(tenantId: string): Promise<Record<string, string[]>> {
+      const rows = (
+        await admin.query<{ role_key: string; permission_key: string }>(
+          `select r.key as role_key, rp.permission_key
+           from role_permissions rp
+           join roles r on r.id = rp.role_id and r.tenant_id = rp.tenant_id
+           where rp.tenant_id = $1
+           order by r.key, rp.permission_key`,
+          [tenantId],
+        )
+      ).rows;
+      const out: Record<string, string[]> = {};
+      for (const row of rows) {
+        (out[row.role_key] ??= []).push(row.permission_key);
+      }
+      return out;
+    }
+    expect(await permKeysByRole(uiTenantId)).toEqual(await permKeysByRole(directTenantId));
+
+    await admin.query("delete from role_permissions where tenant_id = $1", [directTenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [directTenantId]);
+    await admin.query("delete from tenants where id = $1", [directTenantId]);
+  });
+
+  it("D2: registers a sessions.generate schedule for the new tenant immediately", async () => {
+    // Previously only db/deploy.ts's bulk sync (at deploy time) ever
+    // wrote a pgboss schedule row — a tenant created between deploys
+    // had no nightly session generation until the next one. This
+    // proves createTenant() itself registers the schedule, keyed by
+    // the new tenant's id, without waiting for a deploy.
+    const slug = uniqueSlug("schedule");
+    const tenantId = await expectOk(await createTenant(baseInput(slug), { actorId }));
+    try {
+      const rows = (
+        await admin.query<{ timezone: string; cron: string }>(
+          `select timezone, cron from pgboss.schedule
+           where name = 'sessions.generate' and key = $1`,
+          [tenantId],
+        )
+      ).rows;
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.timezone).toBe("Asia/Kolkata");
+      expect(rows[0]?.cron).toBe("0 2 * * *");
+    } finally {
+      await admin.query(
+        `delete from pgboss.schedule where name = 'sessions.generate' and key = $1`,
+        [tenantId],
+      );
+    }
   });
 });

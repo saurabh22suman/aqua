@@ -24,9 +24,12 @@ import type { TenantId, UserId } from "@/lib/ids";
 //
 // Status is `invited` per the tenant_memberships_status_check
 // constraint. The invited user accepts later by completing a
-// phone-OTP login (architecture §6.1, F-9). Until that login
-// happens, the membership is in the `invited` state — `active`
-// follows on first authenticated request.
+// phone-OTP login (architecture §6.1, F-9): better-auth's
+// callbackOnVerification (lib/auth/server.ts) fires the moment that
+// OTP verifies, and calls activateInvitedMemberships (D1,
+// db/membership-activation.ts) right there — invited -> active
+// happens synchronously in that hook, not on some later "first
+// authenticated request" (no such step exists in this codebase).
 //
 // Two transactions: the user find-or-create runs in `withPlatform`
 // (the `users` table is in the platform allowlist, RLS-exempt);

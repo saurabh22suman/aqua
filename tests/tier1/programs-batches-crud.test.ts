@@ -24,6 +24,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // D2 — createBatch now materialises sessions synchronously, so
+  // teardown has to clear those before batches (FK).
+  await admin.query("delete from sessions where tenant_id = any($1)", [[tenantA, tenantB]]);
   await admin.query("delete from batches where tenant_id = any($1)", [[tenantA, tenantB]]);
   await admin.query("delete from programs where tenant_id = any($1)", [[tenantA, tenantB]]);
   await admin.query("delete from tenants where id = any($1)", [[tenantA, tenantB]]);

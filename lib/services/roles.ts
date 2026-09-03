@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { roles } from "@/db/schema/roles";
 import { PERMISSIONS } from "@/db/seed-platform";
 import type { TenantId } from "@/lib/ids";
@@ -99,34 +99,50 @@ const ROLE_TEMPLATES: ReadonlyArray<{
   },
 ];
 
-export async function seedRoleTemplates(tenantId: TenantId): Promise<void> {
-  await withTenant(tenantId, async (tx) => {
-    for (const template of ROLE_TEMPLATES) {
-      const [created] = await tx
-        .insert(roles)
-        .values({
-          tenantId,
-          key: template.key,
-          name: template.name,
-          homePath: template.homePath,
-          homeOrdinal: template.homeOrdinal,
-          isSystem: true,
-        })
-        .onConflictDoNothing()
-        .returning({ id: roles.id });
+// C1 — accepts an optional existing transaction so a caller already
+// inside one (createTenant's withPlatformAdmin transaction) can seed
+// roles atomically with the tenant/location rows, rather than opening
+// a second, independent transaction via withTenant(). Without this,
+// role seeding could commit even if the surrounding tenant creation
+// later rolled back, or vice versa — exactly the partial-state
+// createTenant's own comment says must never happen.
+//
+// When called with a tx, that transaction must already carry a scope
+// permitting an INSERT on roles/role_permissions — withPlatformAdmin's
+// app.platform_admin session variable, via the platform_admin_insert
+// policy (migration 20260903085505), covers the one caller that needs
+// this today.
+export async function seedRoleTemplates(tenantId: TenantId, tx?: TenantTx): Promise<void> {
+  if (tx) return seedRoleTemplatesOnTx(tenantId, tx);
+  return withTenant(tenantId, (innerTx) => seedRoleTemplatesOnTx(tenantId, innerTx));
+}
 
-      // The role already exists — the tenant's role, possibly renamed or
-      // edited. Never touch an existing role: a re-run must not clobber a
-      // rename, re-add a revoked permission or revert a grant.
-      if (!created) continue;
+async function seedRoleTemplatesOnTx(tenantId: TenantId, tx: TenantTx): Promise<void> {
+  for (const template of ROLE_TEMPLATES) {
+    const [created] = await tx
+      .insert(roles)
+      .values({
+        tenantId,
+        key: template.key,
+        name: template.name,
+        homePath: template.homePath,
+        homeOrdinal: template.homeOrdinal,
+        isSystem: true,
+      })
+      .onConflictDoNothing()
+      .returning({ id: roles.id });
 
-      for (const permissionKey of template.permissions) {
-        await tx.execute(sql`
-          insert into role_permissions (tenant_id, role_id, permission_key)
-          values (${tenantId}, ${created.id}, ${permissionKey})
-          on conflict do nothing
-        `);
-      }
+    // The role already exists — the tenant's role, possibly renamed or
+    // edited. Never touch an existing role: a re-run must not clobber a
+    // rename, re-add a revoked permission or revert a grant.
+    if (!created) continue;
+
+    for (const permissionKey of template.permissions) {
+      await tx.execute(sql`
+        insert into role_permissions (tenant_id, role_id, permission_key)
+        values (${tenantId}, ${created.id}, ${permissionKey})
+        on conflict do nothing
+      `);
     }
-  });
+  }
 }

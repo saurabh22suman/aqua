@@ -72,6 +72,8 @@ const ALLOWLIST = new Set([
   "tests/tier1/staff-records.test.ts",
   "tests/tier1/platform-auth.test.ts",
   "tests/tier1/platform-auth-actions.test.ts",
+  "tests/tier1/platform-user-delete-cascade.test.ts",
+  "tests/tier1/member-enrolment.test.ts",
   "tests/tier1/platform-tenants-list.test.ts",
   "tests/tier1/platform-tenants-detail.test.ts",
   "tests/tier1/platform-admin-tenant-write-rls.test.ts",
@@ -94,6 +96,8 @@ const ALLOWLIST = new Set([
   "tests/tier1/preset-sample-data.test.ts",
   "tests/tier1/sample-data-hide-rule.test.ts",
   "tests/tier1/invite-owner-action.test.ts",
+  "tests/tier1/membership-activation.test.ts",
+  "tests/tier1/tenant-creation-parity.test.ts",
   // Tenant detail page reads sample/real state via the
   // privileged pool for the "remove sample data" gate. Same shape
   // as 1.5's tenant list page: the production code goes through

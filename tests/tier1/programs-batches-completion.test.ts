@@ -59,6 +59,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (tenantId) {
     await admin.query("delete from enrolments where tenant_id = $1", [tenantId]);
+    // D2 — createBatch now materialises sessions synchronously, so
+    // teardown has to clear those before batches (FK).
+    await admin.query("delete from sessions where tenant_id = $1", [tenantId]);
     await admin.query("delete from batches where tenant_id = $1", [tenantId]);
     await admin.query("delete from staff where tenant_id = $1", [tenantId]);
     await admin.query("delete from consents where tenant_id = $1", [tenantId]);

@@ -7,6 +7,8 @@ import { tenants } from "./schema/tenants";
 import { locations } from "./schema/locations";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
+import { registerSessionsGenerateSchedule } from "./queue";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
 // Phase 1.5 — platform-side tenant creation. Replaces the CLI path
@@ -22,10 +24,11 @@ import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 // leaving tenant_isolation intact for every other caller.
 //
 // Single transaction by design: a partially-created tenant (header
-// row but no first location, or both rows but no audit trail) is a
-// state nobody can reason about. Either everything commits or nothing
-// does. The preset pathway (Phase 2.2) will hook in alongside this
-// transaction later — for now, preset fields stay null.
+// row but no first location, no role templates, or all of those but
+// no audit trail) is a state nobody can reason about. Either
+// everything commits or nothing does. The preset pathway (Phase 2.2)
+// will hook in alongside this transaction later — for now, preset
+// fields stay null.
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])$/;
 const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
@@ -64,7 +67,12 @@ export const createTenantInput = z.object({
     .min(1)
     .default("Asia/Kolkata")
     .refine(isCanonicalTimezone, "Time zone is not a recognised IANA identifier."),
-  planKey: z.string().trim().min(1).default("standard"),
+  // No hardcoded default key: which plan is "the default" is
+  // plans.is_default (schema-enforced unique-partial-index, seeded by
+  // db/seed-platform.ts), not a string this form has to keep in sync
+  // with it. Omitting planKey resolves to whichever plan carries
+  // is_default at request time.
+  planKey: z.string().trim().min(1).optional(),
   currency: z
     .string()
     .trim()
@@ -144,21 +152,32 @@ export async function createTenant(
   const input = parsed.data;
 
   try {
-    return await withPlatformAdmin(async (tx) => {
+    const result: CreateTenantResult = await withPlatformAdmin(async (tx) => {
       // Plan lookup is a straight read on a platform-scoped table
       // (allowlist). No need for withPlatform() — the surrounding
       // platform_admin session doesn't change that visibility.
+      // planKey omitted -> resolve is_default rather than assuming a
+      // hardcoded key: the key of "the default plan" and the string
+      // this form falls back to were two sources of truth that only
+      // happened to agree because nothing had renamed the default
+      // plan yet.
       const planRows = await tx
-        .select({ id: plans.id, name: plans.name })
+        .select({ id: plans.id, name: plans.name, key: plans.key })
         .from(plans)
-        .where(and(eq(plans.key, input.planKey), eq(plans.status, "active")))
+        .where(
+          input.planKey
+            ? and(eq(plans.key, input.planKey), eq(plans.status, "active"))
+            : and(eq(plans.isDefault, true), eq(plans.status, "active")),
+        )
         .limit(1);
       const plan = planRows[0];
       if (!plan) {
         return {
           kind: "error",
           code: "plan_not_found",
-          message: `No active plan with key "${input.planKey}".`,
+          message: input.planKey
+            ? `No active plan with key "${input.planKey}".`
+            : "No default plan is configured.",
         };
       }
 
@@ -188,6 +207,14 @@ export async function createTenant(
         throw new Error("createTenant: tenants insert returned no row");
       }
 
+      // C1 — same transaction as the tenant/location/audit rows. A
+      // tenant with no role templates is not a valid tenant: invite-
+      // owner (db/tenant-invite.ts) looks up the owner role by key
+      // and fails outright without it. scripts/seed.ts and
+      // scripts/seed-demo.ts both call this right after creating the
+      // tenant row; this was the one step createTenant was missing.
+      await seedRoleTemplates(tenant.id, tx);
+
       await tx.insert(locations).values({
         id: uuidv7(),
         tenantId: tenant.id,
@@ -210,7 +237,7 @@ export async function createTenant(
           name: input.name,
           slug: input.slug,
           timezone: input.timezone,
-          planKey: input.planKey,
+          planKey: plan.key,
           planName: plan.name,
           currency: input.currency,
           ...(input.gstin ? { gstin: input.gstin } : {}),
@@ -221,6 +248,51 @@ export async function createTenant(
 
       return { kind: "ok", tenantId: tenant.id };
     });
+
+    // D2 — outside the transaction: pg-boss is a separate connection,
+    // not part of the tenant/location/audit atomicity above, and the
+    // tenant already exists by this point regardless of what happens
+    // here. Best-effort: db/deploy.ts's syncSessionGenerateSchedules
+    // reconciles any tenant that's missing a schedule on the next
+    // deploy, so a transient scheduler outage here doesn't need to
+    // fail tenant creation for an operator who already has a real
+    // tenant row. But "best-effort" must not mean "silent" — a
+    // swallowed failure here is the exact bug D2 fixes, one layer
+    // down. error-level log carries the tenant id for grepping, and
+    // a platform_audit_log row makes it visible without a new
+    // surface: the tenant detail page's "Recent activity" list
+    // (app/(platform)/platform/tenants/[tenantId]/page.tsx) already
+    // renders platform_audit_log by tenant, and it's the page the
+    // operator lands on immediately after creating the tenant.
+    if (result.kind === "ok") {
+      try {
+        await registerSessionsGenerateSchedule(result.tenantId, input.timezone);
+      } catch (err) {
+        console.error(
+          `createTenant: failed to register sessions.generate schedule for tenant ${result.tenantId}`,
+          err,
+        );
+        await withPlatform(() =>
+          db.insert(platformAuditLog).values({
+            actorId: ctx.actorId,
+            tenantId: result.tenantId,
+            action: "tenant.schedule_registration_failed",
+            targetType: "tenant",
+            targetId: result.tenantId,
+            detail: {
+              message: err instanceof Error ? err.message : String(err),
+            },
+          }),
+        ).catch((auditErr) => {
+          console.error(
+            `createTenant: failed to write schedule-registration-failure audit row for tenant ${result.tenantId}`,
+            auditErr,
+          );
+        });
+      }
+    }
+
+    return result;
   } catch (err) {
     // Postgres SQLSTATE 23505 = unique_violation. tenants.slug is
     // the only unique constraint that depends on operator input;

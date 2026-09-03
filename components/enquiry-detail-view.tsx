@@ -21,10 +21,16 @@ export function EnquiryDetailView({
   enquiry,
   locations,
   batches,
+  memberDetailBasePath = "/owner/members",
 }: {
   enquiry: EnquiryDetail;
   locations: LocationOption[];
   batches: BatchWithProgramName[];
+  // Where to send staff after converting — the member's own detail
+  // page, where the Enrolment section (B3) picks up: a direct
+  // conversion (no prior trial) has no batchId field on this form, so
+  // enrolling is always this page's job, not this one's.
+  memberDetailBasePath?: string;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +122,7 @@ export function EnquiryDetailView({
         return;
       }
       setShowConvertNoTrial(false);
-      router.refresh();
+      router.push(`${memberDetailBasePath}/${result.memberId}`);
     } finally {
       setBusy(false);
     }
@@ -182,7 +188,7 @@ export function EnquiryDetailView({
             type="button"
             onClick={submitBookTrial}
             disabled={busy || !trialValid || !batchId}
-            className="w-full rounded-ctl bg-mango py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+            className="w-full rounded-ctl bg-[var(--accent)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
             data-testid="submit-book-trial"
           >
             {busy ? "Booking…" : "Confirm trial booking"}
@@ -262,7 +268,7 @@ export function EnquiryDetailView({
             type="button"
             onClick={submitFollowUp}
             disabled={busy || !followUpDue}
-            className="rounded-ctl bg-mango px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+            className="rounded-ctl bg-[var(--accent)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
             Add follow-up
           </button>
