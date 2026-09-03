@@ -67,7 +67,7 @@ export function MemberStatusPanel({
               type="button"
               onClick={confirm}
               disabled={busy}
-              className="rounded-ctl bg-mango px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+              className="rounded-ctl bg-[var(--accent)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
               data-testid="confirm-status-change"
             >
               {busy ? "Saving…" : "Confirm"}

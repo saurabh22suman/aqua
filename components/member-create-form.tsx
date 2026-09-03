@@ -298,7 +298,7 @@ export function MemberCreateForm({
         type="button"
         onClick={submit}
         disabled={busy}
-        className="w-full rounded-ctl bg-mango py-3 text-[14px] font-medium text-white disabled:opacity-50"
+        className="w-full rounded-ctl bg-[var(--accent)] py-3 text-[14px] font-medium text-white disabled:opacity-50"
         data-testid="submit-member"
       >
         {busy ? "Saving…" : "Add member"}

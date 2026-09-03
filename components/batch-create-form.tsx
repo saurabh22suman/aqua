@@ -130,7 +130,7 @@ export function BatchCreateForm({
         type="button"
         onClick={submit}
         disabled={busy || !name.trim() || days.length === 0}
-        className="rounded-ctl bg-mango px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+        className="rounded-ctl bg-[var(--accent)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
       >
         Add batch
       </button>

@@ -148,7 +148,7 @@ export function BatchEditForm({
           type="button"
           onClick={save}
           disabled={saving || !form.name.trim() || form.days.length === 0}
-          className="flex-1 rounded-ctl bg-mango px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+          className="flex-1 rounded-ctl bg-[var(--accent)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
           data-testid={`save-batch-${batchId}`}
         >
           Save batch
