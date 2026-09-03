@@ -131,6 +131,12 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 
 Everything here reads data that already exists. No money.
 
+- [x] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. Done in a prior PR — verified still working; member detail page renders the history table.
+- [x] **4.3** Attendance report — by batch / period, with CSV export using canonical field names (`member_count`, not `swimmer_count`). `GREEN`
+- [x] **4.4** Enquiry funnel report — counts and conversion by source and stage over time. Figures reconcile to the `enquiries` table exactly. `GREEN`
+- [x] **4.5** Retention view — members at risk by attendance signal. **Aggregate and batch-level only.** No per-minor profiling. `GREEN`
+- [x] **4.6** Coach load view — sessions per coach per week, utilisation. `GREEN`
+
 - [ ] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. `GREEN`
 - [ ] **4.2** Per-batch attendance summary — deferred in `C-27` to avoid a merge conflict with `#23`. That has landed; wire it in. `GREEN`
 - [ ] **4.3** Attendance report — by batch, by program, by period, with CSV export using canonical field names, not tenant vocabulary. `GREEN`
