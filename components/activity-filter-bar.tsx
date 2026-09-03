@@ -57,7 +57,7 @@ export function ActivityFilterBar({
         <select
           value={action}
           onChange={(e) => setAction(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[13px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
         >
           <option value="">Any</option>
           {actions.map((a) => (
@@ -74,7 +74,7 @@ export function ActivityFilterBar({
           value={tenantId}
           onChange={(e) => setTenantId(e.target.value)}
           placeholder="optional uuid"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[13px] font-mono"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px] font-mono"
         />
       </label>
       <label className="block">
@@ -83,7 +83,7 @@ export function ActivityFilterBar({
           type="date"
           value={since}
           onChange={(e) => setSince(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[13px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
         />
       </label>
       <label className="block">
@@ -92,7 +92,7 @@ export function ActivityFilterBar({
           type="date"
           value={until}
           onChange={(e) => setUntil(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[13px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
         />
       </label>
       <div className="md:col-span-4 flex gap-2 justify-end">
@@ -100,7 +100,7 @@ export function ActivityFilterBar({
           type="button"
           onClick={reset}
           disabled={pending}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50"
+          className="rounded-pill px-4 py-3 min-h-[44px] text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50"
         >
           Reset
         </button>
@@ -108,7 +108,7 @@ export function ActivityFilterBar({
           type="button"
           onClick={apply}
           disabled={pending}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center gap-1.5"
+          className="rounded-pill px-4 py-3 min-h-[44px] text-[13px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center gap-1.5"
         >
           {pending ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
           Apply

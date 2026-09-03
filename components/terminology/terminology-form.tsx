@@ -154,7 +154,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
                   onChange={(e) => setRow(row.key, { one: e.target.value })}
                   placeholder={DEFAULT_TERMS.en[row.key].one}
                   maxLength={60}
-                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px]"
+                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
                   data-testid={`term-${row.key}-one`}
                 />
               </label>
@@ -166,7 +166,7 @@ export function TerminologyForm({ initial }: { initial: TerminologyState }) {
                   onChange={(e) => setRow(row.key, { other: e.target.value })}
                   placeholder={DEFAULT_TERMS.en[row.key].other}
                   maxLength={60}
-                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px]"
+                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
                   data-testid={`term-${row.key}-other`}
                 />
               </label>
