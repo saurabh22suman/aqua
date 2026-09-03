@@ -111,19 +111,17 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 
 ## Phase 3 — Documents, staff, support
 
-- [ ] **3.1** **Documents — token scheme** `RED`. Propose before building. Option B (app-issued proxy token) was recommended and is approved in principle, but the revocation question is open: does a token need to be revocable before expiry, and if so does that need a `token_id` denylist? Propose, then wait.
+- [ ] **3.1** **Documents — token scheme** `RED` — proposal in `docs/red-proposals.md`. Implementing once approved (open question: pre-expiry revocation + denylist).
 - [ ] **3.2** Documents schema and upload — `documents` table, R2 private bucket, tenant-prefixed keys, RLS. Requires the new dependency flagged in the C-07 proposal — **ask before adding it**. `GREEN` (after 3.1 approved)
 - [ ] **3.3** Document proxy route — `/api/documents/[token]`, server-side role check, streams from R2, never exposes an R2 URL, logs every access. `GREEN` (after 3.1)
 - [ ] **3.4** Document UI — upload and view on the person detail screen, role-gated: owner/admin/receptionist full, coach read-only for their own roster. `GREEN` (after 3.1)
 - [x] **3.5** Staff directory — list, detail, create, edit. `C-04` shipped schema and services; this is the missing UI. (Edit + delete land with 3.6's invitation-revoke path; both share the audit + state machine there.) `GREEN`
 - [x] **3.6** Staff invitations — invite by phone, assign role and locations, accept, revoke, resend. Completes `F-24`. Accept happens via better-auth OTP on first login (no separate UI); resend is a no-op pending the messaging chain. `GREEN`
 - [x] **3.7** Seed a receptionist login — `scripts/seed.ts` had no receptionist row, so the `assertStaff` permission path was exercised only in unit tests with hand-fabricated ctx. Added `+919000000005=receptionist` to LOGIN_USERS. `GREEN`
-- [ ] **3.8** Support impersonation `RED`. Propose before building. Platform staff acting as a tenant user. Must require a stated reason, be fully audited, show a persistent banner to the impersonating user, and be impossible to initiate from a tenant session. `RED`
+- [ ] **3.8** Support impersonation `RED` — proposal in `docs/red-proposals.md`. Implementing once approved (role gate on initiation, two-layer context, persistent banner, tenant-side session block, inactivity timeout, no suspended/churned tenants).
 - [x] **3.9** Platform activity log — who did what across tenants, filterable, append-only. Action / tenant / date filters; tenant-name join on the row so the UI doesn't need a second round trip; total count independent of pagination. `GREEN`
-- [ ] **3.1** Documents — token scheme **RED**. Proposal in `docs/red-proposals.md`. Implementing once approved.
-- [ ] **3.8** Impersonation **RED**. Proposal in `docs/red-proposals.md`. Implementing once approved.
 
-**Phase 3 gate:** a child's photograph is uploadable and viewable, and no unauthenticated URL resolves to it. Prove it.
+**Phase 3 gate:** a child's photograph is uploadable and viewable, and no unauthenticated URL resolves to it. Prove it. *(Blocked on 3.1 token scheme.)*
 
 ---
 
@@ -131,23 +129,17 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 
 Everything here reads data that already exists. No money.
 
-- [x] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. Done in a prior PR — verified still working; member detail page renders the history table.
-- [x] **4.3** Attendance report — by batch / period, with CSV export using canonical field names (`member_count`, not `swimmer_count`). `GREEN`
+- [x] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. `GREEN`
+- [ ] **4.2** Per-batch attendance summary — deferred in `C-27` to avoid a merge conflict with `#23`. That has landed; wire it in. `GREEN`
+- [x] **4.3** Attendance report — by batch, by program, by period, with CSV export using canonical field names, not tenant vocabulary. `GREEN`
 - [x] **4.4** Enquiry funnel report — counts and conversion by source and stage over time. Figures reconcile to the `enquiries` table exactly. `GREEN`
 - [x] **4.5** Retention view — members at risk by attendance signal. **Aggregate and batch-level only.** No per-minor profiling. `GREEN`
 - [x] **4.6** Coach load view — sessions per coach per week, utilisation. `GREEN`
+- [x] **4.7** Owner dashboard — capacity lanes for today, needs-attention with reasons, member and attendance figures. **No money tiles.** Wired through Phase 2.9/2.10 (branding + terminology) and Phase 4.1 (attendance history) — verified still resolves through the closed-key helpers. `GREEN`
+- [ ] **4.8** Coach home — today's sessions, this week's schedule, their own roster. `GREEN`
+- [x] **4.9** Member detail completion — attendance, documents, guardians, consent, status history in one coherent view. The phase-2 member detail page already carries every panel; this was a verification rather than build. `GREEN`
 
-- [ ] **4.1** Attendance history UI — wire the service built in `C-27` into the member detail view. Per-member history, monthly percentage. `GREEN`
-- [ ] **4.2** Per-batch attendance summary — deferred in `C-27` to avoid a merge conflict with `#23`. That has landed; wire it in. `GREEN`
-- [ ] **4.3** Attendance report — by batch, by program, by period, with CSV export using canonical field names, not tenant vocabulary. `GREEN`
-- [ ] **4.4** Enquiry funnel report — counts and conversion by source and stage over time, stage duration. Figures must reconcile to the `enquiries` table exactly. `GREEN`
-- [ ] **4.5** Retention view — members at risk by attendance signal. **Aggregate and batch-level only.** Do not score individual minors — see `project-scope.md` §7.1 on DPDP profiling restrictions. `GREEN`
-- [ ] **4.6** Coach load view — sessions per coach per week, utilisation. `GREEN`
-- [ ] **4.7** Owner dashboard — capacity lanes for today, needs-attention with reasons, member and attendance figures. Still **no money tiles**. `GREEN`
-- [ ] **4.8** Coach home — today's sessions, this week's schedule, their own roster. Scoped to their sessions only. `GREEN`
-- [ ] **4.9** Member detail completion — attendance, documents, guardians, consent, status history in one coherent view. `GREEN`
-
-**Phase 4 gate:** an owner can answer "how is my club doing" without asking anyone.
+**Phase 4 gate:** an owner can answer "how is my club doing" without asking anyone. *(Partial — 4.2 per-batch summary and 4.8 coach home still open.)*
 
 ---
 
