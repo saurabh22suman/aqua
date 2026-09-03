@@ -3,6 +3,7 @@ import { AlertTriangle, ChevronRight, Clock } from "lucide-react";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import { TenantMark } from "@/components/branding/tenant-mark";
+import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 // S4 (Owner home) — composition follows docs/sports-club-ui-direction.html's
 // "Owner · home" mockup: one dominant hero, three stat chips, a
@@ -17,9 +18,11 @@ import { TenantMark } from "@/components/branding/tenant-mark";
 export function OwnerDashboard({
   data,
   branding,
+  terminology,
 }: {
   data: OwnerDashboardData;
   branding: BrandingData;
+  terminology: TerminologyState;
 }) {
   const dayLabel = new Date(`${data.today}T00:00:00`).toLocaleDateString("en-IN", {
     weekday: "long",
@@ -30,6 +33,15 @@ export function OwnerDashboard({
   // name when it doesn't. data.tenantName is the column-level
   // fallback, branding.displayName is the override.
   const displayName = branding.displayName ?? data.tenantName;
+  // Phase 2.10 — the resolved vocabulary: a swimming academy
+  // sees "Active swimmers" rather than "Active members"; a
+  // tenant that never customised still reads "Active members".
+  // Database columns stay canonical (member_code is never
+  // renamed), per architecture § 7.5.
+  const membersOther = resolveTerm(terminology, "member", "other");
+  const batchesOther = resolveTerm(terminology, "batch", "other");
+  const sessionsOther = resolveTerm(terminology, "session", "other");
+  const sessionsOne = resolveTerm(terminology, "session", 1);
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -56,7 +68,7 @@ export function OwnerDashboard({
             </p>
             <p className="text-[13px] text-paper/80">
               {data.todayMarked} of {data.todayTotal} marked across {data.todaysLanes.length}{" "}
-              {data.todaysLanes.length === 1 ? "session" : "sessions"}
+              {data.todaysLanes.length === 1 ? sessionsOne : sessionsOther}
             </p>
           </>
         ) : (
@@ -67,7 +79,7 @@ export function OwnerDashboard({
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-ctl bg-deck px-2.5 py-3">
           <p className="font-display text-[17px] font-semibold tracking-tight">{data.activeMemberCount}</p>
-          <p className="mt-0.5 text-[11px] text-ink-3">Active members</p>
+          <p className="mt-0.5 text-[11px] text-ink-3">Active {membersOther}</p>
         </div>
         <div className="rounded-ctl bg-deck px-2.5 py-3">
           <p className="font-display text-[17px] font-semibold tracking-tight">
@@ -77,7 +89,7 @@ export function OwnerDashboard({
         </div>
         <div className="rounded-ctl bg-deck px-2.5 py-3">
           <p className="font-display text-[17px] font-semibold tracking-tight">{data.activeBatchCount}</p>
-          <p className="mt-0.5 text-[11px] text-ink-3">Batches running</p>
+          <p className="mt-0.5 text-[11px] text-ink-3">{titleCase(batchesOther)} running</p>
         </div>
       </div>
 
@@ -120,7 +132,7 @@ export function OwnerDashboard({
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Today&apos;s lanes</h2>
       {data.todaysLanes.length === 0 ? (
         <div className="rounded-ctl border border-line bg-paper px-4 py-6 text-center">
-          <p className="text-[13px] font-medium">No sessions today</p>
+          <p className="text-[13px] font-medium">No {sessionsOther} today</p>
           <p className="mt-1 text-[12.5px] text-ink-3">
             Nothing is scheduled for today across any batch.
           </p>

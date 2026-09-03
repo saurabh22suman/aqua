@@ -1,13 +1,11 @@
 import Link from "next/link";
-import { ChevronRight, ListChecks, Palette } from "lucide-react";
+import { ChevronRight, Languages, ListChecks, Palette } from "lucide-react";
 
-// F-23 — settings surface. Branding (Phase 2.9) and Terminology
-// (Phase 2.10) live here; future settings (locations, business
-// hours, holiday calendar) accumulate in the same list. The
-// onboarding row stays for a fresh tenant until they've finished
-// setup — see Phase 2.8's checklist service for what "finished"
-// means. Style follows the row pattern of the bottom-nav cards:
-// icon | title + sub | chevron.
+// F-23 — settings surface. Branding (Phase 2.9), Terminology
+// (Phase 2.10) and the onboarding checklist (Phase 2.8) live
+// here; future settings (locations, business hours, holiday
+// calendar) accumulate in the same list. Style follows the row
+// pattern of the bottom-nav cards: icon | title + sub | chevron.
 export default function Page() {
   return (
     <main className="px-5 pt-6 pb-8">
@@ -45,6 +43,21 @@ export default function Page() {
           <p className="text-[14px] font-medium leading-tight">Branding</p>
           <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
             Display name, short name and accent.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+      <Link
+        href="/owner/settings/terminology"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+      >
+        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
+          <Languages size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Vocabulary</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Eight overridable terms — &quot;member&quot; becomes &quot;swimmer&quot; and so on.
           </p>
         </div>
         <ChevronRight size={18} className="text-ink-3 flex-none" />
