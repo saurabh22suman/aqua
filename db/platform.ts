@@ -91,16 +91,18 @@ export async function devVerificationCode(phone: string): Promise<string | null>
 export async function linkBetterAuthUser(
   betterAuthUserId: string,
   phoneNumber: string,
-): Promise<void> {
-  await withPlatform(() =>
+): Promise<UserId> {
+  const [row] = await withPlatform(() =>
     db
       .insert(users)
       .values({ id: asUserId(uuidv7()), betterAuthId: betterAuthUserId, phone: phoneNumber })
       .onConflictDoUpdate({
         target: users.phone,
         set: { betterAuthId: betterAuthUserId, updatedAt: new Date() },
-      }),
+      })
+      .returning({ id: users.id }),
   );
+  return row!.id;
 }
 
 // tenantId is already known by the time this is called — an ordinary

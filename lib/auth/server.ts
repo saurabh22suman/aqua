@@ -5,6 +5,7 @@ import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { db } from "@/db/auth-db";
 import { betterAuthSchema } from "../../db/schema/better-auth";
 import { linkBetterAuthUser } from "../../db/platform";
+import { activateInvitedMemberships } from "../../db/membership-activation";
 import { deliverOtp } from "./otp-delivery";
 
 export function createAuth(authDb: NodePgDatabase<Record<string, never>>) {
@@ -30,7 +31,8 @@ export function createAuth(authDb: NodePgDatabase<Record<string, never>>) {
           getTempEmail: (phoneNumber) => `${phoneNumber}@phone.aqua.local`,
         },
         callbackOnVerification: async ({ phoneNumber, user }) => {
-          await linkBetterAuthUser(user.id, phoneNumber);
+          const userId = await linkBetterAuthUser(user.id, phoneNumber);
+          await activateInvitedMemberships(userId);
         },
       }),
     ],

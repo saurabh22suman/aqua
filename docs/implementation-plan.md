@@ -384,6 +384,8 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Build:** Partitioned-by-month `audit_log`. `writeAudit()` helper that participates in the caller's transaction. Insert-only grants.
 **Done when:** a mutation and its audit row commit or roll back together; `app_user` cannot update or delete audit rows.
 
+**Known gap:** `db/membership-activation.ts`'s `activateInvitedMemberships` (D1, fix/demo-blockers) flips a tenant membership from `invited` to `active` — a security-relevant transition, since it's what grants tenant access — and writes no audit row today. `platform_audit_log.actorId` is a FK to `platform_users.id` (platform operators); the person accepting their own invite is a tenant member, not a platform user, so writing there would violate the FK. Unaudited until this table exists; see the `TODO(F-14)` in that file.
+
 ### F-15 · Audit coverage
 **Depends:** F-14
 **Build:** Wrap mutation helpers so audit writing is the default rather than a per-callsite decision. Capture before and after.
