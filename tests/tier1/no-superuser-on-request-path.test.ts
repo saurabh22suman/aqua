@@ -98,6 +98,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/invite-owner-action.test.ts",
   "tests/tier1/membership-activation.test.ts",
   "tests/tier1/tenant-creation-parity.test.ts",
+  "tests/tier1/onboarding-checklist.test.ts",
   // Tenant detail page reads sample/real state via the
   // privileged pool for the "remove sample data" gate. Same shape
   // as 1.5's tenant list page: the production code goes through
