@@ -73,6 +73,23 @@ jobs:
       - name: db:reset (bootstrap roles + migrate against the CI Postgres service)
         run: pnpm db:reset -- --i-understand
 
+      # D2/D3 fallout: db/deploy.ts is the only place that ever bootstraps
+      # pg-boss's own schema (pgboss.*, via boss.start() under the
+      # privileged MIGRATION_DATABASE_URL — app_user has no CREATE on the
+      # schema, see db/deploy.ts's grantAppUserOnPgBossSchema) and grants
+      # app_user the read/write it needs on that schema afterward. In a
+      # real deploy this always runs before the app serves a request, so
+      # createTenant()'s registerSessionsGenerateSchedule() (D2) can
+      # assume it. db:reset only runs our own migrations, not this — a
+      # fresh CI Postgres never got pgboss.schedule created, and the
+      # tests that touch it (platform-tenants-create.test.ts's D2 case,
+      # tenant-creation-parity.test.ts) failed with "relation
+      # pgboss.schedule does not exist" until this step was added. Run it
+      # here for the same reason db:reset runs here: match what a real
+      # deploy guarantees before anything downstream depends on it.
+      - name: db:deploy (bootstrap pg-boss schema + queues before tests depend on it)
+        run: pnpm db:deploy
+
       # pretest seeds the platform catalogue automatically (see T0).
       #
       # Two Postgres instances are in play here on purpose, not
