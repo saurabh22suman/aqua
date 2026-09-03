@@ -107,6 +107,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/owner-reports.test.ts",
   "tests/tier1/permission-matrix.test.ts",
   "tests/tier1/coach-conflicts.test.ts",
+  "tests/tier1/presets-r22.test.ts",
   "app/(owner)/owner/reports/attendance.csv/route.ts",
   // Tenant detail page reads sample/real state via the
   // privileged pool for the "remove sample data" gate. Same shape
