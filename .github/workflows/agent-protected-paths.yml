@@ -1,0 +1,84 @@
+name: agent-protected-paths
+
+# Self-merge suspension gate.
+#
+# History: the agent was given a rule to open PRs but not merge
+# them. That rule was memory-dependent and failed 3 for 3.
+# This gate is the mechanical replacement — but it is ONE LAYER
+# of defence, not the only one. Branch protection with required
+# reviewers is the second; both must be live. See
+# docs/five-day-work-guide.md §"Self-merge suspension".
+#
+# What this gate does:
+#   1. Computes the set of files the PR touches.
+#   2. If ANY of them is under a protected path (db/migrations/**,
+#      lib/auth/**, lib/money/**, plus the gate workflow and its
+#      companion test), the PR must carry the label
+#      human-approved-merge. Otherwise the gate fails.
+#
+# IMPORTANT — what this gate does NOT do:
+#   It does not stop the agent from self-applying the label via
+#   the GitHub API (verified against this very repo: the agent's
+#   token has repo scope and can apply any label). The gate
+#   surfaces the issue; the real enforcement is branch
+#   protection requiring a human reviewer's approval before
+#   merge. Both must be live for self-merge to be impossible.
+#
+# Why a label and not the author:
+#   The agent and the human share the same GitHub identity
+#   (saurabh22suman). Author-based gating cannot distinguish
+#   them.
+
+on:
+  pull_request:
+
+jobs:
+  agent-protected-paths:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed files
+        id: changed
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          git diff --name-only --diff-filter=ACMRTUXB "$BASE...$HEAD" > /tmp/changed.txt
+          cat /tmp/changed.txt
+
+      - name: Check protected paths require the human-approved-merge label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          FAILED=0
+          while IFS= read -r file; do
+            case "$file" in
+              db/migrations/*) echo "::error file=$file::Touches db/migrations/**."; FAILED=1 ;;
+              lib/auth/*) echo "::error file=$file::Touches lib/auth/**."; FAILED=1 ;;
+              lib/money/*) echo "::error file=$file::Touches lib/money/**."; FAILED=1 ;;
+              db/schema/consent.ts|lib/services/consent|lib/services/consent.ts|lib/actions/consent|lib/actions/consent.ts) echo "::error file=$file::Touches a consent-related path."; FAILED=1 ;;
+              .github/workflows/agent-protected-paths.yml) echo "::error file=$file::Touches the gate workflow itself."; FAILED=1 ;;
+              tests/tier1/agent-protected-paths.test.ts) echo "::error file=$file::Touches the gate's companion test."; FAILED=1 ;;
+            esac
+          done < /tmp/changed.txt
+          if [ "$FAILED" -eq 0 ]; then
+            echo "No protected paths touched. Gate passes."
+            exit 0
+          fi
+          echo ""
+          echo "This PR touches a protected path. Checking for human-approved-merge label."
+          labels_json=$(gh api "repos/${{ github.repository }}/issues/$PR_NUMBER/labels" --jq '.[].name')
+          echo "Labels: $labels_json"
+          if echo "$labels_json" | grep -qx "human-approved-merge"; then
+            echo "Label human-approved-merge present. Gate passes."
+            exit 0
+          fi
+          echo "::error::This PR touches a protected path and is missing the human-approved-merge label. The label alone is NOT sufficient protection — branch protection requiring a human reviewer must also be live before merge. The human reviewer is the real gate; the label is the proof that review happened."
+          exit 1
