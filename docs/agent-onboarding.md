@@ -91,7 +91,7 @@ distinction is drawn from).
 | First-load JS ≤150KB gzipped, per route | `scripts/check-bundle-budget.ts` in CI |
 | Font payload ≤60KB, latin-only | `scripts/check-font-budget.ts` in CI |
 | TypeScript strict, no implicit `any` | `tsc --noEmit` |
-| `--accent` never inside a status/state style | a dedicated lint rule (see DESIGN.md §1.2) |
+| `--accent` never inside a status/state style | `tests/tier1/hardcoded-brand-color.test.ts` (vitest source-scan, NOT a lint rule — see DESIGN.md §1.2. F4 audit correction: the previous table said "dedicated lint rule"; it is a vitest test that scans `app/` and `components/` for Tailwind classes like `bg-mango` / `text-indigo`. Same mechanical guarantee as a lint rule, just running under `pnpm test` instead of `pnpm lint`. The misnaming stopped the next agent from looking.) |
 | A new tenant-scoped table without RLS | F-08a's catch-all query over `pg_class`, no per-table test needed |
 
 | Memory-dependent — discipline only | Why nothing catches it |

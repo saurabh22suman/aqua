@@ -28,7 +28,15 @@
 // will start refusing new offenders (and re-failing on those that
 // grow further).
 //
-// Wired into CI alongside the other checks via `pnpm check:lines`.
+// NOT WIRED INTO CI (F4 audit correction): the previous header
+// said "wired into CI alongside the other checks via
+// `pnpm check:lines`". It is not. `.github/workflows/ci.yml`
+// does not run this script. The audit caught this — a false
+// claim of enforcement is worse than an honest "not enforced";
+// it stops anyone checking by hand. `pnpm check:lines` is
+// available to run locally and is documented in package.json;
+// wiring it into CI is a separate decision (alongside flipping
+// STRICT, see above).
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";

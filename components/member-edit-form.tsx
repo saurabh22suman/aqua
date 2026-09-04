@@ -103,7 +103,7 @@ export function MemberEditForm({
         className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
       />
 
-      {error ? <p className="text-[13px] text-late">{error}</p> : null}
+      {error ? <p className="text-[13px] text-ink-3">{error}</p> : null}
 
       <button
         type="button"

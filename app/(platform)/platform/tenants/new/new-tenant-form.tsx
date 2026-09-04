@@ -151,7 +151,7 @@ export function NewTenantForm({
       {error ? (
         <p
           role="alert"
-          className="rounded-ctl border border-late bg-late-soft px-3 py-2 text-[13px] text-late"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
         >
           {error}
         </p>

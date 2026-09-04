@@ -121,7 +121,7 @@ export function LoginForm() {
         </>
       )}
 
-      {error ? <p className="mt-4 text-[13px] text-late">{error}</p> : null}
+      {error ? <p className="mt-4 text-[13px] text-ink-3">{error}</p> : null}
 
       <button
         onClick={() => (step === "phone" ? submitPhone() : submitCode())}
