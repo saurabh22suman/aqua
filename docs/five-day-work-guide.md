@@ -71,7 +71,7 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 
 ### Pre-flight (before Phase 1)
 
-- [ ] **Apply branch protection on `main`** — follow `docs/branch-protection.md` and verify with the GitHub API afterwards (`gh api repos/saurabh22suman/aqua/branches/main/protection` should return `require_pr: true`, `enforce_admins.enabled: true`, and `required_status_checks.contexts` containing `ci`). Until this is true, the merge discipline above is a documentation rule, not a platform guarantee; the diff between the two states is whether direct pushes are blocked by GitHub or by self-restraint.
+- [x] **Apply branch protection on `main`** — applied Sep 2026 (ruleset `main protection`, id 22285086). Direct push blocked (verified: GH013 on attempt); PR + status checks `ci` + `agent-protected-paths` required (strict). `bypass_actors: []`, `current_user_can_bypass: never`. `required_approving_review_count: 0` — agent can self-merge after self-applying the `human-approved-merge` label (token has repo scope), which is the ceiling on a solo-repo setup. See the F1 standing rule below for the discipline that closes what the gate can't.
 
 ### Self-merge suspension — F1
 
