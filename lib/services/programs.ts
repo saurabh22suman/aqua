@@ -37,6 +37,17 @@ export async function createProgram(
   });
 }
 
+// Known gap (logged as known gap, F2 audit response): batch-level
+// coach conflict (G1) is enforced only at the FORM layer via
+// `checkCoachConflictsAction` — this service does not call
+// `detectCoachConflicts` itself. A direct POST to the action
+// bypasses the warning. See docs/guard-path-matrix.md.
+//
+// F2 finding: this gap predates the audit. Out of scope for the
+// reschedule-session fix; closing it requires a service-layer
+// call to detectCoachConflicts in both createBatch and
+// updateBatch (the matrix names the path).
+
 // C-16 done-when: CRUD works. Refuses while a live batch still
 // references the program rather than cascading -- an owner deleting a
 // program by mistake with active batches under it gets a clear reason,
@@ -188,6 +199,9 @@ export async function updateProgram(
   });
 }
 
+// Known gap (logged as known gap, F2 audit response): batch-level
+// coach conflict (G1) is form-only here too. See createBatch's
+// comment and docs/guard-path-matrix.md.
 export async function updateBatch(
   ctx: ActionCtx,
   input: {

@@ -203,6 +203,14 @@ const promoteSchema = z.object({
   batchId: z.string().uuid(),
 });
 
+// Known gap (logged as known gap, F2 audit response): promoteHead
+// does NOT re-check capacity (G3) before transitioning a row to
+// 'promoted'. The follow-up workflow is "an admin sees the
+// promotion and enrols the member separately"; if the slot is
+// filled between join and promotion, the admin enrolment would
+// later fail with `target_full`. Closing the gap requires a
+// product decision (auto-enrol vs. remain a "head-of-queue"
+// surface) — out of scope for F2. See docs/guard-path-matrix.md.
 export async function promoteHead(
   ctx: ActionCtx,
   raw: unknown,
