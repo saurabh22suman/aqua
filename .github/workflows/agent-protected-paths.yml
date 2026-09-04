@@ -33,7 +33,7 @@ on:
   pull_request:
 
 jobs:
-  protected-paths:
+  agent-protected-paths:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,12 +48,7 @@ jobs:
         run: |
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
-          {
-            git diff --name-only --diff-filter=ACMRTUXB "$BASE...$HEAD"
-            echo "----- ALWAYS_PROTECTED -----"
-            echo ".github/workflows/agent-protected-paths.yml"
-            echo "tests/tier1/agent-protected-paths.test.ts"
-          } > /tmp/changed.txt
+          git diff --name-only --diff-filter=ACMRTUXB "$BASE...$HEAD" > /tmp/changed.txt
           cat /tmp/changed.txt
 
       - name: Check protected paths require the human-approved-merge label
