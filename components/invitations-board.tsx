@@ -13,6 +13,16 @@ import type { ListInvitationsRow } from "@/lib/services/staff-invitations";
 // row revoke + resend. Resend is a no-op until the messaging
 // chain ships; the row tells the user that explicitly rather
 // than pretending.
+//
+// F4 audit correction (Sep 2026): status pills used to colour
+// "invited" with the warn semantic token and "active" with the
+// good semantic token. Those are reserved for money and
+// attendance state (DESIGN.md §1.1). Invitation state is neither
+// — it is "has this staff member accepted the invite?", a binary
+// lifecycle. The pill text ("Invited" / "Active") is the source
+// of truth; the colour is now neutral ink. Same fix as the F4
+// audit applied to other recently-added surfaces (onboarding-
+// checklist, branding-form, terminology-form, staff-invite-form).
 
 const STATUS_LABEL: Record<ListInvitationsRow["status"], string> = {
   invited: "Invited",
@@ -21,8 +31,8 @@ const STATUS_LABEL: Record<ListInvitationsRow["status"], string> = {
 };
 
 const STATUS_TONE: Record<ListInvitationsRow["status"], string> = {
-  invited: "bg-warn-soft text-warn",
-  active: "bg-good-soft text-good",
+  invited: "bg-deck text-ink-2",
+  active: "bg-deck text-ink-2",
   revoked: "bg-deck text-ink-3",
 };
 
@@ -101,7 +111,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
           : ` · ${row.locationNames.join(", ")}`}
       </p>
       {error ? (
-        <p className="mt-2 text-[12.5px] text-late" role="alert">{error}</p>
+        <p className="mt-2 text-[12.5px] text-ink-3" role="alert">{error}</p>
       ) : null}
       {row.status === "invited" ? (
         <p className="mt-2 text-[12px] text-ink-3">
@@ -126,7 +136,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
             type="button"
             onClick={onRevoke}
             disabled={pending}
-            className="rounded-pill px-3 py-2 text-[13px] font-medium bg-late-soft text-late disabled:opacity-50 flex items-center gap-1.5"
+            className="rounded-pill px-3 py-2 text-[13px] font-medium border border-line text-ink-2 disabled:opacity-50 flex items-center gap-1.5"
             data-testid={`revoke-${row.membershipId}`}
           >
             {busy === "revoke" ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}

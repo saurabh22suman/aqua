@@ -119,7 +119,7 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
       ) : null}
 
       {error ? (
-        <p className="mb-4 text-[13px] text-late" role="alert">{error}</p>
+        <p className="mb-4 text-[13px] text-ink-3" role="alert">{error}</p>
       ) : null}
 
       <div className="flex gap-2">

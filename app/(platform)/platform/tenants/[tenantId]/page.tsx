@@ -17,23 +17,17 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function StatusPill({ status }: { status: string }) {
-  if (status === "suspended") {
-    return (
-      <span className="text-[12px] font-medium px-3 py-1 rounded-pill bg-late-soft text-late">
-        {STATUS_LABEL[status]}
-      </span>
-    );
-  }
-  if (status === "trial") {
-    return (
-      <span className="text-[12px] font-medium px-3 py-1 rounded-pill bg-warn-soft text-warn">
-        {STATUS_LABEL[status]}
-      </span>
-    );
-  }
+  // Status pill colour stays neutral ink regardless of the
+  // underlying state — late (overdue/absent) and warn (needs
+  // attention) are reserved semantic tokens for money and
+  // attendance state (DESIGN.md §1.1). A tenant being suspended
+  // or on trial is neither, so the label is the source of truth.
+  // F4 audit correction: this branch had reverted back to
+  // bg-late-soft / bg-warn-soft after the ea6c1f7 audit fix;
+  // the early-audit fix's `bg-deck text-ink-2` is restored.
   return (
     <span className="text-[12px] font-medium px-3 py-1 rounded-pill bg-deck text-ink-2">
-      {STATUS_LABEL[status]}
+      {STATUS_LABEL[status] ?? status}
     </span>
   );
 }

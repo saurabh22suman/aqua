@@ -118,7 +118,7 @@ export function StaffCreateForm() {
       </label>
 
       {error ? (
-        <p className="mb-4 text-[13px] text-late" role="alert">
+        <p className="mb-4 text-[13px] text-ink-3" role="alert">
           {error}
         </p>
       ) : null}

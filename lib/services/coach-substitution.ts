@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { sessions } from "@/db/schema/scheduling";
 import { staff } from "@/db/schema/staff";
+import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asStaffId, asTenantId } from "@/lib/ids";
 
@@ -26,6 +27,14 @@ import { asStaffId, asTenantId } from "@/lib/ids";
 // Reschedule-style mechanics — substitute preserves the
 // session's id, date, times, and attendance rows. Only
 // sessions.coach_id changes.
+//
+// F2 (audit fix): the audit found that substituteCoach, like
+// rescheduleSession, silently allowed a coach to be assigned
+// to a session that overlapped another of their sessions. We
+// now call detectSessionConflicts before the UPDATE and return
+// coach_conflict if the proposed new coach has another
+// non-cancelled session in this session's date/time window.
+// Same gap, same guard — written once, called from both paths.
 
 export type SubstituteCoachResult =
   | { kind: "ok"; sessionId: string; newCoachId: string; previousCoachId: string | null }
@@ -35,8 +44,10 @@ export type SubstituteCoachResult =
         | "invalid"
         | "session_not_found"
         | "coach_not_found"
-        | "no_change";
+        | "no_change"
+        | "coach_conflict";
       message: string;
+      conflictingSessionIds?: string[];
     };
 
 export async function substituteCoach(
@@ -53,7 +64,13 @@ export async function substituteCoach(
 
   return withTenant(ctx.tenantId, async (tx) => {
     const [s] = await tx
-      .select({ id: sessions.id, coachId: sessions.coachId })
+      .select({
+        id: sessions.id,
+        coachId: sessions.coachId,
+        sessionDate: sessions.sessionDate,
+        startsAt: sessions.startsAt,
+        endsAt: sessions.endsAt,
+      })
       .from(sessions)
       .where(
         and(
@@ -98,6 +115,32 @@ export async function substituteCoach(
         sessionId: s.id,
         newCoachId: coach.id,
         previousCoachId: s.coachId,
+      };
+    }
+
+    // F2 guard — coach conflict for the proposed substitute.
+    // Detects whether `coach` already has another non-cancelled
+    // session in this session's date/time window. excludeSessionId
+    // drops this very session (the substitute is being applied
+    // to it, so it should not flag itself). Runs inside the
+    // withTenant scope of the caller — sharing the tx means
+    // the check and the write see the same snapshot, and we
+    // don't open a nested withTenant (db/scope.ts refuses).
+    const conflicts = await detectSessionConflicts(ctx, {
+      coachId: coach.id,
+      sessionDate: s.sessionDate,
+      startsAt: s.startsAt,
+      endsAt: s.endsAt,
+      excludeSessionId: s.id,
+      tx,
+    });
+    if (conflicts.conflicts.length > 0) {
+      return {
+        kind: "error",
+        code: "coach_conflict",
+        message:
+          "This coach already has another session in this time window.",
+        conflictingSessionIds: conflicts.conflicts.map((c) => c.sessionId),
       };
     }
 

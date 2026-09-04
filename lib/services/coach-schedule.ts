@@ -4,6 +4,7 @@ import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
 import { enrolments } from "@/db/schema/scheduling";
 import { members, persons } from "@/db/schema/people";
+import { staff } from "@/db/schema/staff";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -53,6 +54,61 @@ export async function listCoachSchedule(
           eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)),
           sql`${sessions.sessionDate} >= ${fromDate}`,
           sql`${sessions.sessionDate} <= ${toDate}`,
+        ),
+      )
+      .orderBy(sessions.sessionDate, sessions.startsAt),
+  );
+}
+
+export type UpcomingSessionRow = {
+  id: string;
+  sessionDate: string;
+  startsAt: Date;
+  endsAt: Date;
+  batchId: string;
+  batchName: string;
+  coachId: string | null;
+  coachName: string | null;
+  status: string;
+};
+
+// F3 (R.1) — upcoming sessions across the whole tenant, for the
+// owner/admin view. Unlike listCoachSchedule, this is NOT scoped
+// to the calling coach — it lists every batch's upcoming sessions
+// so an owner can substitute a coach on any of them. The Coach
+// role is not the target caller (the audit's "coach sees a
+// conflict" promise for R.2 is met by BatchEditForm's existing
+// warning, surfaced to whoever is editing the batch — typically
+// the owner). This service is management-only.
+export async function listUpcomingSessions(
+  ctx: ActionCtx,
+  fromDate: string,
+  toDate: string,
+): Promise<UpcomingSessionRow[]> {
+  return withTenant(ctx.tenantId, (tx) =>
+    tx
+      .select({
+        id: sessions.id,
+        sessionDate: sessions.sessionDate,
+        startsAt: sessions.startsAt,
+        endsAt: sessions.endsAt,
+        batchId: batches.id,
+        batchName: batches.name,
+        coachId: sessions.coachId,
+        coachName: persons.fullName,
+        status: sessions.status,
+      })
+      .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .leftJoin(staff, eq(staff.id, sessions.coachId))
+      .leftJoin(persons, eq(persons.id, staff.personId))
+      .where(
+        and(
+          eq(sessions.tenantId, ctx.tenantId),
+          isNull(batches.deletedAt),
+          sql`${sessions.sessionDate} >= ${fromDate}`,
+          sql`${sessions.sessionDate} <= ${toDate}`,
+          sql`${sessions.status} <> 'cancelled'`,
         ),
       )
       .orderBy(sessions.sessionDate, sessions.startsAt),

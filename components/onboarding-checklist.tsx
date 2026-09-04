@@ -83,8 +83,8 @@ export function OnboardingChecklistView({ data }: { data: OnboardingChecklist })
               <div
                 className={`h-9 w-9 rounded-[11px] grid place-items-center flex-none ${
                   item.complete
-                    ? "bg-good-soft text-good"
-                    : "bg-warn-soft text-warn"
+                    ? "bg-deck text-ink-2"
+                    : "bg-deck text-ink-3"
                 }`}
                 aria-hidden="true"
               >
@@ -102,7 +102,7 @@ export function OnboardingChecklistView({ data }: { data: OnboardingChecklist })
               </div>
               <div className="flex-none text-ink-3">
                 {item.complete ? (
-                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-pill bg-good-soft text-good">
+                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-pill bg-deck text-ink-2">
                     Done
                   </span>
                 ) : (

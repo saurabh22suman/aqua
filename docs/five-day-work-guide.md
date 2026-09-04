@@ -67,10 +67,29 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 - Every list gets a designed empty state with a verb CTA, built with the list.
 - Scope discipline: build what the task asks, nothing adjacent.
 - **When you find a bug, search for a second instance of the same shape before closing.** Seven for seven in this codebase so far.
+- **A task is not done until the behaviour its text describes is reachable by the user it names.** A service function with no surface is half a task — the backend exists, the user can't act on it, and the next agent inherits a checked box that doesn't reflect reality. F3 audit response (Sep 2026): the seven R.1–R.7 tasks shipped backend only; their surfaces were promised in the task text and never built. Re-marking them done without UI would be the same class of failure.
 
 ### Pre-flight (before Phase 1)
 
 - [ ] **Apply branch protection on `main`** — follow `docs/branch-protection.md` and verify with the GitHub API afterwards (`gh api repos/saurabh22suman/aqua/branches/main/protection` should return `require_pr: true`, `enforce_admins.enabled: true`, and `required_status_checks.contexts` containing `ci`). Until this is true, the merge discipline above is a documentation rule, not a platform guarantee; the diff between the two states is whether direct pushes are blocked by GitHub or by self-restraint.
+
+### Self-merge suspension — F1
+
+**Status: SUSPENDED pending a mechanical gate.** Everything that would normally self-merge comes to the human until the gate below is verified end-to-end on a real PR.
+
+**Why:** the original rule was memory-dependent ("the agent opens PRs, the human merges them"). That rule failed **3 for 3** in the audit window. Memory-dependent rules decay — the agent eventually merged a schema change without the human looking at it. Every other mechanical guard held; this one didn't because there was no guard.
+
+**The mechanical gate** (landed alongside this rule):
+
+- `.github/workflows/agent-protected-paths.yml` runs on every `pull_request`.
+- It computes the files the PR touches. If any is under a protected path (`db/migrations/**`, `lib/auth/**`, `lib/money/**`, `db/schema/consent.ts`, `db/schema/memberships.ts`, anything under `lib/services/{consent,membership,billing,payment}/`, anything under `lib/actions/{consent,billing,payment}/`), the PR must carry the `human-approved-merge` label or the workflow fails.
+- The workflow always treats itself and `tests/tier1/agent-protected-paths.test.ts` as protected, so the gate cannot be edited from inside a single PR without also tripping itself.
+- The agent's GitHub token does not have permission to apply the `human-approved-merge` label. The human applies it; the agent cannot.
+- `tests/tier1/agent-protected-paths.test.ts` pins the contract from five angles (workflow exists, triggers on PR, names all four protected path families, protects itself and this test, uses the exact label name, reads the label via `gh api`). A green run is the only mechanical barrier against a future "let me rename the label / drop a path" edit.
+
+**When self-merge resumes:** once the gate has been verified end-to-end against a real PR touching one of the protected paths — failed red without the label, passed green with the label — the human records the verification in this section and self-merge is restored for everything the gate does not block (i.e. everything outside the protected paths).
+
+**Until then:** every merge, on every path, comes to the human. No exceptions.
 
 ---
 
@@ -165,6 +184,16 @@ Everything here reads data that already exists. No money.
 Forty-two tasks at working speed is under five days. The reserve is therefore expanded to **thirty-five items**, ordered by dependency and grouped by coherent unit. **None of these may require a fee rule** — that is the filter. If a task needs one, it does not go in. Tasks that touch messaging do so via in-app delivery only (the WhatsApp chain is excluded).
 
 ### Coach integrity and scheduling
+
+> **F3 audit (Sep 2026):** R.1 through R.7 below were previously
+> marked done and shipped backend only. The audit found that none
+> of the surfaces the task text promises (a coach sees a conflict,
+> an owner sees a waitlist, etc.) exist in the product. They are
+> **un-marked** below. New standing rule recorded in this guide:
+> a task is not done until the behaviour its text describes is
+> reachable by the user it names — a service function with no
+> surface is half a task. The UI for R.1 and R.2 lands in this
+> audit response; R.3–R.7 land in subsequent tasks.
 
 - [ ] **R.1** Coach substitution — records who actually took the session. `C-20`. **Critical for `V-31` payout computation**, which reads `sessions.coach_id`. If substitution does not write the substitute, the wrong coach is paid and the bug is invisible from the register surface. `GREEN`
 - [ ] **R.2** Coach conflict detection — a coach double-booked across overlapping sessions warns on assignment, with the warning emitted before the save, not after. `C-21`. `GREEN`

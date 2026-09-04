@@ -159,12 +159,12 @@ export function BrandingForm({ initial }: { initial: FormState }) {
       </div>
 
       {error ? (
-        <p className="mt-4 text-[13px] text-late" role="alert">
+        <p className="mt-4 text-[13px] text-ink-3" role="alert">
           {error}
         </p>
       ) : null}
       {savedAt && !error ? (
-        <p className="mt-4 text-[13px] text-good" role="status">
+        <p className="mt-4 text-[13px] text-ink-3" role="status">
           Saved. Changes apply everywhere at once.
         </p>
       ) : null}
