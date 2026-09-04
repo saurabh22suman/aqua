@@ -109,8 +109,8 @@ export function SessionSubstituteControl({
         ))}
       </select>
       {error ? (
-        <div className="flex items-start gap-2 rounded-ctl bg-warn-soft px-3 py-2" role="alert">
-          <AlertTriangle size={14} className="text-warn flex-none mt-0.5" />
+        <div className="flex items-start gap-2 rounded-ctl bg-deck border border-line px-3 py-2" role="alert">
+          <AlertTriangle size={14} className="text-ink-2 flex-none mt-0.5" />
           <p className="text-[11.5px] text-ink-2">
             <span className="font-medium">{error}</span>
             {conflictingSessionIds.length > 0

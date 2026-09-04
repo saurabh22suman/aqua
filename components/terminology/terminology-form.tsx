@@ -201,10 +201,10 @@ export function TerminologyForm({
             </div>
 
             {errorMsg ? (
-              <p className="mt-2 text-[12.5px] text-late" role="alert">{errorMsg}</p>
+              <p className="mt-2 text-[12.5px] text-ink-3" role="alert">{errorMsg}</p>
             ) : null}
             {savedAt && !errorMsg ? (
-              <p className="mt-2 text-[12.5px] text-good" role="status">Saved.</p>
+              <p className="mt-2 text-[12.5px] text-ink-3" role="status">Saved.</p>
             ) : null}
 
             <div className="mt-3 flex gap-2">
