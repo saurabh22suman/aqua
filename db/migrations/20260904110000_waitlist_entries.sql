@@ -48,3 +48,4 @@ create policy waitlist_entries_tenant_isolation
   with check (tenant_id::text = current_setting('app.tenant_id', true));
 
 grant insert, update, delete, select on waitlist_entries to app_user;
+-- F1 gate-proof PR: trivial change to a migration file. The workflow MUST fail this.
