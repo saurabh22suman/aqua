@@ -212,15 +212,17 @@ Forty-two tasks at working speed is under five days. The reserve is therefore ex
 > **F3 audit (Sep 2026):** R.1 through R.7 below were previously
 > marked done and shipped backend only. The audit found that none
 > of the surfaces the task text promises (a coach sees a conflict,
-> an owner sees a waitlist, etc.) exist in the product. They are
-> **un-marked** below. New standing rule recorded in this guide:
+> an owner sees a waitlist, etc.) exist in the product. They were
+> **un-marked** and the UI for R.1 and R.2 was rebuilt as part of
+> the F3 fix (commits `5786fd3` for F3-R.1-R.2-UI). Both R.1 and
+> R.2 now have user-reachable surfaces and are marked [x] below.
+> R.3–R.7 still have backend only — landing their UIs is the next
+> block of work. Standing rule (recorded in the F1 section above):
 > a task is not done until the behaviour its text describes is
-> reachable by the user it names — a service function with no
-> surface is half a task. The UI for R.1 and R.2 lands in this
-> audit response; R.3–R.7 land in subsequent tasks.
+> reachable by the user it names.
 
-- [ ] **R.1** Coach substitution — records who actually took the session. `C-20`. **Critical for `V-31` payout computation**, which reads `sessions.coach_id`. If substitution does not write the substitute, the wrong coach is paid and the bug is invisible from the register surface. `GREEN`
-- [ ] **R.2** Coach conflict detection — a coach double-booked across overlapping sessions warns on assignment, with the warning emitted before the save, not after. `C-21`. `GREEN`
+- [x] **R.1** Coach substitution — records who actually took the session. `C-20`. **Critical for `V-31` payout computation**, which reads `sessions.coach_id`. Service: `substituteCoach` in `lib/services/coach-substitution.ts`. UI: `/owner/sessions` page + `SessionSubstituteControl` (`components/session-substitute-control.tsx`); the F2 conflict guard surfaces inline as a coach_conflict error. Marked [x] per F3 standing rule (UI shipped). `GREEN`
+- [x] **R.2** Coach conflict detection — a coach double-booked across overlapping sessions warns on assignment, with the warning emitted before the save, not after. `C-21`. Service: `detectCoachConflicts` + `detectSessionConflicts` (the latter added by F2). UI: warning banner in `BatchEditForm` (already shipped pre-F3) and `BatchCreateForm` (added by F3 to cover creation, where the gap was). Marked [x] per F3 standing rule. `GREEN`
 - [ ] **R.3** Holiday and closure calendar — annual holidays the owner declares; one-off closures that block bookings; the session generator skips both. Without this, a national holiday still generates a session and a coach registers against an empty pool. `GREEN`
 - [ ] **R.4** Session cancellation and rescheduling — closed reason vocabulary; reschedule preserves the `client_id` linkage so the offline queue still drains. Guardian notification surfaces in-app; WhatsApp delivery is excluded. `GREEN`
 
