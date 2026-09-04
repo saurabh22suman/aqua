@@ -1,7 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { AlertTriangle } from "lucide-react";
 import { createBatchAction } from "@/lib/actions/programs";
+import {
+  checkCoachConflictsAction,
+  type CoachConflict,
+} from "@/lib/actions/coach-conflicts";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
 import type { Program } from "@/db/schema/programs";
 
@@ -25,10 +30,32 @@ export function BatchCreateForm({
   const [coachId, setCoachId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [conflicts, setConflicts] = useState<CoachConflict[]>([]);
 
   function toggleDay(day: number) {
     setDays((d) => (d.includes(day) ? d.filter((x) => x !== day) : [...d, day].sort()));
   }
+
+  // R.2 — same shape as BatchEditForm's conflict check; creation
+  // had been missing this warning entirely (F3 audit response).
+  useEffect(() => {
+    if (!coachId || days.length === 0 || endTime <= startTime) {
+      setConflicts([]);
+      return;
+    }
+    let cancelled = false;
+    checkCoachConflictsAction({
+      coachId,
+      daysOfWeek: days,
+      startTime,
+      endTime,
+    }).then((res) => {
+      if (!cancelled) setConflicts(res.conflicts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [coachId, days, startTime, endTime]);
 
   async function submit() {
     if (!name.trim() || !programId || days.length === 0) return;
@@ -50,6 +77,7 @@ export function BatchCreateForm({
       }
       onCreated(res.batch);
       setName("");
+      setConflicts([]);
     } finally {
       setBusy(false);
     }
@@ -125,6 +153,22 @@ export function BatchCreateForm({
           </button>
         ))}
       </div>
+      {conflicts.length > 0 ? (
+        <div
+          className="mt-1 rounded-ctl bg-warn-soft border border-warn px-3 py-2 flex gap-2"
+          role="alert"
+          data-testid="coach-conflict-create"
+        >
+          <AlertTriangle size={14} className="text-warn flex-none mt-0.5" />
+          <p className="text-[12px] text-ink-2">
+            <span className="font-medium">Coach double-booked.</span>{" "}
+            {conflicts.length === 1
+              ? `Also running on day ${conflicts[0].daysOverlap.join(", ")}:`
+              : `Conflicts with ${conflicts.length} other batches:`}{" "}
+            {conflicts.map((c) => c.batchName).join(", ")}.
+          </p>
+        </div>
+      ) : null}
       {error ? <p className="text-[12px] text-late">{error}</p> : null}
       <button
         type="button"
