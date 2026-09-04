@@ -330,8 +330,8 @@ const DEMO_BATCHES: BatchSpec[] = [
     name: "Morning Squad",
     daysOfWeek: [1, 2, 3, 4, 5],
     startTime: "07:00",
-    capacity: 16,
-    fillCount: 16,
+    capacity: 12,
+    fillCount: 12,
   },
   {
     program: "Junior competitive",
@@ -720,30 +720,44 @@ async function ensureMakeupCredit(
   console.log(`makeup credit seeded → 1 granted`);
 }
 
-// R.1 — substitution on a past session: replace the primary coach
-// with the secondary on one session. Records the actual coach who
-// took it so V-31 payout reads the right person.
+// R.1 — substitution on a past session: pick a session from a
+// batch that originally had Coach Aanya (primary) and swap to
+// Coach Bhaskar (secondary). The session-generator and our past-
+// session materialiser both inherit the batch's coach, so past
+// sessions on Morning Squad already have the primary coach. The
+// substitution here records "actually Coach Bhaskar took this
+// one" so the V-31 payout reads the right person.
 async function ensureSubstitution(
   tenantId: TenantId,
-  secondaryCoachStaffId: string,
+  primaryCoachStaffId: string | undefined,
+  secondaryCoachStaffId: string | undefined,
 ): Promise<void> {
-  if (!secondaryCoachStaffId) return;
-  const pastSession = await adminPool.query<{ id: string; coach_id: string | null }>(
-    `select id, coach_id from sessions where tenant_id = $1 and session_date < current_date
-     and status <> 'cancelled' order by session_date desc limit 1`,
-    [tenantId],
+    if (!primaryCoachStaffId || !secondaryCoachStaffId) return;
+  // Find a past Morning Squad session. The substitution is
+  // specific enough to be a single session — a single swap, not a
+  // blanket replacement of every coach.
+  const pastSession = await adminPool.query<{ id: string }>(
+    `select s.id from sessions s
+     join batches b on b.id = s.batch_id
+     where s.tenant_id = $1 and s.session_date < current_date
+       and s.coach_id = $2 and b.name = 'Morning Squad'
+       and s.session_date = (
+         select max(s2.session_date) from sessions s2
+         where s2.tenant_id = $1 and s2.coach_id = $2
+           and s2.session_date < current_date
+       )
+     limit 1`,
+    [tenantId, primaryCoachStaffId],
   );
-  if (pastSession.rows.length === 0) return;
+  if (pastSession.rows.length === 0) {
+    console.log(`substitution: no past Morning Squad session with primary coach found`);
+    return;
+  }
   const sessionId = pastSession.rows[0].id;
-  const originalCoachId = pastSession.rows[0].coach_id;
-  if (!originalCoachId || originalCoachId === secondaryCoachStaffId) return;
-  // Only apply the substitution if the session still has the original
-  // coach — that way re-running the seed doesn't drift the coach
-  // assignment arbitrarily.
   const result = await adminPool.query(
     `update sessions set coach_id = $1, updated_at = now()
      where id = $2 and coach_id = $3`,
-    [secondaryCoachStaffId, sessionId, originalCoachId],
+    [secondaryCoachStaffId, sessionId, primaryCoachStaffId],
   );
   if (result.rowCount && result.rowCount > 0) {
     console.log(`substitution seeded → session ${sessionId.slice(0, 8)}… coach swapped`);
@@ -755,19 +769,76 @@ async function markAttendance(
   memberId: string,
   sessionDate: string,
   status: "present" | "absent" | "late",
+  batchId?: string,
 ): Promise<void> {
   const session = await adminPool.query<{ id: string }>(
-    `select id from sessions where tenant_id = $1 and session_date = $2 limit 1`,
-    [tenantId, sessionDate],
+    batchId
+      ? `select id from sessions where tenant_id = $1 and batch_id = $2 and session_date = $3 limit 1`
+      : `select id from sessions where tenant_id = $1 and session_date = $2 limit 1`,
+    batchId ? [tenantId, batchId, sessionDate] : [tenantId, sessionDate],
   );
   if (session.rows.length === 0) return;
   const sessionId = session.rows[0].id;
+  // client_id must be unique per tenant. UUID v7s generated in
+  // the same millisecond share the first ~10 chars (timestamp +
+  // variant) — member_ids in a single seed run all share that
+  // prefix. Use enough of the member_id that the tenant+session+
+  // member tuple is genuinely unique.
+  const clientId = `seed-${sessionDate}-${sessionId.slice(0, 8)}-${memberId}`;
   await adminPool.query(
     `insert into attendance (id, tenant_id, session_id, member_id, status, client_id, marked_at)
      values (gen_random_uuid(), $1, $2, $3, $4, $5, now())
      on conflict (tenant_id, session_id, member_id) do nothing`,
-    [tenantId, sessionId, memberId, status, `seed-${sessionDate}-${memberId.slice(0, 8)}`],
+    [tenantId, sessionId, memberId, status, clientId],
   );
+}
+
+// Past sessions for the demo — the session-generator only
+// materialises future sessions; the demo needs both windows
+// populated so attendance history has something to render.
+async function ensurePastSessions(
+  tenantId: TenantId,
+  batchIdsByName: Map<string, string>,
+): Promise<void> {
+  const today = todayInZone(DEMO_TENANT.timezone);
+  const now = new Date(`${today}T00:00:00Z`);
+  let created = 0;
+  for (let d = 21; d >= 1; d--) {
+    const day = new Date(now);
+    day.setUTCDate(day.getUTCDate() - d);
+    const dateStr = day.toISOString().slice(0, 10);
+    const dow = day.getUTCDay();
+    for (const [batchName, batchId] of batchIdsByName) {
+      const spec = DEMO_BATCHES.find((b) => b.name === batchName);
+      if (!spec || !spec.daysOfWeek.includes(dow)) continue;
+      if (spec.startsInDays) continue;
+      const existing = await adminPool.query<{ id: string }>(
+        "select id from sessions where tenant_id = $1 and batch_id = $2 and session_date = $3",
+        [tenantId, batchId, dateStr],
+      );
+      if (existing.rows.length > 0) continue;
+      const endTime = addHour(spec.startTime);
+      const coachIdRow = await adminPool.query<{ coach_id: string }>(
+        "select coach_id from batches where id = $1",
+        [batchId],
+      );
+      const coachId = coachIdRow.rows[0]?.coach_id ?? null;
+      await adminPool.query(
+        `insert into sessions (id, tenant_id, batch_id, session_date, starts_at, ends_at, status, coach_id)
+         values (gen_random_uuid(), $1, $2, $3, $4, $5, 'held', $6)`,
+        [
+          tenantId,
+          batchId,
+          dateStr,
+          `${dateStr}T${spec.startTime}:00Z`,
+          `${dateStr}T${endTime}:00Z`,
+          coachId,
+        ],
+      );
+      created++;
+    }
+  }
+  if (created > 0) console.log(`past sessions materialised → ${created}`);
 }
 
 async function ensureAttendanceHistory(
@@ -777,8 +848,8 @@ async function ensureAttendanceHistory(
 ): Promise<void> {
   const today = todayInZone(DEMO_TENANT.timezone);
 
-  // Get active members per batch (the ones enrolled). We'll mark
-  // attendance for them across the past 21 days, skipping cancelled.
+  await ensurePastSessions(tenantId, batchIdsByName);
+
   const batchMemberMap = new Map<string, string[]>();
   for (const b of Array.from(batchIdsByName.keys())) {
     const batchId = batchIdsByName.get(b);
@@ -790,32 +861,21 @@ async function ensureAttendanceHistory(
     batchMemberMap.set(b, enrolled.rows.map((r) => r.member_id));
   }
 
-  // For the past 21 days, mark attendance for sessions that
-  // actually exist for each batch. Use a deterministic mix of
-  // present/absent/late so the dashboard and member-detail pages
-  // show varied percentages.
   const now = new Date(`${today}T00:00:00Z`);
   for (let d = 21; d >= 1; d--) {
     const day = new Date(now);
     day.setUTCDate(day.getUTCDate() - d);
     const dateStr = day.toISOString().slice(0, 10);
-    const dow = day.getUTCDay(); // 0 = Sunday
-    for (const [batchName, _batchId] of batchIdsByName) {
-      void _batchId;
-      // Match the batch's day-of-week (we know what we set in
-      // DEMO_BATCHES above).
+    const dow = day.getUTCDay();
+    for (const [batchName, batchId] of batchIdsByName) {
       const spec = DEMO_BATCHES.find((b) => b.name === batchName);
       if (!spec || !spec.daysOfWeek.includes(dow)) continue;
+      if (spec.startsInDays) continue;
 
       const memberIds = batchMemberMap.get(batchName) ?? [];
       for (const memberId of memberIds) {
-        // Deterministic per-member, per-day status.
-        // 80% present, 12% absent, 8% late — but two members
-        // (AWS-002 Aaradhya, JRS-007 Ishaan) are flagged as
-        // "low attendance" so they drop ~half their sessions,
-        // visible in the needs-attention list and member-detail.
         const isLowAttendance =
-          memberId.includes("AWS-002".toLowerCase()) ||
+          members.find((m) => m.fullName === "Aaradhya Iyer")?.memberId === memberId ||
           members.find((m) => m.fullName === "Ishaan Verma")?.memberId === memberId;
         const r = hash01(`${memberId}-${dateStr}`);
         const status: "present" | "absent" | "late" = isLowAttendance
@@ -829,7 +889,7 @@ async function ensureAttendanceHistory(
             : r < 0.20
               ? "absent"
               : "present";
-        await markAttendance(tenantId, memberId, dateStr, status);
+        await markAttendance(tenantId, memberId, dateStr, status, batchId);
       }
     }
   }
@@ -1063,8 +1123,8 @@ async function main() {
   await ensureAttendanceHistory(tenantId, members, batchIdsByName);
 
   // R.1 — substitution on a past session.
-  if (secondaryCoachStaffId) {
-    await ensureSubstitution(tenantId, secondaryCoachStaffId);
+  if (primaryCoachStaffId && secondaryCoachStaffId) {
+    await ensureSubstitution(tenantId, primaryCoachStaffId, secondaryCoachStaffId);
   }
 
   // R.5 — waitlist on Morning Masters.
