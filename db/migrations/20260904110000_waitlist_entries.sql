@@ -48,3 +48,4 @@ create policy waitlist_entries_tenant_isolation
   with check (tenant_id::text = current_setting('app.tenant_id', true));
 
 grant insert, update, delete, select on waitlist_entries to app_user;
+-- gate-reports-verify: trivial change to trigger agent-protected-paths workflow
