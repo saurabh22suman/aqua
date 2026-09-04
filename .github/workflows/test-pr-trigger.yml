@@ -1,0 +1,10 @@
+name: test-pr-trigger
+
+on:
+  pull_request:
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "PR trigger works"
