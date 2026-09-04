@@ -82,7 +82,10 @@ export function EnquiriesBoard({
       <ul data-testid="enquiries-list">
         {enquiries.length === 0 ? (
           <li className="rounded-ctl border border-line bg-paper px-4 py-8 text-center">
-            <p className="text-[13px] text-ink-3">No enquiries yet.</p>
+            <p className="text-[14px] font-medium">No enquiries yet</p>
+            <p className="mt-1 text-[12.5px] text-ink-3">
+              Capture a walk-in, phone call, or online lead above — name and source only at first contact.
+            </p>
           </li>
         ) : (
           enquiries.map((e) => (
