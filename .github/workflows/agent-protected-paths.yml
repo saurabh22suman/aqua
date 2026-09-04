@@ -33,7 +33,7 @@ on:
   pull_request:
 
 jobs:
-  protected-paths:
+  agent-protected-paths:
     runs-on: ubuntu-latest
     permissions:
       contents: read
