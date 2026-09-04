@@ -681,10 +681,9 @@ async function ensureHolidays(tenantId: TenantId): Promise<void> {
 // R.5 — one waitlist entry on the near-empty Morning Masters batch.
 async function ensureWaitlist(
   tenantId: TenantId,
-  _batchId: string,
+  batchId: string,
   memberId: string,
 ): Promise<void> {
-  void _batchId;
   const existing = await adminPool.query<{ id: string }>(
     `select id from waitlist_entries where tenant_id = $1 and batch_id = $2 and member_id = $3 and status = 'waiting'`,
     [tenantId, batchId, memberId],
