@@ -65,7 +65,7 @@ export function RemoveSampleDataButton({
         {error ? (
           <p
             role="alert"
-            className="rounded-ctl border border-late bg-late-soft px-3 py-2 text-[13px] text-late"
+            className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
           >
             {error}
           </p>
@@ -73,7 +73,7 @@ export function RemoveSampleDataButton({
         {done ? (
           <p
             role="status"
-            className="rounded-ctl border border-good bg-good-soft px-3 py-2 text-[13px] text-good"
+            className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
           >
             Removed {Object.values(done.counts).reduce((a, b) => a + b, 0)} sample rows.
           </p>

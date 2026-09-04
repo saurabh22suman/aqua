@@ -152,7 +152,7 @@ export function ProgramsBatchesBoard({
                     type="button"
                     onClick={() => saveProgram(p.id)}
                     disabled={busyProgram || !editingProgramName.trim()}
-                    className="h-8 w-8 grid place-items-center rounded-ctl text-good"
+                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-2"
                     aria-label="Save program"
                     data-testid={`save-program-${p.id}`}
                   >
@@ -182,7 +182,7 @@ export function ProgramsBatchesBoard({
                       <button
                         type="button"
                         onClick={() => removeProgram(p.id)}
-                        className="text-[12px] font-medium text-late"
+                        className="text-[12px] font-medium text-ink-2"
                         data-testid={`confirm-delete-program-${p.id}`}
                       >
                         Confirm
@@ -200,7 +200,7 @@ export function ProgramsBatchesBoard({
                       type="button"
                       onClick={() => setConfirmDeleteProgram(p.id)}
                       aria-label={`Delete ${p.name}`}
-                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-late"
+                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -227,7 +227,7 @@ export function ProgramsBatchesBoard({
             Add
           </button>
         </div>
-        {programError ? <p className="mt-1 text-[12px] text-late">{programError}</p> : null}
+        {programError ? <p className="mt-1 text-[12px] text-ink-3">{programError}</p> : null}
       </section>
 
       <section>
@@ -271,7 +271,7 @@ export function ProgramsBatchesBoard({
                       <button
                         type="button"
                         onClick={() => removeBatch(b.id)}
-                        className="text-[12px] font-medium text-late"
+                        className="text-[12px] font-medium text-ink-2"
                         data-testid={`confirm-delete-batch-${b.id}`}
                       >
                         Confirm
@@ -289,7 +289,7 @@ export function ProgramsBatchesBoard({
                       type="button"
                       onClick={() => setConfirmDeleteBatch(b.id)}
                       aria-label={`Delete ${b.name}`}
-                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-late flex-none"
+                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2 flex-none"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -299,7 +299,7 @@ export function ProgramsBatchesBoard({
             </li>
           ))}
         </ul>
-        {batchError ? <p className="mt-1 text-[12px] text-late">{batchError}</p> : null}
+        {batchError ? <p className="mt-1 text-[12px] text-ink-3">{batchError}</p> : null}
 
         {programs.length === 0 ? (
           <p className="mt-3 text-[13px] text-ink-3">Add a program first.</p>

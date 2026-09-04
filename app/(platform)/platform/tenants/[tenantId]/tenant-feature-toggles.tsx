@@ -86,7 +86,7 @@ export function TenantFeatureToggles({
       {error ? (
         <p
           role="alert"
-          className="mb-3 rounded-ctl border border-late bg-late-soft px-3 py-2 text-[13px] text-late"
+          className="mb-3 rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
         >
           {error}
         </p>

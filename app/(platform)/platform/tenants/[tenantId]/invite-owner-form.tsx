@@ -92,7 +92,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
       {status?.kind === "ok" ? (
         <p
           role="status"
-          className="rounded-ctl border border-good bg-good-soft px-3 py-2 text-[13px] text-good"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
         >
           {status.wasNewUser
             ? "Owner invited — user created, membership pending phone confirmation."
@@ -102,7 +102,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
       {status?.kind === "error" ? (
         <p
           role="alert"
-          className="rounded-ctl border border-late bg-late-soft px-3 py-2 text-[13px] text-late"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
         >
           {status.message}
         </p>
