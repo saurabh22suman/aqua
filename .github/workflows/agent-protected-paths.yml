@@ -68,6 +68,7 @@ jobs:
               db/migrations/*) echo "::error file=$file::Touches db/migrations/**."; FAILED=1 ;;
               lib/auth/*) echo "::error file=$file::Touches lib/auth/**."; FAILED=1 ;;
               lib/money/*) echo "::error file=$file::Touches lib/money/**."; FAILED=1 ;;
+              db/schema/consent.ts|lib/services/consent|lib/services/consent.ts|lib/actions/consent|lib/actions/consent.ts) echo "::error file=$file::Touches a consent-related path."; FAILED=1 ;;
               .github/workflows/agent-protected-paths.yml) echo "::error file=$file::Touches the gate workflow itself."; FAILED=1 ;;
               tests/tier1/agent-protected-paths.test.ts) echo "::error file=$file::Touches the gate's companion test."; FAILED=1 ;;
             esac
