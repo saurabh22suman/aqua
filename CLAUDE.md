@@ -18,6 +18,15 @@ Postgres · Drizzle · Better Auth · pg-boss · Razorpay · WhatsApp.
     rule, not a platform guarantee. Treat it as absolute regardless.
 - `main` being green is what makes auto-deploy from `main` safe. Treat a
   broken `main` as an incident, not a follow-up task.
+- **Self-merge is suspended** (F1). Every PR merge comes to the human
+  until `.github/workflows/agent-protected-paths.yml` has been verified
+  end-to-end against a real PR — see `docs/five-day-work-guide.md`
+  §"Self-merge suspension". The rule was memory-dependent before; it
+  failed 3 for 3 in the audit window. The workflow + the companion
+  test (`tests/tier1/agent-protected-paths.test.ts`) are the mechanical
+  replacement. The label `human-approved-merge` is required for any PR
+  touching `db/migrations/**`, `lib/auth/**`, `lib/money/**`, or
+  consent-related paths, and the agent's token cannot apply it.
 
 ## Absolute rules
 Annotated with whether each is mechanically checked — an agent
