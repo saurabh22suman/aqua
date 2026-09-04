@@ -106,6 +106,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-activity.test.ts",
   "tests/tier1/owner-reports.test.ts",
   "tests/tier1/permission-matrix.test.ts",
+  "tests/tier1/coach-substitution.test.ts",
   "tests/tier1/coach-conflicts.test.ts",
   "tests/tier1/presets-r22.test.ts",
   "tests/tier1/batch-transfer.test.ts",
