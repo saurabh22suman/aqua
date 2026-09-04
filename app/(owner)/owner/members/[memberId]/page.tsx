@@ -5,6 +5,7 @@ import { getMemberDetailAction } from "@/lib/actions/people";
 import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
+import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 
 export default async function MemberDetailPage({
@@ -47,6 +48,16 @@ export default async function MemberDetailPage({
       </div>
 
       <MemberEnrolmentPanel memberId={member.memberId} />
+
+      <ParentLinkPanel
+        memberId={member.memberId}
+        memberName={member.fullName}
+        primaryGuardianName={
+          Array.isArray(member.guardians) && member.guardians.length > 0
+            ? member.guardians[0]!.fullName
+            : null
+        }
+      />
 
       <dl className="mt-4 rounded-card border border-line bg-paper p-3.5 space-y-2 text-[13px]">
         <div className="flex justify-between">

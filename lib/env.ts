@@ -40,6 +40,12 @@ const envSchema = z
       emptyAsUndefined,
       z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
     ),
+    // C-45 parent-page link signing key. Same shape as BETTER_AUTH_SECRET
+    // (HS256) but a separate secret so rotation doesn't invalidate parents'
+    // active 7-day links when better-auth rotates its own. Required in
+    // production for the same reason — the parent page is a live
+    // surface, not a build-only one.
+    PARENT_LINK_SECRET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
   })
   .superRefine((val, ctx) => {
     // `next build` forces NODE_ENV=production for the child process that
@@ -59,6 +65,17 @@ const envSchema = z
         path: ["BETTER_AUTH_SECRET"],
         message:
           "required in production — without it, better-auth throws on every request (confirmed: send-otp returns 500)",
+      });
+    }
+    // Same rule for the parent-page link secret: the page renders live,
+    // not at build time. A missing secret here would 500 every /p/[token]
+    // request in production.
+    if (requireProductionVars && !val.PARENT_LINK_SECRET) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PARENT_LINK_SECRET"],
+        message:
+          "required in production — without it, /p/[token] returns 500 on every render",
       });
     }
     if (requireProductionVars && !val.BETTER_AUTH_URL) {
@@ -109,6 +126,7 @@ export type ParsedEnv = {
   APP_LOGIN_PASSWORD?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  PARENT_LINK_SECRET?: string;
   NODE_ENV: "development" | "test" | "production";
   DEMO_MODE: boolean;
 };
@@ -131,9 +149,10 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
     DATABASE_URL: parsed.data.DATABASE_URL,
     MIGRATION_DATABASE_URL:
       parsed.data.MIGRATION_DATABASE_URL ?? parsed.data.DATABASE_URL,
-    APP_LOGIN_PASSWORD: parsed.data.APP_LOGIN_PASSWORD,
-    BETTER_AUTH_SECRET: parsed.data.BETTER_AUTH_SECRET,
-    BETTER_AUTH_URL: parsed.data.BETTER_AUTH_URL,
+  APP_LOGIN_PASSWORD: parsed.data.APP_LOGIN_PASSWORD,
+  BETTER_AUTH_SECRET: parsed.data.BETTER_AUTH_SECRET,
+  BETTER_AUTH_URL: parsed.data.BETTER_AUTH_URL,
+  PARENT_LINK_SECRET: parsed.data.PARENT_LINK_SECRET,
     NODE_ENV: parsed.data.NODE_ENV,
     DEMO_MODE: parsed.data.DEMO_MODE,
   };

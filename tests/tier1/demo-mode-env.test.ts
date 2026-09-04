@@ -36,6 +36,7 @@ describe("parseEnv — DEMO_MODE boot-fail", () => {
       // does not flip the boot-fail on top of those.
       BETTER_AUTH_SECRET: "x".repeat(32),
       BETTER_AUTH_URL: "https://aqua.example.com",
+      PARENT_LINK_SECRET: "x".repeat(32),
     });
     expect(parsed.DEMO_MODE).toBe(false);
     expect(parsed.NODE_ENV).toBe("production");
