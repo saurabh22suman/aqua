@@ -72,6 +72,24 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 
 - [ ] **Apply branch protection on `main`** — follow `docs/branch-protection.md` and verify with the GitHub API afterwards (`gh api repos/saurabh22suman/aqua/branches/main/protection` should return `require_pr: true`, `enforce_admins.enabled: true`, and `required_status_checks.contexts` containing `ci`). Until this is true, the merge discipline above is a documentation rule, not a platform guarantee; the diff between the two states is whether direct pushes are blocked by GitHub or by self-restraint.
 
+### Self-merge suspension — F1
+
+**Status: SUSPENDED pending a mechanical gate.** Everything that would normally self-merge comes to the human until the gate below is verified end-to-end on a real PR.
+
+**Why:** the original rule was memory-dependent ("the agent opens PRs, the human merges them"). That rule failed **3 for 3** in the audit window. Memory-dependent rules decay — the agent eventually merged a schema change without the human looking at it. Every other mechanical guard held; this one didn't because there was no guard.
+
+**The mechanical gate** (landed alongside this rule):
+
+- `.github/workflows/agent-protected-paths.yml` runs on every `pull_request`.
+- It computes the files the PR touches. If any is under a protected path (`db/migrations/**`, `lib/auth/**`, `lib/money/**`, `db/schema/consent.ts`, `db/schema/memberships.ts`, anything under `lib/services/{consent,membership,billing,payment}/`, anything under `lib/actions/{consent,billing,payment}/`), the PR must carry the `human-approved-merge` label or the workflow fails.
+- The workflow always treats itself and `tests/tier1/agent-protected-paths.test.ts` as protected, so the gate cannot be edited from inside a single PR without also tripping itself.
+- The agent's GitHub token does not have permission to apply the `human-approved-merge` label. The human applies it; the agent cannot.
+- `tests/tier1/agent-protected-paths.test.ts` pins the contract from five angles (workflow exists, triggers on PR, names all four protected path families, protects itself and this test, uses the exact label name, reads the label via `gh api`). A green run is the only mechanical barrier against a future "let me rename the label / drop a path" edit.
+
+**When self-merge resumes:** once the gate has been verified end-to-end against a real PR touching one of the protected paths — failed red without the label, passed green with the label — the human records the verification in this section and self-merge is restored for everything the gate does not block (i.e. everything outside the protected paths).
+
+**Until then:** every merge, on every path, comes to the human. No exceptions.
+
 ---
 
 ## Phase 1 — Platform foundation
