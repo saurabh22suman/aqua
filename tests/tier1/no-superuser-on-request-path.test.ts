@@ -43,6 +43,7 @@ import { describe, expect, it } from "vitest";
 const ALLOWLIST = new Set([
   "db/migrate.ts",
   "db/migrations/20260904090000_makeup_credits.sql",
+  "db/migrations/20260904100000_tenant_holidays.sql",
   "db/bootstrap-roles.ts",
   "db/reset.ts",
   "db/deploy.ts",
@@ -106,6 +107,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/staff-invitations.test.ts",
   "tests/tier1/platform-activity.test.ts",
   "tests/tier1/owner-reports.test.ts",
+  "tests/tier1/holidays.test.ts",
   "tests/tier1/permission-matrix.test.ts",
   "tests/tier1/makeup.test.ts",
   "tests/tier1/coach-substitution.test.ts",
