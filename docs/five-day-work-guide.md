@@ -67,6 +67,7 @@ Most are mechanically enforced and will stop you. These are the ones that are **
 - Every list gets a designed empty state with a verb CTA, built with the list.
 - Scope discipline: build what the task asks, nothing adjacent.
 - **When you find a bug, search for a second instance of the same shape before closing.** Seven for seven in this codebase so far.
+- **A task is not done until the behaviour its text describes is reachable by the user it names.** A service function with no surface is half a task — the backend exists, the user can't act on it, and the next agent inherits a checked box that doesn't reflect reality. F3 audit response (Sep 2026): the seven R.1–R.7 tasks shipped backend only; their surfaces were promised in the task text and never built. Re-marking them done without UI would be the same class of failure.
 
 ### Pre-flight (before Phase 1)
 
@@ -165,6 +166,16 @@ Everything here reads data that already exists. No money.
 Forty-two tasks at working speed is under five days. The reserve is therefore expanded to **thirty-five items**, ordered by dependency and grouped by coherent unit. **None of these may require a fee rule** — that is the filter. If a task needs one, it does not go in. Tasks that touch messaging do so via in-app delivery only (the WhatsApp chain is excluded).
 
 ### Coach integrity and scheduling
+
+> **F3 audit (Sep 2026):** R.1 through R.7 below were previously
+> marked done and shipped backend only. The audit found that none
+> of the surfaces the task text promises (a coach sees a conflict,
+> an owner sees a waitlist, etc.) exist in the product. They are
+> **un-marked** below. New standing rule recorded in this guide:
+> a task is not done until the behaviour its text describes is
+> reachable by the user it names — a service function with no
+> surface is half a task. The UI for R.1 and R.2 lands in this
+> audit response; R.3–R.7 land in subsequent tasks.
 
 - [ ] **R.1** Coach substitution — records who actually took the session. `C-20`. **Critical for `V-31` payout computation**, which reads `sessions.coach_id`. If substitution does not write the substitute, the wrong coach is paid and the bug is invisible from the register surface. `GREEN`
 - [ ] **R.2** Coach conflict detection — a coach double-booked across overlapping sessions warns on assignment, with the warning emitted before the save, not after. `C-21`. `GREEN`
