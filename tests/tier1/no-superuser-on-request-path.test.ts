@@ -42,6 +42,7 @@ import { describe, expect, it } from "vitest";
 //                            queueing — still just a driver script
 const ALLOWLIST = new Set([
   "db/migrate.ts",
+  "db/migrations/20260904090000_makeup_credits.sql",
   "db/bootstrap-roles.ts",
   "db/reset.ts",
   "db/deploy.ts",
@@ -106,6 +107,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-activity.test.ts",
   "tests/tier1/owner-reports.test.ts",
   "tests/tier1/permission-matrix.test.ts",
+  "tests/tier1/makeup.test.ts",
   "tests/tier1/coach-substitution.test.ts",
   "tests/tier1/coach-conflicts.test.ts",
   "tests/tier1/presets-r22.test.ts",
