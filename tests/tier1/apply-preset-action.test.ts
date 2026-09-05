@@ -63,6 +63,13 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — revalidatePath is called by applyPresetAction on success. In
+// unit tests there is no static-generation store, so revalidatePath
+// throws — mock it as a no-op.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
 // H1 — actions take FormData. applyPresetAction redirects on success;
 // the mock below turns redirect() into a thrown RedirectSignal.
 class RedirectSignal extends Error {

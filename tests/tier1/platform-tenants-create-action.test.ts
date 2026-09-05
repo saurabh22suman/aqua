@@ -38,6 +38,13 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — createTenantAction calls revalidatePath on success. In unit
+// tests there is no static-generation store, so revalidatePath
+// throws — mock it as a no-op.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const SLUG_PREFIX = `act-${RUN}`;

@@ -21,7 +21,7 @@ import { asUserId } from "@/lib/ids";
 //                          to useActionState for inline display.
 //
 // Standing rule: (1) parse, (2) platform-session permission check,
-// (3) service. H1 — input is FormData; the presetKey comes in via
+// (3) service. H1 — input is FormData; the preset key comes in via
 // a hidden field so the server re-validates it (a tampered cookie
 // replier can't target a different preset than the page indicates).
 

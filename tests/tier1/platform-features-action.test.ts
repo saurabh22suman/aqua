@@ -23,6 +23,13 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — updateFeatureAction calls revalidatePath() to invalidate the
+// page cache. In a unit-test context there is no static-generation
+// store, so revalidatePath throws — mock it as a no-op.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
 // H1 — actions take FormData. The feature key arrives as a hidden
 // form field; build the FormData with the key alongside the inputs.
 function fd(featureKey: string, obj: Record<string, string>): FormData {

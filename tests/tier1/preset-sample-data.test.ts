@@ -57,6 +57,16 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — actions that mutate (removeSampleDataAction et al.) call
+// revalidatePath() to invalidate the page cache. In a unit-test
+// context there is no static-generation store, so revalidatePath
+// throws — mock it as a no-op. Tests still verify the action's
+// return value and DB state; cache invalidation is Next.js's job
+// in production.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
 async function loginActor(): Promise<void> {
   const sessionId = uuidv7();
   const token = uuidv7() + uuidv7().replace(/-/g, "");
