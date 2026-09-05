@@ -1,11 +1,18 @@
 "use server";
 
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   createTenantInput,
   createTenant,
   type CreateTenantResult,
 } from "@/db/platform-tenant-create";
+
+// Re-export so the form component (which calls the action via
+// useActionState) can import CreateTenantResult without reaching
+// into db/ directly. db/ is server-only; the form is a client island.
+export type { CreateTenantResult };
 import {
   transitionInput,
   transitionTenantStatus,
@@ -16,9 +23,16 @@ import { asUserId, asTenantId } from "@/lib/ids";
 
 // Phase 1.5 + 1.6 — server actions for the operator surface:
 // createTenantAction backs /platform/tenants/new; transitionTenantStatus
-// backs the controls on /platform/tenants/[tenantId]. Both open
-// with the (1) zod-parse preamble, (2) platform-session permission
-// check — the standing rule every Server Action must follow.
+// backs the controls on /platform/tenants/[tenantId].
+//
+// createTenantAction takes FormData (H1: pre-hydration submit goes
+// via POST to the action endpoint, not via native GET with form
+// fields in the URL). transitionTenantStatusAction keeps its
+// (tenantId, input) signature because the callsite is button-driven
+// (no <form> element); it is not vulnerable to the URL leak.
+//
+// Both open with the (1) zod-parse preamble, (2) platform-session
+// permission check — the standing rule every Server Action must follow.
 
 const createFormInputSchema = z.object({
   name: z.string(),
@@ -34,12 +48,21 @@ const createFormInputSchema = z.object({
 export type CreateTenantFormInput = z.input<typeof createFormInputSchema>;
 
 export async function createTenantAction(
-  input: unknown,
+  _prev: unknown,
+  formData: FormData,
 ): Promise<CreateTenantResult> {
   // (1) parse — required preamble. Form posts `locationIsPrimary`
-  // as a string when ticked. Coerce and pass into the service
-  // schema, which is the source of truth for validation.
-  const surface = createFormInputSchema.safeParse(input);
+  // as a string when ticked; coerce.
+  const surface = createFormInputSchema.safeParse({
+    name: String(formData.get("name") ?? "").trim(),
+    slug: String(formData.get("slug") ?? "").trim(),
+    timezone: String(formData.get("timezone") ?? "").trim(),
+    planKey: String(formData.get("planKey") ?? "").trim(),
+    currency: String(formData.get("currency") ?? "").trim().toUpperCase(),
+    gstin: String(formData.get("gstin") ?? "").trim() || undefined,
+    locationName: String(formData.get("locationName") ?? "").trim(),
+    locationIsPrimary: formData.get("locationIsPrimary") === "on",
+  });
   if (!surface.success) {
     return {
       kind: "error",
@@ -53,8 +76,6 @@ export async function createTenantAction(
   };
 
   // (2) permission check — platform session, fully past 2FA.
-  // Anything else (unauthenticated, half-authenticated, expired,
-  // suspended) routes back to the operator through login.
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") {
     return {
@@ -64,14 +85,21 @@ export async function createTenantAction(
     };
   }
 
-  return createTenant(normalised, { actorId: asUserId(status.userId) });
+  const result = await createTenant(normalised, { actorId: asUserId(status.userId) });
+  if (result.kind === "ok") {
+    redirect(`/platform/tenants/${result.tenantId}`);
+  }
+  return result;
 }
 
 // ---- Phase 1.6 — status transitions ----
+//
+// NOT a Server Action form-pattern call. status-transitions.tsx is
+// button-driven (a modal confirm button calls the action via JS);
+// there is no <form> element, so this action is not vulnerable to
+// the pre-hydration URL leak. The signature stays
+// (tenantId, input) so the existing callsite keeps working.
 
-// Surface schema for the status-controls form. tenantId arrives
-// from the route parameter on the page; never trust the form to
-// supply it (a hidden field is just a cookie replier away).
 const transitionFormInputSchema = z.object({
   targetStatus: z.enum(["active", "suspended", "churned"]),
   reason: z.string().optional(),
@@ -107,7 +135,11 @@ export async function transitionTenantStatusAction(
     };
   }
 
-  return transitionTenantStatus(asTenantId(tenantId), normalised, {
+  const result = await transitionTenantStatus(asTenantId(tenantId), normalised, {
     actorId: asUserId(status.userId),
   });
+  if (result.kind === "ok") {
+    revalidatePath(`/platform/tenants/${tenantId}`);
+  }
+  return result;
 }

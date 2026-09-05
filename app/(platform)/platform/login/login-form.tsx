@@ -1,34 +1,26 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import {
   loginPlatformAction,
   type PlatformLoginResult,
 } from "@/lib/actions/platform-auth";
 
+// H1 — pre-hydration submit goes to the server action endpoint via
+// POST (the action's own URL), not to the current URL via GET. The
+// password never appears in the query string, regardless of whether
+// React has hydrated. useActionState lets the form render the action's
+// returned error inline; on success the action calls redirect() and
+// the browser navigates.
 export function PlatformLoginForm() {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    const formData = new FormData(e.currentTarget);
-    const result: PlatformLoginResult = await loginPlatformAction({
-      email: String(formData.get("email") ?? ""),
-      password: String(formData.get("password") ?? ""),
-    });
-    if (result.kind === "needs_totp") {
-      router.push("/platform/verify");
-      return;
-    }
-    if (result.kind === "error") setError(result.message);
-  }
+  const [state, formAction, isPending] = useActionState(loginPlatformAction, {
+    kind: "error",
+    message: "",
+  } as PlatformLoginResult);
+  const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form action={formAction} method="post" className="space-y-4">
       <Field
         label="Email"
         name="email"
@@ -54,7 +46,6 @@ export function PlatformLoginForm() {
       <button
         type="submit"
         disabled={isPending}
-        onClick={() => startTransition(() => undefined)}
         className="w-full rounded-pill py-3 text-[15px] font-semibold text-white bg-[var(--accent)] transition-colors duration-150 disabled:opacity-60"
       >
         {isPending ? "Signing in…" : "Continue"}

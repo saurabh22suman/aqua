@@ -23,6 +23,15 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — actions take FormData. The feature key arrives as a hidden
+// form field; build the FormData with the key alongside the inputs.
+function fd(featureKey: string, obj: Record<string, string>): FormData {
+  const f = new FormData();
+  f.set("key", featureKey);
+  for (const [k, v] of Object.entries(obj)) f.set(k, v);
+  return f;
+}
+
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const PREFIX = `feat-act-${RUN}`;
@@ -129,11 +138,11 @@ describe("updateFeatureAction", () => {
     const { token } = await provisionActiveAdmin(`ok-${Date.now().toString(36)}`);
     cookieJar.set("platform_session", token);
 
-    const result = await updateFeatureAction(`${PREFIX}-a`, {
+    const result = await updateFeatureAction(null, fd(`${PREFIX}-a`, {
       name: "Renamed",
       category: "core",
       status: "beta",
-    });
+    }));
     expect(result.kind).toBe("ok");
     if (result.kind !== "ok") return;
 
@@ -151,11 +160,11 @@ describe("updateFeatureAction", () => {
 
   it("returns invalid when the cookie is missing", async () => {
     cookieJar.delete("platform_session");
-    const result = await updateFeatureAction(`${PREFIX}-a`, {
+    const result = await updateFeatureAction(null, fd(`${PREFIX}-a`, {
       name: "x",
       category: "core",
       status: "ga",
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -165,24 +174,24 @@ describe("updateFeatureAction", () => {
     const { token } = await provisionActiveAdmin(`bad-${Date.now().toString(36)}`);
     cookieJar.set("platform_session", token);
 
-    const result = await updateFeatureAction(`${PREFIX}-b`, {
+    const result = await updateFeatureAction(null, fd(`${PREFIX}-b`, {
       name: "B",
       category: "core",
       // Force a string past the surface-schema enum; the action's
       // safeParse should reject it before any write.
       status: "ga" as unknown as "beta",
-    });
+    }));
     // The first arg is an enum of "ga" | "beta" | "internal" — passing a
     // valid value but with the type cast works at runtime; to exercise
     // the invalid path the test needs an actually-bad value, so use the
     // null edge below as a stronger probe of the same path.
     expect(result.kind).toBe("ok");
 
-    const r2 = await updateFeatureAction(`${PREFIX}-b`, {
+    const r2 = await updateFeatureAction(null, fd(`${PREFIX}-b`, {
       name: "B",
       category: "core",
       status: "shipped" as unknown as "ga",
-    });
+    }));
     expect(r2.kind).toBe("error");
     if (r2.kind !== "error") return;
     expect(r2.code).toBe("invalid");
@@ -194,11 +203,11 @@ describe("updateFeatureAction", () => {
     const { token } = await provisionActiveAdmin(`missing-${Date.now().toString(36)}`);
     cookieJar.set("platform_session", token);
 
-    const result = await updateFeatureAction(`${PREFIX}-does-not-exist`, {
+    const result = await updateFeatureAction(null, fd(`${PREFIX}-does-not-exist`, {
       name: "x",
       category: "core",
       status: "ga",
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("not_found");
@@ -210,11 +219,11 @@ describe("updateFeatureAction", () => {
     const { token } = await provisionActiveAdmin(`empty-${Date.now().toString(36)}`);
     cookieJar.set("platform_session", token);
 
-    const result = await updateFeatureAction(`${PREFIX}-a`, {
+    const result = await updateFeatureAction(null, fd(`${PREFIX}-a`, {
       name: "",
       category: "core",
       status: "ga",
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");

@@ -1,26 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import Link from "next/link";
 import {
   createTenantAction,
-  type CreateTenantFormInput,
+  type CreateTenantResult,
 } from "@/lib/actions/platform-tenants";
-import type { CreateTenantResult } from "@/db/platform-tenant-create";
 
-// Phase 1.5 — create-tenant form. Round-trips to a Server Action
-// (lib/actions/platform-tenants.ts). On success, navigates to the
-// new tenant's detail page so the operator sees the result
-// (architecture §empty state: reuses the existing 1.4 detail surface
-// immediately — a brand-new tenant has zero members and zero sessions,
-// which is the natural empty state of that page).
-//
-// The form follows the same surface patterns Phase 1.1–1.4 set:
-// white-on-paper inputs over a paper background, 16px font on inputs
-// per DESIGN.md §2 (anything smaller triggers iOS zoom-on-focus),
-// single primary action coloured via --accent, inline error pill
-// (DESIGN.md §4: errors say what to do, not what failed).
+// Phase 1.5 — create-tenant form. H1 — uses <form action={createTenantAction}>
+// rather than onSubmit. Pre-hydration submit goes via POST to the
+// action endpoint; form fields (name, slug, timezone, currency,
+// GSTIN, locationName) never appear as query-string values.
 
 type Plan = { key: string; name: string; isDefault: boolean };
 
@@ -37,41 +27,16 @@ export function NewTenantForm({
   plans: ReadonlyArray<Plan>;
   defaultPlanKey: string;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [state, formAction, isPending] = useActionState(createTenantAction, {
+    kind: "error",
+    code: "invalid",
+    message: "",
+  } as CreateTenantResult);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    const form = e.currentTarget;
-    const data = new FormData(form);
-
-    const input: CreateTenantFormInput = {
-      name: String(data.get("name") ?? "").trim(),
-      slug: String(data.get("slug") ?? "").trim(),
-      timezone: String(data.get("timezone") ?? defaultTimezone).trim(),
-      planKey: String(data.get("planKey") ?? defaultPlanKey).trim(),
-      currency: String(data.get("currency") ?? defaultCurrency)
-        .trim()
-        .toUpperCase(),
-      gstin: String(data.get("gstin") ?? "").trim() || undefined,
-      locationName: String(data.get("locationName") ?? defaultLocationName).trim(),
-      locationIsPrimary: data.get("locationIsPrimary") === "on",
-    };
-
-    startTransition(async () => {
-      const result: CreateTenantResult = await createTenantAction(input);
-      if (result.kind === "ok") {
-        router.push(`/platform/tenants/${result.tenantId}`);
-        return;
-      }
-      setError(result.message);
-    });
-  }
+  const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 space-y-6">
+    <form action={formAction} method="post" className="mt-8 space-y-6">
       <Section title="Club details" subtitle="Public-facing name and URL slug.">
         <Field label="Club name" name="name" required autoComplete="off" />
         <Field

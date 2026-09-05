@@ -1,23 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useActionState } from "react";
 import {
   upsertTenantFeatureAction,
-  type UpsertTenantFeatureFormInput,
+  type UpsertTenantFeatureResult,
 } from "@/lib/actions/platform-features";
 
 // Phase 1.8 — per-tenant feature toggle inline editor.
 //
-// Renders one row per feature the tenant's effective set contains.
-// Each row shows the resolved source (plan baseline vs operator
-// override), and exposes a tiny inline form for the three edit
-// moves: force-on, force-off, reset-to-plan.
-//
-// The row keeps the same shape as FeatureViewRow / FeatureEditRow
-// from /platform/features/feature-catalogue.tsx so an operator
-// moving between the catalogue and the tenant detail page sees
-// the same interaction language.
+// H1 — each edit row's form uses <form action={upsertTenantFeatureAction}>
+// rather than onSubmit. Pre-hydration submit goes via POST to the
+// action endpoint; the action value (force-on / force-off / reset-to-plan)
+// never appears as a query string.
 
 type FeatureSource = "plan" | "tenant_override" | "denied";
 
@@ -49,24 +44,6 @@ export function TenantFeatureToggles({
     expiresAt?: Date;
   }>;
 }) {
-  const router = useRouter();
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function submit(input: UpsertTenantFeatureFormInput) {
-    startTransition(async () => {
-      const result = await upsertTenantFeatureAction(tenantId, input);
-      if (result.kind === "ok") {
-        setEditingKey(null);
-        setError(null);
-        router.refresh();
-        return;
-      }
-      setError(result.message);
-    });
-  }
-
   if (initial.length === 0) {
     return (
       <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
@@ -82,47 +59,46 @@ export function TenantFeatureToggles({
   }
 
   return (
-    <>
-      {error ? (
-        <p
-          role="alert"
-          className="mb-3 rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-        >
-          {error}
-        </p>
-      ) : null}
-      <div className="rounded-card bg-paper border border-line overflow-hidden">
-        <ul>
-          {initial.map((f, idx) => (
-            <li
-              key={f.key}
-              className={`px-4 py-3 ${idx > 0 ? "border-t border-line" : ""}`}
-            >
-              {editingKey === f.key ? (
-                <TenantFeatureEditRow
-                  featureKey={f.key}
-                  currentSource={f.source}
-                  isPending={isPending}
-                  onCancel={() => {
-                    setEditingKey(null);
-                    setError(null);
-                  }}
-                  onSubmit={submit}
-                />
-              ) : (
-                <TenantFeatureViewRow
-                  feature={f}
-                  onEdit={() => {
-                    setEditingKey(f.key);
-                    setError(null);
-                  }}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </>
+    <div className="rounded-card bg-paper border border-line overflow-hidden">
+      <ul>
+        {initial.map((f, idx) => (
+          <li
+            key={f.key}
+            className={`px-4 py-3 ${idx > 0 ? "border-t border-line" : ""}`}
+          >
+            <TenantFeatureRow tenantId={tenantId} feature={f} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Per-row component so each row owns its own edit toggle and
+// pending/error state via useActionState.
+function TenantFeatureRow({
+  tenantId,
+  feature,
+}: {
+  tenantId: string;
+  feature: { key: string; source: FeatureSource; expiresAt?: Date };
+}) {
+  const [editing, setEditing] = useState(false);
+  if (!editing) {
+    return (
+      <TenantFeatureViewRow
+        feature={feature}
+        onEdit={() => setEditing(true)}
+      />
+    );
+  }
+  return (
+    <TenantFeatureEditRow
+      tenantId={tenantId}
+      featureKey={feature.key}
+      currentSource={feature.source}
+      onCancel={() => setEditing(false)}
+    />
   );
 }
 
@@ -163,49 +139,67 @@ function TenantFeatureViewRow({
 }
 
 function TenantFeatureEditRow({
+  tenantId,
   featureKey,
   currentSource,
-  isPending,
   onCancel,
-  onSubmit,
 }: {
+  tenantId: string;
   featureKey: string;
   currentSource: FeatureSource;
-  isPending: boolean;
   onCancel: () => void;
-  onSubmit: (input: UpsertTenantFeatureFormInput) => void;
 }) {
-  // The form posts one of three outcomes:
-  //   - force on  → mode=override, enabled=true
-  //   - force off → mode=override, enabled=false
-  //   - reset to plan → mode=clear
-  // The current state is shown above the buttons so the operator
-  // can see what they're changing FROM.
+  const [state, formAction, isPending] = useActionState(upsertTenantFeatureAction, {
+    kind: "error",
+    code: "invalid",
+    message: "",
+  } as UpsertTenantFeatureResult);
+
+  // On success, close the edit row. The action's revalidatePath()
+  // refreshes the SSR data on the next render.
+  if (state?.kind === "ok") {
+    onCancel();
+    return null;
+  }
+
+  const error = state?.kind === "error" ? state.message : null;
+
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        const form = new FormData(e.currentTarget);
-        const action = String(form.get("action") ?? "");
-        if (action === "force-on") {
-          onSubmit({ featureKey, mode: "override", enabled: true });
-        } else if (action === "force-off") {
-          onSubmit({ featureKey, mode: "override", enabled: false });
-        } else if (action === "reset-to-plan") {
-          onSubmit({ featureKey, mode: "clear", enabled: true });
-        }
-      }}
+      action={formAction}
+      method="post"
       className="space-y-3"
     >
+      <input type="hidden" name="tenantId" value={tenantId} />
+      <input type="hidden" name="featureKey" value={featureKey} />
       <p className="text-[13px] text-ink-2">
         Editing <span className="font-mono">{featureKey}</span> · currently{" "}
         <span className="font-medium">{SOURCE_LABEL[currentSource]}</span>
       </p>
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+        >
+          {error}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         <button
           type="submit"
-          name="action"
-          value="force-on"
+          name="mode"
+          value="override"
+          // H1: enabled vs disabled is a separate form field. The
+          // action reads enabled from formData. A boolean false
+          // becomes "false" string. Use a hidden input rather than
+          // a checkbox so the value is always sent.
+          onClick={(e) => {
+            const form = e.currentTarget.form;
+            if (form) {
+              const hidden = form.elements.namedItem("enabled") as HTMLInputElement | null;
+              if (hidden) hidden.value = "true";
+            }
+          }}
           disabled={isPending}
           className="rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
         >
@@ -213,8 +207,15 @@ function TenantFeatureEditRow({
         </button>
         <button
           type="submit"
-          name="action"
-          value="force-off"
+          name="mode"
+          value="override"
+          onClick={(e) => {
+            const form = e.currentTarget.form;
+            if (form) {
+              const hidden = form.elements.namedItem("enabled") as HTMLInputElement | null;
+              if (hidden) hidden.value = "false";
+            }
+          }}
           disabled={isPending}
           className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck disabled:opacity-60 transition-colors duration-150"
         >
@@ -222,8 +223,8 @@ function TenantFeatureEditRow({
         </button>
         <button
           type="submit"
-          name="action"
-          value="reset-to-plan"
+          name="mode"
+          value="clear"
           disabled={isPending || currentSource === "plan"}
           className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck disabled:opacity-40 transition-colors duration-150"
         >
@@ -238,6 +239,7 @@ function TenantFeatureEditRow({
           Cancel
         </button>
       </div>
+      <input type="hidden" name="enabled" value="true" />
     </form>
   );
 }

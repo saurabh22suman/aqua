@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import {
   platformLogin,
@@ -19,6 +20,13 @@ import {
 // (withPlatform() + the row's role column). The Server Action preamble
 // test walks the AST and asserts .parse()/.safeParse() is the FIRST
 // statement of every action. Keeping that contract intact matters.
+//
+// H1 — Server Action form pattern. loginPlatformAction and
+// verifyPlatformTotpAction now take FormData so the login / verify
+// forms can use <form action={fn}> rather than onSubmit. Pre-hydration
+// submits (cold Next.js dev compile, JS disabled, hydration race) POST
+// to the server action endpoint instead of falling through to a native
+// GET that puts the password in the URL.
 
 const loginInput = z.object({
   email: z.string().email(),
@@ -30,27 +38,28 @@ const verifyInput = z.object({
 });
 
 export type PlatformLoginResult =
-  | { kind: "ok" }
-  | { kind: "needs_totp" }
   | { kind: "error"; message: string };
 
 export async function loginPlatformAction(
-  input: unknown,
+  _prevState: unknown,
+  formData: FormData,
 ): Promise<PlatformLoginResult> {
-  const parsed = loginInput.safeParse(input);
+  const parsed = loginInput.safeParse({
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+  });
   if (!parsed.success) {
     return { kind: "error", message: "Enter a valid email and password." };
   }
   try {
     const result = await platformLogin(parsed.data);
-    if (result.kind === "second_factor_required") {
-      await writePlatformSessionCookie(result.sessionToken);
-      return { kind: "needs_totp" };
+    if (result.kind !== "second_factor_required") {
+      // fully_authenticated cannot happen here — platformLogin refuses
+      // to mark a session fully_authenticated; that is platformVerifyTotp's
+      // job. Treat as unreachable but type-narrow defensively.
+      return { kind: "error", message: "Unexpected login state." };
     }
-    // fully_authenticated cannot happen here — platformLogin refuses
-    // to mark a session fully_authenticated; that is platformVerifyTotp's
-    // job. Treat as unreachable but type-narrow defensively.
-    return { kind: "error", message: "Unexpected login state." };
+    await writePlatformSessionCookie(result.sessionToken);
   } catch (err) {
     if (err instanceof PlatformAuthError) {
       if (err.code === "no_totp") {
@@ -67,16 +76,19 @@ export async function loginPlatformAction(
     }
     throw err;
   }
+  redirect("/platform/verify");
 }
 
 export type PlatformVerifyResult =
-  | { kind: "ok" }
   | { kind: "error"; message: string };
 
 export async function verifyPlatformTotpAction(
-  input: unknown,
+  _prevState: unknown,
+  formData: FormData,
 ): Promise<PlatformVerifyResult> {
-  const parsed = verifyInput.safeParse(input);
+  const parsed = verifyInput.safeParse({
+    code: String(formData.get("code") ?? ""),
+  });
   if (!parsed.success) {
     return { kind: "error", message: "Enter the 6-digit code from your authenticator." };
   }
@@ -92,8 +104,9 @@ export async function verifyPlatformTotpAction(
       sessionToken: token,
       code: parsed.data.code,
     });
-    if (result.kind === "fully_authenticated") return { kind: "ok" };
-    return { kind: "error", message: "Unexpected verify state." };
+    if (result.kind !== "fully_authenticated") {
+      return { kind: "error", message: "Unexpected verify state." };
+    }
   } catch (err) {
     if (err instanceof PlatformAuthError) {
       if (err.code === "invalid_totp") {
@@ -118,6 +131,7 @@ export async function verifyPlatformTotpAction(
     }
     throw err;
   }
+  redirect("/platform");
 }
 
 export type PlatformLogoutResult = { kind: "ok" };

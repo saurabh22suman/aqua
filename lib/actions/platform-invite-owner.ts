@@ -15,6 +15,11 @@ import { asUserId } from "@/lib/ids";
 //   - 'tenant_not_found' / 'owner_role_missing' / 'already_member'
 //                      → same path, defensive failure
 //   - 'error'          → last-resort branch
+//
+// H1 — input is now FormData (the form uses <form action={fn}>
+// rather than onSubmit). tenantId arrives as a hidden field; the
+// server re-parses and re-validates it so a tampered field cannot
+// address a different tenant.
 
 const inviteFormInput = z.object({
   tenantId: z.string().uuid(),
@@ -26,10 +31,14 @@ export type InviteOwnerActionResult =
   | { kind: "error"; code: "invalid"; message: string };
 
 export async function inviteOwnerAction(
-  input: unknown,
+  _prev: unknown,
+  formData: FormData,
 ): Promise<InviteOwnerActionResult> {
   // (1) parse
-  const surface = inviteFormInput.safeParse(input);
+  const surface = inviteFormInput.safeParse({
+    tenantId: String(formData.get("tenantId") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+  });
   if (!surface.success) {
     return {
       kind: "error",

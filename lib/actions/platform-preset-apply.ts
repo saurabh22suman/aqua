@@ -1,31 +1,29 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
-import { applyPreset, type ApplyPresetResult } from "@/db/preset-engine";
+import {
+  applyPreset,
+  type ApplyPresetResult,
+} from "@/db/preset-engine";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { asUserId } from "@/lib/ids";
 
 // Phase 2.2b — applyPreset server action. The form on
 // /platform/presets and the picker on the tenant detail page
 // both call this. The result kind drives the inline CTA flow:
-//   - 'ok'             → router.refresh; the detail page now shows
-//                          the seeded state.
+//   - 'ok'             → redirect to the tenant detail page so the
+//                          operator sees the seeded state.
 //   - 'lock_active'    → the picker shows a verb CTA "Edit seeded
 //                          data by hand" because the engine has
-//                          refused (architecture rule 5 — a real
-//                          member exists, OR a different preset was
-//                          already applied and switching requires
-//                          manual clean-up).
-//   - 'preset_not_found' / 'tenant_not_found' → the picker shows a
-//                          CTA that the catalogue or the URL is
-//                          stale; the form re-loads.
+//                          refused.
+//   - 'preset_not_found' / 'tenant_not_found' / 'error' → returned
+//                          to useActionState for inline display.
 //
-// Standing rule (every Server Action opens with (1) parse, (2)
-// permission check, then (3) service): the `featureKey` argument
-// travels in the URL on /platform/presets/[key] and in the route
-// for the tenant detail modal — never from the form body, so a
-// tampered cookie replier can't target a different preset than
-// the page indicates.
+// Standing rule: (1) parse, (2) platform-session permission check,
+// (3) service. H1 — input is FormData; the presetKey comes in via
+// a hidden field so the server re-validates it (a tampered cookie
+// replier can't target a different preset than the page indicates).
 
 const applyFormInput = z.object({
   tenantId: z.string().uuid(),
@@ -34,21 +32,19 @@ const applyFormInput = z.object({
 
 export type ApplyPresetFormInput = z.input<typeof applyFormInput>;
 
-// The action's result union is a superset of the engine's. The
-// 'invalid' kind is the action-layer pre-screen failure (parse /
-// auth) — never the engine's, since the engine never sees a
-// surface-malformed input.
 export type ApplyPresetActionResult =
   | ApplyPresetResult
   | { kind: "error"; code: "invalid"; message: string };
 
 export async function applyPresetAction(
-  input: unknown,
+  _prev: unknown,
+  formData: FormData,
 ): Promise<ApplyPresetActionResult> {
-  // (1) parse — the surface schema is the source of truth for
-  // field shape; the engine's own zod schema validates the
-  // definition shape inside `applyPreset`.
-  const surface = applyFormInput.safeParse(input);
+  // (1) parse
+  const surface = applyFormInput.safeParse({
+    tenantId: String(formData.get("tenantId") ?? ""),
+    featureKey: String(formData.get("featureKey") ?? ""),
+  });
   if (!surface.success) {
     return {
       kind: "error",
@@ -57,8 +53,7 @@ export async function applyPresetAction(
     };
   }
 
-  // (2) platform-session permission check. The whole UI is
-  // operator-side; tenant users don't reach this action.
+  // (2) platform-session permission check
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") {
     return {
@@ -68,12 +63,12 @@ export async function applyPresetAction(
     };
   }
 
-  // (3) engine. The two-transaction shape (create-tenant in
-  // withPlatformAdmin, apply in withTenant) is by design — see
-  // the architecture's "One transaction" rule. The UI calls
-  // createTenantAction first (under the operator's request),
-  // then applyPresetAction here.
-  return applyPreset(surface.data.tenantId as never, surface.data.featureKey, {
+  // (3) engine
+  const result = await applyPreset(surface.data.tenantId as never, surface.data.featureKey, {
     actorId: asUserId(status.userId),
   });
+  if (result.kind === "ok") {
+    redirect(`/platform/tenants/${surface.data.tenantId}`);
+  }
+  return result;
 }
