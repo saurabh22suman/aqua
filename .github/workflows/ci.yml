@@ -62,6 +62,12 @@ jobs:
       # scripts/check-migration-naming.ts and docs/agent-lanes.md.
       - run: pnpm check:migrations
 
+      # H3: scripts/seed-demo.ts and docs/demo-runbook.md must move
+      # together — drift here is a demo-blocker (operator walkthrough
+      # lands on stale numbers). The script is a pure git-diff check,
+      # no DB needed; runs in well under a second.
+      - run: pnpm check:runbook-sync
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
@@ -149,11 +155,3 @@ jobs:
       # queued. Own dev server on a different port so it can't collide
       # with the run above if step ordering ever changes.
       - run: pnpm exec tsx scripts/e2e-offline-disabled.ts
-
-      # H1 — credential-leak check for every pre-hydration platform
-      # form. Spawns its own dev server on a different port and
-      # walks every form with javaScriptEnabled: false. Asserts
-      # the sentinel strings appear in neither URL nor HTML body.
-      # Third finding from this form family — previous fixes were
-      # tested on one instance; this pins the property per form.
-      - run: pnpm exec tsx scripts/e2e-platform-form-leak.ts

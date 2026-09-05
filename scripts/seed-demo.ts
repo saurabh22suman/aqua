@@ -155,6 +155,29 @@ const DEMO_MEMBERS: Array<{
   { fullName: "Suhas Iyer",       memberCode: "JRS-011", dateOfBirth: "2013-04-12", phone: "+919812340040", joinedDaysAgo: 480, status: "lapsed" },
 ];
 
+// Football tenant — 8 members, 4 in U-14 Squad (minors) and 4 in Open
+// Practice (adults). Phone range +919812340101..108 stays clear of the
+// Aqua Worli members' +919812340001..040. Codes KFB-* do not collide
+// with AWS/JRS/MMS prefixes, so the member list reads as a distinct
+// tenant at a glance.
+const DEMO_FOOTBALL_MEMBERS: Array<{
+  fullName: string;
+  memberCode: string;
+  dateOfBirth: string;
+  phone?: string;
+  batch: "U-14 Squad" | "Open Practice";
+  joinedDaysAgo: number;
+}> = [
+  { fullName: "Atharv Joshi",    memberCode: "KFB-001", dateOfBirth: "2014-02-12", phone: "+919812340101", batch: "U-14 Squad",    joinedDaysAgo: 220 },
+  { fullName: "Bhavna Reddy",     memberCode: "KFB-002", dateOfBirth: "2013-08-21", phone: "+919812340102", batch: "U-14 Squad",    joinedDaysAgo: 200 },
+  { fullName: "Chirag Patel",     memberCode: "KFB-003", dateOfBirth: "2012-11-04", phone: "+919812340103", batch: "U-14 Squad",    joinedDaysAgo: 180 },
+  { fullName: "Devika Singh",     memberCode: "KFB-004", dateOfBirth: "2015-05-19", phone: "+919812340104", batch: "U-14 Squad",    joinedDaysAgo: 160 },
+  { fullName: "Eshaan Nair",      memberCode: "KFB-005", dateOfBirth: "1996-04-12", phone: "+919812340105", batch: "Open Practice", joinedDaysAgo: 400 },
+  { fullName: "Falguni Kulkarni", memberCode: "KFB-006", dateOfBirth: "1994-09-23", phone: "+919812340106", batch: "Open Practice", joinedDaysAgo: 380 },
+  { fullName: "Gaurav Desai",     memberCode: "KFB-007", dateOfBirth: "1992-06-30", phone: "+919812340107", batch: "Open Practice", joinedDaysAgo: 360 },
+  { fullName: "Hiral Shah",       memberCode: "KFB-008", dateOfBirth: "1998-01-18", phone: "+919812340108", batch: "Open Practice", joinedDaysAgo: 340 },
+];
+
 const adminPool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 async function ensureTenant(
@@ -608,6 +631,39 @@ const DEMO_ENQUIRIES: Array<{
   },
 ];
 
+// Football tenant — 2 enquiries, distinct names + phones from the
+// Aqua Worli list so the second tenant's enquiry list reads as a
+// separate pool. Stages: one new, one contacted with overdue follow-up
+// (mirrors the Aqua Worli pattern so the operator's "needs attention"
+// lane surface still has something to demo on a second tenant).
+const DEMO_FOOTBALL_ENQUIRIES: Array<{
+  fullName: string;
+  phone: string;
+  source: "walk-in" | "phone" | "referral" | "online" | "other";
+  stage: "new" | "contacted";
+  notes?: string;
+  daysAgo: number;
+  followUpDaysFromNow?: number;
+}> = [
+  {
+    fullName: "Ishita Iyer",
+    phone: "+919812345701",
+    source: "walk-in",
+    stage: "new",
+    notes: "Asked about U-14 trial slot.",
+    daysAgo: 1,
+  },
+  {
+    fullName: "Jai Deshpande",
+    phone: "+919812345702",
+    source: "referral",
+    stage: "contacted",
+    notes: "Came via an existing Open Practice parent.",
+    daysAgo: 3,
+    followUpDaysFromNow: -2,
+  },
+];
+
 async function ensureEnquiries(tenantId: TenantId): Promise<void> {
   const today = todayInZone(DEMO_TENANT.timezone);
   for (const e of DEMO_ENQUIRIES) {
@@ -915,7 +971,7 @@ function isMinorDateOfBirth(dob: string, timezone: string): boolean {
 async function ensureKicksFootballTenant(): Promise<void> {
   const tenantId = await ensureTenant(DEMO_FOOTBALL_TENANT, "multi-sport");
   await seedRoleTemplates(tenantId);
-  await ensureLocation(
+  const locationId = await ensureLocation(
     tenantId,
     DEMO_FOOTBALL_TENANT.firstLocation.name,
     DEMO_FOOTBALL_TENANT.firstLocation.address,
@@ -1006,10 +1062,205 @@ async function ensureKicksFootballTenant(): Promise<void> {
   await withTenant(tenantId, async (tx) => {
     await generateSessions(tx, tenantId, DEMO_FOOTBALL_TENANT.timezone);
   });
+  // Members + enrolments + enquiries + past attendance — enough that
+  // the second tenant reads as a live club (not an empty shell) on
+  // the platform tenant list. See DEMO_FOOTBALL_MEMBERS / _ENQUIRIES
+  // for the data shapes.
+  const fbMembers = await ensureFootballMembers(tenantId, locationId, fbBatchIds);
+  await ensureFootballEnquiries(tenantId);
+  await ensureFootballPastAttendance(tenantId, fbBatchIds, fbMembers);
   console.log(
     `football tenant ${DEMO_FOOTBALL_TENANT.slug} → ${fbBatches.length} batches`,
   );
   void dayStr;
+}
+
+// Football tenant — members. Pattern mirrors ensureMembers for Aqua
+// Worli: createMember (which writes the person, member, guardian for
+// minors, and processing consent in one transaction), then enrol
+// into the assigned batch. Guardian rows are required for the four
+// minors (DPDP) — same shape as Aqua Worli minors, with the parent's
+// phone defaulting to the member's phone so the data is self-contained.
+async function ensureFootballMembers(
+  tenantId: TenantId,
+  locationId: string,
+  fbBatchIds: Map<string, string>,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  for (const m of DEMO_FOOTBALL_MEMBERS) {
+    const existing = await adminPool.query<{ id: string }>(
+      `select id from members where tenant_id = $1 and member_code = $2`,
+      [tenantId, m.memberCode],
+    );
+    let memberId: string;
+    if (existing.rows.length > 0) {
+      memberId = existing.rows[0].id;
+    } else {
+      const result = await createMember({ tenantId, userId: undefined as never }, {
+        fullName: m.fullName,
+        dateOfBirth: m.dateOfBirth,
+        memberCode: m.memberCode,
+        locationId,
+        phone: m.phone,
+        consents: [
+          {
+            purpose: "processing",
+            policyVersion: "2026.1",
+            evidence: { channel: "staff-assisted-in-person" },
+          },
+        ],
+        ...(isMinorDateOfBirth(m.dateOfBirth, DEMO_FOOTBALL_TENANT.timezone)
+          ? {
+              guardian: {
+                fullName: `${m.fullName.split(" ")[0]}'s parent`,
+                phone: m.phone,
+                relationship: "parent",
+              },
+            }
+          : {}),
+      });
+      if (!result.ok) {
+        throw new Error(`football createMember failed for ${m.memberCode} — ${result.error}`);
+      }
+      memberId = result.memberId;
+    }
+    out.set(m.memberCode, memberId);
+
+    const batchId = fbBatchIds.get(m.batch);
+    if (!batchId) continue;
+    await adminPool.query(
+      `insert into enrolments (id, tenant_id, member_id, batch_id, enrolled_on)
+       select gen_random_uuid(), $1, $2, $3, current_date
+       where not exists (
+         select 1 from enrolments
+         where tenant_id = $1 and member_id = $2 and batch_id = $3
+       )`,
+      [tenantId, memberId, batchId],
+    );
+  }
+  console.log(`football members seeded → ${out.size}`);
+  return out;
+}
+
+// Football tenant — enquiries. Mirrors ensureEnquiries for Aqua Worli.
+// One new, one contacted with overdue follow-up so the operator's
+// "needs attention" lane lights up on the second tenant too.
+async function ensureFootballEnquiries(tenantId: TenantId): Promise<void> {
+  const today = todayInZone(DEMO_FOOTBALL_TENANT.timezone);
+  for (const e of DEMO_FOOTBALL_ENQUIRIES) {
+    const existing = await adminPool.query<{ id: string }>(
+      "select id from enquiries where tenant_id = $1 and full_name = $2",
+      [tenantId, e.fullName],
+    );
+    if (existing.rows.length > 0) continue;
+    const createdAt = new Date(`${today}T00:00:00Z`);
+    createdAt.setUTCDate(createdAt.getUTCDate() - e.daysAgo);
+    const id = uuidv7();
+    await adminPool.query(
+      `insert into enquiries (id, tenant_id, full_name, phone, source, stage, notes,
+                              created_at, updated_at, created_by, updated_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $8, null, null)`,
+      [
+        id,
+        tenantId,
+        e.fullName,
+        e.phone,
+        e.source,
+        e.stage,
+        e.notes ?? null,
+        createdAt,
+      ],
+    );
+    if (e.followUpDaysFromNow !== undefined) {
+      const due = new Date(`${today}T00:00:00Z`);
+      due.setUTCDate(due.getUTCDate() + e.followUpDaysFromNow);
+      await adminPool.query(
+        `insert into enquiry_follow_ups
+           (id, tenant_id, enquiry_id, due_at, note, created_by, updated_by)
+         values ($1, $2, $3, $4, $5, null, null)`,
+        [uuidv7(), tenantId, id, due, e.notes ?? "Follow up."],
+      );
+    }
+  }
+  console.log(`football enquiries seeded → ${DEMO_FOOTBALL_ENQUIRIES.length}`);
+}
+
+// Football tenant — past sessions + attendance. Smaller window than
+// Aqua Worli (7 days vs 21) because the second tenant is not the
+// primary walkthrough target — enough for an operator to see the
+// register pattern, not enough to drown the demo. Mark attendance
+// for one batch (U-14 Squad) so the register screen has data.
+async function ensureFootballPastAttendance(
+  tenantId: TenantId,
+  fbBatchIds: Map<string, string>,
+  fbMembers: Map<string, string>,
+): Promise<void> {
+  const today = todayInZone(DEMO_FOOTBALL_TENANT.timezone);
+  const now = new Date(`${today}T00:00:00Z`);
+  const u14BatchId = fbBatchIds.get("U-14 Squad");
+  if (!u14BatchId) return;
+  const spec = { startTime: "16:00" };
+  const enrolledRows = await adminPool.query<{ id: string; member_id: string }>(
+    `select e.id, e.member_id from enrolments e where e.tenant_id = $1 and e.batch_id = $2`,
+    [tenantId, u14BatchId],
+  );
+  if (enrolledRows.rows.length === 0) return;
+  for (let d = 7; d >= 1; d--) {
+    const day = new Date(now);
+    day.setUTCDate(day.getUTCDate() - d);
+    const dateStr = day.toISOString().slice(0, 10);
+    const dow = day.getUTCDay();
+    // U-14 Squad runs Mon/Wed/Fri (1, 3, 5).
+    if (![1, 3, 5].includes(dow)) continue;
+
+    // Materialise the past session if missing.
+    const existing = await adminPool.query<{ id: string }>(
+      "select id from sessions where tenant_id = $1 and batch_id = $2 and session_date = $3",
+      [tenantId, u14BatchId, dateStr],
+    );
+    let sessionId: string;
+    if (existing.rows.length > 0) {
+      sessionId = existing.rows[0].id;
+    } else {
+      const endTime = addHour(spec.startTime);
+      const coachIdRow = await adminPool.query<{ coach_id: string }>(
+        "select coach_id from batches where id = $1",
+        [u14BatchId],
+      );
+      const coachId = coachIdRow.rows[0]?.coach_id ?? null;
+      sessionId = uuidv7();
+      await adminPool.query(
+        `insert into sessions (id, tenant_id, batch_id, session_date, starts_at, ends_at, status, coach_id)
+         values ($1, $2, $3, $4, $5, $6, 'held', $7)`,
+        [
+          sessionId,
+          tenantId,
+          u14BatchId,
+          dateStr,
+          `${dateStr}T${spec.startTime}:00Z`,
+          `${dateStr}T${endTime}:00Z`,
+          coachId,
+        ],
+      );
+    }
+
+    // Mark attendance — 75% present, 25% absent on this batch, by
+    // hashing member_id so the same member is consistently present
+    // or absent across the window (deterministic rather than random
+    // so re-running the seed does not flip a row each time).
+    for (const er of enrolledRows.rows) {
+      const status = hash01(er.member_id) < 0.75 ? "present" : "absent";
+      const clientId = `seed-football-${dateStr}-${sessionId.slice(0, 8)}-${er.member_id}`;
+      await adminPool.query(
+        `insert into attendance (id, tenant_id, session_id, member_id, status, client_id, marked_at)
+         values (gen_random_uuid(), $1, $2, $3, $4, $5, now())
+         on conflict (tenant_id, session_id, member_id) do nothing`,
+        [tenantId, sessionId, er.member_id, status, clientId],
+      );
+    }
+  }
+  void fbMembers;
+  console.log(`football past attendance seeded → u-14 squad, 7 days`);
 }
 
 async function main() {
