@@ -23,6 +23,7 @@
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
     "check:fonts": "tsx scripts/check-font-budget.ts",
     "check:lines": "tsx scripts/check-line-count.ts",
+    "e2e:platform-form-leak": "tsx scripts/e2e-platform-form-leak.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "dependencies": {

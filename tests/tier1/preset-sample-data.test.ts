@@ -57,6 +57,16 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — actions that mutate (removeSampleDataAction et al.) call
+// revalidatePath() to invalidate the page cache. In a unit-test
+// context there is no static-generation store, so revalidatePath
+// throws — mock it as a no-op. Tests still verify the action's
+// return value and DB state; cache invalidation is Next.js's job
+// in production.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
 async function loginActor(): Promise<void> {
   const sessionId = uuidv7();
   const token = uuidv7() + uuidv7().replace(/-/g, "");
@@ -207,11 +217,16 @@ describe("removeSampleData (service)", () => {
 });
 
 describe("removeSampleDataAction (server action)", () => {
+  // H1 — input is FormData.
+  function fd(obj: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(obj)) f.set(k, v);
+    return f;
+  }
+
   it("returns invalid when the input shape is bad", async () => {
     await loginActor();
-    const result = await removeSampleDataAction({
-      tenantId: "not-a-uuid",
-    });
+    const result = await removeSampleDataAction(null, fd({ tenantId: "not-a-uuid" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -219,9 +234,7 @@ describe("removeSampleDataAction (server action)", () => {
 
   it("returns invalid when the cookie is missing", async () => {
     cookieJar.delete("platform_session");
-    const result = await removeSampleDataAction({
-      tenantId: uuidv7(),
-    });
+    const result = await removeSampleDataAction(null, fd({ tenantId: uuidv7() }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -231,7 +244,7 @@ describe("removeSampleDataAction (server action)", () => {
     await loginActor();
     const tenantId = await seedTenantWithSampleData();
     try {
-      const result = await removeSampleDataAction({ tenantId });
+      const result = await removeSampleDataAction(null, fd({ tenantId }));
       expect(result.kind).toBe("ok");
       if (result.kind !== "ok") return;
       expect(result.counts.programs).toBeGreaterThan(0);
@@ -250,7 +263,7 @@ describe("removeSampleDataAction (server action)", () => {
          values ($1, $2, $3, false, $4)`,
         [realProgramId, tenantId, "Real program", actorIdValue],
       );
-      const result = await removeSampleDataAction({ tenantId });
+      const result = await removeSampleDataAction(null, fd({ tenantId }));
       expect(result.kind).toBe("lock_active");
     } finally {
       await cleanupTenant(tenantId);

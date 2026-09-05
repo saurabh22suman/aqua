@@ -1,60 +1,37 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import { removeSampleDataAction } from "@/lib/actions/platform-remove-sample-data";
 
 // Phase 2.3 — "Remove sample data" button on the tenant detail
-// page. The parent page renders this client island only when
-// (hasSample && !hasReal). The button calls
-// `removeSampleDataAction` and reflects the result.
-//
-// One dominant element per the page: the StatusTransitionControls
-// (the main operator control) is the saturated colour. This button
-// uses neutral-ink with a subtle border — destructive, but not the
-// primary action. The form-pattern is a single button + inline
-// status; the operator is the platform admin, the page is theirs.
+// page. H1 — form uses <form action={removeSampleDataAction}>; the
+// tenantId arrives as a hidden field and is re-validated server-side.
+// Pre-hydration submit goes via POST to the action endpoint rather
+// than falling through to a native GET.
 
 export function RemoveSampleDataButton({
   tenantId,
 }: {
   tenantId: string;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ counts: Record<string, number> } | null>(
+  const [state, formAction, isPending] = useActionState(
+    removeSampleDataAction,
     null,
   );
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    startTransition(async () => {
-      const result = await removeSampleDataAction({ tenantId });
-      if (result.kind === "ok") {
-        setDone({ counts: result.counts });
-        router.refresh();
-        return;
-      }
-      if (result.kind === "lock_active") {
-        setError(result.message);
-        return;
-      }
-      if (result.kind === "tenant_not_found") {
-        setError("Tenant not found. Refresh the page.");
-        return;
-      }
-      if (result.kind === "error") {
-        setError(result.message);
-        return;
-      }
-    });
-  }
+  const error =
+    state && "kind" in state && state.kind === "error"
+      ? (state as { kind: "error"; message: string }).message
+      : null;
+  const done =
+    state && "kind" in state && state.kind === "ok"
+      ? (state as { kind: "ok"; counts: Record<string, number> })
+      : null;
 
   return (
     <div className="mt-2">
-      <form onSubmit={onSubmit} className="flex items-center gap-3">
+      <form action={formAction} method="post" className="flex items-center gap-3">
+        <input type="hidden" name="tenantId" value={tenantId} />
         <button
           type="submit"
           disabled={isPending}

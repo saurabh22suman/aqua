@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useActionState } from "react";
 import {
   updateFeatureAction,
   type UpdateFeatureFormInput,
@@ -9,12 +9,14 @@ import {
 import type { Feature } from "@/db/schema/platform";
 
 // Phase 1.7 — feature catalogue client. Receives the SSR-fetched
-// rows, owns per-row edit state. Each row is either view-mode
-// (key + name + category + status pill + Edit button) or
-// edit-mode (input fields + Save / Cancel). One Server Action
-// call per Save; the page is re-fetched on success via
-// router.refresh() so the audit row timestamps and any other
-// shared state stay in lock-step.
+// rows, owns per-row edit state.
+//
+// H1 — each edit row's form uses <form action={updateFeatureAction}>
+// rather than onSubmit. Pre-hydration submit goes via POST to the
+// action endpoint rather than falling through to a native GET that
+// puts form fields (name, category, status) in the URL. Per-row
+// useActionState surfaces errors inline; on success the row closes
+// edit mode and the action's revalidatePath() refreshes the SSR data.
 
 const STATUS_LABEL: Record<string, string> = {
   ga: "GA",
@@ -33,14 +35,8 @@ export function FeatureCatalogue({
 }: {
   initial: ReadonlyArray<Feature>;
 }) {
-  const router = useRouter();
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
   // Group by category for the visual order. Categories are
-  // freeform text in the schema, so we sort alphabetically rather
-  // than encoding any order at the type level.
+  // freeform text in the schema, so we sort alphabetically.
   const grouped = new Map<string, Feature[]>();
   for (const f of initial) {
     const arr = grouped.get(f.category) ?? [];
@@ -48,27 +44,18 @@ export function FeatureCatalogue({
     grouped.set(f.category, arr);
   }
   const orderedCategories = Array.from(grouped.keys()).sort();
-  // Stable alphabetical ordering inside each category.
   for (const arr of grouped.values()) {
     arr.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   return (
     <>
-      {error ? (
-        <p
-          role="alert"
-          className="mt-6 mb-3 rounded-ctl border border-late bg-late-soft px-3 py-2 text-[13px] text-late"
-        >
-          {error}
-        </p>
-      ) : null}
       {initial.length === 0 ? (
         <div className="mt-8 rounded-card bg-paper border border-line px-5 py-12 text-center">
           <p className="text-[15px] font-medium text-ink">No features yet</p>
           <p className="mt-2 text-[13px] text-ink-3">
-            The catalogue is empty — \`pnpm db:seed\` populates it from
-            \`db/seed-platform.ts\` on a fresh database.
+            The catalogue is empty — `pnpm db:seed` populates it from
+            `db/seed-platform.ts` on a fresh database.
           </p>
           <code className="mt-4 inline-block rounded-ctl bg-deck px-3 py-1 text-[12px] font-mono text-ink-2">
             pnpm db:seed
@@ -90,39 +77,7 @@ export function FeatureCatalogue({
                         idx > 0 ? "border-t border-line" : ""
                       }`}
                     >
-                      {editingKey === feature.key ? (
-                        <FeatureEditRow
-                          feature={feature}
-                          isPending={isPending}
-                          onCancel={() => {
-                            setEditingKey(null);
-                            setError(null);
-                          }}
-                          onSubmit={(next) => {
-                            startTransition(async () => {
-                              const result = await updateFeatureAction(
-                                feature.key,
-                                next,
-                              );
-                              if (result.kind === "ok") {
-                                setEditingKey(null);
-                                setError(null);
-                                router.refresh();
-                                return;
-                              }
-                              setError(result.message);
-                            });
-                          }}
-                        />
-                      ) : (
-                        <FeatureViewRow
-                          feature={feature}
-                          onEdit={() => {
-                            setEditingKey(feature.key);
-                            setError(null);
-                          }}
-                        />
-                      )}
+                      <CatalogueRow feature={feature} />
                     </li>
                   ))}
                 </ul>
@@ -133,6 +88,16 @@ export function FeatureCatalogue({
       )}
     </>
   );
+}
+
+// Per-row component so each row owns its own edit toggle and (when
+// editing) its own pending/error state via useActionState.
+function CatalogueRow({ feature }: { feature: Feature }) {
+  const [editing, setEditing] = useState(false);
+  if (!editing) {
+    return <FeatureViewRow feature={feature} onEdit={() => setEditing(true)} />;
+  }
+  return <FeatureEditRow feature={feature} onCancel={() => setEditing(false)} />;
 }
 
 function FeatureViewRow({
@@ -170,36 +135,41 @@ function FeatureViewRow({
 
 function FeatureEditRow({
   feature,
-  isPending,
-  onSubmit,
   onCancel,
 }: {
   feature: Feature;
-  isPending: boolean;
-  onSubmit: (next: UpdateFeatureFormInput) => void;
   onCancel: () => void;
 }) {
+  const [state, formAction, isPending] = useActionState(updateFeatureAction, null);
   const [name, setName] = useState(feature.name);
   const [category, setCategory] = useState(feature.category);
   // Schema columns are typed as `string` (the schema's CHECK
   // constraint is the source of truth, not the type), so the
-  // initialiser casts through the zod-derived enum. The select
-  // onChange below narrows incoming values the same way.
+  // initialiser casts through the zod-derived enum.
   const initialStatus: UpdateFeatureFormInput["status"] =
     feature.status === "beta" || feature.status === "internal"
       ? feature.status
       : "ga";
-  const [status, setStatus] =
-    useState<UpdateFeatureFormInput["status"]>(initialStatus);
+  const [status, setStatus] = useState<UpdateFeatureFormInput["status"]>(initialStatus);
+
+  // On success, close the edit row. The action calls
+  // revalidatePath("/platform/features") so the SSR data updates
+  // on the next render. The render below short-circuits before
+  // rendering the form, avoiding stale-state echo.
+  if (state?.kind === "ok") {
+    onCancel();
+    return null;
+  }
+
+  const error = state?.kind === "error" ? state.message : null;
 
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit({ name, category, status });
-      }}
+      action={formAction}
+      method="post"
       className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end"
     >
+      <input type="hidden" name="key" value={feature.key} />
       <div>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
@@ -267,6 +237,14 @@ function FeatureEditRow({
           Cancel
         </button>
       </div>
+      {error ? (
+        <p
+          role="alert"
+          className="md:col-span-4 rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+        >
+          {error}
+        </p>
+      ) : null}
     </form>
   );
 }

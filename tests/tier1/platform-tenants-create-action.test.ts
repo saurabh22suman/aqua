@@ -38,6 +38,13 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — createTenantAction calls revalidatePath on success. In unit
+// tests there is no static-generation store, so revalidatePath
+// throws — mock it as a no-op.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const SLUG_PREFIX = `act-${RUN}`;
@@ -158,6 +165,33 @@ const happyInput: CreateTenantFormInput = {
   locationIsPrimary: true,
 };
 
+// H1 — actions take FormData; build it from the typed input shape.
+function fd(input: CreateTenantFormInput): FormData {
+  const f = new FormData();
+  f.set("name", input.name);
+  f.set("slug", input.slug);
+  f.set("timezone", input.timezone);
+  f.set("planKey", input.planKey);
+  f.set("currency", input.currency);
+  if (input.gstin) f.set("gstin", input.gstin);
+  f.set("locationName", input.locationName);
+  if (input.locationIsPrimary) f.set("locationIsPrimary", "on");
+  return f;
+}
+
+// H1 — createTenantAction redirects on success. Mock the redirect
+// so the success path is observable without honouring a real nav.
+class RedirectSignal extends Error {
+  constructor(public path: string) {
+    super(`REDIRECT:${path}`);
+  }
+}
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => {
+    throw new RedirectSignal(path);
+  },
+}));
+
 let counter = 0;
 function uniqueSlug(label: string): string {
   counter += 1;
@@ -165,18 +199,23 @@ function uniqueSlug(label: string): string {
 }
 
 describe("createTenantAction", () => {
-  it("returns ok: tenantId, tenant row + audit row written", async () => {
+  it("redirects to /platform/tenants/[id] on success and writes the tenant row", async () => {
     const { token } = await provisionActiveAdmin(`ok-${counter}`);
     cookieJar.set("platform_session", token);
 
     const slug = uniqueSlug("ok");
-    const result = await createTenantAction({ ...happyInput, slug });
-    expect(result.kind).toBe("ok");
-    if (result.kind !== "ok") return;
+    let captured: string | null = null;
+    try {
+      await createTenantAction(null, fd({ ...happyInput, slug }));
+    } catch (err) {
+      if (err instanceof RedirectSignal) captured = err.path;
+      else throw err;
+    }
+    expect(captured).toMatch(/^\/platform\/tenants\/[0-9a-f-]+$/);
 
     const tenants = await admin.query<{ slug: string }>(
-      "select slug from tenants where id = $1",
-      [result.tenantId],
+      "select slug from tenants where slug = $1",
+      [slug],
     );
     expect(tenants.rows[0]?.slug).toBe(slug);
 
@@ -185,10 +224,10 @@ describe("createTenantAction", () => {
 
   it("returns error.kind: 'invalid' when session is unauthenticated", async () => {
     cookieJar.delete("platform_session");
-    const result = await createTenantAction({
+    const result = await createTenantAction(null, fd({
       ...happyInput,
       slug: uniqueSlug("no-auth"),
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -220,10 +259,10 @@ describe("createTenantAction", () => {
     }
     await writePlatformSessionCookie(login.sessionToken);
 
-    const result = await createTenantAction({
+    const result = await createTenantAction(null, fd({
       ...happyInput,
       slug: uniqueSlug("half-auth"),
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -242,10 +281,10 @@ describe("createTenantAction", () => {
       )
     ).rows[0]!.count;
 
-    const result = await createTenantAction({
+    const result = await createTenantAction(null, fd({
       ...happyInput,
       slug: "UPPERCASE-NOT-ALLOWED",
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -266,11 +305,13 @@ describe("createTenantAction", () => {
     cookieJar.set("platform_session", token);
     const slug = uniqueSlug("collision");
 
-    const first = await createTenantAction({ ...happyInput, slug });
-    expect(first.kind).toBe("ok");
-    if (first.kind !== "ok") return;
+    try {
+      await createTenantAction(null, fd({ ...happyInput, slug }));
+    } catch (err) {
+      if (!(err instanceof RedirectSignal)) throw err;
+    }
 
-    const second = await createTenantAction({ ...happyInput, slug });
+    const second = await createTenantAction(null, fd({ ...happyInput, slug }));
     expect(second.kind).toBe("error");
     if (second.kind !== "error") return;
     expect(second.code).toBe("slug_taken");

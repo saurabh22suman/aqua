@@ -1,25 +1,28 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { applyPresetAction } from "@/lib/actions/platform-preset-apply";
-import type { TenantListRow } from "@/db/platform-tenants";
+import {
+  applyPresetAction,
+  type ApplyPresetActionResult,
+} from "@/lib/actions/platform-preset-apply";
 
-// Phase 2.2b — preset apply form. Server data is the list of
-// tenants the operator can apply the preset to; the form posts
-// (tenantId, featureKey) to the server action and reflects the
-// discriminated result.
+// Phase 2.2b — applyPreset client island. Lives on /platform/presets/[key].
 //
-// Composition: one dominant element — the "Apply" button. The
-// tenant picker is a `<select>` above it; the preview breakdown
-// lives on the parent page. State of the world: a disabled picker
-// for tenants that already have a preset, an explicit explanation
-// of why, with a verb CTA that does NOT pretend to offer an
-// override — the engine has refused, and the operator's recourse
-// is to edit by hand.
+// H1 — the form uses <form action={applyPresetAction}> rather than
+// onSubmit. Pre-hydration submit goes via POST to the action
+// endpoint; the tenantId + presetKey never appear in a query string.
+// On success the action calls redirect() to the tenant detail page.
 
-type Tenant = TenantListRow;
+type Tenant = {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  presetKey: string | null;
+  presetVersion: number | null;
+};
 
 export function PresetDetailForm({
   presetKey,
@@ -30,9 +33,15 @@ export function PresetDetailForm({
   presetName: string;
   tenants: ReadonlyArray<Tenant>;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  // The action returns a discriminated union; initial state is a
+  // generic error-shaped value with an empty message (no inline
+  // pill rendered until the action returns a non-empty error).
+  const [state, formAction, isPending] = useActionState(applyPresetAction, {
+    kind: "error",
+    code: "invalid",
+    message: "",
+  } as ApplyPresetActionResult);
+
   // Track per-tenant-applied-state from the list. The list comes
   // server-rendered; the form's defaults are read once.
   const [tenantId, setTenantId] = useState<string>(
@@ -43,50 +52,11 @@ export function PresetDetailForm({
   const selectedAlreadyApplied =
     selected?.presetKey !== null && selected?.presetKey !== undefined;
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    if (!tenantId) {
-      setError("Pick a tenant first.");
-      return;
-    }
-    startTransition(async () => {
-      const result = await applyPresetAction({
-        tenantId,
-        featureKey: presetKey,
-      });
-      // The result kind drives the inline CTA. Successful apply →
-      // jump to the tenant detail page so the operator sees the
-      // seeded state (architecture §empty state: a fresh-apply
-      // tenant has zero members and zero sessions, which is the
-      // natural empty state of /platform/tenants/[id]).
-      if (result.kind === "ok") {
-        router.push(`/platform/tenants/${tenantId}`);
-        return;
-      }
-      if (result.kind === "lock_active") {
-        setError(result.message);
-        return;
-      }
-      if (result.kind === "preset_not_found") {
-        setError(
-          "This preset was removed from the catalogue. Refresh to see the latest list.",
-        );
-        return;
-      }
-      if (result.kind === "tenant_not_found") {
-        setError("That tenant no longer exists. Refresh the list.");
-        return;
-      }
-      if (result.kind === "error") {
-        setError(result.message);
-        return;
-      }
-    });
-  }
+  const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 space-y-4">
+    <form action={formAction} method="post" className="mt-8 space-y-4">
+      <input type="hidden" name="featureKey" value={presetKey} />
       <section className="rounded-card bg-paper border border-line p-5 space-y-4">
         <div>
           <h2 className="font-display text-[16px] font-semibold text-ink">
@@ -116,6 +86,7 @@ export function PresetDetailForm({
             </p>
           ) : (
             <select
+              name="tenantId"
               value={tenantId}
               onChange={(e) => setTenantId(e.target.value)}
               className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] focus:outline-none"

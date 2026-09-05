@@ -230,12 +230,16 @@ describe("inviteOwner (service)", () => {
 });
 
 describe("inviteOwnerAction (server action)", () => {
+  // H1 — input is FormData; the form uses <form action={fn}>.
+  function fd(obj: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(obj)) f.set(k, v);
+    return f;
+  }
+
   it("returns invalid when the input shape is bad", async () => {
     await loginActor();
-    const result = await inviteOwnerAction({
-      tenantId: "not-a-uuid",
-      phone: "+919999999999",
-    });
+    const result = await inviteOwnerAction(null, fd({ tenantId: "not-a-uuid", phone: "+919999999999" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -243,10 +247,7 @@ describe("inviteOwnerAction (server action)", () => {
 
   it("returns invalid when the cookie is missing", async () => {
     cookieJar.delete("platform_session");
-    const result = await inviteOwnerAction({
-      tenantId: uuidv7(),
-      phone: "+919999999999",
-    });
+    const result = await inviteOwnerAction(null, fd({ tenantId: uuidv7(), phone: "+919999999999" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -257,7 +258,7 @@ describe("inviteOwnerAction (server action)", () => {
     const tenantId = await seedTenantWithOwnerRole();
     try {
       const phone = `+91${Math.floor(9000000000 + Math.random() * 1000000000)}`;
-      const result = await inviteOwnerAction({ tenantId, phone });
+      const result = await inviteOwnerAction(null, fd({ tenantId, phone }));
       expect(result.kind).toBe("ok");
       if (result.kind !== "ok") return;
       expect(result.wasNewUser).toBe(true);

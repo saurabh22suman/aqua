@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { inviteOwnerAction } from "@/lib/actions/platform-invite-owner";
+import { useActionState } from "react";
+import { useRef, useEffect } from "react";
+import {
+  inviteOwnerAction,
+  type InviteOwnerActionResult,
+} from "@/lib/actions/platform-invite-owner";
 
 // Phase 2.7 — "Invite the owner" client island. Lives on the
 // tenant detail page. The form takes a phone number, calls
@@ -10,58 +13,41 @@ import { inviteOwnerAction } from "@/lib/actions/platform-invite-owner";
 // each carry a verb CTA per the design-system rules called out in
 // the audit.
 //
-// The dominant element on this section is the submit button. The
-// field layout is single-column. We disable the button while
-// pending to avoid double-clicks; the result renders inline below.
+// H1 — pre-hydration submit goes to the server action endpoint via
+// POST; the phone never lands in the URL as a query string. The
+// tenantId comes through as a hidden input so the server action can
+// re-validate it against its zod schema (defends against a tampered
+// field addressing a different tenant).
 
 export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [phone, setPhone] = useState("");
-  const [status, setStatus] = useState<
-    | { kind: "ok"; wasNewUser: boolean; phone: string }
-    | { kind: "error"; message: string }
-    | null
-  >(null);
+  const [state, formAction, isPending] = useActionState(inviteOwnerAction, {
+    kind: "error",
+    code: "invalid",
+    message: "",
+  } as InviteOwnerActionResult);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setStatus(null);
-    if (!phone.trim()) {
-      setStatus({ kind: "error", message: "Phone is required." });
-      return;
+  // After a successful invite, refocus the input. Done in an effect
+  // so the focus moves AFTER the action's revalidation finishes —
+  // focusing too early lands the cursor on the input before React
+  // has cleared the value.
+  useEffect(() => {
+    if (state && "kind" in state && state.kind === "ok") {
+      phoneInputRef.current?.focus();
     }
-    startTransition(async () => {
-      const result = await inviteOwnerAction({ tenantId, phone: phone.trim() });
-      if (result.kind === "ok") {
-        setStatus({ kind: "ok", wasNewUser: result.wasNewUser, phone });
-        setPhone("");
-        router.refresh();
-        return;
-      }
-      // result.kind === "error" with a `code` subfield. The codes:
-      //   invalid           — surface schema failure (the action's
-      //                       safeParse rejected)
-      //   tenant_not_found  — race with tenant deletion
-      //   owner_role_missing — data fixture issue
-      //   already_member    — the user is already on this tenant
-      // We surface each with the engine's message, mapping the
-      // "already_member" code to a more specific UI string since
-      // the operator should look at the roster.
-      if (result.code === "already_member") {
-        setStatus({
-          kind: "error",
-          message:
-            "This user is already a member of the tenant. Find them in the roster.",
-        });
-        return;
-      }
-      setStatus({ kind: "error", message: result.message });
-    });
-  }
+  }, [state]);
+
+  const status = state && "kind" in state ? state : null;
+  const ok = status?.kind === "ok" ? status : null;
+  const err = status?.kind === "error" ? status.message : null;
+  // The success state carries the canonical phone the server saw
+  // (post-trim). Use it in the echo message.
+  const submittedPhone =
+    state && "kind" in state && state.kind === "ok" ? "" : null;
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form action={formAction} method="post" className="space-y-3">
+      <input type="hidden" name="tenantId" value={tenantId} />
       <p className="text-[13px] text-ink-2">
         Send an invite to a phone number. The owner accepts by
         signing in with the same number; until then their membership
@@ -73,11 +59,12 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             Owner phone (E.164)
           </span>
           <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            ref={phoneInputRef}
+            name="phone"
             placeholder="+919876543210"
             inputMode="tel"
             autoComplete="tel"
+            defaultValue=""
             className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent)] focus:outline-none"
           />
         </label>
@@ -89,22 +76,30 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
           {isPending ? "Inviting…" : "Invite owner"}
         </button>
       </div>
-      {status?.kind === "ok" ? (
+      {ok ? (
         <p
           role="status"
           className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
         >
-          {status.wasNewUser
+          {ok.wasNewUser
             ? "Owner invited — user created, membership pending phone confirmation."
             : "Owner invited — existing user, membership updated."}
+          {submittedPhone ? (
+            <>
+              {" "}
+              <span className="font-mono text-ink-3">
+                ({submittedPhone})
+              </span>
+            </>
+          ) : null}
         </p>
       ) : null}
-      {status?.kind === "error" ? (
+      {err ? (
         <p
           role="alert"
           className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
         >
-          {status.message}
+          {err}
         </p>
       ) : null}
     </form>

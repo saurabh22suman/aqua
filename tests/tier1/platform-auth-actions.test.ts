@@ -35,6 +35,21 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — the actions now call redirect() on success. Redirect throws
+// NEXT_REDIRECT inside Next.js; in a unit test we want to capture
+// the redirect target without honouring it. The mock turns redirect
+// into a tagged error that the test can assert on.
+class RedirectSignal extends Error {
+  constructor(public path: string) {
+    super(`REDIRECT:${path}`);
+  }
+}
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => {
+    throw new RedirectSignal(path);
+  },
+}));
+
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
@@ -109,20 +124,33 @@ describe("platform-cookie helpers", () => {
 });
 
 describe("loginPlatformAction", () => {
+  // H1 — actions take FormData and call redirect() on the success
+  // path. The mock at the top of the file turns redirect() into a
+  // thrown RedirectSignal, so the assertions below catch the path
+  // instead of comparing against a removed result.kind.
+  function fd(obj: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(obj)) f.set(k, v);
+    return f;
+  }
+
   it("returns error for zod-invalid input without touching the database", async () => {
-    const result = await loginPlatformAction({
-      email: "not-an-email",
-      password: "",
-    });
+    const result = await loginPlatformAction(null, fd({ email: "not-an-email", password: "" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.message).toMatch(/email and password/);
   });
 
-  it("returns needs_totp on a correct password and writes the half-auth cookie", async () => {
+  it("redirects to /platform/verify on a correct password and writes the half-auth cookie", async () => {
     const { password, email } = await createEnrolledUser("login-ok");
-    const result = await loginPlatformAction({ email, password });
-    expect(result.kind).toBe("needs_totp");
+    let captured: string | null = null;
+    try {
+      await loginPlatformAction(null, fd({ email, password }));
+    } catch (err) {
+      if (err instanceof RedirectSignal) captured = err.path;
+      else throw err;
+    }
+    expect(captured).toBe("/platform/verify");
     const cookie = await readPlatformSessionToken();
     expect(cookie).toMatch(/^[0-9a-f]{64}$/);
     await clearPlatformSessionCookie();
@@ -130,7 +158,7 @@ describe("loginPlatformAction", () => {
 
   it("returns the generic error message on a wrong password, by design", async () => {
     const { password, email } = await createEnrolledUser("login-wrong");
-    const result = await loginPlatformAction({ email, password: password + "X" });
+    const result = await loginPlatformAction(null, fd({ email, password: password + "X" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     // The message must not distinguish "wrong password" from "no such
@@ -141,29 +169,47 @@ describe("loginPlatformAction", () => {
 });
 
 describe("verifyPlatformTotpAction", () => {
+  function fd(obj: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(obj)) f.set(k, v);
+    return f;
+  }
+
   it("rejects with sign-in-expired message when no cookie is set", async () => {
     await clearPlatformSessionCookie();
-    const result = await verifyPlatformTotpAction({ code: "123456" });
+    const result = await verifyPlatformTotpAction(null, fd({ code: "123456" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.message.toLowerCase()).toContain("sign-in");
   });
 
-  it("returns ok on a correct code", async () => {
+  it("redirects to /platform on a correct code", async () => {
     const { password, email, totpSecret } = await createEnrolledUser("verify-ok");
-    const loginResult = await loginPlatformAction({ email, password });
-    expect(loginResult.kind).toBe("needs_totp");
-    const result = await verifyPlatformTotpAction({ code: makeCode(totpSecret) });
-    expect(result.kind).toBe("ok");
+    try {
+      await loginPlatformAction(null, fd({ email, password }));
+    } catch (err) {
+      if (!(err instanceof RedirectSignal)) throw err;
+    }
+    let captured: string | null = null;
+    try {
+      await verifyPlatformTotpAction(null, fd({ code: makeCode(totpSecret) }));
+    } catch (err) {
+      if (err instanceof RedirectSignal) captured = err.path;
+      else throw err;
+    }
+    expect(captured).toBe("/platform");
     await clearPlatformSessionCookie();
   });
 
   it("returns wrong-code error on an incorrect code and clears nothing", async () => {
     const { password, email } = await createEnrolledUser("verify-wrong");
-    const loginResult = await loginPlatformAction({ email, password });
-    expect(loginResult.kind).toBe("needs_totp");
+    try {
+      await loginPlatformAction(null, fd({ email, password }));
+    } catch (err) {
+      if (!(err instanceof RedirectSignal)) throw err;
+    }
     const tokenBefore = await readPlatformSessionToken();
-    const result = await verifyPlatformTotpAction({ code: "000000" });
+    const result = await verifyPlatformTotpAction(null, fd({ code: "000000" }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.message.toLowerCase()).toContain("wrong");
@@ -174,9 +220,19 @@ describe("verifyPlatformTotpAction", () => {
 });
 
 describe("logoutPlatformAction", () => {
+  function fd(obj: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(obj)) f.set(k, v);
+    return f;
+  }
+
   it("clears the cookie and removes the session row", async () => {
     const { password, email } = await createEnrolledUser("logout");
-    await loginPlatformAction({ email, password });
+    try {
+      await loginPlatformAction(null, fd({ email, password }));
+    } catch (err) {
+      if (!(err instanceof RedirectSignal)) throw err;
+    }
     const tokenBefore = await readPlatformSessionToken();
     expect(tokenBefore).toMatch(/^[0-9a-f]{64}$/);
     const before = await admin.query<{ count: string }>(
@@ -195,6 +251,12 @@ describe("logoutPlatformAction", () => {
 });
 
 describe("platformAuthStatusAction", () => {
+  function fd(obj: Record<string, string>): FormData {
+    const f = new FormData();
+    for (const [k, v] of Object.entries(obj)) f.set(k, v);
+    return f;
+  }
+
   it("reports not_found with no cookie", async () => {
     await clearPlatformSessionCookie();
     const status = await platformAuthStatusAction();
@@ -203,8 +265,16 @@ describe("platformAuthStatusAction", () => {
 
   it("reports authenticated after a successful 2FA", async () => {
     const { password, email, totpSecret } = await createEnrolledUser("status-full");
-    await loginPlatformAction({ email, password });
-    await verifyPlatformTotpAction({ code: makeCode(totpSecret) });
+    try {
+      await loginPlatformAction(null, fd({ email, password }));
+    } catch (err) {
+      if (!(err instanceof RedirectSignal)) throw err;
+    }
+    try {
+      await verifyPlatformTotpAction(null, fd({ code: makeCode(totpSecret) }));
+    } catch (err) {
+      if (!(err instanceof RedirectSignal)) throw err;
+    }
     const status = await platformAuthStatusAction();
     expect(status.kind).toBe("authenticated");
     if (status.kind !== "authenticated") return;

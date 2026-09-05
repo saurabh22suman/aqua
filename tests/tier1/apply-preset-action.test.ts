@@ -63,6 +63,32 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
+// H1 — revalidatePath is called by applyPresetAction on success. In
+// unit tests there is no static-generation store, so revalidatePath
+// throws — mock it as a no-op.
+vi.mock("next/cache", () => ({
+  revalidatePath: () => undefined,
+}));
+
+// H1 — actions take FormData. applyPresetAction redirects on success;
+// the mock below turns redirect() into a thrown RedirectSignal.
+class RedirectSignal extends Error {
+  constructor(public path: string) {
+    super(`REDIRECT:${path}`);
+  }
+}
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => {
+    throw new RedirectSignal(path);
+  },
+}));
+
+function fd(obj: Record<string, string>): FormData {
+  const f = new FormData();
+  for (const [k, v] of Object.entries(obj)) f.set(k, v);
+  return f;
+}
+
 async function loginActor(): Promise<void> {
   // Insert a platform_sessions row directly so the action's
   // permission check sees an authenticated session. Going through
@@ -132,10 +158,10 @@ async function cleanupTenant(id: string): Promise<void> {
 
 describe("applyPresetAction", () => {
   it("returns invalid when the input shape is bad", async () => {
-    const result = await applyPresetAction({
+    const result = await applyPresetAction(null, fd({
       tenantId: "not-a-uuid",
       featureKey: "",
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
@@ -143,30 +169,28 @@ describe("applyPresetAction", () => {
 
   it("returns invalid when the cookie is missing (unauthenticated)", async () => {
     cookieJar.delete("platform_session");
-    const result = await applyPresetAction({
+    const result = await applyPresetAction(null, fd({
       tenantId: uuidv7(),
       featureKey: "swimming",
-    });
+    }));
     expect(result.kind).toBe("error");
     if (result.kind !== "error") return;
     expect(result.code).toBe("invalid");
     expect(result.message.toLowerCase()).toContain("session");
   });
 
-  it("applies swimming on a fresh tenant and returns ok", async () => {
+  it("applies swimming on a fresh tenant and redirects to /platform/tenants/[id]", async () => {
     await loginActor();
     const tenantId = await seedTenant();
     try {
-      const result = await applyPresetAction({
-        tenantId,
-        featureKey: "swimming",
-      });
-      expect(result.kind).toBe("ok");
-      if (result.kind !== "ok") return;
-      // engine returns the engine's ApplyPresetResult type
-      // (presetKey/presetVersion/appliedAt). Surface checks:
-      expect(result.presetKey).toBe("swimming");
-      expect(result.presetVersion).toBeGreaterThanOrEqual(1);
+      let captured: string | null = null;
+      try {
+        await applyPresetAction(null, fd({ tenantId, featureKey: "swimming" }));
+      } catch (err) {
+        if (err instanceof RedirectSignal) captured = err.path;
+        else throw err;
+      }
+      expect(captured).toBe(`/platform/tenants/${tenantId}`);
       // tenant fields stamped
       const stamped = (
         await admin.query<{ preset_key: string }>(
@@ -180,24 +204,26 @@ describe("applyPresetAction", () => {
     }
   });
 
-  it("rejects a second apply of the same preset (idempotent ok)", async () => {
+  it("rejects a second apply of the same preset as a no-op redirect (idempotent)", async () => {
     await loginActor();
     const tenantId = await seedTenant();
     try {
-      const first = await applyPresetAction({
-        tenantId,
-        featureKey: "swimming",
-      });
-      expect(first.kind).toBe("ok");
-      if (first.kind !== "ok") return;
-      expect(first.idempotent).toBe(false);
-      const second = await applyPresetAction({
-        tenantId,
-        featureKey: "swimming",
-      });
-      expect(second.kind).toBe("ok");
-      if (second.kind !== "ok") return;
-      expect(second.idempotent).toBe(true);
+      let firstRedirect: string | null = null;
+      try {
+        await applyPresetAction(null, fd({ tenantId, featureKey: "swimming" }));
+      } catch (err) {
+        if (err instanceof RedirectSignal) firstRedirect = err.path;
+        else throw err;
+      }
+      expect(firstRedirect).toBe(`/platform/tenants/${tenantId}`);
+      let secondRedirect: string | null = null;
+      try {
+        await applyPresetAction(null, fd({ tenantId, featureKey: "swimming" }));
+      } catch (err) {
+        if (err instanceof RedirectSignal) secondRedirect = err.path;
+        else throw err;
+      }
+      expect(secondRedirect).toBe(`/platform/tenants/${tenantId}`);
     } finally {
       await cleanupTenant(tenantId);
     }
@@ -224,10 +250,10 @@ describe("applyPresetAction", () => {
         "insert into members (id, tenant_id, person_id, location_id, status, member_code) values ($1, $2, $3, $4, 'active', $5)",
         [memberId, tenantId, personId, locationId, `phase22b-${memberId}`],
       );
-      const result = await applyPresetAction({
+      const result = await applyPresetAction(null, fd({
         tenantId,
         featureKey: "swimming",
-      });
+      }));
       expect(result.kind).toBe("lock_active");
       if (result.kind !== "lock_active") return;
       expect(result.reason).toBe("non_sample_member_exists");
@@ -240,10 +266,10 @@ describe("applyPresetAction", () => {
     await loginActor();
     const tenantId = await seedTenant();
     try {
-      const result = await applyPresetAction({
+      const result = await applyPresetAction(null, fd({
         tenantId,
         featureKey: "does-not-exist",
-      });
+      }));
       expect(result.kind).toBe("preset_not_found");
     } finally {
       await cleanupTenant(tenantId);

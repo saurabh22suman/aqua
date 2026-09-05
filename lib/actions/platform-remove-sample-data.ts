@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   removeSampleData,
@@ -7,19 +8,9 @@ import {
 } from "@/db/preset-sample-data";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 
-// Phase 2.3 — server action for the "Remove sample data" button
-// on the tenant detail page. Standing-rule pattern: (1) parse
-// the surface shape (here the input is just a tenant id, validated
-// as a uuid), (2) check the platform session, (3) call the
-// service. The result kind drives the inline UI:
-//   - 'ok'             → router.refresh; the preset-engine's
-//                          sample rows are gone.
-//   - 'lock_active'    → the page already hides the button when a
-//                          real row exists, so reaching this branch
-//                          means the operator used a stale route;
-//                          the inline error pill explains.
-//   - 'tenant_not_found' / 'invalid' / 'error' — defensive
-//                          fall-through.
+// Phase 2.3 — server action for the "Remove sample data" button.
+// H1 — input is now FormData; tenantId arrives as a hidden field
+// (re-validated server-side).
 
 const removeFormInput = z.object({
   tenantId: z.string().uuid(),
@@ -30,10 +21,13 @@ export type RemoveSampleDataActionResult =
   | { kind: "error"; code: "invalid"; message: string };
 
 export async function removeSampleDataAction(
-  input: unknown,
+  _prev: unknown,
+  formData: FormData,
 ): Promise<RemoveSampleDataActionResult> {
   // (1) parse
-  const surface = removeFormInput.safeParse(input);
+  const surface = removeFormInput.safeParse({
+    tenantId: String(formData.get("tenantId") ?? ""),
+  });
   if (!surface.success) {
     return {
       kind: "error",
@@ -53,7 +47,11 @@ export async function removeSampleDataAction(
   }
 
   // (3) service
-  return removeSampleData(surface.data.tenantId as never, {
+  const result = await removeSampleData(surface.data.tenantId as never, {
     actorId: status.userId as never,
   });
+  if (result.kind === "ok") {
+    revalidatePath(`/platform/tenants/${surface.data.tenantId}`);
+  }
+  return result;
 }
