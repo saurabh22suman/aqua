@@ -12,6 +12,7 @@
     "lint": "eslint . --max-warnings=0",
     "pretest": "tsx db/seed-platform.ts",
     "test": "vitest run",
+    "e2e:parent-link-zero-js": "tsx scripts/e2e-parent-link-zero-js.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset.ts",
@@ -23,7 +24,7 @@
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
     "check:fonts": "tsx scripts/check-font-budget.ts",
     "check:lines": "tsx scripts/check-line-count.ts",
-    "e2e:platform-form-leak": "tsx scripts/e2e-platform-form-leak.ts",
+    "check:runbook-sync": "tsx scripts/check-runbook-sync.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "dependencies": {
