@@ -93,6 +93,164 @@ behave correctly under operational mistakes without redesign.
 
 ---
 
+## H1 · Pre-hydration form submit leaks credentials
+
+### Bug
+
+`app/(platform)/platform/login/login-form.tsx` ships as
+`<form onSubmit={onSubmit}>` with no `method` attribute. The
+React handler calls `e.preventDefault()` then invokes the
+server action via `startTransition`. **That handler only
+fires after React has hydrated.** In Next.js dev, the first
+compile of a route can take seconds; a click in that window
+falls through to the browser's native form submission, which
+defaults to `method="get"` against the current URL with form
+fields appended as the query string.
+
+I reproduced it directly: a Playwright click on
+`/platform/login` before hydration submitted natively and the
+URL became
+`/platform/login?email=ops%40aqua.local&password=5WO0aX3ZWc4R0qL2`.
+The password is now in:
+- Browser history (until the user clears it).
+- Server access logs (the URL is what gets logged).
+- Any `Referer` header sent on a navigation away.
+- Any monitoring/analytics tool that captures URLs.
+
+This is a credential-exposure bug, not a demo annoyance.
+
+It is also the third finding on this login form's path:
+**F5** closed one as a headless artifact; **G5** fixed a
+`startTransition` no-op; **H1** is the hydration race that
+underneath both. Three is the "look for siblings" threshold.
+
+### Inventory — every form in the platform surface
+
+`grep -rn '<form' --include='*.tsx' app/` against the whole
+tree finds **nine** platform forms with the same shape. None
+of the tenant surfaces use `<form>` at all (they use
+`<button type="button" onClick={...}>`); the issue is
+platform-only.
+
+| # | File | Form | What's at risk |
+|---|---|---|---|
+| 1 | `app/(platform)/platform/login/login-form.tsx` | platform login | **email + password** |
+| 2 | `app/(platform)/platform/verify/verify-form.tsx` | TOTP verify | 6-digit TOTP code |
+| 3 | `app/(platform)/platform/features/feature-catalogue.tsx` | feature edit | feature key + name + category |
+| 4 | `app/(platform)/platform/presets/[key]/preset-detail-form.tsx` | preset apply | tenant id + preset key |
+| 5 | `app/(platform)/platform/tenants/[tenantId]/remove-sample-data-button.tsx` | destructive | tenant id |
+| 6 | `app/(platform)/platform/tenants/[tenantId]/tenant-feature-toggles.tsx` | feature toggle | tenant id + feature key + mode |
+| 7 | `app/(platform)/platform/tenants/[tenantId]/invite-owner-form.tsx` | invite owner | **phone number** |
+| 8 | `app/(platform)/platform/tenants/new/new-tenant-form.tsx` | create tenant | **name + slug + timezone + currency + GSTIN** |
+| 9 | `app/(platform)/platform/tenants/[tenantId]/status-transitions.tsx` | suspend / churn | tenant id |
+
+`components/login-form.tsx` (tenant phone login) does not
+have this shape — it uses `fetch()` to
+`/api/auth/phone-number/send-otp` with a JSON body, no native
+form submit. Its pre-hydration failure mode is "button does
+nothing," not "credentials in URL." Different bug, not in
+scope here.
+
+The platform layout's sign-out form is the one form that
+already uses the safe pattern: `<form action={signOutFormAction}>`
+— it works without JS. That's the pattern to converge on.
+
+### Fix shape
+
+Two layers. **Both** required; each alone leaves a hole.
+
+**Layer 1 — `method="post"` on every form.**
+Belt-and-suspenders: even if a future refactor breaks the
+React handler, a native submit goes via POST and credentials
+land in the body, not the URL. This is a one-line change per
+form. Cheap, mechanical, captures the bug.
+
+**Layer 2 — Next.js Server Action form-action pattern.**
+`<form action={serverAction}>` where `serverAction` accepts
+`FormData` directly. Works without JS — a pre-hydration
+submit posts to the server action endpoint, the action runs
+server-side, the browser follows the redirect. This is what
+`signOutFormAction` already does.
+
+Refactor required: each action (`loginPlatformAction`,
+`verifyPlatformTotpAction`, etc.) currently takes
+`input: unknown`. Change to `(formData: FormData)` and read
+fields with `formData.get(...)`. Call sites inside the React
+handler already build the same object via
+`String(formData.get("email"))` etc., so the parsing moves
+to the action and the React layer becomes a thin wrapper that
+calls `action(formData)` from `useTransition`. The Zod parse
+moves into the action — that's already where it lives in the
+existing code; the refactor is the signature change, not the
+logic.
+
+Each affected form's existing `e.preventDefault()` handler
+is replaced by the server-action `action={fn}` attribute.
+The button stays `type="submit"`, the input `name`
+attributes stay the same (they're what `FormData.get()` keys
+on). Mechanical, except for the action signature change.
+
+### Test — proves the fix and the bug
+
+`tests/tier1/platform-form-credential-leak.test.ts`. For each
+of the nine forms:
+
+1. Launch a Playwright context with
+   `javaScriptEnabled: false`.
+2. Visit the form's page. Fill it with sentinel values
+   (e.g. `password = "LEAK_CANARY_xyzzy"`).
+3. Click submit. Read `page.url` and `page.content()`.
+4. **Assert `LEAK_CANARY_xyzzy` is not in `page.url`.** This
+   fails today on the login form (the bug) and passes after
+   the fix.
+5. **Assert `LEAK_CANARY_xyzzy` is not in `page.content()`.**
+   Catches accidental echo in error pages.
+6. Bonus: assert the submit was a POST, not a GET, by
+   inspecting the request method via `page.on("request")`.
+
+The test runs against the dev build, so the hydration race
+is reproducible — Next.js's first compile is slow enough
+that `javaScriptEnabled: false` matches what a real user
+gets in the cold window.
+
+For tenant forms (which use `<button type="button">`) a
+similar test asserts the click does nothing without JS, so
+the absence of `<form>` is intentional and documented, not
+an oversight.
+
+### What's NOT in scope
+
+- Renaming the action signature is. But re-doing the
+  redirect logic is not — the server already redirects to
+  `/platform/verify` on `needs_totp` and to `/platform` on
+  `ok`; the FormData path keeps both.
+- Login retry / rate limit logic is not. Lives in
+  `platformLogin`, unchanged.
+- The "warm up the platform login before sitting down"
+  runbook rule is. With the fix it's no longer load-bearing;
+  remove it.
+
+### Why one PR
+
+The fix is the same nine files in one shape plus one new
+test file. Splitting across PRs would either (a) leave
+credential-leaking forms open during the merge window or
+(b) force reviewers to read the same refactor nine times.
+One labelled PR (auth is in the protected-paths gate; the
+F1 standing rule applies — `human-approved-merge` label,
+human merges).
+
+### Cost of doing nothing
+
+The platform login form has now produced three findings.
+Every other form on the list is structurally identical to
+the one that just leaked. The next auditor who clicks
+quickly enough to beat hydration has the password in their
+terminal scrollback. We can either fix all nine at once or
+chase each one as a separate incident.
+
+---
+
 ## 3.8 · Support impersonation
 
 ### What's approved
