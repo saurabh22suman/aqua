@@ -1,8 +1,7 @@
 // H1 — credential leak check for every pre-hydration form submit
-// in the platform surface. The test connects to the existing
-// production server (CI runs `pnpm build` then `pnpm start`
-// separately; spinning a per-route-compile dev server here would
-// blow the test budget).
+// in the platform surface. Spawns its own dev server (matching the
+// scripts/e2e-login.ts and scripts/e2e-offline.ts pattern) and
+// runs Playwright against it.
 //
 // Two tiers:
 //
@@ -16,7 +15,7 @@
 //   follow the redirect — the form never renders in the
 //   response HTML.
 //
-//   Tier 2 (source check, all 9 forms) — grep each form file for
+//   Tier 2 (source check, all 8 forms) — grep each form file for
 //   `method="post"` on the rendered <form> element. That's the
 //   load-bearing piece of the H1 fix: a native submit on a form
 //   with method="post" puts the form fields in the request body,
@@ -29,9 +28,11 @@
 // test pins the property per-form.
 
 import { chromium } from "playwright";
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const BASE = "http://localhost:3000"; // production server (pnpm start)
+const PORT = 3220;
+const BASE = `http://localhost:${PORT}`;
 const SENTINEL = "LEAK_CANARY_xyzzy";
 
 type FormTarget = {
@@ -40,10 +41,10 @@ type FormTarget = {
   source: string;
 };
 
-// The nine forms that previously had the <form onSubmit> shape;
+// The eight forms that previously had the <form onSubmit> shape;
 // status-transitions is button-driven with no <form> so it's
-// not in this list (verified by grep: no `<form` element in
-// status-transitions.tsx).
+// not in this list (verified by `grep '<form' app/(platform)/platform/
+// tenants/[tenantId]/status-transitions.tsx` — zero matches).
 const FORM_TARGETS: FormTarget[] = [
   {
     name: "platform login",
@@ -79,6 +80,19 @@ const FORM_TARGETS: FormTarget[] = [
   },
 ];
 
+async function waitForServer(): Promise<void> {
+  for (let i = 0; i < 120; i++) {
+    try {
+      const res = await fetch(`${BASE}/login`);
+      if (res.ok) return;
+    } catch {
+      // not up yet
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  throw new Error("dev server never came up on " + BASE);
+}
+
 async function run(): Promise<{ failures: string[]; total: number }> {
   const failures: string[] = [];
 
@@ -109,19 +123,20 @@ async function run(): Promise<{ failures: string[]; total: number }> {
     console.log(`  ${withPost.length === matches.length && withPost.length > 0 ? "✓" : "✗"} ${t.name}: ${withPost.length}/${matches.length} forms have method="post"`);
   }
 
-  // Tier 1 — live submit on the login form (public; no cookie
-  // needed, JS disabled, sentinel credentials).
+  // Tier 1 — live submit. Spawn a dev server on $PORT. Use `next
+  // dev` (not `next start`) because dev mode is what's installed
+  // for the e2e pipeline; production builds need `pnpm build`
+  // first, and dev mode's per-route compile is fast enough for
+  // a single-route test.
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
+    stdio: "ignore",
+    detached: true,
+    env: process.env,
+  });
+  let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
   try {
-    const res = await fetch(`${BASE}/login`);
-    if (!res.ok) throw new Error(`${BASE}/login returned ${res.status}`);
-  } catch {
-    console.error(
-      `H1 credential-leak check: ${BASE} is not reachable — start the production server with 'pnpm build && pnpm start' before running this script.`,
-    );
-    process.exit(2);
-  }
-  const browser = await chromium.launch({ headless: true });
-  try {
+    await waitForServer();
+    browser = await chromium.launch({ headless: true });
     const liveCtx = await browser.newContext({
       viewport: { width: 1366, height: 900 },
       javaScriptEnabled: false,
@@ -130,9 +145,9 @@ async function run(): Promise<{ failures: string[]; total: number }> {
     try {
       await livePage.goto(`${BASE}/platform/login`, {
         waitUntil: "domcontentloaded",
-        timeout: 30_000,
+        timeout: 60_000,
       });
-      await livePage.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => undefined);
+      await livePage.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => undefined);
       await livePage.waitForSelector("form", { timeout: 15_000, state: "attached" });
       await livePage.evaluate(`
         (() => {
@@ -161,7 +176,8 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       await liveCtx.close();
     }
   } finally {
-    await browser.close();
+    if (browser) await browser.close();
+    if (server.pid) process.kill(-server.pid);
   }
 
   return { failures, total: FORM_TARGETS.length };
