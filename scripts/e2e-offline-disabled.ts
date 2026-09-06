@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { Pool } from "pg";
 import { env } from "@/lib/env";
 import {
@@ -17,6 +18,26 @@ import {
   waitForServer,
 } from "./lib/offline-page";
 
+// J3 — liveness probe. See scripts/e2e-login.ts for the rationale.
+async function assertPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(
+          `port ${port} is already in use — a previous e2e run likely ` +
+          `left a stale next dev. Find and kill it (lsof -i :${port} or ` +
+          `fuser -k ${port}/tcp), then re-run.`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+  });
+}
+
 // The counterpart to e2e-offline.ts: this is the default state every
 // tenant ships in (offline_sync_enabled = false, issue #4 postmortem's
 // kill switch). Confirms the online happy path is unaffected, the
@@ -32,6 +53,7 @@ import {
 // below flips the per-tenant side; the env var is already in its safe
 // default state.
 const BASE = "http://localhost:3216";
+const PORT = 3216;
 const MEMBER_COUNT = 2;
 const RUN = Date.now().toString(36);
 const COACH_PHONE = "+91 90000 00002";
@@ -39,12 +61,13 @@ const COACH_PHONE = "+91 90000 00002";
 const { results, record } = makeRecorder();
 
 async function main() {
+  await assertPortFree(PORT);
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   // OFFLINE_SYNC_ENABLED (PR #6, lib/feature-flags.ts) is left unset — its
   // safe default is "off", which is what we're testing here. The
   // per-tenant kill switch (PR #12, tenants.offlineSync_enabled) is
   // flipped to false explicitly below so the test is self-contained.
-  const server = spawn("pnpm", ["next", "dev", "-p", "3216"], {
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
     stdio: "ignore",
     detached: true,
   });

@@ -164,3 +164,17 @@ jobs:
       # queued. Own dev server on a different port so it can't collide
       # with the run above if step ordering ever changes.
       - run: pnpm exec tsx scripts/e2e-offline-disabled.ts
+
+      # H1 follow-up — parent-page zero-JS contract. The shipped
+      # artifact must contain zero <script> tags. A dev-server
+      # assertion is wrong because dev mode bundles differently than
+      # `next build`'s output; the test builds and runs `next start`,
+      # so what it checks is what a real visitor receives.
+      - run: pnpm e2e:parent-link-zero-js
+
+      # H1 follow-up — credential-leak check on every pre-hydration
+      # form submit in the platform surface. Three tiers: live submit
+      # on the platform login form (JS disabled), live submit on one
+      # auth-gated form (JS enabled, manual fetch), and a source scan
+      # pinning method="post" on every other form statically.
+      - run: pnpm e2e:platform-form-leak

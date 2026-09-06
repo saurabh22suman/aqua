@@ -131,6 +131,44 @@ describe("listTenants", () => {
     expect(seenFixtures[2]?.id).toBe(TENANT_IDS.carol);
   });
 
+  it("within the same status group, newer tenants come first — the secondary sort property (H2, regression-proof)", async () => {
+    // J6 — the audit caught this: the original fixture had one
+    // tenant per status, so created_at only broke ties — it
+    // never decided the order. A regression that DROPPED the
+    // secondary sort would still pass the existing test. This
+    // test inserts two tenants with the SAME status and
+    // DIFFERENT created_at and pins the descending order — so
+    // dropping the `created_at desc` clause would put the
+    // older tenant first and fail here.
+    const tenantOldId = asTenantId(uuidv7());
+    const tenantNewId = asTenantId(uuidv7());
+    await admin.query(
+      `insert into tenants (id, slug, name, plan_id, timezone, status, created_at)
+       values ($1, $2, 'H2 Tie Older',  $3, 'Asia/Kolkata', 'active', now() - interval '10 seconds'),
+              ($4, $5, 'H2 Tie Newer',  $3, 'Asia/Kolkata', 'active', now() - interval '2 seconds')`,
+      [tenantOldId, `h2-older-${RUN}`, defaultPlanId, tenantNewId, `h2-newer-${RUN}`],
+    );
+
+    try {
+      // Filter by status='active' so the test is hermetic — only
+      // the active-status fixtures + the new ties are returned.
+      const result = await listTenants({ status: "active" });
+      const seenTies = result.rows.filter(
+        (r) => r.id === tenantOldId || r.id === tenantNewId,
+      );
+      expect(seenTies).toHaveLength(2);
+      // H2 secondary sort: created_at desc — the newer tie
+      // (tenantNewId) must come first. If the SQL drops the
+      // secondary sort, the order flips and this fails.
+      expect(seenTies[0]?.id).toBe(tenantNewId);
+      expect(seenTies[1]?.id).toBe(tenantOldId);
+    } finally {
+      await admin.query("delete from tenants where id = any($1)", [
+        [tenantOldId, tenantNewId],
+      ]);
+    }
+  });
+
   it("denormalises member_count and location_count per tenant", async () => {
     const result = await listTenants({});
     const alice = result.rows.find((r) => r.id === TENANT_IDS.alice);

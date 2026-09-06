@@ -46,10 +46,16 @@
 //   not the URL. Tier 1 confirms this on the live submit path;
 //   Tier 2 confirms it on every other form statically.
 //
-// "All nine forms, not a representative sample" was the H1 scope
-// addition — each form gets its own check. Past fixes on this
-// family were tested on one instance and missed the others; this
-// test pins the property per-form.
+// "Eight forms, not a representative sample" — the J7 audit
+// caught PR #88's claim of "9 platform forms" being off by one:
+// the eight FORM_TARGETS below are the ones PR #88 actually
+// touched; the sign-out form in (platform)/layout.tsx is the
+// ninth `<form>` on the platform surface but it has no body
+// fields to leak (a single button — sign-out carries no
+// credential, no PII), so it was correctly out of scope for the
+// credential-leak fix. Past fixes on this family were tested on
+// one instance and missed the others; this test pins the
+// property per-form for the eight that actually carry input.
 //
 // action="" investigation (the second pre-hydration finding):
 // the form's rendered action attribute is empty because React 19's
@@ -65,6 +71,7 @@
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
 import { createHmac, randomUUID } from "node:crypto";
@@ -135,6 +142,26 @@ async function waitForServer(): Promise<void> {
   throw new Error("dev server never came up on " + BASE);
 }
 
+// J3 — liveness probe. See scripts/e2e-login.ts for the rationale.
+async function assertPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(
+          `port ${port} is already in use — a previous e2e run likely ` +
+          `left a stale next dev. Find and kill it (lsof -i :${port} or ` +
+          `fuser -k ${port}/tcp), then re-run.`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+  });
+}
+
 async function anyActiveTenant(): Promise<string> {
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   try {
@@ -185,6 +212,11 @@ async function seedAuthedSessionCookie(): Promise<{ cookieValue: string }> {
 }
 
 async function run(): Promise<{ failures: string[]; total: number }> {
+  // J3 — refuse to run against a stale server. Probe the port
+  // BEFORE any DB or filesystem work: a stale server on this port
+  // means nothing downstream is meaningful.
+  await assertPortFree(PORT);
+
   const failures: string[] = [];
 
   // Tier 2 — source check. Cheap, deterministic, runs in <10ms.

@@ -316,6 +316,101 @@ property that was never enforced.
 - [ ] `pnpm check:scripts-exist` is wired into CI; a failing run
       there is a merge blocker, not a follow-up.
 
+### Named failure class: a passing test is not enforcement
+
+A test that "passes" — by the most literal reading of its own
+output — is not enforcement unless three things are simultaneously
+true: (a) CI has ever invoked it on this repo, (b) a regression in
+the property it covers actually flips it red, and (c) that red
+build actually blocks a merge. Drop any one of those three and
+the test reports a property the codebase does not have. The
+"green" check then reads as evidence of a property that has
+never been exercised against real code.
+
+Three instances from this batch's audit, all reported as
+"verified" in good faith and all false on at least one of the
+three:
+
+1. **`scripts/e2e-parent-link-zero-js.ts` referenced, never
+   existed (C-45 zero-JS claim).** `package.json` carried an
+   `e2e:parent-link-zero-js` entry, the underlying property
+   (the parent page ships zero `<script>` tags) was reported
+   fixed in PR #92's predecessor, and CI was green. The script
+   file did not exist in any commit on any branch. `pnpm
+   e2e:parent-link-zero-js` would have errored with
+   `ERR_MODULE_NOT_FOUND` if invoked; nothing invoked it
+   because no CI step referenced it. The CI run that "proved"
+   the property was running entirely different tests. Closed
+   by the underlying fix (the layout/route-handler split that
+   makes the property true) AND the
+   `scripts/check-scripts-exist.ts` direction-closure check
+   (disk ↔ package.json ↔ ci.yml) — either alone is incomplete.
+2. **`scripts/e2e-platform-form-leak.ts` referenced nowhere
+   (H1 credential-leak claim, PR #88).** The script was
+   written, the test pinned eight forms, the property was
+   reported as covered, and CI was green. CI never ran the
+   script. There was no `package.json` entry pointing at it
+   and no `run:` line in `ci.yml` mentioning it — the entire
+   H1 credential-leak property was unverified by CI for the
+   life of the script. Closed by adding the `e2e:platform-form-leak`
+   package.json entry AND the `pnpm e2e:platform-form-leak`
+   ci.yml step — both required; the test still does not
+   enforce the property if either is missing.
+3. **`e2e:parent-link-zero-js` named only in a CI comment (the
+   recurrence that motivated J1).** The fix to instance #1
+   landed, the script existed, the package.json entry was in
+   place — but `ci.yml` only *mentioned* the script in an
+   explanatory comment, never as a `run:` line. `pnpm
+   check-scripts-exist` (the original disk-direction check)
+   validated the on-disk file and the package.json entry and
+   reported green. CI never invoked the script. Same shape as
+   instance #1, three PRs later, because the original check
+   stopped at one direction. Closed by extending
+   `check-scripts-exist.ts` to a two-direction closure
+   (`disk → package.json → ci.yml`) and proving it fails when
+   a CI wiring line is commented out.
+
+Every one of these read as "CI is green, property is enforced"
+to a reviewer who didn't trace the chain past the surface. None
+of them would have been caught by a CI run that the test itself
+didn't participate in; the test had to *itself* assert the
+wiring, not rely on a code reviewer to spot the gap.
+
+- [ ] Before accepting any "this passes in CI" claim for a test
+      added in the batch, ask three questions in order, and
+      refuse to move on until each has a concrete answer: (1)
+      Has CI *ever* invoked this specific test on this repo
+      against this commit? Search `.github/workflows/*.yml` for
+      the exact invocation (script name or `tsx <path>`); a
+      match in a comment, a doc, or a `package.json` entry
+      alone is not CI invocation. (2) Does a real regression
+      in the property the test covers flip the test red, not
+      stay green? Plant the regression locally, watch the
+      exit code, revert; an untested test cannot answer this
+      question for you. (3) Does the red build actually block
+      the merge — i.e. is the failure on the `ci` job that's
+      required for `main`, not on a job that's advisory? A
+      job that fails and is ignored is, for enforcement
+      purposes, a job that doesn't exist.
+- [ ] A test that "passes" without anyone naming the specific
+      command that ran is not a verification — it is a
+      summary of a different property. The command that ran
+      is the claim; the green check is its proof; neither is
+      transferable.
+- [ ] A new `pnpm <name>` script must satisfy the closure:
+      on-disk file (`pnpm check:scripts-exist`), `package.json`
+      entry naming it (the check), and a `run:` line in
+      `.github/workflows/ci.yml` (the check's second
+      direction). All three must hold; the J1 audit produced
+      three independent recurrences of this exact class
+      because the closure was one-directional.
+- [ ] Do not cite a test as evidence of a property in a
+      commit message, batch report, or PR description
+      without first running it locally and watching the
+      exit code. "I wrote a test for it" is not "I verified
+      it." The gap between those two statements is where
+      this failure class lives.
+
 ### Named failure class: a narrowed window looks like a closed one
 
 **A fix that reduces a failure rate is not a fix.** Measure repeatedly,

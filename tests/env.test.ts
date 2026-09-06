@@ -13,8 +13,13 @@ async function loadEnv() {
 // trips the password-match check added for D2b, passing locally (nothing
 // ambient) and failing only in CI. Neutralise the whole set every test,
 // then let individual tests opt back in to whatever they're exercising.
+//
+// J7: MIGRATION_DATABASE_URL was previously optional with a fallback to
+// DATABASE_URL — a real silent-against-correctness shape: a developer
+// who forgot to set it ran migrations under `app_login` (no
+// privileges) and saw confusing errors. Now required.
 beforeEach(() => {
-  vi.stubEnv("MIGRATION_DATABASE_URL", "");
+  vi.stubEnv("MIGRATION_DATABASE_URL", "postgresql://aqua:aqua@localhost:5432/aqua");
   vi.stubEnv("APP_LOGIN_PASSWORD", "");
   vi.stubEnv("BETTER_AUTH_SECRET", "");
   vi.stubEnv("BETTER_AUTH_URL", "");
@@ -30,16 +35,35 @@ describe("lib/env", () => {
   it("exposes a valid DATABASE_URL", async () => {
     vi.stubEnv(
       "DATABASE_URL",
-      "postgresql://aqua:aqua@localhost:5432/aqua",
+      "postgresql://app_login:pw@localhost:5432/aqua",
     );
 
     const { env } = await loadEnv();
-    expect(env.DATABASE_URL).toBe("postgresql://aqua:aqua@localhost:5432/aqua");
-    expect(env.MIGRATION_DATABASE_URL).toBe(env.DATABASE_URL);
+    expect(env.DATABASE_URL).toBe("postgresql://app_login:pw@localhost:5432/aqua");
+    // J7: MIGRATION_DATABASE_URL is no longer optional. The
+    // earlier "falls back to DATABASE_URL" behaviour was the
+    // shape the audit caught: a developer missing the var ran
+    // migrations under `app_login` and saw confusing errors.
+    // Now required and distinct from DATABASE_URL.
+    expect(env.MIGRATION_DATABASE_URL).toBe(
+      "postgresql://aqua:aqua@localhost:5432/aqua",
+    );
+    expect(env.MIGRATION_DATABASE_URL).not.toBe(env.DATABASE_URL);
+  });
+
+  it("fails loudly when MIGRATION_DATABASE_URL is unset (J7 — required, no fallback)", async () => {
+    vi.stubEnv(
+      "DATABASE_URL",
+      "postgresql://app_login:pw@localhost:5432/aqua",
+    );
+    vi.stubEnv("MIGRATION_DATABASE_URL", undefined);
+
+    await expect(loadEnv()).rejects.toThrow(/MIGRATION_DATABASE_URL/);
   });
 
   it("fails loudly and names every missing variable", async () => {
     vi.stubEnv("DATABASE_URL", undefined);
+    vi.stubEnv("MIGRATION_DATABASE_URL", undefined);
 
     await expect(loadEnv()).rejects.toThrow(/DATABASE_URL/);
   });
@@ -84,7 +108,7 @@ describe("lib/env", () => {
 
   it("does not require BETTER_AUTH_SECRET/URL outside production", async () => {
     vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
-    vi.stubEnv("APP_LOGIN_PASSWORD", "pw");
+    vi.stubEnv("APP_LOGIN_PASSWORD", "");
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("BETTER_AUTH_SECRET", undefined);
     vi.stubEnv("BETTER_AUTH_URL", undefined);
