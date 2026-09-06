@@ -389,6 +389,21 @@ const DEMO_BATCHES: BatchSpec[] = [
     capacity: 12,
     fillCount: 0,
   },
+  // E2 — a Sunday batch. The seed's other batches are Mon–Fri (with
+  // Saturday covered by Junior TTS). Without a day-0 (Sunday) batch,
+  // every "today" surface is empty on a Sunday demo day, which the
+  // runbook explicitly warns against ("whatever the weekday").
+  // Sunday Open Practice gives the operator something to click on a
+  // weekend: coached by the secondary coach so the R.2 conflict
+  // surface stays clean.
+  {
+    program: "Adult masters",
+    name: "Sunday Open Practice",
+    daysOfWeek: [0],
+    startTime: "09:00",
+    capacity: 12,
+    fillCount: 0,
+  },
 ];
 
 async function ensureBatches(

@@ -11,6 +11,15 @@ fails any commit that changes the seed without updating this file
 in the same change. If a number here disagrees with what you see,
 the runbook is wrong — update it in the same PR as the seed fix.
 
+**What `check:runbook-sync` does NOT catch:** it only fires when
+`scripts/seed-demo.ts` changes in the same PR. The runbook can
+drift from a previous seed commit (or from UI changes elsewhere
+in the repo) without any CI failure. The runbook is verified by
+**walkthrough**, not by the sync check — the walkthrough operator
+is the last line of defence. If you spot a runbook/seed mismatch
+during a demo, fix the runbook (or open a PR) — do not silently
+work around it.
+
 ## What works
 
 - Auth: phone + OTP code via `better-auth`. The dev-mode hint
@@ -30,21 +39,53 @@ the runbook is wrong — update it in the same PR as the seed fix.
   - **Accountant** (`+91 90000 00006`) → no dashboard yet (the role
     exists for permission tests; no UI surfaces are gated to it
     today)
-  - **Parent** (`+91 90000 00003`) → `/parent` (stub — see below)
+  - **Coach Faraz Khan** (`+91 90000 00007`) → Kicks Football
+    Academy only. The Kicks coach is separate from the Aqua
+    Worli coaching staff; sign in as Faraz to walk the football
+    tenant's coach surface.
+  - **Parent** (no seeded user) → `/parent` (stub — see below).
+    The runbook previously listed `+91 90000 00003` for parent,
+    but the seed does not create that user; the parent surface
+    is intentionally unsign-in-able until the parent app lands.
   - **Platform operator** (`ops@aqua.local` / password printed by
     `pnpm tsx scripts/seed-platform-user.ts` / TOTP on the same
     line) → `/platform` (tenants, presets, features)
+
+#### Cross-tenant memberships worth showing off
+
+A few login users have memberships in **both** tenants by design —
+this is a genuinely useful thing to show in the demo because it
+exercises the home-routing rule (a user with memberships in
+multiple tenants routes to whichever tenant the home resolver
+picks) and the "different accent per tenant" detail.
+
+- **Owner Ojaswi** (`+91 90000 00001`) has owner memberships in
+  Aqua Worli **and** Kicks Football Academy. Sign in as Ojaswi
+  and you'll land in Aqua Worli (the first tenant in membership
+  order); switch by signing out and signing back in as a Kicks-
+  scoped user, or by hard-navigating to the Kicks owner route
+  in dev.
+- **Receptionist Rhea** (`+91 90000 00004`) has receptionist
+  memberships in both tenants.
+- The Aqua Worli coaches (Aanya Rao, Bhaskar Menon) and the
+  Accountant are **Aqua Worli only** — they have no Kicks
+  membership.
+- The Kicks coach (Faraz Khan) is **Kicks only**.
 - The platform tenant list shows three rows:
-  - **`Aqua Worli` (Active)** — the swimming-club walkthrough
-    tenant. Slug `demo-academy`. Mango accent. 40 members (32
-    active, 5 paused, 3 lapsed), 1 location, 6 batches, 8
-    enquiries, 21 days of past attendance.
   - **`Kicks Football Academy` (Active)** — the cross-tenant
     comparison tenant. Slug `kicks-academy`. Marine accent.
     Different preset (`multi-sport`). 8 members (4 minors + 4
     adults), 1 location, 2 batches (U-14 Squad + Open Practice),
     2 enquiries (one new, one contacted with overdue follow-up),
-    7 days of past attendance on U-14 Squad.
+    3 session-dates of past attendance on U-14 Squad (Mon/Wed/Fri
+    inside a 7-day lookback window; the seed loops 7 days back and
+    filters to the batch's days, yielding 3 attended sessions).
+  - **`Aqua Worli` (Active)** — the swimming-club walkthrough
+    tenant. Slug `demo-academy`. Mango accent. 40 members (32
+    active, 5 paused, 3 lapsed), 1 location, 7 batches, 8
+    enquiries, 21 days of past attendance. Kicks leads this row
+    on the sort (status then created_at desc, both active; Kicks
+    is created after Aqua Worli in the seed).
   - **`Orphan Demo` (Churned)** — `slug orphan-tenant`, 0 members,
     0 locations, terminal status. Deliberately seeded so the
     operator sees the lifecycle UI's "no transitions available"
@@ -206,14 +247,14 @@ Log in at `/platform/login` with the credentials printed by
 
 - **`/platform`** — the home page shows "Tenants" and "Feature
   catalogue" cards. Click "Tenants".
-- **`/platform/tenants`** — the list. **Aqua Worli (Active) is
-  the walkthrough target**; it leads the list by virtue of
-  status-then-created_at-desc sort. Kicks Football Academy
-  (Active) is the second row — click it briefly to show the
-  cross-tenant comparison (different sport, different preset,
-  different accent). Orphan Demo (Churned) is at the bottom;
-  click it once to show the "no transitions available" lifecycle
-  state.
+- **`/platform/tenants`** — the list. **Kicks Football Academy
+  (Active) leads the list** (status-then-created_at-desc; both
+  active tenants, Kicks was created after Aqua Worli in the seed
+  so the desc sort puts Kicks first). **Aqua Worli (Active) is the
+  walkthrough target** and sits in the second row — click it for
+  the swimming-club deep dive. Orphan Demo (Churned) is at the
+  bottom; click it once to show the "no transitions available"
+  lifecycle state.
 - **Tenant detail (`/platform/tenants/<aqua-worli-id>`)** — shows
   Settings (timezone Asia/Kolkata, plan Standard, preset
   swimming v1), Feature state (all enabled by plan baseline),
@@ -235,10 +276,18 @@ Sign out, log in as `+91 90000 00001`.
 - **`/owner` (dashboard)** — the demo data lights this up:
   - Active members: 32
   - Today's registers: 0% by default (the seed marks past
-    sessions, not today's)
+    sessions, not today's; a live operator marks today's during
+    the walkthrough)
   - Attendance this week: ~85%
-  - Batches running: 6
-  - Today's lanes: Morning Squad 07:00, Junior TTS 17:00
+  - Batches running: 7 (Morning Squad, Junior TTS, Morning
+    Masters, Trial Squad, Holiday Recovery, Late Squad, **Sunday
+    Open Practice** — the Sunday batch exists so "today"
+    surfaces have content every weekday, including weekends)
+  - Today's lanes: depends on the demo day. On a weekday the
+    operator sees 07:00 Morning Squad and 17:00 Junior TTS (plus
+    06:00 Morning Masters on Mon/Wed/Fri). On a Saturday:
+    Junior TTS at 17:00. On a Sunday: Sunday Open Practice at
+    09:00 — the only session of the day, but there is one.
   - Needs you today: Follow-up overdue (Meera Nair, Anaya Joshi)
 - **`/owner/members`** — list of 40 members (32 active, 5
   paused, 3 lapsed). Filter chips at the top. Click any
@@ -247,9 +296,16 @@ Sign out, log in as `+91 90000 00001`.
   Edit link, attendance section, guardian panel (visible on
   minors — `AWS-*` and `JRS-*` rows).
 - **`/owner/programs`** — three programs (Learn-to-swim,
-  Junior competitive, Adult masters). Six batches across them,
+  Junior competitive, Adult masters). Seven batches across them,
   including the R.2 conflict pair (Late Squad + Holiday
-  Recovery, both 18:00–19:00 with Coach Aanya Rao).
+  Recovery, both 18:00–19:00 with Coach Aanya Rao) and the
+  Sunday-only Sunday Open Practice at 09:00 (Coach Bhaskar
+  Menon). **Note:** Programs / Sessions / Enquiries are NOT in
+  the owner bottom nav — the nav is Home / Members / Reports /
+  Settings. Reach Programs by direct URL or via the "Sessions"
+  link at the top of the page; reach Enquiries from the
+  dashboard's "Needs you today" cards. The nav is deliberately
+  short on mobile.
   - Add a program ("Water Polo"), edit its name.
   - Add a batch under a program, assign a coach, then edit it
     (rename, change coach). The R.2 conflict warning surfaces
@@ -281,7 +337,9 @@ dedicated reception surface (`/reception`), not the old
   visible (0/8 marked).
 - **`/reception/members/new`** — the full add-member form
   (DOB mandatory, gender optional, guardian fields for minors,
-  consent checkbox). Adding a member returns to `/reception`.
+  consent checkbox). Adding a member navigates to the new
+  member's detail page (`/reception/members/<id>`) — useful
+  because the next step is usually to enrol them.
 - **`/reception/enquiries`** — the quick-capture form. Capture
   a walk-in; it appears in the list. Click an enquiry to open
   its detail (stage transitions + follow-ups) inside the
@@ -296,9 +354,10 @@ Sign out, log in as `+91 90000 00002`.
   Junior TTS; weekends only Morning Squad (which runs
   Mon–Fri). Click a session card.
 - **`/coach/register/<id>`** — the live register screen for
-  that session. Each roster row has Present / Absent / Late
-  buttons. Click any present to mark. The dashboard reflects
-  in real time.
+  that session. Each roster row has Present / Absent buttons
+  (Late appears in the attendance history view as a status, not
+  as a mark option on the live register). Click any present to
+  mark. The dashboard reflects in real time.
 - **`/coach/schedule`** — the next-7-day schedule across the
   coach's batches, each day's sessions linking to its
   register.
@@ -362,10 +421,13 @@ hook) will fail otherwise — by design.
   activation, no amount on the seeded plan. demo-academy's
   plan_id is the standard seeded plan with no plan_shapes
   attached.
-- **Invite flow** — partial. The "Owner" section on
+- **Invite flow** — confirmation inline. The "Owner" section on
   `/platform/tenants/<id>` accepts a phone number and calls
-  `inviteOwnerAction`; the UI doesn't show a confirmation of
-  the membership creation yet.
+  `inviteOwnerAction`; on success the form shows "Owner invited
+  — user created, membership pending phone confirmation" inline.
+  No email/SMS is actually sent; the operator verifies the
+  invitee by reading the phone number back, and the invited
+  owner accepts by completing a phone-OTP login.
 - **Sample-data remove** — hidden on a tenant with no preset
   applied (demo-academy has the `swimming` preset applied, so
   this section IS visible; kicks-academy has `multi-sport`
