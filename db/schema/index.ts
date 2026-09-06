@@ -14,3 +14,4 @@ export * from "./tenant-features";
 export * from "./preset-engine";
 export * from "./roles";
 export * from "./enquiries";
+export * from "./audit";
