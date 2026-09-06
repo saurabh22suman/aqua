@@ -1,7 +1,35 @@
 import { chromium } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
+
+// J3 — liveness probe. A previous run that crashed or was killed
+// might leave a `next dev` listening on this port; the script's
+// waitForServer() would then succeed against the stale process and
+// re-run against yesterday's build, silently passing. The probe
+// refuses to start unless the port is provably free. If the probe
+// fails with EADDRINUSE, the developer / CI is told to find and
+// kill the leftover, not silently re-run.
+async function assertPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(
+          `port ${port} is already in use — a previous e2e run likely ` +
+          `left a stale next dev. Find and kill it (lsof -i :${port} or ` +
+          `fuser -k ${port}/tcp), then re-run.`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+  });
+}
 
 const BASE = "http://localhost:3211";
+const PORT = 3211;
 const ROLES: { phone: string; expect: string }[] = [
   { phone: "+91 90000 00001", expect: "/owner" },
   { phone: "+91 90000 00002", expect: "/coach" },
@@ -22,7 +50,8 @@ async function waitForServer(proc: ChildProcess): Promise<void> {
 }
 
 async function main() {
-  const server = spawn("pnpm", ["next", "dev", "-p", "3211"], {
+  await assertPortFree(PORT);
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
     stdio: "ignore",
     detached: true,
   });

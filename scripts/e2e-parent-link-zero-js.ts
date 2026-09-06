@@ -28,6 +28,7 @@
 // dominates). It cleans up its dev server on every exit path.
 
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -89,7 +90,7 @@ function countScriptTags(html: string): number {
   return matches?.length ?? 0;
 }
 
-async function seedSigningMaterial(): Promise<{ tenantId: string; memberId: string }> {
+async function seedSigningMaterial(): Promise<{ tenantId: string; memberId: string; fullName: string }> {
   const url = process.env.MIGRATION_DATABASE_URL;
   if (!url) {
     throw new Error(
@@ -99,19 +100,29 @@ async function seedSigningMaterial(): Promise<{ tenantId: string; memberId: stri
   }
   const admin = new Pool({ connectionString: url });
   try {
-    const r = await admin.query<{ tenant_id: string; member_id: string }>(
-      `select m.tenant_id::text as tenant_id, m.id::text as member_id
+    // The CI seed (`pnpm seed`, which calls `scripts/seed.ts`) creates
+    // members named "Synthetic Member 01..16" on the demo-academy
+    // tenant; the demo seed (`scripts/seed-demo.ts`) creates Aarav
+    // Sharma / AWS-001. CI runs the dev seed only, so we look up
+    // whichever first member exists and pin the assertion on its
+    // actual full name (assertion 3 below).
+    const r = await admin.query<{ tenant_id: string; member_id: string; full_name: string }>(
+      `select m.tenant_id::text as tenant_id, m.id::text as member_id, p.full_name
          from members m
          join persons p on p.id = m.person_id
-        where p.full_name = 'Aarav Sharma'
+        order by m.member_code asc
         limit 1`,
     );
     if (r.rows.length === 0) {
       throw new Error(
-        "Aarav Sharma (AWS-001) not found — run pnpm db:reset && pnpm seed first.",
+        "no seeded member found — run pnpm db:reset && pnpm seed first.",
       );
     }
-    return { tenantId: r.rows[0].tenant_id, memberId: r.rows[0].member_id };
+    return {
+      tenantId: r.rows[0].tenant_id,
+      memberId: r.rows[0].member_id,
+      fullName: r.rows[0].full_name,
+    };
   } finally {
     await admin.end();
   }
@@ -159,7 +170,46 @@ async function waitForServer(): Promise<void> {
   throw new Error(`dev server never came up on ${BASE}`);
 }
 
+// J3 — liveness probe. A previous run that crashed or was killed
+// might have left a `next start` listening on the same port; this
+// script would then `waitForServer()` against the stale process,
+// pass against yesterday's build, and ship. The probe refuses to
+// start unless the port is provably free. `node:net.createServer`
+// tries to bind — if it succeeds, the port was free and we
+// immediately close it. If it fails with EADDRINUSE, we throw
+// loudly: the developer (or CI) needs to find and kill the
+// leftover, not let the test silently re-run against a phantom.
+//
+// We do this check once at script entry, before any other setup,
+// so a stale server produces the same loud failure regardless of
+// which test path reaches it.
+async function assertPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(
+          `port ${port} is already in use — a previous e2e run likely ` +
+          `left a stale next start. Find and kill it (lsof -i :${port} or ` +
+          `fuser -k ${port}/tcp), then re-run.`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+  });
+}
+
 async function main(): Promise<void> {
+  // J3 — refuse to run against a stale server. The audit caught
+  // `waitForServer()` succeeding against a leftover process and
+  // silently re-running yesterday's assertions. Probe the port
+  // BEFORE doing anything else: a stale server on this port means
+  // nothing downstream is meaningful.
+  await assertPortFree(PORT);
+
   // Build to the default `.next/` directory. The test starts a
   // production server on an isolated port (3221) so it does not
   // collide with a developer's running `next dev` on 3000/3211/etc.
@@ -206,7 +256,7 @@ async function main(): Promise<void> {
     // 2) Valid token: the page renders the member's data. The RSC
     //    payload for the rendered data is server-streamed HTML; it
     //    must not be accompanied by any client runtime.
-    const { tenantId, memberId } = await seedSigningMaterial();
+    const { tenantId, memberId, fullName } = await seedSigningMaterial();
     const token = signToken({ tenantId, memberId, secret });
     const valid = await fetchBody(`/p/${token}`);
     const validCount = countScriptTags(valid.body);
@@ -219,10 +269,12 @@ async function main(): Promise<void> {
     // 3) Sanity: the page must still contain the child's name. If
     //    the token's claims are right and the data path renders, the
     //    assertion above is a real coverage of the surface, not an
-    //    assertion on a stub.
-    if (!valid.body.includes("Aarav Sharma")) {
+    //    assertion on a stub. fullName comes from the same DB query
+    //    that produced the token, so it can't drift from the data
+    //    path renders.
+    if (!valid.body.includes(fullName)) {
       throw new Error(
-        `valid-token page did not contain the seeded member's name — the page is rendering a stub.`,
+        `valid-token page did not contain the seeded member's name "${fullName}" — the page is rendering a stub.`,
       );
     }
 

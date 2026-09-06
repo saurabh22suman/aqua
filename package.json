@@ -13,6 +13,7 @@
     "pretest": "tsx db/seed-platform.ts",
     "test": "vitest run",
     "e2e:parent-link-zero-js": "tsx scripts/e2e-parent-link-zero-js.ts",
+    "e2e:platform-form-leak": "tsx scripts/e2e-platform-form-leak.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset.ts",
