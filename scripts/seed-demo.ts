@@ -426,12 +426,17 @@ async function ensureBatches(
       id = existing.rows[0].id;
     } else {
       id = uuidv7();
-      // Primary coach on the morning batches, secondary coach on
-      // the rest. The R.2 demo conflict comes from the Late Squad
-      // block in main(), which assigns the same primary coach to
-      // another batch overlapping Mon-Fri 18:00-19:00.
+      // Primary coach on the morning + Sunday batches, secondary
+      // coach on the rest. The R.2 demo conflict comes from the
+      // Late Squad block in main(), which assigns the same primary
+      // coach to another batch overlapping Mon-Fri 18:00-19:00.
+      // Sunday Open Practice sits with the primary coach so the
+      // runbook's "primary coach today" surface has content every
+      // day of the week — the operator walks as Coach (primary).
       const coachId =
-        b.name === "Morning Squad" || b.name === "Morning Masters"
+        b.name === "Morning Squad" ||
+        b.name === "Morning Masters" ||
+        b.name === "Sunday Open Practice"
           ? primaryCoachStaffId
           : secondaryCoachStaffId;
       const endTime = addHour(b.startTime);
