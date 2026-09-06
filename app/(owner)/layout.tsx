@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { LayoutDashboard, Users, FileText, Settings } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
-import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import { sessionExists } from "@/lib/auth/context";
 
 export default async function OwnerLayout({ children }: { children: ReactNode }) {
@@ -19,7 +18,6 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
           { href: "/owner/settings", label: "Settings", icon: Settings },
         ]}
       />
-      <ServiceWorkerRegistrar />
     </div>
   );
 }
