@@ -11,6 +11,11 @@ import { parseEnv } from "@/lib/env";
 
 const BASE: Record<string, string> = {
   DATABASE_URL: "postgres://app:pw@localhost:5432/aqua",
+  // J7: MIGRATION_DATABASE_URL is now required — a developer
+  // missing it would otherwise run migrations under `app_login`
+  // and see confusing errors. The audit caught that shape; the
+  // fix is the test below plus this BASE addition.
+  MIGRATION_DATABASE_URL: "postgres://aqua:aqua@localhost:5432/aqua",
 };
 
 describe("parseEnv — DEMO_MODE boot-fail", () => {

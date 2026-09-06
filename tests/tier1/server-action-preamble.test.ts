@@ -143,15 +143,54 @@ function isPermissionCallExpr(expr: ts.Expression): boolean {
 // "second statement" check lets the action interleave a normalisation
 // step (intermediate variable assignment) between parse and
 // permission — the rule is about ordering, not slot allocation.
-type Site = { index: number; isPerm: boolean; isServiceCall: boolean };
+type Site = { index: number; isPerm: boolean };
 
 function flattenBody(body: ts.Block): { stmt: ts.Statement; site: Site }[] {
+  // F5/J5 fix: the previous version of this file had a
+  // `isServiceCall: boolean` field that was declared and
+  // initialised but never set to true. The order check below
+  // gated `serviceIndex` advancement on that flag, so
+  // `serviceIndex` stayed at -1 forever and the permIndex <
+  // serviceIndex comparison never ran — every action passed the
+  // order check regardless of where the permission check sat.
+  //
+  // The fix is structural: drop the field entirely. The
+  // serviceIndex check now runs against `statementLooksLikeServiceCall`
+  // directly, on every statement, exactly as the comment above
+  // the function described the original intent.
   const out: { stmt: ts.Statement; site: Site }[] = [];
   body.statements.forEach((s, i) => {
-    out.push({ stmt: s, site: { index: i, isPerm: false, isServiceCall: false } });
+    out.push({ stmt: s, site: { index: i, isPerm: false } });
   });
   return out;
 }
+
+// Built-in JS / Next.js / better-auth functions that are NOT
+// service calls — they're either pure (String, Number, Math) or
+// platform-level helpers (revalidatePath, formData.get). Without
+// this list, `String(formData.get(...))` (a type-coercion
+// wrapper around the parsed value, common after safeParse) would
+// register as a service call and the order check would fire on
+// every action with a normalisation step between parse and
+// permission.
+//
+// Keep the list deliberately tight: anything added here must be
+// safe to call from a Server Action WITHOUT crossing a permission
+// boundary. If unsure, leave it off — false negatives on the
+// order check (a real service call we treat as a setup line)
+// are recoverable from review; false positives (a setup line we
+// treat as a service call) make the test perpetually red.
+const NON_SERVICE_NAMES = new Set([
+  // JS built-ins.
+  "String", "Number", "Boolean", "Object", "Array", "JSON",
+  "Math", "Date", "Set", "Map", "Promise", "Symbol", "Error",
+  // Next.js request / cache helpers.
+  "revalidatePath", "revalidateTag", "redirect", "notFound",
+  // FormData is a value, not a service; `.get()` is field access.
+  "get", "getAll", "has", "entries", "keys", "values",
+  // better-auth's helpers are platform-level; the auth lookup
+  // is gated by PERMISSION_CALL_NAMES, not here.
+]);
 
 // Heuristic: a statement "is a service call" if it contains an await
 // on a name not in PERMISSION_CALL_NAMES, not a primitive (number/
@@ -173,6 +212,25 @@ function statementLooksLikeServiceCall(s: ts.Statement): boolean {
   }
   if (ts.isAwaitExpression(cursor)) cursor = cursor.expression;
   if (!ts.isCallExpression(cursor)) return false;
+
+  // F5/J5 fix: exclude parse calls. The first statement of every
+  // action is a `<schema>.parse(...)` / `<schema>.safeParse(...)`
+  // call, and the second statement is the permission check.
+  // Without this exclusion, every parse call counts as a service
+  // call and `serviceIndex` lands on the parse statement —
+  // permIndex (1) >= serviceIndex (0) → the order check fails
+  // on every action regardless of where the actual service call
+  // sits. (The bug surfaced only after the dead `isServiceCall`
+  // gate was removed — before that, every action passed
+  // regardless of order.)
+  if (
+    ts.isPropertyAccessExpression(cursor.expression) &&
+    (cursor.expression.name.text === "parse" ||
+      cursor.expression.name.text === "safeParse")
+  ) {
+    return false;
+  }
+
   // An `await auth.api.getSession({ headers })` style call — we
   // treat it as a session lookup, not a service call, and let
   // PERMISSION_CALL_NAMES catch the wrapper.
@@ -193,10 +251,28 @@ function statementLooksLikeServiceCall(s: ts.Statement): boolean {
   ) {
     return false;
   }
+  // JS / Next.js / better-auth built-ins: not service calls.
+  // See NON_SERVICE_NAMES' header for what makes the cut.
+  if (
+    ts.isCallExpression(cursor) &&
+    ts.isIdentifier(cursor.expression) &&
+    NON_SERVICE_NAMES.has(cursor.expression.text)
+  ) {
+    return false;
+  }
   if (sawPermissionWrapper) return false;
   return true;
 }
 
+// True iff the body runs parse → permission check → service in that
+// order. The rule is "permission must come before service"; the test
+// walks all top-level statements (and the body of any leading try)
+// to find both a permission call and any "service-looking" call,
+// then asserts parse < permission < service. Skipping the strict
+// "second statement" check lets the action interleave a normalisation
+// step (intermediate variable assignment, an early-return on parse
+// failure, a revalidatePath) between parse and permission — the
+// rule is about ordering, not slot allocation.
 function secondStatementIsPermissionCheck(body: ts.Block): boolean {
   const flattened = flattenBody(body);
   let permIndex = -1;
@@ -218,14 +294,16 @@ function secondStatementIsPermissionCheck(body: ts.Block): boolean {
         }
       });
     }
+    // Service-call advancement now runs on every statement
+    // (the dead `site.isServiceCall &&` gate is gone — see the
+    // F5/J5 note above flattenBody).
     if (
-      site.isServiceCall &&
       statementLooksLikeServiceCall(stmt) &&
       serviceIndex === -1
     ) {
       serviceIndex = site.index;
     }
-    if (!site.isServiceCall && permIndex === -1) {
+    if (permIndex === -1) {
       // Look at this statement directly — mark it as a permission
       // candidate if its expression is a permission call.
       const init =
