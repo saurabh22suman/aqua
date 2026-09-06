@@ -115,17 +115,20 @@ afterAll(async () => {
 });
 
 describe("listTenants", () => {
-  it("returns tenant rows ordered by created_at desc", async () => {
+  it("returns tenant rows ordered by status (live first) then created_at desc", async () => {
     const result = await listTenants({});
     expect(result.total).toBeGreaterThanOrEqual(3);
     const seenFixtures = result.rows.filter((r) =>
       Object.values(TENANT_IDS).some((id) => id === r.id),
     );
     expect(seenFixtures).toHaveLength(3);
-    // Within the fixture set, alice was inserted first and carol last,
-    // so desc order = carol, bob, alice.
-    expect(seenFixtures[0]?.id).toBe(TENANT_IDS.carol);
-    expect(seenFixtures[2]?.id).toBe(TENANT_IDS.alice);
+    // H2: status leads — active (bob) before trial (alice) before
+    // suspended (carol). Within a status group newer tenants come
+    // first; one fixture tenant per status, so created_at only breaks
+    // ties here, it doesn't decide the fixture order.
+    expect(seenFixtures[0]?.id).toBe(TENANT_IDS.bob);
+    expect(seenFixtures[1]?.id).toBe(TENANT_IDS.alice);
+    expect(seenFixtures[2]?.id).toBe(TENANT_IDS.carol);
   });
 
   it("denormalises member_count and location_count per tenant", async () => {

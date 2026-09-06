@@ -110,7 +110,15 @@ export async function listTenants(
         group by tenant_id
       ) locations on locations.tenant_id = ${tenants.id}
       where ${where}
-      order by ${tenants.createdAt} desc
+      order by
+        case ${tenants.status}
+          when 'active' then 0
+          when 'trial' then 1
+          when 'suspended' then 2
+          when 'churned' then 3
+          else 4
+        end,
+        ${tenants.createdAt} desc
       limit ${input.limit}
       offset ${input.offset}
     `);
