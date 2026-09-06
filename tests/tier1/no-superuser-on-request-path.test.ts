@@ -40,6 +40,14 @@ import { describe, expect, it } from "vitest";
 //                            OFFLINE_SYNC_ENABLED=false counterpart,
 //                            verifying the fail-loud UI instead of offline
 //                            queueing — still just a driver script
+//   scripts/e2e-platform-form-leak.ts - H1 driver script. Tier 1.5 needs
+//                            to provision a platform_users row + a fully
+//                            authed platform_sessions row so it can reach
+//                            an auth-gated form with JS on; that fixture
+//                            setup goes through the privileged pool the
+//                            same way scripts/e2e-offline.ts does. Reads
+//                            are limited to the one active-tenant lookup;
+//                            it never serves a request path.
 const ALLOWLIST = new Set([
   "db/migrate.ts",
   "db/migrations/20260904090000_makeup_credits.sql",
@@ -129,6 +137,7 @@ const ALLOWLIST = new Set([
   "app/(platform)/platform/tenants/[tenantId]/page.tsx",
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
+  "scripts/e2e-platform-form-leak.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist
 ]);
 
