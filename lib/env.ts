@@ -23,7 +23,7 @@ function passwordOf(connectionString: string): string {
 const envSchema = z
   .object({
     DATABASE_URL: postgresUrl,
-    MIGRATION_DATABASE_URL: z.preprocess(emptyAsUndefined, postgresUrl.optional()),
+    MIGRATION_DATABASE_URL: z.preprocess(emptyAsUndefined, postgresUrl),
     APP_LOGIN_PASSWORD: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     BETTER_AUTH_SECRET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     BETTER_AUTH_URL: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
@@ -145,14 +145,19 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
       `Invalid environment configuration:\n${issues}\nCopy .env.example to .env and fill in every variable.`,
     );
   }
+  if (!parsed.data.MIGRATION_DATABASE_URL) {
+    throw new Error(
+      "Invalid environment configuration:\n" +
+        "  - MIGRATION_DATABASE_URL: required — connects as the privileged `aqua` role for migrations, role bootstrap, and pg-boss schema setup. Falling back to DATABASE_URL (which connects as `app_login`) would run migrations and reset scripts under a role without the privileges they need. Set MIGRATION_DATABASE_URL explicitly in every environment, including local.",
+    );
+  }
   return {
     DATABASE_URL: parsed.data.DATABASE_URL,
-    MIGRATION_DATABASE_URL:
-      parsed.data.MIGRATION_DATABASE_URL ?? parsed.data.DATABASE_URL,
-  APP_LOGIN_PASSWORD: parsed.data.APP_LOGIN_PASSWORD,
-  BETTER_AUTH_SECRET: parsed.data.BETTER_AUTH_SECRET,
-  BETTER_AUTH_URL: parsed.data.BETTER_AUTH_URL,
-  PARENT_LINK_SECRET: parsed.data.PARENT_LINK_SECRET,
+    MIGRATION_DATABASE_URL: parsed.data.MIGRATION_DATABASE_URL,
+    APP_LOGIN_PASSWORD: parsed.data.APP_LOGIN_PASSWORD,
+    BETTER_AUTH_SECRET: parsed.data.BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL: parsed.data.BETTER_AUTH_URL,
+    PARENT_LINK_SECRET: parsed.data.PARENT_LINK_SECRET,
     NODE_ENV: parsed.data.NODE_ENV,
     DEMO_MODE: parsed.data.DEMO_MODE,
   };

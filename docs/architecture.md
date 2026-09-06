@@ -1577,7 +1577,14 @@ create index on message_log (tenant_id, sent_at desc);
 Signed token → /p/{token} → server-rendered page, no bundle
 ```
 
-Payload holds person id, tenant id, scope and expiry; signed with a rotating secret; single-purpose (a fee link cannot read progress); 7-day expiry; revocable. Zero client JavaScript, no analytics, no tracking — a DPDP requirement on any surface serving children's data.
+Payload holds person id, tenant id, scope and expiry; signed with a long-lived secret (`PARENT_LINK_SECRET`, separate from `BETTER_AUTH_SECRET` so a better-auth rotation doesn't silently invalidate parents' 7-day links); single-purpose (a fee link cannot read progress); 7-day expiry. **Revocation is not currently supported** — the audit caught two false claims that landed here:
+
+1. The secret is not "rotating". It's a single long-lived env var, exactly the same shape `BETTER_AUTH_SECRET` uses. A rotating secret would require a key-id in the JWT header and a verifier that knows the current + previous keys. We do not have that. A rotation today invalidates every active link until parents ask for new ones.
+2. Revocation is not implemented. A denylist table is documented as a future addition (the C-07 proposal calls it optional) but is not in the schema. With TTL + a long-lived secret, the only way to revoke a link is to rotate the secret, which is heavy-handed — it kills every other active parent link, not just the one being revoked.
+
+The /p/[token] route is a Next.js Route Handler returning a raw HTML document, not a page.tsx. This shape is what makes the zero-client-JavaScript property real: a page.tsx would inherit the App Router root layout's client runtime and ship ~10 <script> tags even with no use-client boundaries. The handler adds `X-Robots-Tag: noindex` so search engines don't cache pages carrying personal data, and writes an `audit_log` row on issuance (staff id, member id, issuedAt, expiresAt, scope — never the token) so the "who issued link X to whom, until when" question has a durable answer.
+
+Zero client JavaScript, no analytics, no tracking — a DPDP requirement on any surface serving children's data.
 
 ---
 
@@ -1650,20 +1657,39 @@ Verified in `scripts/e2e-offline-disabled.ts`: the online path still marks and p
 
 ### 13.2 Route structure
 
+The repo's actual structure (J7 — the previous version of this section claimed a single `(tenant)/[slug]/` tree that didn't exist on disk):
+
 ```
 app/
-  (platform)/          control plane — separate auth, Phase 4
-  (tenant)/[slug]/
-    (owner)/           dashboard, reports, settings
-    (staff)/           members, batches, attendance, fees, bookings
-    (coach)/           today, register, assessments
-    (worker)/          tasks
-  p/[token]/           parent magic-link pages, zero JS
-  book/[slug]/         public booking, minimal JS
-  api/webhooks/
+  layout.tsx                          — root layout
+  globals.css
+  (auth)/login/                       — phone+OTP sign-in (staff + parents)
+  (owner)/owner/                      — owner/admin surfaces
+    page.tsx                          — dashboard
+    batches/, members/, staff/, sessions/, enquiries/, programs/,
+    onboarding/, reports/, settings/terminology/, settings/branding/
+  (coach)/coach/                      — coach surfaces
+    page.tsx                          — today
+    register/[sessionId]/, schedule/, members/, me/
+  (reception)/reception/              — receptionist surfaces
+    page.tsx                          — today
+    members/, members/[memberId]/, members/new/, enquiries/, enquiries/[enquiryId]/
+  (parent)/parent/                    — parent surfaces (legacy; superseded by /p/[token])
+    page.tsx
+  (platform)/platform/                — control plane — separate auth, mandatory 2FA
+    page.tsx                          — activity feed
+    login/, verify/, features/, presets/, presets/[key]/,
+    tenants/, tenants/[tenantId]/, tenants/new/, activity/
+  p/[token]/                          — parent magic-link pages, zero JS (route handler)
+  api/auth/[...all]/                  — better-auth catch-all
+  api/health/                         — health endpoint
 ```
 
 Role groups are separate layouts, not conditional rendering inside one dashboard. This is what makes role-first UX real rather than aspirational — a worker's bundle does not contain the owner's reports.
+
+There is **no `(tenant)/[slug]/` segment** in the actual tree. Tenant resolution is slug-keyed via the session (`lib/auth/context.ts`, `resolveCtxFor` / `requireCtx`), not via a URL segment — the URL doesn't carry the tenant. (A `/book/[slug]/` public-booking tree is also documented but not yet implemented; Phase 3 work.)
+
+The `(parent)/parent/` segment is a legacy stub from before C-45 — the `/p/[token]` route is the live surface; the parent dashboard is not yet built.
 
 ### 13.3 Performance budget in CI
 

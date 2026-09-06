@@ -49,17 +49,18 @@ should not assume "absolute" means "the test suite will catch it."
 - TypeScript strict. No `any`. Zod at every boundary. (enforced: `tsconfig`
   strict + CI `pnpm typecheck`)
 - Every Server Action opens with (1) a Zod parse, then (2) a permission
-  check, before any service/DB call. (**Parse-first is enforced** —
+  check, before any service/DB call. (Both halves are enforced —
   `tests/tier1/server-action-preamble.test.ts` walks the real AST.
-  **Permission-order is NOT enforced despite reading like it is** — the
-  test's own ordering check is dead code: `site.isServiceCall` is
-  declared and never set to `true` anywhere in the file, so the
-  `serviceIndex` it gates never advances past `-1` and the
-  `permIndex < serviceIndex` comparison never runs. Proven live: moving
-  the permission check in `lib/actions/platform-invite-owner.ts` to
-  after the service call left all tests green. Until that AST walk is
-  fixed, permission-order is a review-time rule only — verify it by
-  reading the action, not by trusting this test passed.)
+  The audit caught the order check as dead code: a `site.isServiceCall`
+  field was declared and never set to `true`, so the `serviceIndex` it
+  gated never advanced past `-1` and the `permIndex < serviceIndex`
+  comparison never ran. F5/J5 fix: the field is gone; the order check
+  now runs against `statementLooksLikeServiceCall` on every
+  statement, with built-ins (`String`, `Number`, `revalidatePath`,
+  `formData.get`, …) excluded from the service-call set so
+  post-parse normalisation doesn't trip the check. Proven live:
+  moving the permission check in `lib/actions/platform-invite-owner.ts`
+  past the service call now flips the test red.)
 - Files under 300 lines. (Partial enforcement — `pnpm check:lines`
   reports every file over the soft limit; the script currently exits 0
   because the codebase accumulated over-300-line files before the
