@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { CalendarDays, UserPlus, ClipboardList } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
+import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import { sessionExists } from "@/lib/auth/context";
 
 export default async function ReceptionLayout({ children }: { children: ReactNode }) {
@@ -17,6 +18,7 @@ export default async function ReceptionLayout({ children }: { children: ReactNod
           { href: "/reception/enquiries", label: "Enquiries", icon: ClipboardList },
         ]}
       />
+      <ServiceWorkerRegistrar />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { CalendarDays, Users, UserRound, ListChecks } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
+import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import { sessionExists } from "@/lib/auth/context";
 
 export default async function CoachLayout({ children }: { children: ReactNode }) {
@@ -18,6 +19,7 @@ export default async function CoachLayout({ children }: { children: ReactNode })
           { href: "/coach/me", label: "Me", icon: UserRound },
         ]}
       />
+      <ServiceWorkerRegistrar />
     </div>
   );
 }
