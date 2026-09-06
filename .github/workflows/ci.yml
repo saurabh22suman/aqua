@@ -68,6 +68,15 @@ jobs:
       # no DB needed; runs in well under a second.
       - run: pnpm check:runbook-sync
 
+      # F5: every script referenced in package.json must point to a
+      # file that exists. The E1 follow-up landed a "passing"
+      # parent-link zero-script test that was actually a phantom:
+      # package.json referenced scripts/e2e-parent-link-zero-js.ts
+      # but the file did not exist in any commit and CI never ran
+      # it. A passing test is not evidence unless you have seen it
+      # run. This check closes that class permanently.
+      - run: pnpm check:scripts-exist
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
