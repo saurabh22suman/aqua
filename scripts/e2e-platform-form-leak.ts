@@ -135,14 +135,19 @@ async function waitForServer(): Promise<void> {
   throw new Error("dev server never came up on " + BASE);
 }
 
-async function activeTenantWithPreset(): Promise<string> {
+async function anyActiveTenant(): Promise<string> {
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   try {
+    // The invite-owner form renders on the tenant detail page for
+    // every tenant (it's not preset-gated), so any active tenant
+    // works. CI seeds via `pnpm seed` (Demo Academy, no preset),
+    // not `pnpm demo:reset`, so a preset condition would find zero
+    // rows in CI — do not require preset_key here.
     const t = await admin.query<{ id: string }>(
-      `select id from tenants where status = 'active' and preset_key is not null limit 1`,
+      `select id from tenants where status = 'active' limit 1`,
     );
     if (t.rows.length === 0) {
-      throw new Error("no active tenant with preset — run pnpm demo:reset first");
+      throw new Error("no active tenant — run pnpm seed first");
     }
     return t.rows[0]!.id;
   } finally {
@@ -268,7 +273,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
     // click required) and the phone field is the most natural
     // sentinel.
     const { cookieValue } = await seedAuthedSessionCookie();
-    const tenantId = await activeTenantWithPreset();
+    const tenantId = await anyActiveTenant();
     const authedCtx = await browser.newContext({
       viewport: { width: 1366, height: 900 },
       javaScriptEnabled: true, // must be true so the form renders
