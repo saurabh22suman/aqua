@@ -48,6 +48,13 @@ import { describe, expect, it } from "vitest";
 //                            same way scripts/e2e-offline.ts does. Reads
 //                            are limited to the one active-tenant lookup;
 //                            it never serves a request path.
+//   scripts/e2e-parent-link-zero-js.ts - C-45 driver script. Derives a
+//                            valid parent-link token by looking up
+//                            Aarav Sharma's tenant_id + member_id from
+//                            the privileged pool (fixture setup, not a
+//                            request-path read); the test then asserts
+//                            the production build's /p/[token] response
+//                            ships zero <script> tags.
 const ALLOWLIST = new Set([
   "db/migrate.ts",
   "db/migrations/20260904090000_makeup_credits.sql",
@@ -138,6 +145,7 @@ const ALLOWLIST = new Set([
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
   "scripts/e2e-platform-form-leak.ts",
+  "scripts/e2e-parent-link-zero-js.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist
 ]);
 
