@@ -271,6 +271,51 @@ the scope guard instead of returning zero.
 Record what went red. A mutation that did NOT turn anything red is a
 coverage hole — open a task for it before moving on.
 
+### Named failure class: a passing test is not evidence unless you have seen it run
+
+A "passing" test that was never run is worse than no test: it spends
+the reviewer's trust for nothing. CI green means CI invoked what
+CI was wired to invoke. A test script referenced in `package.json`
+that does not exist on disk will not fail CI — `pnpm test` won't
+run it, and most CI workflows are written against `pnpm test`. The
+"green" check then confirms nothing about the property it claims
+to cover.
+
+Real example from one session: the C-45 parent-link zero-script
+property was reported as fixed by PR #92's predecessor. The "fix"
+included `scripts/e2e-parent-link-zero-js.ts`, wired into CI via
+`package.json`'s `e2e:parent-link-zero-js` script. CI was green.
+The property was not actually enforced. The file did not exist in
+any commit on any branch — `pnpm e2e:parent-link-zero-js` would
+have failed with `ERR_MODULE_NOT_FOUND` if anyone had run it, but
+no one did, because CI never invoked that script. The CI run that
+"proved" the property was running the wrong tests entirely. Closed
+in two parts: (a) the underlying layout/route-handler fix that
+made the property actually true, (b) `scripts/check-scripts-exist.ts`
+which fails CI when any `tsx`/`node` entry point referenced from
+`package.json` does not exist on disk. Either alone would not have
+been enough: the fix without the check could drift again the same
+way; the check without the fix would have reported clean on a
+property that was never enforced.
+
+- [ ] A "this passes" claim is not evidence until you have seen the
+      artifact run. For a new `pnpm <name>` script, that means:
+      the script must exist on disk (see
+      `pnpm check:scripts-exist`), and the script must be invoked
+      from CI (search `.github/workflows/ci.yml` for the script
+      name; a `package.json` entry alone is not a CI invocation).
+- [ ] If the verification is "CI was green" without naming the
+      specific command that ran, that is not a verification — it is a
+      summary of a different property. Ask for the command.
+- [ ] Do not add a new `pnpm <name>` script and then cite it as
+      evidence of a property without first running it locally and
+      watching the exit code. A file that does not exist is the
+      trivial version; a file that errors at runtime is the next
+      version; a file that passes for the wrong reason is the
+      version that survives review.
+- [ ] `pnpm check:scripts-exist` is wired into CI; a failing run
+      there is a merge blocker, not a follow-up.
+
 ### Named failure class: a narrowed window looks like a closed one
 
 **A fix that reduces a failure rate is not a fix.** Measure repeatedly,
