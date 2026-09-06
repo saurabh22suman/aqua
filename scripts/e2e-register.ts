@@ -1,7 +1,29 @@
 import { chromium } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
+
+// J3 — liveness probe. See scripts/e2e-login.ts for the rationale.
+async function assertPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(
+          `port ${port} is already in use — a previous e2e run likely ` +
+          `left a stale next dev. Find and kill it (lsof -i :${port} or ` +
+          `fuser -k ${port}/tcp), then re-run.`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+  });
+}
 
 const BASE = "http://localhost:3213";
+const PORT = 3213;
 
 async function waitForServer(proc: ChildProcess): Promise<void> {
   for (let i = 0; i < 60; i++) {
@@ -15,7 +37,8 @@ async function waitForServer(proc: ChildProcess): Promise<void> {
 }
 
 async function main() {
-  const server = spawn("pnpm", ["next", "dev", "-p", "3213"], {
+  await assertPortFree(PORT);
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
     stdio: "ignore",
     detached: true,
   });

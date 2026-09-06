@@ -28,6 +28,25 @@ name: agent-protected-paths
 #   The agent and the human share the same GitHub identity
 #   (saurabh22suman). Author-based gating cannot distinguish
 #   them.
+#
+# Path coverage — every glob below is paired with a semantic
+# category in `tests/tier1/agent-protected-paths.test.ts`. The
+# test walks the repo for files matching each semantic
+# definition (auth, money, consent, children's data) and asserts
+# each one is COVERED by at least one glob here. If a future
+# file lands in one of those categories without a matching glob
+# below, the test fails — and the test also blocks itself from
+# being weakened silently (it pins its own path).
+#
+# The categories are deliberately path-based, not import-based:
+#   - The workflow runs before tests, on a bare checkout.
+#     `grep -r` over the whole repo at PR time is cheap but
+#     fragile; globbing by path is cheaper and reviewable.
+#   - Auth/money/consent/children's-data code has stable homes
+#     in this repo by convention (see docs/agent-lanes.md and
+#     the test's semantic definitions). New code in those
+#     categories lands in the same homes; a new home is the
+#     change that wants review anyway.
 
 on:
   pull_request:
@@ -60,10 +79,54 @@ jobs:
           FAILED=0
           while IFS= read -r file; do
             case "$file" in
+              # AUTH — credential issuance, session handling, permission
+              # checks. lib/auth/* is the home of session/permission/
+              # cookie helpers; lib/actions/platform-auth* is the platform
+              # login/verify session lookup; db/platform-auth* is the
+              # platform user/session/2FA storage layer; lib/actions/
+              # parent-link* and lib/services/parent-link* issue and
+              # verify the signed parent-page tokens (a credential); app/
+              # api/auth/* is the better-auth catch-all route.
+              lib/auth/*) echo "::error file=$file::Touches lib/auth/** (session/permission helpers)."; FAILED=1 ;;
+              lib/actions/platform-auth*) echo "::error file=$file::Touches platform auth (login/verify/2FA)."; FAILED=1 ;;
+              db/platform-auth*) echo "::error file=$file::Touches platform auth storage (users/sessions/TOTP)."; FAILED=1 ;;
+              lib/actions/parent-link*) echo "::error file=$file::Touches parent-link issuance (a credential)."; FAILED=1 ;;
+              lib/services/parent-link*) echo "::error file=$file::Touches parent-link signing/verification."; FAILED=1 ;;
+              app/api/auth/*) echo "::error file=$file::Touches the better-auth route handler."; FAILED=1 ;;
+
+              # MONEY — paise arithmetic, formatting, schema that holds
+              # money columns. *money* and *_paise* are the conventions;
+              # lib/money/* is the helper home.
+              lib/money/*) echo "::error file=$file::Touches lib/money/** (paise arithmetic/format)."; FAILED=1 ;;
+              db/schema/*money*) echo "::error file=$file::Touches a money schema file."; FAILED=1 ;;
+              db/schema/*paise*) echo "::error file=$file::Touches a *_paise schema file."; FAILED=1 ;;
+
+              # CONSENT — DPDP-Act tracked state. consent.ts is the
+              # schema; service and action layers live alongside.
+              db/schema/consent*) echo "::error file=$file::Touches consent schema."; FAILED=1 ;;
+              lib/services/consent*) echo "::error file=$file::Touches consent service."; FAILED=1 ;;
+              lib/actions/consent*) echo "::error file=$file::Touches consent action."; FAILED=1 ;;
+
+              # CHILDREN'S DATA — surfaces that read or expose data
+              # about minors (the subject of DPDP). parent-view is the
+              # data-fetch layer for the signed-link parent page;
+              # persons/memberships/scheduling carry the underlying
+              # rows (members, persons, guardianships, attendance);
+              # better-auth owns the credential rows.
+              lib/services/parent-view*) echo "::error file=$file::Touches parent-view (children's data)."; FAILED=1 ;;
+              db/schema/people.ts) echo "::error file=$file::Touches persons/members/guardianships schema."; FAILED=1 ;;
+              db/schema/memberships.ts) echo "::error file=$file::Touches memberships schema."; FAILED=1 ;;
+              db/schema/scheduling.ts) echo "::error file=$file::Touches sessions/attendance schema."; FAILED=1 ;;
+              db/schema/better-auth.ts) echo "::error file=$file::Touches better-auth credential schema."; FAILED=1 ;;
+              db/auth-db.ts) echo "::error file=$file::Touches the better-auth drizzle handle."; FAILED=1 ;;
+
+              # MIGRATIONS — never edit an applied migration; add a new
+              # one (CLAUDE.md). Always requires review.
               db/migrations/*) echo "::error file=$file::Touches db/migrations/**."; FAILED=1 ;;
-              lib/auth/*) echo "::error file=$file::Touches lib/auth/**."; FAILED=1 ;;
-              lib/money/*) echo "::error file=$file::Touches lib/money/**."; FAILED=1 ;;
-              db/schema/consent.ts|lib/services/consent|lib/services/consent.ts|lib/actions/consent|lib/actions/consent.ts) echo "::error file=$file::Touches a consent-related path."; FAILED=1 ;;
+
+              # GATE ITSELF — the workflow and its companion test pair.
+              # Editing either without tripping the gate is the
+              # original attack class the gate exists to prevent.
               .github/workflows/agent-protected-paths.yml) echo "::error file=$file::Touches the gate workflow itself."; FAILED=1 ;;
               tests/tier1/agent-protected-paths.test.ts) echo "::error file=$file::Touches the gate's companion test."; FAILED=1 ;;
             esac

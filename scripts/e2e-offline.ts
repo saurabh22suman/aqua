@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { Pool } from "pg";
 import { env } from "@/lib/env";
 import {
@@ -21,7 +22,28 @@ import {
 } from "./lib/offline-page";
 import { runVerify5, runVerify6, runVerifyColdStart } from "./lib/offline-verify";
 
+// J3 — liveness probe. See scripts/e2e-login.ts for the rationale.
+async function assertPortFree(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const probe = createServer();
+    probe.unref();
+    probe.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE") {
+        reject(new Error(
+          `port ${port} is already in use — a previous e2e run likely ` +
+          `left a stale next dev. Find and kill it (lsof -i :${port} or ` +
+          `fuser -k ${port}/tcp), then re-run.`,
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    probe.listen(port, "127.0.0.1", () => probe.close(() => resolve()));
+  });
+}
+
 const BASE = "http://localhost:3215";
+const PORT = 3215;
 const MEMBER_COUNT = 16;
 const RUN = Date.now().toString(36);
 const COACH_PHONE = "+91 90000 00002";
@@ -29,11 +51,12 @@ const COACH_PHONE = "+91 90000 00002";
 const { results, record } = makeRecorder();
 
 async function main() {
+  await assertPortFree(PORT);
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   // This suite specifically exercises offline queueing/sync — off by
   // default everywhere else (lib/feature-flags.ts, issue #4), but this is
   // the one process that must turn it on to test the thing it's testing.
-  const server = spawn("pnpm", ["next", "dev", "-p", "3215"], {
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
     stdio: "ignore",
     detached: true,
     env: { ...process.env, OFFLINE_SYNC_ENABLED: "true" },
