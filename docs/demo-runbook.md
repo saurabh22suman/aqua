@@ -299,8 +299,10 @@ Sign out, log in as `+91 90000 00001`.
   Junior competitive, Adult masters). Seven batches across them,
   including the R.2 conflict pair (Late Squad + Holiday
   Recovery, both 18:00–19:00 with Coach Aanya Rao) and the
-  Sunday-only Sunday Open Practice at 09:00 (Coach Bhaskar
-  Menon). **Note:** Programs / Sessions / Enquiries are NOT in
+  Sunday-only Sunday Open Practice at 09:00 (Coach Aanya Rao,
+  the primary coach — so the runbook's primary-coach "today"
+  surface has content every day of the week). **Note:** Programs
+  / Sessions / Enquiries are NOT in
   the owner bottom nav — the nav is Home / Members / Reports /
   Settings. Reach Programs by direct URL or via the "Sessions"
   link at the top of the page; reach Enquiries from the
