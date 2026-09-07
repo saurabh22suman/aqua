@@ -8,9 +8,14 @@
 // Without --email the script uses a default and warns loudly.
 
 import { Pool } from "pg";
-import { randomBytes, createHmac } from "node:crypto";
+import { randomBytes } from "node:crypto";
+import qrcode from "qrcode";
 import { env } from "@/lib/env";
-import { provisionPlatformUser, markTotpEnrolled } from "../db/platform-auth";
+import {
+  provisionPlatformUser,
+  markTotpEnrolled,
+  currentTotpCode,
+} from "../db/platform-auth";
 
 // Demo reset path. The operator provisioning the platform login via
 // this script is doing demo / local-dev work — gate it the same way
@@ -35,35 +40,24 @@ function parseArgs() {
   return out;
 }
 
-function currentTotp(secret: string): string {
-  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const cleaned = secret.replace(/=+$/g, "").toUpperCase();
-  const bytes: number[] = [];
-  let bits = 0;
-  let value = 0;
-  for (const ch of cleaned) {
-    const v = ALPHABET.indexOf(ch);
-    if (v < 0) throw new Error(`invalid base32 char: ${ch}`);
-    value = (value << 5) | v;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.push((value >>> bits) & 0xff);
-    }
-  }
-  const key = Buffer.from(bytes);
-  const counter = Math.floor(Date.now() / 1000 / 30);
-  const counterHex = counter.toString(16).padStart(16, "0");
-  const hmac = createHmac("sha1", key)
-    .update(Buffer.from(counterHex, "hex"))
-    .digest();
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const binary =
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff);
-  return (binary % 1_000_000).toString().padStart(6, "0");
+// otpauth:// URI per the KeyURI format (Google Authenticator compatible).
+// The label is "{issuer}:{account}" — many authenticators split on the
+// colon and treat the right side as the account. URL-encoded to be
+// safe in any URI parser.
+function otpauthUri(args: {
+  issuer: string;
+  account: string;
+  secret: string;
+}): string {
+  const label = `${args.issuer}:${args.account}`;
+  const params = new URLSearchParams({
+    secret: args.secret,
+    issuer: args.issuer,
+    algorithm: "SHA1",
+    digits: "6",
+    period: "30",
+  });
+  return `otpauth://totp/${encodeURIComponent(label)}?${params.toString()}`;
 }
 
 async function main() {
@@ -85,13 +79,29 @@ async function main() {
     });
     await markTotpEnrolled(id);
 
+    const issuer = "Aqua";
+    const uri = otpauthUri({ issuer, account: email, secret: totpSecret });
+    // Render the QR to a UTF-8 block-character string so it pastes
+    // straight into any terminal that supports Unicode (iTerm,
+    // macOS Terminal, GNOME Terminal, VS Code's terminal — all
+    // verified). Google Authenticator's scanner accepts both the
+    // URI and the rendered QR; most authenticator apps do.
+    const qrText = await qrcode.toString(uri, {
+      type: "terminal",
+      errorCorrectionLevel: "M",
+      margin: 1,
+    });
+
     console.log("");
     console.log("=== Platform operator seeded ===");
     console.log(`id           ${id}`);
     console.log(`email        ${email}`);
     console.log(`password     ${password}`);
     console.log(`totp secret  ${totpSecret}`);
-    console.log(`current code ${currentTotp(totpSecret)} (use this to verify, or scan into an authenticator app and use the rolling code)`);
+    console.log(`otpauth URI  ${uri}`);
+    console.log(`current code ${currentTotpCode(totpSecret)} (use this to verify, or scan the QR below into an authenticator app)`);
+    console.log("");
+    console.log(qrText);
     console.log("===============================");
     console.log("");
   } finally {

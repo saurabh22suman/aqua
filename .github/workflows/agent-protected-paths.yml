@@ -50,6 +50,13 @@ name: agent-protected-paths
 
 on:
   pull_request:
+    # `labeled` + `unlabeled` so the gate re-runs when the human
+    # applies (or removes) the human-approved-merge label after the
+    # initial PR open. Without these, the gate runs once on the open
+    # event, fails, and the human has to trigger a manual re-run
+    # after labelling — friction the gate exists to avoid. The
+    # `opened`/`synchronize`/`reopened` types stay covered too.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 jobs:
   agent-protected-paths:
