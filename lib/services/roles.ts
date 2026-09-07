@@ -31,12 +31,15 @@ const ROLE_TEMPLATES: ReadonlyArray<{
   {
     key: "accountant",
     name: "Accountant",
-    // Pre-existing behaviour, preserved as data rather than fixed here:
-    // only owner/admin/coach ever had a distinct landing route: everyone
-    // else fell through to /parent. Whether accountant/receptionist/worker
-    // deserve their own staff landing page is a product question, not part
-    // of this fix.
-    homePath: "/parent",
+    // K3 — pre-demo fix. /parent has no nav and renders just an
+    // "<h1>Parent</h1>" stub, so an authenticated accountant used to
+    // land on a dead-end mislabeled page. Pointed at /owner for now:
+    // the owner surface is read-mostly at the report/dashboard level
+    // and an accountant's permissions (invoices.write, payments.record,
+    // reports.financial) all work there. A dedicated accountant home is
+    // a separate, deliberate product decision — recorded as not-built
+    // here, same shape as the worker role further down.
+    homePath: "/owner",
     homeOrdinal: 3,
     permissions: [
       "invoices.read",

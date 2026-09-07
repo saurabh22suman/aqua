@@ -19,6 +19,23 @@ export default defineConfig({
     // Tests within a file still run in parallel (vitest default).
     fileParallelism: false,
   },
+  // K1 — the batch-detail click-through test imports the page module
+  // (a .tsx file) directly. tsconfig sets jsx: "preserve" so Next can
+  // transform at build time, but Vite 8's import-analysis runs before
+  // that and chokes on untransformed JSX. The oxc option here is the
+  // Vite-8 equivalent of the deprecated esbuild.jsx knob; without it
+  // Vite respects the tsconfig "preserve" instruction and never
+  // rewrites JSX, which the click-through test needs to invoke the
+  // server-component page function (and any future route-driven
+  // regression tests). Tests under tests/offline/* already get JSX
+  // handling via @testing-library/react + the jsdom env; this is the
+  // equivalent for tests that just want to call a server-component page
+  // function and assert on its rendered output.
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+    },
+  },
   resolve: {
     alias: {
       "@": new URL(".", import.meta.url).pathname,

@@ -7,7 +7,10 @@ import { todayInZone } from "@/lib/time/tz";
 import { withTenant } from "@/db/tenant";
 import { eq } from "drizzle-orm";
 import { tenants } from "@/db/schema/tenants";
-import { getBatchAttendanceSummary } from "@/lib/services/attendance-history";
+import {
+  currentMonthPeriod,
+  getBatchAttendanceSummary,
+} from "@/lib/services/attendance-history";
 
 // Phase 4.2 — per-batch attendance summary. Service existed
 // since C-27 (lib/services/attendance-history.ts), deferred
@@ -26,26 +29,25 @@ export default async function BatchDetailPage({
   const { batchId } = await params;
   const ctx = await requireDefaultCtx();
   assertStaff(ctx);
-  const summary = await withTenant(ctx.tenantId, async (tx) => {
-    const [tenant] = await tx
+
+  // Read the tenant's timezone in its own short transaction, then call
+  // the service from outside that scope. Opening withTenant here and
+  // calling getBatchAttendanceSummary inside it nests with the service's
+  // own withTenant and trips enterScope's "Cannot enter tenant scope
+  // while already inside a tenant scope" guard (db/scope.ts). The same
+  // shape as lib/actions/attendance.ts's tenantToday helper, kept inline
+  // because only this page needs it.
+  const [tenant] = await withTenant(ctx.tenantId, (tx) =>
+    tx
       .select({ timezone: tenants.timezone })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId))
-      .limit(1);
-    const period = (() => {
-      const today = todayInZone(tenant?.timezone ?? "Asia/Kolkata");
-      const [y, mo] = today.split("-").map(Number);
-      const from = `${y}-${String(mo).padStart(2, "0")}-01`;
-      const nextMonth = mo === 12 ? { y: y + 1, m: 1 } : { y, m: mo + 1 };
-      const to = `${nextMonth.y}-${String(nextMonth.m).padStart(2, "0")}-01`;
-      return { from, to };
-    })();
-    return getBatchAttendanceSummary(
-      { tenantId: ctx.tenantId },
-      batchId,
-      period,
-    );
-  });
+      .limit(1),
+  );
+  const today = todayInZone(tenant?.timezone ?? "Asia/Kolkata");
+  const period = currentMonthPeriod(today);
+
+  const summary = await getBatchAttendanceSummary(ctx, batchId, period);
   if (!summary) notFound();
 
   return (
