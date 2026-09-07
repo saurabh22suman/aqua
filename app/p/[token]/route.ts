@@ -243,10 +243,21 @@ function pageHeaders(): HeadersInit {
   // No service worker, no analytics, no third-party. Cache-control
   // is no-store because the page contains personal data about a
   // specific child.
+  //
+  // J4 — keep the page out of search engine indexes. The URL embeds
+  // a signed token whose 7-day TTL bounds its exposure; a search
+  // engine caching the response would extend that exposure to
+  // "everyone who can read the cache" — incompatible with the
+  // "magic link expires" contract the operator promised the
+  // guardian. X-Robots-Tag is the only noindex knob Next.js
+  // Route Handlers expose; `<meta name="robots">` would also
+  // work but is read by some crawlers only after parsing HTML,
+  // not at HTTP-fetch time. Header is the canonical surface.
   return {
     "Content-Type": "text/html; charset=utf-8",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
+    "X-Robots-Tag": "noindex",
     "Cache-Control": "no-store",
   };
 }
