@@ -22,6 +22,7 @@
     "check:migrations": "tsx scripts/check-migration-naming.ts",
     "worker": "tsx worker/index.ts",
     "seed": "tsx scripts/seed.ts",
+    "platform:code": "tsx scripts/platform-code.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
     "check:fonts": "tsx scripts/check-font-budget.ts",
     "check:lines": "tsx scripts/check-line-count.ts",
@@ -53,6 +54,7 @@
     "@testing-library/react": "^16.3.3",
     "@types/node": "^26.2.0",
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/uuid": "^11.0.0",
@@ -61,6 +63,7 @@
     "eslint-config-next": "^15.5.23",
     "jsdom": "^30.0.1",
     "playwright": "^1.62.1",
+    "qrcode": "^1.5.4",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   }

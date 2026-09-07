@@ -91,6 +91,36 @@ function base32Decode(input: string): Buffer {
 }
 
 /**
+ * Generate the current 6-digit TOTP code for a given secret. RFC 6238
+ * with SHA-1, 30s step. The mirror of verifyTotp without the
+ * constant-time compare — the caller already knows the secret, so
+ * the code is for them; the verify path stays where it is. Used by
+ * the demo seed and the demo-only `pnpm platform:code` convenience
+ * script.
+ */
+export function currentTotpCode(secret: string, now = Date.now()): string {
+  let secretBytes: Buffer;
+  try {
+    secretBytes = base32Decode(secret);
+  } catch {
+    return "000000";
+  }
+  if (secretBytes.length < 10) return "000000";
+  const counter = Math.floor(now / 1000 / 30);
+  const counterHex = counter.toString(16).padStart(16, "0");
+  const hmac = createHmac("sha1", secretBytes)
+    .update(Buffer.from(counterHex, "hex"))
+    .digest();
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const binary =
+    ((hmac[offset] & 0x7f) << 24) |
+    ((hmac[offset + 1] & 0xff) << 16) |
+    ((hmac[offset + 2] & 0xff) << 8) |
+    (hmac[offset + 3] & 0xff);
+  return (binary % 1_000_000).toString().padStart(6, "0");
+}
+
+/**
  * Verify a 6-digit TOTP code against the user's secret. RFC 6238 with
  * SHA-1, 30s step, ±1 step window (90s total) for clock skew. Constant
  * time on candidate comparison.

@@ -374,3 +374,46 @@ describe("verify before claiming done — F1 also requires the workflow parses",
     expect(result.toString()).toBe("");
   }, 10_000);
 });
+
+describe("the gate re-runs on label changes (so the human does not have to)", () => {
+  // The audit caught this: the original gate workflow only fired on
+  // the PR open event. If the gate failed, the human had to apply
+  // the human-approved-merge label AND trigger a manual workflow
+  // re-run — extra friction the gate exists to avoid. The fix is to
+  // also include `labeled` and `unlabeled` in the workflow's
+  // `pull_request.types` so GitHub re-runs the workflow when those
+  // events happen.
+  //
+  // History check (from git log 4d511cb): an earlier fix removed
+  // the types filter entirely while working around a heredoc + colon-
+  // prefixed lines parsing bug that made the workflow register but
+  // never fire. The current workflow uses simple `echo "::error::"`
+  // statements — no heredocs — so adding the types filter back is
+  // safe. This test pins both: that the types are present AND that
+  // no heredoc has crept in to reintroduce the original bug.
+  const workflow = readFileSync(WORKFLOW_PATH, "utf8");
+
+  it("declares the pull_request.types filter with labeled + unlabeled", () => {
+    // Extract the indented block after `pull_request:`. YAML
+    // whitespace tolerance — we look for any line matching the
+    // expected keys within a few lines of `pull_request:`.
+    expect(workflow).toMatch(/^on:\s*[\s\S]*?pull_request:\s*$/m);
+    expect(workflow).toMatch(/types:\s*\[[^\]]*labeled[^\]]*\]/);
+    expect(workflow).toMatch(/types:\s*\[[^\]]*unlabeled[^\]]*\]/);
+    expect(workflow).toMatch(
+      /types:\s*\[[^\]]*opened[^\]]*synchronize[^\]]*reopened[^\]]*\]/,
+    );
+  });
+
+  it("does not reintroduce the heredoc parsing bug the previous fix worked around", () => {
+    // The original buggy workflow used `cat <<'MSG' >&2 ... MSG`
+    // heredocs which GitHub's workflow parser rejected. The fix
+    // replaced them with simple `echo "::error::..."` statements.
+    // If a future change re-adds a heredoc, GitHub silently fails
+    // to register the workflow run, and the gate goes missing —
+    // exactly the shape that hid J2 for three PRs in a row. Pin
+    // the absence.
+    expect(workflow).not.toMatch(/<<\s*'?MSG'?\s*\n/);
+    expect(workflow).not.toMatch(/\bcat\b.*<<.*\bMSG\b/);
+  });
+});
