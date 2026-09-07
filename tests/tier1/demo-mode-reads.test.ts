@@ -46,6 +46,7 @@ const ALLOWED_READERS = new Set<string[]>([
   // can't write synthetic data.
   ["scripts", "seed-demo.ts"],
   ["scripts", "seed-platform-user.ts"],
+  ["scripts", "platform-code.ts"],
   // The demo-reset wrapper. Same gate as the seed scripts; runs the
   // reset chain only after the guard fires, so `pnpm demo:reset` with
   // DEMO_MODE off does nothing before spawning db:reset.

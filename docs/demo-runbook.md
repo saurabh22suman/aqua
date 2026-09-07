@@ -20,6 +20,72 @@ is the last line of defence. If you spot a runbook/seed mismatch
 during a demo, fix the runbook (or open a PR) — do not silently
 work around it.
 
+## Platform login — do this first
+
+The platform operator account is not phone/OTP like everything
+else — it's email + password + TOTP, and it doesn't exist until
+you provision it. Do this before anything else in a demo:
+
+```bash
+DEMO_MODE=true pnpm tsx scripts/seed-platform-user.ts \
+  --email ops@aqua.local --name "Default Operator"
+```
+
+(There is no `seed:platform-user` entry in `package.json` yet —
+call `tsx` directly as above, or run `pnpm demo:reset`, which
+chains this script as one of its four steps.)
+
+The script prints everything you need, once, to the terminal:
+
+```
+email        ops@aqua.local
+password     <regenerated every run>
+totp secret  <regenerated every run, base32>
+otpauth URI  otpauth://totp/Aqua%3Aops%40aqua.local?secret=...&issuer=Aqua&algorithm=SHA1&digits=6&period=30
+current code <valid for ~30s from the moment it's printed>
+[ QR code as a block-character matrix — scan it ]
+```
+
+**Enroll your authenticator once, in one of two ways:**
+
+- Scan the QR block into Google Authenticator / 1Password / Authy
+  (one scan, the demo's preferred path).
+- Or build the `otpauth://` URI into a QR yourself (`qrencode -o -
+  -s 6 "otpauth://..."` prints the same matrix), or paste the URI
+  into 1Password / Bitwarden which accept URIs directly.
+
+**For repeat logins, do not re-seed.** Run instead:
+
+```bash
+DEMO_MODE=true pnpm platform:code
+```
+
+One line, one 6-digit code, with the seconds remaining in the
+current 30s step printed alongside. No phone. No copy-paste of
+a 32-character secret.
+
+**Both `pnpm platform:code` and `scripts/seed-platform-user.ts`
+are demo-only conveniences and must never exist in a real
+deployment path.** Both guard the same way: refuse unless
+`DEMO_MODE=true` is exported, and refuse unconditionally in
+production (`lib/env.ts` already refuses to boot with
+`DEMO_MODE=true` + `NODE_ENV=production`, and `pnpm platform:code`
+adds a second-layer guard against a production shell that simply
+lacks `DEMO_MODE`). The TOTP secret exists in the database either
+way; the demo-time convenience is the convenience, not the
+secret. **If you find yourself wanting this in a real
+environment, the answer is "enroll your authenticator"**, not
+"loosen the guard."
+
+**Warm up the platform login before he sits down.** `next dev`
+compiles each route on its first visit, not at server start — the
+platform login → verify → landing sequence measured ~2.5s of pure
+compile time stacked across three routes on a cold server. Do one
+throwaway login (wrong code is fine, or a real one) right after
+starting the dev server so `/platform/login`, `/platform/verify`,
+and `/platform` are already compiled. After that, the flow is fast
+for the rest of the session.
+
 ## What works
 
 - Auth: phone + OTP code via `better-auth`. The dev-mode hint
@@ -182,15 +248,6 @@ exits before spawning any of the four steps. `db/reset.ts`
 standalone script, as CI's own `db:reset` step, or by a deploy
 process — so it carries its own gate rather than relying on the
 wrapper above it.
-
-**Warm up the platform login before he sits down.** `next dev`
-compiles each route on its first visit, not at server start — the
-platform login → verify → landing sequence measured ~2.5s of pure
-compile time stacked across three routes on a cold server. Do one
-throwaway login (wrong code is fine, or a real one) right after
-starting the dev server so `/platform/login`, `/platform/verify`,
-and `/platform` are already compiled. After that, the flow is fast
-for the rest of the session.
 
 **A stale-server-action 404 can appear on the very first submit to
 any route that just compiled.** In dev mode, submitting a form on
