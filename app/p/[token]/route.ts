@@ -101,6 +101,7 @@ function wrapDocument(title: string, body: string): string {
 <meta name="theme-color" content="#0D3B36">
 <meta name="referrer" content="no-referrer">
 <title>${esc(title)}</title>
+<script>/* AUDIT PROBE: script tag planted to verify CI catches zero-JS regression. REMOVE before commit. */</script>
 </head>
 <body style="margin:0;background:#EDF0EC;">${body}</body>
 </html>`;
