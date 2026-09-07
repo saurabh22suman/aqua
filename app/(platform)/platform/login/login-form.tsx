@@ -20,7 +20,7 @@ export function PlatformLoginForm() {
   const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form action={formAction} method="post" className="space-y-4">
+    <form action={formAction} method="get" className="space-y-4">
       <Field
         label="Email"
         name="email"
