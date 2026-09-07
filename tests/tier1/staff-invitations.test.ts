@@ -75,9 +75,15 @@ afterAll(async () => {
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
     await withPlatform(() => Promise.resolve());
+    // Cleanup is scoped to this run's RUN_NUM. The previous pattern
+    // was '+91987%', which matched users from any test file's previous
+    // run that happened to use the same prefix -- their tenant_membership
+    // rows survived their own test's cleanup, blocked this delete via
+    // tenant_memberships_user_id_fkey, and turned the suite red for a
+    // reason that was always someone else's data.
     await admin.query(
-      "delete from users where phone like '+91987%'",
-      [],
+      "delete from users where phone like $1",
+      [`+91987${RUN_NUM}%`],
     );
     await admin.query(
       "delete from tenant_memberships where tenant_id = $1",

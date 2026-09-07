@@ -36,7 +36,7 @@ export default async function ReportsPage({
         Period{" "}
         <span className="font-mono">{period.from}</span> to{" "}
         <span className="font-mono">{period.to}</span>{" "}
-        ({timezone}). Date-range picker lands with the rest of 4&apos;s filter surface.
+        ({timezone}). This calendar month, in the tenant&apos;s timezone.
       </p>
 
       <div className="mt-6 space-y-3">

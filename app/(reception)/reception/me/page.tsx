@@ -4,13 +4,11 @@ import { assertStaff } from "@/lib/auth/permissions";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
-// K2 — coach's account surface. Minimum the K2 brief asks for: the
-// user's name and phone, plus a sign-out button. The bottom nav's
-// "Me" tab (app/(coach)/layout.tsx) lands here. A full profile editor
-// is explicitly out of scope for the demo; when one lands, it can
-// replace the two-line identity block in place without touching the
-// nav or the sign-out form.
-export default async function CoachMePage() {
+// K2 — reception's account surface. Mirrors /coach/me: name, phone,
+// sign-out. Reception's bottom nav had three tabs (Today / Add
+// member / Enquiries) — K2 adds a fourth "Me" tab so this page is
+// reachable without burying a sign-out link inside Today.
+export default async function ReceptionMePage() {
   const ctx = await requireDefaultCtx();
   assertStaff(ctx);
   const identity = await getCurrentStaffIdentity(ctx);

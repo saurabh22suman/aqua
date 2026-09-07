@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { staff, type StaffType } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
+import { users } from "@/db/schema/users";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asPersonId, type StaffId, type PersonId, type TenantId, type UserId } from "@/lib/ids";
 
@@ -101,6 +102,49 @@ export async function createStaff(
 
     if (!row) return { ok: false, error: "This person already has a staff record of that type." };
     return { ok: true, staffId: row.id };
+  });
+}
+
+// K2 — the "me" surface. Resolves the current user's full name and
+// phone, used by /coach/me, /reception/me and the Account section of
+// /owner/settings to label the logged-in user above the sign-out
+// button. Best-effort: returns null when the user has no staff row yet
+// (an invited-but-not-onboarded staff member), so the caller can render
+// the phone from the session as a fallback instead of crashing.
+//
+// Phone comes from users (the durable auth identity, set at OTP
+// verification). Name comes from persons via staff; an owner/admin who
+// was never entered as a person won't have a name here, which is the
+// honest empty rather than fabricating one.
+export type StaffIdentity = {
+  fullName: string | null;
+  phone: string;
+};
+
+export async function getCurrentStaffIdentity(
+  ctx: ActionCtx,
+): Promise<StaffIdentity | null> {
+  if (!ctx.userId) return null;
+  return withTenant(ctx.tenantId, async (tx) => {
+    const [row] = await tx
+      .select({
+        fullName: persons.fullName,
+        phone: users.phone,
+      })
+      .from(staff)
+      .innerJoin(persons, eq(persons.id, staff.personId))
+      .innerJoin(users, eq(users.id, staff.userId))
+      .where(
+        and(
+          eq(staff.tenantId, ctx.tenantId),
+          eq(staff.userId, ctx.userId!),
+          isNull(staff.deletedAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!row) return null;
+    return { fullName: row.fullName, phone: row.phone };
   });
 }
 
