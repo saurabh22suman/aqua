@@ -1,13 +1,20 @@
 import { getCoachRosterAction } from "@/lib/actions/coach";
+import { getTerminologyAction } from "@/lib/actions/terminology";
+import { resolveTerm } from "@/lib/terminology/keys";
 import { CoachRosterSearch } from "@/components/coach-roster-search";
 
 export default async function CoachMembersPage() {
-  const roster = await getCoachRosterAction();
+  const [roster, terminology] = await Promise.all([
+    getCoachRosterAction(),
+    getTerminologyAction(),
+  ]);
 
   return (
     <main className="px-5 pt-10 pb-8">
       <h1 className="font-display text-[22px] font-semibold text-marine">Members</h1>
-      <p className="mt-1 text-[13px] text-ink-3">Find a swimmer you coach.</p>
+      <p className="mt-1 text-[13px] text-ink-3">
+        Find a {resolveTerm(terminology, "member", 1)} you coach.
+      </p>
 
       {roster.length === 0 ? (
         <div className="text-center py-12" data-testid="coach-roster-empty">
