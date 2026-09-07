@@ -58,7 +58,7 @@ export default async function SessionsPage() {
       <p className="mt-1 text-[12.5px] text-ink-3">
         Upcoming sessions across every batch — substitute a coach when
         someone is unavailable. The change is recorded so the register
-        and the payout read from the same source.
+        reads who actually ran the session.
       </p>
 
       <UpcomingSessionsList initialSessions={upcoming} coaches={coaches} />

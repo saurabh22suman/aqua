@@ -59,16 +59,15 @@ export default async function StaffDetailPage({
             <p className="text-[14px]">{staff.userId ? "Has login" : "No login"}</p>
             <p className="text-[12px] text-ink-3 mt-0.5">
               {staff.userId
-                ? "Sign in via the staff login flow (3.6 invitations wires this)."
-                : "Has no user account yet. Use the invitations surface to send a login link."}
+                ? "They sign in with their phone number — no separate password."
+                : "No phone-based login yet. Send an invite from the invitations surface to wire one up."}
             </p>
           </div>
         </div>
       </div>
 
       <p className="mt-6 text-[12.5px] text-ink-3 leading-snug">
-        Removing or changing a staff role lands with 3.6 — the same audit-trail and invitation-revoke path
-        covers both edit and dismiss.
+        Detail view is read-only — edit and dismiss ship with the next staff cycle.
       </p>
     </main>
   );
