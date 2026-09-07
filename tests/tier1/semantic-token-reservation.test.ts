@@ -133,6 +133,13 @@ const WHITELIST = new Set([
   // comments so this entry exists for the actual code, not
   // the prose.
   "app/(platform)/platform/tenants/[tenantId]/page.tsx",
+
+  // coach/members/[memberId]/page.tsx — coach member detail.
+  // Attendance history (last 90d) is rendered as status pills:
+  // present → good, late → warn, absent → late. Attendance
+  // state — the same use as owner/members/[id], which is also
+  // whitelisted.
+  "app/(coach)/coach/members/[memberId]/page.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

@@ -1,12 +1,14 @@
 "use server";
 
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { assertStaff } from "@/lib/auth/permissions";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema";
 import { addDays, todayInZone } from "@/lib/time/tz";
-import { listCoachRoster, listCoachSchedule } from "@/lib/services/coach-schedule";
+import { listCoachRoster, listCoachSchedule, getCoachNextUpcoming } from "@/lib/services/coach-schedule";
+import { getCoachMemberDetail, type CoachMemberDetail } from "@/lib/services/coach-member";
 import {
   getRosterForSession,
   listTodaySessions,
@@ -15,6 +17,8 @@ import {
   type RosterRow,
 } from "@/lib/services/register";
 import { coachScheduleSchema, markAttendanceSchema, sessionIdSchema } from "@/lib/schemas";
+
+const memberIdSchema = z.string().uuid();
 import type { CoachRosterRow, CoachScheduleRow } from "@/lib/services/coach-schedule";
 
 export type TodaySession = {
@@ -24,6 +28,7 @@ export type TodaySession = {
   endsAt: string;
   marked: number;
   total: number;
+  sessionDate?: string;
 };
 
 export async function getTodayAction(): Promise<{
@@ -51,6 +56,64 @@ export async function getTodayAction(): Promise<{
       marked: r.marked,
       total: r.total,
     })),
+  };
+}
+
+// Coach home view — today's sessions plus the next upcoming session
+// for the empty state. Reception doesn't get the empty-state treatment:
+// they observe, not act. The next-session lookup is coach-scoped so a
+// coach never sees another coach's batch through this path. Returns
+// the soonest future session within a 7-day window.
+export async function getCoachHomeAction(): Promise<{
+  sessions: TodaySession[];
+  next: TodaySession | null;
+}> {
+  const ctx = await requireDefaultCtx();
+  assertStaff(ctx);
+  if (ctx.roleKey !== "coach") {
+    // Reception and other staff see only today; the home-page empty
+    // state is a coach-only thing.
+    const today = await getTodayAction();
+    return { sessions: today.sessions, next: null };
+  }
+
+  const [tenant] = await withTenant(ctx.tenantId, (tx) =>
+    tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)),
+  );
+  const today = todayInZone(tenant.timezone);
+
+  const [todayRows, nextRow] = await Promise.all([
+    listTodaySessions(
+      { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+      today,
+    ),
+    getCoachNextUpcoming(
+      { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+      today,
+      7,
+    ),
+  ]);
+
+  return {
+    sessions: todayRows.map((r) => ({
+      id: r.id,
+      batchName: r.batchName,
+      startsAt: r.startsAt.toISOString(),
+      endsAt: r.endsAt.toISOString(),
+      marked: r.marked,
+      total: r.total,
+    })),
+    next: nextRow
+      ? {
+          id: nextRow.id,
+          batchName: nextRow.batchName,
+          startsAt: nextRow.startsAt.toISOString(),
+          endsAt: nextRow.endsAt.toISOString(),
+          marked: nextRow.marked,
+          total: nextRow.total,
+          sessionDate: nextRow.sessionDate,
+        }
+      : null,
   };
 }
 
@@ -153,4 +216,19 @@ export async function getCoachRosterAction(): Promise<CoachRosterRow[]> {
   const ctx = await requireDefaultCtx();
   assertStaff(ctx);
   return listCoachRoster({ tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey });
+}
+
+// Coach-scoped member lookup. The service returns null when the
+// member isn't in any of this coach's batches — the page renders
+// 404 so a coach can't probe ids that aren't theirs.
+export async function getCoachMemberDetailAction(
+  rawMemberId: string,
+): Promise<CoachMemberDetail | null> {
+  const memberId = memberIdSchema.parse(rawMemberId);
+  const ctx = await requireDefaultCtx();
+  assertStaff(ctx);
+  return getCoachMemberDetail(
+    { tenantId: ctx.tenantId, userId: ctx.userId ?? "" },
+    memberId,
+  );
 }

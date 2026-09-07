@@ -6,6 +6,7 @@ import { enrolments } from "@/db/schema/scheduling";
 import { members, persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
+import { addDays } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 
 export type CoachScheduleRow = {
@@ -113,6 +114,57 @@ export async function listUpcomingSessions(
       )
       .orderBy(sessions.sessionDate, sessions.startsAt),
   );
+}
+
+// Coach-scoped "next upcoming session" lookup. Used by the coach
+// home's empty state: when there's nothing on today, the page
+// surfaces the soonest future session the coach would act on next
+// (so the verb and target on the empty-state card can match the
+// distance — "Open register" if it's today or tomorrow, "Show on
+// schedule" otherwise). Coach-scoping mirrors listCoachSchedule so
+// a coach cannot see another coach's register through this path.
+// Returns null if the coach has no future sessions in the next
+// `daysAhead` window.
+export async function getCoachNextUpcoming(
+  ctx: ActionCtx & { roleKey: string; userId: string },
+  afterDate: string,
+  daysAhead: number,
+): Promise<CoachScheduleRow | null> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const fromDate = addDays(afterDate, 1);
+    const toDate = addDays(afterDate, daysAhead);
+    const rows = await tx
+      .select({
+        id: sessions.id,
+        sessionDate: sessions.sessionDate,
+        batchName: batches.name,
+        startsAt: sessions.startsAt,
+        endsAt: sessions.endsAt,
+        marked: sql<number>`(
+          select count(*)::int from ${attendance} a
+          where a.tenant_id = ${ctx.tenantId} and a.session_id = ${sessions.id}
+        )`,
+        total: sql<number>`(
+          select count(distinct e.member_id)::int from ${enrolments} e
+          where e.tenant_id = ${ctx.tenantId}
+            and e.batch_id = ${sessions.batchId}
+            and e.enrolled_on <= ${fromDate}
+        )`,
+      })
+      .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .where(
+        and(
+          eq(sessions.tenantId, ctx.tenantId),
+          eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId!)),
+          sql`${sessions.sessionDate} >= ${fromDate}`,
+          sql`${sessions.sessionDate} <= ${toDate}`,
+        ),
+      )
+      .orderBy(sessions.sessionDate, sessions.startsAt)
+      .limit(1);
+    return rows[0] ?? null;
+  });
 }
 
 export type CoachRosterRow = {
