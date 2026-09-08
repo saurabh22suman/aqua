@@ -26,6 +26,7 @@ import {
   type PersonSearchRow,
 } from "@/lib/services/people";
 import { transitionMemberStatus } from "@/lib/services/member-status";
+import { getMemberIdCardContext, type MemberIdCardContext } from "@/lib/services/member-id-card";
 import type { CreateMemberInput } from "@/lib/schemas";
 
 export async function listMembersAction(raw: {
@@ -131,4 +132,13 @@ export async function transitionMemberStatusAction(raw: {
     { tenantId: ctx.tenantId, userId: ctx.userId },
     input,
   );
+}
+
+// §5.2 — context for the member identity card. Owner and reception
+// surfaces both read this on the member detail page. Returns null
+// when the tenant is missing (e.g. deleted) — the page treats that
+// as "skip the card" rather than crashing the surrounding detail.
+export async function getMemberIdCardContextAction(): Promise<MemberIdCardContext | null> {
+  const ctx = await requireDefaultCtx();
+  return getMemberIdCardContext({ tenantId: ctx.tenantId });
 }

@@ -1,7 +1,13 @@
 import { notFound } from "next/navigation";
 import { ShieldCheck, Users } from "lucide-react";
-import { getMemberDetailAction } from "@/lib/actions/people";
+import {
+  getMemberDetailAction,
+  getMemberIdCardContextAction,
+} from "@/lib/actions/people";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
+import { MemberIdCard } from "@/components/member-id-card";
+import { resolveTerm } from "@/lib/terminology/keys";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -18,18 +24,42 @@ export default async function ReceptionMemberDetailPage({
   params: Promise<{ memberId: string }>;
 }) {
   const { memberId } = await params;
-  const member = await getMemberDetailAction(memberId);
+  const [member, cardCtx, terminology] = await Promise.all([
+    getMemberDetailAction(memberId),
+    getMemberIdCardContextAction(),
+    // The id-card's eyebrow renders the closed-key `member`
+    // singular form via resolveTerm (L3 audit). Reception
+    // registers the member and prints the card in the same visit;
+    // the same terminology fetch that the owner-side page uses
+    // pays the cost here too.
+    getTerminologyAction(),
+  ]);
   if (!member) notFound();
 
   return (
     <main className="px-5 pt-10 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">{member.fullName}</h1>
+      {cardCtx && terminology ? (
+        <div className="print-isolate-block">
+          <MemberIdCard
+            tenantSlug={cardCtx.tenantSlug}
+            tenantDisplayName={cardCtx.displayName}
+            tenantAccent={cardCtx.accent}
+            initials={cardCtx.initials}
+            memberFullName={member.fullName}
+            memberCode={member.memberCode}
+            memberUuid={member.memberId}
+            terminology={terminology}
+          />
+        </div>
+      ) : null}
+
+      <h1 className="font-display text-[19px] font-semibold mt-6">{member.fullName}</h1>
       <p className="mt-0.5 text-[12.5px] text-ink-3">
         {member.memberCode} · {member.locationName}
         {member.isMinor ? " · minor" : ""}
       </p>
 
-      <MemberEnrolmentPanel memberId={member.memberId} />
+      <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
 
       {member.isMinor ? (
         <section className="mt-4">
@@ -38,7 +68,9 @@ export default async function ReceptionMemberDetailPage({
             Guardians
           </h2>
           {member.guardians.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">No guardian on file.</p>
+            <p className="mt-2 text-[13px] text-ink-3">
+            No {resolveTerm(terminology, "guardian", 1)} on file.
+          </p>
           ) : (
             <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
               {member.guardians.map((g) => (

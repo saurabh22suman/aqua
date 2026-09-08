@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getRosterAction } from "@/lib/actions/coach";
 import { RegisterBoard } from "@/components/register-board";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
+import { getTerminologyAction } from "@/lib/actions/terminology";
+import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 
 export default async function RegisterPage({
   params,
@@ -9,12 +11,22 @@ export default async function RegisterPage({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
-  const data = await getRosterAction(sessionId);
+  const [data, terminology] = await Promise.all([
+    getRosterAction(sessionId),
+    // L3 audit — the empty-state copy (`Session not found`) routes
+    // through the closed-key resolver. No current preset overrides
+    // `session`, but the uniform contract is what keeps a future
+    // preset (e.g. a "sparring" tennis preset) from drifting
+    // silently. The fetch is cheap and only paid once per page.
+    getTerminologyAction(),
+  ]);
 
   if (!data) {
     return (
       <main className="px-5 pt-10">
-        <p className="text-[15px] font-medium">Session not found</p>
+        <p className="text-[15px] font-medium">
+          {titleCase(resolveTerm(terminology, "session", 1))} not found
+        </p>
         <Link href="/coach" className="mt-2 inline-block text-[13px] text-ink-3 underline">
           Back to today
         </Link>

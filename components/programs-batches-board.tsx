@@ -13,15 +13,19 @@ import { BatchEditForm, type BatchEditFormState } from "@/components/batch-edit-
 import { BatchCreateForm } from "@/components/batch-create-form";
 import type { Program } from "@/db/schema/programs";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 export function ProgramsBatchesBoard({
   initialPrograms,
   initialBatches,
   coaches,
+  terminology,
 }: {
   initialPrograms: Program[];
   initialBatches: BatchWithProgramName[];
   coaches: CoachOption[];
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const [programs, setPrograms] = useState(initialPrograms);
   const [batches, setBatches] = useState(initialBatches);
@@ -245,6 +249,7 @@ export function ProgramsBatchesBoard({
                   onCancel={cancelEditBatch}
                   onSaved={onBatchSaved}
                   onError={setBatchError}
+                  terminology={terminology}
                 />
               ) : (
                 <div className="flex items-center gap-2">
@@ -302,9 +307,14 @@ export function ProgramsBatchesBoard({
         {batchError ? <p className="mt-1 text-[12px] text-ink-3">{batchError}</p> : null}
 
         {programs.length === 0 ? (
-          <p className="mt-3 text-[13px] text-ink-3">Add a program first.</p>
+          <p className="mt-3 text-[13px] text-ink-3">Add a {resolveTerm(terminology, "program", 1)} first.</p>
         ) : (
-          <BatchCreateForm programs={programs} coaches={coaches} onCreated={onBatchCreated} />
+          <BatchCreateForm
+            programs={programs}
+            coaches={coaches}
+            onCreated={onBatchCreated}
+            terminology={terminology}
+          />
         )}
       </section>
     </div>

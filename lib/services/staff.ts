@@ -108,14 +108,19 @@ export async function createStaff(
 // K2 — the "me" surface. Resolves the current user's full name and
 // phone, used by /coach/me, /reception/me and the Account section of
 // /owner/settings to label the logged-in user above the sign-out
-// button. Best-effort: returns null when the user has no staff row yet
-// (an invited-but-not-onboarded staff member), so the caller can render
-// the phone from the session as a fallback instead of crashing.
+// button.
 //
-// Phone comes from users (the durable auth identity, set at OTP
-// verification). Name comes from persons via staff; an owner/admin who
-// was never entered as a person won't have a name here, which is the
-// honest empty rather than fabricating one.
+// Phone is always present (users.phone is not null by schema), so the
+// page never renders "No phone on file" for a logged-in user. Name
+// is best-effort: it comes from persons via the staff row, and an
+// owner / admin who was never entered as a person — the owner user
+// in the seed has no staff row, only a users row — gets null. That
+// matches the data; we don't fabricate a name. The "Signed in" label
+// the UI shows in that case is the honest empty.
+//
+// Returns null only when ctx.userId is missing (which means the
+// caller never resolved a real session — an internal misuse, not a
+// user-facing case).
 export type StaffIdentity = {
   fullName: string | null;
   phone: string;
@@ -126,25 +131,28 @@ export async function getCurrentStaffIdentity(
 ): Promise<StaffIdentity | null> {
   if (!ctx.userId) return null;
   return withTenant(ctx.tenantId, async (tx) => {
-    const [row] = await tx
-      .select({
-        fullName: persons.fullName,
-        phone: users.phone,
-      })
+    const phoneRow = await tx
+      .select({ phone: users.phone })
+      .from(users)
+      .where(and(eq(users.id, ctx.userId!), isNull(users.deletedAt)))
+      .limit(1);
+    const phone = phoneRow[0]?.phone;
+    if (!phone) return null;
+
+    const nameRow = await tx
+      .select({ fullName: persons.fullName })
       .from(staff)
       .innerJoin(persons, eq(persons.id, staff.personId))
-      .innerJoin(users, eq(users.id, staff.userId))
       .where(
         and(
           eq(staff.tenantId, ctx.tenantId),
           eq(staff.userId, ctx.userId!),
           isNull(staff.deletedAt),
-          isNull(users.deletedAt),
         ),
       )
       .limit(1);
-    if (!row) return null;
-    return { fullName: row.fullName, phone: row.phone };
+
+    return { fullName: nameRow[0]?.fullName ?? null, phone };
   });
 }
 

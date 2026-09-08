@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// Phase 2.2a — architecture §7.4 rule 6: "No runtime branching.
+// Phase 2.2a / L4 — architecture §7.4 rule 6: "No runtime branching.
 // Enforced by a lint rule restricting reads of `preset_key` to the
 // analytics module."
 //
@@ -13,6 +13,28 @@ import { describe, expect, it } from "vitest";
 // `if (tenant.presetKey === 'swimming')` that branches behaviour.
 // This test scans the source tree and asserts no such branch is
 // present — every read is in the operator surface or the engine.
+//
+// L4 — file rename and explicit scope.
+//
+// The previous filename, `preset-key-reads.test.ts`, was ambiguous:
+// it sounded like it gated everything about presets. It does not.
+// This file checks exactly one thing — the rule-6 source-tree read
+// scan above. It does NOT check:
+//
+//   - The vocabulary shape of preset definitions (see
+//     tests/tier1/preset-engine.test.ts, the "L1 — terminology
+//     round-trips through getTerminology" describe block).
+//   - That hardcoded vocab words in JSX prose are absent (see
+//     tests/tier1/vocab-source-scan.test.ts). The L3 audit found
+//     three such violations in source while this test stayed green;
+//     two different concerns.
+//   - That the catalogue registers every exported preset constant
+//     (see tests/tier1/preset-catalogue-coverage.test.ts, L2).
+//
+// Keeping the file honest about scope is the audit's L4 ask. A
+// future reader who lands here expects "preset_key read scope" and
+// gets it; if they want vocab or catalogue coverage they read the
+// file named for that.
 
 const ROOT = process.cwd();
 const SCAN_DIRS = ["lib", "app", "components", "db"];

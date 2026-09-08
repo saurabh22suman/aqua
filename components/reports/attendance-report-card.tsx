@@ -1,5 +1,7 @@
 import { Download } from "lucide-react";
 import { attendanceReportCsvAction } from "@/lib/actions/owner-reports";
+import { getTerminologyAction } from "@/lib/actions/terminology";
+import { resolveTerm } from "@/lib/terminology/keys";
 import type { BatchAttendanceReportRow, ReportPeriod } from "@/lib/services/owner-reports";
 
 // Phase 4.3 — attendance report. CSV uses canonical field
@@ -7,17 +9,25 @@ import type { BatchAttendanceReportRow, ReportPeriod } from "@/lib/services/owne
 // vocabulary mapping. Owner sees the period picker + a CSV
 // download button per row.
 
-export function AttendanceReportCard({
+export async function AttendanceReportCard({
   rows,
   period,
 }: {
   rows: BatchAttendanceReportRow[];
   period: ReportPeriod;
 }) {
+  // L3 audit — the report title routes the closed-key `batch`
+  // singular form through resolveTerm so a football preset
+  // (which renames `batch` to `squad`) reads "Attendance by
+  // squad" instead of "Attendance by batch". Other report
+  // surfaces below do the same.
+  const terminology = await getTerminologyAction();
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">Attendance by batch</h2>
+        <h2 className="font-display text-[15px] font-semibold">
+          Attendance by {resolveTerm(terminology, "batch", 1)}
+        </h2>
         <a
           href={`/owner/reports/attendance.csv?from=${period.from}&to=${period.to}`}
           // Server-rendered download link — no client JS.
@@ -27,7 +37,9 @@ export function AttendanceReportCard({
         </a>
       </header>
       {rows.length === 0 ? (
-        <p className="mt-2 text-[13px] text-ink-3">No batches ran any sessions in this period.</p>
+        <p className="mt-2 text-[13px] text-ink-3">
+          No {resolveTerm(terminology, "batch", "other")} ran any {resolveTerm(terminology, "session", "other")} in this period.
+        </p>
       ) : (
         <ul className="mt-3 divide-y divide-line">
           {rows.map((r) => (

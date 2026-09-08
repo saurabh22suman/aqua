@@ -4,7 +4,7 @@ import {
   DANCE_MA_PRESET_DEFINITION,
   FOOTBALL_PRESET_DEFINITION,
   GYM_PRESET_DEFINITION,
-  START_FROM_SCRATCH_DEFINITION,
+  START_FROM_SCRATCH_PRESET_DEFINITION,
 } from "@/db/preset-definitions-r22";
 
 // Phase R.22 — remaining preset definitions. Each constant
@@ -16,7 +16,7 @@ import {
 // prices) holds.
 
 const ALL_PRESETS = [
-  START_FROM_SCRATCH_DEFINITION,
+  START_FROM_SCRATCH_PRESET_DEFINITION,
   BADMINTON_PRESET_DEFINITION,
   GYM_PRESET_DEFINITION,
   FOOTBALL_PRESET_DEFINITION,
@@ -25,9 +25,9 @@ const ALL_PRESETS = [
 
 describe("presets (R.22 — start-from-scratch, badminton, gym, football, dance/MA)", () => {
   it("start-from-scratch is non-empty but skeletal", () => {
-    expect(START_FROM_SCRATCH_DEFINITION.features.length).toBeGreaterThan(0);
-    expect(START_FROM_SCRATCH_DEFINITION.exampleBatches).toEqual([]);
-    expect(START_FROM_SCRATCH_DEFINITION.planShapes.length).toBeGreaterThan(0);
+    expect(START_FROM_SCRATCH_PRESET_DEFINITION.features.length).toBeGreaterThan(0);
+    expect(START_FROM_SCRATCH_PRESET_DEFINITION.exampleBatches).toEqual([]);
+    expect(START_FROM_SCRATCH_PRESET_DEFINITION.planShapes.length).toBeGreaterThan(0);
   });
 
   it("every preset has at least one plan shape — the wizard needs at least one to display", () => {
@@ -52,7 +52,7 @@ describe("presets (R.22 — start-from-scratch, badminton, gym, football, dance/
   });
 
   it("start-from-scratch leaves terminology empty (the operator defines the words)", () => {
-    expect(START_FROM_SCRATCH_DEFINITION.terminology).toEqual({});
+    expect(START_FROM_SCRATCH_PRESET_DEFINITION.terminology).toEqual({});
   });
 
   it("every preset except start-from-scratch carries the audit-relevant message templates", () => {
@@ -60,7 +60,7 @@ describe("presets (R.22 — start-from-scratch, badminton, gym, football, dance/
     // what to enable. Other verticals ship the templates that
     // the preset's messaging features unlock.
     for (const preset of ALL_PRESETS) {
-      if (preset === START_FROM_SCRATCH_DEFINITION) continue;
+      if (preset === START_FROM_SCRATCH_PRESET_DEFINITION) continue;
       expect(preset.messageTemplates.length).toBeGreaterThan(0);
     }
   });

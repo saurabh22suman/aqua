@@ -67,6 +67,11 @@ const ALLOWLIST = new Set([
   "scripts/seed.ts",
   "scripts/seed-platform-user.ts",
   "scripts/seed-demo.ts",
+  // L5 — one-off dev-DB sweep, dev only, refuses to run when
+  // NODE_ENV=production. Same fixture-setup pattern as
+  // scripts/seed.ts: privileged pool because (a) tenants has RLS
+  // and (b) the script is one-off maintenance, not request-path.
+  "scripts/l5-clean-dev-orphans.ts",
   "lib/env.ts",
   "tests/env.test.ts",
   "tests/tier1/attendance-upsert.test.ts",
@@ -108,7 +113,8 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-admin-tenant-features-rls.test.ts",
   "tests/tier1/tenant-feature-resolution.test.ts",
   "tests/tier1/preset-engine.test.ts",
-  "tests/tier1/preset-key-reads.test.ts",
+  "tests/tier1/preset-key-runtime-reads.test.ts",
+  "tests/tier1/preset-catalogue-coverage.test.ts", // L2 — same fixture-setup pattern as the other tier1 preset tests above
   "tests/tier1/apply-preset-action.test.ts",
   "tests/tier1/preset-preview-source.test.ts",
   "tests/tier1/preset-sample-data.test.ts",

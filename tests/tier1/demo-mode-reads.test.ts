@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 // `if (DEMO_MODE)` in services or db").
 //
 // This test is the mechanical guarantee, same pattern as
-// tests/tier1/preset-key-reads.test.ts.
+// tests/tier1/preset-key-runtime-reads.test.ts.
 
 const ROOT = process.cwd();
 const SCAN_DIRS = ["lib", "app", "components", "db", "scripts"];

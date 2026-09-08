@@ -7,10 +7,12 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
 // F-23 — settings surface. Branding (Phase 2.9), Terminology
 // (Phase 2.10), Staff (Phase 3.5) and the onboarding checklist
-// (Phase 2.8) live here; future settings (locations, business
-// hours, holiday calendar) accumulate in the same list. Style
-// follows the row pattern of the bottom-nav cards: icon | title
-// + sub | chevron.
+// (Phase 2.8) live here. Locations / business hours / holidays
+// editors are NOT on this page today — those tables exist (per the
+// audit: locations + tenant_holidays) but the owner-side editors
+// are their own future tasks. The subtitle below says only what's
+// actually reachable from this list; the follow-up tasks can grow
+// it back.
 //
 // K2 — Account section at the foot of the page. The bottom nav's
 // 4th slot is Settings (admin-y), not a "Me" tab, so the identity
@@ -23,9 +25,9 @@ export default async function Page() {
 
   return (
     <main className="px-5 pt-6 pb-8">
-      <h1 className="font-display text-[19px] font-semibold capitalize">settings</h1>
+      <h1 className="font-display text-[19px] font-semibold">Settings</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Tenant configuration — branding, vocabulary, staff, locations, hours.
+        Branding, vocabulary, staff and onboarding — everything the owner can change about the academy.
       </p>
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Setup</h2>

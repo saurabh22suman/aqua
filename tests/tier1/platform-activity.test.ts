@@ -21,6 +21,34 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let actorId = "";
+const seededTenantIds: string[] = [];
+
+// Tenants FKs from several tables with ON DELETE NO ACTION —
+// deleting a tenant directly leaves the orphan row referencing
+// the dead tenant. Cascade order leaves before roots. Same list
+// scripts/l5-clean-dev-orphans.ts uses; kept inline so the test
+// stays self-contained (no cross-module dependency on the
+// one-off dev-cleanup script).
+const TENANT_FK_CLEANUP_ORDER = [
+  "enquiry_follow_ups",
+  "attendance",
+  "consents",
+  "guardianships",
+  "member_status_transitions",
+  "membership_locations",
+  "tenant_memberships",
+  "role_permissions",
+  "enrolments",
+  "members",
+  "staff",
+  "persons",
+  "sessions",
+  "batches",
+  "enquiries",
+  "programs",
+  "roles",
+  "locations",
+];
 
 beforeAll(async () => {
   // Provision a real platform operator so the audit rows can
@@ -39,6 +67,41 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // L5 — the audit found 45+ orphaned phase39-* tenants
+  // accumulating in the dev DB. The cause: this test's
+  // `makeTenant()` inserts tenants but `afterAll` did not clean
+  // them up. Track the ids and delete them with their dependent
+  // tables here. The dev-DB cleanup script
+  // (scripts/l5-clean-dev-orphans.ts) is the one-off; this is
+  // the structural fix that prevents the next test run from
+  // re-introducing the noise.
+  if (seededTenantIds.length > 0) {
+    try {
+      for (const table of TENANT_FK_CLEANUP_ORDER) {
+        try {
+          await admin.query(
+            `delete from ${table} where tenant_id = any($1::uuid[])`,
+            [seededTenantIds],
+          );
+        } catch {
+          // table or column may be absent in a given schema
+          // revision; the next table's FK is what would surface
+          // the problem anyway.
+        }
+      }
+      await admin.query(
+        "delete from platform_audit_log where tenant_id = any($1::uuid[])",
+        [seededTenantIds],
+      );
+      await admin.query(
+        "delete from tenants where id = any($1::uuid[])",
+        [seededTenantIds],
+      );
+    } finally {
+      // best-effort; the cleanup runs once per suite, no retry
+    }
+  }
+
   if (actorId) {
     await admin.query("delete from platform_audit_log where actor_id = $1::uuid", [actorId]);
     await admin.query("delete from platform_sessions where user_id = $1::uuid", [actorId]);
@@ -80,6 +143,11 @@ async function makeTenant(label: string): Promise<string> {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1::uuid, $2, $3, $4::uuid, $5)",
     [id, `phase39-${label}-${RUN}`, `Activity Test ${label}`, plan?.id ?? null, TZ],
   );
+  // L5 — track every tenant this test creates so afterAll can
+  // delete them. Without this the dev DB accumulates ~3 phase39-*
+  // rows per test run (the audit found 45 of them when this test
+  // was first instrumented).
+  seededTenantIds.push(id);
   return id;
 }
 

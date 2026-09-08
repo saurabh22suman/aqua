@@ -63,13 +63,17 @@ describe("getActivePreset (swimming)", () => {
 
     // The Zod-parsed definition has the right shape. Spot-check
     // a few invariants that are core to the preset's purpose.
+    // L1 — terminology is the canonical nested shape from
+    // lib/terminology/keys.ts, not flat key→string (the old
+    // shape never round-tripped through getTerminology — see the
+    // applyPreset L1 describe block).
     const d = result.definition;
     expect(d.features).toContain("swim.levels");
     expect(d.features).toContain("pool.booking");
-    expect(d.terminology).toMatchObject({
-      student: "swimmer",
-      lane: "lane",
-    });
+    expect(d.terminology.member?.en?.one).toBe("swimmer");
+    expect(d.terminology.member?.en?.other).toBe("swimmers");
+    expect(d.terminology.facility?.en?.one).toBe("lane");
+    expect(d.terminology.facility?.en?.other).toBe("lanes");
     expect(d.programs.length).toBeGreaterThan(0);
     expect(d.skillLevels.length).toBeGreaterThanOrEqual(3); // Beginner, Intermediate, Advanced
     expect(d.facilities.length).toBeGreaterThan(0);

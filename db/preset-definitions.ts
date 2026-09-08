@@ -1,4 +1,39 @@
 import { z } from "zod";
+import {
+  LOCALES,
+  type LocaleOverrides,
+  type TermForms,
+} from "@/lib/terminology/keys";
+
+// L1 — Preset definitions store the canonical TerminologyOverrides
+// shape from lib/terminology/keys.ts, not a flat key→string. The
+// previous flat shape was the bug: it never round-tripped through
+// getTerminology() (which expects nested {en:{one,other}}) and so
+// was silently dropped on every preset, for every tenant, always.
+// Moving the writer to the right shape is the fix; loosening the
+// reader to accept the wrong shape would have hidden the bug
+// permanently. See tests/tier1/preset-engine.test.ts — the new
+// "terminology round-trips through getTerminology()" test is the
+// one that would have caught the original divergence.
+const termFormsSchema: z.ZodType<TermForms> = z.object({
+  one: z.string().trim().min(1).max(60),
+  other: z.string().trim().min(1).max(60),
+});
+const localeOverridesSchema: z.ZodType<LocaleOverrides> = z.object(
+  Object.fromEntries(LOCALES.map((l) => [l, termFormsSchema.optional()])),
+);
+const terminologySchema = z.object(
+  Object.fromEntries([
+    ["member", localeOverridesSchema.optional()],
+    ["batch", localeOverridesSchema.optional()],
+    ["coach", localeOverridesSchema.optional()],
+    ["session", localeOverridesSchema.optional()],
+    ["program", localeOverridesSchema.optional()],
+    ["facility", localeOverridesSchema.optional()],
+    ["guardian", localeOverridesSchema.optional()],
+    ["enquiry", localeOverridesSchema.optional()],
+  ]),
+);
 
 // Phase 2.1 — preset definition shape per architecture §7.4.
 //
@@ -111,7 +146,7 @@ export const exampleBatchSchema = z.object({
 
 export const presetDefinitionSchema = z.object({
   features: z.array(z.string().trim().min(1)).min(1),
-  terminology: z.record(z.string().trim().min(1), z.string().trim().min(1)),
+  terminology: terminologySchema,
   roles: z.array(roleSpecSchema).default([]),
   programs: z.array(programSchema).default([]),
   skillLevels: z.array(skillLevelSchema).default([]),
@@ -152,11 +187,25 @@ export const SWIMMING_PRESET_DEFINITION: PresetDefinition = {
     "enquiries",
   ],
   terminology: {
-    student: "swimmer",
-    batch: "batch",
-    lane: "lane",
-    coach: "coach",
-    level: "level",
+    // L1 — nested shape. Plural forms filled in here; this is the
+    // one place plural knowledge lives (architecture § 7.5 rule 1:
+    // "storing both forms is the only shape the closed-key resolver
+    // above can trust without per-key special casing"). Defaults
+    // come from DEFAULT_TERMS in lib/terminology/keys.ts; we override
+    // only the keys where swimming genuinely says something
+    // different from the generic "member" / "session" / "facility".
+    member: {
+      en: { one: "swimmer", other: "swimmers" },
+    },
+    coach: {
+      en: { one: "coach", other: "coaches" },
+    },
+    facility: {
+      en: { one: "lane", other: "lanes" },
+    },
+    session: {
+      en: { one: "session", other: "sessions" },
+    },
   },
   // Two vertical-specific roles. The five standard roles
   // (owner/admin/accountant/receptionist/coach/worker) are seeded
@@ -356,11 +405,24 @@ export const MULTI_SPORT_PRESET_DEFINITION: PresetDefinition = {
     "enquiries",
   ],
   terminology: {
-    student: "member",
-    batch: "batch",
-    lane: "facility",
-    coach: "coach",
-    level: "level",
+    // L1 — nested shape. Multi-sport uses "multi-sport" framing
+    // (slot for a class, studio for a room, trainer for a coach,
+    // member as the default).
+    member: {
+      en: { one: "member", other: "members" },
+    },
+    coach: {
+      en: { one: "trainer", other: "trainers" },
+    },
+    facility: {
+      en: { one: "studio", other: "studios" },
+    },
+    session: {
+      en: { one: "slot", other: "slots" },
+    },
+    batch: {
+      en: { one: "slot", other: "slots" },
+    },
   },
   roles: [],
   programs: [],

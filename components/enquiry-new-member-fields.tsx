@@ -6,6 +6,7 @@ import { searchPersonsAction } from "@/lib/actions/people";
 import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import type { NewMemberDetails } from "@/lib/services/enquiries";
+import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 function looksLikeMinor(dateOfBirth: string): boolean | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
@@ -26,10 +27,13 @@ export function EnquiryNewMemberFields({
   locations,
   onChange,
   onValidityChange,
+  terminology,
 }: {
   locations: LocationOption[];
   onChange: (details: NewMemberDetails | null) => void;
   onValidityChange: (valid: boolean) => void;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [gender, setGender] = useState("");
@@ -131,7 +135,9 @@ export function EnquiryNewMemberFields({
 
       {minor === true ? (
         <div className="rounded-ctl border border-line bg-paper p-3 space-y-2">
-          <p className="text-[12.5px] font-medium">Guardian required — this is a minor</p>
+          <p className="text-[12.5px] font-medium">
+            {titleCase(resolveTerm(terminology, "guardian", 1))} required — this is a minor
+          </p>
           {guardian.mode === "existing" ? (
             <div className="flex items-center justify-between rounded-ctl bg-water-soft px-3 py-2">
               <span className="text-[12.5px] text-water">{guardian.label}</span>

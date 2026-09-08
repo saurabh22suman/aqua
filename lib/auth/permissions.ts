@@ -5,6 +5,16 @@ import type { Ctx } from "@/lib/auth/context";
 // task's own done-when is "a receptionist adds a member" -- every
 // assertStaff-gated action, including listing programs, was
 // unreachable for the one role meant to use it most.
+//
+// accountant is deliberately NOT in this list. The role is "someone
+// with reports-side access" (invoices.write, payments.record,
+// reports.financial, staff.pay.read) — not a daily floor user with
+// shifts — and a Tier 1 contract pins this exact boundary in
+// tests/tier1/permission-matrix.test.ts. Callers that should accept
+// accountants (e.g. the owner dashboard, which K3 sends accountants
+// to) gate on something looser than assertStaff; the dashboard
+// delegates the question to requireDefaultCtx + the row-level
+// permission set, not this role-key check.
 const STAFF_ROLES = ["owner", "admin", "coach", "receptionist"] as const;
 const MANAGEMENT_ROLES = ["owner", "admin"] as const;
 const MEMBERS_WRITE_ROLES = ["owner", "admin", "receptionist"] as const;
