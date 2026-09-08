@@ -47,6 +47,13 @@ const APEX_ALLOWLIST = [
   // payloads, and the _next/static directory the build emits.
   "/_next/",
   "/favicon",
+  // Service worker registration. The offline-attendance-sync
+  // feature registers `/sw.js` (see components/sw-registrar.tsx);
+  // if the middleware blocks /sw.js the SW never registers and
+  // the offline-sync e2e (scripts/e2e-offline.ts) breaks because
+  // the page can't load from cache while offline. The SW is at the
+  // root of the apex host (tenant surface), not on ops.
+  "/sw.js",
 ];
 
 // Paths the ops subdomain always serves.
