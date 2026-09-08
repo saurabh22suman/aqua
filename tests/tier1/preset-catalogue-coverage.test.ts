@@ -18,7 +18,7 @@ import { env } from "@/lib/env";
 // constant; the test then picks it up at next run. Importing the
 // constants would couple the test to a chosen listing and lose
 // that property — the same reasoning
-// tests/tier1/preset-key-reads.test.ts gives for hardcoding
+// tests/tier1/preset-key-runtime-reads.test.ts gives for hardcoding
 // SCAN_DIRS rather than importing them.
 
 const ROOT = process.cwd();

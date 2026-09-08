@@ -24,7 +24,7 @@ import { describe, expect, it } from "vitest";
 // All three are fixed by routing the prose through resolveTerm().
 // The source-scan below catches a regression — any future JSX text
 // that names a vocab word without going through the resolver. Same
-// shape as preset-key-reads.test.ts: a regex pass over the source
+// shape as preset-key-runtime-reads.test.ts: a regex pass over the source
 // tree with an explicit allowlist, every other occurrence is a
 // test failure.
 //
@@ -35,7 +35,7 @@ import { describe, expect, it } from "vitest";
 // write as prose because their meaning depends on which preset the
 // tenant applied. We list them by name here rather than reading the
 // preset definitions at scan time so the scan stays a static
-// structural check (same philosophy as preset-key-reads).
+// structural check (same philosophy as preset-key-runtime-reads).
 //
 // All strings are matched as whole words, case-insensitive — so
 // `memberId` and `members.board.tsx` do NOT match (word boundary),
@@ -46,7 +46,7 @@ const SCAN_DIRS = ["app", "components"];
 
 // Term keys from lib/terminology/keys.ts (kept inline rather than
 // imported so the scan is a pure structural check — the same
-// reasoning preset-key-reads.test.ts gives for the SCAN_DIRS list).
+// reasoning preset-key-runtime-reads.test.ts gives for the SCAN_DIRS list).
 const TERM_KEYS = [
   "member",
   "batch",

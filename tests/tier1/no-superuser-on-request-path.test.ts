@@ -108,7 +108,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/platform-admin-tenant-features-rls.test.ts",
   "tests/tier1/tenant-feature-resolution.test.ts",
   "tests/tier1/preset-engine.test.ts",
-  "tests/tier1/preset-key-reads.test.ts",
+  "tests/tier1/preset-key-runtime-reads.test.ts",
   "tests/tier1/preset-catalogue-coverage.test.ts", // L2 — same fixture-setup pattern as the other tier1 preset tests above
   "tests/tier1/apply-preset-action.test.ts",
   "tests/tier1/preset-preview-source.test.ts",
