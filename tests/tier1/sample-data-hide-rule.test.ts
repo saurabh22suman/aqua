@@ -18,7 +18,7 @@ const PAGE_PATH = join(
   ROOT,
   "app",
   "(platform)",
-  "platform",
+  "ops",
   "tenants",
   "[tenantId]",
   "page.tsx",

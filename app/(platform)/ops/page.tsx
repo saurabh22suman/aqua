@@ -12,9 +12,9 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 export default async function PlatformHome() {
   const status = await platformAuthStatusAction();
   if (status.kind === "not_found" || status.kind === "expired") {
-    redirect("/platform/login");
+    redirect("/ops/login");
   }
-  if (status.kind === "unauthenticated") redirect("/platform/verify");
+  if (status.kind === "unauthenticated") redirect("/ops/verify");
 
   return (
     <div className="max-w-2xl">
@@ -30,7 +30,7 @@ export default async function PlatformHome() {
 
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Link
-          href="/platform/tenants"
+          href="/ops/tenants"
           className="rounded-card bg-paper border border-line p-4 hover:border-[var(--accent)] transition-colors duration-150"
         >
           <p className="text-[13px] font-medium text-ink">Tenants</p>
@@ -39,7 +39,7 @@ export default async function PlatformHome() {
           </p>
         </Link>
         <Link
-          href="/platform/features"
+          href="/ops/features"
           className="rounded-card bg-paper border border-line p-4 hover:border-[var(--accent)] transition-colors duration-150"
         >
           <p className="text-[13px] font-medium text-ink">Feature catalogue</p>
@@ -48,7 +48,7 @@ export default async function PlatformHome() {
           </p>
         </Link>
         <Link
-          href="/platform/activity"
+          href="/ops/activity"
           className="rounded-card bg-paper border border-line p-4 hover:border-[var(--accent)] transition-colors duration-150"
         >
           <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">

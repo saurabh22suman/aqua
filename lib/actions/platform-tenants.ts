@@ -22,8 +22,8 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { asUserId, asTenantId } from "@/lib/ids";
 
 // Phase 1.5 + 1.6 — server actions for the operator surface:
-// createTenantAction backs /platform/tenants/new; transitionTenantStatus
-// backs the controls on /platform/tenants/[tenantId].
+// createTenantAction backs /ops/tenants/new; transitionTenantStatus
+// backs the controls on /ops/tenants/[tenantId].
 //
 // createTenantAction takes FormData (H1: pre-hydration submit goes
 // via POST to the action endpoint, not via native GET with form
@@ -87,7 +87,7 @@ export async function createTenantAction(
 
   const result = await createTenant(normalised, { actorId: asUserId(status.userId) });
   if (result.kind === "ok") {
-    redirect(`/platform/tenants/${result.tenantId}`);
+    redirect(`/ops/tenants/${result.tenantId}`);
   }
   return result;
 }
@@ -139,7 +139,7 @@ export async function transitionTenantStatusAction(
     actorId: asUserId(status.userId),
   });
   if (result.kind === "ok") {
-    revalidatePath(`/platform/tenants/${tenantId}`);
+    revalidatePath(`/ops/tenants/${tenantId}`);
   }
   return result;
 }

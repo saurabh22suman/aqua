@@ -162,7 +162,7 @@ const ALLOWLIST = new Set([
   // as 1.5's tenant list page: the production code goes through
   // withPlatformAdmin() for cross-tenant data; the test fixture
   // uses the admin pool for setup and the post-action assertions.
-  "app/(platform)/platform/tenants/[tenantId]/page.tsx",
+  "app/(platform)/ops/tenants/[tenantId]/page.tsx",
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
   "scripts/e2e-platform-form-leak.ts",

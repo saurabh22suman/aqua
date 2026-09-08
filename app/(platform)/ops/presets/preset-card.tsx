@@ -11,7 +11,7 @@ import type { PresetEntry } from "./preset-catalogue";
 // preview pane the user asked for.
 //
 // The "Apply to a tenant" interaction lives at
-// /platform/presets/[key] (the dedicated route the link points to),
+// /ops/presets/[key] (the dedicated route the link points to),
 // not on the catalogue card itself. The card's primary action is
 // the preview; the apply is the next step in the same flow.
 
@@ -60,7 +60,7 @@ export function PresetCard({ entry }: { entry: PresetEntry }) {
           </p>
         </div>
         <Link
-          href={`/platform/presets/${entry.preset.key}`}
+          href={`/ops/presets/${entry.preset.key}`}
           className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 transition-colors duration-150"
         >
           Open preview

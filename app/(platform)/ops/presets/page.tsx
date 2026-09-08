@@ -5,7 +5,7 @@ import { listPresets } from "@/db/platform-presets";
 import { previewPreset } from "@/db/preset-engine";
 import { PresetCatalogue } from "./preset-catalogue";
 
-// Phase 2.2b — operator-facing preset catalogue at /platform/presets.
+// Phase 2.2b — operator-facing preset catalogue at /ops/presets.
 //
 // Renders one card per active preset (today: swimming + multi-sport,
 // seeded by 2.1). Each card surfaces the *preview* counts (programs,
@@ -27,7 +27,7 @@ import { PresetCatalogue } from "./preset-catalogue";
 
 export default async function PresetsPage() {
   const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") redirect("/platform/login");
+  if (status.kind !== "authenticated") redirect("/ops/login");
 
   const presets = await listPresets();
   // Preview is per-preset. Run each in parallel so the page render
@@ -48,7 +48,7 @@ export default async function PresetsPage() {
         Preset catalogue
       </h1>
       <p className="mt-1 text-[14px] text-ink-2">
-        Onboarding presets. The <Link href="/platform/tenants" className="text-[var(--accent)] underline underline-offset-2">tenant list</Link>{" "}
+        Onboarding presets. The <Link href="/ops/tenants" className="text-[var(--accent)] underline underline-offset-2">tenant list</Link>{" "}
         shows the applied state; this page is the picker and the
         preview.
       </p>

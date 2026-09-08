@@ -101,7 +101,7 @@ async function main() {
     const code = currentTotpCode(u.totp_secret);
     const secs = secondsRemainingInStep();
     // Single line, single number, scannable. Operator copies into
-    // the /platform/verify TOTP field.
+    // the /ops/verify TOTP field.
     console.log(`${code}  (refresh in ${secs}s — email: ${u.email})`);
   } finally {
     await admin.end();

@@ -131,7 +131,7 @@ export function NewTenantForm({
           {isPending ? "Creating…" : "Create tenant"}
         </button>
         <Link
-          href="/platform/tenants"
+          href="/ops/tenants"
           className="rounded-pill px-4 py-3 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
         >
           Cancel

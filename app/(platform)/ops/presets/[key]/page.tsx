@@ -6,7 +6,7 @@ import { previewPreset } from "@/db/preset-engine";
 import { listTenants } from "@/db/platform-tenants";
 import { PresetDetailForm } from "./preset-detail-form";
 
-// Phase 2.2b — per-preset detail page at /platform/presets/[key].
+// Phase 2.2b — per-preset detail page at /ops/presets/[key].
 // The catalogue page links here for the dominant "Open preview"
 // action; this page renders the full preview breakdown and the
 // apply form.
@@ -49,7 +49,7 @@ export default async function PresetDetailPage({
   params: Promise<{ key: string }>;
 }) {
   const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") redirect("/platform/login");
+  if (status.kind !== "authenticated") redirect("/ops/login");
 
   const { key } = await params;
   const result = await getActivePreset(key);
@@ -60,7 +60,7 @@ export default async function PresetDetailPage({
 
   // Tenant list for the picker. The listTenants function is the
   // canonical operator-facing list (with status pill and member
-  // count); it powers /platform/tenants too. limit=200 covers the
+  // count); it powers /ops/tenants too. limit=200 covers the
   // early adopter case (a handful of tenants per operator); if a
   // future operator has more, the search filter narrows the
   // picker. The picker's data shape only needs id, name, slug,
@@ -74,7 +74,7 @@ export default async function PresetDetailPage({
     <div className="max-w-3xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
         <Link
-          href="/platform/presets"
+          href="/ops/presets"
           className="hover:text-ink underline-offset-2 hover:underline"
         >
           Catalogue

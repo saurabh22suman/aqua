@@ -51,7 +51,7 @@ export default async function PlatformTenantDetailPage({
   params: Promise<{ tenantId: string }>;
 }) {
   const auth = await platformAuthStatusAction();
-  if (auth.kind !== "authenticated") redirect("/platform/login");
+  if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const { tenantId } = await params;
   const detail = await getTenantDetail(asTenantId(tenantId));
@@ -61,7 +61,7 @@ export default async function PlatformTenantDetailPage({
   return (
     <div className="max-w-5xl">
       <Link
-        href="/platform/tenants"
+        href="/ops/tenants"
         className="text-[13px] text-ink-3 hover:text-ink underline-offset-2 hover:underline"
       >
         ← All tenants
@@ -97,7 +97,7 @@ export default async function PlatformTenantDetailPage({
           <DescriptionRow
             label="Plan"
             value={detail.planName ?? "—"}
-            href={detail.planId ? `/platform/plans/${detail.planId}` : undefined}
+            href={detail.planId ? `/ops/plans/${detail.planId}` : undefined}
           />
           <DescriptionRow
             label="Preset"

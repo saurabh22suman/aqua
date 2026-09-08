@@ -331,8 +331,8 @@ describe("the gate catches the specific PRs the audit named", () => {
 
   it("PR #88 file list — every H1 platform-form file is covered", () => {
     const pr88 = [
-      "app/(platform)/platform/login/login-form.tsx",
-      "app/(platform)/platform/verify/verify-form.tsx",
+      "app/(platform)/ops/login/login-form.tsx",
+      "app/(platform)/ops/verify/verify-form.tsx",
       "lib/actions/platform-auth.ts",
       "lib/actions/platform-features.ts",
       "lib/actions/platform-invite-owner.ts",

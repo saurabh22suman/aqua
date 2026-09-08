@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 // definition changes.
 //
 // The mechanical check: any UI source under
-// `app/(platform)/platform/presets/` that displays a numeric
+// `app/(platform)/ops/presets/` that displays a numeric
 // count for a preset (programs, skill levels, etc.) must read it
 // from `entry.result.preview.counts` (the previewPreset output
 // shape) and not from a literal numeric. The TypeScript types
@@ -88,7 +88,7 @@ function findHandWrittenCounts(): {
 describe("preset counts are read from previewPreset, not hand-written (architecture §7.4)", () => {
   const found = findHandWrittenCounts();
 
-  it("finds no hand-written numeric counts under app/(platform)/platform/presets/", () => {
+  it("finds no hand-written numeric counts under app/(platform)/ops/presets/", () => {
     if (found.length > 0) {
       const formatted = found
         .map((f) => `  ${f.path}:${f.line}\n    ${f.text}`)
