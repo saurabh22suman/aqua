@@ -55,13 +55,19 @@ export type InviteOwnerResult =
       message: string;
     };
 
+import { normaliseToE164 } from "@/lib/phone";
+
 const E164_PLUS = /^\+\d{8,15}$/;
 
 export async function inviteOwner(
   tenantId: TenantId,
   input: { phone: string; actorId: UserId },
 ): Promise<InviteOwnerResult> {
-  const cleaned = input.phone.replace(/[\s-]/g, "");
+  // Strip whitespace/dashes, then route through the canonical
+  // helper so an operator who paste-enters `919876543210`
+  // (without the +91) still hits the same canonical row that
+  // the seed/lookup paths use.
+  const cleaned = normaliseToE164(input.phone.replace(/[\s-]/g, ""));
   if (!E164_PLUS.test(cleaned)) {
     return {
       kind: "error",

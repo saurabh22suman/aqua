@@ -72,6 +72,12 @@ const ALLOWLIST = new Set([
   // scripts/seed.ts: privileged pool because (a) tenants has RLS
   // and (b) the script is one-off maintenance, not request-path.
   "scripts/l5-clean-dev-orphans.ts",
+  // L2-followup one-off vocabulary fixers; demo-side scripts that
+  // talk to the privileged pool the same way scripts/seed-demo.ts
+  // does (env.MIGRATION_DATABASE_URL), no request-path code.
+  "scripts/l2-apply-presets.ts",
+  "scripts/l2-set-terminology.ts",
+  "tests/tier1/link-better-auth-user.test.ts",
   "lib/env.ts",
   "tests/env.test.ts",
   "tests/tier1/attendance-upsert.test.ts",
