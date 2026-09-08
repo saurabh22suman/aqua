@@ -14,9 +14,15 @@ RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # next build touches lib/env.ts at page-data-collection time (see the
-# NEXT_PHASE=phase-production-build exemption in lib/env.ts) — this only
-# needs to parse as a valid Postgres URL, nothing connects during build.
+# NEXT_PHASE=phase-production-build exemption in lib/env.ts) — these
+# only need to parse as valid Postgres URLs, nothing connects during
+# build. BOTH vars are required unconditionally by lib/env.ts's parser
+# (MIGRATION_DATABASE_URL has its own non-production-bypass check at the
+# bottom of parseEnv); missing either fails the build with a non-actionable
+# "Invalid environment configuration" that points at the wrong root cause
+# (looks like an env-var bug, not a Dockerfile bug).
 ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+ENV MIGRATION_DATABASE_URL=postgresql://build:build@localhost:5432/build
 RUN pnpm build
 
 # ---- runtime: both services, differing only by command ----
