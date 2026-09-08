@@ -10,7 +10,7 @@
 // fresh apply.
 import { Pool } from "pg";
 import { applyPreset } from "../db/preset-engine";
-import { asTenantId, asUserId, type TenantId, type UserId } from "../lib/ids";
+import { asTenantId, asUserId, type UserId } from "../lib/ids";
 import { env } from "../lib/env";
 
 const TARGETS: Array<[string, string]> = [
