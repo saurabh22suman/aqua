@@ -260,6 +260,24 @@ If a button click seems to do nothing on a screen you haven't
 visited yet this session, reload once before assuming something is
 broken.
 
+**Cold-start the dev server before a demo, never demo off a server
+that has been hot-reloading through a work session.** Fast Refresh
+can leave HMR state in a shape that throws on first render of a
+route — symptoms range from a generic
+`options.factory` runtime error to a page that compiles but never
+reaches the client. A session that has just walked through a chain
+of edits (vocab / preset / member-detail changes, anything that
+touches shared layout) is exactly the case where a cold restart
+matters. Before the operator sits down:
+
+```bash
+pkill -f 'next dev' ; pkill -f 'next-server' ; rm -rf .next
+pnpm dev   # or `pnpm demo:reset && pnpm dev`
+```
+
+A cold start against a freshly-built `.next` is the only state
+that is guaranteed clean.
+
 **Re-running `seed-platform-user.ts` signs out any open operator
 tab.** It deletes and re-provisions the `platform_users` row for
 that email (re-runnable by design); `platform_sessions.user_id`
