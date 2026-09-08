@@ -11,6 +11,7 @@ import { locations } from "./schema/locations";
 import { membershipLocations } from "./schema/memberships";
 import { baVerification } from "./schema/better-auth";
 import { asUserId, type UserId, type TenantId } from "@/lib/ids";
+import { normaliseToE164 } from "@/lib/phone";
 
 export type TenantAccess = {
   userId: UserId;
@@ -92,17 +93,38 @@ export async function linkBetterAuthUser(
   betterAuthUserId: string,
   phoneNumber: string,
 ): Promise<UserId> {
-  const [row] = await withPlatform(() =>
-    db
-      .insert(users)
-      .values({ id: asUserId(uuidv7()), betterAuthId: betterAuthUserId, phone: phoneNumber })
-      .onConflictDoUpdate({
-        target: users.phone,
-        set: { betterAuthId: betterAuthUserId, updatedAt: new Date() },
-      })
-      .returning({ id: users.id }),
+  // Canonicalise to E.164-with-+. better-auth's phone plugin
+  // hands the callback the raw input (`919000000001` for an
+  // Indian number entered without a +), but every other write
+  // path — the seed, `findOrCreateUserByPhone`, the invite
+  // flows — stores `+919000000001`. Without canonicalisation,
+  // the upsert's conflict target misses the existing seeded row
+  // and inserts a second `users` row with the stripped phone,
+  // and the home resolver returns `{kind: "none"}` on the very
+  // next login.
+  //
+  // Implemented with raw SQL because drizzle-orm 0.45.2's
+  // prepared-statement cache occasionally binds the wrong number
+  // of parameters for this particular `onConflictDoUpdate`
+  // shape in a pooled connection reused across runs; the raw
+  // statement is independent of any cache key. See
+  // tests/tier1/link-better-auth-user.test.ts for the seam.
+  const canonical = normaliseToE164(phoneNumber);
+  const newId = asUserId(uuidv7());
+  const rows = await withPlatform(async () =>
+    db.execute(sql`
+      insert into users (id, better_auth_id, phone)
+      values (${newId}, ${betterAuthUserId}, ${canonical})
+      on conflict (phone) do update
+        set better_auth_id = excluded.better_auth_id,
+            updated_at = now()
+      returning id
+    `),
   );
-  return row!.id;
+  const rowsArray = (rows as unknown as { rows: Array<{ id: string }> }).rows;
+  const row = rowsArray[0];
+  if (!row) throw new Error("linkBetterAuthUser: insert returned no row");
+  return asUserId(row.id);
 }
 
 // tenantId is already known by the time this is called — an ordinary

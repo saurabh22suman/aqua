@@ -108,7 +108,11 @@ for the rest of the session.
   - **Coach Faraz Khan** (`+91 90000 00007`) → Kicks Football
     Academy only. The Kicks coach is separate from the Aqua
     Worli coaching staff; sign in as Faraz to walk the football
-    tenant's coach surface.
+    tenant's coach surface. The role's terminology key is the
+    same (`coach`), but the multi-sport preset overrides the
+    label to `trainer`, so role pickers and roster labels read
+    "Trainer Faraz Khan" on this tenant — same person, same role,
+    preset's vocabulary.
   - **Parent** (no seeded user) → `/parent` (stub — see below).
     The runbook previously listed `+91 90000 00003` for parent,
     but the seed does not create that user; the parent surface
@@ -169,13 +173,15 @@ picks) and the "different accent per tenant" detail.
   - **Today's lanes:** Morning Squad at 07:00, Junior TTS at 17:00
   - **Follow-up overdue:** Meera Nair (2 days overdue),
     Anaya Joshi (1 day overdue)
-- Aqua Worli programs: `Learn-to-swim`, `Junior competitive`,
-  `Adult masters` (three). Batches per program vary — see
-  `DEMO_BATCHES` in `scripts/seed-demo.ts` for the canonical list.
+- Aqua Worli programs: `Learn to swim`, `Stroke development`,
+  `Junior competitive` (three — verbatim from the swimming preset
+  after the seed routed through `applyPreset`). Batches per
+  program vary — see `DEMO_BATCHES` in `scripts/seed-demo.ts` for
+  the canonical list.
 - Aqua Worli members by archetype:
-  - `AWS-*` (Learn-to-swim) — kids, mix of guardians attached
+  - `AWS-*` (Learn to swim) — kids, mix of guardians attached
   - `JRS-*` (Junior competitive) — teens
-  - `MMS-*` (Adult masters) — adults
+  - `MMS-*` (Stroke development) — adults
 - Demo-side state worth pointing at:
   - **R.1 substitution** — one past session on Morning Squad
     shows the secondary coach substituted for the primary. Visible
@@ -259,6 +265,24 @@ attempt). A page reload always clears it and the retry succeeds.
 If a button click seems to do nothing on a screen you haven't
 visited yet this session, reload once before assuming something is
 broken.
+
+**Cold-start the dev server before a demo, never demo off a server
+that has been hot-reloading through a work session.** Fast Refresh
+can leave HMR state in a shape that throws on first render of a
+route — symptoms range from a generic
+`options.factory` runtime error to a page that compiles but never
+reaches the client. A session that has just walked through a chain
+of edits (vocab / preset / member-detail changes, anything that
+touches shared layout) is exactly the case where a cold restart
+matters. Before the operator sits down:
+
+```bash
+pkill -f 'next dev' ; pkill -f 'next-server' ; rm -rf .next
+pnpm dev   # or `pnpm demo:reset && pnpm dev`
+```
+
+A cold start against a freshly-built `.next` is the only state
+that is guaranteed clean.
 
 **Re-running `seed-platform-user.ts` signs out any open operator
 tab.** It deletes and re-provisions the `platform_users` row for
@@ -352,9 +376,9 @@ Sign out, log in as `+91 90000 00001`.
 - **Member detail (`/owner/members/<id>`)** — shows name, code,
   Edit link, attendance section, guardian panel (visible on
   minors — `AWS-*` and `JRS-*` rows).
-- **`/owner/programs`** — three programs (Learn-to-swim,
-  Junior competitive, Adult masters). Seven batches across them,
-  including the R.2 conflict pair (Late Squad + Holiday
+- **`/owner/programs`** — three programs (Learn to swim,
+  Stroke development, Junior competitive). Seven batches across
+  them, including the R.2 conflict pair (Late Squad + Holiday
   Recovery, both 18:00–19:00 with Coach Aanya Rao) and the
   Sunday-only Sunday Open Practice at 09:00 (Coach Aanya Rao,
   the primary coach — so the runbook's primary-coach "today"

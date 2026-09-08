@@ -138,7 +138,18 @@ const FEATURES: ReadonlyArray<{
   { key: "reports", name: "Reports", category: "insight", status: "ga" },
   { key: "settings", name: "Settings and configuration", category: "platform", status: "ga" },
   { key: "messaging", name: "WhatsApp and email", category: "comms", status: "ga" },
-  { key: "pool.booking", name: "Facility booking", category: "facility", status: "ga" },
+  // Facility booking is one feature key per primary facility type.
+  // pool.booking is GA today (it was added with F-01); the other three
+  // are forward-looking — Phase 3 (project-scope §5.7) builds the
+  // actual booking module per facility. Listed at status="beta" so
+  // they exist on every preset that names them (FK target — without
+  // these rows, applyPreset rolls back when a preset's
+  // features[] references e.g. pitch.booking) and so the plan
+  // entitlement layer can find them when V-XX ships.
+  { key: "pool.booking", name: "Swimming lane booking", category: "facility", status: "ga" },
+  { key: "court.booking", name: "Badminton / racquet court booking", category: "facility", status: "beta" },
+  { key: "pitch.booking", name: "Football pitch booking", category: "facility", status: "beta" },
+  { key: "studio.booking", name: "Studio / dance booking", category: "facility", status: "beta" },
   { key: "swim.levels", name: "Swimming skill levels", category: "vertical", status: "ga" },
   { key: "cafe.pos", name: "Café POS", category: "commerce", status: "internal" },
   { key: "analytics.advanced", name: "Advanced analytics", category: "insight", status: "internal" },

@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { pool } from "../db/client";
 import { withTenant } from "../db/tenant";
@@ -6,12 +7,13 @@ import { roles } from "../db/schema/roles";
 import { generateSessions } from "../lib/jobs/session-generator";
 import { createMember } from "../lib/services/register";
 import { seedRoleTemplates } from "../lib/services/roles";
+import { applyPreset } from "../db/preset-engine";
 import {
   defaultPlanId,
   seedPlatformCatalogue,
 } from "../db/seed-platform";
 import { env } from "@/lib/env";
-import { asTenantId, type TenantId } from "../lib/ids";
+import { asTenantId, asUserId, type TenantId, type UserId } from "../lib/ids";
 import { todayInZone } from "../lib/time/tz";
 import { isMinor } from "../lib/time/tz";
 
@@ -183,6 +185,7 @@ const adminPool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 async function ensureTenant(
   t: typeof DEMO_TENANT | typeof DEMO_FOOTBALL_TENANT,
   presetKey: string,
+  actor: UserId,
 ): Promise<TenantId> {
   const existing = await adminPool.query<{ id: string }>(
     "select id from tenants where slug = $1",
@@ -192,16 +195,21 @@ async function ensureTenant(
 
   const id = asTenantId(uuidv7());
   const planId = await defaultPlanId(env.MIGRATION_DATABASE_URL);
+  // No preset_key / preset_version on the INSERT — applyPreset owns
+  // those. Writing them directly here was the eighth divergence
+  // (audit L2 followup): the preset's terminology, programs, plans,
+  // feature enablement, dashboard_cards, message templates and
+  // role/permission grants never landed because the seed
+  // short-circuited the engine.
   await adminPool.query(
-    `insert into tenants (id, slug, name, status, plan_id, preset_key, preset_version,
+    `insert into tenants (id, slug, name, status, plan_id,
                          timezone, currency, gstin, branding)
-     values ($1, $2, $3, 'active', $4, $5, 1, $6, $7, $8, $9::jsonb)`,
+     values ($1, $2, $3, 'active', $4, $5, $6, $7, $8::jsonb)`,
     [
       id,
       t.slug,
       t.name,
       planId,
-      presetKey,
       t.timezone,
       t.currency,
       t.gstin,
@@ -212,7 +220,73 @@ async function ensureTenant(
       }),
     ],
   );
+
+  const result = await applyPreset(id, presetKey, { actorId: actor });
+  if (result.kind !== "ok") {
+    throw new Error(
+      `applyPreset(${presetKey}) for ${t.slug} returned ${result.kind}: ` +
+        ("message" in result ? result.message : ""),
+    );
+  }
+
+  // The swimming preset ships two example batches ("Beginners MWF
+  // 06:00" and "Junior TTS 17:00") under the same preset programs
+  // the demo's batches attach to. The demo's batches (Morning Squad
+  // etc.) live alongside with different names; the example batches
+  // would otherwise show as orphan rows on /owner/programs that
+  // have no seeded members and aren't part of the walkthrough
+  // narrative. Drop them (and their cascaded sessions / attendance)
+  // so the demo's program list reads as the 7 batches the runbook
+  // names. multi-sport has empty exampleBatches, so this is a
+  // no-op for the football tenant.
+  await withTenant(id, async (tx) => {
+    // attendance first (FK → sessions), then sessions (FK →
+    // batches), then batches. All sample rows; the seed's own
+    // batches have is_sample=false and stay.
+    await tx.execute(sql`
+      delete from attendance
+      where tenant_id = ${id}::uuid
+        and session_id in (
+          select s.id from sessions s
+          join batches b on b.id = s.batch_id and b.tenant_id = s.tenant_id
+          where b.tenant_id = ${id}::uuid and b.is_sample = true
+        )
+    `);
+    await tx.execute(sql`
+      delete from sessions
+      where tenant_id = ${id}::uuid
+        and batch_id in (
+          select id from batches where tenant_id = ${id}::uuid and is_sample = true
+        )
+    `);
+    await tx.execute(sql`
+      delete from batches where tenant_id = ${id}::uuid and is_sample = true
+    `);
+  });
+
   return id;
+}
+
+// applyPreset's audit columns need a real platform_users row as
+// the actor. pnpm demo:reset chains seed-platform-user *after* this
+// script, so no operator row exists yet on a fresh database. Stand
+// up a synthetic bootstrap actor here (placeholder credentials —
+// never used for login) and reuse it if already present. The
+// email is unique; the row survives subsequent seed-platform-user
+// runs because that script targets a different email.
+async function ensureDemoBootstrapActor(): Promise<UserId> {
+  const existing = await adminPool.query<{ id: string }>(
+    "select id from platform_users where email = $1",
+    ["demo-bootstrap@aqua.local"],
+  );
+  if (existing.rows[0]) return asUserId(existing.rows[0].id);
+  const id = uuidv7();
+  await adminPool.query(
+    `insert into platform_users (id, email, name, password_hash, password_salt, role, status)
+     values ($1, $2, $3, 'demo-bootstrap-not-a-real-password', 'demo-bootstrap-not-a-real-salt', 'admin', 'active')`,
+    [id, "demo-bootstrap@aqua.local", "Demo Bootstrap Actor"],
+  );
+  return asUserId(id);
 }
 
 async function ensureLocation(
@@ -342,14 +416,19 @@ type BatchSpec = {
 };
 
 // Five batches at different times and fill levels:
-//   - Morning Squad (Learn-to-swim)  full — 16 enrolled against 16
-//   - Junior TTS (Junior competitive)  healthy — 8 enrolled against 16
-//   - Morning Masters                    nearly empty — 2 enrolled against 16
-//   - Trial Squad (Learn-to-swim)        starting next week — 1 enrolled
-//   - Holiday Recovery (Junior)          empty — for R.3 holiday visibility
+//   - Morning Squad (Learn to swim)        full — 12 enrolled against 12
+//   - Junior TTS (Junior competitive)     healthy — 8 enrolled against 16
+//   - Morning Masters (Stroke development) nearly empty — 2 enrolled against 16
+//   - Trial Squad (Learn to swim)         starting next week — 1 enrolled
+//   - Holiday Recovery (Junior competitive) empty — for R.3 holiday visibility
+//
+// Program names match the swimming preset verbatim. They used to
+// be "Learn-to-swim" (hyphen) / "Adult masters" — the seed's own
+// creation, divergent from the preset. After moving through
+// applyPreset, the demo's programs are the preset's programs.
 const DEMO_BATCHES: BatchSpec[] = [
   {
-    program: "Learn-to-swim",
+    program: "Learn to swim",
     name: "Morning Squad",
     daysOfWeek: [1, 2, 3, 4, 5],
     startTime: "07:00",
@@ -365,7 +444,7 @@ const DEMO_BATCHES: BatchSpec[] = [
     fillCount: 8,
   },
   {
-    program: "Adult masters",
+    program: "Stroke development",
     name: "Morning Masters",
     daysOfWeek: [1, 3, 5],
     startTime: "06:00",
@@ -373,7 +452,7 @@ const DEMO_BATCHES: BatchSpec[] = [
     fillCount: 2,
   },
   {
-    program: "Learn-to-swim",
+    program: "Learn to swim",
     name: "Trial Squad",
     daysOfWeek: [1, 3, 5],
     startTime: "16:00",
@@ -397,7 +476,7 @@ const DEMO_BATCHES: BatchSpec[] = [
   // weekend: coached by the secondary coach so the R.2 conflict
   // surface stays clean.
   {
-    program: "Adult masters",
+    program: "Stroke development",
     name: "Sunday Open Practice",
     daysOfWeek: [0],
     startTime: "09:00",
@@ -988,8 +1067,8 @@ function isMinorDateOfBirth(dob: string, timezone: string): boolean {
   return isMinor(dob, timezone);
 }
 
-async function ensureKicksFootballTenant(): Promise<void> {
-  const tenantId = await ensureTenant(DEMO_FOOTBALL_TENANT, "multi-sport");
+async function ensureKicksFootballTenant(actor: UserId): Promise<void> {
+  const tenantId = await ensureTenant(DEMO_FOOTBALL_TENANT, "multi-sport", actor);
   await seedRoleTemplates(tenantId);
   const locationId = await ensureLocation(
     tenantId,
@@ -1287,8 +1366,17 @@ async function main() {
   await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
   console.log("platform catalogue seeded → standard plan + ga features");
 
+  // applyPreset stamps tenant_features / terminology / programs /
+  // plan shapes / message templates / dashboard_cards / preset_key
+  // with a real platform_users row as the audit actor. The
+  // platform operator is seeded by a separate script that runs
+  // AFTER this one in `pnpm demo:reset`, so stand up a synthetic
+  // bootstrap row here — placeholder credentials, never used for
+  // login.
+  const actor = await ensureDemoBootstrapActor();
+
   // Main tenant — swimming.
-  const tenantId = await ensureTenant(DEMO_TENANT, "swimming");
+  const tenantId = await ensureTenant(DEMO_TENANT, "swimming", actor);
   console.log(`tenant ${DEMO_TENANT.slug} → ${tenantId}`);
   await seedRoleTemplates(tenantId);
   console.log("role templates seeded → owner, admin, receptionist, coach, accountant, worker");
@@ -1313,10 +1401,18 @@ async function main() {
     DEMO_TENANT.firstLocation.name,
     DEMO_TENANT.firstLocation.address,
   );
+  // Programs land via applyPreset — names match the swimming
+  // preset verbatim ("Learn to swim", "Stroke development",
+  // "Junior competitive"). ensurePrograms() is now a no-op for
+  // these three rows: it finds each by name and returns its id.
+  // The third demo program replaces the legacy "Adult masters"
+  // (the seed previously created its own programs with different
+  // names from the preset; the divergence is what made terminology
+  // empty).
   const programsByName = await ensurePrograms(tenantId, [
-    { name: "Learn-to-swim" },
+    { name: "Learn to swim" },
+    { name: "Stroke development" },
     { name: "Junior competitive" },
-    { name: "Adult masters" },
   ]);
 
   const staffIdsByPhone = await ensureStaff(tenantId, [
@@ -1359,7 +1455,7 @@ async function main() {
     );
     if (existing.rows.length === 0) {
       const id = uuidv7();
-      const programId = programsByName.get("Adult masters");
+      const programId = programsByName.get("Stroke development");
       if (programId && primaryCoachStaffId) {
         await adminPool.query(
           `insert into batches
@@ -1439,7 +1535,7 @@ async function main() {
 
   // Second tenant — football. Different preset, different accent, so the
   // platform tenant list shows two rows with visibly different states.
-  await ensureKicksFootballTenant();
+  await ensureKicksFootballTenant(actor);
 
   await pool.end().catch(() => {});
   await adminPool.end();
