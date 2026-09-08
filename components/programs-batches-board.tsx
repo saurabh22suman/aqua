@@ -13,7 +13,7 @@ import { BatchEditForm, type BatchEditFormState } from "@/components/batch-edit-
 import { BatchCreateForm } from "@/components/batch-create-form";
 import type { Program } from "@/db/schema/programs";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
-import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 export function ProgramsBatchesBoard({
   initialPrograms,
@@ -235,7 +235,9 @@ export function ProgramsBatchesBoard({
       </section>
 
       <section>
-        <h2 className="font-display text-[15px] font-semibold text-ink-2">Batches</h2>
+        <h2 className="font-display text-[15px] font-semibold text-ink-2">
+          {titleCase(resolveTerm(terminology, "batch", "other"))}
+        </h2>
         <ul className="mt-2 divide-y divide-line" data-testid="batches-list">
           {batches.map((b) => (
             <li key={b.id} className="py-2">
@@ -261,7 +263,7 @@ export function ProgramsBatchesBoard({
                       {b.name}
                     </Link>
                     <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {b.startTime}–{b.endTime}</span>
-                    {b.coachName ? <span className="text-ink-3"> · coach {b.coachName}</span> : null}
+                    {b.coachName ? <span className="text-ink-3"> · {resolveTerm(terminology, "coach", 1)} {b.coachName}</span> : null}
                   </div>
                   <button
                     type="button"
