@@ -209,7 +209,7 @@ export const DANCE_MA_PRESET_DEFINITION: PresetDefinition = presetDefinitionSche
     "billing",
     "studio.booking",
     "staff",
-    "levels.assess",
+    "swim.levels",
     "reports",
     "settings",
     "messaging",
