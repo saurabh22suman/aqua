@@ -75,7 +75,9 @@ const ALLOWLIST = new Set([
   // L2-followup one-off vocabulary fixers; demo-side scripts that
   // talk to the privileged pool the same way scripts/seed-demo.ts
   // does (env.MIGRATION_DATABASE_URL), no request-path code.
-  "scripts/l2-apply-presets.ts",
+  // l2-apply-presets.ts was retired — the demo seed now routes
+  // through applyPreset() in scripts/seed-demo.ts so the backfill
+  // is no longer needed.
   "scripts/l2-set-terminology.ts",
   "tests/tier1/link-better-auth-user.test.ts",
   "lib/env.ts",
@@ -121,6 +123,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/preset-engine.test.ts",
   "tests/tier1/preset-key-runtime-reads.test.ts",
   "tests/tier1/preset-catalogue-coverage.test.ts", // L2 — same fixture-setup pattern as the other tier1 preset tests above
+  "tests/tier1/preset-feature-coverage.test.ts", // L2-followup — same fixture-setup pattern as preset-catalogue-coverage; reads features table to cross-check every preset's features[]
   "tests/tier1/apply-preset-action.test.ts",
   "tests/tier1/preset-preview-source.test.ts",
   "tests/tier1/preset-sample-data.test.ts",
