@@ -22,7 +22,7 @@ import { presetDefinitionSchema } from "./preset-definitions";
 // Start-from-scratch
 // ---------------------------------------------------------------------------
 
-export const START_FROM_SCRATCH_DEFINITION: PresetDefinition = presetDefinitionSchema.parse({
+export const START_FROM_SCRATCH_PRESET_DEFINITION: PresetDefinition = presetDefinitionSchema.parse({
   features: [
     "members",
     "attendance",
