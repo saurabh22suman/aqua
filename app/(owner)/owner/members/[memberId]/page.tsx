@@ -12,6 +12,7 @@ import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
+import { resolveTerm } from "@/lib/terminology/keys";
 
 export default async function MemberDetailPage({
   params,
@@ -74,7 +75,7 @@ export default async function MemberDetailPage({
         <MemberStatusPanel memberId={member.memberId} status={member.status} />
       </div>
 
-      <MemberEnrolmentPanel memberId={member.memberId} />
+      <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
 
       <ParentLinkPanel
         memberId={member.memberId}
@@ -114,7 +115,9 @@ export default async function MemberDetailPage({
             Guardians
           </h2>
           {member.guardians.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">No guardian on file.</p>
+            <p className="mt-2 text-[13px] text-ink-3">
+              No {resolveTerm(terminology, "guardian", 1)} on file.
+            </p>
           ) : (
             <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
               {member.guardians.map((g) => (

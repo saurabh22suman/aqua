@@ -16,12 +16,14 @@ import type { LocationOption } from "@/lib/services/people";
 import type { BatchWithProgramName } from "@/lib/services/programs";
 import type { EnquiryStage } from "@/db/schema/enquiries";
 import type { NewMemberDetails } from "@/lib/services/enquiries";
+import type { TerminologyState } from "@/lib/terminology/keys";
 
 export function EnquiryDetailView({
   enquiry,
   locations,
   batches,
   memberDetailBasePath = "/owner/members",
+  terminology,
 }: {
   enquiry: EnquiryDetail;
   locations: LocationOption[];
@@ -31,6 +33,8 @@ export function EnquiryDetailView({
   // conversion (no prior trial) has no batchId field on this form, so
   // enrolling is always this page's job, not this one's.
   memberDetailBasePath?: string;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +187,12 @@ export function EnquiryDetailView({
               </option>
             ))}
           </select>
-          <EnquiryNewMemberFields locations={locations} onChange={setTrialDetails} onValidityChange={setTrialValid} />
+          <EnquiryNewMemberFields
+            locations={locations}
+            onChange={setTrialDetails}
+            onValidityChange={setTrialValid}
+            terminology={terminology}
+          />
           <button
             type="button"
             onClick={submitBookTrial}
@@ -209,7 +218,12 @@ export function EnquiryDetailView({
             className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
           />
           {!enquiry.memberId ? (
-            <EnquiryNewMemberFields locations={locations} onChange={setConvertDetails} onValidityChange={setConvertValid} />
+            <EnquiryNewMemberFields
+              locations={locations}
+              onChange={setConvertDetails}
+              onValidityChange={setConvertValid}
+              terminology={terminology}
+            />
           ) : null}
           <button
             type="button"

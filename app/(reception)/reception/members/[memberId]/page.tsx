@@ -7,6 +7,7 @@ import {
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberIdCard } from "@/components/member-id-card";
+import { resolveTerm } from "@/lib/terminology/keys";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -58,7 +59,7 @@ export default async function ReceptionMemberDetailPage({
         {member.isMinor ? " · minor" : ""}
       </p>
 
-      <MemberEnrolmentPanel memberId={member.memberId} />
+      <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
 
       {member.isMinor ? (
         <section className="mt-4">
@@ -67,7 +68,9 @@ export default async function ReceptionMemberDetailPage({
             Guardians
           </h2>
           {member.guardians.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">No guardian on file.</p>
+            <p className="mt-2 text-[13px] text-ink-3">
+            No {resolveTerm(terminology, "guardian", 1)} on file.
+          </p>
           ) : (
             <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
               {member.guardians.map((g) => (

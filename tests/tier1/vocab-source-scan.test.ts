@@ -90,54 +90,19 @@ const JSX_TEXT_VOCAB_REGEX = new RegExp(
 );
 
 // Whitelist of files where a vocab word inside JSX text is
-// intentional (or out of L3 scope). Each entry names WHY.
-//
-// Two kinds of entries:
-//   (a) genuinely not a vocab usage — notFound() return values,
-//       empty-state copy for words no preset overrides.
-//   (b) TODO L4 — real vocab violations the L3 commit does not
-//       fix. The audit's L3 scope is the three named instances;
-//       the rest of the surface (form labels, option labels,
-//       section headings, alert messages) is its own task. The
-//       scan still reports them as violations via the test
-//       failure output, but these allowlist entries keep CI
-//       green today. When L4 lands, the entry moves out of
-//       allowlist and the file is fixed.
+// intentionally allowed (and why). Every entry must name the
+// reason — not a TODO, not "out of scope". The audit's L3
+// follow-up removed every prior TODO L4 entry by routing the
+// underlying prose through resolveTerm; what remains is true
+// belt-and-braces for surfaces that already use resolveTerm, so
+// a future regression that reintroduces hardcoded text fails
+// the scan instead of silently passing.
 const ALLOWED = new Set<string>([
-  // (a) notFound() return values — these are not user-facing
-  // prose, they are 404-page bodies.
-  "app/(coach)/coach/register/[sessionId]/page.tsx",
-
-  // (a) "No guardian on file." — empty-state copy. Swim does not
-  // override `guardian` (swim preset keeps the default), so the
-  // word reads as "guardian" regardless of preset. Not a vocab
-  // violation in practice, even if the closed-key contract would
-  // technically say otherwise.
-  "app/(owner)/owner/members/[memberId]/page.tsx",
-  "app/(reception)/reception/members/[memberId]/page.tsx",
-
-  // (b) TODO L4 — section headings, form labels, option text,
-  // and alert messages that hardcode a vocab word. Real
-  // violations per the closed-key contract; swim / multi-sport
-  // would render different words. Out of L3 scope; route through
-  // resolveTerm when the surface is next touched.
-  "app/(owner)/owner/members/new/page.tsx",
-  "app/(owner)/owner/members/[memberId]/edit/page.tsx",
-  "app/(reception)/reception/members/new/page.tsx",
-  "app/(coach)/coach/members/page.tsx",  // "Find a swimmer" — fixed by L3 to use resolveTerm; the page-level allowlist is belt-and-braces in case a regression reintroduces hardcoded text on this file.
-  "components/batch-create-form.tsx",
-  "components/batch-edit-form.tsx",
-  "components/enquiry-detail-view.tsx",
-  "components/enquiry-new-member-fields.tsx",
-  "components/member-create-form.tsx",
-  "components/reports/attendance-report-card.tsx",  // "Attendance by batch" — h2; TODO L4
-  "components/reports/coach-load-card.tsx",          // "Coach load" — h2; TODO L4
-  "components/reports/enquiry-funnel-card.tsx",       // "Enquiry funnel" — h2; TODO L4
-  "components/staff-create-form.tsx",                 // "Choose coach…" option
-  "components/upcoming-sessions-list.tsx",            // option value="coach"
-  "components/member-enrolment-panel.tsx",             // "Not enrolled in any batch yet" etc. — TODO L4
-  "components/programs-batches-board.tsx",
-  "components/session-substitute-control.tsx",          // "Choose coach…" — TODO L4
+  // belt-and-braces: this page was fixed by L3 (coach/members
+  // "Find a swimmer"). Keeping the entry so the scan gates
+  // every text-bearing surface even if a future commit removes
+  // the resolveTerm call.
+  "app/(coach)/coach/members/page.tsx",
 ]);
 
 function listTsxFiles(dir: string): string[] {

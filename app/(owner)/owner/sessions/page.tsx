@@ -6,6 +6,7 @@ import { listUpcomingSessions } from "@/lib/services/coach-schedule";
 import { listCoaches } from "@/lib/services/programs";
 import { listBatches } from "@/lib/services/programs";
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 
 // F3 (R.1) — owner-facing upcoming-sessions page. Lists every
 // scheduled session in the tenant over the next two weeks, with
@@ -32,9 +33,14 @@ export default async function SessionsPage() {
   const fromDate = today.toISOString().slice(0, 10);
   const toDate = twoWeeksOut.toISOString().slice(0, 10);
 
-  const [upcoming, coaches] = await Promise.all([
+  const [upcoming, coaches, terminology] = await Promise.all([
     listUpcomingSessions(ctx, fromDate, toDate),
     listCoaches(ctx),
+    // The substitute coach picker labels itself with closed-key
+    // `coach` (L3 audit). Fetching once at the page so the
+    // UpcomingSessionsList → SessionSubstituteControl prop
+    // drill is just data, not extra round trips.
+    getTerminologyAction(),
   ]);
 
   // unused here, but importing keeps the export live for tests
@@ -61,7 +67,7 @@ export default async function SessionsPage() {
         reads who actually ran the session.
       </p>
 
-      <UpcomingSessionsList initialSessions={upcoming} coaches={coaches} />
+      <UpcomingSessionsList initialSessions={upcoming} coaches={coaches} terminology={terminology} />
 
       <div className="mt-6 rounded-card border border-line bg-paper p-4">
         <p className="text-[12.5px] text-ink-3">

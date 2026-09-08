@@ -1,4 +1,6 @@
 import type { EnquiryFunnelRow } from "@/lib/services/owner-reports";
+import { getTerminologyAction } from "@/lib/actions/terminology";
+import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 
 // Phase 4.4 — enquiry funnel per source. Owner reads counts
 // and conversion rate. Stages show breakdown so the owner
@@ -13,12 +15,19 @@ const SOURCE_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-export function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) {
+export async function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) {
+  // L3 audit — the title routes the closed-key `enquiry` plural
+  // form through resolveTerm so the heading matches whatever
+  // the tenant's vocabulary preset defines (currently every
+  // preset keeps "enquiry", but the contract is uniform).
+  const terminology = await getTerminologyAction();
   const totalAll = rows.reduce((s, r) => s + r.total, 0);
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">Enquiry funnel</h2>
+        <h2 className="font-display text-[15px] font-semibold">
+          {titleCase(resolveTerm(terminology, "enquiry", "other"))} funnel
+        </h2>
         <span className="text-[12px] text-ink-3">{totalAll} in period</span>
       </header>
       {totalAll === 0 ? (

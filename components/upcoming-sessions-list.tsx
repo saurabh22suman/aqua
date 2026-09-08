@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SessionSubstituteControl } from "@/components/session-substitute-control";
 import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import type { CoachOption } from "@/lib/services/programs";
+import type { TerminologyState } from "@/lib/terminology/keys";
 
 // F3 (R.1) — client island for /owner/sessions. Renders the
 // session list with a per-row substitute control. Tracks
@@ -40,9 +41,12 @@ function formatHeaderDate(dateStr: string): string {
 export function UpcomingSessionsList({
   initialSessions,
   coaches,
+  terminology,
 }: {
   initialSessions: UpcomingSessionRow[];
   coaches: CoachOption[];
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const [sessions, setSessions] = useState(initialSessions);
 
@@ -105,6 +109,7 @@ export function UpcomingSessionsList({
                     onSubstituted={(result) => {
                       onSubstituted(s.id, result.newCoachName);
                     }}
+                    terminology={terminology}
                   />
                 </div>
               </li>

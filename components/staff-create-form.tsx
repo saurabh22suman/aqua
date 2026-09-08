@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { Loader2, Save, X } from "lucide-react";
 import { createStaffAction } from "@/lib/actions/staff";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 type Mode = "new" | "existing";
 
-export function StaffCreateForm() {
+export function StaffCreateForm({ terminology }: { terminology: TerminologyState }) {
   const [mode, setMode] = useState<Mode>("new");
   const [fullName, setFullName] = useState("");
   const [existingPersonId, setExistingPersonId] = useState("");
@@ -99,7 +100,7 @@ export function StaffCreateForm() {
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
           data-testid="staff-type"
         >
-          <option value="coach">Coach</option>
+          <option value="coach">{resolveTerm(terminology, "coach", 1)}</option>
           <option value="receptionist">Receptionist</option>
           <option value="worker">Worker</option>
           <option value="accountant">Accountant</option>

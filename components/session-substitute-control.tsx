@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, Check } from "lucide-react";
 import { substituteCoachAction } from "@/lib/actions/coach-substitution";
 import type { CoachOption } from "@/lib/services/programs";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 // F3 (R.1) — substitution surface. Rendered once per upcoming
 // session on /owner/sessions. The current coach's name is shown
@@ -23,6 +24,7 @@ export function SessionSubstituteControl({
   currentCoachName,
   coaches,
   onSubstituted,
+  terminology,
 }: {
   sessionId: string;
   sessionDate: string;
@@ -31,6 +33,8 @@ export function SessionSubstituteControl({
   currentCoachName: string | null;
   coaches: CoachOption[];
   onSubstituted: (result: { newCoachId: string; newCoachName: string }) => void;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -101,7 +105,7 @@ export function SessionSubstituteControl({
         className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px]"
         data-testid={`substitute-coach-${sessionId}`}
       >
-        <option value="">Choose coach…</option>
+        <option value="">Choose {resolveTerm(terminology, "coach", 1)}…</option>
         {eligibleCoaches.map((c) => (
           <option key={c.staffId} value={c.staffId}>
             {c.fullName}

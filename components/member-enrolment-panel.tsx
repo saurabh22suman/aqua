@@ -6,6 +6,7 @@ import { listBatchesAction } from "@/lib/actions/programs";
 import { enrolMemberAction, listMemberEnrolmentsAction } from "@/lib/actions/enrolment";
 import type { MemberEnrolment } from "@/lib/services/enrolment";
 import type { BatchWithProgramName } from "@/lib/services/programs";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 // B3 — a member created through reception's add-member form, or
 // produced by converting an enquiry with no prior trial booking,
@@ -27,7 +28,19 @@ import type { BatchWithProgramName } from "@/lib/services/programs";
 // always shown (filtered to batches not already enrolled in), below
 // the current-enrolments list when there is one.
 
-export function MemberEnrolmentPanel({ memberId }: { memberId: string }) {
+export function MemberEnrolmentPanel({
+  memberId,
+  terminology,
+}: {
+  memberId: string;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  // Three empty-state strings ("not enrolled in any batch",
+  // "add a program and batch first", "enrolled in every
+  // available batch") route through here so a swim / gym /
+  // football tenant that customises `batch` or `program` does
+  // not drift from what the panel says.
+  terminology: TerminologyState;
+}) {
   const router = useRouter();
   const [enrolments, setEnrolments] = useState<MemberEnrolment[] | null>(null);
   const [batches, setBatches] = useState<BatchWithProgramName[] | null>(null);
@@ -128,7 +141,7 @@ export function MemberEnrolmentPanel({ memberId }: { memberId: string }) {
               ))}
             </ul>
           ) : (
-            <p className="text-[13px] text-ink-3">Not enrolled in any batch yet.</p>
+            <p className="text-[13px] text-ink-3">Not enrolled in any {resolveTerm(terminology, "batch", "other")} yet.</p>
           )}
 
           {availableBatches.length > 0 ? (
@@ -156,9 +169,13 @@ export function MemberEnrolmentPanel({ memberId }: { memberId: string }) {
               </button>
             </div>
           ) : batches!.length === 0 ? (
-            <p className="text-[13px] text-ink-3">No batches yet — add a program and batch first.</p>
+            <p className="text-[13px] text-ink-3">
+              No {resolveTerm(terminology, "batch", "other")} yet — add a {resolveTerm(terminology, "program", 1)} and {resolveTerm(terminology, "batch", 1)} first.
+            </p>
           ) : (
-            <p className="text-[13px] text-ink-3">Enrolled in every available batch.</p>
+            <p className="text-[13px] text-ink-3">
+              Enrolled in every available {resolveTerm(terminology, "batch", 1)}.
+            </p>
           )}
           {actionError ? <p className="text-[12px] text-late">{actionError}</p> : null}
         </div>
