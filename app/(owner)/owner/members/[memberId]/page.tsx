@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarCheck, Pencil, ShieldCheck, Users } from "lucide-react";
-import { getMemberDetailAction } from "@/lib/actions/people";
+import {
+  getMemberDetailAction,
+  getMemberIdCardContextAction,
+} from "@/lib/actions/people";
 import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
+import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 
 export default async function MemberDetailPage({
@@ -14,15 +19,37 @@ export default async function MemberDetailPage({
   params: Promise<{ memberId: string }>;
 }) {
   const { memberId } = await params;
-  const [member, attendanceHistory] = await Promise.all([
+  const [member, attendanceHistory, cardCtx, terminology] = await Promise.all([
     getMemberDetailAction(memberId),
     getMemberAttendanceHistoryAction(memberId),
+    getMemberIdCardContextAction(),
+    // The id-card's eyebrow renders the closed-key `member`
+    // singular form via resolveTerm (L3 audit). The page already
+    // fetched the other three; adding terminology here keeps the
+    // card self-consistent without a second round trip on its
+    // own — and only the page that mounts the card pays the cost.
+    getTerminologyAction(),
   ]);
   if (!member) notFound();
 
   return (
     <main className="px-5 pt-10 pb-8">
-      <div className="flex items-start justify-between">
+      {cardCtx && terminology ? (
+        <div className="print-isolate-block">
+          <MemberIdCard
+            tenantSlug={cardCtx.tenantSlug}
+            tenantDisplayName={cardCtx.displayName}
+            tenantAccent={cardCtx.accent}
+            initials={cardCtx.initials}
+            memberFullName={member.fullName}
+            memberCode={member.memberCode}
+            memberUuid={member.memberId}
+            terminology={terminology}
+          />
+        </div>
+      ) : null}
+
+      <div className="mt-6 flex items-start justify-between">
         <div>
           <h1 className="font-display text-[19px] font-semibold">{member.fullName}</h1>
           <p className="mt-0.5 text-[12.5px] text-ink-3">
