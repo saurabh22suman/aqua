@@ -187,3 +187,13 @@ jobs:
       # the surface contract. See middleware.ts and
       # scripts/e2e-host-boundary.ts for the rules and the probes.
       - run: pnpm e2e:host-boundary
+
+      # A — non-route asset reachability. The middleware allowlist
+      # is a failure surface for any path the app serves but the
+      # allowlist doesn't know about (the /sw.js bug that took down
+      # the previous CI run surfaced only because one e2e script
+      # exercised the SW). This test pins the static list (/sw.js
+      # today) AND auto-enumerates public/ so a future contributor
+      # who drops a new asset in /public/ has it covered on the
+      # next PR. Pattern is the same as e2e-host-boundary.
+      - run: pnpm e2e:asset-reachability

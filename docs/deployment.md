@@ -37,15 +37,23 @@ For the first deploy only. Re-running for fixes is just steps
 **0a.** Decide on a base domain. The demo uses
 `aqua.soloengine.in` (operator decides the real domain).
 
-**0b.** Pick a DNS provider. This procedure assumes Cloudflare
-for two reasons: (1) the apex A record + `ops.<base>` A record
-both point at the VPS IP; (2) if/when per-tenant subdomains (B)
-land, Cloudflare handles the wildcard TLS at the edge (Dokploy
-itself doesn't have a documented DNS-01 wildcard path —
+**0b.** Set up DNS for two hostnames: `<base>` and `ops.<base>`.
+Two A records, one per hostname, both pointing at the VPS IP.
+Any registrar works — Cloudflare Registrar, Porkbun, Namecheap,
+GoDaddy. Cloudflare (the company) is **not** required for this
+procedure as long as you're only on hostnames, not per-tenant
+subdomains: Dokploy + Traefik issue a Let's Encrypt cert per
+hostname automatically (HTTP-01 challenge, since each hostname has
+its own working A record; no DNS-01 needed). You get two certs
+that auto-renew.
+
+**Cloudflare (the proxy) becomes mandatory for B
+(per-tenant subdomains)** — Dokploy's
 [certificates docs](https://docs.dokploy.com/docs/core/certificates)
-only describe manual cert paste and `traefik.me`). Cloudflare
-account, zone for the base domain, and the two A records all
-needed before step 1.
+don't document a DNS-01 wildcard path, so `*.aqua.soloengine.in`
+isn't natively issuable from Dokploy. The future-work section on
+B describes that constraint and the rate-limit reasoning. For
+today's deploy (A only, two hostnames), no Cloudflare.
 
 **0c.** Generate the four secrets. One terminal:
 
