@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./server";
+import { isSessionExpiredForRole } from "./permissions";
 import type { UserId, TenantId } from "@/lib/ids";
 import {
   resolveTenantAccessBySlug,
@@ -52,7 +53,16 @@ export const requireCtx = cache(async (slug: string): Promise<Ctx> => {
   const session = await auth.api.getSession({ headers: h });
   if (!session?.user) throw new NotFoundError();
 
-  return resolveCtxFor(session.user.id, slug);
+  const ctx = await resolveCtxFor(session.user.id, slug);
+  if (
+    isSessionExpiredForRole(
+      ctx.roleKey,
+      new Date(session.session.createdAt).getTime(),
+    )
+  ) {
+    throw new NotFoundError();
+  }
+  return ctx;
 });
 
 export async function requireDefaultCtx(): Promise<Ctx> {
@@ -62,6 +72,15 @@ export async function requireDefaultCtx(): Promise<Ctx> {
 
   const membership = await resolveDefaultMembership(session.user.id);
   if (!membership) throw new NotFoundError();
+
+  if (
+    isSessionExpiredForRole(
+      membership.roleKey,
+      new Date(session.session.createdAt).getTime(),
+    )
+  ) {
+    throw new NotFoundError();
+  }
 
   const locationIds = await resolveLocationIds(
     membership.tenantId,
@@ -99,6 +118,24 @@ async function withPlatformSafe<T>(fn: () => Promise<T>): Promise<T> {
 export async function sessionExists(): Promise<boolean> {
   const h = await headers();
   const session = await withPlatformSafe(() => auth.api.getSession({ headers: h }));
+  if (!session?.user) return false;
+
+  // Freshness-aware: every role layout redirects to /login on false,
+  // so an expired receptionist session must read as absent HERE --
+  // otherwise the layout renders, the page's requireDefaultCtx throws,
+  // and the user is trapped on an error page with no path back to
+  // login. Membership resolution costs one indexed read per layout
+  // render; correctness of the redirect is worth it.
+  const membership = await resolveDefaultMembership(session.user.id);
+  if (!membership) return false;
+  if (
+    isSessionExpiredForRole(
+      membership.roleKey,
+      new Date(session.session.createdAt).getTime(),
+    )
+  ) {
+    return false;
+  }
   return session !== null;
 }
 

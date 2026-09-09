@@ -15,6 +15,24 @@ const ENQUIRIES_ROLES = ["owner", "admin", "receptionist"] as const;
 
 // F-12 deletes all of these: role-key string comparisons are the F-04
 // "Never" violation, tolerated only as an interim bridge to permission sets.
+// Receptionist sessions are hard-capped from login (createdAt, NOT
+// sliding): the front desk is a shared device, often a counter
+// tablet, and a 30-day sliding session there means whoever walks up
+// next inherits the last shift's identity. 12h covers a full working
+// day plus handover; anything left logged in overnight is dead by
+// morning. Owner/coach/admin stay on the 30-day sliding library
+// session (personal phones). Pure function of (role, timestamps) so
+// it is unit-testable without a session or a database.
+export const RECEPTIONIST_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+export function isSessionExpiredForRole(
+  roleKey: string,
+  sessionCreatedAtMs: number,
+  nowMs: number = Date.now(),
+): boolean {
+  if (roleKey !== "receptionist") return false;
+  return nowMs - sessionCreatedAtMs > RECEPTIONIST_SESSION_MAX_AGE_MS;
+}
 export function assertStaff(ctx: Ctx): void {
   if (!STAFF_ROLES.includes(ctx.roleKey as (typeof STAFF_ROLES)[number])) {
     throw new Error(

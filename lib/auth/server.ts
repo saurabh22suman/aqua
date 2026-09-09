@@ -14,6 +14,18 @@ export function createAuth(authDb: NodePgDatabase<Record<string, never>>) {
       provider: "pg",
       schema: betterAuthSchema,
     }),
+    // Session lifetime is per-role by design (architecture §6.1):
+    // owner/coach/admin sit on personal phones and get the full
+    // 30-day sliding window here. The receptionist cap (12h hard,
+    // shared front-desk device) cannot live in this global config --
+    // better-auth has no per-role session concept -- so it is
+    // enforced in our own layer instead: sessionExists() returns
+    // false and requireDefaultCtx()/requireCtx() throw once a
+    // receptionist session passes isSessionExpiredForRole().
+    session: {
+      expiresIn: 60 * 60 * 24 * 30,
+      updateAge: 60 * 60 * 24,
+    },
     rateLimit: {
       enabled: true,
       window: 60,

@@ -8,12 +8,17 @@ import { asTenantId } from "@/lib/ids";
 
 // requireDefaultCtx needs a session; stub only the framework edges
 // (better-auth session + next/headers). The database path it exercises —
-// resolveDefaultMembership + resolveLocationIds — stays real.
+// resolveDefaultMembership + resolveLocationIds — stays real. The stub
+// mirrors better-auth's real shape ({ session, user } with a fresh
+// createdAt) so the receptionist session cap sees a live session.
 const { authUser } = vi.hoisted(() => ({ authUser: { betterAuthId: "" } }));
 vi.mock("@/lib/auth/server", () => ({
   auth: {
     api: {
-      getSession: async () => ({ user: { id: authUser.betterAuthId } }),
+      getSession: async () => ({
+        user: { id: authUser.betterAuthId },
+        session: { createdAt: new Date() },
+      }),
     },
   },
 }));

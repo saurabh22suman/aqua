@@ -87,8 +87,10 @@ export function LoginForm() {
       </h1>
       <p className="mt-2 text-[14px] text-ink-2">
         {step === "phone"
-          ? "We'll text you a six-digit code."
-          : `Sent to ${phone}. It expires in five minutes.`}
+          ? process.env.NODE_ENV === "production"
+            ? "Ask your club for a login link — or enter your number if they shared a code with you. Nothing arrives by SMS."
+            : "Demo build: the six-digit code appears on the next screen. Nothing is sent anywhere."
+          : `Code for ${phone}. It expires in five minutes.`}
       </p>
 
       {step === "phone" ? (
@@ -128,7 +130,7 @@ export function LoginForm() {
         disabled={busy || (step === "phone" ? !phone : code.length !== 6)}
         className="mt-6 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent)] transition-colors duration-150 disabled:opacity-40"
       >
-        {busy ? "One moment…" : step === "phone" ? "Send code" : "Verify and continue"}
+        {busy ? "One moment…" : step === "phone" ? "Continue" : "Verify and continue"}
       </button>
 
       {step === "code" ? (

@@ -20,7 +20,8 @@ export default async function StaffInvitePage() {
       </Link>
       <h1 className="font-display text-[19px] font-semibold">Invite staff</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Add the person to the directory first, then invite them to log in from the staff invitations surface.
+        Create the invite, then copy the login link from the roster and share it yourself —
+        nothing is sent automatically.
       </p>
 
       <div className="mt-6">

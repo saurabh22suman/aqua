@@ -57,7 +57,8 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
           data-testid="invite-phone"
         />
         <span className="block mt-1 text-[12px] text-ink-3">
-          Country code first. The invitee signs in with the same phone.
+          Country code first. After inviting, copy the login link from the roster and share it
+          yourself — nothing is sent automatically.
         </span>
       </label>
       <label className="block mb-4">
@@ -131,7 +132,7 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
           data-testid="invite-save"
         >
           {pending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {pending ? "Inviting…" : "Send invite"}
+          {pending ? "Inviting…" : "Create invite"}
         </button>
         <Link
           href="/owner/staff/invitations"
