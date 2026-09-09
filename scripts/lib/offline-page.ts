@@ -18,7 +18,7 @@ export async function loginAsCoach(
   const page = await context.newPage();
   await page.goto(`${base}/login`);
   await page.getByPlaceholder("+91 98765 43210").fill(coachPhone);
-  await page.getByRole("button", { name: "Send code" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
   const hint = page.locator("[data-testid=dev-code]");
   await hint.waitFor({ timeout: 15_000 });
   const code = (await hint.textContent())!.replace(/\D/g, "").slice(-6);

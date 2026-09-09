@@ -66,7 +66,7 @@ async function main() {
     try {
       await page.goto(`${BASE}/login`);
       await page.getByPlaceholder("+91 98765 43210").fill(role.phone);
-      await page.getByRole("button", { name: "Send code" }).click();
+      await page.getByRole("button", { name: "Continue" }).click();
 
       const hint = page.locator("text=dev code:");
       await hint.waitFor({ timeout: 15_000 });
