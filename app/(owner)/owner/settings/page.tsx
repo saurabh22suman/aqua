@@ -1,18 +1,33 @@
 import Link from "next/link";
-import { ChevronRight, Languages, ListChecks, Palette, Users } from "lucide-react";
+import { LogOut, ChevronRight, Languages, ListChecks, Palette, Users } from "lucide-react";
+import { requireDefaultCtx } from "@/lib/auth/context";
+import { assertStaff } from "@/lib/auth/permissions";
+import { getCurrentStaffIdentity } from "@/lib/services/staff";
+import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
 // F-23 — settings surface. Branding (Phase 2.9), Terminology
 // (Phase 2.10), Staff (Phase 3.5) and the onboarding checklist
-// (Phase 2.8) live here; future settings (locations, business
-// hours, holiday calendar) accumulate in the same list. Style
-// follows the row pattern of the bottom-nav cards: icon | title
-// + sub | chevron.
-export default function Page() {
+// (Phase 2.8) live here. Locations / business hours / holidays
+// editors are NOT on this page today — those tables exist (per the
+// audit: locations + tenant_holidays) but the owner-side editors
+// are their own future tasks. The subtitle below says only what's
+// actually reachable from this list; the follow-up tasks can grow
+// it back.
+//
+// K2 — Account section at the foot of the page. The bottom nav's
+// 4th slot is Settings (admin-y), not a "Me" tab, so the identity
+// block + sign-out lives here instead. When a dedicated /owner/me
+// lands it can replace this section in place.
+export default async function Page() {
+  const ctx = await requireDefaultCtx();
+  assertStaff(ctx);
+  const identity = await getCurrentStaffIdentity(ctx);
+
   return (
     <main className="px-5 pt-6 pb-8">
-      <h1 className="font-display text-[19px] font-semibold capitalize">settings</h1>
+      <h1 className="font-display text-[19px] font-semibold">Settings</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Tenant configuration — branding, vocabulary, staff, locations, hours.
+        Branding, vocabulary, staff and onboarding — everything the owner can change about the academy.
       </p>
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Setup</h2>
@@ -78,6 +93,25 @@ export default function Page() {
         </div>
         <ChevronRight size={18} className="text-ink-3 flex-none" />
       </Link>
+
+      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Account</h2>
+      <section className="rounded-card border border-line bg-paper p-4">
+        <p className="font-display text-[14px] font-semibold">
+          {identity?.fullName ?? "Signed in"}
+        </p>
+        <p className="mt-1 text-[13px] text-ink-3 font-mono">
+          {identity?.phone ?? "No phone on file"}
+        </p>
+      </section>
+      <form action={logoutTenantAction} className="mt-3">
+        <button
+          type="submit"
+          className="flex w-full items-center gap-2 rounded-card border border-line bg-paper px-4 py-3 text-[14px] font-medium text-ink hover:bg-paper/80"
+        >
+          <LogOut size={16} className="text-ink-3" />
+          Sign out
+        </button>
+      </form>
     </main>
   );
 }

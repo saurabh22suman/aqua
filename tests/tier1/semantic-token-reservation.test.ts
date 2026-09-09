@@ -120,7 +120,7 @@ const WHITELIST = new Set([
   // (GA / beta) status pills. `beta` maps to warn (needs
   // attention), `ga` maps to good (released). The label is the
   // primary signal; the colour is supportive.
-  "app/(platform)/platform/features/feature-catalogue.tsx",
+  "app/(platform)/ops/features/feature-catalogue.tsx",
 
   // reception/page.tsx — same lane strip as the coach-side
   // today view (DESIGN.md §3: water/warn/good fill).
@@ -132,7 +132,14 @@ const WHITELIST = new Set([
   // names the design rationale; the regex still skips block
   // comments so this entry exists for the actual code, not
   // the prose.
-  "app/(platform)/platform/tenants/[tenantId]/page.tsx",
+  "app/(platform)/ops/tenants/[tenantId]/page.tsx",
+
+  // coach/members/[memberId]/page.tsx — coach member detail.
+  // Attendance history (last 90d) is rendered as status pills:
+  // present → good, late → warn, absent → late. Attendance
+  // state — the same use as owner/members/[id], which is also
+  // whitelisted.
+  "app/(coach)/coach/members/[memberId]/page.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

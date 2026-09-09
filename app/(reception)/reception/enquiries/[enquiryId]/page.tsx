@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
 import { listBatchesAction } from "@/lib/actions/programs";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
 
 export default async function ReceptionEnquiryDetailPage({
@@ -10,10 +11,12 @@ export default async function ReceptionEnquiryDetailPage({
   params: Promise<{ enquiryId: string }>;
 }) {
   const { enquiryId } = await params;
-  const [enquiry, locations, batches] = await Promise.all([
+  const [enquiry, locations, batches, terminology] = await Promise.all([
     getEnquiryDetailAction(enquiryId),
     listLocationsAction(),
     listBatchesAction(),
+    // L3 audit — see owner-side page for the rationale.
+    getTerminologyAction(),
   ]);
   if (!enquiry) notFound();
 
@@ -30,6 +33,7 @@ export default async function ReceptionEnquiryDetailPage({
           locations={locations}
           batches={batches}
           memberDetailBasePath="/reception/members"
+          terminology={terminology}
         />
       </div>
     </main>

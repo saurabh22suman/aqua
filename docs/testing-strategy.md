@@ -302,6 +302,36 @@ Five Playwright specs, not fifty. Slow, brittle, expensive to maintain — spend
 
 Use role-based and accessibility selectors, never CSS classes — the agent will restyle components constantly and class-based selectors will break every week.
 
+### 4.7 Page-render tests — the page → service call shape
+
+A gap Tier 1–3 and §4.6 don't cover: the page-level **call site** — the place where a server component wraps one or more service calls, opens its own transaction, handles routing data (`params`, `searchParams`), and renders. The service-layer tests prove the service works. The Playwright §4.6 specs prove the critical journeys work. Neither covers "this page renders without throwing" for every route, which is the layer where one extra `withTenant()` or one missing `await` blows up the screen for everyone.
+
+K1 is the canonical case: `/owner/batches/[batchId]` wrapped `getBatchAttendanceSummary` in its own `withTenant` to read the tenant timezone first, which nested inside the service's own `withTenant`. The service's own test (`tests/tier1/attendance-history.test.ts`) passed clean — the bug was in how the page called it. The bug shipped through ~100 PRs because nothing in the suite exercises a page function end-to-end.
+
+Mechanism: a vitest file per App Router page that imports the page, drives it with the same Next.js context a real HTTP request carries (mocked `next/headers`, mocked better-auth session, mocked `next/navigation`, real DB rows), and asserts the rendered output. The existing `tests/tier1/batch-detail-page.test.ts` is the first one. The pattern:
+
+- `// @vitest-environment jsdom` at the top — the convention `tests/offline/*` already established; needed for Vite to load any `.tsx` the test imports.
+- `vi.mock("@/lib/auth/server", …)` + `vi.mock("next/headers", …)` + `vi.mock("next/navigation", …)` to stub the framework edges. The database path stays real.
+- One happy-path test per page: assert the page function returns a tree containing the entity name (or other load-bearing text) and does not throw.
+- Optional not-found / unauthenticated / wrong-role negative cases where the page branches on them.
+
+Cost per page is roughly 50–150 lines of fixture + assertions; runtime is in the few-hundred-milliseconds range because the DB path is the only thing that does I/O. One file per route group — not one per route — keeps the fixture shared: every `(owner)/owner/**` page reuses the owner-user fixture, every `(coach)/coach/**` page reuses the coach fixture, and so on. Scope: every App Router page under `(owner)/`, `(coach)/`, `(reception)/`, `(platform)/`. Tenant auth gates, `assertStaff`/`assertManagement` branches, and `notFound()` paths get their own negative cases per file.
+
+What this catches that nothing else does:
+
+- **Page-level transaction nesting** (K1). A unit test of the service cannot, by construction.
+- **Missing `await` on a service call** — the page returns the Promise object, render explodes at the client. Catches it at the page layer.
+- **Wrong `ctx` shape** — passing `ctx` to a service that expects `{ tenantId, userId }` only, or forgetting a field. The service's own test passes in isolation; only the page call exercises the real shape.
+- **Routing-data handling** — Promise-based `params` and `searchParams` in App Router 15 are easy to drop or destructure wrong. Calling the page function with `params: Promise.resolve(…)` exercises this directly.
+
+What this does **not** catch:
+
+- Visual regressions. Snapshot tests on rendered output rot with every restyle; the agent regenerates them without reading. Page-render tests assert on text content, not markup.
+- Real navigation, real redirects, real cookies. That's §4.6's job — five Playwright journeys where failure is invisible in any smaller test.
+- Money arithmetic, RLS, idempotency, consent. Those stay Tier 1.
+
+**Approval state (Sep 2026):** approved for after the demo. Scope: one test file per route group, uniform shape, every `(owner)/`, `(coach)/`, `(reception)/`, `(platform)/` page. One-shot backstop pass, not per-page PRs. Until the backstop lands, the regression surface for the page → service call shape is whatever happens to be tested, which is the gap K1 exposed.
+
 ---
 
 ## 5. Rules for agent-written tests

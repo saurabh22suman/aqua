@@ -99,7 +99,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
             data-testid="branding-display-name"
           />
           <span className="block mt-1 text-[12px] text-ink-3">
-            Shown on the home, parent page and any future receipt.
+            Shown across every surface — the dashboard, reports, registers, and the login screens.
           </span>
         </label>
 

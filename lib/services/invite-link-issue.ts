@@ -10,6 +10,7 @@ import {
   INVITE_LINK_TTL_SECONDS,
   RELOGIN_LINK_TTL_SECONDS,
 } from "./invite-link-token";
+import { normaliseToE164 } from "@/lib/phone";
 import type { TenantId } from "@/lib/ids";
 
 // Minting side of staff magic-link login (architecture §6.1).
@@ -98,7 +99,7 @@ export async function issueLoginLinkForPhone(
   tenantId: TenantId,
   rawPhone: string,
 ): Promise<IssueLoginLinkResult> {
-  const phone = rawPhone.replace(/[\s-]/g, "");
+  const phone = normaliseToE164(rawPhone);
   const found = await withTenant(tenantId, async (tx) => {
     const rows = await tx
       .select({ membershipId: tenantMemberships.id })

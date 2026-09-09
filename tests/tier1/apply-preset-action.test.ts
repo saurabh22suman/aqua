@@ -179,7 +179,7 @@ describe("applyPresetAction", () => {
     expect(result.message.toLowerCase()).toContain("session");
   });
 
-  it("applies swimming on a fresh tenant and redirects to /platform/tenants/[id]", async () => {
+  it("applies swimming on a fresh tenant and redirects to /ops/tenants/[id]", async () => {
     await loginActor();
     const tenantId = await seedTenant();
     try {
@@ -190,7 +190,7 @@ describe("applyPresetAction", () => {
         if (err instanceof RedirectSignal) captured = err.path;
         else throw err;
       }
-      expect(captured).toBe(`/platform/tenants/${tenantId}`);
+      expect(captured).toBe(`/ops/tenants/${tenantId}`);
       // tenant fields stamped
       const stamped = (
         await admin.query<{ preset_key: string }>(
@@ -215,7 +215,7 @@ describe("applyPresetAction", () => {
         if (err instanceof RedirectSignal) firstRedirect = err.path;
         else throw err;
       }
-      expect(firstRedirect).toBe(`/platform/tenants/${tenantId}`);
+      expect(firstRedirect).toBe(`/ops/tenants/${tenantId}`);
       let secondRedirect: string | null = null;
       try {
         await applyPresetAction(null, fd({ tenantId, featureKey: "swimming" }));
@@ -223,7 +223,7 @@ describe("applyPresetAction", () => {
         if (err instanceof RedirectSignal) secondRedirect = err.path;
         else throw err;
       }
-      expect(secondRedirect).toBe(`/platform/tenants/${tenantId}`);
+      expect(secondRedirect).toBe(`/ops/tenants/${tenantId}`);
     } finally {
       await cleanupTenant(tenantId);
     }

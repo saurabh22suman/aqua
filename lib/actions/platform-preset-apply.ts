@@ -10,7 +10,7 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { asUserId } from "@/lib/ids";
 
 // Phase 2.2b — applyPreset server action. The form on
-// /platform/presets and the picker on the tenant detail page
+// /ops/presets and the picker on the tenant detail page
 // both call this. The result kind drives the inline CTA flow:
 //   - 'ok'             → redirect to the tenant detail page so the
 //                          operator sees the seeded state.
@@ -68,7 +68,7 @@ export async function applyPresetAction(
     actorId: asUserId(status.userId),
   });
   if (result.kind === "ok") {
-    redirect(`/platform/tenants/${surface.data.tenantId}`);
+    redirect(`/ops/tenants/${surface.data.tenantId}`);
   }
   return result;
 }

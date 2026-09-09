@@ -35,6 +35,8 @@ import { asTenantId, type UserId } from "@/lib/ids";
 // know the phone to sign in with. The membership row carries
 // the full identity, so the activation has nothing else to
 // reconcile.
+import { normaliseToE164 } from "@/lib/phone";
+
 const E164_PLUS = /^\+\d{8,15}$/;
 
 // Closed role keys the invitation form is allowed to assign.
@@ -96,7 +98,7 @@ export async function inviteStaff(
     };
   }
   const input = parsed.data;
-  const cleanedPhone = input.phone.replace(/[\s-]/g, "");
+  const cleanedPhone = normaliseToE164(input.phone.replace(/[\s-]/g, ""));
   if (!E164_PLUS.test(cleanedPhone)) {
     return {
       kind: "error",

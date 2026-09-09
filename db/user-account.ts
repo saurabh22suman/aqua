@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { db } from "./client";
 import { users } from "./schema/users";
 import { asUserId, type UserId } from "@/lib/ids";
+import { normaliseToE164 } from "@/lib/phone";
 
 // Phase 3.6 — user (identity) lookup helpers for the staff
 // invitations service. Identity belongs on the platform side;
@@ -14,15 +15,20 @@ import { asUserId, type UserId } from "@/lib/ids";
 export async function findOrCreateUserByPhone(
   phone: string,
 ): Promise<{ id: string; wasNew: boolean }> {
+  // Canonical E.164. The seed stores +91XXXXXXXXXX; the auth
+  // callback hands the 91XXXXXXXXXX form. Both must hit the same
+  // `users.phone` value or this query misses both written rows
+  // and creates a duplicate.
+  const canonical = normaliseToE164(phone);
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.phone, phone))
+    .where(eq(users.phone, canonical))
     .limit(1);
   if (existing[0]) return { id: existing[0]!.id, wasNew: false };
   const inserted = await db
     .insert(users)
-    .values({ phone })
+    .values({ phone: canonical })
     .returning({ id: users.id });
   return { id: inserted[0]!.id, wasNew: true };
 }

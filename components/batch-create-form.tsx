@@ -9,6 +9,7 @@ import {
 } from "@/lib/actions/coach-conflicts";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
 import type { Program } from "@/db/schema/programs";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -16,10 +17,17 @@ export function BatchCreateForm({
   programs,
   coaches,
   onCreated,
+  terminology,
 }: {
   programs: Program[];
   coaches: CoachOption[];
   onCreated: (batch: BatchWithProgramName) => void;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  // The "No {coach} assigned" option label is the only vocab word
+  // in this form; routed through here so a gym / multi-sport /
+  // dance tenant that renames `coach` to trainer / trainer /
+  // instructor does not leave the picker label drifted.
+  terminology: TerminologyState;
 }) {
   const [programId, setProgramId] = useState(programs[0]?.id ?? "");
   const [name, setName] = useState("");
@@ -131,7 +139,7 @@ export function BatchCreateForm({
         className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
         data-testid="batch-coach-picker"
       >
-        <option value="">No coach assigned</option>
+        <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>
         {coaches.map((c) => (
           <option key={c.staffId} value={c.staffId}>
             {c.fullName}

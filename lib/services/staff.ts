@@ -2,6 +2,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { staff, type StaffType } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
+import { users } from "@/db/schema/users";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asPersonId, type StaffId, type PersonId, type TenantId, type UserId } from "@/lib/ids";
 
@@ -101,6 +102,57 @@ export async function createStaff(
 
     if (!row) return { ok: false, error: "This person already has a staff record of that type." };
     return { ok: true, staffId: row.id };
+  });
+}
+
+// K2 — the "me" surface. Resolves the current user's full name and
+// phone, used by /coach/me, /reception/me and the Account section of
+// /owner/settings to label the logged-in user above the sign-out
+// button.
+//
+// Phone is always present (users.phone is not null by schema), so the
+// page never renders "No phone on file" for a logged-in user. Name
+// is best-effort: it comes from persons via the staff row, and an
+// owner / admin who was never entered as a person — the owner user
+// in the seed has no staff row, only a users row — gets null. That
+// matches the data; we don't fabricate a name. The "Signed in" label
+// the UI shows in that case is the honest empty.
+//
+// Returns null only when ctx.userId is missing (which means the
+// caller never resolved a real session — an internal misuse, not a
+// user-facing case).
+export type StaffIdentity = {
+  fullName: string | null;
+  phone: string;
+};
+
+export async function getCurrentStaffIdentity(
+  ctx: ActionCtx,
+): Promise<StaffIdentity | null> {
+  if (!ctx.userId) return null;
+  return withTenant(ctx.tenantId, async (tx) => {
+    const phoneRow = await tx
+      .select({ phone: users.phone })
+      .from(users)
+      .where(and(eq(users.id, ctx.userId!), isNull(users.deletedAt)))
+      .limit(1);
+    const phone = phoneRow[0]?.phone;
+    if (!phone) return null;
+
+    const nameRow = await tx
+      .select({ fullName: persons.fullName })
+      .from(staff)
+      .innerJoin(persons, eq(persons.id, staff.personId))
+      .where(
+        and(
+          eq(staff.tenantId, ctx.tenantId),
+          eq(staff.userId, ctx.userId!),
+          isNull(staff.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    return { fullName: nameRow[0]?.fullName ?? null, phone };
   });
 }
 

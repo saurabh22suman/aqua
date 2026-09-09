@@ -178,3 +178,12 @@ jobs:
       # auth-gated form (JS enabled, manual fetch), and a source scan
       # pinning method="post" on every other form statically.
       - run: pnpm e2e:platform-form-leak
+
+      # A — host boundary. The platform surface lives at ops.<base>;
+      # the tenant surface lives at <base>. middleware.ts enforces
+      # this in the routing layer; this e2e pins it against future
+      # refactors. Spawns its own dev server (port 3222), curls each
+      # path with explicit Host headers, asserts 200 vs 404 against
+      # the surface contract. See middleware.ts and
+      # scripts/e2e-host-boundary.ts for the rules and the probes.
+      - run: pnpm e2e:host-boundary

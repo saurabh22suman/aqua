@@ -75,7 +75,7 @@ export async function updateFeatureAction(
 
   const result = await updateFeature(normalised, { actorId: asUserId(status.userId) });
   if (result.kind === "ok") {
-    revalidatePath("/platform/features");
+    revalidatePath("/ops/features");
   }
   return result;
 }
@@ -133,7 +133,7 @@ export async function upsertTenantFeatureAction(
     actorId: asUserId(status.userId),
   });
   if (result.kind === "ok") {
-    revalidatePath(`/platform/tenants/${tenantId}`);
+    revalidatePath(`/ops/tenants/${tenantId}`);
   }
   return result;
 }

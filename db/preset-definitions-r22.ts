@@ -22,7 +22,7 @@ import { presetDefinitionSchema } from "./preset-definitions";
 // Start-from-scratch
 // ---------------------------------------------------------------------------
 
-export const START_FROM_SCRATCH_DEFINITION: PresetDefinition = presetDefinitionSchema.parse({
+export const START_FROM_SCRATCH_PRESET_DEFINITION: PresetDefinition = presetDefinitionSchema.parse({
   features: [
     "members",
     "attendance",
@@ -64,14 +64,22 @@ export const BADMINTON_PRESET_DEFINITION: PresetDefinition = presetDefinitionSch
     "enquiries",
   ],
   terminology: {
-    facility: "court",
-    session: "match",
-    coach: "coach",
-    member: "member",
-    batch: "session",
-    program: "program",
-    guardian: "guardian",
-    enquiry: "enquiry",
+    // L1 — nested shape, plural forms filled in.
+    member: {
+      en: { one: "member", other: "members" },
+    },
+    coach: {
+      en: { one: "coach", other: "coaches" },
+    },
+    facility: {
+      en: { one: "court", other: "courts" },
+    },
+    session: {
+      en: { one: "match", other: "matches" },
+    },
+    batch: {
+      en: { one: "session", other: "sessions" },
+    },
   },
   roles: [],
   programs: [
@@ -106,14 +114,22 @@ export const GYM_PRESET_DEFINITION: PresetDefinition = presetDefinitionSchema.pa
     "enquiries",
   ],
   terminology: {
-    facility: "studio",
-    session: "class",
-    coach: "trainer",
-    member: "member",
-    batch: "slot",
-    program: "program",
-    guardian: "guardian",
-    enquiry: "enquiry",
+    // L1 — nested shape, plural forms filled in.
+    member: {
+      en: { one: "member", other: "members" },
+    },
+    coach: {
+      en: { one: "trainer", other: "trainers" },
+    },
+    facility: {
+      en: { one: "studio", other: "studios" },
+    },
+    session: {
+      en: { one: "class", other: "classes" },
+    },
+    batch: {
+      en: { one: "slot", other: "slots" },
+    },
   },
   roles: [],
   programs: [
@@ -149,14 +165,22 @@ export const FOOTBALL_PRESET_DEFINITION: PresetDefinition = presetDefinitionSche
     "enquiries",
   ],
   terminology: {
-    facility: "pitch",
-    session: "session",
-    coach: "coach",
-    member: "player",
-    batch: "squad",
-    program: "program",
-    guardian: "guardian",
-    enquiry: "enquiry",
+    // L1 — nested shape, plural forms filled in.
+    member: {
+      en: { one: "player", other: "players" },
+    },
+    coach: {
+      en: { one: "coach", other: "coaches" },
+    },
+    facility: {
+      en: { one: "pitch", other: "pitches" },
+    },
+    session: {
+      en: { one: "session", other: "sessions" },
+    },
+    batch: {
+      en: { one: "squad", other: "squads" },
+    },
   },
   roles: [],
   programs: [
@@ -185,21 +209,32 @@ export const DANCE_MA_PRESET_DEFINITION: PresetDefinition = presetDefinitionSche
     "billing",
     "studio.booking",
     "staff",
-    "levels.assess",
+    "swim.levels",
     "reports",
     "settings",
     "messaging",
     "enquiries",
   ],
   terminology: {
-    facility: "studio",
-    session: "class",
-    coach: "instructor",
-    member: "student",
-    batch: "session",
-    program: "style",
-    guardian: "guardian",
-    enquiry: "enquiry",
+    // L1 — nested shape, plural forms filled in.
+    member: {
+      en: { one: "student", other: "students" },
+    },
+    coach: {
+      en: { one: "instructor", other: "instructors" },
+    },
+    facility: {
+      en: { one: "studio", other: "studios" },
+    },
+    session: {
+      en: { one: "class", other: "classes" },
+    },
+    batch: {
+      en: { one: "session", other: "sessions" },
+    },
+    program: {
+      en: { one: "style", other: "styles" },
+    },
   },
   roles: [],
   programs: [

@@ -4,13 +4,30 @@ import {
   SWIMMING_PRESET_DEFINITION,
   MULTI_SPORT_PRESET_DEFINITION,
 } from "./preset-definitions";
+import {
+  BADMINTON_PRESET_DEFINITION,
+  DANCE_MA_PRESET_DEFINITION,
+  FOOTBALL_PRESET_DEFINITION,
+  GYM_PRESET_DEFINITION,
+START_FROM_SCRATCH_PRESET_DEFINITION,
+} from "./preset-definitions-r22";
 
 // Phase 2.1 — preset catalogue seed entries. Authored as
-// constants in db/preset-definitions.ts (Zod-validated at module
+// constants in db/preset-definitions.ts and
+// db/preset-definitions-r22.ts (Zod-validated at module
 // load, so a typo here surfaces as a build error rather than a
 // runtime surprise). The seedPlatformCatalogue function below
 // inserts the rows on a fresh database; production onboarding
 // reads them via the applyPreset engine in 2.2.
+//
+// L2 — the catalogue ships ALL seven v1 definitions. The audit
+// found that five of the seven (start-from-scratch, badminton,
+// gym, football, dance / martial arts) were defined in source
+// but not registered; the table only held swimming + multi-sport.
+// Written-and-tested is not shipped — the test in
+// tests/tier1/preset-catalogue-coverage.test.ts asserts the
+// presets table contains every *_PRESET_DEFINITION exported
+// from db/preset-definitions*.ts.
 const PRESETS: ReadonlyArray<{
   key: string;
   version: number;
@@ -41,6 +58,69 @@ const PRESETS: ReadonlyArray<{
     definition: MULTI_SPORT_PRESET_DEFINITION,
     status: "active",
   },
+  // ---- R.22: five additional v1 presets ----
+  // No vertical-specific content (programs / skill levels / facilities /
+  // example batches all empty). Provides the five standard plan shapes
+  // only; the operator adds the sport(s) from the catalogue after
+  // onboarding. Distinct from multi-sport: this one ships the GA
+  // features common to every club — nothing more, nothing less.
+  {
+    key: "start-from-scratch",
+    version: 1,
+    name: "Start from scratch",
+    description:
+      "Empty catalogue: GA features only, no programs, no skill ladder, " +
+      "no facilities. The operator configures everything from scratch " +
+      "during onboarding; the two standard plan shapes stay so a fresh " +
+      "tenant can move from trial to active without re-seed.",
+    definition: START_FROM_SCRATCH_PRESET_DEFINITION,
+    status: "active",
+  },
+  {
+    key: "badminton",
+    version: 1,
+    name: "Badminton / racquet",
+    description:
+      "Court booking + drop-in and monthly plan shapes. Junior and adult " +
+      "coaching programs. Vocabulary overridden: session → match, " +
+      "facility → court, batch → session.",
+    definition: BADMINTON_PRESET_DEFINITION,
+    status: "active",
+  },
+  {
+    key: "gym",
+    version: 1,
+    name: "Gym / fitness",
+    description:
+      "Class booking + drop-in and monthly plan shapes. Strength and " +
+      "cardio programs. Vocabulary overridden: coach → trainer, " +
+      "facility → studio, session → class, batch → slot.",
+    definition: GYM_PRESET_DEFINITION,
+    status: "active",
+  },
+  {
+    key: "football",
+    version: 1,
+    name: "Football",
+    description:
+      "Pitch booking + termly plan shape. Junior academy and adult " +
+      "skills programs. Vocabulary overridden: member → player, " +
+      "facility → pitch, batch → squad.",
+    definition: FOOTBALL_PRESET_DEFINITION,
+    status: "active",
+  },
+  {
+    key: "dance-ma",
+    version: 1,
+    name: "Dance / martial arts",
+    description:
+      "Studio booking + termly plan shape. Ballet and Karate programs. " +
+      "Single skill ladder (Belt). Vocabulary overridden: member → " +
+      "student, coach → instructor, facility → studio, session → class, " +
+      "program → style.",
+    definition: DANCE_MA_PRESET_DEFINITION,
+    status: "active",
+  },
 ];
 
 const FEATURES: ReadonlyArray<{
@@ -58,7 +138,18 @@ const FEATURES: ReadonlyArray<{
   { key: "reports", name: "Reports", category: "insight", status: "ga" },
   { key: "settings", name: "Settings and configuration", category: "platform", status: "ga" },
   { key: "messaging", name: "WhatsApp and email", category: "comms", status: "ga" },
-  { key: "pool.booking", name: "Facility booking", category: "facility", status: "ga" },
+  // Facility booking is one feature key per primary facility type.
+  // pool.booking is GA today (it was added with F-01); the other three
+  // are forward-looking — Phase 3 (project-scope §5.7) builds the
+  // actual booking module per facility. Listed at status="beta" so
+  // they exist on every preset that names them (FK target — without
+  // these rows, applyPreset rolls back when a preset's
+  // features[] references e.g. pitch.booking) and so the plan
+  // entitlement layer can find them when V-XX ships.
+  { key: "pool.booking", name: "Swimming lane booking", category: "facility", status: "ga" },
+  { key: "court.booking", name: "Badminton / racquet court booking", category: "facility", status: "beta" },
+  { key: "pitch.booking", name: "Football pitch booking", category: "facility", status: "beta" },
+  { key: "studio.booking", name: "Studio / dance booking", category: "facility", status: "beta" },
   { key: "swim.levels", name: "Swimming skill levels", category: "vertical", status: "ga" },
   { key: "cafe.pos", name: "Café POS", category: "commerce", status: "internal" },
   { key: "analytics.advanced", name: "Advanced analytics", category: "insight", status: "internal" },
@@ -250,29 +341,6 @@ export async function seedPlatformCatalogue(
         "Placeholder consent notice — replace with the real DPDP-compliant privacy notice before go-live.",
       ],
     );
-
-    // Phase 2.1 — preset catalogue. The schema is fixed by
-    // migration 0007; this seed populates v1 of the two presets
-    // the work-guide ships today (swimming + multi-sport). Each
-    // call is idempotent on the (key, version) PK, so re-running
-    // seedPlatformCatalogue against an already-seeded database is
-    // a no-op. New presets or new versions land via future
-    // migration-style additions; we do not extend this array.
-    for (const preset of PRESETS) {
-      await client.query(
-        `insert into presets (key, version, name, description, definition, status)
-         values ($1, $2, $3, $4, $5::jsonb, $6)
-         on conflict (key, version) do nothing`,
-        [
-          preset.key,
-          preset.version,
-          preset.name,
-          preset.description,
-          JSON.stringify(preset.definition),
-          preset.status,
-        ],
-      );
-    }
   } finally {
     await client.end();
   }

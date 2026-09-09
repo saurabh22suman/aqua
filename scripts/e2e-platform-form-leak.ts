@@ -16,7 +16,7 @@
 //   response HTML.
 //
 //   Tier 1.5 (live submit, one auth-gated form) — for the
-//   invite-owner form on /platform/tenants/[id]. The test
+//   invite-owner form on /ops/tenants/[id]. The test
 //   logs in via the form action (JS enabled, so RSC redirect
 //   templates fire and the page renders), then navigates to
 //   the auth-gated form page, fills the phone field with
@@ -82,7 +82,16 @@ import {
 } from "@/db/platform-auth";
 
 const PORT = 3220;
-const BASE = `http://127.0.0.1:${PORT}`;
+// Platform lives on its own subdomain (ops.<base>). The dev
+// server listens on 0.0.0.0 so ops.localhost resolves to it via
+// /etc/hosts (or any other DNS that maps ops.localhost → 127.0.0.1).
+// The Host header is the only thing that flips the boundary for
+// this test — Playwright sends it automatically when the URL
+// hostname matches the Host header. If ops.localhost doesn't
+// resolve, the test fails on the first goto with a clear DNS
+// error; add the /etc/hosts entry to fix.
+const HOST = "ops.localhost";
+const BASE = `http://${HOST}:${PORT}`;
 const SENTINEL = "LEAK_CANARY_xyzzy";
 
 type FormTarget = {
@@ -92,48 +101,54 @@ type FormTarget = {
 
 // The eight forms that previously had the <form onSubmit> shape;
 // status-transitions is button-driven with no <form> so it's
-// not in this list (verified by `grep '<form' app/(platform)/platform/
+// not in this list (verified by `grep '<form' app/(platform)/ops/
 // tenants/[tenantId]/status-transitions.tsx` — zero matches).
 const FORM_TARGETS: FormTarget[] = [
   {
     name: "platform login",
-    source: "app/(platform)/platform/login/login-form.tsx",
+    source: "app/(platform)/ops/login/login-form.tsx",
   },
   {
     name: "platform verify",
-    source: "app/(platform)/platform/verify/verify-form.tsx",
+    source: "app/(platform)/ops/verify/verify-form.tsx",
   },
   {
     name: "feature catalogue edit",
-    source: "app/(platform)/platform/features/feature-catalogue.tsx",
+    source: "app/(platform)/ops/features/feature-catalogue.tsx",
   },
   {
     name: "preset detail apply",
-    source: "app/(platform)/platform/presets/[key]/preset-detail-form.tsx",
+    source: "app/(platform)/ops/presets/[key]/preset-detail-form.tsx",
   },
   {
     name: "tenant remove sample data",
-    source: "app/(platform)/platform/tenants/[tenantId]/remove-sample-data-button.tsx",
+    source: "app/(platform)/ops/tenants/[tenantId]/remove-sample-data-button.tsx",
   },
   {
     name: "tenant feature toggle",
-    source: "app/(platform)/platform/tenants/[tenantId]/tenant-feature-toggles.tsx",
+    source: "app/(platform)/ops/tenants/[tenantId]/tenant-feature-toggles.tsx",
   },
   {
     name: "invite owner",
-    source: "app/(platform)/platform/tenants/[tenantId]/invite-owner-form.tsx",
+    source: "app/(platform)/ops/tenants/[tenantId]/invite-owner-form.tsx",
   },
   {
     name: "create tenant",
-    source: "app/(platform)/platform/tenants/new/new-tenant-form.tsx",
+    source: "app/(platform)/ops/tenants/new/new-tenant-form.tsx",
   },
 ];
 
 async function waitForServer(): Promise<void> {
   for (let i = 0; i < 120; i++) {
     try {
-      const res = await fetch(`${BASE}/login`);
-      if (res.ok) return;
+      // /api/health — reachable on every host (apex, ops). The
+      // previous /login probe would 404 on ops.localhost after
+      // the host-boundary change because middleware blocks /login
+      // on the ops host. /api/health is the one path that's always
+      // 200 (or 503 if Postgres is unreachable, still a valid
+      // response).
+      const res = await fetch(`${BASE}/api/health`);
+      if (res.status < 500) return;
     } catch {
       // not up yet
     }
@@ -245,7 +260,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
   }
 
   // Tier 1 + Tier 1.5 — live submit. Spawn a dev server.
-  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: "ignore",
     detached: true,
     env: process.env,
@@ -262,7 +277,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
     });
     const loginPage = await loginCtx.newPage();
     try {
-      await loginPage.goto(`${BASE}/platform/login`, {
+      await loginPage.goto(`${BASE}/ops/login`, {
         waitUntil: "domcontentloaded",
         timeout: 60_000,
       });
@@ -314,12 +329,12 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       {
         name: "platform_session",
         value: cookieValue,
-        // The dev server may resolve to localhost or 127.0.0.1
-        // depending on the system; Playwright's cookie jar matches
-        // cookies to requests by domain. The server reaches itself
-        // over 127.0.0.1 in the CI runner; use that domain so the
-        // server can read the cookie on its own redirect.
-        domain: "127.0.0.1",
+        // The platform lives on its own subdomain now
+        // (ops.<base>); the cookie must match the navigation host
+        // exactly. ops.localhost resolves to ::1 on most systems;
+        // the dev server (bound to ::) accepts the connection and
+        // the browser sends the cookie because hostname matches.
+        domain: "ops.localhost",
         path: "/",
         httpOnly: true,
         secure: false,
@@ -328,7 +343,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
     ]);
     const authedPage = await authedCtx.newPage();
     try {
-      await authedPage.goto(`${BASE}/platform/tenants/${tenantId}`, {
+      await authedPage.goto(`${BASE}/ops/tenants/${tenantId}`, {
         waitUntil: "domcontentloaded",
         timeout: 60_000,
       });

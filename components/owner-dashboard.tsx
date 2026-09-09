@@ -129,7 +129,9 @@ export function OwnerDashboard({
         </ul>
       )}
 
-      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Today&apos;s lanes</h2>
+      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">
+        Today&apos;s {resolveTerm(terminology, "facility", "other")}
+      </h2>
       {data.todaysLanes.length === 0 ? (
         <div className="rounded-ctl border border-line bg-paper px-4 py-6 text-center">
           <p className="text-[13px] font-medium">No {sessionsOther} today</p>

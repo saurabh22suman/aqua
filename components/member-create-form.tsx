@@ -6,6 +6,11 @@ import { AlertTriangle } from "lucide-react";
 import { createMemberAction, searchPersonsAction } from "@/lib/actions/people";
 import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
+import {
+  resolveTerm,
+  titleCase,
+  type TerminologyState,
+} from "@/lib/terminology/keys";
 
 // Rough client-side age check for immediate UI feedback only -- the
 // server (isMinor, lib/time/tz.ts) is the real, tenant-timezone-aware
@@ -28,6 +33,7 @@ type GuardianChoice =
 export function MemberCreateForm({
   locations,
   memberDetailBasePath = "/owner/members",
+  terminology,
 }: {
   locations: LocationOption[];
   // Base path for the new member's detail page, e.g. "/owner/members"
@@ -35,6 +41,12 @@ export function MemberCreateForm({
   // staff land somewhere they can immediately enrol the member in a
   // batch (B3), not a generic "done" screen.
   memberDetailBasePath?: string;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  // Two surface strings ("Guardian required", "the guardian's
+  // details") route through here so a swim / gym / football tenant
+  // that customises future `guardian` overrides does not drift
+  // silently from what the form says.
+  terminology: TerminologyState;
 }) {
   const router = useRouter();
   const [fullName, setFullName] = useState("");
@@ -194,7 +206,9 @@ export function MemberCreateForm({
 
       {minor === true ? (
         <section className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
-          <h3 className="text-[13px] font-semibold">Guardian required — this member is a minor</h3>
+          <h3 className="text-[13px] font-semibold">
+            {titleCase(resolveTerm(terminology, "guardian", 1))} required — this {resolveTerm(terminology, "member", 1)} is a minor
+          </h3>
 
           {guardian.mode === "existing" ? (
             <div className="flex items-center justify-between rounded-ctl bg-water-soft px-3 py-2">
@@ -237,7 +251,9 @@ export function MemberCreateForm({
                 </ul>
               ) : null}
 
-              <p className="text-[12px] text-ink-3">Not found? Enter the guardian&apos;s details below.</p>
+              <p className="text-[12px] text-ink-3">
+                Not found? Enter the {resolveTerm(terminology, "guardian", 1)}&apos;s details below.
+              </p>
               <input
                 type="text"
                 value={guardianName}

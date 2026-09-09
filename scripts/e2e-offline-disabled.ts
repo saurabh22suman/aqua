@@ -67,9 +67,10 @@ async function main() {
   // safe default is "off", which is what we're testing here. The
   // per-tenant kill switch (PR #12, tenants.offlineSync_enabled) is
   // flipped to false explicitly below so the test is self-contained.
-  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: "ignore",
     detached: true,
+    env: { ...process.env, BETTER_AUTH_URL: BASE },
   });
 
   let fixture: OfflineFixture | undefined;

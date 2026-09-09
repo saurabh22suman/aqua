@@ -76,7 +76,7 @@ export async function loginPlatformAction(
     }
     throw err;
   }
-  redirect("/platform/verify");
+  redirect("/ops/verify");
 }
 
 export type PlatformVerifyResult =

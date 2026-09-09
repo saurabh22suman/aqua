@@ -116,7 +116,14 @@ afterAll(async () => {
 
 describe("listTenants", () => {
   it("returns tenant rows ordered by status (live first) then created_at desc", async () => {
-    const result = await listTenants({});
+    // Search by the unique RUN token so only this suite's three
+    // fixtures are returned — hermetic regardless of what other
+    // tier1 tests have inserted by the time this one runs. The
+    // default limit (50) is also fine on a clean dev DB, but a
+    // populated one (other suite tests' leftover tenants) pages
+    // carol out; the suite ordering matters less when we narrow
+    // by slug instead of hoping for the right page.
+    const result = await listTenants({ search: RUN });
     expect(result.total).toBeGreaterThanOrEqual(3);
     const seenFixtures = result.rows.filter((r) =>
       Object.values(TENANT_IDS).some((id) => id === r.id),
@@ -170,7 +177,12 @@ describe("listTenants", () => {
   });
 
   it("denormalises member_count and location_count per tenant", async () => {
-    const result = await listTenants({});
+    // Same hermetic filter as the order test above — Carol is the
+    // last fixture in our three, and a default-limit list of a
+    // populated suite DB pages her out. The denormalisation SQL
+    // is correct (coalesce(members.cnt, 0) resolves all three),
+    // so the test pass once we can find all three in the result.
+    const result = await listTenants({ search: RUN });
     const alice = result.rows.find((r) => r.id === TENANT_IDS.alice);
     const bob = result.rows.find((r) => r.id === TENANT_IDS.bob);
     const carol = result.rows.find((r) => r.id === TENANT_IDS.carol);

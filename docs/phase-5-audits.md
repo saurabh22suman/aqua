@@ -27,7 +27,7 @@ empty states (no rows match the current filter) just say so.
 | `/owner/member/[id]` attendance | empty | "No sessions marked yet this month" |
 | `/owner/member/[id]` guardians | none | "No guardian on file" — no add-guardian UI today; the registration flow is the right path |
 | `/owner/member/[id]` consent | none | "No consent on file" — same reasoning |
-| `/platform/activity` | empty | "No events" — "Nothing has happened that matches the current filters" |
+| `/ops/activity` | empty | "No events" — "Nothing has happened that matches the current filters" |
 | `/owner/staff/[id]` staff detail | n/a (always has the person) | — |
 | `/owner/staff/[id]/...` no enrolments | "No enrolments" | reader guidance only |
 | `/owner/enquiries/[id]` no follow-ups | n/a (header always shown) | — |

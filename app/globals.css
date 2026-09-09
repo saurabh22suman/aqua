@@ -45,3 +45,48 @@ html {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* Member identity card (§5.2) — print isolation.
+ * The card lives inside a longer detail page (status, enrolment,
+ * parent link, contact, attendance, …). For the operator's "print a
+ * card" workflow, only the card should appear on paper — the rest of
+ * the page is screen-only context. The design contract is: open the
+ * member detail, hit Cmd-P, get exactly one card.
+ *
+ * The card carries `data-print-isolate="member-id-card"`; its
+ * wrapper carries `.print-isolate-block`. Print rules below hide every
+ * other top-level child of <main> and all app chrome (bottom nav,
+ * headers). The card itself stays visible at its on-screen size. */
+@media print {
+  /* Hide app chrome that wraps the page. */
+  nav[aria-label="Primary"],
+  nav[aria-label],
+  header,
+  footer {
+    display: none !important;
+  }
+
+  /* Hide every direct child of <main> except the print-isolate
+   * wrapper. This keeps the rest of the detail page off the printout
+   * without having to mark every other section. */
+  main > *:not(.print-isolate-block) {
+    display: none !important;
+  }
+
+  /* The card itself: full-width on paper, no border, no shadow,
+   * sized like an A6 landscape. Background stays white. */
+  .print-isolate-block {
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .id-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+    border: none !important;
+    box-shadow: none !important;
+    max-width: 148mm;
+    margin: 0 auto !important;
+  }
+}
+

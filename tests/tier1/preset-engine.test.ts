@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { env } from "@/lib/env";
 import { applyPreset, previewPreset } from "@/db/preset-engine";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
+import { getTerminology } from "@/lib/services/terminology";
+import { resolveTerm } from "@/lib/terminology/keys";
 
 // Phase 2.2a — applyPreset engine tests.
 //
@@ -157,12 +159,23 @@ describe("applyPreset (swimming)", () => {
     );
     expect(tf.rows.length).toBeGreaterThanOrEqual(4);
 
-    // terminology set on the tenant.
-    const t = await admin.query<{ terminology: Record<string, string> }>(
+    // terminology set on the tenant. L1 — this used to assert the
+    // SQL column directly (terminology?.student === "swimmer"); the
+    // migration to the canonical nested shape means the column now
+    // holds a {member:{en:{one,other}}, ...} object. The point is
+    // asserted via getTerminology() + resolveTerm in the dedicated
+    // "L1 — terminology round-trips through getTerminology" describe
+    // block below. SQL-column peek here would only re-pin the wrong
+    // seam. Keep this section focused on the write side.
+    const t = await admin.query<{ terminology: unknown }>(
       "select terminology from tenants where id = $1::uuid",
       [tenantId],
     );
-    expect(t.rows[0]?.terminology?.student).toBe("swimmer");
+    const stored = t.rows[0]?.terminology as
+      | { member?: { en?: { one?: string; other?: string } } }
+      | null;
+    expect(stored?.member?.en?.one).toBe("swimmer");
+    expect(stored?.member?.en?.other).toBe("swimmers");
 
     // programs seeded (Learn to swim, etc.) with is_sample = true.
     const progs = await admin.query<{ name: string; is_sample: boolean }>(
@@ -282,6 +295,71 @@ describe("applyPreset (swimming)", () => {
     );
     expect(stamped.rows[0]?.preset_key).toBe("swimming");
     expect(stamped.rows[0]?.preset_version).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// L1 — terminology round-trips through the read path. This is the
+// test the audit flagged as missing: every previous test of
+// terminology checked the SQL column directly, never the resolver.
+// The previous flat-shape definition silently dropped on every
+// preset; nothing asserted that. After the migration to the
+// canonical nested shape, the override survives and resolveTerm
+// returns it. If a future preset author writes the wrong shape,
+// this test fails with a clear seam message — not a column-dump
+// assertion that would pass even when the resolver eats the data.
+describe("applyPreset (L1 — terminology round-trips through getTerminology)", () => {
+  it("swimming: member/coach/facility/session overrides survive the read path", async () => {
+    const tenantId = await seedTenant();
+    const result = await applyPreset(tenantId, "swimming", { actorId });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+
+    const state = await getTerminology({ tenantId });
+    // The override reaches the resolver and produces the right
+    // forms in both count=1 and count="other" cases. This is what
+    // the UI calls when it renders "1 swimmer / 12 swimmers" — the
+    // exact seam that was broken.
+    expect(resolveTerm(state, "member", 1)).toBe("swimmer");
+    expect(resolveTerm(state, "member", "other")).toBe("swimmers");
+    expect(resolveTerm(state, "coach", 1)).toBe("coach");
+    expect(resolveTerm(state, "coach", "other")).toBe("coaches");
+    expect(resolveTerm(state, "facility", 1)).toBe("lane");
+    expect(resolveTerm(state, "facility", "other")).toBe("lanes");
+    // session falls back to DEFAULT_TERMS (the swimming preset
+    // doesn't override it). The point of this assertion is that
+    // the override doesn't accidentally shadow the default with
+    // something malformed.
+    expect(resolveTerm(state, "session", 1)).toBe("session");
+    expect(resolveTerm(state, "session", "other")).toBe("sessions");
+  });
+
+  it("multi-sport: trainer / studio / slot overrides survive the read path", async () => {
+    const tenantId = await seedTenant();
+    const result = await applyPreset(tenantId, "multi-sport", { actorId });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+
+    const state = await getTerminology({ tenantId });
+    expect(resolveTerm(state, "coach", 1)).toBe("trainer");
+    expect(resolveTerm(state, "coach", "other")).toBe("trainers");
+    expect(resolveTerm(state, "facility", 1)).toBe("studio");
+    expect(resolveTerm(state, "facility", "other")).toBe("studios");
+    expect(resolveTerm(state, "batch", 1)).toBe("slot");
+    expect(resolveTerm(state, "batch", "other")).toBe("slots");
+  });
+
+  it("read path returns empty for keys the preset didn't override (DEFAULT_TERMS still works)", async () => {
+    // Fresh tenant — no preset applied, overrides should be empty.
+    // The resolver falls through to DEFAULT_TERMS for every key. This
+    // guards against the regression where the override layer
+    // accidentally shadows the defaults with something malformed
+    // even when the column is "empty" (e.g. `{}`).
+    const tenantId = await seedTenant();
+    const state = await getTerminology({ tenantId });
+    expect(state.overrides).toEqual({});
+    expect(resolveTerm(state, "member", 1)).toBe("member");
+    expect(resolveTerm(state, "member", "other")).toBe("members");
+    expect(resolveTerm(state, "batch", "other")).toBe("batches");
   });
 });
 

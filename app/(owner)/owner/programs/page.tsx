@@ -1,13 +1,17 @@
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { listBatchesAction, listCoachesAction, listProgramsAction } from "@/lib/actions/programs";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 import { ProgramsBatchesBoard } from "@/components/programs-batches-board";
 
 export default async function ProgramsPage() {
-  const [programs, batches, coaches] = await Promise.all([
+  const [programs, batches, coaches, terminology] = await Promise.all([
     listProgramsAction(),
     listBatchesAction(),
     listCoachesAction(),
+    // ProgramsBatchesBoard → BatchCreateForm / BatchEditForm use
+    // closed-key `coach` and "Add a program first" copy (L3 audit).
+    getTerminologyAction(),
   ]);
 
   return (
@@ -24,7 +28,12 @@ export default async function ProgramsPage() {
         </Link>
       </div>
       <div className="mt-4">
-        <ProgramsBatchesBoard initialPrograms={programs} initialBatches={batches} coaches={coaches} />
+        <ProgramsBatchesBoard
+          initialPrograms={programs}
+          initialBatches={batches}
+          coaches={coaches}
+          terminology={terminology}
+        />
       </div>
     </main>
   );

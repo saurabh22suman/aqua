@@ -9,6 +9,7 @@ import {
 } from "@/lib/actions/coach-conflicts";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
 import type { Program } from "@/db/schema/programs";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -31,6 +32,7 @@ export function BatchEditForm({
   onCancel,
   onSaved,
   onError,
+  terminology,
 }: {
   batchId: string;
   initial: BatchEditFormState;
@@ -40,6 +42,8 @@ export function BatchEditForm({
   onCancel: () => void;
   onSaved: (batch: BatchWithProgramName) => void;
   onError: (message: string | null) => void;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const [form, setForm] = useState(initial);
   const [saving, setSaving] = useState(false);
@@ -160,7 +164,7 @@ export function BatchEditForm({
         className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
         data-testid={`edit-batch-coach-${batchId}`}
       >
-        <option value="">No coach assigned</option>
+        <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>
         {coaches.map((c) => (
           <option key={c.staffId} value={c.staffId}>
             {c.fullName}

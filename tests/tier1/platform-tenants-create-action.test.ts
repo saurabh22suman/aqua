@@ -199,7 +199,7 @@ function uniqueSlug(label: string): string {
 }
 
 describe("createTenantAction", () => {
-  it("redirects to /platform/tenants/[id] on success and writes the tenant row", async () => {
+  it("redirects to /ops/tenants/[id] on success and writes the tenant row", async () => {
     const { token } = await provisionActiveAdmin(`ok-${counter}`);
     cookieJar.set("platform_session", token);
 
@@ -211,7 +211,7 @@ describe("createTenantAction", () => {
       if (err instanceof RedirectSignal) captured = err.path;
       else throw err;
     }
-    expect(captured).toMatch(/^\/platform\/tenants\/[0-9a-f-]+$/);
+    expect(captured).toMatch(/^\/ops\/tenants\/[0-9a-f-]+$/);
 
     const tenants = await admin.query<{ slug: string }>(
       "select slug from tenants where slug = $1",

@@ -125,10 +125,10 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 - [x] **1.2** Platform layout and shell — `(platform)` route group, dark marine sidebar (operators work from laptops, not poolside), login + 2FA verify + home under it. Visually distinct from tenant surfaces. `GREEN`
 - [x] **1.3** Tenant list — all tenants with status, plan, member count, location count, created date. Searchable by name/slug; filterable by status. New `withPlatformAdmin()` scope + `platform_admin_select` RLS policy grant cross-tenant read for the operator. `GREEN`
 - [x] **1.4** Tenant detail — settings (timezone, plan, currency, GSTIN, preset, offline-sync flag), locations (active, soft-deleted hidden), feature state (resolved from plan; overrides come in 1.8), usage stats (members, locations, sessions this month), recent platform activity. Read-only. `GREEN`
-- [x] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `/platform/tenants/new` shipped; `tests/tier1/platform-tenants-create.test.ts` covers the action shape. `GREEN`
-- [x] **1.6** Tenant status lifecycle — trial, active, suspended, churned, with reasons and audit. A suspended tenant's users cannot log in and see a clear message. `db/platform-tenant-status.ts` + `/platform/tenants/[tenantId]/status-transitions.tsx`. `GREEN`
-- [x] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `/platform/features/page.tsx`. `GREEN`
-- [ ] **1.8** Per-tenant feature toggles — override plan baseline, with expiry for trials and betas. **Toggle on/off wired; setting an expiry on an override is NOT exposed** (the row shows "Override expires {date}" but no input sets it). Toggling changes both API behaviour and rendered navigation. `/platform/tenants/[tenantId]/tenant-feature-toggles.tsx`. Un-marked Sep 2026 retroactive audit — see `docs/retroactive-checklist-audit.md`. `GREEN` (toggle only; expiry-set missing)
+- [x] **1.5** Create tenant — slug, name, timezone, plan, first location. Replaces the CLI path in `F-25`. `/ops/tenants/new` shipped; `tests/tier1/platform-tenants-create.test.ts` covers the action shape. `GREEN`
+- [x] **1.6** Tenant status lifecycle — trial, active, suspended, churned, with reasons and audit. A suspended tenant's users cannot log in and see a clear message. `db/platform-tenant-status.ts` + `/ops/tenants/[tenantId]/status-transitions.tsx`. `GREEN`
+- [x] **1.7** Feature catalogue screen — every feature, its category, its status. Editable. `/ops/features/page.tsx`. `GREEN`
+- [ ] **1.8** Per-tenant feature toggles — override plan baseline, with expiry for trials and betas. **Toggle on/off wired; setting an expiry on an override is NOT exposed** (the row shows "Override expires {date}" but no input sets it). Toggling changes both API behaviour and rendered navigation. `/ops/tenants/[tenantId]/tenant-feature-toggles.tsx`. Un-marked Sep 2026 retroactive audit — see `docs/retroactive-checklist-audit.md`. `GREEN` (toggle only; expiry-set missing)
 
 **Phase 1 gate:** a platform admin creates a tenant, enables features, and the tenant's owner sees exactly those features. No CLI involved.
 
@@ -137,11 +137,11 @@ The control plane has schema but no surface. Nothing here touches tenant data.
 ## Phase 2 — Onboarding and presets
 
 - [x] **2.1** Preset definitions — wrote swimming (full) and multi-sport (full) per `architecture.md` §7.4. Others stay documented stubs. **No prices** — plan shapes only, amount null. `db/preset-definitions.ts` ships both. `GREEN`
-- [x] **2.2** `applyPreset` UI — pick a preset at tenant creation, preview what it will seed, apply in one transaction. `/platform/presets/[key]` shipped. `GREEN`
+- [x] **2.2** `applyPreset` UI — pick a preset at tenant creation, preview what it will seed, apply in one transaction. `/ops/presets/[key]` shipped. `GREEN`
 - [x] **2.3** Sample data flagging — seeded example batches and programs carry `is_sample`, with a one-tap "remove sample data" action that disappears once anything real attaches. `db/preset-sample-data.ts` + `remove-sample-data.tsx`. `GREEN`
 - [x] **2.4** Preset lock — `applyPreset` refuses once a non-sample member exists. Test in `tests/tier1/apply-preset-action.test.ts`. `GREEN`
 - [x] **2.5** Onboarding wizard, step 1 — club details, timezone, first location. `new-tenant-form.tsx` walks slug, name, timezone, currency, GSTIN, plan, primary location. `GREEN`
-- [x] **2.6** Onboarding wizard, step 2 — preset selection with preview. `/platform/presets/[key]` carries the picker + preview + apply against an existing tenant. `GREEN`
+- [x] **2.6** Onboarding wizard, step 2 — preset selection with preview. `/ops/presets/[key]` carries the picker + preview + apply against an existing tenant. `GREEN`
 - [x] **2.7** Onboarding wizard, step 3 — invite the owner, assign role. `invite-owner-action.ts` + `invite-owner-form.tsx` + `db/tenant-invite.ts`. `GREEN`
 - [x] **2.8** Onboarding checklist — the new tenant's owner sees what remains: add members, create batches, assign coaches. Each item links to where it is done. `GREEN`
 - [x] **2.9a** Tenant branding UI — club name, short name, accent editor (six-key picker, runtime accent via `--accent`, never a hex). Fallback initials mark renders when nothing is uploaded (inline SVG, no external request). Editor is management-only; coach/receptionist keep the read-only surfaces. `GREEN`

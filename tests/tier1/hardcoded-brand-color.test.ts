@@ -29,7 +29,7 @@ import { describe, expect, it } from "vitest";
 // of tenant branding (e.g. components/demo-banner.tsx).
 //
 // Same pattern as tests/tier1/demo-mode-reads.test.ts and
-// tests/tier1/preset-key-reads.test.ts: source-level regex scan, not a
+// tests/tier1/preset-key-runtime-reads.test.ts: source-level regex scan, not a
 // render test, mechanical guarantee that this class of bug fails the
 // build if it reproduces a third time.
 
