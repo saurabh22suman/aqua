@@ -1,14 +1,14 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { env } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 import { seedPlatformCatalogue } from "@/db/seed-platform";
 import { resolveTenantFeatureKeys } from "@/db/features";
 import { asTenantId, type TenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so setup/teardown rows must be
 // inserted through the privileged migration pool, never the app pool.
-const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+const admin = new Pool({ connectionString: requireMigrationUrl("tests/tier1/platform-entitlements.test.ts") });
 
 const RUN = Date.now().toString(36);
 const PILOT_KEY = `pilot-${RUN}`;
@@ -94,8 +94,8 @@ describe("platform catalogue and plan-baseline entitlements", () => {
   });
 
   it("seedPlatformCatalogue is idempotent and seeds exactly one default plan", async () => {
-    await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
-    await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+    await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-entitlements.test.ts"));
+    await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-entitlements.test.ts"));
 
     const defaults = await admin.query<{ key: string; price_paise: string | null }>(
       "select key, price_paise from plans where is_default = true",
@@ -196,8 +196,8 @@ describe("platform catalogue and plan-baseline entitlements", () => {
   });
 
   it("the permission catalogue is a closed list and the seed is idempotent", async () => {
-    await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
-    await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+    await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-entitlements.test.ts"));
+    await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-entitlements.test.ts"));
 
     const permCount = await admin.query<{ n: number }>(
       "select count(*)::int as n from permissions",

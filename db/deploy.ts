@@ -2,7 +2,7 @@ import { PgBoss } from "pg-boss";
 import { Client } from "pg";
 import { bootstrapRoles } from "@/db/bootstrap-roles";
 import { runMigrations } from "@/db/migrate";
-import { env } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 import {
   SESSIONS_GENERATE_QUEUE,
   scheduleSessionsGenerate,
@@ -113,20 +113,21 @@ async function grantAppUserOnPgBossSchema(connectionString: string): Promise<voi
 // container at boot (tests/tier1/no-superuser-on-request-path.test.ts
 // enforces that MIGRATION_DATABASE_URL never reaches request-path code).
 async function main(): Promise<void> {
+  const migrationUrl = requireMigrationUrl("db/deploy.ts");
   console.log("bootstrapping roles (idempotent — invariant: bootstrap precedes migrate)...");
-  await bootstrapRoles(env.MIGRATION_DATABASE_URL);
+  await bootstrapRoles(migrationUrl);
 
-  await runMigrations(env.MIGRATION_DATABASE_URL);
+  await runMigrations(migrationUrl);
 
   console.log("ensuring pg-boss schema, queues and per-tenant schedules (idempotent)...");
-  const boss = new PgBoss(env.MIGRATION_DATABASE_URL);
+  const boss = new PgBoss(migrationUrl);
   await boss.start();
   await ensurePgBossQueues(boss);
-  const tenants = await fetchJobTenants(env.MIGRATION_DATABASE_URL);
+  const tenants = await fetchJobTenants(migrationUrl);
   await syncSessionGenerateSchedules(boss, tenants);
   await boss.stop({ graceful: false, timeout: 5000 });
 
-  await grantAppUserOnPgBossSchema(env.MIGRATION_DATABASE_URL);
+  await grantAppUserOnPgBossSchema(migrationUrl);
 
   console.log(`deploy migration complete. ${tenants.length} tenant(s) scheduled.`);
 }

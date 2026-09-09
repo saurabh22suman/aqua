@@ -30,7 +30,7 @@
 
 import { Client } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { env } from "@/lib/env";
+import { env, requireMigrationUrl } from "@/lib/env";
 
 const ACTION = (() => {
   const args = process.argv.slice(2);
@@ -76,7 +76,7 @@ const NO_ACTION_CHILD_TABLES = [
 ];
 
 async function main(): Promise<void> {
-  const client = new Client({ connectionString: env.MIGRATION_DATABASE_URL });
+  const client = new Client({ connectionString: requireMigrationUrl("scripts/l5-clean-dev-orphans.ts") });
   await client.connect();
 
   try {

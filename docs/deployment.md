@@ -647,10 +647,13 @@ the migrate step, not for the web/worker.
 
 ## Reference — local Docker verification
 
-`docker-compose.prod.yml` exists for this purpose only — its
-header comment is explicit. Dokploy manages its own real secrets
-per service in production; the compose file's credentials are
-throwaway local values.
+`docker-compose.prod.yml` is both the local verification setup and
+the Dokploy Compose deployment. Every secret is `${VAR:-fallback}`:
+locally the fallbacks (or the repo-root `.env`, which Compose
+auto-loads) apply with zero setup; on Dokploy set the real values
+as environment variables — Compose deployments do not inherit them
+automatically, so each service references them explicitly. The
+compose file never carries real secrets (`.env` is git-ignored).
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build

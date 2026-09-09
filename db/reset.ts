@@ -3,7 +3,7 @@ import readline from "node:readline/promises";
 import { bootstrapRoles } from "@/db/bootstrap-roles";
 import { runMigrations } from "@/db/migrate";
 import { confirmationMatches, describeTarget, evaluateResetGuard } from "@/db/reset-guard";
-import { env } from "@/lib/env";
+import { env, requireMigrationUrl } from "@/lib/env";
 
 async function main(): Promise<void> {
   const decision = evaluateResetGuard({
@@ -16,7 +16,11 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const { host, database } = describeTarget(env.MIGRATION_DATABASE_URL);
+  const migrationUrl = requireMigrationUrl("db/reset.ts");
+  const { host, database } = describeTarget(migrationUrl);
+  console.log("About to drop and recreate the public schema on:");
+  console.log(`  host:     ${host}`);
+  console.log(`  database: ${database}`);
   console.log("About to drop and recreate the public schema on:");
   console.log(`  host:     ${host}`);
   console.log(`  database: ${database}`);
@@ -31,7 +35,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const client = new Client({ connectionString: env.MIGRATION_DATABASE_URL });
+  const client = new Client({ connectionString: migrationUrl });
   await client.connect();
 
   try {
@@ -44,9 +48,9 @@ async function main(): Promise<void> {
   console.log("public schema dropped.");
 
   console.log("bootstrapping roles before migrating (invariant: bootstrap precedes migrate)...");
-  await bootstrapRoles(env.MIGRATION_DATABASE_URL);
+  await bootstrapRoles(migrationUrl);
 
-  await runMigrations(env.MIGRATION_DATABASE_URL);
+  await runMigrations(migrationUrl);
 }
 
 main().catch((err) => {
