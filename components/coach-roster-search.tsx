@@ -40,7 +40,7 @@ export function CoachRosterSearch({ roster }: { roster: CoachRosterRow[] }) {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name or code"
           aria-label="Search members"
-          className="w-full h-10 pl-9 pr-3 rounded-ctl bg-paper border border-line text-[14px]"
+          className="w-full min-h-[44px] pl-9 pr-3 rounded-ctl bg-paper border border-line text-[16px]"
         />
       </div>
       {filtered.length === 0 ? (

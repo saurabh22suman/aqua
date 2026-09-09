@@ -33,6 +33,10 @@ export async function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) 
       {totalAll === 0 ? (
         <p className="mt-2 text-[13px] text-ink-3">No enquiries captured in this period.</p>
       ) : (
+        // 4 columns ("New → Converted" header is wide) overflow 390px
+        // without this wrapper. Horizontal scroll of the table only —
+        // the page itself never scrolls sideways. [automatable]
+        <div className="overflow-x-auto -mx-4 px-4">
         <table className="mt-3 w-full text-[13px]">
           <thead className="text-[11px] uppercase tracking-wide text-ink-3">
             <tr className="text-left">
@@ -59,6 +63,7 @@ export async function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) 
               ))}
           </tbody>
         </table>
+        </div>
       )}
     </article>
   );

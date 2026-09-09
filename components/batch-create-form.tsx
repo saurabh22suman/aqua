@@ -96,7 +96,7 @@ export function BatchCreateForm({
       <select
         value={programId}
         onChange={(e) => setProgramId(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         {programs.map((p) => (
           <option key={p.id} value={p.id}>
@@ -109,7 +109,7 @@ export function BatchCreateForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Batch name"
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       />
       <div className="flex gap-2">
         <input
@@ -117,26 +117,26 @@ export function BatchCreateForm({
           min={1}
           value={capacity}
           onChange={(e) => setCapacity(e.target.value)}
-          className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           aria-label="Capacity"
         />
         <input
           type="time"
           value={startTime}
           onChange={(e) => setStartTime(e.target.value)}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <input
           type="time"
           value={endTime}
           onChange={(e) => setEndTime(e.target.value)}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
       <select
         value={coachId}
         onChange={(e) => setCoachId(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid="batch-coach-picker"
       >
         <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>

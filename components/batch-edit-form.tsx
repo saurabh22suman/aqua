@@ -120,7 +120,7 @@ export function BatchEditForm({
       <select
         value={form.programId}
         onChange={(e) => setForm({ ...form, programId: e.target.value })}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         {programs.map((p) => (
           <option key={p.id} value={p.id}>
@@ -133,7 +133,7 @@ export function BatchEditForm({
         value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })}
         placeholder="Batch name"
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid={`edit-batch-name-${batchId}`}
       />
       <div className="flex gap-2">
@@ -142,26 +142,26 @@ export function BatchEditForm({
           min={1}
           value={form.capacity}
           onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-          className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           aria-label="Capacity"
         />
         <input
           type="time"
           value={form.startTime}
           onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <input
           type="time"
           value={form.endTime}
           onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
       <select
         value={form.coachId}
         onChange={(e) => setForm({ ...form, coachId: e.target.value })}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid={`edit-batch-coach-${batchId}`}
       >
         <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>

@@ -47,7 +47,7 @@ export function EnquiriesBoard({
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Name"
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="enquiry-capture-name"
         />
         <input
@@ -55,12 +55,12 @@ export function EnquiriesBoard({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone (optional)"
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <select
           value={source}
           onChange={(e) => setSource(e.target.value as (typeof SOURCES)[number])}
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         >
           {SOURCES.map((s) => (
             <option key={s} value={s}>

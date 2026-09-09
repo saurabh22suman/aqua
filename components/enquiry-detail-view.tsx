@@ -179,7 +179,7 @@ export function EnquiryDetailView({
           <select
             value={batchId}
             onChange={(e) => setBatchId(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           >
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
@@ -215,7 +215,7 @@ export function EnquiryDetailView({
             value={convertReason}
             onChange={(e) => setConvertReason(e.target.value)}
             placeholder="Reason (e.g. paid and enrolled)"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           {!enquiry.memberId ? (
             <EnquiryNewMemberFields
@@ -269,14 +269,14 @@ export function EnquiryDetailView({
             type="datetime-local"
             value={followUpDue}
             onChange={(e) => setFollowUpDue(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           <input
             type="text"
             value={followUpNote}
             onChange={(e) => setFollowUpNote(e.target.value)}
             placeholder="Note (optional)"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           <button
             type="button"

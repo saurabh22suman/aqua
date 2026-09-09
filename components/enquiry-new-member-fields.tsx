@@ -103,7 +103,7 @@ export function EnquiryNewMemberFields({
           onChange={(e) => {
             setDateOfBirth(e.target.value);
           }}
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="enquiry-member-dob"
         />
       </div>
@@ -112,7 +112,7 @@ export function EnquiryNewMemberFields({
         onChange={(e) => {
           setGender(e.target.value);
         }}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         <option value="">Gender (optional)</option>
         <option value="male">Male</option>
@@ -124,7 +124,7 @@ export function EnquiryNewMemberFields({
         onChange={(e) => {
           setLocationId(e.target.value);
         }}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         {locations.map((l) => (
           <option key={l.id} value={l.id}>
@@ -158,7 +158,7 @@ export function EnquiryNewMemberFields({
                 value={guardianQuery}
                 onChange={(e) => runGuardianSearch(e.target.value)}
                 placeholder="Search existing guardian"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[12.5px]"
+                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
               />
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
@@ -186,7 +186,7 @@ export function EnquiryNewMemberFields({
                   setGuardianName(e.target.value);
                 }}
                 placeholder="Or: guardian full name"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[12.5px]"
+                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
               />
               <input
                 type="tel"
@@ -195,7 +195,7 @@ export function EnquiryNewMemberFields({
                   setGuardianPhone(e.target.value);
                 }}
                 placeholder="Guardian phone (optional)"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[12.5px]"
+                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
               />
             </>
           )}
@@ -206,7 +206,7 @@ export function EnquiryNewMemberFields({
               setRelationship(e.target.value);
             }}
             placeholder="Relationship (e.g. mother)"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[12.5px]"
+            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           {guardianMissing() ? (
             <div className="flex items-start gap-2 rounded-ctl bg-warn-soft px-3 py-2">

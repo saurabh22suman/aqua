@@ -102,7 +102,7 @@ export function SessionSubstituteControl({
       <select
         value={picked}
         onChange={(e) => setPicked(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
         data-testid={`substitute-coach-${sessionId}`}
       >
         <option value="">Choose {resolveTerm(terminology, "coach", 1)}…</option>

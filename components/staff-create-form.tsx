@@ -83,7 +83,7 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
             value={existingPersonId}
             onChange={(e) => setExistingPersonId(e.target.value)}
             placeholder="00000000-0000-0000-0000-000000000000"
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px] font-mono"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] font-mono"
             data-testid="staff-existingPersonId"
           />
           <span className="block mt-1 text-[12px] text-ink-3">
