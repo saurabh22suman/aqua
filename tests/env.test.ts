@@ -40,25 +40,51 @@ describe("lib/env", () => {
 
     const { env } = await loadEnv();
     expect(env.DATABASE_URL).toBe("postgresql://app_login:pw@localhost:5432/aqua");
-    // J7: MIGRATION_DATABASE_URL is no longer optional. The
-    // earlier "falls back to DATABASE_URL" behaviour was the
-    // shape the audit caught: a developer missing the var ran
-    // migrations under `app_login` and saw confusing errors.
-    // Now required and distinct from DATABASE_URL.
+    // J7, relocated: MIGRATION_DATABASE_URL is optional at parse
+    // time (the worker boots without it — it must never hold the
+    // superuser credential) and required at each privileged
+    // script's entry via requireMigrationUrl(). The earlier "falls
+    // back to DATABASE_URL" behaviour stays forbidden: a developer
+    // missing the var must fail loudly in the script that needs
+    // it, never silently run migrations under `app_login`.
     expect(env.MIGRATION_DATABASE_URL).toBe(
       "postgresql://aqua:aqua@localhost:5432/aqua",
     );
     expect(env.MIGRATION_DATABASE_URL).not.toBe(env.DATABASE_URL);
   });
 
-  it("fails loudly when MIGRATION_DATABASE_URL is unset (J7 — required, no fallback)", async () => {
+  it("leaves MIGRATION_DATABASE_URL unset without failing import (worker boots without it)", async () => {
     vi.stubEnv(
       "DATABASE_URL",
       "postgresql://app_login:pw@localhost:5432/aqua",
     );
     vi.stubEnv("MIGRATION_DATABASE_URL", undefined);
 
-    await expect(loadEnv()).rejects.toThrow(/MIGRATION_DATABASE_URL/);
+    const { env } = await loadEnv();
+    expect(env.MIGRATION_DATABASE_URL).toBeUndefined();
+  });
+
+  it("requireMigrationUrl fails loudly when unset (J7 — required, no fallback)", async () => {
+    vi.stubEnv(
+      "DATABASE_URL",
+      "postgresql://app_login:pw@localhost:5432/aqua",
+    );
+    vi.stubEnv("MIGRATION_DATABASE_URL", undefined);
+
+    const { requireMigrationUrl } = await loadEnv();
+    expect(() => requireMigrationUrl("test-caller")).toThrow(/MIGRATION_DATABASE_URL/);
+    expect(() => requireMigrationUrl("test-caller")).toThrow(/test-caller/);
+  });
+
+  it("requireMigrationUrl returns the URL when set", async () => {
+    vi.stubEnv(
+      "DATABASE_URL",
+      "postgresql://app_login:pw@localhost:5432/aqua",
+    );
+    const { requireMigrationUrl } = await loadEnv();
+    expect(requireMigrationUrl("test-caller")).toBe(
+      "postgresql://aqua:aqua@localhost:5432/aqua",
+    );
   });
 
   it("fails loudly and names every missing variable", async () => {

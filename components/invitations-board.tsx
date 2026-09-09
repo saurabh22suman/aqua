@@ -2,17 +2,22 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ChevronRight, Loader2, RotateCcw, X } from "lucide-react";
+import { Check, ChevronRight, Copy, Loader2, RotateCcw, X } from "lucide-react";
 import {
   revokeInvitationAction,
-  resendInvitationAction,
 } from "@/lib/actions/staff-invitations";
+import { issueLoginLinkAction } from "@/lib/actions/invite-link";
 import type { ListInvitationsRow } from "@/lib/services/staff-invitations";
 
-// Phase 3.6 — invitations board. List with state pills, per-
-// row revoke + resend. Resend is a no-op until the messaging
-// chain ships; the row tells the user that explicitly rather
-// than pretending.
+// Phase 3.6 — invitations board. List with state pills, per-row
+// revoke + login-link issue. There is no delivery channel yet (no
+// SMS, no WhatsApp), so the board never claims anything was sent:
+// issuing a link shows the link to copy, with the expiry, and says
+// plainly to share it by hand. "Resend reminder" used to sit here
+// calling an endpoint that returned { delivered: false } and showed
+// nothing -- a button that pretends to send. It is gone; the link
+// panel below is the honest replacement, for invited rows (first
+// login) and active rows (re-login when a session dies) alike.
 //
 // F4 audit correction (Sep 2026): status pills used to colour
 // "invited" with the warn semantic token and "active" with the
@@ -65,8 +70,10 @@ export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
 
 function InvitationRow({ row }: { row: ListInvitationsRow }) {
   const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState<"revoke" | "resend" | null>(null);
+  const [busy, setBusy] = useState<"revoke" | "link" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   function onRevoke() {
     setError(null);
@@ -84,16 +91,32 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
     });
   }
 
-  function onResend() {
+  function onIssueLink() {
     setError(null);
-    setBusy("resend");
+    setBusy("link");
+    setCopied(false);
     startTransition(async () => {
-      const result = await resendInvitationAction(row.membershipId);
+      const result = await issueLoginLinkAction(row.membershipId);
       if (result.kind === "error") {
         setError(result.message);
+      } else {
+        setLink({
+          url: `${window.location.origin}${result.urlPath}`,
+          expiresAt: result.expiresAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+        });
       }
       setBusy(null);
     });
+  }
+
+  async function onCopy() {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+    } catch {
+      setError("Copy failed — long-press the link and copy it by hand.");
+    }
   }
 
   return (
@@ -115,20 +138,39 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
       ) : null}
       {row.status === "invited" ? (
         <p className="mt-2 text-[12px] text-ink-3">
-          They sign in with that phone on the staff surface — the membership flips to &quot;active&quot; on first OTP.
+          They sign in with the login link below — the membership flips to &quot;active&quot; on first use.
+          Nothing is sent by SMS or WhatsApp; copy the link and share it yourself.
         </p>
       ) : null}
-      <div className="mt-3 flex gap-2">
-        {row.status === "invited" ? (
+      {link ? (
+        <div className="mt-2 rounded-ctl border border-line bg-deck p-3">
+          <p className="text-[11px] text-ink-3 break-all font-mono">{link.url}</p>
+          <p className="mt-1 text-[11px] text-ink-3">
+            Works once, expires {link.expiresAt}. Anyone holding it can sign in as {row.roleKey} — send it
+            directly to the right person.
+          </p>
           <button
             type="button"
-            onClick={onResend}
+            onClick={onCopy}
+            className="mt-2 rounded-pill px-3 py-2 text-[13px] font-medium bg-paper border border-line text-ink-2 flex items-center gap-1.5"
+            data-testid={`copy-link-${row.membershipId}`}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />}
+            {copied ? "Copied" : "Copy link"}
+          </button>
+        </div>
+      ) : null}
+      <div className="mt-3 flex gap-2">
+        {row.status === "invited" || row.status === "active" ? (
+          <button
+            type="button"
+            onClick={onIssueLink}
             disabled={pending}
             className="rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 flex items-center gap-1.5"
-            data-testid={`resend-${row.membershipId}`}
+            data-testid={`issue-link-${row.membershipId}`}
           >
-            {busy === "resend" ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} />}
-            Resend reminder
+            {busy === "link" ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} />}
+            {row.status === "invited" ? "Get login link" : "New login link"}
           </button>
         ) : null}
         {row.status === "active" || row.status === "invited" ? (

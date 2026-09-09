@@ -75,8 +75,8 @@ export async function runMigrations(connectionString: string): Promise<number> {
 }
 
 async function main(): Promise<void> {
-  const { env } = await import("@/lib/env");
-  await runMigrations(env.MIGRATION_DATABASE_URL);
+  const { requireMigrationUrl } = await import("@/lib/env");
+  await runMigrations(requireMigrationUrl("db/migrate.ts"));
 }
 
 if (process.argv[1] && process.argv[1].endsWith("migrate.ts")) {

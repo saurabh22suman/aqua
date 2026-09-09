@@ -23,7 +23,15 @@ function passwordOf(connectionString: string): string {
 const envSchema = z
   .object({
     DATABASE_URL: postgresUrl,
-    MIGRATION_DATABASE_URL: z.preprocess(emptyAsUndefined, postgresUrl),
+    // Optional at parse time on purpose: the worker MUST boot
+    // without it (it must never hold the superuser credential —
+    // deployment go-live check #3, and the compose file
+    // deliberately withholds it). J7's fail-fast is preserved by
+    // requireMigrationUrl() below, which every privileged script
+    // calls at entry: a missing URL fails loudly in the script
+    // that needs it, never silently, and never in a process that
+    // must not have it.
+    MIGRATION_DATABASE_URL: z.preprocess(emptyAsUndefined, postgresUrl.optional()),
     APP_LOGIN_PASSWORD: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     BETTER_AUTH_SECRET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     BETTER_AUTH_URL: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
@@ -122,7 +130,7 @@ const envSchema = z
 
 export type ParsedEnv = {
   DATABASE_URL: string;
-  MIGRATION_DATABASE_URL: string;
+  MIGRATION_DATABASE_URL?: string;
   APP_LOGIN_PASSWORD?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
@@ -145,12 +153,6 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
       `Invalid environment configuration:\n${issues}\nCopy .env.example to .env and fill in every variable.`,
     );
   }
-  if (!parsed.data.MIGRATION_DATABASE_URL) {
-    throw new Error(
-      "Invalid environment configuration:\n" +
-        "  - MIGRATION_DATABASE_URL: required — connects as the privileged `aqua` role for migrations, role bootstrap, and pg-boss schema setup. Falling back to DATABASE_URL (which connects as `app_login`) would run migrations and reset scripts under a role without the privileges they need. Set MIGRATION_DATABASE_URL explicitly in every environment, including local.",
-    );
-  }
   return {
     DATABASE_URL: parsed.data.DATABASE_URL,
     MIGRATION_DATABASE_URL: parsed.data.MIGRATION_DATABASE_URL,
@@ -161,6 +163,24 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
     NODE_ENV: parsed.data.NODE_ENV,
     DEMO_MODE: parsed.data.DEMO_MODE,
   };
+}
+
+// J7 fail-fast, relocated: MIGRATION_DATABASE_URL is optional at
+// parse time (the worker boots without it), so every privileged
+// script demands it explicitly at entry through here. Call with
+// the script's name so the error says who needs it. Never fall
+// back to DATABASE_URL — that runs migrations under `app_login`
+// (no privileges) and surfaces as confusing errors, the exact
+// shape J7 caught.
+export function requireMigrationUrl(caller: string): string {
+  const url = env.MIGRATION_DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "Invalid environment configuration:\n" +
+        `  - MIGRATION_DATABASE_URL: required by ${caller} — connects as the privileged \`aqua\` role for migrations, role bootstrap, and pg-boss schema setup. Falling back to DATABASE_URL (which connects as \`app_login\`) would run privileged work under a role without the privileges it needs. Set MIGRATION_DATABASE_URL explicitly.`,
+    );
+  }
+  return url;
 }
 
 export const env = parseEnv(process.env);

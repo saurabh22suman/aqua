@@ -1,5 +1,5 @@
 import { Client } from "pg";
-import { env } from "@/lib/env";
+import { env, requireMigrationUrl } from "@/lib/env";
 
 function quotePassword(password: string): string {
   return `'${password.replace(/'/g, "''")}'`;
@@ -76,7 +76,7 @@ export async function bootstrapRoles(
 }
 
 async function main(): Promise<void> {
-  await bootstrapRoles(env.MIGRATION_DATABASE_URL);
+  await bootstrapRoles(requireMigrationUrl("db/bootstrap-roles.ts"));
 }
 
 if (process.argv[1] && process.argv[1].endsWith("bootstrap-roles.ts")) {

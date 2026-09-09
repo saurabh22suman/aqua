@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { env } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 
 // L2 — preset catalogue coverage.
 //
@@ -23,7 +23,7 @@ import { env } from "@/lib/env";
 
 const ROOT = process.cwd();
 const SCAN_DIR = "db";
-const ADMIN = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+const ADMIN = new Pool({ connectionString: requireMigrationUrl("tests/tier1/preset-catalogue-coverage.test.ts") });
 
 function listTsFiles(dir: string): string[] {
   const out: string[] = [];
@@ -84,7 +84,7 @@ beforeAll(async () => {
   // never had them is in a known state. The seed is idempotent on
   // (key, version), so re-running is harmless.
   const { seedPlatformCatalogue } = await import("@/db/seed-platform");
-  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/preset-catalogue-coverage.test.ts"));
 });
 
 afterAll(async () => {

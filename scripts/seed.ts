@@ -1,5 +1,5 @@
 import { Pool } from "pg";
-import { env } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 import { v7 as uuidv7 } from "uuid";
 import { and, eq, isNull } from "drizzle-orm";
 import { pool } from "../db/client";
@@ -16,7 +16,7 @@ const SLUG = "demo-academy";
 const TZ = "Asia/Kolkata";
 const MEMBER_COUNT = 16;
 
-const adminPool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+const adminPool = new Pool({ connectionString: requireMigrationUrl("scripts/seed.ts") });
 
 async function ensureTenant(): Promise<TenantId> {
   const existing = await adminPool.query<{ id: string }>(
@@ -26,7 +26,7 @@ async function ensureTenant(): Promise<TenantId> {
   if (existing.rows.length > 0) return asTenantId(existing.rows[0].id);
 
   const id = asTenantId(uuidv7());
-  const planId = await defaultPlanId(env.MIGRATION_DATABASE_URL);
+  const planId = await defaultPlanId(requireMigrationUrl("scripts/seed.ts"));
   await adminPool.query(
     "insert into tenants (id, slug, name, status, plan_id) values ($1,$2,'Demo Academy','active',$3)",
     [id, SLUG, planId],
@@ -35,7 +35,7 @@ async function ensureTenant(): Promise<TenantId> {
 }
 
 async function main() {
-  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  await seedPlatformCatalogue(requireMigrationUrl("scripts/seed.ts"));
   console.log("platform catalogue seeded → standard plan + ga features");
 
   const tenantId = await ensureTenant();

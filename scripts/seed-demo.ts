@@ -12,7 +12,7 @@ import {
   defaultPlanId,
   seedPlatformCatalogue,
 } from "../db/seed-platform";
-import { env } from "@/lib/env";
+import { env, requireMigrationUrl } from "@/lib/env";
 import { asTenantId, asUserId, type TenantId, type UserId } from "../lib/ids";
 import { todayInZone } from "../lib/time/tz";
 import { isMinor } from "../lib/time/tz";
@@ -180,7 +180,7 @@ const DEMO_FOOTBALL_MEMBERS: Array<{
   { fullName: "Hiral Shah",       memberCode: "KFB-008", dateOfBirth: "1998-01-18", phone: "+919812340108", batch: "Open Practice", joinedDaysAgo: 340 },
 ];
 
-const adminPool = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+const adminPool = new Pool({ connectionString: requireMigrationUrl("scripts/seed-demo.ts") });
 
 async function ensureTenant(
   t: typeof DEMO_TENANT | typeof DEMO_FOOTBALL_TENANT,
@@ -194,7 +194,7 @@ async function ensureTenant(
   if (existing.rows.length > 0) return asTenantId(existing.rows[0].id);
 
   const id = asTenantId(uuidv7());
-  const planId = await defaultPlanId(env.MIGRATION_DATABASE_URL);
+  const planId = await defaultPlanId(requireMigrationUrl("scripts/seed-demo.ts"));
   // No preset_key / preset_version on the INSERT — applyPreset owns
   // those. Writing them directly here was the eighth divergence
   // (audit L2 followup): the preset's terminology, programs, plans,
@@ -1363,7 +1363,7 @@ async function ensureFootballPastAttendance(
 }
 
 async function main() {
-  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  await seedPlatformCatalogue(requireMigrationUrl("scripts/seed-demo.ts"));
   console.log("platform catalogue seeded → standard plan + ga features");
 
   // applyPreset stamps tenant_features / terminology / programs /

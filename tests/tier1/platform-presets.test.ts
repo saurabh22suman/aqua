@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { env } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 import { listPresets, getActivePreset } from "@/db/platform-presets";
 
 // Phase 2.1 — service-level proof for the preset catalogue read
@@ -12,7 +12,7 @@ import { listPresets, getActivePreset } from "@/db/platform-presets";
 // loudly and the regression surface is the same shape it would
 // be on a production database.
 
-const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+const admin = new Pool({ connectionString: requireMigrationUrl("tests/tier1/platform-presets.test.ts") });
 
 beforeAll(async () => {
   // Belt and suspenders: explicitly re-run the seed so a dev DB
@@ -20,7 +20,7 @@ beforeAll(async () => {
   // The seed is idempotent on (key, version), so running it again
   // is harmless.
   const { seedPlatformCatalogue } = await import("@/db/seed-platform");
-  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-presets.test.ts"));
 });
 
 afterAll(async () => {

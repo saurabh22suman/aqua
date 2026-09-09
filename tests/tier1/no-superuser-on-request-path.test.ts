@@ -154,6 +154,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/parent-link-audit.test.ts",
   "tests/tier1/sunday-coach-assignment.test.ts",
   "tests/tier1/demo-mode-env.test.ts",
+  "tests/tier1/magic-link-login.test.ts",
   "scripts/platform-code.ts",
   "tests/tier1/platform-code-gates.test.ts",
   "app/(owner)/owner/reports/attendance.csv/route.ts",

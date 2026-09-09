@@ -32,7 +32,13 @@ const { authUser } = vi.hoisted(() => ({ authUser: { betterAuthId: "" } }));
 vi.mock("@/lib/auth/server", () => ({
   auth: {
     api: {
-      getSession: async () => ({ user: { id: authUser.betterAuthId } }),
+      // Mirrors better-auth's real shape ({ session, user } with a
+      // fresh createdAt) so the receptionist session cap sees a live
+      // session.
+      getSession: async () => ({
+        user: { id: authUser.betterAuthId },
+        session: { createdAt: new Date() },
+      }),
     },
   },
 }));

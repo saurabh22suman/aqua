@@ -329,10 +329,12 @@ Mechanical guarantees, not code review: `tests/tier1/user-scope.test.ts` proves 
 
 Phone number plus OTP is the primary method — it matches how this market actually works. Email and password exists as a fallback for desktop staff.
 
+Staff magic-link login (single-use, membership-bound invite and re-login links) is a parallel door into the same session table: it exists because OTP has no delivery channel until WhatsApp lands. OTP code is untouched and lights up with no migration once a channel exists.
+
 | Actor | Method |
 |---|---|
-| Staff | Phone OTP, session cookie, 30-day sliding expiry |
-| Owner / admin | Same, plus optional email login |
+| Owner / coach / admin | Phone OTP or magic link, session cookie, **30-day sliding expiry** (personal phones; `session.expiresIn` in `lib/auth/server.ts`) |
+| Receptionist | Same doors, session hard-capped at **12h from login** (shared front-desk device; enforced in `sessionExists()` + `requireDefaultCtx()`/`requireCtx()` via `isSessionExpiredForRole()`, because better-auth has no per-role session concept) |
 | Parent | **No account.** Signed magic link, single-purpose, 7-day expiry |
 | Walk-in customer | No account. Booking reference plus phone |
 | Platform staff | Separate table, separate session, mandatory 2FA |

@@ -20,10 +20,9 @@ export default async function StaffInvitePage() {
       </Link>
       <h1 className="font-display text-[19px] font-semibold">Invite staff</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Send a phone-OTP invite to a coach, receptionist, worker or
-        accountant. New phone numbers create the directory entry and
-        the login in one step — no separate &ldquo;add to directory&rdquo;
-        step required.
+        Invite a coach or receptionist — the invite creates their login in one step. Then
+        copy the login link from the roster and share it yourself. Nothing is sent
+        automatically.
       </p>
       <Link
         href="/owner/staff/new"

@@ -237,7 +237,7 @@ export default async function PlatformTenantDetailPage({
       <section className="mt-8">
         <SectionHeader
           title="Owner"
-          subtitle="Step 3 of the onboarding wizard: send an invite. The owner accepts by signing in with the same phone number."
+          subtitle="Step 3 of the onboarding wizard: create the owner's membership, then mint a login link and share it with them yourself. Nothing is delivered automatically."
         />
         <div className="rounded-card bg-paper border border-line px-5 py-5">
           <InviteOwnerForm tenantId={detail.id} />

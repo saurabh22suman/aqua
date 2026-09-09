@@ -54,7 +54,7 @@ async function main() {
   try {
     await page.goto(`${BASE}/login`);
     await page.getByPlaceholder("+91 98765 43210").fill("+91 90000 00002");
-    await page.getByRole("button", { name: "Send code" }).click();
+    await page.getByRole("button", { name: "Continue" }).click();
     const hint = page.locator("[data-testid=dev-code]");
     await hint.waitFor({ timeout: 15_000 });
     const code = (await hint.textContent())!.replace(/\D/g, "").slice(-6);

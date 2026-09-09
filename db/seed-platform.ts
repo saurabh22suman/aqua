@@ -347,8 +347,8 @@ export async function seedPlatformCatalogue(
 }
 
 async function main(): Promise<void> {
-  const { env } = await import("@/lib/env");
-  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  const { requireMigrationUrl } = await import("@/lib/env");
+  await seedPlatformCatalogue(requireMigrationUrl("db/seed-platform.ts"));
   console.log("platform catalogue seeded.");
 }
 

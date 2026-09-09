@@ -1,9 +1,24 @@
-# For LOCAL VERIFICATION of the Docker setup (D3) — build the image, run
-# all three services, confirm the app works end to end and the worker
-# picks up a job. Dokploy (D4) manages web/worker/Postgres itself and
-# supplies its own real secrets per service; this file's credentials are
-# throwaway local-only values, same convention as the existing
-# docker-compose.yml.
+# Production compose: local verification AND the Dokploy deployment.
+#
+# Every secret and password is `${VAR:-local-fallback}`:
+# - Local (`docker compose -f docker-compose.prod.yml up --build`):
+#   fallbacks apply (or the repo-root .env, which Compose auto-loads
+#   — every password is derived from a single variable, so whatever
+#   the source, all services stay consistent with each other).
+#   Zero setup, same as before.
+# - Dokploy: Compose deployments do NOT inherit Dokploy environment
+#   variables automatically — each service references them explicitly
+#   below. Set the real values as Dokploy environment variables:
+#     POSTGRES_PASSWORD, APP_LOGIN_PASSWORD, BETTER_AUTH_SECRET,
+#     BETTER_AUTH_URL (https://<base>), PARENT_LINK_SECRET
+#   (Generate per docs/deployment.md step 0c. Passwords must be
+#   URL-safe — they are interpolated raw into connection strings.)
+#
+# lib/env.ts requires BETTER_AUTH_SECRET, BETTER_AUTH_URL and
+# PARENT_LINK_SECRET in every NODE_ENV=production process (migrate,
+# web AND worker — the worker parses env too), and fail-fasts when
+# APP_LOGIN_PASSWORD disagrees with the DATABASE_URL password, so
+# all three services carry the full set.
 #
 # Explicit project name: without it, Compose defaults to the directory
 # name ("aqua") for BOTH this file and the plain dev docker-compose.yml,
@@ -21,7 +36,7 @@ services:
     image: postgres:16
     environment:
       POSTGRES_USER: aqua
-      POSTGRES_PASSWORD: aqua
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aqua}
       POSTGRES_DB: aqua
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U aqua -d aqua"]
@@ -40,9 +55,12 @@ services:
     build: .
     command: ["node_modules/.bin/tsx", "db/deploy.ts"]
     environment:
-      MIGRATION_DATABASE_URL: postgresql://aqua:aqua@db:5432/aqua
-      APP_LOGIN_PASSWORD: local-compose-verification-pw
-      DATABASE_URL: postgresql://app_login:local-compose-verification-pw@db:5432/aqua
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:-aqua}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-local-compose-verification-pw}
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:-local-compose-verification-pw}@db:5432/aqua
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-local-compose-verification-secret-not-real}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:-local-compose-verification-parent-secret-not-real}
     depends_on:
       db:
         condition: service_healthy
@@ -54,9 +72,19 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://app_login:local-compose-verification-pw@db:5432/aqua
-      BETTER_AUTH_SECRET: local-compose-verification-secret-not-real
-      BETTER_AUTH_URL: http://localhost:3000
+      # Next standalone binds HOSTNAME when set; without it, it binds
+      # the container hostname (eth0) only, and localhost/127.0.0.1
+      # inside the container refuses — including the healthcheck
+      # below. The container then reads healthy from the outside
+      # while Docker marks it unhealthy.
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:-local-compose-verification-pw}@db:5432/aqua
+      # Set (not just embedded above) so lib/env.ts fail-fasts on drift
+      # with a clear message instead of a bare Postgres auth failure.
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-local-compose-verification-pw}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-local-compose-verification-secret-not-real}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:-local-compose-verification-parent-secret-not-real}
       OFFLINE_SYNC_ENABLED: ""
     depends_on:
       migrate:
@@ -71,7 +99,11 @@ services:
     build: .
     command: ["node_modules/.bin/tsx", "worker/index.ts"]
     environment:
-      DATABASE_URL: postgresql://app_login:local-compose-verification-pw@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:-local-compose-verification-pw}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:-local-compose-verification-pw}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-local-compose-verification-secret-not-real}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:-local-compose-verification-parent-secret-not-real}
       # Explicit, not just inherited from the image's ENV NODE_ENV=production
       # (Dockerfile) — the worker is a plain node process, not something
       # Next's CLI sets this for automatically the way `next start` does

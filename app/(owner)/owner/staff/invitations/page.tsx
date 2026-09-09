@@ -2,11 +2,11 @@ import Link from "next/link";
 import { listInvitationsAction } from "@/lib/actions/staff-invitations";
 import { InvitationsBoard } from "@/components/invitations-board";
 
-// Phase 3.6 — staff invitations surface. List + revoke + resend.
-// The "accept" step is the invitee signing in with the phone
-// they were invited with — that flips status 'invited' to
-// 'active' through better-auth's callbackOnVerification (no
-// separate UI on this side).
+// Phase 3.6 — staff invitations surface. List + revoke + login-link
+// issue. The "accept" step is the invitee opening the login link the
+// owner shares with them -- that flips status 'invited' to 'active'
+// inside the redeem (no separate UI on this side, no OTP involved
+// until a delivery channel exists).
 export default async function StaffInvitationsPage() {
   const rows = await listInvitationsAction();
   return (

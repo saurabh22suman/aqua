@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { env } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 import { applyPreset, previewPreset } from "@/db/preset-engine";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
 import { getTerminology } from "@/lib/services/terminology";
@@ -31,14 +31,14 @@ import { resolveTerm } from "@/lib/terminology/keys";
 //      constraint violation during the run rolls back the whole
 //      transaction.
 
-const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+const admin = new Pool({ connectionString: requireMigrationUrl("tests/tier1/preset-engine.test.ts") });
 let actorId: UserId;
 const seededTenants: TenantId[] = [];
 const seededMembers: string[] = [];
 
 beforeAll(async () => {
   const { seedPlatformCatalogue } = await import("@/db/seed-platform");
-  await seedPlatformCatalogue(env.MIGRATION_DATABASE_URL);
+  await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/preset-engine.test.ts"));
 
   // Mint our own platform_users row so the engine's `created_by` /
   // `updated_by` audit columns point at a real user. The seed in

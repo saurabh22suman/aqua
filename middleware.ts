@@ -42,6 +42,11 @@ const APEX_ALLOWLIST = [
   "/parent",
   "/p/",
   "/api/auth/",
+  // Staff magic-link redeem (app/api/login-link/redeem). Pre-auth
+  // by definition -- the token IS the credential -- same as /login
+  // and /p/ above. Authorization lives in redeemLoginLink
+  // (signature + expiry + membership status + single-use consume).
+  "/api/login-link/",
   "/api/health",
   // Next.js internals and static assets. Required for HMR, RSC
   // payloads, and the _next/static directory the build emits.

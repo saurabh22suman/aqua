@@ -46,11 +46,17 @@ function findMatchingClose(text: string, openParenIndex: number): string {
 // Better-auth's getSession returns the better-auth user id;
 // requireDefaultCtx resolves that to the platform users.id and
 // looks up the membership + role, same path a real request takes.
+// The stub mirrors better-auth's real shape ({ session, user } with
+// a fresh createdAt) so the receptionist session cap sees a live
+// session.
 const { authUser } = vi.hoisted(() => ({ authUser: { betterAuthId: "" } }));
 vi.mock("@/lib/auth/server", () => ({
   auth: {
     api: {
-      getSession: async () => ({ user: { id: authUser.betterAuthId } }),
+      getSession: async () => ({
+        user: { id: authUser.betterAuthId },
+        session: { createdAt: new Date() },
+      }),
     },
   },
 }));
