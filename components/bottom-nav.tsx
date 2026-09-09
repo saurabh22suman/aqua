@@ -69,8 +69,16 @@ export function BottomNav({ items }: { items: NavItem[] }) {
   return (
     <nav
       aria-label="Primary"
-      className="fixed bottom-0 inset-x-0 h-16 bg-paper border-t border-line shadow-2 grid"
-      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+      // min-h, not h: on notch phones the home-indicator inset adds
+      // real height below the bar. Without it the nav sits on the
+      // indicator and the lowest 10-20px of every tap target is dead.
+      // Mobile pass [automatable]: static + emulator-verified; notch
+      // overlap still needs a real-device check (see PR report).
+      className="fixed bottom-0 inset-x-0 min-h-16 bg-paper border-t border-line shadow-2 grid"
+      style={{
+        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
     >
       {items.map((item) => {
         const Icon = ICONS[item.iconName];

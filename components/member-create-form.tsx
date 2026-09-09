@@ -154,7 +154,7 @@ export function MemberCreateForm({
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Full name"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
           data-testid="member-full-name"
         />
         <input
@@ -162,7 +162,7 @@ export function MemberCreateForm({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone (optional)"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         />
         <div>
           <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
@@ -170,14 +170,14 @@ export function MemberCreateForm({
             type="date"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
             data-testid="member-dob"
           />
         </div>
         <select
           value={gender}
           onChange={(e) => setGender(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         >
           <option value="">Gender (optional)</option>
           <option value="male">Male</option>
@@ -187,7 +187,7 @@ export function MemberCreateForm({
         <select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         >
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
@@ -200,7 +200,7 @@ export function MemberCreateForm({
           onChange={(e) => setMedicalNotes(e.target.value)}
           placeholder="Medical notes (optional)"
           rows={2}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         />
       </section>
 
@@ -216,7 +216,7 @@ export function MemberCreateForm({
               <button
                 type="button"
                 onClick={() => setGuardian({ mode: "none" })}
-                className="text-[12px] text-ink-3 underline"
+                className="inline-flex items-center min-h-[44px] px-2 text-[12px] text-ink-3 underline"
               >
                 Change
               </button>
@@ -228,7 +228,7 @@ export function MemberCreateForm({
                 value={guardianQuery}
                 onChange={(e) => runGuardianSearch(e.target.value)}
                 placeholder="Search an existing guardian by name or phone"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="guardian-search"
               />
               {guardianResults.length > 0 ? (
@@ -241,7 +241,7 @@ export function MemberCreateForm({
                           setGuardian({ mode: "existing", personId: r.personId, label: r.fullName });
                           setGuardianResults([]);
                         }}
-                        className="w-full text-left px-3 py-2 text-[13px] hover:bg-deck"
+                        className="w-full text-left px-3 py-3 min-h-[44px] text-[14px] hover:bg-deck"
                       >
                         {r.fullName}
                         {r.phone ? <span className="text-ink-3"> · {r.phone}</span> : null}
@@ -259,7 +259,7 @@ export function MemberCreateForm({
                 value={guardianName}
                 onChange={(e) => setGuardianName(e.target.value)}
                 placeholder="Guardian full name"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="guardian-new-name"
               />
               <input
@@ -267,7 +267,7 @@ export function MemberCreateForm({
                 value={guardianPhone}
                 onChange={(e) => setGuardianPhone(e.target.value)}
                 placeholder="Guardian phone (optional)"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
               />
             </>
           )}
@@ -277,7 +277,7 @@ export function MemberCreateForm({
             value={relationship}
             onChange={(e) => setRelationship(e.target.value)}
             placeholder="Relationship to member (e.g. mother, father)"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[13px]"
+            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
             data-testid="guardian-relationship"
           />
 
@@ -293,12 +293,12 @@ export function MemberCreateForm({
         </section>
       ) : null}
 
-      <label className="flex items-start gap-2.5">
+      <label className="flex items-start gap-2.5 min-h-[44px] py-1">
         <input
           type="checkbox"
           checked={consentGiven}
           onChange={(e) => setConsentGiven(e.target.checked)}
-          className="mt-0.5"
+          className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent)]"
           data-testid="consent-checkbox"
         />
         <span className="text-[12.5px] text-ink-2">
@@ -308,17 +308,28 @@ export function MemberCreateForm({
         </span>
       </label>
 
-      {error ? <p className="text-[13px] text-late">{error}</p> : null}
+      {error ? (
+        <p className="text-[13px] text-late" role="alert">
+          {error}
+        </p>
+      ) : null}
 
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy}
-        className="w-full rounded-ctl bg-[var(--accent)] py-3 text-[14px] font-medium text-white disabled:opacity-50"
-        data-testid="submit-member"
-      >
-        {busy ? "Saving…" : "Add member"}
-      </button>
+      {/* Sticky save bar [automatable]: this is the longest form in the
+          product, and with the guardian section open the submit scrolls
+          two viewports down. The bar pins above the fixed bottom nav
+          (4rem + safe-area + gap) so Save is always one thumb-tap away.
+          shadow-2 is the floating-element level per DESIGN.md §1.4. */}
+      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] rounded-ctl border border-line bg-paper p-2 shadow-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy}
+          className="w-full rounded-ctl bg-[var(--accent)] py-3 min-h-[48px] text-[15px] font-semibold text-white disabled:opacity-50"
+          data-testid="submit-member"
+        >
+          {busy ? "Saving…" : "Add member"}
+        </button>
+      </div>
     </div>
   );
 }

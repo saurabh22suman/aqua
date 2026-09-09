@@ -144,7 +144,7 @@ export function ProgramsBatchesBoard({
                   type="text"
                   value={editingProgramName}
                   onChange={(e) => setEditingProgramName(e.target.value)}
-                  className="flex-1 rounded-ctl border border-line bg-deck px-2.5 py-1.5 text-[14px]"
+                  className="flex-1 rounded-ctl border border-line bg-deck px-2.5 py-1.5 text-[16px]"
                   data-testid={`edit-program-input-${p.id}`}
                 />
               ) : (
@@ -220,7 +220,7 @@ export function ProgramsBatchesBoard({
             value={programName}
             onChange={(e) => setProgramName(e.target.value)}
             placeholder="New program name"
-            className="flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[14px]"
+            className="flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           <button
             type="button"

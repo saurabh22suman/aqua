@@ -27,7 +27,7 @@ export default async function RegisterPage({
         <p className="text-[15px] font-medium">
           {titleCase(resolveTerm(terminology, "session", 1))} not found
         </p>
-        <Link href="/coach" className="mt-2 inline-block text-[13px] text-ink-3 underline">
+        <Link href="/coach" className="mt-2 inline-flex items-center min-h-[44px] text-[13px] text-ink-3 underline">
           Back to today
         </Link>
       </main>
@@ -42,7 +42,9 @@ export default async function RegisterPage({
 
   return (
     <main className="px-5 pt-6">
-      <Link href="/coach" className="text-[13px] text-ink-3 underline underline-offset-2">
+      {/* min-h-44px target: the old 13px inline link was ~20px tall,
+          unreachable one-handed mid-register. [automatable] */}
+      <Link href="/coach" className="inline-flex items-center min-h-[44px] text-[13px] text-ink-3 underline underline-offset-2">
         ← Today
       </Link>
       <h1 className="mt-2 font-display text-[19px] font-semibold text-marine">

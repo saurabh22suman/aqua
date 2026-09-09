@@ -172,6 +172,7 @@ boxShadow: {
 - Inputs at **16px** font size — anything smaller triggers iOS zoom-on-focus.
 - Bottom nav: **exactly four items**. There is no "More" tab. If a fifth thing seems necessary, something else is wrong.
 - Role layouts are separate route groups, not conditional rendering. A worker's bundle must not contain owner components.
+- **`/ops` is desktop-only by design.** The platform console is for operators on laptops, not poolside — sidebar layout, data tables, no bottom nav, no 44px/16px mobile pass. The mobile rules in this section bind the tenant surfaces (`/coach`, `/reception`, `/owner`, `/parent`, `/p/*`) only. A usable small-screen fallback (stacked sidebar content) is acceptable; thumb-reach and one-handed operation are not targets there.
 - **No dark mode.** Users are outdoors in daylight. High-contrast light wins.
 
 ---

@@ -6,7 +6,7 @@ import { sessionExists } from "@/lib/auth/context";
 export default async function ReceptionLayout({ children }: { children: ReactNode }) {
   if (!(await sessionExists())) redirect("/login");
   return (
-    <div className="min-h-dvh pb-16">
+    <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
       {children}
       <BottomNav
         items={[

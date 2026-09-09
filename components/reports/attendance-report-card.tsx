@@ -30,8 +30,9 @@ export async function AttendanceReportCard({
         </h2>
         <a
           href={`/owner/reports/attendance.csv?from=${period.from}&to=${period.to}`}
-          // Server-rendered download link — no client JS.
-          className="rounded-ctl px-3 py-1.5 text-[12px] font-medium bg-deck text-ink-2 flex items-center gap-1.5 hover:bg-line"
+          // Server-rendered download link — no client JS. min-h-44px:
+          // the old py-1.5 link was ~30px tall. [automatable]
+          className="rounded-ctl px-3 min-h-[44px] inline-flex items-center text-[12px] font-medium bg-deck text-ink-2 gap-1.5 hover:bg-line"
         >
           <Download size={12} /> CSV
         </a>

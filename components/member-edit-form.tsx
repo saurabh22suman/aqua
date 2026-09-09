@@ -56,14 +56,14 @@ export function MemberEditForm({
         value={fullName}
         onChange={(e) => setFullName(e.target.value)}
         placeholder="Full name"
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
       />
       <input
         type="tel"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
         placeholder="Phone (optional)"
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
       />
       <div>
         <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
@@ -71,13 +71,13 @@ export function MemberEditForm({
           type="date"
           value={dateOfBirth}
           onChange={(e) => setDateOfBirth(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         />
       </div>
       <select
         value={gender}
         onChange={(e) => setGender(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
       >
         <option value="">Gender (optional)</option>
         <option value="male">Male</option>
@@ -87,7 +87,7 @@ export function MemberEditForm({
       <select
         value={locationId}
         onChange={(e) => setLocationId(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
       >
         {locations.map((l) => (
           <option key={l.id} value={l.id}>
@@ -100,7 +100,7 @@ export function MemberEditForm({
         onChange={(e) => setMedicalNotes(e.target.value)}
         placeholder="Medical notes (optional)"
         rows={2}
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[14px]"
+        className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
       />
 
       {error ? <p className="text-[13px] text-ink-3">{error}</p> : null}

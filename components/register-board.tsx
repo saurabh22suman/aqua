@@ -109,7 +109,7 @@ export function RegisterBoard({
                 <p className="text-[14px] font-medium truncate flex items-center gap-1.5">
                   {r.name}
                   {r.isTrial ? (
-                    <span className="rounded-pill bg-warn-soft px-1.5 py-0.5 text-[10px] font-medium text-warn flex-none">
+                    <span className="rounded-pill bg-warn-soft px-1.5 py-0.5 text-[11px] font-medium text-warn flex-none">
                       Trial
                     </span>
                   ) : null}
