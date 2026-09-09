@@ -70,10 +70,10 @@ const ALLOWED_READERS = new Set<string[]>([
   ["db", "platform-tenants.ts"],
   ["db", "schema", "tenants.ts"],
   ["db", "schema", "index.ts"],
-  // The operator display surface: /platform/tenants lists and
+  // The operator display surface: /ops/tenants lists and
   // shows the applied preset as a display field. No branching.
-  ["app", "(platform)", "platform", "tenants", "page.tsx"],
-  ["app", "(platform)", "platform", "tenants", "[tenantId]", "page.tsx"],
+  ["app", "(platform)", "ops", "tenants", "page.tsx"],
+  ["app", "(platform)", "ops", "tenants", "[tenantId]", "page.tsx"],
   // The migration ledger and the seed source. The seed file
   // defines the catalogue but doesn't read tenant preset state
   // at runtime. Migrations create tables; their reads are
@@ -84,11 +84,11 @@ const ALLOWED_READERS = new Set<string[]>([
   // display. The detail form needs presetKey to disambiguate
   // "this tenant already has preset X applied" from "no preset
   // yet" — that's a display signal, not a runtime branch.
-  ["app", "(platform)", "platform", "presets", "page.tsx"],
-  ["app", "(platform)", "platform", "presets", "preset-catalogue.tsx"],
-  ["app", "(platform)", "platform", "presets", "preset-card.tsx"],
-  ["app", "(platform)", "platform", "presets", "[key]", "page.tsx"],
-  ["app", "(platform)", "platform", "presets", "[key]", "preset-detail-form.tsx"],
+  ["app", "(platform)", "ops", "presets", "page.tsx"],
+  ["app", "(platform)", "ops", "presets", "preset-catalogue.tsx"],
+  ["app", "(platform)", "ops", "presets", "preset-card.tsx"],
+  ["app", "(platform)", "ops", "presets", "[key]", "page.tsx"],
+  ["app", "(platform)", "ops", "presets", "[key]", "preset-detail-form.tsx"],
   // Tests read preset key state freely; the rule is about
   // production-runtime code.
   ["tests"],

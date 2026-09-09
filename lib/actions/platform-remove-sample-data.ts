@@ -51,7 +51,7 @@ export async function removeSampleDataAction(
     actorId: status.userId as never,
   });
   if (result.kind === "ok") {
-    revalidatePath(`/platform/tenants/${surface.data.tenantId}`);
+    revalidatePath(`/ops/tenants/${surface.data.tenantId}`);
   }
   return result;
 }

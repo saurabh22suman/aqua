@@ -56,10 +56,23 @@ async function main() {
   // This suite specifically exercises offline queueing/sync — off by
   // default everywhere else (lib/feature-flags.ts, issue #4), but this is
   // the one process that must turn it on to test the thing it's testing.
-  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
+  //
+  // BETTER_AUTH_URL is set explicitly to the dev server's port
+  // (3215 here; e2e-login uses 3211, e2e-platform-form-leak uses ops.localhost:3220).
+  // Without it, better-auth falls back to inferring from the request —
+  // which works on the happy path but rejects the very first
+  // verify call with "Invalid origin" on this system's IPv6
+  // resolution of localhost (::1). The fallback path is
+  // environment-sensitive; an explicit BETTER_AUTH_URL is the
+  // shape that survives both IPv4 and IPv6 dev environments.
+  const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: "ignore",
     detached: true,
-    env: { ...process.env, OFFLINE_SYNC_ENABLED: "true" },
+    env: {
+      ...process.env,
+      OFFLINE_SYNC_ENABLED: "true",
+      BETTER_AUTH_URL: BASE,
+    },
   });
 
   let fixture: OfflineFixture | undefined;

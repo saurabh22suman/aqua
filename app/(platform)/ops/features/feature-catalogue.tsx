@@ -153,7 +153,7 @@ function FeatureEditRow({
   const [status, setStatus] = useState<UpdateFeatureFormInput["status"]>(initialStatus);
 
   // On success, close the edit row. The action calls
-  // revalidatePath("/platform/features") so the SSR data updates
+  // revalidatePath("/ops/features") so the SSR data updates
   // on the next render. The render below short-circuits before
   // rendering the form, avoiding stale-state echo.
   if (state?.kind === "ok") {

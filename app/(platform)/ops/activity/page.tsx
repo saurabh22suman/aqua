@@ -24,7 +24,7 @@ export default async function PlatformActivityPage({
   }>;
 }) {
   const auth = await platformAuthStatusAction();
-  if (auth.kind !== "authenticated") redirect("/platform/login");
+  if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const params = await searchParams;
 

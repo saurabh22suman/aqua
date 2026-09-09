@@ -141,7 +141,7 @@ describe("loginPlatformAction", () => {
     expect(result.message).toMatch(/email and password/);
   });
 
-  it("redirects to /platform/verify on a correct password and writes the half-auth cookie", async () => {
+  it("redirects to /ops/verify on a correct password and writes the half-auth cookie", async () => {
     const { password, email } = await createEnrolledUser("login-ok");
     let captured: string | null = null;
     try {
@@ -150,7 +150,7 @@ describe("loginPlatformAction", () => {
       if (err instanceof RedirectSignal) captured = err.path;
       else throw err;
     }
-    expect(captured).toBe("/platform/verify");
+    expect(captured).toBe("/ops/verify");
     const cookie = await readPlatformSessionToken();
     expect(cookie).toMatch(/^[0-9a-f]{64}$/);
     await clearPlatformSessionCookie();

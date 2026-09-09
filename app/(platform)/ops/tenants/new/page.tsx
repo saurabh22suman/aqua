@@ -3,15 +3,15 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listActivePlans } from "@/db/platform-tenant-create";
 import { NewTenantForm } from "./new-tenant-form";
 
-// Phase 1.5 — create-tenant page. Sits under /platform/tenants/new;
-// the listing page at /platform/tenants already links here with a
+// Phase 1.5 — create-tenant page. Sits under /ops/tenants/new;
+// the listing page at /ops/tenants already links here with a
 // verb CTA. The page is server-rendered: auth-gate, fetch the active
 // plan list for the <select>, hand off to a client form for the
 // submit-and-redirect flow.
 
 export default async function NewTenantPage() {
   const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") redirect("/platform/login");
+  if (status.kind !== "authenticated") redirect("/ops/login");
 
   const plans = await listActivePlans();
   const defaultPlan = plans.find((p) => p.isDefault) ?? plans[0];

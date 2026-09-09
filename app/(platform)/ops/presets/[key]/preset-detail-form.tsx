@@ -8,7 +8,7 @@ import {
   type ApplyPresetActionResult,
 } from "@/lib/actions/platform-preset-apply";
 
-// Phase 2.2b — applyPreset client island. Lives on /platform/presets/[key].
+// Phase 2.2b — applyPreset client island. Lives on /ops/presets/[key].
 //
 // H1 — the form uses <form action={applyPresetAction}> rather than
 // onSubmit. Pre-hydration submit goes via POST to the action
@@ -77,7 +77,7 @@ export function PresetDetailForm({
             <p className="mt-1 text-[13px] text-ink-3">
               No tenants yet.{" "}
               <Link
-                href="/platform/tenants/new"
+                href="/ops/tenants/new"
                 className="text-[var(--accent)] underline underline-offset-2"
               >
                 Create one
@@ -136,7 +136,7 @@ export function PresetDetailForm({
             : `Apply ${presetName} to this tenant`}
         </button>
         <Link
-          href="/platform/presets"
+          href="/ops/presets"
           className="rounded-pill px-4 py-2.5 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
         >
           Cancel

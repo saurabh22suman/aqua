@@ -50,7 +50,7 @@ export function TenantFeatureToggles({
         <p className="text-[14px] font-medium text-ink">No features on this plan</p>
         <p className="mt-2 text-[13px] text-ink-3">
           The tenant&apos;s plan has no GA features attached. The
-          catalogue is editable at /platform/features; per-tenant
+          catalogue is editable at /ops/features; per-tenant
           overrides land only on features the plan already carries
           (or that the operator first enables via the catalogue).
         </p>

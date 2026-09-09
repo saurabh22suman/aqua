@@ -82,8 +82,8 @@ compiles each route on its first visit, not at server start — the
 platform login → verify → landing sequence measured ~2.5s of pure
 compile time stacked across three routes on a cold server. Do one
 throwaway login (wrong code is fine, or a real one) right after
-starting the dev server so `/platform/login`, `/platform/verify`,
-and `/platform` are already compiled. After that, the flow is fast
+starting the dev server so `ops.<base>/ops/login`, `ops.<base>/ops/verify`,
+and `ops.<base>/ops` are already compiled. After that, the flow is fast
 for the rest of the session.
 
 ## What works
@@ -119,7 +119,7 @@ for the rest of the session.
     is intentionally unsign-in-able until the parent app lands.
   - **Platform operator** (`ops@aqua.local` / password printed by
     `pnpm tsx scripts/seed-platform-user.ts` / TOTP on the same
-    line) → `/platform` (tenants, presets, features)
+    line) → `ops.<base>/ops` (tenants, presets, features)
 
 #### Cross-tenant memberships worth showing off
 
@@ -289,7 +289,7 @@ tab.** It deletes and re-provisions the `platform_users` row for
 that email (re-runnable by design); `platform_sessions.user_id`
 cascades on delete, so every session belonging to that user
 disappears immediately. The next request from that tab gets
-redirected to `/platform/login`. `demo:reset` chains this script,
+redirected to `/ops/login`. `demo:reset` chains this script,
 so the same applies there. Close or refresh the platform tab
 after re-seeding.
 
@@ -323,12 +323,16 @@ dev mode.
 
 ### 1. Platform operator — 2 minutes
 
-Log in at `/platform/login` with the credentials printed by
-`scripts/seed-platform-user.ts`.
+Log in at `ops.<base>/ops/login` with the credentials printed by
+`scripts/seed-platform-user.ts`. The platform lives on its own
+subdomain (`ops.<base>`), separate from the tenant surface — this
+is a real security boundary (TOTP auth, separate `platform_session`
+cookie) and the routing layer refuses tenant paths on the ops host
+(via middleware.ts; pinned by `pnpm e2e:host-boundary`).
 
-- **`/platform`** — the home page shows "Tenants" and "Feature
+- **`ops.<base>/ops`** — the home page shows "Tenants" and "Feature
   catalogue" cards. Click "Tenants".
-- **`/platform/tenants`** — the list. **Kicks Football Academy
+- **`/ops/tenants`** — the list. **Kicks Football Academy
   (Active) leads the list** (status-then-created_at-desc; both
   active tenants, Kicks was created after Aqua Worli in the seed
   so the desc sort puts Kicks first). **Aqua Worli (Active) is the
@@ -336,18 +340,18 @@ Log in at `/platform/login` with the credentials printed by
   the swimming-club deep dive. Orphan Demo (Churned) is at the
   bottom; click it once to show the "no transitions available"
   lifecycle state.
-- **Tenant detail (`/platform/tenants/<aqua-worli-id>`)** — shows
+- **Tenant detail (`/ops/tenants/<aqua-worli-id>`)** — shows
   Settings (timezone Asia/Kolkata, plan Standard, preset
   swimming v1), Feature state (all enabled by plan baseline),
   Status section with the lifecycle buttons (Suspend / Mark
   churned). The "Owner" section has a phone field with "Invite
   owner" button.
-- **`/platform/presets`** — the catalogue shows swimming and
+- **`/ops/presets`** — the catalogue shows swimming and
   multi-sport. Click into swimming.
-- **Preset detail (`/platform/presets/swimming`)** — the preview
+- **Preset detail (`/ops/presets/swimming`)** — the preview
   pane shows counts and breakdown; the "Apply to a tenant" form
   is the picker with demo-academy pre-selected.
-- **`/platform/features`** — the feature catalogue with editable
+- **`/ops/features`** — the feature catalogue with editable
   rows. Skip the editing flow unless the operator asks.
 
 ### 2. Owner — 5 minutes
@@ -505,7 +509,7 @@ hook) will fail otherwise — by design.
   plan_id is the standard seeded plan with no plan_shapes
   attached.
 - **Invite flow** — confirmation inline. The "Owner" section on
-  `/platform/tenants/<id>` accepts a phone number and calls
+  `/ops/tenants/<id>` accepts a phone number and calls
   `inviteOwnerAction`; on success the form shows "Owner invited
   — user created, membership pending phone confirmation" inline.
   No email/SMS is actually sent; the operator verifies the
@@ -553,4 +557,4 @@ hook) will fail otherwise — by design.
   register, members).
 - `app/(reception)/reception/...` — receptionist surface
   (today, add member, enquiries + detail).
-- `app/(platform)/platform/...` — operator surface.
+- `app/(platform)/ops/...` — operator surface.

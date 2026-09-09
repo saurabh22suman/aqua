@@ -1676,7 +1676,7 @@ app/
     members/, members/[memberId]/, members/new/, enquiries/, enquiries/[enquiryId]/
   (parent)/parent/                    — parent surfaces (legacy; superseded by /p/[token])
     page.tsx
-  (platform)/platform/                — control plane — separate auth, mandatory 2FA
+  (platform)/ops/                — control plane — separate auth, mandatory 2FA
     page.tsx                          — activity feed
     login/, verify/, features/, presets/, presets/[key]/,
     tenants/, tenants/[tenantId]/, tenants/new/, activity/

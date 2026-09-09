@@ -53,9 +53,9 @@ function PlatformNav({
   return (
     <ul className="space-y-1">
       <PlatformNavItem href="/platform" label="Overview" />
-      <PlatformNavItem href="/platform/tenants" label="Tenants" />
-      <PlatformNavItem href="/platform/features" label="Feature catalogue" />
-      <PlatformNavItem href="/platform/presets" label="Presets" />
+      <PlatformNavItem href="/ops/tenants" label="Tenants" />
+      <PlatformNavItem href="/ops/features" label="Feature catalogue" />
+      <PlatformNavItem href="/ops/presets" label="Presets" />
     </ul>
   );
 }
@@ -113,5 +113,5 @@ async function signOutFormAction() {
   "use server";
   const { logoutPlatformAction } = await import("@/lib/actions/platform-auth");
   await logoutPlatformAction();
-  redirect("/platform/login");
+  redirect("/ops/login");
 }

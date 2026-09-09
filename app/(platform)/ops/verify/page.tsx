@@ -5,7 +5,7 @@ import { PlatformVerifyForm } from "./verify-form";
 export default async function PlatformVerifyPage() {
   const status = await platformAuthStatusAction();
   if (status.kind === "not_found" || status.kind === "expired") {
-    redirect("/platform/login");
+    redirect("/ops/login");
   }
   if (status.kind === "authenticated") redirect("/platform");
   return (

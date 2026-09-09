@@ -60,7 +60,7 @@ export default async function PlatformTenantsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") redirect("/platform/login");
+  if (status.kind !== "authenticated") redirect("/ops/login");
 
   const params = await searchParams;
   const result = await listTenants({
@@ -94,7 +94,7 @@ export default async function PlatformTenantsPage({
           </p>
         </div>
         <Link
-          href="/platform/tenants/new"
+          href="/ops/tenants/new"
           className="rounded-pill py-2.5 px-5 text-[14px] font-semibold text-white bg-[var(--accent)] transition-colors duration-150"
         >
           New tenant
@@ -138,7 +138,7 @@ export default async function PlatformTenantsPage({
         </button>
         {hasFilters ? (
           <Link
-            href="/platform/tenants"
+            href="/ops/tenants"
             className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
           >
             Clear
@@ -156,7 +156,7 @@ export default async function PlatformTenantsPage({
               ? "Try clearing the filter, or "
               : "Create the first tenant from the control plane. "}
             <Link
-              href="/platform/tenants/new"
+              href="/ops/tenants/new"
               className="text-[var(--accent)] underline underline-offset-2"
             >
               add a tenant
@@ -185,7 +185,7 @@ export default async function PlatformTenantsPage({
                 >
                   <td className="px-4 py-3">
                     <Link
-                      href={`/platform/tenants/${row.id}`}
+                      href={`/ops/tenants/${row.id}`}
                       className="font-medium text-ink hover:underline underline-offset-2"
                     >
                       {row.name}

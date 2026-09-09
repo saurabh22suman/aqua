@@ -4,14 +4,14 @@ import { listFeatures } from "@/db/platform-features";
 import { FeatureCatalogue } from "./feature-catalogue";
 
 // Phase 1.7 — feature catalogue screen. The platform sidebar has
-// linked `/platform/features` since 1.2; this is the page that
+// linked `/ops/features` since 1.2; this is the page that
 // lives there. Server-rendered: auth-gated, fetches the catalogue,
 // hands the snapshot to a small client island that handles per-
 // row edit/save.
 
 export default async function FeaturesPage() {
   const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") redirect("/platform/login");
+  if (status.kind !== "authenticated") redirect("/ops/login");
 
   const features = await listFeatures();
   return (
