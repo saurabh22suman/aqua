@@ -508,13 +508,18 @@ hook) will fail otherwise — by design.
   activation, no amount on the seeded plan. demo-academy's
   plan_id is the standard seeded plan with no plan_shapes
   attached.
-- **Invite flow** — confirmation inline. The "Owner" section on
-  `/ops/tenants/<id>` accepts a phone number and calls
-  `inviteOwnerAction`; on success the form shows "Owner invited
-  — user created, membership pending phone confirmation" inline.
-  No email/SMS is actually sent; the operator verifies the
-  invitee by reading the phone number back, and the invited
-  owner accepts by completing a phone-OTP login.
+- **Invite flow** — confirmation inline, no delivery channel.
+  The "Owner" section on `/ops/tenants/<id>` accepts a phone
+  number and calls `inviteOwnerAction`; on success the form shows
+  "Owner membership created." Nothing is sent anywhere — mint a
+  login link from the "Owner login link" panel and share it with
+  the owner yourself (call, email, WhatsApp-forward by hand); the
+  invited owner accepts by opening the link, which flips them to
+  active on first use. Same for staff: the invitations roster has
+  "Get login link" (invited) / "New login link" (active) per row —
+  copy it, forward it, never claim a reminder was sent. Phone-OTP
+  login still works wherever a code can be seen (dev-code hint in
+  the demo); it has no SMS behind it.
 - **Sample-data remove** — hidden on a tenant with no preset
   applied (demo-academy has the `swimming` preset applied, so
   this section IS visible; kicks-academy has `multi-sport`
