@@ -52,10 +52,10 @@ const ROW_KEYS: ReadonlyArray<{
 // Per-locale sample sentence so the preview rendering shows
 // the same language the user is editing. Defaults to English
 // placeholders — translations land in the data-only R.20 pass.
-const SAMPLE_SENTENCES: Record<Locale, { singular: (n: string) => string; plural: (n: string) => string }> = {
+export const SAMPLE_SENTENCES: Record<Locale, { singular: (n: string) => string; plural: (n: string) => string }> = {
   en: {
     singular: (n: string) => `1 ${n} marked present`,
-    plural: (n: string) => `12 ${n}s marked present`,
+    plural: (n: string) => `12 ${n} marked present`,
   },
   hi: {
     singular: (n: string) => `1 ${n} उपस्थित`,
