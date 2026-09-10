@@ -16,8 +16,17 @@ export function RegisterBoard({
   const initialStatuses = Object.fromEntries(
     rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
   );
-  const { marks, mark, markedCount, pending, online, syncedLabel, hasActiveFailure, saving } =
-    useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled);
+  const {
+    marks,
+    mark,
+    markedCount,
+    pending,
+    online,
+    syncedLabel,
+    hasActiveFailure,
+    saving,
+    retrySync,
+  } = useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled);
 
   return (
     <div>
@@ -44,6 +53,53 @@ export function RegisterBoard({
           built) the owner/parent screens reuse. See DESIGN.md §"the lane
           strip". */}
       <div className="sticky top-0 z-10 -mx-5 px-5 pt-3 pb-3 bg-deck/95 backdrop-blur-sm">
+        {/* Sync-failure banner (online + hasActiveFailure): the mark
+            that didn't land is the single most urgent operational
+            signal on this screen. Distinct colour, distinct copy,
+            tappable to retry. Priority 1: a failure that the coach
+            can act on outranks a "saved locally" message that they
+            can't. DESIGN.md §1.1: `late` = error / overdue state, the
+            correct token here. */}
+        {online && hasActiveFailure ? (
+          <button
+            type="button"
+            onClick={() => void retrySync()}
+            data-testid="sync-failure-banner"
+            className="mb-2 block w-full rounded-card border border-late bg-late-soft px-4 py-3 text-left"
+          >
+            <p className="text-[13px] font-semibold text-late">
+              Couldn&apos;t sync {pending === 1 ? "1 mark" : `${pending} marks`}.
+            </p>
+            <p className="mt-0.5 text-[12px] text-late">Tap to retry.</p>
+          </button>
+        ) : null}
+
+        {/* Offline + pending banner: the queue has durable writes
+            that haven't gone through. The lane strip's "offline —
+            saved on device" line tells the coach what's true; this
+            banner is the count. Priority 2: only shown when offline
+            AND pending > 0 (an online + pending state is "syncing
+            N…", already conveyed by the lane strip). DESIGN.md §1.1:
+            `warn` = needs attention, the correct token for "your
+            data is fine, the network isn't". */}
+        {!online && pending > 0 ? (
+          <div
+            data-testid="pending-sync-banner"
+            className="mb-2 rounded-card border border-warn bg-warn-soft px-4 py-3"
+          >
+            <p className="text-[13px] font-semibold text-warn flex items-center gap-2">
+              <span
+                aria-hidden
+                className="inline-block h-1.5 w-1.5 rounded-full bg-warn motion-reduce:animate-none"
+              />
+              {pending === 1 ? "1 mark" : `${pending} marks`} saved locally.
+            </p>
+            <p className="mt-0.5 text-[12px] text-warn">
+              Will sync when you&apos;re online.
+            </p>
+          </div>
+        ) : null}
+
         <div className="rounded-card bg-water-soft px-4 py-3">
           <div className="flex items-baseline justify-between">
             <p className="text-[13px] text-ink-2">

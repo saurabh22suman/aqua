@@ -3,6 +3,16 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { installFakeIndexedDB } from "./fake-indexeddb";
 
+// Pinned in this file too (tests/offline/use-offline-register-disabled.test.tsx
+// has its own copy) so the retrySync suite can stub navigator.onLine without
+// taking a dependency on that sibling's exports.
+function stubOnline(value: boolean) {
+  Object.defineProperty(window.navigator, "onLine", {
+    configurable: true,
+    value,
+  });
+}
+
 // mark()'s flush() path calls the real server action on enqueue — mocked
 // so this test exercises only the enqueue-durability mechanism (issue
 // #4), not sync/network behaviour, which is a separate concern.
@@ -161,6 +171,78 @@ describe("useOfflineRegister — observing settlement without awaiting mark() it
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
     });
+    unmount();
+  });
+});
+
+// retrySync — the manual retry trigger wired to the red sync-failure
+// banner in components/register-board.tsx. flush() (which retrySync
+// delegates to) already runs on a 4s timer and on the `online` event,
+// so retrySync must NOT be a different code path: same gate
+// (`runningRef || !navigator.onLine` → no-op), same effect (drain the
+// queue). This test pins both halves of that contract.
+describe("useOfflineRegister — retrySync", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("exposes retrySync on its return shape", async () => {
+    installFakeIndexedDB();
+    stubOnline(true);
+
+    const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
+    const { result, unmount } = renderHook(() =>
+      useOfflineRegister("session-1", [], {}, true),
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(typeof result.current.retrySync).toBe("function");
+    unmount();
+  });
+
+  it("returns a settled promise when called online (does not throw)", async () => {
+    installFakeIndexedDB();
+    stubOnline(true);
+
+    const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
+    const { result, unmount } = renderHook(() =>
+      useOfflineRegister("session-1", [], {}, true),
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    await act(async () => {
+      // Must not reject: the click handler discards this promise, and
+      // a thrown retry would surface as an unhandled rejection.
+      await result.current.retrySync();
+    });
+
+    unmount();
+  });
+
+  it("is a no-op when navigator.onLine is false (does not throw)", async () => {
+    installFakeIndexedDB();
+    stubOnline(false);
+
+    const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
+    const { result, unmount } = renderHook(() =>
+      useOfflineRegister("session-1", [], {}, true),
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    await act(async () => {
+      // Offline → flush()'s internal guard short-circuits. retrySync
+      // must surface that as a settled promise, not throw.
+      await result.current.retrySync();
+    });
+
+    expect(result.current.pending).toBe(0);
     unmount();
   });
 });
