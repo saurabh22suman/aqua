@@ -274,6 +274,16 @@ export function useOfflineRegister(
     });
   }
 
+  // Manual retry trigger for the queue — wired to the red sync-failure
+  // banner in components/register-board.tsx. Same effect as the timer-
+  // driven flush, but caller-initiated. flush()'s own guards make a
+  // retry while offline (or while a previous flush is in flight) a
+  // harmless no-op; we don't re-check navigator.onLine here because
+  // flush() is the single source of truth for that gate.
+  function retrySync(): Promise<void> {
+    return flush.current();
+  }
+
   const markedCount = useMemo(
     () => Object.values(marks).filter(Boolean).length,
     [marks],
@@ -303,5 +313,6 @@ export function useOfflineRegister(
     hasActiveFailure,
     saving,
     waitForPendingWrites,
+    retrySync,
   };
 }
