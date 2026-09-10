@@ -1,15 +1,25 @@
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
-import { sessionExists } from "@/lib/auth/context";
+import { notFound, redirect } from "next/navigation";
+import { requireDefaultCtx } from "@/lib/auth/context";
+import { canAccessSurface, SURFACE_PARENT } from "@/lib/auth/surface-access";
 
-// No bottom nav here on purpose: S5 (the real parent surface — signed
-// single-purpose tokens, zero-JS, no phone/OTP session at all) is RED,
-// proposed but not approved. This layout exists only to close the gap
-// this route group had relative to (coach)/(owner): unlike those, it
-// shipped with no session gate at all. Do not add nav or UI here before
-// S5 lands — that would invent the design DESIGN.md and the plan haven't
-// settled yet.
+// See app/(owner)/layout.tsx for the role-gating rationale. The
+// /parent route group is a stub today (S5 -- the real parent
+// surface is /p/[token], outside this gate). Workers also land
+// here as a placeholder home until a worker surface exists
+// (scope §195). The role-to-surface map in lib/auth/surface-access
+// keeps both behind the same gate; the page inside (still an
+// "h1 Parent" stub) renders for either role, and the matrix
+// test pins this.
 export default async function ParentLayout({ children }: { children: ReactNode }) {
-  if (!(await sessionExists())) redirect("/login");
+  let ctx;
+  try {
+    ctx = await requireDefaultCtx();
+  } catch {
+    redirect("/login");
+  }
+  if (!canAccessSurface(ctx.roleKey, SURFACE_PARENT)) {
+    notFound();
+  }
   return <div className="min-h-dvh">{children}</div>;
 }
