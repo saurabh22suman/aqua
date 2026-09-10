@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   listUpcomingSessions,
   type UpcomingSessionRow,
@@ -28,6 +28,6 @@ export async function listUpcomingSessionsAction(
   const parsed = listSchema.safeParse(raw);
   if (!parsed.success) return [];
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "attendance.read");
   return listUpcomingSessions(ctx, parsed.data.fromDate, parsed.data.toDate);
 }

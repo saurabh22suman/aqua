@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertEnquiriesAccess } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   addFollowUpSchema,
   bookTrialSchema,
@@ -39,21 +39,21 @@ export async function createEnquiryAction(raw: {
 }): Promise<EnquiryRow> {
   const input = createEnquirySchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.write");
   return createEnquiry(ctx, input);
 }
 
 export async function listEnquiriesAction(raw: { stage?: string }): Promise<EnquiryRow[]> {
   const input = listEnquiriesFilterSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.read");
   return listEnquiries(ctx, input);
 }
 
 export async function getEnquiryDetailAction(rawEnquiryId: string): Promise<EnquiryDetail | null> {
   const enquiryId = enquiryIdSchema.parse(rawEnquiryId);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.read");
   return getEnquiryDetail(ctx, enquiryId);
 }
 
@@ -63,7 +63,7 @@ export async function transitionEnquiryStageAction(raw: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const input = transitionEnquiryStageSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.write");
   return transitionEnquiryStage(ctx, input);
 }
 
@@ -74,7 +74,7 @@ export async function addFollowUpAction(raw: {
 }): Promise<{ id: string }> {
   const input = addFollowUpSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.write");
   return addFollowUp(ctx, { ...input, dueAt: new Date(input.dueAt) });
 }
 
@@ -83,13 +83,13 @@ export async function completeFollowUpAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const followUpId = completeFollowUpSchema.parse(rawFollowUpId);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.write");
   return completeFollowUp(ctx, followUpId);
 }
 
 export async function listOverdueFollowUpsAction(): Promise<OverdueFollowUp[]> {
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.read");
   return listOverdueFollowUps(ctx);
 }
 
@@ -108,7 +108,7 @@ export async function bookTrialAction(raw: {
 }): Promise<{ ok: true; memberId: string } | { ok: false; error: string }> {
   const input = bookTrialSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.write");
   return bookTrial(ctx, input);
 }
 
@@ -126,12 +126,12 @@ export async function convertEnquiryAction(raw: {
 }): Promise<{ ok: true; memberId: string } | { ok: false; error: string }> {
   const input = convertEnquirySchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.write");
   return convertEnquiry(ctx, input);
 }
 
 export async function conversionRateBySourceAction(): Promise<SourceConversion[]> {
   const ctx = await requireDefaultCtx();
-  assertEnquiriesAccess(ctx);
+  requirePermission(ctx, "enquiries.read");
   return conversionRateBySource(ctx);
 }

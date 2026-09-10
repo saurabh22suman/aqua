@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { asTenantId } from "@/lib/ids";
 
 // Phase 4 (reports) — small auxiliary action that resolves a
@@ -16,7 +16,7 @@ import { asTenantId } from "@/lib/ids";
 
 export async function getTenantTimezoneAction(): Promise<string> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return withTenant(ctx.tenantId, async (tx) => {
     const [row] = await tx
       .select({ timezone: tenants.timezone })

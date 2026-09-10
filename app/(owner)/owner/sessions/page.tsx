@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, UserCog } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
 import { listCoaches } from "@/lib/services/programs";
 import { listBatches } from "@/lib/services/programs";
@@ -25,7 +25,7 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 
 export default async function SessionsPage() {
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "attendance.read");
 
   const today = new Date();
   const twoWeeksOut = new Date();

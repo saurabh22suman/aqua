@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff, assertMembersWrite } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { enrolMember } from "@/lib/services/register";
 import { listMemberEnrolments, type MemberEnrolment } from "@/lib/services/enrolment";
 
@@ -18,7 +18,7 @@ export async function listMemberEnrolmentsAction(
 ): Promise<MemberEnrolment[]> {
   const memberId = memberIdSchema.parse(rawMemberId);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return listMemberEnrolments(ctx, memberId);
 }
 
@@ -35,6 +35,6 @@ export async function enrolMemberAction(raw: {
 }): Promise<EnrolMemberResult> {
   const input = enrolMemberInput.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertMembersWrite(ctx);
+  requirePermission(ctx, "members.write");
   return enrolMember({ tenantId: ctx.tenantId }, input);
 }

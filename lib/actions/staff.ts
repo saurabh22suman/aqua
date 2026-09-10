@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   listStaff,
   createStaff,
@@ -26,7 +26,7 @@ export async function listStaffAction(raw: {
 }): Promise<StaffRow[]> {
   const input = listInputSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.read");
   return listStaff({ tenantId: ctx.tenantId, userId: ctx.userId }, input);
 }
 
@@ -62,7 +62,7 @@ export async function createStaffAction(
     };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.write");
   const result = await createStaff(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data.existingPersonId

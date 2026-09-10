@@ -1,10 +1,22 @@
 import type { ReactNode } from "react";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
-import { sessionExists } from "@/lib/auth/context";
+import { requireDefaultCtx } from "@/lib/auth/context";
+import { canAccessSurface, SURFACE_COACH } from "@/lib/auth/surface-access";
 
+// See app/(owner)/layout.tsx for the role-gating rationale. Coach
+// surface today: owner, admin (no — they have /owner), coach only.
+// `canAccessSurface` is the single role-to-surface resolver.
 export default async function CoachLayout({ children }: { children: ReactNode }) {
-  if (!(await sessionExists())) redirect("/login");
+  let ctx;
+  try {
+    ctx = await requireDefaultCtx();
+  } catch {
+    redirect("/login");
+  }
+  if (!canAccessSurface(ctx.roleKey, SURFACE_COACH)) {
+    notFound();
+  }
   return (
     <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
       {children}
