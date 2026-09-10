@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./server";
 import { isSessionExpiredForRole } from "./permissions";
+import { resolvePermissionContext } from "./permission";
 import type { UserId, TenantId } from "@/lib/ids";
 import {
   resolveTenantAccessBySlug,
@@ -18,6 +19,12 @@ export type Ctx = {
   slug: string;
   allLocations: boolean;
   locationIds: string[];
+  // Phase 1.5 — role grants and tenant feature entitlements, both
+  // populated once per request. `requirePermission(ctx, "x.y")` is
+  // the single resolution; `hasPermission` / `hasFeature` are the
+  // cheap reads used by UI gating. See lib/auth/permission.ts.
+  permissions: Set<string>;
+  features: Set<string>;
 };
 
 // M3: every lib/services/*.ts file independently redeclared this as
@@ -43,9 +50,13 @@ export async function resolveCtxFor(
   const access = await resolveTenantAccessBySlug(betterAuthUserId, slug);
   if (!access) throw new NotFoundError();
 
+  const { permissions, features } = await resolvePermissionContext(
+    access.tenantId,
+    access.roleId,
+  );
   const locationIds = await resolveLocationIds(access.tenantId, access.membershipId, access.allLocations);
 
-  return { ...access, slug, locationIds };
+  return { ...access, slug, locationIds, permissions, features };
 }
 
 export const requireCtx = cache(async (slug: string): Promise<Ctx> => {
@@ -82,6 +93,10 @@ export async function requireDefaultCtx(): Promise<Ctx> {
     throw new NotFoundError();
   }
 
+  const { permissions, features } = await resolvePermissionContext(
+    membership.tenantId,
+    membership.roleId,
+  );
   const locationIds = await resolveLocationIds(
     membership.tenantId,
     membership.membershipId,
@@ -107,6 +122,8 @@ export async function requireDefaultCtx(): Promise<Ctx> {
     slug: "",
     allLocations: membership.allLocations,
     locationIds,
+    permissions,
+    features,
   };
 }
 

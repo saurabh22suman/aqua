@@ -32,6 +32,13 @@ function ctxWith(roleKey: string): Ctx {
     slug: "",
     allLocations: true,
     locationIds: [],
+    // Sub-PR 1 of role-gating: every Ctx now carries its role's
+    // permission set and the tenant's feature set. Tests that
+    // hand-fabricate Ctx populate empty sets; matrix assertions
+    // stay honest because none of the four guards below inspect
+    // permissions or features.
+    permissions: new Set<string>(),
+    features: new Set<string>(),
   };
 }
 
