@@ -13,6 +13,7 @@ import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { InlineEditField } from "@/components/member-detail/inline-edit-field";
 
 export default async function MemberDetailPage({
   params,
@@ -52,7 +53,16 @@ export default async function MemberDetailPage({
 
       <div className="mt-6 flex items-start justify-between">
         <div>
-          <h1 className="font-display text-[19px] font-semibold">{member.fullName}</h1>
+          <h1 className="font-display text-[19px] font-semibold">
+            <InlineEditField
+              value={member.fullName}
+              field="fullName"
+              memberId={member.memberId}
+              type="text"
+              snapshot={member}
+              valueClassName="font-display text-[19px] font-semibold text-ink"
+            />
+          </h1>
           <p className="mt-0.5 text-[12.5px] text-ink-3">
             {member.memberCode} · {member.locationName}
             {member.isMinor ? " · minor" : ""}
@@ -90,22 +100,60 @@ export default async function MemberDetailPage({
       <dl className="mt-4 rounded-card border border-line bg-paper p-3.5 space-y-2 text-[13px]">
         <div className="flex justify-between">
           <dt className="text-ink-3">Phone</dt>
-          <dd>{member.phone ?? "—"}</dd>
+          <dd>
+            <InlineEditField
+              value={member.phone ?? ""}
+              field="phone"
+              memberId={member.memberId}
+              type="text"
+              snapshot={member}
+              placeholder="Add phone"
+            />
+          </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-ink-3">Date of birth</dt>
-          <dd>{member.dateOfBirth ?? "—"}</dd>
+          <dd>
+            <InlineEditField
+              value={member.dateOfBirth ?? ""}
+              field="dateOfBirth"
+              memberId={member.memberId}
+              type="date"
+              snapshot={member}
+            />
+          </dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-ink-3">Gender</dt>
-          <dd className="capitalize">{member.gender ?? "—"}</dd>
+          <dd>
+            <InlineEditField
+              value={member.gender ?? ""}
+              field="gender"
+              memberId={member.memberId}
+              type="select"
+              options={[
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
+                { value: "other", label: "Other" },
+              ]}
+              snapshot={member}
+              valueClassName="capitalize"
+            />
+          </dd>
         </div>
-        {member.medicalNotes ? (
-          <div>
-            <dt className="text-ink-3">Medical notes</dt>
-            <dd className="mt-0.5">{member.medicalNotes}</dd>
-          </div>
-        ) : null}
+        <div>
+          <dt className="text-ink-3">Medical notes</dt>
+          <dd className="mt-0.5">
+            <InlineEditField
+              value={member.medicalNotes ?? ""}
+              field="medicalNotes"
+              memberId={member.memberId}
+              type="textarea"
+              snapshot={member}
+              placeholder="Add medical notes"
+            />
+          </dd>
+        </div>
       </dl>
 
       {member.isMinor ? (
