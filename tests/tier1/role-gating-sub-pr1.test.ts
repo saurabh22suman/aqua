@@ -19,7 +19,7 @@ import type { Ctx } from "@/lib/auth/context";
 // without going through the database. The matrix test (sub-PR 3)
 // wires both layers end-to-end with seeded tenants.
 
-function ctxWith(roleKey: string, permissions: string[] = [], features: string[] = []): Ctx {
+function ctxWith(roleKey: string): Ctx {
   return {
     userId: "00000000-0000-0000-0000-000000000000" as never,
     tenantId: "00000000-0000-0000-0000-000000000000" as never,
@@ -29,8 +29,8 @@ function ctxWith(roleKey: string, permissions: string[] = [], features: string[]
     slug: "",
     allLocations: true,
     locationIds: [],
-    permissions: new Set(permissions),
-    features: new Set(features),
+    permissions: new Set<string>(),
+    features: new Set<string>(),
   };
 }
 
@@ -90,14 +90,19 @@ describe("lib/auth/surface-access (sub-PR 1)", () => {
 
 describe("lib/auth/permission — hasPermission / hasFeature (sub-PR 1)", () => {
   it("hasPermission reads ctx.permissions", () => {
-    const ctx = ctxWith("coach", ["attendance.mark", "members.read"]);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
+    ctx.permissions.add("members.read");
     expect(hasPermission(ctx, "attendance.mark")).toBe(true);
     expect(hasPermission(ctx, "members.read")).toBe(true);
     expect(hasPermission(ctx, "members.write")).toBe(false);
   });
 
   it("hasFeature reads ctx.features", () => {
-    const ctx = ctxWith("owner", ["reports.financial"], ["reports", "billing"]);
+    const ctx = ctxWith("owner");
+    ctx.permissions.add("reports.financial");
+    ctx.features.add("reports");
+    ctx.features.add("billing");
     expect(hasFeature(ctx, "reports")).toBe(true);
     expect(hasFeature(ctx, "billing")).toBe(true);
     expect(hasFeature(ctx, "cafe.pos")).toBe(false);
@@ -106,13 +111,19 @@ describe("lib/auth/permission — hasPermission / hasFeature (sub-PR 1)", () => 
 
 describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
   it("returns silently when the role has the permission", () => {
-    const ctx = ctxWith("coach", ["attendance.mark", "members.read"], ["attendance", "members"]);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
+    ctx.permissions.add("members.read");
+    ctx.features.add("attendance");
+    ctx.features.add("members");
     expect(() => requirePermission(ctx, "attendance.mark")).not.toThrow();
     expect(() => requirePermission(ctx, "members.read")).not.toThrow();
   });
 
   it("throws role_grant_missing when the role lacks the permission", () => {
-    const ctx = ctxWith("coach", ["attendance.mark"], ["attendance"]);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
+    ctx.features.add("attendance");
     try {
       requirePermission(ctx, "members.write");
       throw new Error("expected throw");
@@ -130,7 +141,8 @@ describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
     // `reports` is NOT in ctx.features. requirePermission throws
     // feature_disabled; the layout's nav rendering checks
     // hasFeature separately.
-    const ctx = ctxWith("owner", ["reports.financial"], []);
+    const ctx = ctxWith("owner");
+    ctx.permissions.add("reports.financial");
     try {
       requirePermission(ctx, "reports.financial");
       throw new Error("expected throw");
@@ -144,7 +156,8 @@ describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
     // Closed list — db/seed-platform.ts is the canonical source.
     // A typo'd permission string must fail closed, never silently
     // pass.
-    const ctx = ctxWith("owner", ["totally.fake.permission"], []);
+    const ctx = ctxWith("owner");
+    ctx.permissions.add("totally.fake.permission");
     try {
       requirePermission(ctx, "totally.fake.permission");
       throw new Error("expected throw");
@@ -161,7 +174,8 @@ describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
     // action (the seed grants every GA feature). The audit's
     // "operator turning Reports off" case still flips on `reports`
     // because reports is NOT in ALWAYS_ON_MODULES.
-    const ctx = ctxWith("coach", ["attendance.mark"], []);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
     expect(() => requirePermission(ctx, "attendance.mark")).not.toThrow();
   });
 });

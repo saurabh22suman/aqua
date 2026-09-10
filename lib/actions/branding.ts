@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   getBranding,
   updateBranding,
@@ -57,7 +57,7 @@ export async function updateBrandingAction(
   }
   // (2) permission: management only
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "settings.manage");
   return updateBranding(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,

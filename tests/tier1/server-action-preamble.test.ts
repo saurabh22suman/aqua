@@ -2,6 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
+import { ACTION_PERMISSION_MAP } from "@/lib/auth/action-permissions";
 
 // Standing rule: every Server Action that takes input opens with a Zod
 // parse before anything else runs. Found by hand three times
@@ -15,6 +16,15 @@ import { describe, expect, it } from "vitest";
 // As of the Phase 1.5–1.7 audit, the rule is now two steps, not one:
 // (1) parse, then (2) a permission check before any service call.
 // Same shape as the original — AST walk, no regexes.
+//
+// Sub-PR 2 of role gating: the rule tightened from "any
+// require*/assert*/platformAuth* call" to a requirePermission call
+// with a literal permission key as second argument. The four
+// assertXxx role-key guards are gone (sub-PR 2 deleted them);
+// requirePermission is the single resolution. Action → permission
+// key mapping lives in lib/auth/action-permissions.ts — the
+// preamble test references it directly so a future action whose
+// permission key isn't in the map fails the build.
 
 const ROOT = process.cwd();
 const SCAN_DIRS = ["lib", "app"];
@@ -29,6 +39,17 @@ function listTsFiles(dir: string): string[] {
     else if (/\.tsx?$/.test(entry)) out.push(full);
   }
   return out;
+}
+
+// Sub-PR 2 — the requirePermission check applies to tenant-path
+// actions only. Platform actions (lib/actions/platform-*) live
+// behind their own /ops surface and have their own permission
+// layer; they aren't part of the action sweep's matrix. SCAN_DIRS
+// below is the filter: include only lib/actions/*.ts (not
+// platform-*) plus app/**/*.ts (route handlers).
+function isTenantPathActionFile(path: string): boolean {
+  if (path.includes("/lib/actions/platform-")) return false;
+  return true;
 }
 
 function isUseServerFile(source: ts.SourceFile): boolean {
@@ -85,26 +106,30 @@ function firstStatementIsParse(body: ts.Block): boolean {
 //   if (status.kind !== "authenticated") { return ... }
 //
 //   const ctx = await requireDefaultCtx();
-//   assertStaff(ctx);
+//   requirePermission(ctx, "x.y");
 //
 //   const session = await withPlatform(() => auth.api.getSession(...));
 //   if (!session) { return ... }
-//
-//   requirePermission(ctx, "x.y");
-//   requireCtx(slug);
 //
 // All five names match a `require*` / `assert*` / `platformAuth*` prefix,
 // or sit on the platform-session lookup path. We don't infer "auth"
 // from the return shape — false positives there would let a future
 // refactor break the check without flipping this test. The allowlist
 // below is the source of truth; add new gates here when they land.
+//
+// Sub-PR 2: dropped assertStaff / assertManagement / assertMembersWrite
+// / assertEnquiriesAccess from this list (deleted from
+// lib/auth/permissions.ts). The single resolution is
+// `requirePermission(ctx, "<key>")`; the second-statement check
+// below asserts the second arg is a string literal AND that the
+// (action, key) pair matches ACTION_PERMISSION_MAP. This is the
+// mechanical proof that the action sweep covered every callsite.
 const PERMISSION_CALL_NAMES = new Set([
   "platformAuthStatusAction",
   "homeForSessionAction",
   "requireDefaultCtx",
   "requireCtx",
   "requirePermission",
-  "assertStaff",
 ]);
 
 function isPermissionCallExpr(expr: ts.Expression): boolean {
@@ -366,6 +391,7 @@ function allActions(): Action[] {
   const actions: Action[] = [];
   for (const dir of SCAN_DIRS) {
     for (const file of listTsFiles(join(ROOT, dir))) {
+      if (!isTenantPathActionFile(file)) continue;
       const text = readFileSync(file, "utf8");
       const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
       actions.push(...findActions(source));
@@ -394,7 +420,7 @@ describe("every Server Action that takes input parses it first", () => {
   );
 
   it.each(withInput.map((a) => [`${a.file}#${a.name}`, a] as const))(
-    "%s runs a permission check as the second statement (after parse, before service)",
+    "%s runs a requirePermission(ctx, <key>) call after parse",
     (_label, action) => {
       // Pre-auth actions are exempt: the act of authenticating
       // doesn't have a permission check to gate on. Anything added
@@ -405,8 +431,32 @@ describe("every Server Action that takes input parses it first", () => {
         secondStatementIsPermissionCheck(action.body),
         `${action.name} in ${action.file} parsed input but the next statement isn't a permission check (call to platformAuthStatusAction / withPlatform(() => auth.api.getSession(...))).`,
       ).toBe(true);
+      // Sub-PR 2 — the action's required permission key must be in
+      // ACTION_PERMISSION_MAP and the requirePermission literal in
+      // the source must match it. A new action without a map entry
+      // fails here, not silently.
+      const expectedKey = ACTION_PERMISSION_MAP[action.name];
+      expect(
+        expectedKey,
+        `${action.name} in ${action.file} is not in ACTION_PERMISSION_MAP. Add an entry to lib/auth/action-permissions.ts.`,
+      ).toBeDefined();
+      const actualKey = extractRequirePermissionKey(action.body);
+      expect(
+        actualKey,
+        `${action.name} in ${action.file} must call requirePermission(ctx, "${expectedKey}"); — found ${actualKey === undefined ? "no requirePermission call" : `"${actualKey}"`}.`,
+      ).toBe(expectedKey);
     },
   );
+
+  it("every ACTION_PERMISSION_MAP entry corresponds to a real Server Action", () => {
+    const actionNames = new Set(actions.map((a) => a.name));
+    for (const mapped of Object.keys(ACTION_PERMISSION_MAP)) {
+      expect(
+        actionNames.has(mapped),
+        `ACTION_PERMISSION_MAP["${mapped}"] has no matching Server Action. Remove the stale entry.`,
+      ).toBe(true);
+    }
+  });
 });
 
 // Pre-auth actions: ones whose second statement *can't* be a
@@ -419,4 +469,54 @@ const PRE_AUTH_ACTIONS = new Set([
   "loginPlatformAction", // password + email; no session to check
   "verifyPlatformTotpAction", // second-factor verify; first half-auth only
   "devCodeAction", // dev-only OTP peek, fails closed in production
+  "homeForSessionAction", // resolves which surface this session belongs to
+  "issueParentLinkAction", // signed token IS the credential
 ]);
+
+// Walk the body and return the literal string passed as the second
+// arg to requirePermission(ctx, "<key>") — or undefined if none
+// is present. Sub-PR 2's mechanical proof: a future action whose
+// key doesn't match ACTION_PERMISSION_MAP flips this red.
+function extractRequirePermissionKey(body: ts.Block): string | undefined {
+  for (const stmt of body.statements) {
+    if (ts.isExpressionStatement(stmt)) {
+      const e = stripAwait(stmt.expression);
+      if (
+        e &&
+        ts.isCallExpression(e) &&
+        ts.isIdentifier(e.expression) &&
+        e.expression.text === "requirePermission" &&
+        e.arguments.length >= 2 &&
+        ts.isStringLiteral(e.arguments[1]!)
+      ) {
+        return e.arguments[1]!.text;
+      }
+    }
+    if (ts.isVariableStatement(stmt)) {
+      const init = stmt.declarationList.declarations[0]?.initializer;
+      if (init) {
+        const e = stripAwait(init);
+        if (
+          e &&
+          ts.isCallExpression(e) &&
+          ts.isIdentifier(e.expression) &&
+          e.expression.text === "requirePermission" &&
+          e.arguments.length >= 2 &&
+          ts.isStringLiteral(e.arguments[1]!)
+        ) {
+          return e.arguments[1]!.text;
+        }
+      }
+    }
+    if (ts.isTryStatement(stmt)) {
+      const inner = extractRequirePermissionKey(stmt.tryBlock);
+      if (inner !== undefined) return inner;
+    }
+  }
+  return undefined;
+}
+
+function stripAwait(e: ts.Expression): ts.Expression | undefined {
+  if (ts.isAwaitExpression(e)) return e.expression;
+  return e;
+}

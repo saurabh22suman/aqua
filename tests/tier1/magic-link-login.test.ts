@@ -8,6 +8,8 @@ import { withPlatform } from "@/db/scope";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { locations } from "@/db/schema/locations";
 import { inviteLinkUses } from "@/db/schema/invite-link-uses";
+import { persons } from "@/db/schema/people";
+import { staff } from "@/db/schema/staff";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { inviteStaff } from "@/lib/services/staff-invitations";
 import {
@@ -128,7 +130,11 @@ describe("invite-link issue/preview/redeem (database)", () => {
   afterAll(async () => {
     if (tenantId) {
       await withTenant(tenantId, async (tx) => {
+        // inviteStaff now also creates persons + staff rows for
+        // coach invites; the cleanup must delete them first.
         await tx.delete(inviteLinkUses).where(eq(inviteLinkUses.tenantId, tenantId));
+        await tx.delete(staff).where(eq(staff.tenantId, tenantId));
+        await tx.delete(persons).where(eq(persons.tenantId, tenantId));
         await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
         await tx.delete(locations).where(eq(locations.tenantId, tenantId));
       });

@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
@@ -10,7 +10,7 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 // reachable without burying a sign-out link inside Today.
 export default async function ReceptionMePage() {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);
 
   return (

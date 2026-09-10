@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LogOut, ChevronRight, Languages, ListChecks, Palette, Users } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
@@ -20,7 +20,7 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 // lands it can replace this section in place.
 export default async function Page() {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);
 
   return (
