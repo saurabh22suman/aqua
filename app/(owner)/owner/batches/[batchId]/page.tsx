@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BarChart3, Calendar } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { todayInZone } from "@/lib/time/tz";
 import { withTenant } from "@/db/tenant";
 import { eq } from "drizzle-orm";
@@ -28,7 +28,7 @@ export default async function BatchDetailPage({
 }) {
   const { batchId } = await params;
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "programs.read");
 
   // Read the tenant's timezone in its own short transaction, then call
   // the service from outside that scope. Opening withTenant here and

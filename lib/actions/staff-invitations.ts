@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   inviteStaff,
   listInvitations,
@@ -28,7 +28,7 @@ export async function listInvitationsAction(): Promise<ListInvitationsRow[]> {
   listInputSchema.parse({});
   // (2) permission
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.invite");
   return listInvitations({ tenantId: ctx.tenantId });
 }
 
@@ -61,7 +61,7 @@ export async function inviteStaffAction(
     };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.invite");
   return inviteStaff({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
 }
 
@@ -79,7 +79,7 @@ export async function revokeInvitationAction(
     };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.invite");
   return revokeInvitation(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,
@@ -97,7 +97,7 @@ export async function resendInvitationAction(
     return { kind: "error", code: "invalid", message: "Invalid membership id." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.invite");
   return resendInvitation(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,

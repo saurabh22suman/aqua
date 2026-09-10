@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   substituteCoach,
   type SubstituteCoachResult,
@@ -25,6 +25,6 @@ export async function substituteCoachAction(
     return { kind: "error", code: "invalid", message: "Invalid substitute request." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
   return substituteCoach({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
 }

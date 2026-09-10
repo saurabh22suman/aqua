@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   detectCoachConflicts,
   type CoachConflictCheckResult,
@@ -40,7 +40,7 @@ export async function checkCoachConflictsAction(
   if (!input.coachId) return { conflicts: [] };
   if (input.endTime <= input.startTime) return { conflicts: [] };
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.read");
   return detectCoachConflicts(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     {

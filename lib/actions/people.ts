@@ -1,7 +1,7 @@
 "use server";
 
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff, assertMembersWrite } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { z } from "zod";
 import {
   createMemberSchema,
@@ -36,20 +36,20 @@ export async function listMembersAction(raw: {
 }): Promise<MemberListRow[]> {
   const input = listMembersFilterSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return listMembers(ctx, input);
 }
 
 export async function getMemberDetailAction(rawMemberId: string): Promise<MemberDetail | null> {
   const memberId = memberIdSchema.parse(rawMemberId);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return getMemberDetail(ctx, memberId);
 }
 
 export async function listLocationsAction(): Promise<LocationOption[]> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return listLocations(ctx);
 }
 
@@ -57,7 +57,7 @@ export async function searchPersonsAction(query: string): Promise<PersonSearchRo
   const parsed = searchPersonsSchema.safeParse(query);
   if (!parsed.success) return [];
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return searchPersons(ctx, parsed.data);
 }
 
@@ -83,7 +83,7 @@ export async function createMemberAction(
 ): Promise<{ ok: true; memberId: string } | { ok: false; error: string }> {
   const input = createMemberSchema.omit({ memberCode: true }).parse(raw);
   const ctx = await requireDefaultCtx();
-  assertMembersWrite(ctx);
+  requirePermission(ctx, "members.write");
 
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const memberCode = await nextMemberCode(ctx);
@@ -116,7 +116,7 @@ export async function updateMemberAction(raw: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const input = updateMemberSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertMembersWrite(ctx);
+  requirePermission(ctx, "members.write");
   return updateMember(ctx, input.memberId, input);
 }
 
@@ -127,7 +127,7 @@ export async function transitionMemberStatusAction(raw: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const input = transitionMemberStatusSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertMembersWrite(ctx);
+  requirePermission(ctx, "members.write");
   return transitionMemberStatus(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     input,

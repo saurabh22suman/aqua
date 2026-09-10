@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   getTerminology,
   updateTermOverride,
@@ -53,7 +53,7 @@ export async function updateTermOverrideAction(
   }
   // (2) permission: management only
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "settings.manage");
   return updateTermOverride(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,
@@ -72,7 +72,7 @@ export async function clearTermOverrideAction(
     };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "settings.manage");
   return clearTermOverride(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,

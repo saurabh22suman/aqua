@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   addToWaitlist,
   cancelWaitlist,
@@ -31,7 +31,7 @@ export async function addToWaitlistAction(raw: unknown): Promise<WaitlistResult>
     return { kind: "error", code: "invalid", message: "Invalid add." };
   }
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "enquiries.write");
   return addToWaitlist({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
 }
 
@@ -41,7 +41,7 @@ export async function cancelWaitlistAction(raw: unknown): Promise<WaitlistResult
     return { kind: "error", code: "invalid", message: "Invalid cancel." };
   }
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "enquiries.write");
   return cancelWaitlist({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
 }
 
@@ -49,7 +49,7 @@ export async function getWaitlistHeadAction(raw: unknown): Promise<WaitlistHead 
   const parsed = batchSchema.safeParse(raw);
   if (!parsed.success) return null;
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "enquiries.read");
   return getWaitlistHead({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed);
 }
 
@@ -59,6 +59,6 @@ export async function promoteHeadAction(raw: unknown): Promise<WaitlistResult> {
     return { kind: "error", code: "invalid", message: "Invalid promote." };
   }
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "enquiries.write");
   return promoteHead({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed);
 }

@@ -106,13 +106,19 @@ describe("lib/auth/permission — hasPermission / hasFeature (sub-PR 1)", () => 
 
 describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
   it("returns silently when the role has the permission", () => {
-    const ctx = ctxWith("coach", ["attendance.mark", "members.read"], ["attendance", "members"]);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
+    ctx.permissions.add("members.read");
+    ctx.features.add("attendance");
+    ctx.features.add("members");
     expect(() => requirePermission(ctx, "attendance.mark")).not.toThrow();
     expect(() => requirePermission(ctx, "members.read")).not.toThrow();
   });
 
   it("throws role_grant_missing when the role lacks the permission", () => {
-    const ctx = ctxWith("coach", ["attendance.mark"], ["attendance"]);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
+    ctx.features.add("attendance");
     try {
       requirePermission(ctx, "members.write");
       throw new Error("expected throw");
@@ -130,7 +136,8 @@ describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
     // `reports` is NOT in ctx.features. requirePermission throws
     // feature_disabled; the layout's nav rendering checks
     // hasFeature separately.
-    const ctx = ctxWith("owner", ["reports.financial"], []);
+    const ctx = ctxWith("owner");
+    ctx.permissions.add("reports.financial");
     try {
       requirePermission(ctx, "reports.financial");
       throw new Error("expected throw");
@@ -144,7 +151,8 @@ describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
     // Closed list — db/seed-platform.ts is the canonical source.
     // A typo'd permission string must fail closed, never silently
     // pass.
-    const ctx = ctxWith("owner", ["totally.fake.permission"], []);
+    const ctx = ctxWith("owner");
+    ctx.permissions.add("totally.fake.permission");
     try {
       requirePermission(ctx, "totally.fake.permission");
       throw new Error("expected throw");
@@ -161,7 +169,8 @@ describe("lib/auth/permission — requirePermission (sub-PR 1)", () => {
     // action (the seed grants every GA feature). The audit's
     // "operator turning Reports off" case still flips on `reports`
     // because reports is NOT in ALWAYS_ON_MODULES.
-    const ctx = ctxWith("coach", ["attendance.mark"], []);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
     expect(() => requirePermission(ctx, "attendance.mark")).not.toThrow();
   });
 });

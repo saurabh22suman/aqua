@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
@@ -12,7 +12,7 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 // nav or the sign-out form.
 export default async function CoachMePage() {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);
 
   return (

@@ -1,7 +1,7 @@
 "use server";
 
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement, assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   createBatchSchema,
   createProgramSchema,
@@ -27,7 +27,7 @@ import type { Program } from "@/db/schema/programs";
 
 export async function listProgramsAction(): Promise<Program[]> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "programs.read");
   return listPrograms(ctx);
 }
 
@@ -37,7 +37,7 @@ export async function createProgramAction(raw: {
 }): Promise<{ ok: true; program: Program } | { ok: false; error: string }> {
   const input = createProgramSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
 
   const program = await createProgram(ctx, input);
   return { ok: true, program };
@@ -48,19 +48,19 @@ export async function deleteProgramAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const programId = deleteProgramSchema.parse(rawProgramId);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
   return deleteProgram(ctx, programId);
 }
 
 export async function listBatchesAction(): Promise<BatchWithProgramName[]> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "programs.read");
   return listBatches(ctx);
 }
 
 export async function listCoachesAction(): Promise<CoachOption[]> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "staff.read");
   return listCoaches(ctx);
 }
 
@@ -75,7 +75,7 @@ export async function createBatchAction(raw: {
 }): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
   const input = createBatchSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
 
   const batch = await createBatch(ctx, input);
   return { ok: true, batch };
@@ -86,7 +86,7 @@ export async function deleteBatchAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const batchId = deleteBatchSchema.parse(rawBatchId);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
   return deleteBatch(ctx, batchId);
 }
 
@@ -97,7 +97,7 @@ export async function updateProgramAction(raw: {
 }): Promise<{ ok: true; program: Program } | { ok: false; error: string }> {
   const input = updateProgramSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
   return updateProgram(ctx, input);
 }
 
@@ -113,6 +113,6 @@ export async function updateBatchAction(raw: {
 }): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
   const input = updateBatchSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "programs.write");
   return updateBatch(ctx, input);
 }

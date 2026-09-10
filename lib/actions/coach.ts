@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema";
 import { addDays, todayInZone } from "@/lib/time/tz";
@@ -35,7 +35,7 @@ export async function getTodayAction(): Promise<{
   sessions: TodaySession[];
 }> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
 
   const [tenant] = await withTenant(ctx.tenantId, (tx) =>
     tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)),
@@ -69,7 +69,7 @@ export async function getCoachHomeAction(): Promise<{
   next: TodaySession | null;
 }> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
   if (ctx.roleKey !== "coach") {
     // Reception and other staff see only today; the home-page empty
     // state is a coach-only thing.
@@ -128,7 +128,7 @@ export async function getScheduleAction(raw: {
 }> {
   const input = coachScheduleSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
 
   const [tenant] = await withTenant(ctx.tenantId, (tx) =>
     tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)),
@@ -169,7 +169,7 @@ export async function getRosterAction(
 } | null> {
   const sessionId = sessionIdSchema.parse(rawSessionId);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
 
   // getRosterForSession returns null identically for "no such session"
   // and "session exists, but not this caller's to see" -- a coach
@@ -198,7 +198,7 @@ export async function markAttendanceSessionAction(raw: {
 }): Promise<{ ok: boolean; error?: string }> {
   const input = markAttendanceSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.mark");
 
   const visible = await sessionVisibleToCaller(
     { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
@@ -214,7 +214,7 @@ export async function markAttendanceSessionAction(raw: {
 
 export async function getCoachRosterAction(): Promise<CoachRosterRow[]> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
   return listCoachRoster({ tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey });
 }
 
@@ -226,7 +226,7 @@ export async function getCoachMemberDetailAction(
 ): Promise<CoachMemberDetail | null> {
   const memberId = memberIdSchema.parse(rawMemberId);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
   return getCoachMemberDetail(
     { tenantId: ctx.tenantId, userId: ctx.userId ?? "" },
     memberId,

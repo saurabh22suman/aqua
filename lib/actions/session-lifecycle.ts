@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   cancelSession,
   rescheduleSession,
@@ -31,7 +31,7 @@ export async function cancelSessionAction(
     return { kind: "error", code: "session_not_found", message: "Invalid session id." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "attendance.mark");
   return cancelSession({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data.sessionId);
 }
 
@@ -43,7 +43,7 @@ export async function rescheduleSessionAction(
     return { kind: "error", code: "invalid", message: "Invalid reschedule request." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "attendance.mark");
   return rescheduleSession(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     {
