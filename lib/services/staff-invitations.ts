@@ -11,6 +11,8 @@ import { tenantMemberships, membershipLocations } from "@/db/schema/memberships"
 import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
+import { persons } from "@/db/schema/people";
+import { staff, type StaffType } from "@/db/schema/staff";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type UserId } from "@/lib/ids";
 
@@ -227,6 +229,55 @@ export async function inviteStaff(
           updatedBy: ctx.userId,
         });
       }
+    }
+
+    // InviteStaff audit gap fix: an invited coach was previously a
+    // tenant_memberships row with NO persons row and NO staff row.
+    // That left the operator with no way to assign the coach to a
+    // batch (batches.coach_id → staff.id, which never existed), and
+    // the audit gap meant the only fix was to walk the operator
+    // through a "create staff record from scratch" path that
+    // duplicated the person's identity. With this branch, the
+    // invite path also produces the persons + staff rows the batch
+    // assigner expects — same transaction, same identifiers,
+    // same audit log entry. STAFF_INVITABLE_ROLES maps "admin" to
+    // "no staff row" deliberately: admins are operational, they
+    // don't appear on the staff roster and aren't assigned to
+    // batches.
+    const STAFF_TYPE_FOR_ROLE: Partial<Record<StaffInvitableRoleKey, StaffType>> = {
+      coach: "coach",
+      receptionist: "receptionist",
+    };
+    const staffType = STAFF_TYPE_FOR_ROLE[input.roleKey];
+    if (staffType) {
+      // Inline the persons + staff insert rather than call
+      // createStaff — createStaff opens its own withTenant(), and
+      // the audit-log TODO above wants all of this in one
+      // transaction. Same SQL, fewer round trips.
+      const [personRow] = await tx
+        .insert(persons)
+        .values({
+          tenantId: ctx.tenantId,
+          fullName: input.fullName,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })
+        .returning({ id: persons.id });
+      if (!personRow) {
+        return {
+          kind: "error",
+          code: "invalid",
+          message: "Could not create the person record for this invite.",
+        };
+      }
+      await tx.insert(staff).values({
+        tenantId: ctx.tenantId,
+        personId: personRow.id,
+        userId: user.id as never,
+        staffType,
+        createdBy: ctx.userId,
+        updatedBy: ctx.userId,
+      });
     }
 
     // TODO(tenant-audit-log): the actor on a staff invite is a
