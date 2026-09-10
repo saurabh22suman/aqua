@@ -1,11 +1,246 @@
-# RED proposals — Phase 3 (documents, impersonation)
+# RED proposals
 
-Two Phase-3 RED items are unresolved. These proposals capture
+Unresolved RED items across phases. Each captures the design
+options and asks for sign-off before implementation. While the
+human reviews, work continues on the GREEN work that doesn't
+depend on these choices.
+
+---
+
+## Tenant role gating (DPDP) — RED
+
+### What the audit found
+
+`app/(owner)/owner/layout.tsx` checks only `sessionExists()`. Same
+in `app/(coach)/layout.tsx`, `app/(reception)/layout.tsx`,
+`app/(parent)/layout.tsx`. A coach typing `/owner/members` reads
+every child's full name, phone, minor flag (DOB-derived) and
+guardian phone — `listMembersAction` returns the whole tenant's
+roster because the action's `assertStaff(ctx)` admits every staff
+role. The action layer is the only check there is, and it's
+inconsistent: `parent-link` correctly refused a coach on a token
+basis, while every other staff-gated read lets the coach through.
+
+This is a DPDP exposure. Children's personal data — date of birth
+implicit through `isMinor`, guardian phone, member phone — is
+visible to a user whose job does not need it. A coach's job is
+their own register, not the whole academy roster.
+
+Five intertwined questions:
+
+1. Where does the check belong — layout, middleware, or per-page?
+2. What does a forbidden role see — 404 (mask existence) or 403?
+3. How do feature entitlements factor in?
+4. `assertStaff` admits every staff role to every staff-gated read.
+   Split or replace?
+5. The mechanical proof — permission matrix across roles ×
+   surfaces — does not exist today.
+
+### Survey of today's authorization
+
+| Layer | Where | Verdict |
+|---|---|---|
+| Per-role route group | `(owner)/layout.tsx`, `(coach)/...`, `(reception)/...`, `(parent)/...` | `sessionExists()` only. The check answers "is there a session?" not "is this role allowed here?" |
+| Per-action | every `lib/actions/*.ts` calls `requireDefaultCtx()` then `assertStaff(ctx)` (or one of three siblings) | Roles are checked via a role-key list (`STAFF_ROLES = ["owner","admin","coach","receptionist"]`) — a future contributor who adds a fifth role and forgets a callsite slips through |
+| Per-service | `lib/services/register.ts` filters `if (ctx.roleKey === "coach")` on three service functions | The drill-down is hand-rolled, e.g. a coach gets their own batches only. Good, but doesn't extend to whole surfaces |
+| Feature entitlements | `resolveTenantFeatureKeys()`, `ctx.features` (planned) | Resolved per request, but `ctx.features` is not populated in Ctx today and `requirePermission(ctx, "x.y")` checks against it exists in spirit only — no callsite calls it |
+| Tenant scope | RLS on every tenant-scoped table | Works as intended; the leak is the application layer reaching for a wider class of rows than the role needs |
+
+The audit's blunt summary: **the role gate is per-action and
+inconsistent, the feature gate is unenforced, and the layout
+admits every role to every tenant surface.**
+
+### Proposal — three layers, all mechanical
+
+#### 1. Layout gates role, not just session
+
+`app/(owner)/owner/layout.tsx` becomes the only place that knows
+the role-vs-surface policy. Pattern:
+
+```ts
+// app/(owner)/owner/layout.tsx
+export default async function OwnerLayout({ children }) {
+  const ctx = await requireDefaultCtx();
+  if (!OWNER_SURFACES.includes(ctx.roleKey)) {
+    notFound();   // not forbidden() — see §2
+  }
+  return <Shell>{children}</Shell>;
+}
+```
+
+`OWNER_SURFACES = ["owner", "admin"]` (receptionist doesn't get
+the owner surface today; could be widened to
+`["owner","admin","receptionist"]` if that becomes a product
+choice — kept narrow per today's seed). The other three layout
+groups get the same treatment with their own lists. The four
+lists live in one file (`lib/auth/surface-access.ts`) so a future
+audit can read the role-to-surface map in one place.
+
+#### 2. 404, not 403 — don't confirm a resource exists
+
+DPDP rule of thumb: the most you should ever tell a forbidden
+caller about a tenant's children is "the page you asked for is
+not here." Returning 403 from `/owner/members` for a coach tells
+them the path exists, the role is wrong, and the page exists for
+someone else. Returning 404 tells them nothing — same answer as a
+made-up path. The action layer already does this correctly:
+`getRosterAction` returns null for "session not visible to caller"
+and "session does not exist" identically; `parent-link` does the
+same for forged tokens. The layout needs to follow the same rule.
+
+Layout: `notFound()` rather than `forbidden()`. Page: `notFound()`
+in the rare cases where one role can read another's resource. The
+mechanical test (below) verifies every forbidden (role, surface)
+pair returns 404, not 403.
+
+#### 3. Feature entitlements — second gate, both layers
+
+Architecture §7.3 says entitlements are enforced both at the API
+and in the UI; today neither holds. Concretely: an operator can
+turn off `reports` for a tenant and `/owner/reports` still renders,
+the CSV still returns 200 with data. Fix:
+
+- **`requirePermission(ctx, "feature.key")`** becomes the
+  resolution over `ctx.features`. Populate `features` on Ctx by
+  joining the existing `resolveTenantFeatureKeys()` into
+  `requireDefaultCtx()` — one extra row read, cached per request
+  via `cache()`.
+- **Action-level**: every action that corresponds to a feature
+  module calls `requirePermission(ctx, "reports")` (etc.) before
+  the service call. The same wrapper that today does parse +
+  `assertStaff` becomes parse + `requirePermission`.
+- **UI-level**: `requirePermission` gates nav rendering — the
+  Reports tab is hidden when `reports` is off; the page still
+  refuses on a direct hit.
+
+The mechanical test (below) walks the feature-flag matrix.
+
+#### 4. `assertStaff` — replace, not split
+
+`assertStaff` currently admits every staff role, including
+`coach`. Splitting it into `assertStaffMemberNotCoach` is the
+audit-shaped fix; the cleaner fix is to remove the role-key list
+entirely and let every call site name its permission key.
+
+```ts
+// before:
+const ctx = await requireDefaultCtx();
+assertStaff(ctx);
+
+// after:
+const ctx = await requireDefaultCtx();
+requirePermission(ctx, "members.read");
+```
+
+`requirePermission` checks (1) the role's permission set
+(`ctx.permissions`), (2) location scope, (3) feature
+entitlement. The role-key list disappears — `assertStaff`,
+`assertManagement`, `assertMembersWrite`, `assertEnquiriesAccess`
+all collapse into `requirePermission(ctx, "x.y")` with the
+appropriate key. The "permission key" closes the audit's
+"forget to update the role list" class.
+
+Two callers stay as-is: `requireDefaultCtx`'s caller chain and
+the platform surface (which doesn't go through Ctx at all). The
+permission set comes from `role_permissions` — already seeded per
+the F-04 design.
+
+#### 5. The mechanical proof — permission matrix
+
+`tests/tier1/permission-matrix.test.ts` today asserts
+`assertStaff`, `assertManagement`, `assertMembersWrite`,
+`assertEnquiriesAccess` against six role keys. That's the four
+guards, not the (role × surface × feature) truth table the audit
+needs. The replacement:
+
+```ts
+// (role × surface) × feature on/off
+const cases: [Role, Surface, Feature?, "allow" | "deny"][] = [
+  // owners see every surface
+  ["owner", "owner", null, "allow"],
+  ["owner", "coach", null, "allow"],     // owner can also open /coach
+  ["admin", "owner", null, "allow"],
+  ["admin", "reception", null, "allow"],
+  // coaches are sealed out of the owner surface
+  ["coach", "owner", null, "deny"],
+  ["coach", "owner", "members", "deny"],  // 404, not 403
+  // feature gating
+  ["admin", "owner", { reports: false }, "deny"],
+  ["accountant", "owner", null, "allow"], // accountant is sent to /owner per K3
+  ["worker", "owner", null, "deny"],
+  ["parent", "owner", null, "deny"],
+  // self-gating
+  ["coach", "coach", null, "allow"],
+  ["coach", "coach", { attendance: false }, "deny"],
+];
+```
+
+For each case: render the route, assert the HTTP status (404 for
+denied, 200 for allowed), and (where applicable) assert the
+response body doesn't leak existence — the page that returned 404
+should be indistinguishable from a not-found route at the same
+prefix.
+
+This is the mechanical replacement for review. A green suite
+proves nothing; the rule needs mutation proof (review-checklist
+§6): dropping one of the layout guards turns the matrix red,
+turning the feature off in the database turns the matching case
+red.
+
+### Migration
+
+The change is mechanical and big — `requirePermission` replaces
+every `assertStaff` / `assertManagement` / `assertMembersWrite`
+/ `assertEnquiriesAccess` callsite. Estimated ~80 callsites
+across `lib/actions/`. Three sub-PRs:
+
+1. **lib/auth/surface-access.ts** + role-vs-surface list, the
+   layout gates, `requirePermission` implementation, Ctx.features
+   populated from `resolveTenantFeatureKeys()`. Tests for the
+   three layouts at the integration level.
+2. **Action sweep** — every `lib/actions/*.ts` swaps the four
+   `assertXxx` calls for `requirePermission`. Reviewer-load
+   reduction is the rationale for splitting this from (1); the
+   mechanical proof (matrix test) sits at the end of (2).
+3. **UI gating** — nav items gate on permission/feature, the
+   pages themselves gate on permission/feature, and the
+   permission matrix test grows to cover each (role, surface,
+   feature) cell.
+
+Each PR carries a one-line `human-approved-merge` label
+candidate; the surface-access change touches `lib/auth/**` and is
+a protected path per the F1 standing rule.
+
+### What this proposal does NOT cover
+
+- **Tenant-side audit log** (architecture §8.10). The whole
+  enforcement story — a forbidden request detected, blocked, and
+  recorded — has no destination for the "blocked" event today.
+  Out of scope here; the layout `notFound()` is its own audit log
+  equivalent (server logs the access) until §8.10 lands.
+- **Worker / parent surface hardening**. Worker has no UI today;
+  parent access is via signed magic links, not a logged-in
+  session. The matrix covers them as "deny on owner surface"
+  because they're tenant members, but the parent-link path is its
+  own thing.
+- **InviteStaff persons/staff row** gap. That's the next RED
+  after this one. The two fixes are related (both surface
+  authorization holes the audit found) but not the same change;
+  inviting a coach who can't be assigned to a batch because no
+  persons row was created is a separate input flow.
+
+### Cost of doing nothing
+
+Children's DOB, phone, guardian phone and medical notes — the
+specific DPDP categories the platform promised the academy —
+visible to a coach today. The audit's preferred timeline is "the
+mobile pass reports, then this one ships, then the next." That
+matches this proposal.
 the design options and ask for a sign-off before implementation.
-While the human reviews, work continues on the GREEN Phase 3
-items (staff directory, invitations, receptionist seed,
-platform activity log) — none of which depend on either of
-these choices.
+While the human reviews, work continues on the GREEN work that
+doesn't depend on these choices (Phase 3 staff/invitations/receptionist
+seed/platform activity; Phase 1.5 onboarding/preset workflows; the
+mobile-pass follow-up scans).
 
 ---
 
