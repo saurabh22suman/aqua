@@ -2,7 +2,7 @@
 
 import { reportPeriodSchema } from "@/lib/services/owner-reports";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   getAttendanceReport,
   getEnquiryFunnel,
@@ -31,14 +31,14 @@ const periodSchema = reportPeriodSchema;
 export async function getAttendanceReportAction(raw: unknown): Promise<BatchAttendanceReportRow[]> {
   const period = periodSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "reports.operational");
   return getAttendanceReport({ tenantId: ctx.tenantId }, period);
 }
 
 export async function getEnquiryFunnelAction(raw: unknown): Promise<EnquiryFunnelRow[]> {
   const period = periodSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "reports.operational");
   return getEnquiryFunnel({ tenantId: ctx.tenantId }, period);
 }
 
@@ -46,21 +46,21 @@ export async function getRetentionViewAction(): Promise<RetentionRow> {
   // No input — the period is "the last 30 days from today",
   // computed inside the service.
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "reports.operational");
   return getRetentionView({ tenantId: ctx.tenantId });
 }
 
 export async function getCoachLoadAction(raw: unknown): Promise<CoachLoadRow[]> {
   const period = periodSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "reports.operational");
   return getCoachLoad({ tenantId: ctx.tenantId }, period);
 }
 
 export async function attendanceReportCsvAction(raw: unknown): Promise<CsvEnvelope> {
   const period = periodSchema.parse(raw);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "reports.operational");
   const rows = await getAttendanceReport({ tenantId: ctx.tenantId }, period);
   return {
     filename: `attendance-${period.from}-to-${period.to}.csv`,

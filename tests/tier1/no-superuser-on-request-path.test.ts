@@ -141,6 +141,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/waitlist.test.ts",
   "tests/tier1/holidays.test.ts",
   "tests/tier1/permission-matrix.test.ts",
+  "tests/tier1/role-gating-matrix.test.ts", // sub-PR 3: matrix test seeds through the privileged pool, same shape as permission-matrix above
   "tests/tier1/makeup.test.ts",
   "tests/tier1/coach-substitution.test.ts",
   "tests/tier1/coach-conflicts.test.ts",

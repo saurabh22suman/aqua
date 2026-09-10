@@ -1,5 +1,7 @@
+"use server";
+
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   getOnboardingChecklist,
   type OnboardingChecklist,
@@ -12,6 +14,6 @@ import {
 // test still recognises as parse-then-permission-order.
 export async function getOnboardingChecklistAction(): Promise<OnboardingChecklist> {
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "members.read");
   return getOnboardingChecklist({ tenantId: ctx.tenantId });
 }

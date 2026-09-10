@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { transferMemberToBatch, type TransferBatchResult } from "@/lib/services/transfer";
 
 // Phase R.6 — V.19 batch transfer action. parse-then-permission
@@ -27,7 +27,7 @@ export async function transferMemberToBatchAction(
     };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "members.write");
   return transferMemberToBatch(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,

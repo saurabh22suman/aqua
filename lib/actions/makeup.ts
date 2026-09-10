@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   grantMakeupCredit,
   redeemMakeupCredit,
@@ -33,7 +33,7 @@ export async function grantMakeupCreditAction(
     return { kind: "error", code: "invalid", message: "Invalid grant." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "attendance.mark");
   return grantMakeupCredit(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     {
@@ -54,7 +54,7 @@ export async function redeemMakeupCreditAction(
     return { kind: "error", code: "invalid", message: "Invalid redemption." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "attendance.mark");
   return redeemMakeupCredit(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,

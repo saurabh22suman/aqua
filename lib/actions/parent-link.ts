@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { ForbiddenError, requirePermission } from "@/lib/auth/permission";
 import { signParentLinkToken } from "@/lib/services/parent-link";
 import { withTenant } from "@/db/tenant";
 import { auditLog } from "@/db/schema/audit";
@@ -13,6 +13,15 @@ import { staff } from "@/db/schema/staff";
 // only — a coach, receptionist, parent, etc. cannot mint these URLs
 // (the surface reveals children's data, the smallest blast radius
 // goes through the most-trusted staff).
+//
+// Sub-PR 2: assertManagement (role-key list) replaced with
+// requirePermission(ctx, "members.write"). The receptionist carries
+// members.write too, so the surface check happens earlier — the
+// (owner) layout gates non-owner roles from reaching this code path
+// at all. requirePermission here is the in-action defense-in-depth
+// for any path that hasn't yet gated at the layout (a future
+// receptionist-facing "issue parent link" flow would have to
+// override this intentionally).
 //
 // The token itself is signed with PARENT_LINK_SECRET and is valid for
 // 7 days. The action returns the FULL URL (origin + path) so the UI
@@ -38,13 +47,15 @@ export async function issueParentLinkAction(
   }
   const ctx = await requireDefaultCtx();
   try {
-    assertManagement(ctx);
-  } catch {
-    // assertManagement throws on a non-management role; surface
-    // the same shape the type allows so the UI can render an
-    // inline pill without the call landing as an unhandled
-    // exception in the Server Action handler.
-    return { kind: "error", code: "unauthorized", message: "You cannot issue parent links." };
+    requirePermission(ctx, "members.write");
+  } catch (e) {
+    if (e instanceof ForbiddenError) {
+      // Surface the same shape the type allows so the UI can render
+      // an inline pill without the call landing as an unhandled
+      // exception in the Server Action handler.
+      return { kind: "error", code: "unauthorized", message: "You cannot issue parent links." };
+    }
+    throw e;
   }
 
   const { token, claims } = signParentLinkToken({

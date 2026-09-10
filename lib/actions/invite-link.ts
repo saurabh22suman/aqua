@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   issueLoginLink,
   type IssueLoginLinkResult,
@@ -27,6 +27,6 @@ export async function issueLoginLinkAction(
     return { kind: "error", code: "membership_not_found", message: "Membership not found." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "staff.invite");
   return issueLoginLink(ctx.tenantId, parsed.data.membershipId);
 }

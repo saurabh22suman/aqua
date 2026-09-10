@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertManagement } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import {
   addHoliday,
   removeHoliday,
@@ -30,7 +30,7 @@ export async function addHolidayAction(
     return { kind: "error", code: "invalid", message: "Invalid holiday." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "settings.manage");
   return addHoliday(
     { tenantId: ctx.tenantId, userId: ctx.userId },
     parsed.data,
@@ -45,6 +45,6 @@ export async function removeHolidayAction(
     return { kind: "error", code: "invalid", message: "Invalid holiday id." };
   }
   const ctx = await requireDefaultCtx();
-  assertManagement(ctx);
+  requirePermission(ctx, "settings.manage");
   return removeHoliday({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
 }

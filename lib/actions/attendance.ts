@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { assertStaff } from "@/lib/auth/permissions";
+import { requirePermission } from "@/lib/auth/permission";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { todayInZone } from "@/lib/time/tz";
@@ -31,7 +31,7 @@ export async function getMemberAttendanceHistoryAction(
 ): Promise<MemberAttendanceHistory> {
   const memberId = memberIdSchema.parse(rawMemberId);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
   const today = await tenantToday(ctx.tenantId);
   return getMemberAttendanceHistory(ctx, memberId, currentMonthPeriod(today));
 }
@@ -41,7 +41,7 @@ export async function getBatchAttendanceSummaryAction(
 ): Promise<BatchAttendanceSummary | null> {
   const batchId = batchIdSchema.parse(rawBatchId);
   const ctx = await requireDefaultCtx();
-  assertStaff(ctx);
+  requirePermission(ctx, "attendance.read");
   const today = await tenantToday(ctx.tenantId);
   return getBatchAttendanceSummary(ctx, batchId, currentMonthPeriod(today));
 }
