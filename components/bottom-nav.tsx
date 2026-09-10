@@ -36,6 +36,22 @@ export type NavItem = {
   href: string;
   label: string;
   iconName: keyof typeof ICONS;
+  // Sub-PR 3: optional feature gate. When set, the nav item is
+  // hidden when ctx.features does NOT contain this key — the
+  // owner/reports tile hides when an operator has turned the
+  // reports feature off, before the user can click through to
+  // a 404 page. Architecture §7.3 says both layers: the action
+  // gate is requirePermission(ctx, "reports.operational"), the UI
+  // gate is this flag. The matrix test exercises both.
+  featureKey?: string;
+};
+
+export type BottomNavProps = {
+  items: NavItem[];
+  // Server components pass a Set, which Next.js can't serialise.
+  // The layouts convert ctx.features (a Set<string>) into an
+  // array before passing it down.
+  hiddenFeatures?: string[];
 };
 
 // Active-state detection: longest-prefix-wins, with an exact match
@@ -62,9 +78,11 @@ function findActiveHref(pathname: string, items: NavItem[]): string | null {
   return best?.href ?? null;
 }
 
-export function BottomNav({ items }: { items: NavItem[] }) {
+export function BottomNav({ items, hiddenFeatures = [] }: BottomNavProps) {
   const pathname = usePathname();
-  const activeHref = findActiveHref(pathname, items);
+  const hidden = new Set(hiddenFeatures);
+  const visibleItems = items.filter((item) => !item.featureKey || !hidden.has(item.featureKey));
+  const activeHref = findActiveHref(pathname, visibleItems);
 
   return (
     <nav
@@ -76,11 +94,11 @@ export function BottomNav({ items }: { items: NavItem[] }) {
       // overlap still needs a real-device check (see PR report).
       className="fixed bottom-0 inset-x-0 min-h-16 bg-paper border-t border-line shadow-2 grid"
       style={{
-        gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`,
+        gridTemplateColumns: `repeat(${visibleItems.length}, minmax(0, 1fr))`,
         paddingBottom: "env(safe-area-inset-bottom)",
       }}
     >
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = ICONS[item.iconName];
         const isActive = item.href === activeHref;
         return (

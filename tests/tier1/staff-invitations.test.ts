@@ -1,12 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { withPlatform } from "@/db/scope";
 import { db } from "@/db/client";
 import { users } from "@/db/schema/users";
+import { persons } from "@/db/schema/people";
+import { staff } from "@/db/schema/staff";
+import { programs, batches } from "@/db/schema/programs";
 import { tenantMemberships, membershipLocations } from "@/db/schema/memberships";
 import { locations } from "@/db/schema/locations";
 import { platformAuditLog } from "@/db/schema/platform-users";
@@ -69,6 +72,16 @@ beforeAll(async () => {
 afterAll(async () => {
   if (tenantId) {
     await withTenant(tenantId, async (tx) => {
+      // inviteStaff now also creates persons + staff rows for
+      // coach / receptionist invites; the audit-gap-fix test
+      // also creates a program + batch linked to the staff row.
+      // Cleanup must delete in dependency order: batches →
+      // programs → staff → persons → membership_locations →
+      // tenant_memberships → locations.
+      await tx.delete(batches).where(eq(batches.tenantId, tenantId));
+      await tx.delete(programs).where(eq(programs.tenantId, tenantId));
+      await tx.delete(staff).where(eq(staff.tenantId, tenantId));
+      await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(membershipLocations).where(eq(membershipLocations.tenantId, tenantId));
       await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
       await tx.delete(platformAuditLog).where(eq(platformAuditLog.tenantId, tenantId));
@@ -235,6 +248,111 @@ describe("inviteStaff (Phase 3.6)", () => {
       return r;
     });
     expect(rows).toHaveLength(0);
+  });
+
+  it("audit gap fix: inviting a coach also creates the persons and staff rows — so a batch can be assigned to them immediately", async () => {
+    // Before the fix: inviteStaff created users + tenant_memberships
+    // but no persons / no staff. The operator's only path to attach
+    // the coach to a batch was a separate "create staff record from
+    // scratch" form that duplicated the person's identity. After
+    // the fix: one invite flow produces all four rows. This test
+    // asserts the staff row exists and is batch-assignable.
+    const phone = `+91987${RUN_NUM}09`;
+    const result = await inviteStaff(
+      { tenantId, userId: SYSTEM_USER },
+      { phone, fullName: "Batch-Ready Coach", roleKey: "coach", locationIds: [] },
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("invite failed");
+
+    // The coach has a staff row keyed to their user.
+    const staffRows = await withTenant(tenantId, async (tx) => {
+      return tx
+        .select({ id: staff.id, staffType: staff.staffType, personId: staff.personId })
+        .from(staff)
+        .where(
+          and(
+            eq(staff.userId, result.userId as never),
+            eq(staff.tenantId, tenantId),
+            isNull(staff.deletedAt),
+          ),
+        );
+    });
+    expect(staffRows).toHaveLength(1);
+    expect(staffRows[0]!.staffType).toBe("coach");
+
+    // The persons row carries the fullName the form collected.
+    const personRows = await withTenant(tenantId, async (tx) => {
+      return tx
+        .select({ fullName: persons.fullName })
+        .from(persons)
+        .where(eq(persons.id, staffRows[0]!.personId));
+    });
+    expect(personRows[0]?.fullName).toBe("Batch-Ready Coach");
+
+    // Coach is now batch-assignable. The previous bug was that
+    // batches.coach_id → staff.id would silently fail with a FK
+    // violation when the operator tried to assign this person.
+    await withTenant(tenantId, async (tx) => {
+      await tx.insert(programs).values({
+        tenantId,
+        name: `Batch-ready program ${RUN_NUM}`,
+      });
+    });
+    const programRows = await withTenant(tenantId, async (tx) =>
+      tx.select({ id: programs.id }).from(programs).where(eq(programs.tenantId, tenantId)).limit(1),
+    );
+    const realProgramId = programRows[0]!.id;
+    const insertedBatches = await withTenant(tenantId, async (tx) =>
+      tx
+        .insert(batches)
+        .values({
+          tenantId,
+          programId: realProgramId,
+          name: `Batch-ready batch ${RUN_NUM}`,
+          capacity: 16,
+          daysOfWeek: [1, 3, 5],
+          startTime: "07:00",
+          endTime: "08:00",
+          coachId: staffRows[0]!.id,
+        })
+        .returning({ id: batches.id, coachId: batches.coachId }),
+    );
+    expect(insertedBatches[0]?.coachId).toBe(staffRows[0]!.id);
+  });
+
+  it("admin invites get NO staff row — admin is operational, not on the staff roster", async () => {
+    // Admin doesn't have a StaffType; mapping is partial.
+    const phone = `+91987${RUN_NUM}10`;
+    const userIdBefore = await admin.query<{ id: string }>(
+      "select id from users where phone = $1",
+      [phone],
+    );
+    const result = await inviteStaff(
+      { tenantId, userId: SYSTEM_USER },
+      { phone, fullName: "Admin Only", roleKey: "admin", locationIds: [] },
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("invite failed");
+    const userIdAfter = await admin.query<{ id: string }>(
+      "select id from users where phone = $1",
+      [phone],
+    );
+    expect(userIdBefore.rows.length + userIdAfter.rows.length).toBeGreaterThanOrEqual(1);
+
+    const staffRows = await withTenant(tenantId, async (tx) =>
+      tx
+        .select({ id: staff.id })
+        .from(staff)
+        .where(
+          and(
+            eq(staff.userId, result.userId as never),
+            eq(staff.tenantId, tenantId),
+            isNull(staff.deletedAt),
+          ),
+        ),
+    );
+    expect(staffRows).toHaveLength(0);
   });
 });
 

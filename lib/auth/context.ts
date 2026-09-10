@@ -18,12 +18,12 @@ export type Ctx = {
   roleId: string;
   slug: string;
   allLocations: boolean;
-  locationIds: string[];
+    locationIds: string[];
   // Phase 1.5 — role grants and tenant feature entitlements, both
   // populated once per request. `requirePermission(ctx, "x.y")` is
   // the single resolution; `hasPermission` / `hasFeature` are the
   // cheap reads used by UI gating. See lib/auth/permission.ts.
-  permissions: Set<string>;
+    permissions: Set<string>;
   features: Set<string>;
 };
 

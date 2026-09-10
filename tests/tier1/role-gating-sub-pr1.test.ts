@@ -19,7 +19,7 @@ import type { Ctx } from "@/lib/auth/context";
 // without going through the database. The matrix test (sub-PR 3)
 // wires both layers end-to-end with seeded tenants.
 
-function ctxWith(roleKey: string, permissions: string[] = [], features: string[] = []): Ctx {
+function ctxWith(roleKey: string): Ctx {
   return {
     userId: "00000000-0000-0000-0000-000000000000" as never,
     tenantId: "00000000-0000-0000-0000-000000000000" as never,
@@ -29,8 +29,8 @@ function ctxWith(roleKey: string, permissions: string[] = [], features: string[]
     slug: "",
     allLocations: true,
     locationIds: [],
-    permissions: new Set(permissions),
-    features: new Set(features),
+    permissions: new Set<string>(),
+    features: new Set<string>(),
   };
 }
 
@@ -90,14 +90,19 @@ describe("lib/auth/surface-access (sub-PR 1)", () => {
 
 describe("lib/auth/permission — hasPermission / hasFeature (sub-PR 1)", () => {
   it("hasPermission reads ctx.permissions", () => {
-    const ctx = ctxWith("coach", ["attendance.mark", "members.read"]);
+    const ctx = ctxWith("coach");
+    ctx.permissions.add("attendance.mark");
+    ctx.permissions.add("members.read");
     expect(hasPermission(ctx, "attendance.mark")).toBe(true);
     expect(hasPermission(ctx, "members.read")).toBe(true);
     expect(hasPermission(ctx, "members.write")).toBe(false);
   });
 
   it("hasFeature reads ctx.features", () => {
-    const ctx = ctxWith("owner", ["reports.financial"], ["reports", "billing"]);
+    const ctx = ctxWith("owner");
+    ctx.permissions.add("reports.financial");
+    ctx.features.add("reports");
+    ctx.features.add("billing");
     expect(hasFeature(ctx, "reports")).toBe(true);
     expect(hasFeature(ctx, "billing")).toBe(true);
     expect(hasFeature(ctx, "cafe.pos")).toBe(false);
