@@ -12,10 +12,15 @@ Postgres · Drizzle · Better Auth · pg-boss · Razorpay · WhatsApp.
 ## Git workflow
 - Feature branch per task/change. Never commit directly to `main`.
 - Open a PR into `main`; the `ci` check must run and pass on the PR itself.
-- Merge only when `ci` is green. No exceptions. `docs/branch-protection.md`
-    is a runbook for a rule not yet applied to this repo (verify with the
-    GitHub API before assuming otherwise) — until it is, this is a discipline
-    rule, not a platform guarantee. Treat it as absolute regardless.
+- Merge only when `ci` is green. No exceptions. The ruleset
+    `main protection` has been active in this repo since
+    2026-09-04 (`required_status_checks.contexts` includes both
+    `ci` and `agent-protected-paths`); PR #118 verified the gate
+    end-to-end. `docs/branch-protection.md` remains the runbook
+    for the *outstanding* gap, which is `required_approving_review_count: 0`:
+    no human review is required before merge, so a green CI is
+    the only mechanical guard. Treat that limit as absolute
+    regardless.
 - `main` being green is what makes auto-deploy from `main` safe. Treat a
   broken `main` as an incident, not a follow-up task.
 - **Self-merge is suspended** (F1). Every PR merge comes to the human
