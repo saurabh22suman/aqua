@@ -187,3 +187,19 @@ jobs:
       # the surface contract. See middleware.ts and
       # scripts/e2e-host-boundary.ts for the rules and the probes.
       - run: pnpm e2e:host-boundary
+
+      # D1 — role-bypass attack e2e. Builds production, starts next
+      # start, logs in as owner/coach/receptionist via the real OTP
+      # flow, replays the three attack shapes (plain GET, RSC + Next-
+      # Router-State-Tree claiming the (owner) layout is mounted,
+      # POST with Next-Action against every action hash in the
+      # server-reference-manifest), and asserts no protected data
+      # (member names, dateOfBirth, dashboard figures) leaks to a
+      # role that isn't entitled to the surface. The positive
+      # control (entitled role receives the data via the same
+      # shapes) gates false negatives — every shape is a real
+      # request the application services. See scripts/e2e-role-
+      # bypass.ts for the rule the auditor broke and the assertions
+      # this test pins. PR D2 lands the fix; PR D1 is the red
+      # baseline.
+      - run: pnpm e2e:role-bypass
