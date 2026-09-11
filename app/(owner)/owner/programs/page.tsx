@@ -3,8 +3,10 @@ import { Calendar } from "lucide-react";
 import { listBatchesAction, listCoachesAction, listProgramsAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { ProgramsBatchesBoard } from "@/components/programs-batches-board";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function ProgramsPage() {
+  await requireOwner();
   const [programs, batches, coaches, terminology] = await Promise.all([
     listProgramsAction(),
     listBatchesAction(),

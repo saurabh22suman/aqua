@@ -3,12 +3,14 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { requireReception } from "@/lib/auth/surface-guard";
 
 // K2 — reception's account surface. Mirrors /coach/me: name, phone,
 // sign-out. Reception's bottom nav had three tabs (Today / Add
 // member / Enquiries) — K2 adds a fourth "Me" tab so this page is
 // reachable without burying a sign-out link inside Today.
 export default async function ReceptionMePage() {
+  await requireReception();
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);

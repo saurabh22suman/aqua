@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { listStaffAction } from "@/lib/actions/staff";
 import { StaffBoard } from "@/components/staff-board";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 3.5 — staff directory. List page reachable from
 // Settings > Academy. Invitations surface links from here.
 export default async function StaffListPage() {
+  await requireOwner();
   const rows = await listStaffAction({});
   return (
     <main className="px-5 pt-6 pb-8">

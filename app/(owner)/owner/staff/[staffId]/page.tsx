@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listStaffAction } from "@/lib/actions/staff";
 import { titleCase } from "@/lib/terminology/keys";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 3.5 — staff detail view. Read-only at this phase;
 // edit + delete land with 3.6 (invitations), where the
@@ -14,6 +15,7 @@ export default async function StaffDetailPage({
 }: {
   params: Promise<{ staffId: string }>;
 }) {
+  await requireOwner();
   const { staffId } = await params;
   const rows = await listStaffAction({});
   const staff = rows.find((r) => r.id === staffId);

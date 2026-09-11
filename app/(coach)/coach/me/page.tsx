@@ -3,6 +3,7 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { requireCoach } from "@/lib/auth/surface-guard";
 
 // K2 — coach's account surface. Minimum the K2 brief asks for: the
 // user's name and phone, plus a sign-out button. The bottom nav's
@@ -11,6 +12,7 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 // replace the two-line identity block in place without touching the
 // nav or the sign-out form.
 export default async function CoachMePage() {
+  await requireCoach();
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);

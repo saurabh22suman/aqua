@@ -2,8 +2,10 @@ import { getCoachRosterAction } from "@/lib/actions/coach";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { CoachRosterSearch } from "@/components/coach-roster-search";
+import { requireCoach } from "@/lib/auth/surface-guard";
 
 export default async function CoachMembersPage() {
+  await requireCoach();
   const [roster, terminology] = await Promise.all([
     getCoachRosterAction(),
     getTerminologyAction(),

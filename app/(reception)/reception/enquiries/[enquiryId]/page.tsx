@@ -4,12 +4,14 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
+import { requireReception } from "@/lib/auth/surface-guard";
 
 export default async function ReceptionEnquiryDetailPage({
   params,
 }: {
   params: Promise<{ enquiryId: string }>;
 }) {
+  await requireReception();
   const { enquiryId } = await params;
   const [enquiry, locations, batches, terminology] = await Promise.all([
     getEnquiryDetailAction(enquiryId),

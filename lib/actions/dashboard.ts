@@ -1,20 +1,26 @@
 "use server";
 
 import { requireDefaultCtx } from "@/lib/auth/context";
+import { requirePermission } from "@/lib/auth/permission";
 import { getOwnerDashboard, type OwnerDashboardData } from "@/lib/services/dashboard";
 
-// K3 follow-up: deliberately no assertStaff. The owner dashboard
-// reads aggregate operational numbers (active members, today's
-// register progress, attendance this week, follow-ups overdue, today's
-// lanes). It carries no PII beyond what the calling role's own
-// permission set covers, no mutations, and is already confined to
-// the caller's tenant by RLS. Accountant is sent here by homePath
-// and reaches this surface — role-key gating ("is this person a
-// daily floor user") would block them, which is the wrong shape.
-// requireDefaultCtx ensures the caller has SOME tenant membership;
-// further action-level guards (members.read for the roster, etc.)
-// live on the individual report queries the dashboard composes.
+// D2 — dashboard.view, granted to owner + admin only. The
+// previous "ungated by design" comment (K3 follow-up) is gone:
+// the auditor demonstrated that a coach / receptionist /
+// accountant can call this action over a direct Next-Action POST
+// and receive the same roll-up an owner gets. The fix is the
+// requirePermission line below; the deeper audit point
+// (architecture §7.3: every action authorizes itself) is now
+// enforced uniformly — see CLAUDE.md "layouts are for UI only".
+//
+// requireDefaultCtx still runs first: an unauthenticated caller
+// or a caller with no tenant membership is bounced before the
+// permission check. requirePermission then enforces the
+// dashboard.view grant; an accountant with reports.operational
+// but no dashboard.view is refused here, exactly the rule the
+// audit landed.
 export async function getOwnerDashboardAction(): Promise<OwnerDashboardData> {
   const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "dashboard.view");
   return getOwnerDashboard({ tenantId: ctx.tenantId });
 }

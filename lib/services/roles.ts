@@ -83,10 +83,15 @@ const ROLE_TEMPLATES: ReadonlyArray<{
     name: "Coach",
     homePath: "/coach",
     homeOrdinal: 2,
+    // D2: coach holds members.read.assigned (not members.read).
+    // members.read is the full-roster read granted to owner /
+    // admin / receptionist; coach only sees members attached to
+    // their own batches, gated at the service layer
+    // (lib/services/people.ts) by a JOIN against coach-staff rows.
     permissions: [
       "attendance.read",
       "attendance.mark",
-      "members.read",
+      "members.read.assigned",
       "programs.read",
       "levels.read",
       "levels.assess",

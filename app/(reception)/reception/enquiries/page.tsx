@@ -1,7 +1,9 @@
 import { listEnquiriesAction } from "@/lib/actions/enquiries";
 import { EnquiriesBoard } from "@/components/enquiries-board";
+import { requireReception } from "@/lib/auth/surface-guard";
 
 export default async function ReceptionEnquiriesPage() {
+  await requireReception();
   const enquiries = await listEnquiriesAction({});
 
   return (

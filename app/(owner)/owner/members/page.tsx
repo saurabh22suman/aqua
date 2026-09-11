@@ -2,8 +2,10 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { listLocationsAction, listMembersAction } from "@/lib/actions/people";
 import { MembersBoard } from "@/components/members-board";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function MembersPage() {
+  await requireOwner();
   const [members, locations] = await Promise.all([
     listMembersAction({}),
     listLocationsAction(),

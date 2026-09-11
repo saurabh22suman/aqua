@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import { getMemberDetailAction, listLocationsAction } from "@/lib/actions/people";
 import { MemberEditForm } from "@/components/member-edit-form";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function EditMemberPage({
   params,
 }: {
   params: Promise<{ memberId: string }>;
 }) {
+  await requireOwner();
   const { memberId } = await params;
   const [member, locations] = await Promise.all([
     getMemberDetailAction(memberId),

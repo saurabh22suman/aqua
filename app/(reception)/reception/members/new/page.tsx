@@ -2,8 +2,10 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { MemberCreateForm } from "@/components/member-create-form";
+import { requireReception } from "@/lib/auth/surface-guard";
 
 export default async function ReceptionNewMemberPage() {
+  await requireReception();
   const [locations, terminology] = await Promise.all([
     listLocationsAction(),
     // L3 audit — the page heading and the form's guardian copy

@@ -11,6 +11,7 @@ import {
   currentMonthPeriod,
   getBatchAttendanceSummary,
 } from "@/lib/services/attendance-history";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 4.2 — per-batch attendance summary. Service existed
 // since C-27 (lib/services/attendance-history.ts), deferred
@@ -26,6 +27,7 @@ export default async function BatchDetailPage({
 }: {
   params: Promise<{ batchId: string }>;
 }) {
+  await requireOwner();
   const { batchId } = await params;
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "programs.read");

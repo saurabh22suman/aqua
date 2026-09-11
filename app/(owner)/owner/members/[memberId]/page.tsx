@@ -14,12 +14,14 @@ import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function MemberDetailPage({
   params,
 }: {
   params: Promise<{ memberId: string }>;
 }) {
+  await requireOwner();
   const { memberId } = await params;
   const [member, attendanceHistory, cardCtx, terminology] = await Promise.all([
     getMemberDetailAction(memberId),
