@@ -131,6 +131,18 @@ jobs:
               # one (CLAUDE.md). Always requires review.
               db/migrations/*) echo "::error file=$file::Touches db/migrations/**."; FAILED=1 ;;
 
+              # TESTS/TIER1/** — the audit-attack review queue.
+              # tests/tier1/ holds the highest-stakes regression tests
+              # in this repo: role-bypass attacks, migration
+              # invariants, the no-superuser allowlist itself. Agents
+              # MUST NOT write under tests/tier1/ at all — every
+              # existing file there is human-written and every
+              # fixture name on the no-superuser allowlist is
+              # human-curated. The rule is recorded in
+              # docs/agent-setup.md. Edit any of them requires a
+              # human reviewer's eyes.
+              tests/tier1/*) echo "::error file=$file::Touches tests/tier1/** (audit-attack regression suite; agents must not write here)."; FAILED=1 ;;
+
               # GATE ITSELF — the workflow and its companion test pair.
               # Editing either without tripping the gate is the
               # original attack class the gate exists to prevent.
