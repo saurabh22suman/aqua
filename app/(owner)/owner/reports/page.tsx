@@ -1,6 +1,8 @@
+import { notFound } from "next/navigation";
 import { getAttendanceReportAction, getEnquiryFunnelAction, getRetentionViewAction, getCoachLoadAction } from "@/lib/actions/owner-reports";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
+import { requireDefaultCtx } from "@/lib/auth/context";
 import { AttendanceReportCard } from "@/components/reports/attendance-report-card";
 import { EnquiryFunnelCard } from "@/components/reports/enquiry-funnel-card";
 import { RetentionCard } from "@/components/reports/retention-card";
@@ -10,11 +12,24 @@ import { CoachLoadCard } from "@/components/reports/coach-load-card";
 // 4.4 / 4.5 / 4.6), one dominant element on each. Period
 // defaults to "this calendar month" in the tenant's timezone.
 // The page picks up `?from=…&to=…` from the URL when set.
+//
+// Feature gate: the layout already hides the Reports nav item
+// when ctx.features does NOT include "reports"; this page does the
+// same check explicitly so a user who types /owner/reports does
+// not reach the action layer only to be met by a ForbiddenError
+// thrown from requirePermission. Same 404 as a made-up path — the
+// surface looks identical whether the feature is off or the URL
+// is wrong (architecture §7.3).
 export default async function ReportsPage({
   searchParams,
 }: {
   searchParams?: Promise<{ from?: string; to?: string }>;
 }) {
+  const ctx = await requireDefaultCtx();
+  if (!ctx.features.has("reports")) {
+    notFound();
+  }
+
   const params = searchParams ? await searchParams : {};
   const timezone = await getTenantTimezoneAction();
   const period = (() => {

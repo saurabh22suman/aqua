@@ -42,7 +42,16 @@ export type NavItem = {
   // reports feature off, before the user can click through to
   // a 404 page. Architecture §7.3 says both layers: the action
   // gate is requirePermission(ctx, "reports.operational"), the UI
-  // gate is this flag. The matrix test exercises both.
+  // gate is this field. The matrix test exercises both.
+  //
+  // What the code actually does at render time: an item is shown
+  // iff (a) it has no featureKey set, OR (b) its featureKey is
+  // not in the hiddenFeatures array the layout passes down.
+  // hiddenFeatures is ctx.features (a Set<string>) serialised to
+  // an array — Next can't ship a Set across the RSC boundary, so
+  // the server-component layout does the conversion. The filter
+  // lives in the BottomNav client component below; see the
+  // visibleItems computation.
   featureKey?: string;
 };
 
