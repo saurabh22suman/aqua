@@ -8,6 +8,8 @@ import { tenantMemberships } from "./schema/memberships";
 import { roles } from "./schema/roles";
 import { tenants } from "./schema/tenants";
 import { platformAuditLog } from "./schema/platform-users";
+import { ensurePersonAndStaff } from "./invite-helpers";
+import type { StaffType } from "./schema/staff";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // Phase 2.7 — "invite the owner, assign role" — the third step of
@@ -43,6 +45,8 @@ export type InviteOwnerResult =
       kind: "ok";
       userId: string;
       membershipId: string;
+      personId: string;
+      staffId: string | null;
       wasNewUser: boolean;
     }
   | {
@@ -59,9 +63,26 @@ import { normaliseToE164 } from "@/lib/phone";
 
 const E164_PLUS = /^\+\d{8,15}$/;
 
+// PR C — when no fullName is given, derive a placeholder from the
+// phone so the always-required persons.full_name column still has a
+// value. The PR C form (lib/actions/platform-invite-owner.ts) passes
+// the operator-entered name explicitly; this fallback is for the
+// platform-side backfill path (tests/tier1/membership-activation.test.ts
+// and tenant-creation-parity.test.ts seed memberships without a
+// name) and keeps the helper the only place a persons row is created.
+function defaultFullName(phone: string): string {
+  const last4 = phone.replace(/\D/g, "").slice(-4);
+  return `Owner +••• ${last4}`;
+}
+
 export async function inviteOwner(
   tenantId: TenantId,
-  input: { phone: string; actorId: UserId },
+  input: {
+    phone: string;
+    fullName?: string;
+    staffType?: StaffType;
+    actorId: UserId;
+  },
 ): Promise<InviteOwnerResult> {
   // Strip whitespace/dashes, then route through the canonical
   // helper so an operator who paste-enters `919876543210`
@@ -75,6 +96,7 @@ export async function inviteOwner(
       message: "Phone must be E.164 with country code (e.g. +919876543210).",
     };
   }
+  const fullName = (input.fullName ?? "").trim() || defaultFullName(cleaned);
 
   // 1. find-or-create the user. `users` is in the platform
   // allowlist; withPlatform() is the standing scope for any
@@ -163,6 +185,18 @@ export async function inviteOwner(
       .returning({ id: tenantMemberships.id });
     const membershipId = inserted[0]!.id;
 
+    // PR C — persons + (optional) staff row from the same shared
+    // helper inviteStaff uses. Without this branch an owner who
+    // also coaches has no persons/staff row and therefore cannot
+    // be assigned to a batch (batches.coach_id → staff.id, which
+    // never existed). staffType is optional; the owner who doesn't
+    // coach gets only the persons row.
+    const personStaff = await ensurePersonAndStaff(tx, tenantId, input.actorId, {
+      fullName,
+      userId: user.id as never,
+      staffType: input.staffType,
+    });
+
     await tx.insert(platformAuditLog).values({
       actorId: input.actorId,
       tenantId,
@@ -180,6 +214,8 @@ export async function inviteOwner(
       kind: "ok",
       userId: user.id,
       membershipId,
+      personId: personStaff.personId,
+      staffId: personStaff.staffId,
       wasNewUser: user.wasNew,
     };
   });
