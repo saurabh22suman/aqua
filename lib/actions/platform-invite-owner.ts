@@ -24,6 +24,12 @@ import { asUserId } from "@/lib/ids";
 const inviteFormInput = z.object({
   tenantId: z.string().uuid(),
   phone: z.string().trim().min(1).max(40),
+  fullName: z.string().trim().min(1).max(200),
+  // Optional. PR C: when set, the invite also creates a staff
+  // row of this type so an owner who also coaches can be assigned
+  // to a batch without a second "create staff" form. Most
+  // operators leave it unset.
+  staffType: z.enum(["coach", "receptionist", "worker", "accountant"]).optional(),
 });
 
 export type InviteOwnerActionResult =
@@ -38,12 +44,18 @@ export async function inviteOwnerAction(
   const surface = inviteFormInput.safeParse({
     tenantId: String(formData.get("tenantId") ?? ""),
     phone: String(formData.get("phone") ?? ""),
+    fullName: String(formData.get("fullName") ?? ""),
+    staffType: (() => {
+      const raw = formData.get("staffType");
+      if (typeof raw !== "string" || raw === "") return undefined;
+      return raw;
+    })(),
   });
   if (!surface.success) {
     return {
       kind: "error",
       code: "invalid",
-      message: "Pick a tenant and a phone number.",
+      message: "Pick a tenant, a phone number, and a name.",
     };
   }
 
@@ -60,6 +72,8 @@ export async function inviteOwnerAction(
   // (3) service
   return inviteOwner(surface.data.tenantId as never, {
     phone: surface.data.phone,
+    fullName: surface.data.fullName,
+    staffType: surface.data.staffType,
     actorId: asUserId(status.userId),
   });
 }
