@@ -214,7 +214,14 @@ export async function markAttendanceSessionAction(raw: {
 
 export async function getCoachRosterAction(): Promise<CoachRosterRow[]> {
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.read");
+  // D2: coach roster reads use members.read.assigned, not
+  // members.read. Coach holds members.read.assigned; coach does NOT
+  // hold members.read (that's the full-roster grant for owner /
+  // admin / receptionist). The service layer scopes by
+  // coachStaffIdSubquery, so the coach sees only the members
+  // attached to their own batches even though the permission
+  // itself is granted to every coach.
+  requirePermission(ctx, "members.read.assigned");
   return listCoachRoster({ tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey });
 }
 
@@ -226,7 +233,7 @@ export async function getCoachMemberDetailAction(
 ): Promise<CoachMemberDetail | null> {
   const memberId = memberIdSchema.parse(rawMemberId);
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.read");
+  requirePermission(ctx, "members.read.assigned");
   return getCoachMemberDetail(
     { tenantId: ctx.tenantId, userId: ctx.userId ?? "" },
     memberId,

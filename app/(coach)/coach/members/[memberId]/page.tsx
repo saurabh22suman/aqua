@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
+import { requireCoach } from "@/lib/auth/surface-guard";
 
 // Coach member detail — the coach-scoped subset of the member's
 // record. The page is intentionally narrow: name, code, batches
@@ -15,6 +16,7 @@ export default async function CoachMemberDetailPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
+  await requireCoach();
   const { memberId } = await params;
   const m = await getCoachMemberDetailAction(memberId);
   if (!m) notFound();

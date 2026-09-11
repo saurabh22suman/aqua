@@ -432,6 +432,62 @@ less likely to lose the race than before. Only found because CI was run
       failure is not evidence — report the actual run count, not "it
       passed."
 
+### Named failure class: Layout used as an authorization boundary
+
+The auditor ran three attacks against a real coach session and got
+owner data three ways:
+
+1. `GET /owner` / `/owner/members` / `/owner/members/[memberId]` with
+   `RSC: 1` and a `Next-Router-State-Tree` header claiming the
+   `(owner)` segment was already mounted → 200 with the dashboard
+   figures, the full member roster, and a member's dateOfBirth.
+   Next.js skips layouts for segments the client claims are mounted,
+   so `app/(owner)/layout.tsx` is **not** an authorization boundary.
+2. `POST` with a `Next-Action` header pointing at
+   `getOwnerDashboardAction`'s hash (from
+   `.next/server/server-reference-manifest.json`) → 200, full payload.
+   `lib/actions/dashboard.ts` called `requireDefaultCtx` and nothing
+   else — no role/permission check.
+3. `POST` against `listMembersAction` / `getMemberDetailAction`
+   with `Next-Action`. Both check `members.read`, which coaches
+   legitimately hold for their own roster. Per-grant, not per-row.
+
+Every page and every server action must authorize itself. Layouts
+steer nav visibility, redirect before data fetches for UX — they
+are not the gate that stops a coach from reaching owner data.
+
+- [ ] No layout is the only authorization gate for a protected
+      surface. Every `page.tsx` under a tenant route group
+      (`(owner)`, `(coach)`, `(reception)`) calls a surface guard
+      (`requireOwner` / `requireCoach` / `requireReception`) as
+      its first statement. The mechanical check is
+      `tests/page-guard-scan.test.ts` — fail to scan it (rename /
+      remove the guard / move the data fetch above it) and CI goes
+      red.
+- [ ] Every `'use server'` exported function calls
+      `requirePermission` against a permission key that scopes its
+      access. The closed exemption list at the top of
+      `tests/action-permission-scan.test.ts` (pre-auth, platform-
+      scoped, tenant-wide metadata) is the only place a function
+      can skip the call. Add a new entry with a stated reason —
+      a silent exemption is the recurrence this rule prevents.
+- [ ] No "ungated by design" comment survives on an action. The
+      shape used to exist on `getOwnerDashboardAction`
+      (`lib/actions/dashboard.ts`); the rule that closed it is
+      "every action authorizes itself" — the data shape is no
+      longer a justification.
+- [ ] Layouts still call `canAccessSurface` for UX (bottom-nav
+      visibility, the redirect before any data fetch) — but pages
+      also call their surface guard. Both layers; never one.
+- [ ] When a permission is split (e.g. `members.read` for full-
+      roster owner/admin/receptionist reads vs `members.read.assigned`
+      for coach reads), the coach's actions that touch the same
+      data take the narrower grant AND scope the service query to
+      the coach's own batches (`coachStaffIdSubquery`). The full
+      grant + service-layer scoping on the coach path is the
+      recurrence this rule prevents — `listMembersAction` and
+      `getMemberDetailAction` got exactly that shape, fixed here.
+
 ## 7. Offline sync — the last-write-wins rule is not a test detail
 
 `attendance` upserts on `(tenant_id, session_id, member_id)` — whichever

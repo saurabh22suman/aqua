@@ -1,7 +1,9 @@
 import { listEnquiriesAction } from "@/lib/actions/enquiries";
 import { EnquiriesBoard } from "@/components/enquiries-board";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function EnquiriesPage() {
+  await requireOwner();
   const enquiries = await listEnquiriesAction({});
 
   return (

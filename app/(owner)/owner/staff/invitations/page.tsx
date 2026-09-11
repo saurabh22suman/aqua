@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listInvitationsAction } from "@/lib/actions/staff-invitations";
 import { InvitationsBoard } from "@/components/invitations-board";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 3.6 — staff invitations surface. List + revoke + login-link
 // issue. The "accept" step is the invitee opening the login link the
@@ -8,6 +9,7 @@ import { InvitationsBoard } from "@/components/invitations-board";
 // inside the redeem (no separate UI on this side, no OTP involved
 // until a delivery channel exists).
 export default async function StaffInvitationsPage() {
+  await requireOwner();
   const rows = await listInvitationsAction();
   return (
     <main className="px-5 pt-6 pb-8">

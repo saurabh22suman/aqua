@@ -3,6 +3,7 @@ import { ChevronLeft } from "lucide-react";
 import { LOCALES, type Locale } from "@/lib/terminology/keys";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { TerminologyForm } from "@/components/terminology/terminology-form";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 2.10 / 4.20 — owner vocabulary editor. Eight closed
 // TERM_KEYS per architecture § 7.5; per-locale override data
@@ -23,6 +24,7 @@ export default async function TerminologySettingsPage({
 }: {
   searchParams: Promise<{ locale?: string }>;
 }) {
+  await requireOwner();
   const params = await searchParams;
   const requested = params.locale;
   const locale: Locale = (LOCALES as readonly string[]).includes(requested ?? "")
