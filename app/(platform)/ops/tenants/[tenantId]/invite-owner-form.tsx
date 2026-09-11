@@ -34,10 +34,12 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
     message: "",
   } as InviteOwnerActionResult);
   const [phone, setPhone] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [staffType, setStaffType] = useState("");
   const phoneInputRef = useRef<HTMLInputElement>(null);
 
-  // After a successful invite, refocus the input. Done in an effect
-  // so the focus moves AFTER the action's revalidation finishes —
+  // After a successful invite, refocus the input. Done in in
+  // effect so the focus moves AFTER the action's revalidation finishes —
   // focusing too early lands the cursor on the input before React
   // has cleared the value.
   useEffect(() => {
@@ -57,8 +59,22 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
         Create the owner&apos;s membership for a phone number. Nothing is sent anywhere —
         after inviting, mint a login link below and share it with the owner yourself.
       </p>
-      <div className="flex items-end gap-3">
-        <label className="block flex-1">
+      <div className="space-y-2">
+        <label className="block">
+          <span className="block text-[12px] font-medium text-ink-2 mb-1">
+            Owner name
+          </span>
+          <input
+            name="fullName"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Priya Iyer"
+            autoComplete="name"
+            required
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] focus:outline-none"
+          />
+        </label>
+        <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Owner phone (E.164)
           </span>
@@ -70,9 +86,29 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             placeholder="+919876543210"
             inputMode="tel"
             autoComplete="tel"
+            required
             className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent)] focus:outline-none"
           />
         </label>
+        <label className="block">
+          <span className="block text-[12px] font-medium text-ink-2 mb-1">
+            Also on the staff roster? (optional)
+          </span>
+          <select
+            name="staffType"
+            value={staffType}
+            onChange={(e) => setStaffType(e.target.value)}
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] focus:outline-none"
+          >
+            <option value="">— No, owner-only —</option>
+            <option value="coach">Yes — also a coach (so they can be assigned to a batch)</option>
+            <option value="receptionist">Yes — also a receptionist</option>
+            <option value="worker">Yes — also a worker</option>
+            <option value="accountant">Yes — also an accountant</option>
+          </select>
+        </label>
+      </div>
+      <div>
         <button
           type="submit"
           disabled={isPending}
