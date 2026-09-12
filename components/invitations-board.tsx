@@ -7,6 +7,7 @@ import {
   revokeInvitationAction,
 } from "@/lib/actions/staff-invitations";
 import { issueLoginLinkAction } from "@/lib/actions/invite-link";
+import { LinkQr } from "@/components/link-qr";
 import type { ListInvitationsRow } from "@/lib/services/staff-invitations";
 
 // Phase 3.6 — invitations board. List with state pills, per-row
@@ -158,6 +159,9 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
             {copied ? <Check size={13} /> : <Copy size={13} />}
             {copied ? "Copied" : "Copy link"}
           </button>
+          <div className="mt-3">
+            <LinkQr url={link.url} />
+          </div>
         </div>
       ) : null}
       <div className="mt-3 flex gap-2">

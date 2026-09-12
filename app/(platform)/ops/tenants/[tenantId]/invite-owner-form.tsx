@@ -7,6 +7,7 @@ import {
   type InviteOwnerActionResult,
 } from "@/lib/actions/platform-invite-owner";
 import { issueOwnerLoginLinkAction } from "@/lib/actions/platform-login-link";
+import { LinkQr } from "@/components/link-qr";
 
 // Phase 2.7 — "Invite the owner" client island. Lives on the
 // tenant detail page. The form takes a phone number, calls
@@ -205,6 +206,9 @@ function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: str
           >
             {copied ? "Copied" : "Copy link"}
           </button>
+          <div className="mt-3">
+            <LinkQr url={link.url} />
+          </div>
         </div>
       ) : null}
     </div>
