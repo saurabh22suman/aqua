@@ -6,6 +6,7 @@ import {
   redeemLoginLink,
   type RedeemLoginLinkError,
 } from "@/lib/services/invite-link";
+import { pinSchema } from "@/lib/services/credentials";
 
 // POST /api/login-link/redeem — consumes a staff magic-link login
 // token and signs the holder in. Pre-auth by definition (the token
@@ -21,6 +22,11 @@ import {
 // is the boring mechanism with no framework magic in between.
 const redeemSchema = z.object({
   token: z.string().min(1).max(4096),
+  // Optional: the set-PIN screen sends it; the plain confirm screen
+  // does not. Shape-checked here so a malformed PIN is a 400 before
+  // the service is reached (the service checks again so other
+  // callers can't skip it).
+  pin: pinSchema.optional(),
 });
 
 export type RedeemRouteResult =
@@ -45,7 +51,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const result = await redeemLoginLink(parsed.data.token);
+  const result = await redeemLoginLink(
+    parsed.data.token,
+    parsed.data.pin !== undefined ? { pin: parsed.data.pin } : undefined,
+  );
   if (result.kind === "error") {
     // Generic 401 for every flavor (invalid, used, revoked,
     // suspended): the confirm page already showed a generic
