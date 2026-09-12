@@ -3,15 +3,20 @@
 import { Check, X } from "lucide-react";
 import type { RosterRow } from "@/lib/actions/coach";
 import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 export function RegisterBoard({
   sessionId,
   rows,
   offlineSyncEnabled,
+  terminology,
 }: {
   sessionId: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
+  // Closed-key vocab resolved by the parent server page (L3 audit).
+  terminology: TerminologyState;
 }) {
   const initialStatuses = Object.fromEntries(
     rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
@@ -153,7 +158,16 @@ export function RegisterBoard({
       </div>
 
       <ul className="mt-2 pb-8">
-        {rows.map((r) => (
+        {rows.length === 0 ? (
+          <li className="list-none">
+            <EmptyState
+              title={`No ${resolveTerm(terminology, "member", "other")} enrolled in this ${resolveTerm(terminology, "batch", 1)}.`}
+              body={`Ask the owner to add them from the ${resolveTerm(terminology, "program", 1)} board.`}
+              action={{ label: "Back to schedule", href: "/coach/schedule" }}
+            />
+          </li>
+        ) : (
+          rows.map((r) => (
           <li
             key={r.memberId}
             data-member-id={r.memberId}
@@ -218,7 +232,8 @@ export function RegisterBoard({
               </div>
             </div>
           </li>
-        ))}
+          ))
+        )}
       </ul>
     </div>
   );

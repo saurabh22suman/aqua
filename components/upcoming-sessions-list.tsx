@@ -6,6 +6,7 @@ import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import type { CoachOption } from "@/lib/services/programs";
 import type { TerminologyState } from "@/lib/terminology/keys";
 import { formatTimeIST } from "@/lib/time/tz";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 // F3 (R.1) — client island for /owner/sessions. Renders the
 // session list with a per-row substitute control. Tracks
@@ -46,13 +47,11 @@ export function UpcomingSessionsList({
 
   if (sessions.length === 0) {
     return (
-      <div className="mt-6 rounded-card border border-line bg-paper p-6 text-center">
-        <p className="text-[15px] font-medium text-ink-2">No upcoming sessions</p>
-        <p className="mt-1.5 text-[12.5px] text-ink-3">
-          Sessions are generated four weeks ahead from each batch&apos;s
-          schedule. Add a batch in the programs board if none exist
-          yet.
-        </p>
+      <div className="mt-6 rounded-card border border-line bg-paper">
+        <EmptyState
+          title="No upcoming sessions"
+          body="Sessions are generated four weeks ahead from each batch's schedule. Add a batch in the programs board if none exist yet."
+        />
       </div>
     );
   }

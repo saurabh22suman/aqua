@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import type { LocationOption, MemberListRow } from "@/lib/services/people";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 const STATUS_LABELS: Record<string, string> = {
   trial: "Trial",
@@ -105,17 +106,18 @@ export function MembersBoard({
 
       <ul className="mt-3" data-testid="members-list" aria-busy={isPending}>
         {members.length === 0 ? (
-          <li className="rounded-ctl border border-line bg-paper px-4 py-8 text-center">
-            <p className="text-[13px] text-ink-3">
-              {search || status || locationId ? "No members match." : "No members yet."}
-            </p>
-            {search || status || locationId ? null : (
-              <Link
-                href="/owner/members/new"
-                className="mt-4 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent)]"
-              >
-                Add your first member
-              </Link>
+          <li className="rounded-ctl border border-line bg-paper list-none">
+            {search || status || locationId ? (
+              <EmptyState title="No members match." />
+            ) : (
+              <EmptyState
+                title="No members yet."
+                body="Add your first member to start building the roster."
+                action={{
+                  label: "Add your first member",
+                  href: "/owner/members/new",
+                }}
+              />
             )}
           </li>
         ) : (

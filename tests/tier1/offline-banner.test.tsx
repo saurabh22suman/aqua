@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RegisterBoard } from "@/components/register-board";
 import type { RosterRow } from "@/lib/services/register";
+import type { TerminologyState } from "@/lib/terminology/keys";
+
+const TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 
 // Three-state sync banner on /coach/register/[sessionId].
 //
@@ -95,7 +98,7 @@ describe("RegisterBoard sync banner — three-state machine", { concurrent: fals
     state.pending = 0;
     state.hasActiveFailure = false;
 
-    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />);
+    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} terminology={TERMINOLOGY} />);
 
     expect(screen.queryByTestId("sync-failure-banner")).toBeNull();
     expect(screen.queryByTestId("pending-sync-banner")).toBeNull();
@@ -106,7 +109,7 @@ describe("RegisterBoard sync banner — three-state machine", { concurrent: fals
     state.pending = 3;
     state.hasActiveFailure = false;
 
-    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />);
+    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} terminology={TERMINOLOGY} />);
 
     const banner = screen.getByTestId("pending-sync-banner");
     expect(banner).not.toBeNull();
@@ -122,7 +125,7 @@ describe("RegisterBoard sync banner — three-state machine", { concurrent: fals
     state.pending = 0;
     state.hasActiveFailure = true;
 
-    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />);
+    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} terminology={TERMINOLOGY} />);
 
     const banner = screen.getByTestId("sync-failure-banner");
     expect(banner).not.toBeNull();
@@ -145,7 +148,7 @@ describe("RegisterBoard sync banner — mutation-proof", { concurrent: false }, 
     state.pending = 5;
     state.hasActiveFailure = false;
 
-    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />);
+    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} terminology={TERMINOLOGY} />);
 
     expect(screen.queryByTestId("pending-sync-banner")).toBeNull();
     expect(screen.queryByTestId("sync-failure-banner")).toBeNull();
@@ -160,7 +163,7 @@ describe("RegisterBoard sync banner — retry wiring", { concurrent: false }, ()
     state.hasActiveFailure = true;
     state.retrySync = retrySync;
 
-    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />);
+    render(<RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} terminology={TERMINOLOGY} />);
 
     const banner = screen.getByTestId("sync-failure-banner");
     expect(retrySync).not.toHaveBeenCalled();

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, X, Check } from "lucide-react";
+import { Tap } from "@/components/ui/Tap";
 import {
   createProgramAction,
   deleteBatchAction,
@@ -152,35 +153,41 @@ export function ProgramsBatchesBoard({
               )}
               {editingProgram === p.id ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => saveProgram(p.id)}
-                    disabled={busyProgram || !editingProgramName.trim()}
-                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-2"
-                    aria-label="Save program"
-                    data-testid={`save-program-${p.id}`}
-                  >
-                    <Check size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingProgram(null)}
-                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3"
-                    aria-label="Cancel"
-                  >
-                    <X size={16} />
-                  </button>
+                  <Tap>
+                    <button
+                      type="button"
+                      onClick={() => saveProgram(p.id)}
+                      disabled={busyProgram || !editingProgramName.trim()}
+                      className="grid place-items-center rounded-ctl text-ink-2"
+                      aria-label="Save program"
+                      data-testid={`save-program-${p.id}`}
+                    >
+                      <Check size={16} />
+                    </button>
+                  </Tap>
+                  <Tap>
+                    <button
+                      type="button"
+                      onClick={() => setEditingProgram(null)}
+                      className="grid place-items-center rounded-ctl text-ink-3"
+                      aria-label="Cancel"
+                    >
+                      <X size={16} />
+                    </button>
+                  </Tap>
                 </>
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => startEditProgram(p)}
-                    aria-label={`Edit ${p.name}`}
-                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2"
-                  >
-                    <Pencil size={15} />
-                  </button>
+                  <Tap>
+                    <button
+                      type="button"
+                      onClick={() => startEditProgram(p)}
+                      aria-label={`Edit ${p.name}`}
+                      className="grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </Tap>
                   {confirmDeleteProgram === p.id ? (
                     <>
                       <button
@@ -200,14 +207,16 @@ export function ProgramsBatchesBoard({
                       </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteProgram(p.id)}
-                      aria-label={`Delete ${p.name}`}
-                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <Tap>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteProgram(p.id)}
+                        aria-label={`Delete ${p.name}`}
+                        className="grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </Tap>
                   )}
                 </>
               )}
@@ -265,14 +274,16 @@ export function ProgramsBatchesBoard({
                     <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {b.startTime}–{b.endTime}</span>
                     {b.coachName ? <span className="text-ink-3"> · {resolveTerm(terminology, "coach", 1)} {b.coachName}</span> : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => startEditBatch(b)}
-                    aria-label={`Edit ${b.name}`}
-                    className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2 flex-none"
-                  >
-                    <Pencil size={15} />
-                  </button>
+                  <Tap>
+                    <button
+                      type="button"
+                      onClick={() => startEditBatch(b)}
+                      aria-label={`Edit ${b.name}`}
+                      className="grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2 flex-none"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  </Tap>
                   {confirmDeleteBatch === b.id ? (
                     <>
                       <button
@@ -292,14 +303,16 @@ export function ProgramsBatchesBoard({
                       </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteBatch(b.id)}
-                      aria-label={`Delete ${b.name}`}
-                      className="h-8 w-8 grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2 flex-none"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <Tap>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteBatch(b.id)}
+                        aria-label={`Delete ${b.name}`}
+                        className="grid place-items-center rounded-ctl text-ink-3 hover:text-ink-2 flex-none"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </Tap>
                   )}
                 </div>
               )}
