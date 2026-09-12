@@ -137,6 +137,18 @@ export function formatWeekdayDateIST(iso: string | Date): string {
   });
 }
 
+// 24-hour IST wall time for form controls (a date/time editor needs
+// "17:00", not "05:00 pm"). Display text still uses formatTimeIST.
+export function formatWallTime24hIST(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Kolkata",
+  }).format(d);
+}
+
 // A wall-clock time from a `time` column ("07:00:00") or an input value
 // ("07:00"). Not an instant, so no zone conversion: the value is
 // already the academy's local time. Unknown shapes pass through, same

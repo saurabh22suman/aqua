@@ -2,10 +2,15 @@
 
 import { useState } from "react";
 import { SessionSubstituteControl } from "@/components/session-substitute-control";
+import { SessionLifecycleControl } from "@/components/session-lifecycle-control";
 import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import type { CoachOption } from "@/lib/services/programs";
 import type { TerminologyState } from "@/lib/terminology/keys";
-import { formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
+import {
+  formatTimeIST,
+  formatWallTime24hIST,
+  formatWeekdayDateIST,
+} from "@/lib/time/tz";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 // F3 (R.1) — client island for /owner/sessions. Renders the
@@ -60,6 +65,27 @@ export function UpcomingSessionsList({
     );
   }
 
+  // R.4 — a cancel/reschedule updates the row in place (and the date
+  // grouping, which keys off sessionDate) until the refresh lands.
+  function onLifecycleChanged(
+    sessionId: string,
+    next: { status: string; sessionDate: string; startsAt?: string; endsAt?: string },
+  ) {
+    setSessions((rows) =>
+      rows.map((r) =>
+        r.id === sessionId
+          ? {
+              ...r,
+              status: next.status,
+              sessionDate: next.sessionDate,
+              startsAt: next.startsAt ? new Date(next.startsAt) : r.startsAt,
+              endsAt: next.endsAt ? new Date(next.endsAt) : r.endsAt,
+            }
+          : r,
+      ),
+    );
+  }
+
   return (
     <div className="mt-5 space-y-5">
       {Array.from(grouped.entries()).map(([date, rows]) => (
@@ -70,22 +96,16 @@ export function UpcomingSessionsList({
           <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
             {rows.map((s) => (
               <li key={s.id} className="px-4 py-3" data-testid={`session-${s.id}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-medium text-ink truncate">
-                      {formatTimeIST(s.startsAt)}&ndash;{formatTimeIST(s.endsAt)}{" "}
-                      &middot; {s.batchName}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-ink-3">
-                      Coach: <span className="text-ink-2">{s.coachName ?? "Unassigned"}</span>
-                      {s.status !== "scheduled" ? (
-                        <>
-                          {" · "}
-                          <span className="text-ink-3">{s.status}</span>
-                        </>
-                      ) : null}
-                    </p>
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium text-ink truncate">
+                    {formatTimeIST(s.startsAt)}&ndash;{formatTimeIST(s.endsAt)}{" "}
+                    &middot; {s.batchName}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-ink-3">
+                    Coach: <span className="text-ink-2">{s.coachName ?? "Unassigned"}</span>
+                  </p>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <SessionSubstituteControl
                     sessionId={s.id}
                     sessionDate={s.sessionDate}
@@ -97,6 +117,14 @@ export function UpcomingSessionsList({
                       onSubstituted(s.id, result.newCoachName);
                     }}
                     terminology={terminology}
+                  />
+                  <SessionLifecycleControl
+                    sessionId={s.id}
+                    sessionDate={s.sessionDate}
+                    startWall={formatWallTime24hIST(s.startsAt)}
+                    endWall={formatWallTime24hIST(s.endsAt)}
+                    status={s.status}
+                    onChanged={(next) => onLifecycleChanged(s.id, next)}
                   />
                 </div>
               </li>
