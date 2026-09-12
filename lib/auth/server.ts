@@ -31,6 +31,26 @@ export function createAuth(authDb: NodePgDatabase<Record<string, never>>) {
       window: 60,
       max: 20,
     },
+    // 2026-09-11 auth feature (phone+PIN): the credential provider is
+    // how a tenant user signs in with phone + PIN after accepting a
+    // magic link. The identity is the same ba_user the phone-OTP
+    // plugin creates; the credential slot (ba_account, provider
+    // "credential") is written by lib/services/credentials.ts.
+    //
+    // disableSignUp is mandatory: enabling emailAndPassword registers
+    // the public /sign-up/email endpoint, and without this flag anyone
+    // who can reach it can mint a ba_user row. Nobody self-registers
+    // in this product — every identity arrives via an invite.
+    // requireEmailVerification stays off (the stored emails are
+    // synthetic `${phone}@phone.aqua.local`; there is no mail channel).
+    // minPasswordLength 6 admits the 6-12 digit PIN policy; the PIN
+    // shape itself is enforced by Zod at the route boundary, and the
+    // per-account lockout lives in the credentials service.
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+      minPasswordLength: 6,
+    },
     plugins: [
       phoneNumber({
         otpLength: 6,

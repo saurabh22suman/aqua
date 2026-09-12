@@ -40,6 +40,12 @@ export const baAccount = pgTable(
       .references(() => baUser.id, { onDelete: "cascade" }),
     accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
+    // better-auth 1.7.1+: "local:credential" for credential accounts.
+    // The @better-auth/drizzle-adapter builds findCredentialAccount's
+    // WHERE clause through this schema object — a missing field emits
+    // an empty SQL fragment and the query fails with a syntax error.
+    // See db/migrations/20260912000200_ba_account_issuer.sql.
+    issuer: text("issuer"),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
