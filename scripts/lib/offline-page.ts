@@ -1,4 +1,5 @@
 import type { BrowserContext, Page } from "playwright";
+import { DEMO_PIN } from "./demo-credentials";
 
 export async function waitForServer(base: string): Promise<void> {
   for (let i = 0; i < 60; i++) {
@@ -15,15 +16,14 @@ export async function loginAsCoach(
   base: string,
   coachPhone: string,
 ): Promise<Page> {
+  // 2026-09-11 auth feature: the login UI is phone + PIN. `pnpm seed`
+  // (which the CI job runs before this) sets every login user's
+  // credential to DEMO_PIN.
   const page = await context.newPage();
   await page.goto(`${base}/login`);
   await page.getByPlaceholder("+91 98765 43210").fill(coachPhone);
-  await page.getByRole("button", { name: "Continue" }).click();
-  const hint = page.locator("[data-testid=dev-code]");
-  await hint.waitFor({ timeout: 15_000 });
-  const code = (await hint.textContent())!.replace(/\D/g, "").slice(-6);
-  await page.getByPlaceholder("••••••").fill(code);
-  await page.getByRole("button", { name: "Verify and continue" }).click();
+  await page.getByLabel("PIN").fill(DEMO_PIN);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/coach", { timeout: 15_000 });
   return page;
 }

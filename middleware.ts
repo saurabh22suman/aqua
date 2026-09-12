@@ -47,6 +47,16 @@ const APEX_ALLOWLIST = [
   // and /p/ above. Authorization lives in redeemLoginLink
   // (signature + expiry + membership status + single-use consume).
   "/api/login-link/",
+  // Phone + PIN login (2026-09-11 auth feature). Pre-auth by
+  // definition; every failure is a generic 401.
+  "/api/login/",
+  // Session-gated set-PIN safety net (already-authenticated users
+  // only; the route checks the better-auth session itself).
+  "/api/account/",
+  // Set-PIN screen reached when a redeem happens without a PIN (the
+  // session exists but no credential does). The page redirects to
+  // /login when there is no session.
+  "/set-pin",
   "/api/health",
   // Next.js internals and static assets. Required for HMR, RSC
   // payloads, and the _next/static directory the build emits.

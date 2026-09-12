@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
+import { DEMO_PIN } from "./lib/demo-credentials";
 
 // J3 — liveness probe. A previous run that crashed or was killed
 // might leave a `next dev` listening on this port; the script's
@@ -65,15 +66,10 @@ async function main() {
     const page = await context.newPage();
     try {
       await page.goto(`${BASE}/login`);
+      // 2026-09-11 auth feature: phone + PIN (pnpm seed sets the PIN).
       await page.getByPlaceholder("+91 98765 43210").fill(role.phone);
-      await page.getByRole("button", { name: "Continue" }).click();
-
-      const hint = page.locator("text=dev code:");
-      await hint.waitFor({ timeout: 15_000 });
-      const code = (await hint.textContent())!.replace(/\D/g, "").slice(-6);
-
-      await page.getByPlaceholder("••••••").fill(code);
-      await page.getByRole("button", { name: "Verify and continue" }).click();
+      await page.getByLabel("PIN").fill(DEMO_PIN);
+      await page.getByRole("button", { name: "Sign in" }).click();
 
       await page.waitForURL(`**${role.expect}`, { timeout: 15_000 });
       console.log(`[✓] ${role.phone} → ${page.url().replace(BASE, "")} (expected ${role.expect})`);
