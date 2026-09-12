@@ -136,7 +136,7 @@ export function BatchEditForm({
         className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid={`edit-batch-name-${batchId}`}
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           type="number"
           min={1}
@@ -149,13 +149,13 @@ export function BatchEditForm({
           type="time"
           value={form.startTime}
           onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <input
           type="time"
           value={form.endTime}
           onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
       <select

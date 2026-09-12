@@ -1,6 +1,5 @@
 import { LogOut } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireCoach } from "@/lib/auth/surface-guard";
@@ -11,10 +10,15 @@ import { requireCoach } from "@/lib/auth/surface-guard";
 // is explicitly out of scope for the demo; when one lands, it can
 // replace the two-line identity block in place without touching the
 // nav or the sign-out form.
+//
+// F4 (mobile UX plan v2): this page previously required the
+// members.read permission, which the coach role does not hold — every
+// tap on "Me" threw ForbiddenError. requireCoach() is the
+// authorization boundary; the identity read only needs the caller's
+// own user row.
 export default async function CoachMePage() {
   await requireCoach();
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);
 
   return (

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { getTodayAction } from "@/lib/actions/coach";
 import { requireReception } from "@/lib/auth/surface-guard";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function timeOf(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", {
@@ -19,12 +19,10 @@ export default async function ReceptionTodayPage() {
       <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
 
       {sessions.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-[15px] font-medium">No sessions today</p>
-          <p className="mt-2 text-[13px] text-ink-3">
-            Sessions are generated four weeks ahead for each batch.
-          </p>
-        </div>
+        <EmptyState
+          title="No sessions today"
+          body="Sessions are generated four weeks ahead for each batch."
+        />
       ) : (
         <ul className="mt-6 space-y-4">
           {sessions.map((s) => {
@@ -32,10 +30,7 @@ export default async function ReceptionTodayPage() {
             const fill = s.marked === 0 ? "bg-water" : pct < 50 ? "bg-warn" : "bg-good";
             return (
               <li key={s.id}>
-                <Link
-                  href={`/coach/register/${s.id}`}
-                  className="block bg-paper rounded-card border border-line p-4 transition-colors duration-150 active:bg-water-soft"
-                >
+                <div className="bg-paper rounded-card border border-line p-4">
                   <div className="flex justify-between items-baseline mb-2">
                     <span className="text-[15px] font-display font-semibold">
                       {timeOf(s.startsAt)} {s.batchName}
@@ -50,7 +45,10 @@ export default async function ReceptionTodayPage() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                </Link>
+                  <p className="mt-2.5 text-[12px] text-ink-3">
+                    Coach will mark attendance.
+                  </p>
+                </div>
               </li>
             );
           })}

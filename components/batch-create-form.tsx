@@ -111,7 +111,7 @@ export function BatchCreateForm({
         placeholder="Batch name"
         className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       />
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           type="number"
           min={1}
@@ -124,13 +124,13 @@ export function BatchCreateForm({
           type="time"
           value={startTime}
           onChange={(e) => setStartTime(e.target.value)}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <input
           type="time"
           value={endTime}
           onChange={(e) => setEndTime(e.target.value)}
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
       <select

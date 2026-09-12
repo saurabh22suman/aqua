@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listTenants } from "@/db/platform-tenants";
@@ -111,7 +112,7 @@ export default async function PlatformTenantsPage({
             name="search"
             defaultValue={params.search ?? ""}
             placeholder="name or slug"
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] focus:outline-none"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] focus:outline-none"
           />
         </label>
         <label className="block">
@@ -121,7 +122,7 @@ export default async function PlatformTenantsPage({
           <select
             name="status"
             defaultValue={params.status ?? ""}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] focus:outline-none"
+            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none"
           >
             <option value="">All</option>
             <option value="trial">Trial</option>
@@ -165,8 +166,41 @@ export default async function PlatformTenantsPage({
           </p>
         </div>
       ) : (
-        <div className="mt-6 rounded-card bg-paper border border-line overflow-hidden">
-          <table className="w-full text-[14px]">
+        <>
+          {/* F2 (mobile UX plan v2): phones get cards; the six-column
+              table is kept for md+ and no longer clips columns behind
+              overflow-hidden on small screens. */}
+          <ul className="mt-6 space-y-3 md:hidden" data-testid="ops-tenants-cards">
+            {result.rows.map((row) => (
+              <li key={row.id}>
+                <Link
+                  href={`/ops/tenants/${row.id}`}
+                  className="block rounded-card bg-paper border border-line p-4 active:bg-deck"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium text-ink truncate">{row.name}</p>
+                      <p className="mt-0.5 text-[12px] text-ink-3 font-mono truncate">
+                        {row.slug}
+                      </p>
+                    </div>
+                    <StatusPill status={row.status} />
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-[13px] text-ink-2 tabular-nums">
+                    <span>Members: {row.memberCount}</span>
+                    <span>Locations: {row.locationCount}</span>
+                    <ChevronRight size={16} className="text-ink-3" aria-hidden="true" />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          <div
+            className="mt-6 hidden md:block rounded-card bg-paper border border-line overflow-x-auto"
+            data-testid="ops-tenants-table"
+          >
+            <table className="w-full text-[14px]">
             <thead>
               <tr className="text-left text-[11px] uppercase tracking-[0.10em] text-ink-3 border-b border-line">
                 <th className="px-4 py-3 font-medium">Tenant</th>
@@ -211,7 +245,8 @@ export default async function PlatformTenantsPage({
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
