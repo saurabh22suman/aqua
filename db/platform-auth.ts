@@ -1,60 +1,26 @@
-import {
-  randomBytes,
-  scryptSync,
-  timingSafeEqual,
-  createHmac,
-  randomUUID,
-} from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./client";
 import { withPlatform } from "./scope";
+import { env } from "@/lib/env";
+import {
+  PLATFORM_SESSION_TTL_SECONDS,
+  PlatformAuthError,
+  constantTimeEqual,
+  hashPassword,
+  sha256,
+} from "./platform-auth-crypto";
+import { loginWithEnvOperator } from "./platform-auth-env";
 import {
   platformUsers,
   platformSessions,
   platformAuditLog,
 } from "./schema";
 
-export const PLATFORM_SESSION_TTL_SECONDS = 60 * 60 * 8; // 8h, sliding on activity
-export const SCRYPT_N = 16384; // CPU/memory cost — Node default; raised for prod if desired
-
-export class PlatformAuthError extends Error {
-  constructor(
-    public readonly code:
-      | "invalid_credentials"
-      | "invalid_totp"
-      | "no_totp"
-      | "session_expired"
-      | "session_invalid"
-      | "second_factor_required"
-      | "user_suspended",
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-function hashPassword(password: string, salt: string): string {
-  // scrypt: deterministic for (password, salt); no pepper here — a
-  // leaked DB does not leak the production password hashes alone. The
-  // verification path recomputes with the stored salt and compares with
-  // timingSafeEqual. Cost 16384 is the Node default — bump for a higher
-  // attack budget if/when offline cracking becomes a real concern.
-  return scryptSync(password, salt, 64, { N: SCRYPT_N }).toString("hex");
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "hex");
-  const bb = Buffer.from(b, "hex");
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
-function sha256(input: string): string {
-  return createHmac("sha256", "platform-session-token-v1")
-    .update(input)
-    .digest("hex");
-}
+// Public surface kept stable: callers (lib/actions/platform-auth.ts,
+// tests) import PlatformAuthError from this module.
+export { PlatformAuthError, PLATFORM_SESSION_TTL_SECONDS } from "./platform-auth-crypto";
 
 export const platformLoginInput = z.object({
   email: z.string().email(),
@@ -167,6 +133,15 @@ export async function platformLogin(
   meta: { ipAddress?: string; userAgent?: string } = {},
 ): Promise<PlatformAuthResult> {
   return withPlatform(async () => {
+    // Env-only door (2026-09-11 auth feature): when OPS_EMAIL +
+    // OPS_PASSWORD are configured they replace the DB credential
+    // check entirely, and the session is created fully authenticated
+    // (no TOTP). Removing the vars restores the DB+TOTP path below
+    // unchanged. The pair is validated at boot (lib/env.ts).
+    if (env.OPS_EMAIL !== undefined && env.OPS_PASSWORD !== undefined) {
+      return await loginWithEnvOperator(input, meta, env.OPS_EMAIL, env.OPS_PASSWORD);
+    }
+
     const [user] = await db
       .select()
       .from(platformUsers)

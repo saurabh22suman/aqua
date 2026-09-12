@@ -1,6 +1,7 @@
 import { chromium } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
+import { DEMO_PIN } from "./lib/demo-credentials";
 
 // J3 — liveness probe. See scripts/e2e-login.ts for the rationale.
 async function assertPortFree(port: number): Promise<void> {
@@ -53,13 +54,10 @@ async function main() {
 
   try {
     await page.goto(`${BASE}/login`);
+    // 2026-09-11 auth feature: phone + PIN (pnpm seed sets the PIN).
     await page.getByPlaceholder("+91 98765 43210").fill("+91 90000 00002");
-    await page.getByRole("button", { name: "Continue" }).click();
-    const hint = page.locator("[data-testid=dev-code]");
-    await hint.waitFor({ timeout: 15_000 });
-    const code = (await hint.textContent())!.replace(/\D/g, "").slice(-6);
-    await page.getByPlaceholder("••••••").fill(code);
-    await page.getByRole("button", { name: "Verify and continue" }).click();
+    await page.getByLabel("PIN").fill(DEMO_PIN);
+    await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL("**/coach", { timeout: 15_000 });
 
     await page.locator("a[href^='/coach/register/']").first().click();

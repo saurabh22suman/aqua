@@ -88,9 +88,12 @@ for the rest of the session.
 
 ## What works
 
-- Auth: phone + OTP code via `better-auth`. The dev-mode hint
-  appears in the page (`dev code:` + 6 digits) so OTP delivery is
-  a no-op in the demo.
+- Auth: **phone + PIN** at `/login`. The demo seeds set every staff
+  and owner account's PIN to **`123456`** (see
+  `scripts/lib/demo-credentials.ts`); first-time onboarding still
+  uses a magic link, which shows the set-PIN screen. OTP endpoints
+  remain in the app for when an SMS channel lands, but nothing is
+  delivered and the UI no longer surfaces them.
 - Five roles log in and land on a working surface:
   - **Owner** (`+91 90000 00001`) → `/owner` (full owner dashboard,
     members, programs + program/batch create/edit, enquiries,

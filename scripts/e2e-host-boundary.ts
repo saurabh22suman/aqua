@@ -90,11 +90,19 @@ const PROBES: Probe[] = [
   { path: "/parent",          host: `ops.localhost:${PORT}`, expect: 404, note: "/parent NOT reachable on ops" },
   { path: "/p/anything",      host: `ops.localhost:${PORT}`, expect: 404, note: "parent magic-link NOT reachable on ops" },
   { path: "/api/health",      host: `ops.localhost:${PORT}`, expect: 200, note: "health reachable on ops (Traefik / Dokploy check)" },
+  // 2026-09-11 auth feature: the phone+PIN and set-PIN routes are
+  // apex-only. On ops they must 404 (never reach the tenant auth
+  // surface); on the apex they exist (405 on GET, because they are
+  // POST-only — a 404 here would mean the middleware dropped them).
+  { path: "/api/login/pin",       host: `ops.localhost:${PORT}`, expect: 404, note: "tenant PIN login NOT reachable on ops" },
+  { path: "/api/account/set-pin", host: `ops.localhost:${PORT}`, expect: 404, note: "tenant set-PIN NOT reachable on ops" },
   // From apex:
   { path: "/ops/login",       host: `localhost:${PORT}`,     expect: 404, note: "/ops NOT reachable on apex" },
   { path: "/ops/",            host: `localhost:${PORT}`,     expect: 404, note: "/ops/* NOT reachable on apex" },
   { path: "/login",           host: `localhost:${PORT}`,     expect: 200, note: "tenant login reachable on apex" },
   { path: "/api/health",      host: `localhost:${PORT}`,     expect: 200, note: "health reachable on apex" },
+  { path: "/api/login/pin",       host: `localhost:${PORT}`, expect: 405, note: "PIN login reachable on apex (POST-only -> 405 on GET)" },
+  { path: "/api/account/set-pin", host: `localhost:${PORT}`, expect: 405, note: "set-PIN reachable on apex (POST-only -> 405 on GET)" },
 ];
 
 async function waitForServer(proc: ChildProcess): Promise<void> {

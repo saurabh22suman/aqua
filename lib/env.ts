@@ -54,6 +54,22 @@ const envSchema = z
     // production for the same reason — the parent page is a live
     // surface, not a build-only one.
     PARENT_LINK_SECRET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    // OPS_EMAIL + OPS_PASSWORD — the env-only operator login (see the
+    // "2026-09-11 auth feature" plan). Both optional; both-or-neither
+    // when set, enforced in superRefine below. The password's 12-char
+    // minimum is mechanical: env vars leak through crash dumps and
+    // process listings, so anything weaker belongs in dev tooling, not
+    // a deployment. The email format check is so the comparison branch
+    // in db/platform-auth.ts doesn't have to defend against "the env
+    // literally wasn't an email" at request time.
+    OPS_EMAIL: z.preprocess(
+      emptyAsUndefined,
+      z.string().email().optional(),
+    ),
+    OPS_PASSWORD: z.preprocess(
+      emptyAsUndefined,
+      z.string().min(12, "must be at least 12 characters").optional(),
+    ),
   })
   .superRefine((val, ctx) => {
     // `next build` forces NODE_ENV=production for the child process that
@@ -113,6 +129,22 @@ const envSchema = z
       }
     }
 
+    // Ops env credentials are a single switch: set both to use the
+    // env path, set neither to use the DB+TOTP path. Mixing them
+    // (email set, password unset, or vice versa) is a misconfiguration
+    // the operator would discover only on first login — fail fast at
+    // boot instead.
+    if ((val.OPS_EMAIL === undefined) !== (val.OPS_PASSWORD === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [val.OPS_EMAIL === undefined ? "OPS_EMAIL" : "OPS_PASSWORD"],
+        message:
+          val.OPS_EMAIL === undefined
+            ? "OPS_EMAIL must be set when OPS_PASSWORD is set (both-or-neither — the env operator door is atomic)"
+            : "OPS_PASSWORD must be set when OPS_EMAIL is set (both-or-neither — the env operator door is atomic)",
+      });
+    }
+
     // DEMO_MODE in production (server phase only — `next build` is
     // exempt for the same reason BETTER_AUTH_SECRET is exempt above:
     // a developer's .env may legitimately have DEMO_MODE=true while
@@ -135,6 +167,8 @@ export type ParsedEnv = {
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
   PARENT_LINK_SECRET?: string;
+  OPS_EMAIL?: string;
+  OPS_PASSWORD?: string;
   NODE_ENV: "development" | "test" | "production";
   DEMO_MODE: boolean;
 };
@@ -160,6 +194,8 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
     BETTER_AUTH_SECRET: parsed.data.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: parsed.data.BETTER_AUTH_URL,
     PARENT_LINK_SECRET: parsed.data.PARENT_LINK_SECRET,
+    OPS_EMAIL: parsed.data.OPS_EMAIL,
+    OPS_PASSWORD: parsed.data.OPS_PASSWORD,
     NODE_ENV: parsed.data.NODE_ENV,
     DEMO_MODE: parsed.data.DEMO_MODE,
   };

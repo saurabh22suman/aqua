@@ -18,7 +18,7 @@ export const inviteLinkUses = pgTable(
   (t) => [
     check(
       "invite_link_uses_purpose_check",
-      sql`${t.purpose} in ('invite', 'relogin')`,
+      sql`${t.purpose} in ('invite', 'relogin', 'reset')`,
     ),
     index("invite_link_uses_membership_idx").on(
       t.tenantId,
@@ -28,4 +28,9 @@ export const inviteLinkUses = pgTable(
   ],
 );
 
-export type InviteLinkPurpose = "invite" | "relogin";
+// 2026-09-11 auth feature, slice 2b: 'reset' is the ops-issued,
+// owner-only, 1-hour-TTL link that forces the set-PIN screen and
+// overwrites the credential. See the migration header for the
+// schema rationale and lib/services/invite-link-issue.ts for the
+// issuance + role guard.
+export type InviteLinkPurpose = "invite" | "relogin" | "reset";

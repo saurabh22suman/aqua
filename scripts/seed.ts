@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { requireMigrationUrl } from "@/lib/env";
+import { seedDemoCredentials, DEMO_PIN } from "./lib/demo-credentials";
 import { v7 as uuidv7 } from "uuid";
 import { and, eq, isNull } from "drizzle-orm";
 import { pool } from "../db/client";
@@ -339,6 +340,12 @@ async function ensureLoginUsers(tenantId: TenantId) {
     }
   });
 
+  // 2026-09-11 auth feature: the login UI is phone + PIN, so the
+  // seeded users need credentials or the demo walkthrough cannot
+  // sign in. Idempotent; overwrites with the documented demo PIN.
+  await seedDemoCredentials(LOGIN_USERS.map((u) => u.phone));
+
   console.log(`login users ready → ${LOGIN_USERS.map((u) => `${u.phone}=${u.role}`).join(", ")}`);
+  console.log(`demo PIN for every login user → ${DEMO_PIN}`);
 }
 
