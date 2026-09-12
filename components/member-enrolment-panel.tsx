@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { enrolMemberAction, listMemberEnrolmentsAction } from "@/lib/actions/enrolment";
 import { addToWaitlistAction } from "@/lib/actions/waitlist";
+import { transferMemberToBatchAction } from "@/lib/actions/transfer";
 import type { MemberEnrolment } from "@/lib/services/enrolment";
 import type { BatchWithProgramName } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
@@ -52,6 +53,11 @@ export function MemberEnrolmentPanel({
   // of leaving the user at a dead end.
   const [fullBatch, setFullBatch] = useState(false);
   const [waitlistMessage, setWaitlistMessage] = useState<string | null>(null);
+  // R.6 — which enrolment row has its transfer picker open, and where
+  // to move that member.
+  const [transferFrom, setTransferFrom] = useState<string | null>(null);
+  const [transferTarget, setTransferTarget] = useState("");
+  const [transferError, setTransferError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -127,6 +133,33 @@ export function MemberEnrolmentPanel({
     }
   }
 
+  // R.6 — move an enrolment to another batch. The service preserves
+  // attendance history (keyed to sessions) and refuses a full
+  // destination; the subscription half of V-19 waits for C-30.
+  async function moveToBatch(fromBatchId: string) {
+    if (!transferTarget) return;
+    setBusy(true);
+    setTransferError(null);
+    try {
+      const res = await transferMemberToBatchAction({
+        memberId,
+        fromBatchId,
+        toBatchId: transferTarget,
+      });
+      if (res.kind === "error") {
+        setTransferError(res.message);
+        return;
+      }
+      setTransferFrom(null);
+      setTransferTarget("");
+      const rows = await listMemberEnrolmentsAction(memberId);
+      setEnrolments(rows);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (loadError) {
     return (
       <div
@@ -165,8 +198,65 @@ export function MemberEnrolmentPanel({
           {enrolments!.length > 0 ? (
             <ul className="space-y-1.5">
               {enrolments!.map((e) => (
-                <li key={e.batchId} className="text-[13.5px]">
-                  {e.batchName} — {e.programName}
+                <li key={e.batchId}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[13.5px]">
+                      {e.batchName} — {e.programName}
+                    </span>
+                    {availableBatches.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTransferFrom(
+                            transferFrom === e.batchId ? null : e.batchId,
+                          );
+                          setTransferTarget(availableBatches[0]?.id ?? "");
+                          setTransferError(null);
+                        }}
+                        className="flex-none rounded-ctl border border-line px-3 min-h-[44px] text-[12.5px] text-ink-2"
+                      >
+                        Transfer
+                      </button>
+                    ) : null}
+                  </div>
+                  {transferFrom === e.batchId ? (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <select
+                        value={transferTarget}
+                        onChange={(ev) => setTransferTarget(ev.target.value)}
+                        className="min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                        data-testid="transfer-target"
+                        aria-label="Transfer to"
+                      >
+                        {availableBatches.map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} — {b.programName}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => moveToBatch(e.batchId)}
+                        disabled={busy || !transferTarget}
+                        className="rounded-ctl bg-[var(--accent)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
+                      >
+                        {busy ? "Moving…" : "Move"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTransferFrom(null);
+                          setTransferError(null);
+                        }}
+                        className="rounded-ctl px-2 min-h-[44px] text-[12.5px] text-ink-3"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : null}
+                  {transferFrom === e.batchId && transferError ? (
+                    <p className="mt-1 text-[12px] text-ink-2">{transferError}</p>
+                  ) : null}
                 </li>
               ))}
             </ul>
