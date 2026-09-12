@@ -6,7 +6,10 @@ import {
   inviteOwnerAction,
   type InviteOwnerActionResult,
 } from "@/lib/actions/platform-invite-owner";
-import { issueOwnerLoginLinkAction } from "@/lib/actions/platform-login-link";
+import {
+  issueOwnerLoginLinkAction,
+  issueOwnerResetLinkAction,
+} from "@/lib/actions/platform-login-link";
 import { LinkQr } from "@/components/link-qr";
 
 // Phase 2.7 — "Invite the owner" client island. Lives on the
@@ -141,21 +144,27 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
   );
 }
 
+type MintedLink = { url: string; expiresAt: string };
+
 function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: string }) {
   const [pending, startTransition] = useTransition();
-  const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [link, setLink] = useState<MintedLink | null>(null);
+  const [resetLink, setResetLink] = useState<MintedLink | null>(null);
+  const [copied, setCopied] = useState<"link" | "reset" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function onIssue() {
+  function mint(
+    fn: () => Promise<Awaited<ReturnType<typeof issueOwnerLoginLinkAction>>>,
+    set: (l: MintedLink) => void,
+  ) {
     setError(null);
-    setCopied(false);
+    setCopied(null);
     startTransition(async () => {
-      const result = await issueOwnerLoginLinkAction({ tenantId, phone });
+      const result = await fn();
       if (result.kind === "error") {
         setError(result.message);
       } else {
-        setLink({
+        set({
           url: `${window.location.origin}${result.urlPath}`,
           expiresAt: result.expiresAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
         });
@@ -163,11 +172,10 @@ function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: str
     });
   }
 
-  async function onCopy() {
-    if (!link) return;
+  async function onCopy(l: MintedLink, which: "link" | "reset") {
     try {
-      await navigator.clipboard.writeText(link.url);
-      setCopied(true);
+      await navigator.clipboard.writeText(l.url);
+      setCopied(which);
     } catch {
       setError("Copy failed — long-press the link and copy it by hand.");
     }
@@ -180,37 +188,83 @@ function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: str
         Single-use, works for the number above. Mint it and share it with the owner yourself —
         this is also how a locked-out sole owner gets back in.
       </p>
-      <button
-        type="button"
-        onClick={onIssue}
-        disabled={pending || phone.trim().length === 0}
-        className="mt-2 rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
-        data-testid="owner-login-link-issue"
-      >
-        {pending ? "Minting…" : "Get login link"}
-      </button>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => mint(() => issueOwnerLoginLinkAction({ tenantId, phone }), setLink)}
+          disabled={pending || phone.trim().length === 0}
+          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+          data-testid="owner-login-link-issue"
+        >
+          {pending ? "Minting…" : "Get login link"}
+        </button>
+        <button
+          type="button"
+          onClick={() => mint(() => issueOwnerResetLinkAction({ tenantId, phone }), setResetLink)}
+          disabled={pending || phone.trim().length === 0}
+          className="rounded-pill px-4 py-2 text-[13px] font-medium bg-paper border border-line text-ink-2 disabled:opacity-60"
+          data-testid="owner-reset-link-issue"
+        >
+          Reset owner PIN
+        </button>
+      </div>
+      <p className="mt-1 text-[11px] text-ink-3">
+        A reset link expires in 1 hour and signs the owner out of other devices.
+      </p>
       {error ? (
         <p role="alert" className="mt-2 text-[12px] text-ink-2">{error}</p>
       ) : null}
       {link ? (
-        <div className="mt-2">
-          <p className="text-[11px] text-ink-3 break-all font-mono" data-testid="owner-login-link-url">
-            {link.url}
-          </p>
-          <p className="mt-1 text-[11px] text-ink-3">Works once, expires {link.expiresAt}.</p>
-          <button
-            type="button"
-            onClick={onCopy}
-            className="mt-2 rounded-pill px-3 py-1.5 text-[12px] font-medium bg-paper border border-line text-ink-2"
-            data-testid="owner-login-link-copy"
-          >
-            {copied ? "Copied" : "Copy link"}
-          </button>
-          <div className="mt-3">
-            <LinkQr url={link.url} />
-          </div>
-        </div>
+        <MintedLinkBlock
+          kind="login"
+          link={link}
+          copied={copied === "link"}
+          onCopy={() => onCopy(link, "link")}
+        />
       ) : null}
+      {resetLink ? (
+        <MintedLinkBlock
+          kind="reset"
+          link={resetLink}
+          copied={copied === "reset"}
+          onCopy={() => onCopy(resetLink, "reset")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function MintedLinkBlock({
+  kind,
+  link,
+  copied,
+  onCopy,
+}: {
+  kind: "login" | "reset";
+  link: MintedLink;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="mt-2" data-testid={`owner-${kind}-link-block`}>
+      <p className="text-[11px] text-ink-3 break-all font-mono" data-testid={`owner-${kind}-link-url`}>
+        {link.url}
+      </p>
+      <p className="mt-1 text-[11px] text-ink-3">
+        Works once, expires {link.expiresAt}.
+        {kind === "reset" ? " The owner sets a new PIN when they open it." : ""}
+      </p>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="mt-2 rounded-pill px-3 py-1.5 text-[12px] font-medium bg-paper border border-line text-ink-2"
+        data-testid={`owner-${kind}-link-copy`}
+      >
+        {copied ? "Copied" : "Copy link"}
+      </button>
+      <div className="mt-3">
+        <LinkQr url={link.url} />
+      </div>
     </div>
   );
 }

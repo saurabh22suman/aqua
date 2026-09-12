@@ -35,7 +35,12 @@ import { asTenantId, asUserId } from "@/lib/ids";
 // race-safe with no check-then-insert window.
 
 export type { IssueLoginLinkResult } from "./invite-link-issue";
-export { issueLoginLink, issueLoginLinkForPhone } from "./invite-link-issue";
+export {
+  issueLoginLink,
+  issueLoginLinkForPhone,
+  issueOwnerResetLink,
+  issueOwnerResetLinkForPhone,
+} from "./invite-link-issue";
 
 export type RedeemLoginLinkError =
   | "invalid"

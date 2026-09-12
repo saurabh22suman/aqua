@@ -183,7 +183,7 @@ describe("verifyPlatformTotpAction", () => {
     expect(result.message.toLowerCase()).toContain("sign-in");
   });
 
-  it("redirects to /platform on a correct code", async () => {
+  it("redirects to /ops on a correct code", async () => {
     const { password, email, totpSecret } = await createEnrolledUser("verify-ok");
     try {
       await loginPlatformAction(null, fd({ email, password }));
@@ -197,7 +197,10 @@ describe("verifyPlatformTotpAction", () => {
       if (err instanceof RedirectSignal) captured = err.path;
       else throw err;
     }
-    expect(captured).toBe("/platform");
+    // 2026-09-11 auth feature: the ops console lives at /ops (the
+    // middleware only admits /ops on the ops host). The old /platform
+    // target predated the PR #105 rename and 404'd.
+    expect(captured).toBe("/ops");
     await clearPlatformSessionCookie();
   });
 

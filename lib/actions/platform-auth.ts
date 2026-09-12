@@ -51,15 +51,15 @@ export async function loginPlatformAction(
   if (!parsed.success) {
     return { kind: "error", message: "Enter a valid email and password." };
   }
+  let fullyAuthenticated = false;
   try {
     const result = await platformLogin(parsed.data);
-    if (result.kind !== "second_factor_required") {
-      // fully_authenticated cannot happen here — platformLogin refuses
-      // to mark a session fully_authenticated; that is platformVerifyTotp's
-      // job. Treat as unreachable but type-narrow defensively.
-      return { kind: "error", message: "Unexpected login state." };
-    }
+    // Since the 2026-09-11 auth feature, platformLogin can return
+    // fully_authenticated when the env-only operator door is
+    // configured (no TOTP). Otherwise the half-authenticated session
+    // goes to the /ops/verify challenge.
     await writePlatformSessionCookie(result.sessionToken);
+    fullyAuthenticated = result.kind === "fully_authenticated";
   } catch (err) {
     if (err instanceof PlatformAuthError) {
       if (err.code === "no_totp") {
@@ -76,7 +76,9 @@ export async function loginPlatformAction(
     }
     throw err;
   }
-  redirect("/ops/verify");
+  // redirect() throws a framework signal and must stay outside the
+  // try/catch above.
+  redirect(fullyAuthenticated ? "/ops" : "/ops/verify");
 }
 
 export type PlatformVerifyResult =
@@ -131,7 +133,7 @@ export async function verifyPlatformTotpAction(
     }
     throw err;
   }
-  redirect("/platform");
+  redirect("/ops");
 }
 
 export type PlatformLogoutResult = { kind: "ok" };
