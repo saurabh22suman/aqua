@@ -5,8 +5,13 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import {
   grantMakeupCredit,
+  listMakeupCredits,
+  listMakeupSources,
+  listMakeupTargets,
   redeemMakeupCredit,
   type MakeupCreditResult,
+  type MakeupCreditRow,
+  type MakeupSessionOption,
 } from "@/lib/services/makeup";
 
 // Phase R.7 — V.18 makeup credits action. parse-then-permission
@@ -24,6 +29,35 @@ const redeemSchema = z.object({
   sourceSessionId: z.string().uuid(),
   targetSessionId: z.string().uuid(),
 });
+
+const memberIdSchema = z.string().uuid();
+
+export async function listMakeupCreditsAction(
+  rawMemberId: string,
+): Promise<MakeupCreditRow[]> {
+  const memberId = memberIdSchema.parse(rawMemberId);
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "attendance.read");
+  return listMakeupCredits(ctx, memberId);
+}
+
+export async function listMakeupSourcesAction(
+  rawMemberId: string,
+): Promise<MakeupSessionOption[]> {
+  const memberId = memberIdSchema.parse(rawMemberId);
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "attendance.read");
+  return listMakeupSources(ctx, memberId);
+}
+
+export async function listMakeupTargetsAction(
+  rawMemberId: string,
+): Promise<MakeupSessionOption[]> {
+  const memberId = memberIdSchema.parse(rawMemberId);
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "attendance.read");
+  return listMakeupTargets(ctx, memberId);
+}
 
 export async function grantMakeupCreditAction(
   raw: unknown,

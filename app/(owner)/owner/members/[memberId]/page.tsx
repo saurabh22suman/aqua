@@ -12,6 +12,7 @@ import { listOptedFacilitiesAction } from "@/lib/actions/facility-optins";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberFacilitiesPanel } from "@/components/member-facilities-panel";
+import { MakeupCreditsPanel } from "@/components/makeup-credits-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
@@ -112,6 +113,8 @@ export default async function MemberDetailPage({
         opted={optedFacilities}
         locations={locations}
       />
+
+      <MakeupCreditsPanel memberId={member.memberId} />
 
       <ParentLinkPanel
         memberId={member.memberId}

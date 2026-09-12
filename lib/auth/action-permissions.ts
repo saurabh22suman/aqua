@@ -94,6 +94,11 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   cancelWaitlistAction: "enquiries.write",
   getWaitlistHeadAction: "enquiries.read",
   listWaitlistAction: "enquiries.read",
+
+  // Makeup credits (R.7)
+  listMakeupCreditsAction: "attendance.read",
+  listMakeupSourcesAction: "attendance.read",
+  listMakeupTargetsAction: "attendance.read",
   promoteHeadAction: "enquiries.write",
 
   // Makeup credits
