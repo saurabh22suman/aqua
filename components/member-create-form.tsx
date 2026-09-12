@@ -110,7 +110,9 @@ export function MemberCreateForm({
       return;
     }
     if (!consentGiven) {
-      setError("Consent to data processing is required before a member can be registered.");
+      setError(
+        `Consent to data processing is required before a ${resolveTerm(terminology, "member", 1)} can be registered.`,
+      );
       return;
     }
     if (minor === true && guardianMissing) {
@@ -168,6 +170,8 @@ export function MemberCreateForm({
           <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
           <input
             type="date"
+            lang="en-IN"
+            placeholder="dd/mm/yyyy"
             value={dateOfBirth}
             onChange={(e) => setDateOfBirth(e.target.value)}
             className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
@@ -276,7 +280,7 @@ export function MemberCreateForm({
             type="text"
             value={relationship}
             onChange={(e) => setRelationship(e.target.value)}
-            placeholder="Relationship to member (e.g. mother, father)"
+            placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
             className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
             data-testid="guardian-relationship"
           />
@@ -303,8 +307,8 @@ export function MemberCreateForm({
         />
         <span className="text-[12.5px] text-ink-2">
           {minor === true
-            ? "The guardian above has agreed to data processing for this member, per the current privacy notice."
-            : "This member has agreed to data processing, per the current privacy notice."}
+            ? `The guardian above has agreed to data processing for this ${resolveTerm(terminology, "member", 1)}, per the current privacy notice.`
+            : `This ${resolveTerm(terminology, "member", 1)} has agreed to data processing, per the current privacy notice.`}
         </span>
       </label>
 
@@ -327,7 +331,7 @@ export function MemberCreateForm({
           className="w-full rounded-ctl bg-[var(--accent)] py-3 min-h-[48px] text-[15px] font-semibold text-white disabled:opacity-50"
           data-testid="submit-member"
         >
-          {busy ? "Saving…" : "Add member"}
+          {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}
         </button>
       </div>
     </div>

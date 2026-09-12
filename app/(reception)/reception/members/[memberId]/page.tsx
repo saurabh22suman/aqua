@@ -9,6 +9,7 @@ import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { requireReception } from "@/lib/auth/surface-guard";
+import { formatDateIST } from "@/lib/time/tz";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -102,7 +103,7 @@ export default async function ReceptionMemberDetailPage({
                 <span className="capitalize font-medium">{c.purpose}</span>
                 <span className="text-ink-3">
                   {" "}
-                  — {c.withdrawnAt ? `withdrawn ${new Date(c.withdrawnAt).toLocaleDateString("en-IN")}` : "active"},
+                  — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"},
                   granted by {c.granterName || "self"}
                 </span>
               </li>

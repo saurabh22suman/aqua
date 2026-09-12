@@ -31,7 +31,7 @@ export function RegisterBoard({
     markedCount,
     pending,
     online,
-    syncedLabel,
+    savedAtLabel,
     hasActiveFailure,
     saving,
     retrySync,
@@ -130,13 +130,17 @@ export function RegisterBoard({
                   "offline — saved on device"
                 ) : pending > 0 ? (
                   `syncing ${pending}…`
+                ) : savedAtLabel ? (
+                  `Saved at ${savedAtLabel}`
                 ) : (
-                  `synced ${syncedLabel}`
+                  "Saved on this phone"
                 )
               ) : !online ? (
                 "offline — can't save"
+              ) : savedAtLabel ? (
+                `Saved at ${savedAtLabel}`
               ) : (
-                `synced ${syncedLabel}`
+                "Saved on this phone"
               )}
             </p>
           </div>

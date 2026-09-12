@@ -1,4 +1,4 @@
-import { todayInZone } from "@/lib/time/tz";
+import { formatTimeIST, todayInZone } from "@/lib/time/tz";
 import { verifyParentLinkToken } from "@/lib/services/parent-link";
 import { getParentViewData } from "@/lib/services/parent-view";
 import { getBranding } from "@/lib/services/branding";
@@ -39,13 +39,6 @@ const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-const TIME_FMT = new Intl.DateTimeFormat("en-IN", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-  timeZone: "Asia/Kolkata",
-});
-
 const DAY_FMT = new Intl.DateTimeFormat("en-IN", {
   day: "2-digit",
   month: "short",
@@ -53,7 +46,7 @@ const DAY_FMT = new Intl.DateTimeFormat("en-IN", {
 });
 
 function formatTimeRange(startsAt: Date, endsAt: Date): string {
-  return `${TIME_FMT.format(startsAt)}–${TIME_FMT.format(endsAt)}`;
+  return `${formatTimeIST(startsAt)}–${formatTimeIST(endsAt)}`;
 }
 
 function initialsFor(name: string): string {

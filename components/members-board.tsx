@@ -6,6 +6,10 @@ import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import type { LocationOption, MemberListRow } from "@/lib/services/people";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { formatPhoneIN } from "@/lib/phone";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+
+const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 
 const STATUS_LABELS: Record<string, string> = {
   trial: "Trial",
@@ -26,9 +30,13 @@ const STATUS_TONE: Record<string, string> = {
 export function MembersBoard({
   initialMembers,
   locations,
+  terminology = DEFAULT_TERMINOLOGY,
 }: {
   initialMembers: MemberListRow[];
   locations: LocationOption[];
+  // Closed-key vocab resolved by the parent server page; optional so
+  // callers without tenant context render the generic terms.
+  terminology?: TerminologyState;
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [search, setSearch] = useState("");
@@ -108,13 +116,15 @@ export function MembersBoard({
         {members.length === 0 ? (
           <li className="rounded-ctl border border-line bg-paper list-none">
             {search || status || locationId ? (
-              <EmptyState title="No members match." />
+              <EmptyState
+                title={`No ${resolveTerm(terminology, "member", "other")} match.`}
+              />
             ) : (
               <EmptyState
-                title="No members yet."
-                body="Add your first member to start building the roster."
+                title={`No ${resolveTerm(terminology, "member", "other")} yet.`}
+                body={`Add your first ${resolveTerm(terminology, "member", 1)} to start building the roster.`}
                 action={{
-                  label: "Add your first member",
+                  label: `Add your first ${resolveTerm(terminology, "member", 1)}`,
                   href: "/owner/members/new",
                 }}
               />
@@ -134,7 +144,7 @@ export function MembersBoard({
                   </p>
                   <p className="mt-0.5 text-[12px] text-ink-3">
                     {m.memberCode} · {m.locationName}
-                    {m.phone ? ` · ${m.phone}` : ""}
+                    {m.phone ? ` · ${formatPhoneIN(m.phone)}` : ""}
                   </p>
                 </div>
                 <span

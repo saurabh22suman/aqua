@@ -5,6 +5,7 @@ import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import { formatTimeIST } from "@/lib/time/tz";
 
 export default async function RegisterPage({
   params,
@@ -36,11 +37,7 @@ export default async function RegisterPage({
     );
   }
 
-  const time = new Date(data.startsAt).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Kolkata",
-  });
+  const time = formatTimeIST(data.startsAt);
 
   return (
     <main className="px-5 pt-6">

@@ -51,6 +51,10 @@ export type InlineEditFieldProps = {
   className?: string;
   valueClassName?: string;
   snapshot: InlineEditSnapshot;
+  // Display-only transform for the read branch (e.g. formatPhoneIN).
+  // The editing input and the committed value always keep the stored
+  // form, so formatting never round-trips into a write.
+  formatValue?: (value: string) => string;
 };
 
 type SaveStatus =
@@ -71,6 +75,7 @@ export function InlineEditField({
   className,
   valueClassName,
   snapshot,
+  formatValue,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -243,11 +248,12 @@ export function InlineEditField({
             <input
               ref={inputRef as React.RefObject<HTMLInputElement>}
               type={type === "date" ? "date" : "text"}
+              lang={type === "date" ? "en-IN" : undefined}
               value={draft}
               onChange={handleChange}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
-              placeholder={placeholder}
+              placeholder={placeholder ?? (type === "date" ? "dd/mm/yyyy" : undefined)}
               aria-label={field}
               className={`${baseInputClass} h-11 min-w-[140px]`}
             />
@@ -255,7 +261,9 @@ export function InlineEditField({
         ) : (
           <>
             <span className={valueClassName ?? "text-[13px]"}>
-              {displayValue || placeholder || "—"}
+              {(formatValue ? formatValue(displayValue) : displayValue) ||
+                placeholder ||
+                "—"}
             </span>
             <button
               type="button"

@@ -69,6 +69,8 @@ export function MemberEditForm({
         <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
         <input
           type="date"
+          lang="en-IN"
+          placeholder="dd/mm/yyyy"
           value={dateOfBirth}
           onChange={(e) => setDateOfBirth(e.target.value)}
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"

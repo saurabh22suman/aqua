@@ -59,3 +59,33 @@ export function normaliseToE164(raw: string): string {
 export function phoneDigits(raw: string): string {
   return raw.replace(/\D/g, "");
 }
+
+/**
+ * Display formatter for Indian mobile numbers: `+91 98123 40010`
+ * (5 + 5), the convention the mobile audit asked for. Understands
+ * E.164 (`+919...`), 91-prefixed, 10-digit local and trunk-0 forms
+ * because `persons.phone` is free text and all four shapes exist in
+ * the wild. Unknown shapes pass through unchanged so a non-IN number
+ * is never mangled.
+ *
+ * Display-only. The edit paths send the stored value, not this
+ * output, to the write boundary.
+ */
+export function formatPhoneIN(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const digits = phoneDigits(raw);
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return `+91 ${digits.slice(2, 7)} ${digits.slice(7)}`;
+  }
+  if (digits.length === 10 && /^[6-9]/.test(digits)) {
+    return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
+  }
+  if (
+    digits.length === 11 &&
+    digits.startsWith("0") &&
+    /^[6-9]/.test(digits.slice(1, 2))
+  ) {
+    return `+91 ${digits.slice(1, 6)} ${digits.slice(6)}`;
+  }
+  return raw;
+}

@@ -1,16 +1,7 @@
 import Link from "next/link";
 import { getScheduleAction } from "@/lib/actions/coach";
+import { formatTimeIST } from "@/lib/time/tz";
 import { requireCoach } from "@/lib/auth/surface-guard";
-
-const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function timeOf(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Kolkata",
-  });
-}
 
 export default async function CoachSchedulePage() {
   await requireCoach();
@@ -32,7 +23,7 @@ export default async function CoachSchedulePage() {
           });
           return (
             <li key={d.date}>
-              <p className="text-[12px] font-medium text-ink-3">{DAY_LABELS[new Date(Date.UTC(y, m - 1, day)).getUTCDay()]} · {dateLabel}</p>
+              <p className="text-[12px] font-medium text-ink-3">{dateLabel}</p>
               {d.sessions.length === 0 ? (
                 <p className="mt-1 text-[13px] text-ink-3">No sessions</p>
               ) : (
@@ -45,7 +36,7 @@ export default async function CoachSchedulePage() {
                       >
                         <div className="flex justify-between items-baseline">
                           <span className="text-[14px] font-display font-semibold">
-                            {timeOf(s.startsAt.toISOString())} {s.batchName}
+                            {formatTimeIST(s.startsAt)} {s.batchName}
                           </span>
                           <span className="text-[12.5px] text-ink-3">
                             {s.marked} / {s.total}
