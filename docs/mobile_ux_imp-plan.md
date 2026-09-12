@@ -200,10 +200,14 @@ component PR can land without screen churn.
 - `<Tap min={44}>` — `Tap.tsx`. Wraps an interactive child and enforces
   a minimum hit area (`min-h-11 min-w-11`, i.e. 44px) without changing
   layout. Fixes F9/F10/F11/F25.
-- `<FieldError>` — `FieldError.tsx`. Per-field error pill with red
-  border + icon + `role="alert"` and an `id` an input can reference via
+- `<FieldError>` — `FieldError.tsx`. Per-field error message with an
+  icon, `role="alert"` and an `id` an input can reference via
   `aria-describedby`. Replaces the combined-error pattern (login, add
-  member, enquiry follow-up).
+  member, enquiry follow-up). Deliberately **neutral colour**: the
+  semantic tokens (`good`/`late`/`warn`) are reserved for money and
+  attendance state (DESIGN.md §1.1), and
+  `tests/tier1/semantic-token-reservation.test.ts` is right to reject
+  a form error wearing `late`. The message text is the signal.
 
 ### 1b — Call-site wiring (scoped)
 
