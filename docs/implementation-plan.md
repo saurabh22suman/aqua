@@ -149,13 +149,20 @@ delivered — real work remains inside these tasks:
 F-02 (B3 shipped `tenants` and `locations` without the F-02 columns —
 currency, gstin, branding, terminology, preset columns, and
 `locations.address`; the F-02 reopen completed them),
-F-03 (interim plain-text role until F-04's roles/permissions model),
-F-09 (OTP has no delivery channel and no staff email/password
-fallback), F-10 (rate limiting is Better Auth's global limiter; the
-per-phone lockout is plugin `allowedAttempts`), F-11 (`Ctx` lacks the
-permissions/features arrays F-12 will consume),
+F-03 (interim plain-text role — **closed** by F-03a's `role_id`
+cutover),
+F-09 (OTP has no delivery channel; **phone + PIN now provides the
+credential door** — first login sets the PIN via a magic link, later
+logins use phone + PIN; OTP still lights up unchanged when SMS lands),
+F-10 (**closed for the PIN door**: per-account lockout lives in
+`lib/services/pin-lockout.ts`; OTP still relies on Better Auth's
+global limiter + plugin `allowedAttempts`),
+F-11 (**closed** — `Ctx` carries `permissions` and `features`; the
+role × surface × feature matrix is enforced),
 C-01/C-03/C-16–C-19/C-22 (schema, constraints, generator and service
-layer exist; screens, job scheduling and the full task bodies do not).
+layer exist; core member/session/register screens now ship — what
+remains is the C-47 job set beyond `sessions.generate` and the
+per-task tails noted on each task).
 
 ### B1 · Foundation
 **Delivers:** S-01, S-03, S-04 · **Stop level:** GREEN · **Status:** complete — `8bb6f99`
@@ -565,7 +572,7 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ### C-19 · Session generation
 **Depends:** C-17
-**Build:** pg-boss job materialising sessions eight weeks ahead from batch recurrence, respecting holidays and closures and **the tenant's timezone**.
+**Build:** pg-boss job materialising sessions four weeks ahead from batch recurrence, respecting holidays and closures and **the tenant's timezone**. (The shipped horizon is `DAYS_AHEAD = 28` in `lib/jobs/session-generator.ts`; this task previously said eight weeks, in conflict with B8 and the code. If eight weeks is wanted, it is a code change plus this line, not a doc edit.)
 **Done when:** a 7:00 AM batch generates sessions at 07:00 IST regardless of server timezone.
 
 ### C-20 · Session changes and substitution
@@ -1144,7 +1151,7 @@ the Never list — no invented values. Backend contract is B6–B8.
 **Done when:** an owner opening the home sees their day truthfully, including its emptiness.
 
 ### S5 · Parent page
-**Stop level:** RED — propose before building
+**Stop level:** RED — proposal signed off and shipped
 **Depends:** S1
-**Build (proposed, not approved):** signed single-purpose scoped tokens with expiry and revocation; `/p/[token]` zero-JS server-rendered; child's next session and attendance this month; no analytics or tracking ever.
-**Never:** serve children's data behind an unguessable-but-unmanaged URL.
+**Status:** complete — signed single-purpose 7-day tokens (`lib/services/parent-link.ts`), `/p/[token]` zero-JS server-rendered (route handler, no client JS), child's next session + attendance this month (`lib/services/parent-view.ts`), `no-store`/`noindex`/`no-referrer`, and a zero-JS contract test (`pnpm e2e:parent-link-zero-js`). Fees and progress remain out (C-32 / V-10–V-11).
+**Never:** serve children's data behind an unguessable-but-unmanaged URL. (The signed token is the managed URL; revocation/denylist is still open on C-44.)

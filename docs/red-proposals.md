@@ -9,6 +9,12 @@ depend on these choices.
 
 ## Tenant role gating (DPDP) — RED
 
+**Status: implemented.** All three sub-PRs landed: surface-access +
+`requirePermission` + `Ctx.features` (#110), then the action sweep
+(the `assertXxx` guards deleted) and the role × surface × feature
+matrix + UI gate consolidated through #118. The text below is kept as
+the audit record that motivated the work, not as open work.
+
 ### What the audit found
 
 `app/(owner)/owner/layout.tsx` checks only `sessionExists()`. Same
@@ -330,6 +336,12 @@ behave correctly under operational mistakes without redesign.
 
 ## H1 · Pre-hydration form submit leaks credentials
 
+**Status: implemented.** Auth forms now carry `method="post"` with the
+server action bound pre-hydration (`app/(platform)/ops/login/login-form.tsx`
+et al.), and the credential-leak shape is covered by the platform
+form-leak e2e (`pnpm e2e:platform-form-leak`). Kept as the audit
+record.
+
 ### Bug
 
 `app/(platform)/platform/login/login-form.tsx` ships as
@@ -573,13 +585,9 @@ implementation later does not regress anything shipped.
 
 ## What to do next
 
-Continue Phase 3 GREEN items:
-- 3.5 Staff directory (build on the existing `staff` service)
-- 3.6 Invitations (invite-by-phone, accept, revoke, resend)
-- 3.7 Receptionist seed (the `assertStaff` permission fix
-  was verified on the existing receptionist row already;
-  add a permanent seed-path check so it never regresses)
-- 3.9 Platform activity log (extend `recentActivity`)
-
-These ship without waiting for the REDs above. The REDs
-land as separate PRs once their proposals are signed off.
+3.5, 3.6, 3.7 and 3.9 shipped (staff directory, invitations,
+receptionist seed, platform activity). The live queue is
+`docs/five-day-work-guide.md`'s R-series plus the REDs still open
+above — 3.1 documents (token scheme) and 3.8 impersonation. Both need
+sign-off before implementation; everything else in the R-series is
+GREEN and ships without waiting.

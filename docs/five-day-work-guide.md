@@ -180,9 +180,9 @@ Everything here reads data that already exists. No money.
 - [x] **4.6** Coach load view — sessions per coach per week, utilisation. `GREEN`
 - [x] **4.7** Owner dashboard — capacity lanes for today, needs-attention with reasons, member and attendance figures. **No money tiles.** Wired through Phase 2.9/2.10 (branding + terminology) and Phase 4.1 (attendance history) — verified still resolves through the closed-key helpers. `GREEN`
 - [x] **4.8** Coach home — today's sessions, this week's schedule, their own roster. Coach-scoped reads via `coach-scope` queries; the roster surface shows each coached member's name and batches. `GREEN`
-- [x] **4.9** Member detail completion — attendance, documents, guardians, consent, status history in one coherent view. The phase-2 member detail page already carries every panel; this was a verification rather than build. `GREEN`
+- [x] **4.9** Member detail completion — attendance, guardians, consent, status history in one coherent view. The phase-2 member detail page carries every panel that exists; **documents are not in the view because C-07 (documents) is not built** — the earlier "documents" claim was corrected by the Sep 2026 doc↔code verification. This was a verification rather than build. `GREEN`
 
-**Phase 4 gate:** an owner can answer "how is my club doing" without asking anyone. *(Partial — 4.2 per-batch summary and 4.8 coach home still open.)*
+**Phase 4 gate:** an owner can answer "how is my club doing" without asking anyone. *(4.2 per-batch summary and 4.8 coach home both shipped — the previous "still open" note was stale.)*
 
 ---
 
@@ -257,13 +257,13 @@ Forty-two tasks at working speed is under five days. The reserve is therefore ex
 
 - [ ] **R.20** Hindi and Bengali terminology scaffolding — translation tables for the closed `TERM_KEYS` in each locale; `titleCase` and plural work; per-locale override UI; default locale picked at tenant creation from the preset's home region. `GREEN`
 - [ ] **R.21** Custom fields on core entities — admin-defined extra columns on members, sessions and batches. Schema decision is open: jsonb on the row, sparse columns, or a separate `entity_custom_fields` table — each has different cost profiles for index, export and search. **RED — propose the storage shape before building.**
-- [ ] **R.22** Remaining preset definitions — football, badminton/racquet, gym/fitness, dance/martial arts, start-from-scratch. Day 2 covers swimming and multi-sport only. **One commit per preset** so a single broken definition does not block the others; each gets TDD and the same lock rule (refuses once a non-sample member exists). `GREEN`
-- [ ] **R.23** Six-accent picker UI — owner picks from the frozen `ACCENTS` map; the picker lives in tenant branding settings; applies to buttons but not status colours (paid, overdue, late). The token plumbing is in `F-19`; this is the missing surface. `GREEN`
+- [x] **R.22** Remaining preset definitions — five presets shipped: `db/preset-definitions-r22.ts` (football, badminton, gym/fitness, dance/martial-arts, start-from-scratch), registered via `db/seed-platform.ts`, Zod-validated at module load, covered by `tests/tier1/presets-r22.test.ts`. Marked [x] by the Sep 2026 doc↔code verification (the checkbox was stale; the code was already there). `GREEN`
+- [x] **R.23** Six-accent picker UI — owner picks from the frozen `ACCENTS` map (`lib/branding/accents.ts`) via the branding settings form (`components/branding/branding-form.tsx`); applies to buttons, not status colours. Marked [x] by the Sep 2026 doc↔code verification. `GREEN`
 
 ### Trials and pipeline
 
-- [ ] **R.24** Trial sessions — an enquiry books into a real batch as a trial; the trial is flagged on the register; outcome recorded. `C-14`. `GREEN`
-- [ ] **R.25** Trial-to-member conversion — convert an enquiry to a member, preserving source attribution so conversion rate by source is reportable. `C-15`. `GREEN`
+- [x] **R.24** Trial sessions — a trial booking creates the member with status `trial` (`lib/services/register.ts`), the register flags trial rows, and the outcome is recorded on the enquiry. Marked [x] by the Sep 2026 doc↔code verification. `C-14`. `GREEN`
+- [x] **R.25** Trial-to-member conversion — `convertEnquiryAction` + the enquiry-detail UI convert an enquiry to a member and preserve source attribution. Marked [x] by the Sep 2026 doc↔code verification. `C-15`. `GREEN`
 - [ ] **R.26** Pipeline follow-ups overdue view — overdue follow-ups surface on the owner dashboard; reassign and complete from the same surface. `C-13` completion. `GREEN`
 
 ### Platform extensions
