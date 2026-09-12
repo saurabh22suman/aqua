@@ -11,6 +11,11 @@ import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
 
 export const INVITE_LINK_TTL_SECONDS = 72 * 60 * 60;
 export const RELOGIN_LINK_TTL_SECONDS = 24 * 60 * 60;
+// 2026-09-11 auth feature: reset is a live support action (ops
+// hands the QR to the owner), not a forward-able invite. 1 hour is
+// long enough for the owner to be in front of the screen, short
+// enough that a stale QR can't be replayed the next day.
+export const RESET_LINK_TTL_SECONDS = 60 * 60;
 
 export type InviteLinkClaims = {
   tenantId: string;
@@ -104,7 +109,18 @@ export function verifyInviteLinkToken(token: string): InviteLinkClaims | null {
 
   if (typeof payload.tenantId !== "string") return null;
   if (typeof payload.membershipId !== "string") return null;
-  if (payload.purpose !== "invite" && payload.purpose !== "relogin") return null;
+  // 2026-09-11 auth feature, slice 2b: 'reset' added. Token
+  // verification is the same shape as invite/relogin — only the
+  // verifier's closed list widens. The semantics (set-PIN screen
+  // always, role-gated to owner) live in the redeem path,
+  // enforced by the membership role check there.
+  if (
+    payload.purpose !== "invite" &&
+    payload.purpose !== "relogin" &&
+    payload.purpose !== "reset"
+  ) {
+    return null;
+  }
   if (typeof payload.exp !== "number") return null;
   if (typeof payload.iat !== "number") return null;
   if (typeof payload.jti !== "string" || payload.jti.length === 0) return null;
