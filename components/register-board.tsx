@@ -6,17 +6,21 @@ import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register"
 import { EmptyState } from "@/components/ui/EmptyState";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
+const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
+
 export function RegisterBoard({
   sessionId,
   rows,
   offlineSyncEnabled,
-  terminology,
+  terminology = DEFAULT_TERMINOLOGY,
 }: {
   sessionId: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
   // Closed-key vocab resolved by the parent server page (L3 audit).
-  terminology: TerminologyState;
+  // Optional so existing callers/tests render the generic terms; the
+  // page passes the tenant-resolved state.
+  terminology?: TerminologyState;
 }) {
   const initialStatuses = Object.fromEntries(
     rows.filter((r) => r.status).map((r) => [r.memberId, r.status as Mark]),
