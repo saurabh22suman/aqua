@@ -4,12 +4,14 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function EnquiryDetailPage({
   params,
 }: {
   params: Promise<{ enquiryId: string }>;
 }) {
+  await requireOwner();
   const { enquiryId } = await params;
   const [enquiry, locations, batches, terminology] = await Promise.all([
     getEnquiryDetailAction(enquiryId),

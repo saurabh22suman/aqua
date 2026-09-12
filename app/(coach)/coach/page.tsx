@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarClock, ChevronRight, Clock } from "lucide-react";
 import { getCoachHomeAction } from "@/lib/actions/coach";
 import { todayInZone } from "@/lib/time/tz";
+import { requireCoach } from "@/lib/auth/surface-guard";
 
 function timeOf(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-IN", {
@@ -38,6 +39,7 @@ function daysBetween(fromIso: string, toIso: string): number {
 // Home is for acting in the next 10 minutes — anything else is
 // reference, and reference has its own tab.
 export default async function CoachTodayPage() {
+  await requireCoach();
   const { sessions, next } = await getCoachHomeAction();
   const today = todayInZone("Asia/Kolkata");
 

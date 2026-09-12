@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getScheduleAction } from "@/lib/actions/coach";
+import { requireCoach } from "@/lib/auth/surface-guard";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -12,6 +13,7 @@ function timeOf(iso: string) {
 }
 
 export default async function CoachSchedulePage() {
+  await requireCoach();
   const { days } = await getScheduleAction({});
 
   return (

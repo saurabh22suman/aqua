@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { getBrandingAction } from "@/lib/actions/branding";
 import { BrandingForm } from "@/components/branding/branding-form";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 2.9 — owner branding editor. Setting display name and
 // short name, and choosing an accent from the six approved
@@ -9,6 +10,7 @@ import { BrandingForm } from "@/components/branding/branding-form";
 // see the PR description and docs/five-day-work-guide.md
 // (no new dependency without asking).
 export default async function BrandingSettingsPage() {
+  await requireOwner();
   const data = await getBrandingAction();
   return (
     <main className="px-5 pt-6 pb-8">

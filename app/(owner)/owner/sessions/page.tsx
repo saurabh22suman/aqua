@@ -7,6 +7,7 @@ import { listCoaches } from "@/lib/services/programs";
 import { listBatches } from "@/lib/services/programs";
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // F3 (R.1) — owner-facing upcoming-sessions page. Lists every
 // scheduled session in the tenant over the next two weeks, with
@@ -24,6 +25,7 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 // page lists their own sessions and uses them).
 
 export default async function SessionsPage() {
+  await requireOwner();
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "attendance.read");
 

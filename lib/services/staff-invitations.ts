@@ -11,8 +11,8 @@ import { tenantMemberships, membershipLocations } from "@/db/schema/memberships"
 import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
-import { persons } from "@/db/schema/people";
-import { staff, type StaffType } from "@/db/schema/staff";
+import type { StaffType } from "@/db/schema/staff";
+import { ensurePersonAndStaff } from "@/db/invite-helpers";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type UserId } from "@/lib/ids";
 
@@ -239,45 +239,43 @@ export async function inviteStaff(
     // through a "create staff record from scratch" path that
     // duplicated the person's identity. With this branch, the
     // invite path also produces the persons + staff rows the batch
-    // assigner expects — same transaction, same identifiers,
-    // same audit log entry. STAFF_INVITABLE_ROLES maps "admin" to
-    // "no staff row" deliberately: admins are operational, they
-    // don't appear on the staff roster and aren't assigned to
-    // batches.
+    // assigner expects — same transaction, same identifiers.
+    //
+    // The actual SQL is in db/invite-helpers.ts:ensurePersonAndStaff,
+    // which both invite paths call. STAFF_INVITABLE_ROLES maps
+    // "admin" to "no staff row" deliberately: admins are operational,
+    // they don't appear on the staff roster and aren't assigned to
+    // batches. The helper skips the staff insert when staffType is
+    // undefined.
     const STAFF_TYPE_FOR_ROLE: Partial<Record<StaffInvitableRoleKey, StaffType>> = {
       coach: "coach",
       receptionist: "receptionist",
     };
     const staffType = STAFF_TYPE_FOR_ROLE[input.roleKey];
-    if (staffType) {
-      // Inline the persons + staff insert rather than call
-      // createStaff — createStaff opens its own withTenant(), and
-      // the audit-log TODO above wants all of this in one
-      // transaction. Same SQL, fewer round trips.
-      const [personRow] = await tx
-        .insert(persons)
-        .values({
-          tenantId: ctx.tenantId,
-          fullName: input.fullName,
-          createdBy: ctx.userId,
-          updatedBy: ctx.userId,
-        })
-        .returning({ id: persons.id });
-      if (!personRow) {
+    try {
+      if (!ctx.userId) {
+        // inviteStaff is only called from a server action whose
+        // ctx was built by requireDefaultCtx — that path always
+        // sets userId. An undefined userId here means a future
+        // caller bypassed the auth boundary; surface as invalid
+        // so the action's error branch handles it.
         return {
           kind: "error",
           code: "invalid",
-          message: "Could not create the person record for this invite.",
+          message: "Invite requires an authenticated actor.",
         };
       }
-      await tx.insert(staff).values({
-        tenantId: ctx.tenantId,
-        personId: personRow.id,
-        userId: user.id as never,
+      await ensurePersonAndStaff(tx, ctx.tenantId, ctx.userId, {
+        fullName: input.fullName,
+        userId: user.id as UserId,
         staffType,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
       });
+    } catch {
+      return {
+        kind: "error",
+        code: "invalid",
+        message: "Could not create the person record for this invite.",
+      };
     }
 
     // TODO(tenant-audit-log): the actor on a staff invite is a

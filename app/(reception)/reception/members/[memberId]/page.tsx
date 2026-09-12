@@ -8,6 +8,7 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { requireReception } from "@/lib/auth/surface-guard";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -23,6 +24,7 @@ export default async function ReceptionMemberDetailPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
+  await requireReception();
   const { memberId } = await params;
   const [member, cardCtx, terminology] = await Promise.all([
     getMemberDetailAction(memberId),

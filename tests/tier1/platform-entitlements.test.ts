@@ -26,6 +26,7 @@ const PLATFORM_TABLES = [
 // text says "29 permissions" but lists 30; this is the verbatim list.
 const ALL_PERMISSION_KEYS = [
   "members.read",
+  "members.read.assigned",
   "members.write",
   "members.delete",
   "attendance.read",
@@ -47,6 +48,7 @@ const ALL_PERMISSION_KEYS = [
   "staff.pay.write",
   "reports.operational",
   "reports.financial",
+  "dashboard.view",
   "settings.read",
   "settings.manage",
   "messaging.send",

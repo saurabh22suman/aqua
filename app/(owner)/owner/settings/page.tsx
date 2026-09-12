@@ -4,6 +4,7 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // F-23 — settings surface. Branding (Phase 2.9), Terminology
 // (Phase 2.10), Staff (Phase 3.5) and the onboarding checklist
@@ -19,6 +20,7 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 // block + sign-out lives here instead. When a dedicated /owner/me
 // lands it can replace this section in place.
 export default async function Page() {
+  await requireOwner();
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);

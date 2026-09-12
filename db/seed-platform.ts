@@ -165,6 +165,7 @@ export const PERMISSIONS: ReadonlyArray<{
   description: string;
 }> = [
   { key: "members.read", module: "members", description: "View member records" },
+  { key: "members.read.assigned", module: "members", description: "View only members assigned to the coach's own batches" },
   { key: "members.write", module: "members", description: "Create and edit member records" },
   { key: "members.delete", module: "members", description: "Archive member records" },
   { key: "attendance.read", module: "attendance", description: "View attendance registers" },
@@ -185,6 +186,7 @@ export const PERMISSIONS: ReadonlyArray<{
   { key: "staff.pay.read", module: "staff", description: "View staff pay and earnings" },
   { key: "staff.pay.write", module: "staff", description: "Set staff pay rates and record payouts" },
   { key: "reports.operational", module: "reports", description: "View attendance and utilisation reports" },
+  { key: "dashboard.view", module: "reports", description: "View the owner dashboard (tenant + daily-operations roll-up)" },
   { key: "reports.financial", module: "reports", description: "View revenue, cost and profitability reports" },
   { key: "settings.read", module: "settings", description: "View tenant settings" },
   { key: "settings.manage", module: "settings", description: "Change tenant settings, branding and terminology" },

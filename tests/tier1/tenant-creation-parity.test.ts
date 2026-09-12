@@ -55,6 +55,7 @@ afterAll(async () => {
     await admin.query("delete from tenant_memberships where tenant_id = $1", [id]);
     await admin.query("delete from role_permissions where tenant_id = $1", [id]);
     await admin.query("delete from roles where tenant_id = $1", [id]);
+    await admin.query("delete from persons where tenant_id = $1", [id]);
     await admin.query("delete from locations where tenant_id = $1", [id]);
     await admin.query("delete from platform_audit_log where tenant_id = $1", [id]);
     await admin.query(

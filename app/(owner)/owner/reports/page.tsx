@@ -5,6 +5,7 @@ import { AttendanceReportCard } from "@/components/reports/attendance-report-car
 import { EnquiryFunnelCard } from "@/components/reports/enquiry-funnel-card";
 import { RetentionCard } from "@/components/reports/retention-card";
 import { CoachLoadCard } from "@/components/reports/coach-load-card";
+import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 4 — owner reports surface. Four cards (4.2 / 4.3 /
 // 4.4 / 4.5 / 4.6), one dominant element on each. Period
@@ -15,6 +16,7 @@ export default async function ReportsPage({
 }: {
   searchParams?: Promise<{ from?: string; to?: string }>;
 }) {
+  await requireOwner();
   const params = searchParams ? await searchParams : {};
   const timezone = await getTenantTimezoneAction();
   const period = (() => {

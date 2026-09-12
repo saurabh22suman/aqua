@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getTodayAction } from "@/lib/actions/coach";
+import { requireReception } from "@/lib/auth/surface-guard";
 
 function timeOf(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", {
@@ -10,6 +11,7 @@ function timeOf(iso: string) {
 }
 
 export default async function ReceptionTodayPage() {
+  await requireReception();
   const { sessions } = await getTodayAction();
 
   return (

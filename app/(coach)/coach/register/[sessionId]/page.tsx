@@ -4,12 +4,14 @@ import { RegisterBoard } from "@/components/register-board";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { requireCoach } from "@/lib/auth/surface-guard";
 
 export default async function RegisterPage({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
+  await requireCoach();
   const { sessionId } = await params;
   const [data, terminology] = await Promise.all([
     getRosterAction(sessionId),
