@@ -178,3 +178,62 @@ describe("lib/env", () => {
     expect(env.APP_LOGIN_PASSWORD).toBeUndefined();
   });
 });
+
+// OPS_EMAIL + OPS_PASSWORD — the env-only operator login. Both
+// optional (DB+TOTP path stays when unset); both-or-neither when set;
+// password has a mechanical minimum length so a developer can't ship
+// a 6-char dev password to production by accident. The plan locks
+// these decisions and the test names match them.
+describe("lib/env OPS_*", () => {
+  it("parses cleanly when both OPS_EMAIL and OPS_PASSWORD are unset — the DB+TOTP path is the only door", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
+    vi.stubEnv("OPS_EMAIL", undefined);
+    vi.stubEnv("OPS_PASSWORD", undefined);
+
+    const { env } = await loadEnv();
+    expect(env.OPS_EMAIL).toBeUndefined();
+    expect(env.OPS_PASSWORD).toBeUndefined();
+  });
+
+  it("exposes both values when both are set", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
+    vi.stubEnv("OPS_EMAIL", "ops@example.com");
+    vi.stubEnv("OPS_PASSWORD", "a-twelve-character-secret");
+
+    const { env } = await loadEnv();
+    expect(env.OPS_EMAIL).toBe("ops@example.com");
+    expect(env.OPS_PASSWORD).toBe("a-twelve-character-secret");
+  });
+
+  it("rejects when only OPS_EMAIL is set — the pair is atomic (both-or-neither)", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
+    vi.stubEnv("OPS_EMAIL", "ops@example.com");
+    vi.stubEnv("OPS_PASSWORD", undefined);
+
+    await expect(loadEnv()).rejects.toThrow(/OPS_PASSWORD/);
+  });
+
+  it("rejects when only OPS_PASSWORD is set — the pair is atomic", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
+    vi.stubEnv("OPS_EMAIL", undefined);
+    vi.stubEnv("OPS_PASSWORD", "a-twelve-character-secret");
+
+    await expect(loadEnv()).rejects.toThrow(/OPS_EMAIL/);
+  });
+
+  it("rejects OPS_PASSWORD shorter than 12 chars — too easy to brute-force from a leaked env", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
+    vi.stubEnv("OPS_EMAIL", "ops@example.com");
+    vi.stubEnv("OPS_PASSWORD", "short");
+
+    await expect(loadEnv()).rejects.toThrow(/OPS_PASSWORD/);
+  });
+
+  it("rejects OPS_EMAIL that is not an email-shaped string", async () => {
+    vi.stubEnv("DATABASE_URL", "postgresql://app_login:pw@localhost:5432/aqua");
+    vi.stubEnv("OPS_EMAIL", "not-an-email");
+    vi.stubEnv("OPS_PASSWORD", "a-twelve-character-secret");
+
+    await expect(loadEnv()).rejects.toThrow(/OPS_EMAIL/);
+  });
+});
