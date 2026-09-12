@@ -16,8 +16,7 @@ import { describe, expect, it } from "vitest";
 // so we only inspect the opening tag's className. <option> children
 // are deliberately out of scope.
 //
-// /ops forms are DESIGN.md §2 desktop-first (Sep 2026 amendment: the
-// mobile console covers nav, lists and list filters only); exempt.
+// /ops is DESIGN.md §2 desktop-only by design; its forms are exempt.
 
 const ROOT = process.cwd();
 const SCAN_DIRS = ["app", "components"];

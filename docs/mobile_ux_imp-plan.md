@@ -62,7 +62,7 @@ plan and `DESIGN.md` disagreed, the plan lost (see decision 6).
 | 4 | Ops mobile nav | Bottom bar with **exactly four** items (Overview, Tenants, Feature catalogue, Presets), matching the tenant surfaces. No hamburger. Sign-out moves into the mobile header, not the nav (the four-item rule is absolute). Requires the `DESIGN.md` amendment in decision 6. |
 | 5 | Destructive confirmations | Keep the existing confirm patterns; do not introduce a toast/undo system. F35's "red churn button" is **dropped** — red is reserved for overdue/absent by `DESIGN.md` §1.1; the existing required-reason modal already gates churn. |
 | 6 | `DESIGN.md` | `DESIGN.md:175` says `/ops` is desktop-only, which contradicts decision 4. Amendment in this PR: `/ops` stays desktop-first (sidebar, tables, console type) but gains a supported mobile console — four-item bottom nav, table→card lists, sign-out in the mobile header, 44px targets on the mobile nav/cards. |
-| 7 | Test mechanism | v1 specified Playwright inside `tests/tier1/`. That is not this repo's convention: tier1 is Vitest (jsdom + Testing Library, or real-DB page drives); Playwright lives in `scripts/e2e-*.ts`. This plan uses tier1 conventions; real-viewport Playwright checks stay in scripts and are out of scope for these phases. |
+| 7 | Test mechanism | v1 specified Playwright inside `tests/tier1/`. Neither is this repo's convention: `tests/tier1/**` is human-owned (see `docs/testing-strategy.md` §5 — agents don't write there), and Playwright lives in `scripts/e2e-*.ts`. New agent-written tests for this plan go in `tests/mobile/` (Vitest + Testing Library, or real-DB page drives); real-viewport Playwright checks stay in scripts and are out of scope for these phases. |
 
 ---
 
@@ -163,11 +163,11 @@ may shrink.
 
 | Test file | Proves |
 | --- | --- |
-| `tests/tier1/time-format.test.ts` | `formatTimeIST`/`formatDateIST` outputs, including the 11:30Z → `05:00 pm` case |
-| `tests/tier1/upcoming-sessions-list.test.tsx` | rendered list shows `05:00 pm`, not `11:30` (jsdom + RTL, substitute control stubbed) |
-| `tests/tier1/coach-me-page.test.ts` | real-DB coach context drives `CoachMePage()` without throwing and renders identity (mutation: re-adding the permission line turns it red) |
-| `tests/tier1/reception-today-page.test.tsx` | page tree contains no `/coach/register/` href and shows the static copy |
-| `tests/tier1/mobile-overflow-guards.test.tsx` | enrolment select has `w-full`/`min-w-0`; batch capacity/time rows have `flex-wrap`; time inputs have `min-w-0` |
+| `tests/mobile/time-format.test.ts` | `formatTimeIST`/`formatDateIST` outputs, including the 11:30Z → `05:00 pm` case |
+| `tests/mobile/upcoming-sessions-list.test.tsx` | rendered list shows `05:00 pm`, not `11:30` (jsdom + RTL, substitute control stubbed) |
+| `tests/mobile/coach-me-page.test.ts` | real-DB coach context drives `CoachMePage()` without throwing and renders identity (mutation: re-adding the permission line turns it red) |
+| `tests/mobile/reception-today-page.test.tsx` | page tree contains no `/coach/register/` href and shows the static copy |
+| `tests/mobile/mobile-overflow-guards.test.tsx` | enrolment select has `w-full`/`min-w-0`; batch capacity/time rows have `flex-wrap`; time inputs have `min-w-0` |
 
 ### Expected score after Phase 0
 
@@ -224,10 +224,10 @@ component PR can land without screen churn.
 
 ### Phase 1 tests
 
-- `tests/tier1/ui-components.test.tsx` — one describe per component;
+- `tests/mobile/ui-components.test.tsx` — one describe per component;
   includes a mutation-style planted case proving empty-state copy
   appears only when the list is empty.
-- Extend `tests/tier1/members-board.test.ts(x)` / add jsdom tests at the
+- `tests/mobile/empty-and-tap-wiring.test.tsx` — jsdom tests at the
   wired call sites asserting the empty-state copy and ≥44px classes on
   the wrapped controls.
 
@@ -288,9 +288,9 @@ cue is wanted later, the compliant lever is copy/placement, not colour
 
 | Test file | Proves |
 | --- | --- |
-| `tests/tier1/platform-mobile-shell.test.tsx` | authenticated platform layout renders the four-item mobile nav and a mobile-header sign-out form; no fifth nav item (four-item rule) |
-| `tests/tier1/ops-tenants-mobile.test.tsx` | with mocked `listTenants`, the card list renders per-tenant counts; table is `hidden md:block`; no `overflow-hidden` on the mobile path |
-| `tests/tier1/ops-home-cards.test.tsx` | Presets card exists and links `/ops/presets` |
+| `tests/mobile/platform-mobile-shell.test.tsx` | authenticated platform layout renders the four-item mobile nav and a mobile-header sign-out form; no fifth nav item (four-item rule) |
+| `tests/mobile/ops-tenants-mobile.test.tsx` | with mocked `listTenants`, the card list renders per-tenant counts; table is `hidden md:block`; no `overflow-hidden` on the mobile path |
+| `tests/mobile/platform-mobile-shell.test.tsx` (home case) | Presets card exists and links `/ops/presets` |
 | `tests/tier1/input-font-size.test.ts` | existing scan stays green (ops search/filter inputs now 16px too) |
 
 ### Expected score after Phase 2
@@ -372,7 +372,7 @@ verification so nobody implements a stale finding.
 | F26 | `owner/owner/layout.tsx`, support 5 items | Actual path `app/(owner)/layout.tsx`; 4+2 = 6 | Deferred pending a nav decision |
 | Nav | `computeBottomNav` / `findActiveHref` "already handles" | `computeBottomNav` doesn't exist; `findActiveHref` is private | Plan describes real component |
 | Phone helper | `lib/phone/format-in.ts` (new) | Existing `lib/phone.ts` is the additive home | Path corrected |
-| Tests | Playwright in `tests/tier1/` | Tier1 is Vitest/jsdom; Playwright lives in `scripts/e2e-*` | Test mechanism corrected |
+| Tests | Playwright in `tests/tier1/` | `tests/tier1/**` is human-owned; agent tests live outside it, Playwright in `scripts/e2e-*` | Test mechanism corrected |
 
 ---
 
