@@ -33,6 +33,8 @@ export default async function LoginLinkPage({
       roleKey={preview.roleKey}
       tenantName={preview.tenantName}
       expiresAt={preview.expiresAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+      credentialSet={preview.credentialSet}
+      purpose={preview.purpose}
     />
   );
 }
