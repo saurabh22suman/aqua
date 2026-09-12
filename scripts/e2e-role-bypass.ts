@@ -518,8 +518,13 @@ function looksLikeRenderedPage(body: string): boolean {
 // Today page is a legitimate authorized empty state with no seeded
 // token in it. The empty-state marker still proves the request shape
 // reached an authorized render (an unauthenticated request redirects,
-// a wrong role 404s), so reception controls may accept it.
-const AUTHORIZED_EMPTY_MARKER = 'data-testid="empty-state"';
+// a wrong role 404s), so reception controls may accept it. Both
+// serialisations are checked: HTML attribute form for plain GETs and
+// the JSON tree form for RSC payloads.
+const AUTHORIZED_EMPTY_MARKERS = [
+  'data-testid="empty-state"',
+  '"data-testid":"empty-state"',
+];
 const POSITIVE_CONTROLS: {
   id: string;
   role: Role;
@@ -636,7 +641,8 @@ async function main(): Promise<void> {
       const rendered =
         res.status === 200 &&
         (looksLikeRenderedPage(res.body) ||
-          (ctrl.allowEmpty === true && res.body.includes(AUTHORIZED_EMPTY_MARKER)));
+          (ctrl.allowEmpty === true &&
+            AUTHORIZED_EMPTY_MARKERS.some((m) => res.body.includes(m))));
       if (!rendered) {
         controlFailures.push({
           caseName: ctrl.id,
