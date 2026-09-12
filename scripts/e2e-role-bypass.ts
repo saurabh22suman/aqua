@@ -514,7 +514,18 @@ const POSITIVE_PROTECTED_TOKENS = ["Demo Academy", "Morning Squad", "Synthetic M
 function looksLikeRenderedPage(body: string): boolean {
   return POSITIVE_PROTECTED_TOKENS.some((tok) => body.includes(tok));
 }
-const POSITIVE_CONTROLS: { id: string; role: Role; attack: Attack }[] = [
+// The seeded batches run Mon–Sat, so on a Sunday the receptionist's
+// Today page is a legitimate authorized empty state with no seeded
+// token in it. The empty-state marker still proves the request shape
+// reached an authorized render (an unauthenticated request redirects,
+// a wrong role 404s), so reception controls may accept it.
+const AUTHORIZED_EMPTY_MARKER = 'data-testid="empty-state"';
+const POSITIVE_CONTROLS: {
+  id: string;
+  role: Role;
+  attack: Attack;
+  allowEmpty?: boolean;
+}[] = [
   // Owner → /owner pages.
   { id: "owner→/owner (plain)", role: "owner", attack: { caseName: "plain", shape: "plain", path: "/owner", routeGroup: "owner" } },
   { id: "owner→/owner (RSC)", role: "owner", attack: { caseName: "rsc", shape: "rsc", path: "/owner", routeGroup: "owner" } },
@@ -525,8 +536,8 @@ const POSITIVE_CONTROLS: { id: string; role: Role; attack: Attack }[] = [
   { id: "coach→/coach (plain)", role: "coach", attack: { caseName: "plain", shape: "plain", path: "/coach", routeGroup: "coach" } },
   { id: "coach→/coach (RSC)", role: "coach", attack: { caseName: "rsc", shape: "rsc", path: "/coach", routeGroup: "coach" } },
   // Receptionist → /reception pages.
-  { id: "receptionist→/reception (plain)", role: "receptionist", attack: { caseName: "plain", shape: "plain", path: "/reception", routeGroup: "reception" } },
-  { id: "receptionist→/reception (RSC)", role: "receptionist", attack: { caseName: "rsc", shape: "rsc", path: "/reception", routeGroup: "reception" } },
+  { id: "receptionist→/reception (plain)", role: "receptionist", allowEmpty: true, attack: { caseName: "plain", shape: "plain", path: "/reception", routeGroup: "reception" } },
+  { id: "receptionist→/reception (RSC)", role: "receptionist", allowEmpty: true, attack: { caseName: "rsc", shape: "rsc", path: "/reception", routeGroup: "reception" } },
 ];
 
 interface Outcome {
@@ -622,7 +633,10 @@ async function main(): Promise<void> {
       // shape is broken — every attack assertion downstream is
       // unreliable, so report it as a separate "harness broken"
       // failure.
-      const rendered = res.status === 200 && looksLikeRenderedPage(res.body);
+      const rendered =
+        res.status === 200 &&
+        (looksLikeRenderedPage(res.body) ||
+          (ctrl.allowEmpty === true && res.body.includes(AUTHORIZED_EMPTY_MARKER)));
       if (!rendered) {
         controlFailures.push({
           caseName: ctrl.id,
