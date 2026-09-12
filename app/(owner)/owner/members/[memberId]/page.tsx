@@ -4,11 +4,14 @@ import { CalendarCheck, Pencil, ShieldCheck, Users } from "lucide-react";
 import {
   getMemberDetailAction,
   getMemberIdCardContextAction,
+  listLocationsAction,
 } from "@/lib/actions/people";
 import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { listOptedFacilitiesAction } from "@/lib/actions/facility-optins";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
+import { MemberFacilitiesPanel } from "@/components/member-facilities-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
@@ -28,17 +31,22 @@ export default async function MemberDetailPage({
   await requireOwner();
   const { memberId } = await params;
   requireUuidParam(memberId);
-  const [member, attendanceHistory, cardCtx, terminology] = await Promise.all([
-    getMemberDetailAction(memberId),
-    getMemberAttendanceHistoryAction(memberId),
-    getMemberIdCardContextAction(),
-    // The id-card's eyebrow renders the closed-key `member`
-    // singular form via resolveTerm (L3 audit). The page already
-    // fetched the other three; adding terminology here keeps the
-    // card self-consistent without a second round trip on its
-    // own — and only the page that mounts the card pays the cost.
-    getTerminologyAction(),
-  ]);
+  const [member, attendanceHistory, cardCtx, terminology, optedFacilities, locations] =
+    await Promise.all([
+      getMemberDetailAction(memberId),
+      getMemberAttendanceHistoryAction(memberId),
+      getMemberIdCardContextAction(),
+      // The id-card's eyebrow renders the closed-key `member`
+      // singular form via resolveTerm (L3 audit). The page already
+      // fetched the other three; adding terminology here keeps the
+      // card self-consistent without a second round trip on its
+      // own — and only the page that mounts the card pays the cost.
+      getTerminologyAction(),
+      // Wave 2 — the facility opt-ins panel: home facility comes from
+      // the member row, opted facilities + the add picker come here.
+      listOptedFacilitiesAction(memberId),
+      listLocationsAction(),
+    ]);
   if (!member) notFound();
 
   return (
@@ -76,7 +84,7 @@ export default async function MemberDetailPage({
             {member.isMinor ? " · minor" : ""}
           </p>
           <p className="mt-0.5 text-[11.5px] text-ink-3">
-            Joined {formatDateIST(member.createdAt)}
+            Joined {formatDateIST(member.joinedOn)}
           </p>
         </div>
         <Link
@@ -97,6 +105,13 @@ export default async function MemberDetailPage({
       </div>
 
       <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
+
+      <MemberFacilitiesPanel
+        memberId={member.memberId}
+        home={{ id: member.locationId, name: member.locationName }}
+        opted={optedFacilities}
+        locations={locations}
+      />
 
       <ParentLinkPanel
         memberId={member.memberId}

@@ -2,6 +2,7 @@ import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { members } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
+import { memberFacilityOptins } from "@/db/schema/facility-optins";
 import { tenants } from "@/db/schema/tenants";
 import { batches, programs } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
@@ -168,37 +169,80 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
     const attendanceThisWeekPct =
       weekRow.total > 0 ? Math.round((weekRow.present / weekRow.total) * 100) : null;
 
-    // W1-6 — per-facility consolidation. Member counts and the last-7-day
-    // attendance percentage, grouped by the member's home facility.
-    const facilityRows = await tx
-      .select({
-        locationId: members.locationId,
-        locationName: locations.name,
-        activeMembers: sql<number>`count(*) filter (where ${members.status} = 'active')::int`,
-        totalMarks: sql<number>`count(${attendance.id})::int`,
-        presentMarks: sql<number>`count(*) filter (where ${attendance.status} in ('present', 'late'))::int`,
-      })
-      .from(members)
-      .innerJoin(locations, eq(locations.id, members.locationId))
-      .leftJoin(
-        attendance,
-        and(
-          eq(attendance.memberId, members.id),
-          eq(attendance.tenantId, ctx.tenantId),
-          gte(attendance.markedAt, weekAgo),
-        ),
-      )
-      .where(and(eq(members.tenantId, ctx.tenantId), isNull(members.deletedAt)))
-      .groupBy(members.locationId, locations.name)
+    // W1-6 / Wave 2 — per-facility consolidation. Every live location
+    // is listed. Active members = home-facility members + active
+    // opt-ins (a member training at two facilities counts at both).
+    // Attendance is grouped by the batch's facility — the session's
+    // real location — not the member's home facility as in Wave 1.
+    const locationRows = await tx
+      .select({ id: locations.id, name: locations.name })
+      .from(locations)
+      .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
       .orderBy(locations.name);
 
-    const facilityBreakdown: FacilityBreakdownRow[] = facilityRows.map((r) => ({
-      locationId: r.locationId,
-      locationName: r.locationName,
-      activeMembers: r.activeMembers,
-      attendancePct:
-        r.totalMarks > 0 ? Math.round((r.presentMarks / r.totalMarks) * 100) : null,
-    }));
+    const homeCounts = await tx
+      .select({
+        locationId: members.locationId,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(members)
+      .where(
+        and(
+          eq(members.tenantId, ctx.tenantId),
+          eq(members.status, "active"),
+          isNull(members.deletedAt),
+        ),
+      )
+      .groupBy(members.locationId);
+
+    const optinCounts = await tx
+      .select({
+        locationId: memberFacilityOptins.locationId,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(memberFacilityOptins)
+      .where(
+        and(
+          eq(memberFacilityOptins.tenantId, ctx.tenantId),
+          isNull(memberFacilityOptins.endedOn),
+        ),
+      )
+      .groupBy(memberFacilityOptins.locationId);
+
+    const attendanceCounts = await tx
+      .select({
+        locationId: batches.locationId,
+        total: sql<number>`count(*)::int`,
+        present: sql<number>`count(*) filter (where ${attendance.status} in ('present', 'late'))::int`,
+      })
+      .from(attendance)
+      .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .where(
+        and(eq(attendance.tenantId, ctx.tenantId), gte(attendance.markedAt, weekAgo)),
+      )
+      .groupBy(batches.locationId);
+
+    const homeBy = new Map(homeCounts.map((r) => [r.locationId, r.n]));
+    const optinBy = new Map(optinCounts.map((r) => [r.locationId, r.n]));
+    const marksBy = new Map(
+      attendanceCounts
+        .filter((r) => r.locationId !== null)
+        .map((r) => [r.locationId as string, r]),
+    );
+
+    const facilityBreakdown: FacilityBreakdownRow[] = locationRows.map((l) => {
+      const marks = marksBy.get(l.id);
+      return {
+        locationId: l.id,
+        locationName: l.name,
+        activeMembers: (homeBy.get(l.id) ?? 0) + (optinBy.get(l.id) ?? 0),
+        attendancePct:
+          marks && marks.total > 0
+            ? Math.round((marks.present / marks.total) * 100)
+            : null,
+      };
+    });
 
     return {
       tenantName: tenant.name,

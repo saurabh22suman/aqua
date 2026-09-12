@@ -8,6 +8,7 @@ import {
   type CoachConflict,
 } from "@/lib/actions/coach-conflicts";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
+import type { LocationOption } from "@/lib/services/people";
 import type { Program } from "@/db/schema/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
@@ -21,6 +22,8 @@ export type BatchEditFormState = {
   startTime: string;
   endTime: string;
   coachId: string;
+  // Wave 2 — the batch's facility.
+  locationId: string;
 };
 
 export function BatchEditForm({
@@ -28,6 +31,7 @@ export function BatchEditForm({
   initial,
   programs,
   coaches,
+  locations,
   error,
   onCancel,
   onSaved,
@@ -38,6 +42,7 @@ export function BatchEditForm({
   initial: BatchEditFormState;
   programs: Program[];
   coaches: CoachOption[];
+  locations: LocationOption[];
   error: string | null;
   onCancel: () => void;
   onSaved: (batch: BatchWithProgramName) => void;
@@ -104,6 +109,7 @@ export function BatchEditForm({
         startTime: form.startTime,
         endTime: form.endTime,
         coachId: form.coachId || undefined,
+        locationId: form.locationId || undefined,
       });
       if (!res.ok) {
         onError(res.error);
@@ -158,6 +164,20 @@ export function BatchEditForm({
           className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
+      {locations.length > 1 ? (
+        <select
+          value={form.locationId}
+          onChange={(e) => setForm({ ...form, locationId: e.target.value })}
+          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          data-testid={`edit-batch-location-${batchId}`}
+        >
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <select
         value={form.coachId}
         onChange={(e) => setForm({ ...form, coachId: e.target.value })}

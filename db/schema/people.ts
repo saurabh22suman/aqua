@@ -61,6 +61,9 @@ export const members = pgTable(
     locationId: uuid("location_id").notNull(),
     memberCode: text("member_code").notNull(),
     status: text("status").notNull().default("active"),
+    // Wave 2 — nullable so backfill could be additive; createMember
+    // writes today in the tenant's timezone, updateMember can backdate.
+    joinedOn: date("joined_on"),
     ...softDelete,
     ...auditColumns,
   },

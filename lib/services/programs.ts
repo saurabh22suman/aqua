@@ -1,9 +1,10 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { batches, programs, type Batch, type Program } from "@/db/schema/programs";
 import { staff } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
+import { locations } from "@/db/schema/locations";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asStaffId } from "@/lib/ids";
@@ -80,7 +81,13 @@ export async function deleteProgram(
   });
 }
 
-export type BatchWithProgramName = Batch & { programName: string; coachName: string | null };
+export type BatchWithProgramName = Batch & {
+  programName: string;
+  coachName: string | null;
+  // Wave 2 — resolved facility name, null only for a pre-migration
+  // batch a tenant never edited.
+  locationName: string | null;
+};
 
 export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[]> {
   return withTenant(ctx.tenantId, (tx) =>
@@ -95,6 +102,7 @@ export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[
         startTime: batches.startTime,
         endTime: batches.endTime,
         coachId: batches.coachId,
+        locationId: batches.locationId,
         isSample: batches.isSample,
         deletedAt: batches.deletedAt,
         createdAt: batches.createdAt,
@@ -103,16 +111,20 @@ export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[
         updatedBy: batches.updatedBy,
         programName: programs.name,
         coachName: persons.fullName,
+        locationName: locations.name,
       })
       .from(batches)
       .innerJoin(programs, eq(programs.id, batches.programId))
       .leftJoin(staff, eq(staff.id, batches.coachId))
       .leftJoin(persons, eq(persons.id, staff.personId))
+      .leftJoin(locations, eq(locations.id, batches.locationId))
       .where(and(eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
       .orderBy(programs.name, batches.name),
   );
 }
 
+// Wave 2 — a batch created without an explicit facility lands at the
+// tenant's primary live location (else the oldest live location).
 export async function createBatch(
   ctx: ActionCtx,
   input: {
@@ -123,9 +135,22 @@ export async function createBatch(
     startTime: string;
     endTime: string;
     coachId?: string;
+    // Wave 2 — optional; omitted means the tenant's primary facility.
+    locationId?: string;
   },
 ): Promise<BatchWithProgramName> {
   return withTenant(ctx.tenantId, async (tx) => {
+    let locationId = input.locationId ?? null;
+    if (!locationId) {
+      const [primary] = await tx
+        .select({ id: locations.id })
+        .from(locations)
+        .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
+        .orderBy(desc(locations.isPrimary), asc(locations.createdAt))
+        .limit(1);
+      locationId = primary?.id ?? null;
+    }
+
     const [batch] = await tx
       .insert(batches)
       .values({
@@ -137,6 +162,7 @@ export async function createBatch(
         startTime: input.startTime,
         endTime: input.endTime,
         coachId: input.coachId ? asStaffId(input.coachId) : undefined,
+        locationId,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })
@@ -157,6 +183,15 @@ export async function createBatch(
       coachName = coach?.fullName ?? null;
     }
 
+    let locationName: string | null = null;
+    if (locationId) {
+      const [loc] = await tx
+        .select({ name: locations.name })
+        .from(locations)
+        .where(eq(locations.id, locationId));
+      locationName = loc?.name ?? null;
+    }
+
     // D2 — a batch with no sessions is an empty register the day
     // after it's created; nothing else materialises them until the
     // nightly sessions.generate job runs. Same function the job and
@@ -170,7 +205,7 @@ export async function createBatch(
       .where(eq(tenants.id, ctx.tenantId));
     await generateSessions(tx, ctx.tenantId, tenant.timezone);
 
-    return { ...batch, programName: program.name, coachName };
+    return { ...batch, programName: program.name, coachName, locationName };
   });
 }
 
@@ -213,6 +248,8 @@ export async function updateBatch(
     startTime: string;
     endTime: string;
     coachId?: string;
+    // Wave 2 — when present, moves the batch to another facility.
+    locationId?: string;
   },
 ): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -226,6 +263,7 @@ export async function updateBatch(
         startTime: input.startTime,
         endTime: input.endTime,
         coachId: input.coachId ? asStaffId(input.coachId) : null,
+        ...(input.locationId ? { locationId: input.locationId } : {}),
         updatedAt: new Date(),
         updatedBy: ctx.userId,
       })
@@ -248,7 +286,16 @@ export async function updateBatch(
       coachName = coach?.fullName ?? null;
     }
 
-    return { ok: true, batch: { ...batch, programName: program.name, coachName } };
+    let locationName: string | null = null;
+    if (batch.locationId) {
+      const [loc] = await tx
+        .select({ name: locations.name })
+        .from(locations)
+        .where(eq(locations.id, batch.locationId));
+      locationName = loc?.name ?? null;
+    }
+
+    return { ok: true, batch: { ...batch, programName: program.name, coachName, locationName } };
   });
 }
 

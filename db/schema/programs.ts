@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   integer,
   time,
   pgTable,
@@ -14,6 +15,7 @@ import {
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { staff } from "./staff";
+import { locations } from "./locations";
 import type { TenantId, StaffId } from "@/lib/ids";
 
 export const programs = pgTable(
@@ -63,6 +65,10 @@ export const batches = pgTable(
     // comparison against ctx.userId compiling cleanly. See
     // lib/ids.ts and docs/agent-lanes.md's history.
     coachId: uuid("coach_id").$type<StaffId>(),
+    // Wave 2 — the facility this batch runs at. Nullable so the
+    // migration could be additive; the form always sends one and the
+    // service falls back to the tenant's primary location.
+    locationId: uuid("location_id"),
     ...softDelete,
     ...auditColumns,
   },
@@ -79,6 +85,14 @@ export const batches = pgTable(
       columns: [t.coachId, t.tenantId],
       foreignColumns: [staff.id, staff.tenantId],
     }),
+    foreignKey({
+      name: "batches_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
+    }),
+    index("batches_tenant_location_live_idx")
+      .on(t.tenantId, t.locationId)
+      .where(sql`deleted_at is null`),
   ],
 );
 

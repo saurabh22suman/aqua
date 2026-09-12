@@ -16,6 +16,7 @@ export function MemberEditForm({
   const [fullName, setFullName] = useState(member.fullName);
   const [phone, setPhone] = useState(member.phone ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(member.dateOfBirth ?? "");
+  const [joinedOn, setJoinedOn] = useState(member.joinedOn);
   const [gender, setGender] = useState(member.gender ?? "");
   const [locationId, setLocationId] = useState(member.locationId);
   const [medicalNotes, setMedicalNotes] = useState(member.medicalNotes ?? "");
@@ -38,6 +39,7 @@ export function MemberEditForm({
         gender: (gender || undefined) as "male" | "female" | "other" | undefined,
         locationId,
         medicalNotes: medicalNotes.trim() || undefined,
+        joinedOn: joinedOn || undefined,
       });
       if (!result.ok) {
         setError(result.error);
@@ -74,6 +76,18 @@ export function MemberEditForm({
           value={dateOfBirth}
           onChange={(e) => setDateOfBirth(e.target.value)}
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+        />
+      </div>
+      <div>
+        <label className="block text-[12px] text-ink-3 mb-1">Joined on</label>
+        <input
+          type="date"
+          lang="en-IN"
+          placeholder="dd/mm/yyyy"
+          value={joinedOn}
+          onChange={(e) => setJoinedOn(e.target.value)}
+          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          data-testid="member-joined-on"
         />
       </div>
       <select

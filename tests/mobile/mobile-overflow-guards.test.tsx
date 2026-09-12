@@ -92,6 +92,7 @@ describe("batch create capacity+time row wraps (F7)", () => {
       <BatchCreateForm
         programs={[PROGRAM]}
         coaches={[]}
+        locations={[]}
         onCreated={vi.fn()}
         terminology={TERMINOLOGY}
       />,
@@ -118,9 +119,11 @@ describe("batch edit capacity+time row wraps (F7)", () => {
           startTime: "07:00",
           endTime: "08:00",
           coachId: "",
+          locationId: "",
         }}
         programs={[PROGRAM]}
         coaches={[]}
+        locations={[]}
         error={null}
         onCancel={vi.fn()}
         onSaved={vi.fn()}

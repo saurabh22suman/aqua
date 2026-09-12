@@ -113,6 +113,7 @@ export async function updateMemberAction(raw: {
   gender?: string;
   locationId: string;
   medicalNotes?: string;
+  joinedOn?: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const input = updateMemberSchema.parse(raw);
   const ctx = await requireDefaultCtx();
