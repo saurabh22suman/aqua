@@ -63,7 +63,7 @@ describe("inline edit phone field", () => {
         memberId="m1"
         type="text"
         snapshot={SNAPSHOT}
-        formatValue={(v) => (v ? `+91 ${v.slice(0, 5)} ${v.slice(5)}` : v)}
+        formatAs="phone"
       />,
     );
 

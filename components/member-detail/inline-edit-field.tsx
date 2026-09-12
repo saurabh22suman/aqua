@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Pencil } from "lucide-react";
 import { updateMemberAction } from "@/lib/actions/people";
+import { formatPhoneIN } from "@/lib/phone";
 
 // Member-detail inline edit. Replaces the read-only field block on
 // /owner/members/[id] with a click-to-edit affordance for the five
@@ -51,10 +52,12 @@ export type InlineEditFieldProps = {
   className?: string;
   valueClassName?: string;
   snapshot: InlineEditSnapshot;
-  // Display-only transform for the read branch (e.g. formatPhoneIN).
-  // The editing input and the committed value always keep the stored
-  // form, so formatting never round-trips into a write.
-  formatValue?: (value: string) => string;
+  // Display-only formatting for the read branch, expressed as a
+  // serializable enum because server components cannot pass functions
+  // across the RSC boundary. The editing input and the committed value
+  // always keep the stored form, so formatting never round-trips into
+  // a write.
+  formatAs?: "phone";
 };
 
 type SaveStatus =
@@ -75,7 +78,7 @@ export function InlineEditField({
   className,
   valueClassName,
   snapshot,
-  formatValue,
+  formatAs,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -261,7 +264,7 @@ export function InlineEditField({
         ) : (
           <>
             <span className={valueClassName ?? "text-[13px]"}>
-              {(formatValue ? formatValue(displayValue) : displayValue) ||
+              {(formatAs === "phone" ? formatPhoneIN(displayValue) : displayValue) ||
                 placeholder ||
                 "—"}
             </span>

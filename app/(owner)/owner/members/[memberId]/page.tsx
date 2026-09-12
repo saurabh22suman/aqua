@@ -114,7 +114,7 @@ export default async function MemberDetailPage({
               type="text"
               snapshot={member}
               placeholder="Add phone"
-              formatValue={formatPhoneIN}
+              formatAs="phone"
             />
           </dd>
         </div>
