@@ -186,7 +186,31 @@ Open questions (owner, 2026-09-13) — to settle before Wave 3 starts:
   Needs a design pass before R.28 (per-location overrides) and the
   platform feature catalogue work.
 
-## 5. Defects to fix regardless of waves
+## 5. R.8 proposal — absence alerts (owner decision needed)
+
+R.3–R.7 are in PR #140 (awaiting CI and merge). R.8 was held because
+it needs a new table plus a daily job over children's attendance,
+which the repo's stop rules reserve for the owner. Proposed shape:
+
+- **Detection:** daily job per tenant (tenant timezone) computing two
+  alert kinds — `consecutive_absences` (3 in a row for a member in a
+  batch) and `low_monthly_attendance` (below a threshold to be set).
+  Dedupe key `(member_id, batch_id, alert_kind, calendar_week)` so a
+  streak alerts once, not once per day.
+- **Schema:** `absence_alerts` (tenant, member, batch, kind, week,
+  created_at; unique on the dedupe key; RLS + composite tenant FKs).
+  Attendance is already read by coaches/parents, so no new personal
+  data class — a direct operational signal, not profiling.
+- **Surfaces:** coach member detail (a line per alert) and the
+  zero-JS parent page. In-app only — no WhatsApp (messaging chain
+  unbuilt).
+- **Decisions:** (1) confirm the two kinds and the low-attendance
+  threshold; (2) coach surface — member detail, today list, or both;
+  (3) parent page placement; (4) read-only or acknowledged state.
+- **Effort:** one migration, one pg-boss job, two surface touches,
+  tests. Ready to build on your word.
+
+## 6. Defects to fix regardless of waves
 
 - `/platform` links/redirects (5 sites) and `/ops/plans/[planId]` link.
 - `/owner/sessions` copy promises cancel/reschedule with no UI (R.4).
@@ -195,7 +219,7 @@ Open questions (owner, 2026-09-13) — to settle before Wave 3 starts:
   sites (wire or delete).
 - `/owner/reports` `—` and `1 → 0` copy (partially swept).
 
-## 6. Open decisions
+## 7. Open decisions
 
 1. Consolidated vs per-facility invoicing (Wave 2, affects C-31/C-32).
 2. Worker surface: build `(worker)/tasks` (R.13) or give workers a
