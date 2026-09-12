@@ -29,8 +29,8 @@ import {
   setCredential,
   hasCredentialByPhone,
   pinLogin,
-  clearPinFailures,
 } from "@/lib/services/credentials";
+import { clearPinFailures } from "@/lib/services/pin-lockout";
 import { normaliseToE164 } from "@/lib/phone";
 import { asUserId, type UserId } from "@/lib/ids";
 

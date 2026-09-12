@@ -31,7 +31,7 @@ import { auth } from "@/lib/auth/server";
 import { findOrCreateUserByPhone } from "@/db/user-account";
 import { users } from "@/db/schema/users";
 import { baUser, baAccount } from "@/db/schema/better-auth";
-import { asUserId, type UserId } from "@/lib/ids";
+import { asUserId } from "@/lib/ids";
 import { normaliseToE164 } from "@/lib/phone";
 
 // The PIN shape: 6-12 digits. Digits-only is the product decision
@@ -42,10 +42,10 @@ import { normaliseToE164 } from "@/lib/phone";
 // against it BEFORE consuming the single-use link.
 export const pinSchema = z.string().regex(/^\d{6,12}$/);
 
-// 5 failures then 15-minute lock. Service constants — not columns —
-// so they can be tuned without a migration.
-export const PIN_LOCKOUT_THRESHOLD = 5;
-export const PIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+// The lockout policy lives in ./pin-lockout (kept small).
+import { clearPinFailures, isPinLocked, recordPinFailure } from "./pin-lockout";
+export { PIN_LOCKOUT_THRESHOLD, PIN_LOCKOUT_WINDOW_MS } from "./pin-lockout";
+
 
 // better-auth's account issuer for locally-managed credentials:
 // createLocalAccountIssuer("credential") === `local:${encodeURIComponent("credential")}`.
@@ -200,38 +200,6 @@ export async function hasCredentialByPhone(phone: string): Promise<boolean> {
 // Lockout bookkeeping — write failed_pin_attempts and pin_locked_until.
 // Called from pinLogin on failure (lock predicate evaluated inside
 // that function before this is reached).
-async function recordPinFailure(userId: UserId): Promise<void> {
-  await withPlatform(async () => {
-    // We use a two-step path (read, write) because pg doesn't expose
-    // SET x = x + 1 ... RETURNING in a way Drizzle composes cleanly
-    // here. Simpler: read then conditional write.
-    const rows = await db
-      .select({ attempts: users.failedPinAttempts })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    const current = rows[0]?.attempts ?? 0;
-    const updated = current + 1;
-    const lockedUntil =
-      updated >= PIN_LOCKOUT_THRESHOLD
-        ? new Date(Date.now() + PIN_LOCKOUT_WINDOW_MS)
-        : null;
-    await db
-      .update(users)
-      .set({ failedPinAttempts: updated, pinLockedUntil: lockedUntil })
-      .where(eq(users.id, userId));
-  });
-}
-
-export async function clearPinFailures(userId: UserId): Promise<void> {
-  await withPlatform(async () => {
-    await db
-      .update(users)
-      .set({ failedPinAttempts: 0, pinLockedUntil: null })
-      .where(eq(users.id, userId));
-  });
-}
-
 // Main login: phone + PIN → Response. Returns the better-auth sign-in
 // Response on success (which carries Set-Cookie); a generic 401
 // Response on any failure (wrong PIN, locked, unknown phone, rate
@@ -265,7 +233,7 @@ export async function pinLogin(rawPhone: string, pin: string): Promise<Response>
     // across fake phones).
     return genericFailure();
   }
-  if (user.pinLockedUntil && user.pinLockedUntil.getTime() > Date.now()) {
+  if (isPinLocked(user.pinLockedUntil)) {
     return genericFailure();
   }
 

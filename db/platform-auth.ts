@@ -1,99 +1,26 @@
-import {
-  randomBytes,
-  scryptSync,
-  timingSafeEqual,
-  createHash,
-  createHmac,
-  randomUUID,
-} from "node:crypto";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./client";
 import { withPlatform } from "./scope";
 import { env } from "@/lib/env";
 import {
+  PLATFORM_SESSION_TTL_SECONDS,
+  PlatformAuthError,
+  constantTimeEqual,
+  hashPassword,
+  sha256,
+} from "./platform-auth-crypto";
+import { loginWithEnvOperator } from "./platform-auth-env";
+import {
   platformUsers,
   platformSessions,
   platformAuditLog,
 } from "./schema";
 
-export const PLATFORM_SESSION_TTL_SECONDS = 60 * 60 * 8; // 8h, sliding on activity
-export const SCRYPT_N = 16384; // CPU/memory cost — Node default; raised for prod if desired
-
-export class PlatformAuthError extends Error {
-  constructor(
-    public readonly code:
-      | "invalid_credentials"
-      | "invalid_totp"
-      | "no_totp"
-      | "session_expired"
-      | "session_invalid"
-      | "second_factor_required"
-      | "user_suspended",
-    message: string,
-  ) {
-    super(message);
-  }
-}
-
-function hashPassword(password: string, salt: string): string {
-  // scrypt: deterministic for (password, salt); no pepper here — a
-  // leaked DB does not leak the production password hashes alone. The
-  // verification path recomputes with the stored salt and compares with
-  // timingSafeEqual. Cost 16384 is the Node default — bump for a higher
-  // attack budget if/when offline cracking becomes a real concern.
-  return scryptSync(password, salt, 64, { N: SCRYPT_N }).toString("hex");
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "hex");
-  const bb = Buffer.from(b, "hex");
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
-function sha256(input: string): string {
-  return createHmac("sha256", "platform-session-token-v1")
-    .update(input)
-    .digest("hex");
-}
-
-// Ops env credentials (2026-09-11 auth feature): constant-time
-// comparison of two arbitrary-length strings. Hash both to a fixed
-// length so timingSafeEqual never sees mismatched lengths (which
-// would itself leak the length).
-function constantTimeStringEqual(a: string, b: string): boolean {
-  const ha = createHash("sha256").update(a).digest();
-  const hb = createHash("sha256").update(b).digest();
-  return timingSafeEqual(ha, hb);
-}
-
-// The env operator has no provisioned row; one is found-or-created on
-// first successful login so sessions and audit rows have a stable FK
-// anchor. The stored password hash is random and never used — the env
-// branch bypasses it — but the columns are NOT NULL.
-async function findOrCreateEnvOperator(email: string): Promise<{ id: string; role: "admin" | "viewer" }> {
-  const canonical = email.toLowerCase();
-  const [existing] = await db
-    .select({ id: platformUsers.id, role: platformUsers.role })
-    .from(platformUsers)
-    .where(eq(platformUsers.email, canonical))
-    .limit(1);
-  if (existing) return { id: existing.id, role: existing.role as "admin" | "viewer" };
-  const salt = randomBytes(16).toString("hex");
-  const [created] = await db
-    .insert(platformUsers)
-    .values({
-      email: canonical,
-      name: "Ops (env)",
-      passwordHash: hashPassword(randomBytes(32).toString("hex"), salt),
-      passwordSalt: salt,
-      role: "admin",
-      status: "active",
-    })
-    .returning({ id: platformUsers.id, role: platformUsers.role });
-  return { id: created!.id, role: created!.role as "admin" | "viewer" };
-}
+// Public surface kept stable: callers (lib/actions/platform-auth.ts,
+// tests) import PlatformAuthError from this module.
+export { PlatformAuthError, PLATFORM_SESSION_TTL_SECONDS } from "./platform-auth-crypto";
 
 export const platformLoginInput = z.object({
   email: z.string().email(),
@@ -212,38 +139,7 @@ export async function platformLogin(
     // (no TOTP). Removing the vars restores the DB+TOTP path below
     // unchanged. The pair is validated at boot (lib/env.ts).
     if (env.OPS_EMAIL !== undefined && env.OPS_PASSWORD !== undefined) {
-      const emailOk = constantTimeStringEqual(
-        input.email.toLowerCase(),
-        env.OPS_EMAIL.toLowerCase(),
-      );
-      const passwordOk = constantTimeStringEqual(input.password, env.OPS_PASSWORD);
-      if (!emailOk || !passwordOk) {
-        throw new PlatformAuthError("invalid_credentials", "invalid credentials");
-      }
-      const operator = await findOrCreateEnvOperator(env.OPS_EMAIL);
-      const sessionToken = randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + PLATFORM_SESSION_TTL_SECONDS * 1000);
-      await db.insert(platformSessions).values({
-        id: randomUUID(),
-        userId: operator.id,
-        tokenHash: sha256(sessionToken),
-        ipAddress: meta.ipAddress,
-        userAgent: meta.userAgent,
-        secondFactorPassed: true,
-        expiresAt,
-      });
-      await db.insert(platformAuditLog).values({
-        actorId: operator.id,
-        action: "platform.login",
-        detail: { method: "env" },
-        ipAddress: meta.ipAddress,
-      });
-      return {
-        kind: "fully_authenticated",
-        sessionToken,
-        userId: operator.id,
-        role: operator.role,
-      };
+      return await loginWithEnvOperator(input, meta, env.OPS_EMAIL, env.OPS_PASSWORD);
     }
 
     const [user] = await db
