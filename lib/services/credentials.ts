@@ -24,12 +24,15 @@
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db/auth-db";
 import { withPlatform } from "@/db/scope";
 import { auth } from "@/lib/auth/server";
+import { findOrCreateUserByPhone } from "@/db/user-account";
 import { users } from "@/db/schema/users";
 import { baUser, baAccount } from "@/db/schema/better-auth";
-import type { UserId } from "@/lib/ids";
+import { asUserId, type UserId } from "@/lib/ids";
+import { normaliseToE164 } from "@/lib/phone";
 
 // The PIN shape: 6-12 digits. Digits-only is the product decision
 // (mobile keypad, quick to enter); 6 is the minimum better-auth is
@@ -100,6 +103,66 @@ export async function setCredential(
     // existing PIN).
     await ctx.internalAdapter.updateAccount(existing.id, { password: hash });
   });
+}
+
+// Ensures the users row and the better-auth ba_user row exist for a
+// canonical phone, links them, and returns the ba_user id. This is
+// the identity half of magic-link redemption, extracted so the demo
+// seeding path (setCredentialForPhone) cannot drift from it.
+export async function ensureBaUserForPhone(rawPhone: string): Promise<string> {
+  const phone = normaliseToE164(rawPhone);
+  return withPlatform(async () => {
+    const user = await findOrCreateUserByPhone(phone);
+    const userId = asUserId(user.id);
+    const tempEmail = `${phone}@phone.aqua.local`;
+    const existing = await db
+      .select({ id: baUser.id })
+      .from(baUser)
+      .where(eq(baUser.phoneNumber, phone))
+      .limit(1);
+    let baUserId: string;
+    if (existing[0]) {
+      baUserId = existing[0].id;
+    } else {
+      const inserted = await db
+        .insert(baUser)
+        .values({
+          id: uuidv7(),
+          name: phone,
+          email: tempEmail,
+          phoneNumber: phone,
+          phoneNumberVerified: true,
+        })
+        .onConflictDoNothing({ target: baUser.email })
+        .returning({ id: baUser.id });
+      if (inserted[0]) {
+        baUserId = inserted[0].id;
+      } else {
+        const retry = await db
+          .select({ id: baUser.id })
+          .from(baUser)
+          .where(eq(baUser.email, tempEmail))
+          .limit(1);
+        baUserId = retry[0]!.id;
+      }
+    }
+    await db
+      .update(users)
+      .set({ betterAuthId: baUserId, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+    return baUserId;
+  });
+}
+
+// Phone-keyed set. Used by demo seeding (scripts/lib/demo-credentials)
+// and any future bootstrap that needs a working credential without a
+// magic link. Overwrites an existing credential, like setCredential.
+export async function setCredentialForPhone(
+  rawPhone: string,
+  pin: string,
+): Promise<void> {
+  const baUserId = await ensureBaUserForPhone(rawPhone);
+  await setCredential(baUserId, pin);
 }
 
 // Read-side: does this phone have a credential row?

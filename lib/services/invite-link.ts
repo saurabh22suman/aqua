@@ -1,26 +1,23 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { v7 as uuidv7 } from "uuid";
 import { auth } from "@/lib/auth/server";
 import { withTenant } from "@/db/tenant";
 import { withPlatform } from "@/db/scope";
-import { db } from "@/db/auth-db";
-import { findOrCreateUserByPhone } from "@/db/user-account";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { tenants } from "@/db/schema/tenants";
 import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
-import { baUser } from "@/db/schema/better-auth";
 import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
 import {
   verifyInviteLinkToken,
 } from "./invite-link-token";
 import {
+  ensureBaUserForPhone,
   hasCredentialByPhone,
   pinSchema,
   setCredential,
 } from "./credentials";
-import { asTenantId, asUserId } from "@/lib/ids";
+import { asTenantId } from "@/lib/ids";
 
 // Staff magic-link login: single-use, membership-bound invite and
 // re-login links. The parallel door to phone OTP (architecture
@@ -262,46 +259,10 @@ export async function redeemLoginLink(
   // Identity: the platform users row exists from the invite
   // (defensive find-or-create); the better-auth row may not --
   // nobody has OTP'd yet -- so create it with the same temp-email
-  // shape phone signup uses, and link the two ids.
+  // shape phone signup uses, and link the two ids. The helper is
+  // shared with demo seeding so the two paths cannot drift.
   const sessionToken = await withPlatform(async () => {
-    const user = await findOrCreateUserByPhone(consumed.phone);
-    const userId = asUserId(user.id);
-    const tempEmail = `${consumed.phone}@phone.aqua.local`;
-    const existing = await db
-      .select({ id: baUser.id })
-      .from(baUser)
-      .where(eq(baUser.phoneNumber, consumed.phone))
-      .limit(1);
-    let baUserId: string;
-    if (existing[0]) {
-      baUserId = existing[0].id;
-    } else {
-      const inserted = await db
-        .insert(baUser)
-        .values({
-          id: uuidv7(),
-          name: consumed.phone,
-          email: tempEmail,
-          phoneNumber: consumed.phone,
-          phoneNumberVerified: true,
-        })
-        .onConflictDoNothing({ target: baUser.email })
-        .returning({ id: baUser.id });
-      if (inserted[0]) {
-        baUserId = inserted[0].id;
-      } else {
-        const retry = await db
-          .select({ id: baUser.id })
-          .from(baUser)
-          .where(eq(baUser.email, tempEmail))
-          .limit(1);
-        baUserId = retry[0]!.id;
-      }
-    }
-    await db
-      .update(users)
-      .set({ betterAuthId: baUserId, updatedAt: new Date() })
-      .where(eq(users.id, userId));
+    const baUserId = await ensureBaUserForPhone(consumed.phone);
 
     if (pin !== undefined) {
       await setCredential(baUserId, pin);

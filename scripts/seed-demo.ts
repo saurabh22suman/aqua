@@ -7,6 +7,7 @@ import { roles } from "../db/schema/roles";
 import { generateSessions } from "../lib/jobs/session-generator";
 import { createMember } from "../lib/services/register";
 import { seedRoleTemplates } from "../lib/services/roles";
+import { seedDemoCredentials, DEMO_PIN } from "./lib/demo-credentials";
 import { applyPreset } from "../db/preset-engine";
 import {
   defaultPlanId,
@@ -1422,6 +1423,15 @@ async function main() {
     DEMO_RECEPTIONIST,
     DEMO_ACCOUNTANT,
   ]);
+  // 2026-09-11 auth feature: login is phone + PIN; every demo user
+  // gets the documented demo PIN (scripts/lib/demo-credentials.ts).
+  await seedDemoCredentials([
+    DEMO_OWNER.phone,
+    DEMO_COACH_PRIMARY.phone,
+    DEMO_COACH_SECONDARY.phone,
+    DEMO_RECEPTIONIST.phone,
+    DEMO_ACCOUNTANT.phone,
+  ]);
   const primaryCoachStaffId = staffIdsByPhone.get(DEMO_COACH_PRIMARY.phone);
   const secondaryCoachStaffId = staffIdsByPhone.get(DEMO_COACH_SECONDARY.phone);
 
@@ -1525,12 +1535,13 @@ async function main() {
 
   await ensureEnquiries(tenantId);
 
-  console.log("\n=== login users ===");
+  console.log("\n=== login users (phone + PIN) ===");
   console.log("+919000000001 owner");
   console.log("+919000000002 coach (primary)");
   console.log("+919000000005 coach (secondary)");
   console.log("+919000000004 receptionist");
   console.log("+919000000006 accountant");
+  console.log(`PIN for every number above: ${DEMO_PIN}`);
   console.log("ops@aqua.local platform operator (from pnpm tsx scripts/seed-platform-user.ts)");
 
   // Second tenant — football. Different preset, different accent, so the
