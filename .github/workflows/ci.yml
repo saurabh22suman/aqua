@@ -35,6 +35,19 @@ jobs:
       # it here is purely to keep that noise out of a first-run log
       # someone is reading at 1am. See docs/ci-first-run.md.
       BETTER_AUTH_SECRET: ci-build-only-not-a-real-secret
+      # scripts/e2e-role-bypass.ts runs next build + next start + a
+      # seed with NODE_ENV=production so lib/env.ts's production-mode
+      # boot guard (lib/env.ts:66-96) fires for the seed subprocess
+      # (next build is exempt via NEXT_PHASE=phase-production-build;
+      # next start loads env lazily on first request). The seed
+      # imports lib/env.ts eagerly and was crashing on these two
+      # required vars. The values here match what the e2e fakes —
+      # BETTER_AUTH_URL points at the local port the e2e listens on
+      # (BASE = http://127.0.0.1:3220), PARENT_LINK_SECRET mirrors
+      # BETTER_AUTH_SECRET's "ci-build-only" pattern since the
+      # parent page is never hit by this test.
+      BETTER_AUTH_URL: http://127.0.0.1:3220
+      PARENT_LINK_SECRET: ci-build-only-not-a-real-secret
 
     steps:
       # fetch-depth: 0 -- M2's lane-overlap check needs origin/<base>
