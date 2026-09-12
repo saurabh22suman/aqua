@@ -89,8 +89,13 @@ export async function waitForMemberStatus(
 export async function waitForQueueDrain(page: Page, timeoutMs = 20_000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const state = await page.locator('[data-testid="sync-state"]').textContent();
-    if (state && /^synced /.test(state.trim())) return true;
+    // Copy-independent probe: the visible label is UX copy (it changed
+    // from "synced HH:MM" to "Saved at HH:MM" in the mobile pass); the
+    // data-sync-state attribute is the stable contract.
+    const state = await page
+      .locator('[data-testid="sync-state"]')
+      .getAttribute("data-sync-state");
+    if (state === "synced") return true;
     await page.evaluate(() => window.__flushQueue?.());
     await page.waitForTimeout(500);
   }

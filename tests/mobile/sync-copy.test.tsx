@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Phase 3 (mobile UX plan v2) — F31. The register's sync line said
 // "synced never" (and "synced HH:MM" anywhere), which reads as a
@@ -67,5 +66,37 @@ describe("register sync label (F31)", () => {
     );
     expect(screen.getByText(/Saved on this phone/)).toBeTruthy();
     expect(screen.queryByText(/never/i)).toBeNull();
+  });
+
+  it("exposes a copy-independent sync state for the e2e harness", () => {
+    // The offline e2e's drain detector used to grep for /^synced / —
+    // renaming the copy broke the probe while the sync still worked.
+    // data-sync-state is the stable contract.
+    render(
+      <RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />,
+    );
+    expect(
+      screen.getByTestId("sync-state").getAttribute("data-sync-state"),
+    ).toBe("synced");
+    cleanup();
+
+    state.savedAtLabel = null;
+    render(
+      <RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />,
+    );
+    expect(
+      screen.getByTestId("sync-state").getAttribute("data-sync-state"),
+    ).toBe("idle");
+    cleanup();
+
+    state.savedAtLabel = "05:00 pm";
+    state.online = false;
+    state.pending = 2;
+    render(
+      <RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />,
+    );
+    expect(
+      screen.getByTestId("sync-state").getAttribute("data-sync-state"),
+    ).toBe("offline");
   });
 });
