@@ -80,3 +80,30 @@ export function isMinor(
   if (tm < bm || (tm === bm && td < bd)) age -= 1;
   return age < 18;
 }
+
+// Display formatters. The canonical zone for this product is
+// Asia/Kolkata; callers that need another zone should build their own
+// Intl call rather than growing this API until a second zone exists.
+// `en-IN` gives the Indian conventions the audit asked for:
+// "05:00 pm" (12-hour, lowercase meridiem) and "12 Sept 2026"
+// (unambiguous day-month-year, never 12/09/2026).
+
+export function formatDateIST(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+export function formatTimeIST(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+}

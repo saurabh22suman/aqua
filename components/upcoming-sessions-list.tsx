@@ -5,18 +5,12 @@ import { SessionSubstituteControl } from "@/components/session-substitute-contro
 import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import type { CoachOption } from "@/lib/services/programs";
 import type { TerminologyState } from "@/lib/terminology/keys";
+import { formatTimeIST } from "@/lib/time/tz";
 
 // F3 (R.1) — client island for /owner/sessions. Renders the
 // session list with a per-row substitute control. Tracks
 // substitutions locally so the substituted coach name updates
 // inline without a server round-trip.
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const h = d.getUTCHours().toString().padStart(2, "0");
-  const m = d.getUTCMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
 
 function groupByDate(rows: UpcomingSessionRow[]): Map<string, UpcomingSessionRow[]> {
   const out = new Map<string, UpcomingSessionRow[]>();
@@ -86,7 +80,7 @@ export function UpcomingSessionsList({
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-[14px] font-medium text-ink truncate">
-                      {formatTime(s.startsAt.toString())}&ndash;{formatTime(s.endsAt.toString())}{" "}
+                      {formatTimeIST(s.startsAt)}&ndash;{formatTimeIST(s.endsAt)}{" "}
                       &middot; {s.batchName}
                     </p>
                     <p className="mt-0.5 text-[12px] text-ink-3">
@@ -102,8 +96,8 @@ export function UpcomingSessionsList({
                   <SessionSubstituteControl
                     sessionId={s.id}
                     sessionDate={s.sessionDate}
-                    startsAt={formatTime(s.startsAt.toString())}
-                    endsAt={formatTime(s.endsAt.toString())}
+                    startsAt={formatTimeIST(s.startsAt)}
+                    endsAt={formatTimeIST(s.endsAt)}
                     currentCoachName={s.coachName}
                     coaches={coaches}
                     onSubstituted={(result) => {

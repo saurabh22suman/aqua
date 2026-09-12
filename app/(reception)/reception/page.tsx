@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getTodayAction } from "@/lib/actions/coach";
 import { requireReception } from "@/lib/auth/surface-guard";
 
@@ -32,10 +31,7 @@ export default async function ReceptionTodayPage() {
             const fill = s.marked === 0 ? "bg-water" : pct < 50 ? "bg-warn" : "bg-good";
             return (
               <li key={s.id}>
-                <Link
-                  href={`/coach/register/${s.id}`}
-                  className="block bg-paper rounded-card border border-line p-4 transition-colors duration-150 active:bg-water-soft"
-                >
+                <div className="bg-paper rounded-card border border-line p-4">
                   <div className="flex justify-between items-baseline mb-2">
                     <span className="text-[15px] font-display font-semibold">
                       {timeOf(s.startsAt)} {s.batchName}
@@ -50,7 +46,10 @@ export default async function ReceptionTodayPage() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                </Link>
+                  <p className="mt-2.5 text-[12px] text-ink-3">
+                    Coach will mark attendance.
+                  </p>
+                </div>
               </li>
             );
           })}
