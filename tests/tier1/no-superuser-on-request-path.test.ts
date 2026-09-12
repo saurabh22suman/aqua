@@ -151,6 +151,7 @@ const ALLOWLIST = new Set([
   "tests/tier1/presets-r22.test.ts",
   "tests/tier1/batch-transfer.test.ts",
   "tests/tier1/batch-detail-page.test.ts", // K1 click-through regression test, same fixture-setup pattern as the other tier1 tests above
+  "tests/mobile/coach-me-page.test.ts", // F4 (mobile UX plan v2): real-DB coach membership drives CoachMePage, same fixture-setup pattern as batch-detail-page above
   "tests/tier1/session-lifecycle.test.ts",
   "tests/tier1/coach-schedule.test.ts",
   "tests/tier1/reschedule-coach-conflict.test.ts",
