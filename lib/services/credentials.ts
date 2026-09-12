@@ -23,12 +23,21 @@
 
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/db/auth-db";
 import { withPlatform } from "@/db/scope";
 import { auth } from "@/lib/auth/server";
 import { users } from "@/db/schema/users";
 import { baUser, baAccount } from "@/db/schema/better-auth";
 import type { UserId } from "@/lib/ids";
+
+// The PIN shape: 6-12 digits. Digits-only is the product decision
+// (mobile keypad, quick to enter); 6 is the minimum better-auth is
+// configured to accept (minPasswordLength) and the lockout in this
+// module is what makes 6 acceptable. Routes reuse this schema so the
+// boundary and the service agree; redeeming a login link validates
+// against it BEFORE consuming the single-use link.
+export const pinSchema = z.string().regex(/^\d{6,12}$/);
 
 // 5 failures then 15-minute lock. Service constants — not columns —
 // so they can be tuned without a migration.

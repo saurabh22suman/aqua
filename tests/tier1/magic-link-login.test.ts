@@ -188,10 +188,17 @@ describe("invite-link issue/preview/redeem (database)", () => {
 
     const issued = await issueLoginLink(tenantId, membershipId);
     if (issued.kind !== "ok") throw new Error("setup issue failed");
-    const redeemed = await redeemLoginLink(issued.token);
+    // 2026-09-11 auth feature: redeem without a PIN on a
+    // credential-less membership now lands on /set-pin (the set-PIN
+    // screen), not the role home. Pass a PIN here to keep this test's
+    // original intent — a completed first login lands on the role
+    // home. The no-PIN branch is covered by
+    // tests/auth/invite-link-pin.test.ts.
+    const redeemed = await redeemLoginLink(issued.token, { pin: "123456" });
     expect(redeemed.kind).toBe("ok");
     if (redeemed.kind !== "ok") return;
     expect(redeemed.homePath).toBe("/coach");
+    expect(redeemed.needsCredential).toBe(false);
     expect(typeof redeemed.sessionToken).toBe("string");
 
     const after = await withTenant(tenantId, (tx) =>
