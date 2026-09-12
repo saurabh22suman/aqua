@@ -81,6 +81,8 @@ export function ActivityFilterBar({
         <span className="block text-[12px] text-ink-3 mb-1">Since</span>
         <input
           type="date"
+          lang="en-IN"
+          placeholder="dd/mm/yyyy"
           value={since}
           onChange={(e) => setSince(e.target.value)}
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
@@ -90,6 +92,8 @@ export function ActivityFilterBar({
         <span className="block text-[12px] text-ink-3 mb-1">Until</span>
         <input
           type="date"
+          lang="en-IN"
+          placeholder="dd/mm/yyyy"
           value={until}
           onChange={(e) => setUntil(e.target.value)}
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"

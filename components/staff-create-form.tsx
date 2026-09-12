@@ -111,6 +111,8 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
         <span className="block text-[12.5px] font-medium mb-1.5">Employed on (optional)</span>
         <input
           type="date"
+          lang="en-IN"
+          placeholder="dd/mm/yyyy"
           value={employedOn}
           onChange={(e) => setEmployedOn(e.target.value)}
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"

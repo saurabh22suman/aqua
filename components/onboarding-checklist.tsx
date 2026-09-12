@@ -74,7 +74,7 @@ export function OnboardingChecklistView({ data }: { data: OnboardingChecklist })
       </div>
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">
-        What&apos;s left
+        {allDone ? "Completed" : "What's left"}
       </h2>
       <ul>
         {data.items.map((item) => {
@@ -101,13 +101,7 @@ export function OnboardingChecklistView({ data }: { data: OnboardingChecklist })
                 </p>
               </div>
               <div className="flex-none text-ink-3">
-                {item.complete ? (
-                  <span className="text-[11px] font-medium px-2.5 py-1 rounded-pill bg-deck text-ink-2">
-                    Done
-                  </span>
-                ) : (
-                  <ChevronRight size={18} />
-                )}
+                {item.complete ? null : <ChevronRight size={18} />}
               </div>
             </div>
           );

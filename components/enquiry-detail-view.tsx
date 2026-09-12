@@ -267,6 +267,8 @@ export function EnquiryDetailView({
         <div className="mt-2.5 rounded-card border border-line bg-paper p-3 space-y-2">
           <input
             type="datetime-local"
+            lang="en-IN"
+            placeholder="dd/mm/yyyy, hh:mm"
             value={followUpDue}
             onChange={(e) => setFollowUpDue(e.target.value)}
             className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"

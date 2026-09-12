@@ -31,7 +31,7 @@ export function RegisterBoard({
     markedCount,
     pending,
     online,
-    syncedLabel,
+    savedAtLabel,
     hasActiveFailure,
     saving,
     retrySync,
@@ -117,7 +117,32 @@ export function RegisterBoard({
               </span>{" "}
               of {rows.length} marked
             </p>
-            <p className="text-[11px] text-ink-3" data-testid="sync-state">
+            <p
+              className="text-[11px] text-ink-3"
+              data-testid="sync-state"
+              // Copy-independent state for the offline e2e harness (and
+              // any future probe). F31 renamed the visible text and
+              // broke a `/^synced /` grep in scripts/lib/offline-page.ts
+              // even though sync was working; the attribute is the
+              // stable contract now.
+              data-sync-state={
+                offlineSyncEnabled
+                  ? saving > 0
+                    ? "saving"
+                    : !online
+                      ? "offline"
+                      : pending > 0
+                        ? "syncing"
+                        : savedAtLabel
+                          ? "synced"
+                          : "idle"
+                  : !online
+                    ? "unsavable"
+                    : savedAtLabel
+                      ? "synced"
+                      : "idle"
+              }
+            >
               {offlineSyncEnabled ? (
                 // "saving" outranks everything else: it means a write
                 // hasn't even committed to this device yet, which is a
@@ -130,13 +155,17 @@ export function RegisterBoard({
                   "offline — saved on device"
                 ) : pending > 0 ? (
                   `syncing ${pending}…`
+                ) : savedAtLabel ? (
+                  `Saved at ${savedAtLabel}`
                 ) : (
-                  `synced ${syncedLabel}`
+                  "Saved on this phone"
                 )
               ) : !online ? (
                 "offline — can't save"
+              ) : savedAtLabel ? (
+                `Saved at ${savedAtLabel}`
               ) : (
-                `synced ${syncedLabel}`
+                "Saved on this phone"
               )}
             </p>
           </div>

@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Phone, Stethoscope, Users } from "lucide-react";
+import { Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import { formatPhoneIN } from "@/lib/phone";
+import { BackLink } from "@/components/ui/BackLink";
 
 // Coach member detail — the coach-scoped subset of the member's
 // record. The page is intentionally narrow: name, code, batches
@@ -23,13 +24,7 @@ export default async function CoachMemberDetailPage({
 
   return (
     <main className="px-5 pt-6 pb-8">
-      <Link
-        href="/coach/members"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
-      >
-        <ChevronLeft size={16} />
-        Members
-      </Link>
+      <BackLink href="/coach/members" label="Members" />
 
       <h1 className="font-display text-[19px] font-semibold leading-tight">
         {m.fullName}
@@ -48,7 +43,11 @@ export default async function CoachMemberDetailPage({
               Phone
             </p>
             <p className="mt-0.5 text-[14px] font-mono">
-              {m.phone ?? <span className="text-ink-3">No phone on file</span>}
+              {m.phone ? (
+                formatPhoneIN(m.phone)
+              ) : (
+                <span className="text-ink-3">No phone on file</span>
+              )}
             </p>
           </div>
         </div>
@@ -79,7 +78,11 @@ export default async function CoachMemberDetailPage({
               <li key={i} className="px-3.5 py-2.5 text-[13px]">
                 <p className="font-medium">{g.fullName}</p>
                 <p className="mt-0.5 font-mono text-ink-2">
-                  {g.phone ?? <span className="text-ink-3">No phone on file</span>}
+                  {g.phone ? (
+                    formatPhoneIN(g.phone)
+                  ) : (
+                    <span className="text-ink-3">No phone on file</span>
+                  )}
                 </p>
               </li>
             ))}

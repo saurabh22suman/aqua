@@ -1,15 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, CalendarClock, ChevronRight, Clock } from "lucide-react";
 import { getCoachHomeAction } from "@/lib/actions/coach";
-import { todayInZone } from "@/lib/time/tz";
+import { formatTimeIST, todayInZone } from "@/lib/time/tz";
 import { requireCoach } from "@/lib/auth/surface-guard";
-
-function timeOf(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function shortDay(iso: string): string {
   // e.g. "Mon 9 Sep"
@@ -77,7 +70,7 @@ export default async function CoachTodayPage() {
                     </span>
                   </p>
                   <p className="mt-1 font-display text-[22px] font-semibold tracking-tight leading-tight">
-                    {timeOf(next.startsAt)} {next.batchName}
+                    {formatTimeIST(next.startsAt)} {next.batchName}
                   </p>
                   <p className="mt-1.5 text-[12.5px] text-paper/70 flex items-center gap-1.5">
                     <CalendarClock size={12} className="flex-none" />
@@ -126,7 +119,7 @@ export default async function CoachTodayPage() {
                 >
                   <div className="flex justify-between items-baseline mb-2">
                     <span className="text-[15px] font-display font-semibold">
-                      {timeOf(s.startsAt)} {s.batchName}
+                      {formatTimeIST(s.startsAt)} {s.batchName}
                     </span>
                     <span className="text-[13px] text-ink-3">
                       {s.marked} / {s.total}
@@ -138,6 +131,13 @@ export default async function CoachTodayPage() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
+                  {/* F21 (mobile UX plan v2): parity with the Up next
+                      card — the highest-frequency action (mark today)
+                      must look tappable, not just be tappable. */}
+                  <p className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--accent-ink)]">
+                    Open register
+                    <ArrowRight size={14} aria-hidden="true" />
+                  </p>
                 </Link>
               </li>
             );

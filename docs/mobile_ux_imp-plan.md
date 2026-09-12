@@ -11,6 +11,13 @@ lost.
 Goal unchanged: lift the role scorecard **6.1 → 8.3** with minimum
 code changes and zero new dependencies.
 
+**Delivery status (2026-09-12).** Phases 0–2 shipped in #135. Phases
+3–5 shipped in the follow-up PR (this change), with two deliberate
+deferrals: F26 (owner nav) needs an information-architecture decision
+before code, and F10/F12 (shared `ConfirmDialog`) are optional
+consistency over guards that already ship. All new tests live in
+agent-owned `tests/mobile/`; no `tests/tier1/**` file is edited.
+
 Audience: the implementer running against `localhost:3211` (dev) and
 the mobile viewport **360 × 800** — the single most common Indian
 mobile canvas (18.5 % of mobile traffic, Statcounter Aug 2026). The
@@ -299,62 +306,68 @@ Ops 7.5 (+3.0). Overall 7.7.
 
 ---
 
-## Phases 3–5 (corrected, for later)
+## Phases 3–5 (shipped)
 
-Not part of the current implementation batch. Corrections applied from
-verification so nobody implements a stale finding.
+### Phase 3 — Indian trust + polish — shipped
 
-### Phase 3 — Indian trust + polish
+- `formatDateIST`/`formatTimeIST` now serve every display surface that
+  had an ad-hoc formatter: coach home (which shipped UTC times on a
+  UTC server — the highest-value fix), schedule, register, reception,
+  reception member detail, owner member detail, parent route, offline
+  register, owner sessions. `owner-dashboard.tsx` keeps its
+  weekday-only wall-date format (parsing and formatting are both
+  server-local, so the weekday is TZ-stable) and the parent route moved
+  from 24h to 12h IST. A guard test
+  (`tests/mobile/formatter-migration-guard.test.ts`) fails any surface
+  that stops importing `@/lib/time/tz` or reappears with UTC getters.
+- `formatPhoneIN()` in `lib/phone.ts` (E.164, 91-prefix, 10-digit
+  local, trunk-0; unknown shapes pass through) applied at the owner
+  member list, owner member detail (new display-only
+  `InlineEditField formatValue` — the raw value still commits), guardian
+  rows, and coach member detail. The ops staff list does not exist in
+  the codebase, so there was nothing to format there.
+- F18 vocabulary: `member-create-form.tsx`,
+  `members-board.tsx`, `owner/members/page.tsx` and
+  `coach/members/page.tsx` route member copy through `resolveTerm()`;
+  the owner list fetches terminology now.
+- F31 copy: the hook exposes `savedAtLabel` (IST, or null before the
+  first sync); the register says `Saved at 05:00 pm` / `Saved on this
+  phone` — never `synced never`.
+- F17: every `date` / `datetime-local` input carries `lang="en-IN"` and
+  a `dd/mm/yyyy` format hint.
 
-- `formatDateIST`/`formatTimeIST` reused across **~10** ad-hoc
-  formatters (v1 said four): `app/(coach)/coach/page.tsx`,
-  `coach/schedule/page.tsx`, `coach/register/[sessionId]/page.tsx`,
-  `reception/page.tsx`, `reception/members/[memberId]/page.tsx`,
-  `owner/members/[memberId]/page.tsx`, `owner-dashboard.tsx`,
-  `app/p/[token]/route.ts`, `use-offline-register.ts`,
-  `upcoming-sessions-list.tsx`.
-- `formatPhoneIN()` in `lib/phone.ts`, applied at owner/coach member
-  list + detail and ops staff list.
-- F18 vocabulary: fix the real leaks — `member-create-form.tsx` (lines
-  113, 279, 306–307, 330), `members-board.tsx:110`,
-  `owner/members/page.tsx:17`, `coach/members/page.tsx:16,23,25` —
-  through `resolveTerm()`; do not add a dotted `term.member.singular`
-  key (that shape doesn't exist; the resolver takes `("member", 1)`).
-- F31 copy: "synced" is emitted in `components/register-board.tsx:125`
-  and `:130`, not in the hook (line 293 only builds the time). Upgrade
-  the label to an explicit `Saved at HH:MM` / `Saved · waiting to sync`
-  pair per the offline research.
-- F17: date inputs currently have no `lang`/placeholder; no
-  `mm/dd/yyyy` literal exists in source. This is additive polish, not a
-  bug fix.
+### Phase 4 — Consistency backstops — shipped except two deferrals
 
-### Phase 4 — Consistency backstops
+- F26 owner nav: **deferred.** Adding Sessions + Enquiries makes six
+  items, which violates `DESIGN.md`'s exactly-four rule. The owner home
+  has no quick-links grid today, so there is also no obvious pair to
+  displace. This needs a navigation decision (move below the nav's
+  level, or replace two of Home/Members/Reports/Settings) before code;
+  tracked here rather than guessed at.
+- F13 BackLink: new `components/ui/BackLink.tsx` (44px row), wired at
+  owner member detail, owner enquiry detail, owner sessions, coach
+  member detail, reception enquiry detail, and the branding/terminology
+  settings pages. A wiring guard test pins all seven.
+- F29: shipped with Phase 3 — `coach/schedule` no longer prints
+  `Sat · Sat, 12 Sept`; `tests/mobile/schedule-header-date.test.tsx`
+  renders the page and was mutation-proven red against the old line.
+- F10/F12: **deferred** (optional). Delete program/batch already have
+  inline two-step confirms; migrating them to a shared dialog is
+  consistency work with no safety gap to close.
+- F27 onboarding: duplicate `Done` pill removed (one state per row) and
+  the section heading switches to `Completed` when nothing is left.
+  `Setup` was rejected for the heading because the all-done hero already
+  uses it.
 
-- F26 owner nav: path is `app/(owner)/layout.tsx` (v1 wrong). Adding
-  Sessions + Enquiries makes **six** items, which violates
-  `DESIGN.md`'s exactly-four rule and M3's 3–5 cap. Needs a real
-  navigation decision (which two items move or get merged) before code.
-- F13 BackLink at the five detail pages listed in v1.
-- F29: the redundant `Sat ·` prefix renders at
-  `app/(coach)/coach/schedule/page.tsx:35`, not :27.
-- F10/F12: delete program/batch already have inline two-step confirms
-  (`programs-batches-board.tsx:184–211`, `276–303`). Migration to a
-  shared `<ConfirmDialog>` is optional consistency work, not a missing
-  guard.
-- F27 onboarding: real duplication is `onboarding-checklist.tsx:100`
-  (`Done` subtitle) + `:104–107` (second `Done` pill); renaming "What's
-  left" to "Setup" would duplicate the hero label at line 42 — pick one.
+### Phase 5 — Visual polish — shipped
 
-### Phase 5 — Visual polish
-
-- F23 identity QR card (`components/member-id-card.tsx`) is an async
-  server component rendered above the `h1`; collapsing needs a client
-  boundary or `<details>`.
-- F36 KPI labels `text-[11px]` → 13–14px (`owner-dashboard.tsx:82,88,92`);
-  research floor for readable secondary text is 14px.
-- F21 today card: more than the date label differs from "Up next"
-  (colour, CTA, progress bar, copy) — a parity pass, not a one-liner.
-- F22 register empty copy via `<EmptyState>` (partially done in 1b).
+- F23 identity QR card: collapsed behind a native `<details>` summary
+  ("Show identity card") — no client boundary needed, zero bundle. Name
+  and code stay above it.
+- F36 KPI labels: `text-[11px]` → `text-[13px]` (label/meta band).
+- F21 today card: both the "Up next" and today-session cards now carry
+  an explicit `Open register` CTA; the lane strip stays.
+- F22 register empty copy: shipped with Phase 1 (`EmptyState`).
 
 ---
 
@@ -392,6 +405,10 @@ portal is not their main trust channel. The plan's low parent weighting
 undercounts the product's real parent experience. A WhatsApp/SMS
 notification strategy belongs in a separate plan, not here.
 
+**Status:** Phases 0–5 are delivered (two deferrals recorded in Phase
+4). The trajectory above is the plan's expected measurement, not a
+re-scored audit.
+
 ---
 
 ## Release sequencing
@@ -401,8 +418,9 @@ notification strategy belongs in a separate plan, not here.
 3. **Phase 1** — `feat: shared UI components` (components + scoped
    wiring), tests included.
 4. **Phase 2** — `feat: ops mobile console`, tests included.
-5. Phases 3–5 after the above merge; Phase 4's nav change needs a
-   decision first.
+5. **Phases 3–5** — the follow-up PR: Indian formatting, vocabulary,
+   BackLink, onboarding, QR collapse, KPI size, coach CTA. F26 and
+   F10/F12 stay deferred as recorded above.
 
 Each PR stays under 300 LOC net (test files exempt per AGENTS.md).
 

@@ -88,15 +88,23 @@ export async function MemberIdCard({
         </p>
       </div>
 
-      <div
-        className="mt-4 mx-auto w-[160px] h-[160px] flex items-center justify-center"
-        // qrcode's SVG output is plain markup — no scripts, no event
-        // handlers, no <foreignObject>. dangerouslySetInnerHTML on a
-        // QR-shaped SVG is safe; the SVG is the only visible content.
-        dangerouslySetInnerHTML={{ __html: qrSvg }}
-        aria-label="Identity code for this membership"
-        role="img"
-      />
+      {/* F23 (mobile UX plan v2): the QR sat above the h1 and always
+          rendered, pushing status/attendance below the fold. Native
+          <details> collapses it with zero client JS. */}
+      <details className="mt-4" data-testid="id-card-qr-details">
+        <summary className="inline-flex min-h-11 cursor-pointer list-none items-center text-[12.5px] font-medium text-ink-3 hover:text-ink">
+          Show identity card
+        </summary>
+        <div
+          className="mt-3 mx-auto w-[160px] h-[160px] flex items-center justify-center"
+          // qrcode's SVG output is plain markup — no scripts, no event
+          // handlers, no <foreignObject>. dangerouslySetInnerHTML on a
+          // QR-shaped SVG is safe; the SVG is the only visible content.
+          dangerouslySetInnerHTML={{ __html: qrSvg }}
+          aria-label="Identity code for this membership"
+          role="img"
+        />
+      </details>
 
       <p className="mt-3 text-[11px] text-ink-3 text-center">
         Identity card &middot; {tenantDisplayName}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import type { RosterRow } from "@/lib/actions/coach";
+import { formatTimeIST } from "@/lib/time/tz";
 import {
   enqueueMark,
   kvDelete,
@@ -289,12 +290,11 @@ export function useOfflineRegister(
     [marks],
   );
 
-  const syncedLabel = lastSynced
-    ? new Date(lastSynced).toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "never";
+  // F31 (mobile UX plan v2): the label is the persisted-sync time in
+  // IST, or null before the first successful sync. The component owns
+  // the copy ("Saved at 05:00 pm" / "Saved on this phone") so it never
+  // claims a sync that hasn't happened.
+  const savedAtLabel = lastSynced ? formatTimeIST(new Date(lastSynced)) : null;
 
   // A failure only counts as "current" if nothing has synced since it
   // happened — otherwise a stale error from an hour ago would keep
@@ -309,7 +309,7 @@ export function useOfflineRegister(
     markedCount,
     pending,
     online,
-    syncedLabel,
+    savedAtLabel,
     hasActiveFailure,
     saving,
     waitForPendingWrites,

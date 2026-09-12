@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { BackLink } from "@/components/ui/BackLink";
 import { getBrandingAction } from "@/lib/actions/branding";
 import { BrandingForm } from "@/components/branding/branding-form";
 import { requireOwner } from "@/lib/auth/surface-guard";
@@ -14,13 +13,7 @@ export default async function BrandingSettingsPage() {
   const data = await getBrandingAction();
   return (
     <main className="px-5 pt-6 pb-8">
-      <Link
-        href="/owner/settings"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
-      >
-        <ChevronLeft size={16} />
-        Settings
-      </Link>
+      <BackLink href="/owner/settings" label="Settings" />
 
       <h1 className="font-display text-[19px] font-semibold">Branding</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">

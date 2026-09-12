@@ -1,14 +1,7 @@
 import { getTodayAction } from "@/lib/actions/coach";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { EmptyState } from "@/components/ui/EmptyState";
-
-function timeOf(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Asia/Kolkata",
-  });
-}
+import { formatTimeIST } from "@/lib/time/tz";
 
 export default async function ReceptionTodayPage() {
   await requireReception();
@@ -33,7 +26,7 @@ export default async function ReceptionTodayPage() {
                 <div className="bg-paper rounded-card border border-line p-4">
                   <div className="flex justify-between items-baseline mb-2">
                     <span className="text-[15px] font-display font-semibold">
-                      {timeOf(s.startsAt)} {s.batchName}
+                      {formatTimeIST(s.startsAt)} {s.batchName}
                     </span>
                     <span className="text-[13px] text-ink-3">
                       {s.marked} / {s.total}

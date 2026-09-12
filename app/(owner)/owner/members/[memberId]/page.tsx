@@ -13,8 +13,11 @@ import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { formatPhoneIN } from "@/lib/phone";
+import { formatDateIST } from "@/lib/time/tz";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
 import { requireOwner } from "@/lib/auth/surface-guard";
+import { BackLink } from "@/components/ui/BackLink";
 
 export default async function MemberDetailPage({
   params,
@@ -37,7 +40,8 @@ export default async function MemberDetailPage({
   if (!member) notFound();
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <main className="px-5 pt-6 pb-8">
+      <BackLink href="/owner/members" label="Members" />
       {cardCtx && terminology ? (
         <div className="print-isolate-block">
           <MemberIdCard
@@ -110,6 +114,7 @@ export default async function MemberDetailPage({
               type="text"
               snapshot={member}
               placeholder="Add phone"
+              formatAs="phone"
             />
           </dd>
         </div>
@@ -174,7 +179,9 @@ export default async function MemberDetailPage({
                 <li key={g.personId} className="px-3.5 py-2.5 text-[13px]">
                   <span className="font-medium">{g.fullName}</span>
                   <span className="text-ink-3"> — {g.relationship}</span>
-                  {g.phone ? <span className="text-ink-3"> · {g.phone}</span> : null}
+                  {g.phone ? (
+                    <span className="text-ink-3"> · {formatPhoneIN(g.phone)}</span>
+                  ) : null}
                   {g.isPrimary ? <span className="ml-1.5 text-[11px] text-water">primary</span> : null}
                 </li>
               ))}
@@ -197,7 +204,7 @@ export default async function MemberDetailPage({
                 <span className="capitalize font-medium">{c.purpose}</span>
                 <span className="text-ink-3">
                   {" "}
-                  — {c.withdrawnAt ? `withdrawn ${new Date(c.withdrawnAt).toLocaleDateString("en-IN")}` : "active"},
+                  — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"},
                   granted by {c.granterName || "self"}
                 </span>
               </li>
@@ -217,7 +224,7 @@ export default async function MemberDetailPage({
                   {MEMBER_STATUS_LABELS[h.toStatus as keyof typeof MEMBER_STATUS_LABELS] ?? h.toStatus}
                 </span>
                 <span className="text-ink-3"> — {h.reason ?? "no reason given"}</span>
-                <p className="text-[11px] text-ink-3">{new Date(h.changedAt).toLocaleString("en-IN")}</p>
+                <p className="text-[11px] text-ink-3">{formatDateIST(h.changedAt)}</p>
               </li>
             ))}
           </ul>
