@@ -1,5 +1,6 @@
 import { getTodayAction } from "@/lib/actions/coach";
 import { requireReception } from "@/lib/auth/surface-guard";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function timeOf(iso: string) {
   return new Date(iso).toLocaleTimeString("en-IN", {
@@ -18,12 +19,10 @@ export default async function ReceptionTodayPage() {
       <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
 
       {sessions.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-[15px] font-medium">No sessions today</p>
-          <p className="mt-2 text-[13px] text-ink-3">
-            Sessions are generated four weeks ahead for each batch.
-          </p>
-        </div>
+        <EmptyState
+          title="No sessions today"
+          body="Sessions are generated four weeks ahead for each batch."
+        />
       ) : (
         <ul className="mt-6 space-y-4">
           {sessions.map((s) => {

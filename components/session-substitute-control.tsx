@@ -6,6 +6,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import { substituteCoachAction } from "@/lib/actions/coach-substitution";
 import type { CoachOption } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { Tap } from "@/components/ui/Tap";
 
 // F3 (R.1) — substitution surface. Rendered once per upcoming
 // session on /owner/sessions. The current coach's name is shown
@@ -81,14 +82,16 @@ export function SessionSubstituteControl({
 
   if (!open) {
     return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-ctl border border-line bg-deck px-3 py-1.5 text-[12px] font-medium text-ink-2 hover:bg-paper"
-        data-testid={`substitute-open-${sessionId}`}
-      >
-        Substitute
-      </button>
+      <Tap>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-ctl border border-line bg-deck px-3 py-1.5 text-[12px] font-medium text-ink-2 hover:bg-paper"
+          data-testid={`substitute-open-${sessionId}`}
+        >
+          Substitute
+        </button>
+      </Tap>
     );
   }
 
