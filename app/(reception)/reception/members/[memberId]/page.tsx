@@ -10,6 +10,8 @@ import { MemberIdCard } from "@/components/member-id-card";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { formatDateIST } from "@/lib/time/tz";
+import { requireUuidParam } from "@/lib/params";
+import { formatPhoneIN } from "@/lib/phone";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -27,6 +29,7 @@ export default async function ReceptionMemberDetailPage({
 }) {
   await requireReception();
   const { memberId } = await params;
+  requireUuidParam(memberId);
   const [member, cardCtx, terminology] = await Promise.all([
     getMemberDetailAction(memberId),
     getMemberIdCardContextAction(),
@@ -80,7 +83,7 @@ export default async function ReceptionMemberDetailPage({
                 <li key={g.personId} className="px-3.5 py-2.5 text-[13px]">
                   <span className="font-medium">{g.fullName}</span>
                   <span className="text-ink-3"> — {g.relationship}</span>
-                  {g.phone ? <span className="text-ink-3"> · {g.phone}</span> : null}
+                  {g.phone ? <span className="text-ink-3"> · {formatPhoneIN(g.phone)}</span> : null}
                   {g.isPrimary ? <span className="ml-1.5 text-[11px] text-water">primary</span> : null}
                 </li>
               ))}

@@ -1,5 +1,6 @@
 import { previewLoginLink } from "@/lib/services/invite-link";
 import { LoginLinkRedeemForm } from "@/components/login-link-redeem-form";
+import { formatDateTimeIST } from "@/lib/time/tz";
 
 // Public redeem page for staff magic-link login. Pre-auth by
 // definition (the link IS the credential); previewLoginLink reads
@@ -32,7 +33,7 @@ export default async function LoginLinkPage({
       phone={preview.phone}
       roleKey={preview.roleKey}
       tenantName={preview.tenantName}
-      expiresAt={preview.expiresAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+      expiresAt={formatDateTimeIST(preview.expiresAt)}
       credentialSet={preview.credentialSet}
       purpose={preview.purpose}
     />

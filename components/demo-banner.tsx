@@ -24,8 +24,8 @@ export function DemoBanner() {
       className="sticky top-0 z-40 bg-marine text-paper"
       data-testid="demo-banner"
     >
-      <div className="max-w-screen-md mx-auto px-5 py-2 flex items-center justify-center gap-2 text-[12.5px] font-medium">
-        <FlaskConical size={13} className="text-paper/70 flex-none" aria-hidden />
+      <div className="max-w-screen-md mx-auto px-5 py-1.5 flex items-center justify-center gap-2 text-[11.5px] font-medium">
+        <FlaskConical size={12} className="text-paper/70 flex-none" aria-hidden />
         <span>
           Demo data — this is a demo tenant. None of this is real academy data.
         </span>

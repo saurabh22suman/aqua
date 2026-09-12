@@ -6,6 +6,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import { substituteCoachAction } from "@/lib/actions/coach-substitution";
 import type { CoachOption } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { formatWeekdayDateIST } from "@/lib/time/tz";
 import { Tap } from "@/components/ui/Tap";
 
 // F3 (R.1) — substitution surface. Rendered once per upcoming
@@ -100,7 +101,7 @@ export function SessionSubstituteControl({
   return (
     <div className="mt-2 space-y-2 rounded-ctl border border-line bg-deck p-3">
       <p className="text-[11.5px] text-ink-3">
-        Substitute for {sessionDate}, {startsAt}–{endsAt}
+        Substitute for {formatWeekdayDateIST(sessionDate)}, {startsAt}–{endsAt}
       </p>
       <select
         value={picked}

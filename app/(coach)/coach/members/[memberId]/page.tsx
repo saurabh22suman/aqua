@@ -4,6 +4,7 @@ import { getCoachMemberDetailAction } from "@/lib/actions/coach";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 import { BackLink } from "@/components/ui/BackLink";
+import { requireUuidParam } from "@/lib/params";
 
 // Coach member detail — the coach-scoped subset of the member's
 // record. The page is intentionally narrow: name, code, batches
@@ -19,6 +20,7 @@ export default async function CoachMemberDetailPage({
 }) {
   await requireCoach();
   const { memberId } = await params;
+  requireUuidParam(memberId);
   const m = await getCoachMemberDetailAction(memberId);
   if (!m) notFound();
 

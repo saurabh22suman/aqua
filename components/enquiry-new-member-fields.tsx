@@ -7,6 +7,7 @@ import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import type { NewMemberDetails } from "@/lib/services/enquiries";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
+import { formatPhoneIN } from "@/lib/phone";
 
 function looksLikeMinor(dateOfBirth: string): boolean | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
@@ -175,7 +176,7 @@ export function EnquiryNewMemberFields({
                         className="w-full text-left px-3 py-2 text-[12.5px] hover:bg-deck"
                       >
                         {r.fullName}
-                        {r.phone ? <span className="text-ink-3"> · {r.phone}</span> : null}
+                        {r.phone ? <span className="text-ink-3"> · {formatPhoneIN(r.phone)}</span> : null}
                       </button>
                     </li>
                   ))}

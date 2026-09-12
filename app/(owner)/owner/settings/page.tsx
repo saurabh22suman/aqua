@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireOwner } from "@/lib/auth/surface-guard";
+import { formatPhoneIN } from "@/lib/phone";
 
 // F-23 — settings surface. Branding (Phase 2.9), Terminology
 // (Phase 2.10), Staff (Phase 3.5) and the onboarding checklist
@@ -102,7 +103,7 @@ export default async function Page() {
           {identity?.fullName ?? "Signed in"}
         </p>
         <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ?? "No phone on file"}
+          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
       <form action={logoutTenantAction} className="mt-3">

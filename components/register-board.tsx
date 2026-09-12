@@ -111,12 +111,16 @@ export function RegisterBoard({
 
         <div className="rounded-card bg-water-soft px-4 py-3">
           <div className="flex items-baseline justify-between">
-            <p className="text-[13px] text-ink-2">
-              <span className="font-display font-semibold text-[15px] text-water">
-                {markedCount}
-              </span>{" "}
-              of {rows.length} marked
-            </p>
+            {rows.length === 0 ? (
+              <p className="text-[13px] text-ink-2">No one enrolled</p>
+            ) : (
+              <p className="text-[13px] text-ink-2">
+                <span className="font-display font-semibold text-[15px] text-water">
+                  {markedCount}
+                </span>{" "}
+                of {rows.length} marked
+              </p>
+            )}
             <p
               className="text-[11px] text-ink-3"
               data-testid="sync-state"
@@ -169,12 +173,14 @@ export function RegisterBoard({
               )}
             </p>
           </div>
-          <div className="mt-2 h-1.5 rounded-pill bg-paper overflow-hidden">
-            <div
-              className="h-full rounded-pill bg-water transition-[width] duration-150"
-              style={{ width: `${rows.length ? (markedCount / rows.length) * 100 : 0}%` }}
-            />
-          </div>
+          {rows.length > 0 ? (
+            <div className="mt-2 h-1.5 rounded-pill bg-paper overflow-hidden">
+              <div
+                className="h-full rounded-pill bg-water transition-[width] duration-150"
+                style={{ width: `${(markedCount / rows.length) * 100}%` }}
+              />
+            </div>
+          ) : null}
         </div>
 
         {/* Rule 1: a mark that fails to sync must be SEEN, not folded into

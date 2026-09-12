@@ -1,17 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, CalendarClock, ChevronRight, Clock } from "lucide-react";
 import { getCoachHomeAction } from "@/lib/actions/coach";
-import { formatTimeIST, todayInZone } from "@/lib/time/tz";
+import { formatTimeIST, formatWeekdayDateIST, todayInZone } from "@/lib/time/tz";
 import { requireCoach } from "@/lib/auth/surface-guard";
-
-function shortDay(iso: string): string {
-  // e.g. "Mon 9 Sep"
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-  });
-}
 
 // Days between two yyyy-mm-dd dates, in calendar days. Both sides are
 // already in the tenant's timezone (today from todayInZone, next's
@@ -64,9 +55,10 @@ export default async function CoachTodayPage() {
                   data-testid="coach-up-next"
                 >
                   <p className="text-[12.5px] text-paper/70 font-medium">
-                    {isSoon ? (ahead === 0 ? "Later today" : "Tomorrow") : shortDay(next.sessionDate!)}
+                    {isSoon ? (ahead === 0 ? "Later today" : "Tomorrow") : null}
                     <span className="ml-1.5 text-paper/60">
-                      {next.sessionDate}
+                      {isSoon ? "· " : ""}
+                      {formatWeekdayDateIST(next.sessionDate!)}
                     </span>
                   </p>
                   <p className="mt-1 font-display text-[22px] font-semibold tracking-tight leading-tight">
@@ -122,15 +114,17 @@ export default async function CoachTodayPage() {
                       {formatTimeIST(s.startsAt)} {s.batchName}
                     </span>
                     <span className="text-[13px] text-ink-3">
-                      {s.marked} / {s.total}
+                      {s.total === 0 ? "No one enrolled" : `${s.marked} / ${s.total}`}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-pill bg-deck overflow-hidden">
-                    <div
-                      className={`h-full rounded-pill ${fill}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                  {s.total > 0 ? (
+                    <div className="h-1.5 rounded-pill bg-deck overflow-hidden">
+                      <div
+                        className={`h-full rounded-pill ${fill}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  ) : null}
                   {/* F21 (mobile UX plan v2): parity with the Up next
                       card — the highest-frequency action (mark today)
                       must look tappable, not just be tappable. */}

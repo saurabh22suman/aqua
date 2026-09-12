@@ -5,8 +5,9 @@ import { batches } from "@/db/schema/programs";
 import { enrolments } from "@/db/schema/scheduling";
 import { members, persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
+import { tenants } from "@/db/schema/tenants";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
-import { addDays } from "@/lib/time/tz";
+import { addDays, isMinor } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 
 export type CoachScheduleRow = {
@@ -172,6 +173,10 @@ export type CoachRosterRow = {
   name: string;
   code: string;
   batches: string[];
+  // P1-8 (mobile UX audit): the owner roster marks minors; the coach
+  // roster must too (consent/guardian context). Derived at read time
+  // from date_of_birth in the tenant's timezone, never stored.
+  isMinor: boolean;
 };
 
 // Members enrolled in the batches this coach coaches, deduped across
@@ -182,11 +187,18 @@ export async function listCoachRoster(
   ctx: ActionCtx & { roleKey: string },
 ): Promise<CoachRosterRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const [tenantRow] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const timezone = tenantRow?.timezone ?? "UTC";
+
     const rows = await tx
       .select({
         memberId: members.id,
         name: persons.fullName,
         code: members.memberCode,
+        dateOfBirth: persons.dateOfBirth,
         batchName: batches.name,
       })
       .from(enrolments)
@@ -214,6 +226,7 @@ export async function listCoachRoster(
           name: r.name,
           code: r.code,
           batches: [r.batchName],
+          isMinor: r.dateOfBirth ? isMinor(r.dateOfBirth, timezone) : false,
         });
       }
     }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Copy, Eye, Link2 } from "lucide-react";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
+import { formatDateTimeIST } from "@/lib/time/tz";
 
 // C-45 — owner-side control to mint a parent-page link for the
 // member whose detail page this lives on. The link is what a parent
@@ -138,14 +139,7 @@ export function ParentLinkPanel({
               </div>
               <p className="text-[11px] text-ink-3">
                 Valid until{" "}
-                {expiresAt
-                  ? new Date(expiresAt).toLocaleString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : "—"}
+                {expiresAt ? formatDateTimeIST(expiresAt) : "—"}
                 . Anyone with the URL can view the page until then.
               </p>
             </>

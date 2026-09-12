@@ -6,6 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import { createMemberAction, searchPersonsAction } from "@/lib/actions/people";
 import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
+import { formatPhoneIN } from "@/lib/phone";
 import {
   resolveTerm,
   titleCase,
@@ -248,7 +249,7 @@ export function MemberCreateForm({
                         className="w-full text-left px-3 py-3 min-h-[44px] text-[14px] hover:bg-deck"
                       >
                         {r.fullName}
-                        {r.phone ? <span className="text-ink-3"> · {r.phone}</span> : null}
+                        {r.phone ? <span className="text-ink-3"> · {formatPhoneIN(r.phone)}</span> : null}
                       </button>
                     </li>
                   ))}

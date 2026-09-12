@@ -11,6 +11,7 @@ import {
   issueOwnerResetLinkAction,
 } from "@/lib/actions/platform-login-link";
 import { LinkQr } from "@/components/link-qr";
+import { formatDateTimeIST } from "@/lib/time/tz";
 
 // Phase 2.7 — "Invite the owner" client island. Lives on the
 // tenant detail page. The form takes a phone number, calls
@@ -80,7 +81,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Owner phone (E.164)
+            Owner phone (+country code)
           </span>
           <input
             ref={phoneInputRef}
@@ -166,7 +167,7 @@ function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: str
       } else {
         set({
           url: `${window.location.origin}${result.urlPath}`,
-          expiresAt: result.expiresAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          expiresAt: formatDateTimeIST(result.expiresAt),
         });
       }
     });

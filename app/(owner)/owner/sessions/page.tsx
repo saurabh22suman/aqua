@@ -6,6 +6,8 @@ import { listCoaches } from "@/lib/services/programs";
 import { listBatches } from "@/lib/services/programs";
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
+import { daysAheadWindow } from "@/lib/time/tz";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 
@@ -29,11 +31,8 @@ export default async function SessionsPage() {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "attendance.read");
 
-  const today = new Date();
-  const twoWeeksOut = new Date();
-  twoWeeksOut.setUTCDate(twoWeeksOut.getUTCDate() + 14);
-  const fromDate = today.toISOString().slice(0, 10);
-  const toDate = twoWeeksOut.toISOString().slice(0, 10);
+  const timezone = await getTenantTimezoneAction();
+  const { fromDate, toDate } = daysAheadWindow(timezone, 14);
 
   const [upcoming, coaches, terminology] = await Promise.all([
     listUpcomingSessions(ctx, fromDate, toDate),

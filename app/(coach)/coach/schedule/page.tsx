@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getScheduleAction } from "@/lib/actions/coach";
-import { formatTimeIST } from "@/lib/time/tz";
+import { formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
 import { requireCoach } from "@/lib/auth/surface-guard";
 
 export default async function CoachSchedulePage() {
@@ -14,13 +14,7 @@ export default async function CoachSchedulePage() {
 
       <ul className="mt-4 space-y-4">
         {days.map((d) => {
-          const [y, m, day] = d.date.split("-").map(Number);
-          const dateLabel = new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-IN", {
-            weekday: "short",
-            day: "numeric",
-            month: "short",
-            timeZone: "UTC",
-          });
+          const dateLabel = formatWeekdayDateIST(d.date);
           return (
             <li key={d.date}>
               <p className="text-[12px] font-medium text-ink-3">{dateLabel}</p>
@@ -39,17 +33,19 @@ export default async function CoachSchedulePage() {
                             {formatTimeIST(s.startsAt)} {s.batchName}
                           </span>
                           <span className="text-[12.5px] text-ink-3">
-                            {s.marked} / {s.total}
+                            {s.total === 0 ? "No one enrolled" : `${s.marked} / ${s.total}`}
                           </span>
                         </div>
-                        <div className="mt-2 h-1.5 rounded-pill bg-deck overflow-hidden">
-                          <div
-                            className={`h-full rounded-pill ${
-                              s.marked === 0 ? "bg-water" : s.marked / s.total < 0.5 ? "bg-warn" : "bg-good"
-                            }`}
-                            style={{ width: `${s.total > 0 ? Math.round((s.marked / s.total) * 100) : 0}%` }}
-                          />
-                        </div>
+                        {s.total > 0 ? (
+                          <div className="mt-2 h-1.5 rounded-pill bg-deck overflow-hidden">
+                            <div
+                              className={`h-full rounded-pill ${
+                                s.marked === 0 ? "bg-water" : s.marked / s.total < 0.5 ? "bg-warn" : "bg-good"
+                              }`}
+                              style={{ width: `${Math.round((s.marked / s.total) * 100)}%` }}
+                            />
+                          </div>
+                        ) : null}
                       </Link>
                     </li>
                   ))}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createEnquiryAction } from "@/lib/actions/enquiries";
 import type { EnquiryRow } from "@/lib/services/enquiries";
 import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
+import { formatPhoneIN } from "@/lib/phone";
 
 const SOURCES = ["walk-in", "phone", "referral", "online", "other"] as const;
 
@@ -95,7 +96,7 @@ export function EnquiriesBoard({
                   <p className="truncate text-[14px] font-medium">{e.fullName}</p>
                   <p className="mt-0.5 text-[12px] text-ink-3">
                     {e.source}
-                    {e.phone ? ` · ${e.phone}` : ""}
+                    {e.phone ? ` · ${formatPhoneIN(e.phone)}` : ""}
                   </p>
                 </div>
                 <span className="flex-none rounded-pill bg-deck px-2.5 py-1 text-[11px] font-medium text-ink-2">

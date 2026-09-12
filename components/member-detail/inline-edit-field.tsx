@@ -214,6 +214,11 @@ export function InlineEditField({
   const baseInputClass =
     "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent)]";
 
+  // P2-8/P2-9: empty fields style the placeholder as editable and keep
+  // the pencil visible (no hover on a phone).
+  const shown = formatAs === "phone" ? formatPhoneIN(displayValue) : displayValue;
+  const isEmpty = !shown;
+
   return (
     <div className={className}>
       <div className="group inline-flex items-center gap-1">
@@ -263,16 +268,14 @@ export function InlineEditField({
           )
         ) : (
           <>
-            <span className={valueClassName ?? "text-[13px]"}>
-              {(formatAs === "phone" ? formatPhoneIN(displayValue) : displayValue) ||
-                placeholder ||
-                "—"}
+            <span className={isEmpty ? "text-[13px] text-[var(--accent-ink)] underline underline-offset-2" : valueClassName ?? "text-[13px]"}>
+              {shown || placeholder || "—"}
             </span>
             <button
               type="button"
               onClick={enterEdit}
               aria-label={`Edit ${field}`}
-              className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-ctl text-ink-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 hover:bg-deck focus-visible:bg-deck"
+              className={`flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-ctl text-ink-3 transition-opacity duration-150 hover:bg-deck focus-visible:bg-deck ${isEmpty ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"}`}
             >
               <Pencil size={14} />
             </button>

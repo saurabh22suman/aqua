@@ -51,7 +51,7 @@ export async function AttendanceReportCard({
               </span>
               <span className="flex-none text-ink-3 text-[12px]">
                 {r.sessionCount} {r.sessionCount === 1 ? "session" : "sessions"} ·{" "}
-                {r.pct === null ? "—" : `${r.pct}% present`}
+                {r.pct === null ? "No attendance recorded" : `${r.pct}% present`}
               </span>
             </li>
           ))}
