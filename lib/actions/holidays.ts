@@ -5,8 +5,10 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import {
   addHoliday,
+  listHolidays,
   removeHoliday,
   type HolidayResult,
+  type HolidayRow,
 } from "@/lib/services/holidays";
 
 // Phase R.3 — holiday actions. parse-then-permission preamble;
@@ -21,6 +23,12 @@ const addSchema = z.object({
 const removeSchema = z.object({
   holidayId: z.string().uuid(),
 });
+
+export async function listHolidaysAction(): Promise<HolidayRow[]> {
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "settings.manage");
+  return listHolidays(ctx);
+}
 
 export async function addHolidayAction(
   raw: unknown,

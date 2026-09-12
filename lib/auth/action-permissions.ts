@@ -85,6 +85,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   checkCoachConflictsAction: "programs.read",
 
   // Holidays
+  listHolidaysAction: "settings.manage",
   addHolidayAction: "settings.manage",
   removeHolidayAction: "settings.manage",
 

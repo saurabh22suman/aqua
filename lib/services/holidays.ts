@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { tenantHolidays } from "@/db/schema/tenant-holidays";
 import type { ActionCtx } from "@/lib/auth/context";
@@ -33,6 +33,31 @@ export type HolidayResult =
         | "not_found";
       message: string;
     };
+
+export type HolidayRow = {
+  id: string;
+  name: string;
+  holidayDate: string;
+  recurringYearly: boolean;
+};
+
+// R.3 UI read — the owner's holiday list, soonest first. The
+// generator uses listHolidaysInRange's sets; this is the display
+// shape for /owner/settings/holidays.
+export async function listHolidays(ctx: ActionCtx): Promise<HolidayRow[]> {
+  return withTenant(ctx.tenantId, (tx) =>
+    tx
+      .select({
+        id: tenantHolidays.id,
+        name: tenantHolidays.name,
+        holidayDate: tenantHolidays.holidayDate,
+        recurringYearly: tenantHolidays.recurringYearly,
+      })
+      .from(tenantHolidays)
+      .where(eq(tenantHolidays.tenantId, ctx.tenantId))
+      .orderBy(asc(tenantHolidays.holidayDate), asc(tenantHolidays.name)),
+  );
+}
 
 // Pre-fetch the holiday set for a date range and serve it as
 // a Set<string> the generator can consult in O(1). The
