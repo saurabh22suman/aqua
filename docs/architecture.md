@@ -327,17 +327,17 @@ Mechanical guarantees, not code review: `tests/tier1/user-scope.test.ts` proves 
 
 ### 6.1 Authentication
 
-Phone number plus OTP is the primary method — it matches how this market actually works. Email and password exists as a fallback for desktop staff.
+**Phone number plus PIN is the primary tenant-staff method** (2026-09-11 auth feature) — it matches how this market actually works and needs no delivery channel. A first-time user always arrives via a single-use magic link, which shows the set-PIN screen; from then on they sign in at `/login` with their mobile number and a 6–12 digit PIN. Failed attempts lock the account (5 failures → 15 minutes; `lib/services/pin-lockout.ts`). A relogin magic link remains a parallel door into the same session table.
 
-Staff magic-link login (single-use, membership-bound invite and re-login links) is a parallel door into the same session table: it exists because OTP has no delivery channel until WhatsApp lands. OTP code is untouched and lights up with no migration once a channel exists.
+Phone OTP is still wired in better-auth and lights up with no migration once an SMS channel lands, but nothing is delivered today and the UI does not surface it. Email and password is enabled only as the credential store behind the PIN (`disableSignUp: true`; nobody self-registers).
 
 | Actor | Method |
 |---|---|
-| Owner / coach / admin | Phone OTP or magic link, session cookie, **30-day sliding expiry** (personal phones; `session.expiresIn` in `lib/auth/server.ts`) |
+| Owner / coach / admin | Phone + PIN, or magic link (first login: set-PIN screen), session cookie, **30-day sliding expiry** (personal phones; `session.expiresIn` in `lib/auth/server.ts`) |
 | Receptionist | Same doors, session hard-capped at **12h from login** (shared front-desk device; enforced in `sessionExists()` + `requireDefaultCtx()`/`requireCtx()` via `isSessionExpiredForRole()`, because better-auth has no per-role session concept) |
 | Parent | **No account.** Signed magic link, single-purpose, 7-day expiry |
 | Walk-in customer | No account. Booking reference plus phone |
-| Platform staff | Separate table, separate session, mandatory 2FA |
+| Platform staff | Separate table, separate session. DB password + TOTP, **or** env credentials (`OPS_EMAIL`/`OPS_PASSWORD`, constant-time compare, no TOTP) when configured — see `db/platform-auth-env.ts`. The env door is a temporary operating arrangement; unsetting the pair restores the DB+TOTP path unchanged |
 
 A person can belong to multiple tenants (a coach working at two academies). Identity is global; membership is per tenant.
 
@@ -916,7 +916,7 @@ create table sessions (
 create index on sessions (tenant_id, session_date, batch_id);
 ```
 
-Sessions are **materialised**, not computed on the fly. A session is a real thing that can be cancelled, reassigned to a substitute coach, or moved. Generation runs nightly, eight weeks ahead.
+Sessions are **materialised**, not computed on the fly. A session is a real thing that can be cancelled, reassigned to a substitute coach, or moved. Generation runs nightly, four weeks ahead (`DAYS_AHEAD` in `lib/jobs/session-generator.ts`) — the C-16 prose previously said eight weeks, which contradicted both B8 and the shipped constant.
 
 ### 8.5 Attendance
 
@@ -1303,6 +1303,9 @@ create table audit_log (
   id          bigserial primary key,
   tenant_id   uuid,
   actor_id    uuid,
+  -- `impersonator_id` is part of the target shape but NOT yet in the
+  -- applied migration (db/migrations/20260907000000_audit_log.sql);
+  -- it lands with support impersonation (3.8).
   impersonator_id uuid,
   action      text not null,        -- 'member.update'
   entity_type text not null,
@@ -1339,7 +1342,7 @@ pg-boss, on the same database. Transactional job enqueueing is a real benefit: a
 
 | Job | Schedule | Purpose |
 |---|---|---|
-| `sessions.generate` | Nightly 02:00 IST | Materialise sessions eight weeks ahead |
+| `sessions.generate` | Nightly 02:00 IST | Materialise sessions four weeks ahead |
 | `subscriptions.expire` | Nightly 02:15 | Mark lapsed, fire notifications |
 | `invoices.generate` | Nightly 02:30 | Raise invoices for renewing subscriptions |
 | `dunning.run` | Daily 09:00 | Reminder ladder at 3, 7, 14, 30 days overdue |
@@ -1412,7 +1415,7 @@ Both require already knowing a tenant or a user. Neither is satisfiable by code 
 
 Closing it needed to know which coach a session belongs to, and nothing did — `batches` and `sessions` had no coach column at all, despite `docs/implementation-plan.md`'s own note (C-20) that V-31's payout computation reads `sessions.coach_id`. That was a doc describing a column that didn't exist. Chosen fix: **add the column**, not correct the doc down to match reality, since the scoping fix needed it anyway.
 
-`batches.coach_id` and `sessions.coach_id` (migration `0014`) are bare `uuid` columns, no foreign key — same shape as `attendance.marked_by`. They reference a user id directly, not a `staff` row, because `staff` (C-04) doesn't exist yet; migrating the reference onto `staff.user_id` once C-04 lands is noted on C-20 in the plan so it isn't forgotten. `lib/jobs/session-generator.ts` copies `batches.coach_id` onto each session it materialises; C-20 (substitution, not yet built) will update a session's own `coach_id` independently of its batch once it exists, which is exactly the "who actually took the session, not who was assigned" distinction the plan asks for.
+`batches.coach_id` and `sessions.coach_id` (migration `0014`) are bare `uuid` columns, no foreign key — same shape as `attendance.marked_by`. They reference a user id directly, not a `staff` row, because `staff` (C-04) doesn't exist yet; migrating the reference onto `staff.user_id` once C-04 lands is noted on C-20 in the plan so it isn't forgotten. `lib/jobs/session-generator.ts` copies `batches.coach_id` onto each session it materialises; C-20 substitution is built: `lib/services/coach-substitution.ts` updates a session's own `coach_id` independently of its batch (the "who actually took the session" distinction), with the owner UI at `/owner/sessions`. The reference migration onto `staff.user_id` is still open (C-20).
 
 `lib/services/register.ts`'s `listTodaySessions` does the actual scoping: a caller with `roleKey === "coach"` sees only sessions whose `coach_id` matches their own user id; every other staff role (owner, admin, receptionist, accountant) keeps full tenant-wide visibility, since their job requires oversight across every coach, not just their own sessions.
 
@@ -1678,7 +1681,7 @@ app/
     members/, members/[memberId]/, members/new/, enquiries/, enquiries/[enquiryId]/
   (parent)/parent/                    — parent surfaces (legacy; superseded by /p/[token])
     page.tsx
-  (platform)/ops/                — control plane — separate auth, mandatory 2FA
+  (platform)/ops/                — control plane — separate auth (password + TOTP, or env creds)
     page.tsx                          — activity feed
     login/, verify/, features/, presets/, presets/[key]/,
     tenants/, tenants/[tenantId]/, tenants/new/, activity/

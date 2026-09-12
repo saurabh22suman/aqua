@@ -47,10 +47,14 @@ should not assume "absolute" means "the test suite will catch it."
   — `Intl.DateTimeFormat` with `timeZone: 'Asia/Kolkata'` is the
   convention, not a lint rule)
 - Every mutation writes `audit_log` in the same transaction. (NOT
-  mechanically checked — relies on reviewer discipline. Phase 1.5
-  introduced a `platform_audit_log` analogue that the platform-side
-  Service layer uses, but the tenant-side `audit_log` (architecture
-  §8.10) is not yet built.)
+  mechanically checked — relies on reviewer discipline. The
+  tenant-side `audit_log` table exists (F-14,
+  `db/migrations/20260907000000_audit_log.sql`), but coverage is the
+  gap: one caller (parent-link issuance) and six
+  `TODO(tenant-audit-log)` sites across branding, terminology, staff
+  invitations, substitution and membership activation; no coverage
+  assertion (F-15). The platform-side `platform_audit_log` analogue
+  is used throughout. See architecture §8.10.)
 - TypeScript strict. No `any`. Zod at every boundary. (enforced: `tsconfig`
   strict + CI `pnpm typecheck`)
 - Every Server Action opens with (1) a Zod parse, then (2) a permission
