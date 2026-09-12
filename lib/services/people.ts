@@ -1,9 +1,10 @@
-import { and, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, ilike, isNull, or, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { members, persons, type MemberStatus } from "@/db/schema/people";
 import { guardianships, consents } from "@/db/schema/consent";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
+import { memberFacilityOptins } from "@/db/schema/facility-optins";
 import { memberStatusTransitions } from "@/db/schema/people";
 import type { ActionCtx } from "@/lib/auth/context";
 import { isMinor } from "@/lib/time/tz";
@@ -35,6 +36,9 @@ export type MemberListRow = {
   // instant, displayed as the member's joining date until an explicit
   // members.joined_on lands (Wave 2). UTC ISO; formatted at the edge.
   createdAt: string;
+  // Wave 2 — the display value: joined_on when set, else created_at's
+  // date. yyyy-mm-dd.
+  joinedOn: string;
 };
 
 // C-06 done-when covers "list with search and filters" -- search is a
@@ -58,7 +62,28 @@ export async function listMembers(
       isNull(persons.deletedAt),
     ];
     if (filters.status) conditions.push(eq(members.status, filters.status));
-    if (filters.locationId) conditions.push(eq(members.locationId, filters.locationId));
+    if (filters.locationId) {
+      // Wave 2 — a facility filter matches the member's home facility
+      // OR an active opt-in, so the owner's facility switcher shows
+      // everyone who trains there.
+      conditions.push(
+        or(
+          eq(members.locationId, filters.locationId),
+          exists(
+            tx
+              .select({ one: sql`1` })
+              .from(memberFacilityOptins)
+              .where(
+                and(
+                  eq(memberFacilityOptins.memberId, members.id),
+                  eq(memberFacilityOptins.locationId, filters.locationId),
+                  isNull(memberFacilityOptins.endedOn),
+                ),
+              ),
+          ),
+        )!,
+      );
+    }
     if (filters.search?.trim()) {
       const term = `%${filters.search.trim()}%`;
       conditions.push(or(ilike(persons.fullName, term), ilike(persons.phone, term))!);
@@ -76,6 +101,7 @@ export async function listMembers(
         locationId: members.locationId,
         locationName: locations.name,
         createdAt: members.createdAt,
+        joinedOn: sql<string>`coalesce(${members.joinedOn}, ${members.createdAt}::date)::text`,
       })
       .from(members)
       .innerJoin(persons, eq(persons.id, members.personId))
@@ -94,6 +120,7 @@ export async function listMembers(
       locationName: r.locationName,
       isMinor: isMinorSafe(r.dateOfBirth, tenant.timezone),
       createdAt: r.createdAt.toISOString(),
+      joinedOn: r.joinedOn,
     }));
   });
 }
@@ -129,6 +156,8 @@ export type MemberDetail = {
   // See MemberListRow.createdAt — the joining-date display source until
   // Wave 2's explicit members.joined_on.
   createdAt: string;
+  // Wave 2 — joined_on when set, else created_at's date. yyyy-mm-dd.
+  joinedOn: string;
   guardians: GuardianRow[];
   consents: ConsentRow[];
   statusHistory: Array<{
@@ -163,6 +192,7 @@ export async function getMemberDetail(
         locationId: members.locationId,
         locationName: locations.name,
         createdAt: members.createdAt,
+        joinedOn: sql<string>`coalesce(${members.joinedOn}, ${members.createdAt}::date)::text`,
       })
       .from(members)
       .innerJoin(persons, eq(persons.id, members.personId))
@@ -229,6 +259,7 @@ export async function getMemberDetail(
       locationName: row.locationName,
       isMinor: isMinorSafe(row.dateOfBirth, tenant.timezone),
       createdAt: row.createdAt.toISOString(),
+      joinedOn: row.joinedOn,
       guardians: guardianRows,
       consents: consentRows.map((c) => ({
         purpose: c.purpose,
@@ -251,6 +282,10 @@ export async function updateMember(
     gender?: string;
     medicalNotes?: string;
     locationId: string;
+    // Wave 2 — optional so callers that predate the column keep
+    // working; when present it corrects the joining date (backdated
+    // admissions, import fixes).
+    joinedOn?: string;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -275,7 +310,12 @@ export async function updateMember(
 
     await tx
       .update(members)
-      .set({ locationId: input.locationId, updatedAt: new Date(), updatedBy: ctx.userId })
+      .set({
+        locationId: input.locationId,
+        ...(input.joinedOn ? { joinedOn: input.joinedOn } : {}),
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
       .where(eq(members.id, asMemberId(memberId)));
 
     return { ok: true };

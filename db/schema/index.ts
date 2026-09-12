@@ -4,6 +4,7 @@ export * from "./locations";
 export * from "./memberships";
 export * from "./better-auth";
 export * from "./people";
+export * from "./facility-optins";
 export * from "./staff";
 export * from "./consent";
 export * from "./programs";

@@ -121,6 +121,7 @@ describe("W1-5 member joined date", () => {
       phone: "+919812340010",
       status: "active",
       createdAt: "2026-09-01T06:00:00.000Z",
+      joinedOn: "2026-09-01",
     } as MemberListRow;
     render(<MembersBoard initialMembers={[row]} />);
     expect(document.body.textContent).toContain("Joined 1 Sept 2026");

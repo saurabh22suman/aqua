@@ -53,6 +53,7 @@ export function MemberCreateForm({
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [joinedOn, setJoinedOn] = useState("");
   const [gender, setGender] = useState("");
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [medicalNotes, setMedicalNotes] = useState("");
@@ -130,6 +131,7 @@ export function MemberCreateForm({
         gender: (gender || undefined) as "male" | "female" | "other" | undefined,
         locationId,
         medicalNotes: medicalNotes.trim() || undefined,
+        joinedOn: joinedOn || undefined,
         guardian: guardianInput(),
         consents: [
           {
@@ -177,6 +179,20 @@ export function MemberCreateForm({
             onChange={(e) => setDateOfBirth(e.target.value)}
             className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
             data-testid="member-dob"
+          />
+        </div>
+        <div>
+          <label className="block text-[12px] text-ink-3 mb-1">
+            Joined on (optional — defaults to today)
+          </label>
+          <input
+            type="date"
+            lang="en-IN"
+            placeholder="dd/mm/yyyy"
+            value={joinedOn}
+            onChange={(e) => setJoinedOn(e.target.value)}
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            data-testid="member-joined-on"
           />
         </div>
         <select

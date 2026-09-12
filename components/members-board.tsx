@@ -135,7 +135,7 @@ export function MembersBoard({
                     {m.phone ? ` · ${formatPhoneIN(m.phone)}` : ""}
                   </p>
                   <p className="mt-0.5 text-[11px] text-ink-3">
-                    Joined {formatDateIST(m.createdAt)}
+                    Joined {formatDateIST(m.joinedOn)}
                   </p>
                 </div>
                 <span

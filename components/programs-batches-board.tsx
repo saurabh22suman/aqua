@@ -14,6 +14,7 @@ import { BatchEditForm, type BatchEditFormState } from "@/components/batch-edit-
 import { BatchCreateForm } from "@/components/batch-create-form";
 import type { Program } from "@/db/schema/programs";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
+import type { LocationOption } from "@/lib/services/people";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { formatWallTime12h } from "@/lib/time/tz";
 
@@ -21,11 +22,14 @@ export function ProgramsBatchesBoard({
   initialPrograms,
   initialBatches,
   coaches,
+  locations,
   terminology,
 }: {
   initialPrograms: Program[];
   initialBatches: BatchWithProgramName[];
   coaches: CoachOption[];
+  // Wave 2 — facilities for the batch create/edit pickers.
+  locations: LocationOption[];
   // Closed-key vocab resolved by the parent server page (L3 audit).
   terminology: TerminologyState;
 }) {
@@ -116,6 +120,7 @@ export function ProgramsBatchesBoard({
       startTime: batch.startTime.slice(0, 5),
       endTime: batch.endTime.slice(0, 5),
       coachId: batch.coachId ?? "",
+      locationId: batch.locationId ?? "",
     });
   }
 
@@ -257,6 +262,7 @@ export function ProgramsBatchesBoard({
                   initial={editBatchForm}
                   programs={programs}
                   coaches={coaches}
+                  locations={locations}
                   error={batchError}
                   onCancel={cancelEditBatch}
                   onSaved={onBatchSaved}
@@ -273,6 +279,7 @@ export function ProgramsBatchesBoard({
                       {b.name}
                     </Link>
                     <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {formatWallTime12h(b.startTime)}–{formatWallTime12h(b.endTime)}</span>
+                    {b.locationName ? <span className="text-ink-3"> · {b.locationName}</span> : null}
                     {b.coachName ? <span className="text-ink-3"> · {resolveTerm(terminology, "coach", 1)} {b.coachName}</span> : null}
                   </div>
                   <Tap>
@@ -328,6 +335,7 @@ export function ProgramsBatchesBoard({
           <BatchCreateForm
             programs={programs}
             coaches={coaches}
+            locations={locations}
             onCreated={onBatchCreated}
             terminology={terminology}
           />

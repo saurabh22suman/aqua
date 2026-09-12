@@ -37,6 +37,9 @@ export const createMemberSchema = z.object({
   locationId: z.string().uuid(),
   memberCode: z.string().min(1).max(50),
   medicalNotes: z.string().max(2000).optional(),
+  // Wave 2 — explicit joining date; omitted means today in the tenant's
+  // timezone (lib/services/register.ts).
+  joinedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   guardian: guardianInputSchema.optional(),
   consents: z.array(consentGrantSchema).min(1),
   witnessedByUserId: z.string().uuid().optional(),
@@ -50,6 +53,9 @@ export const updateMemberSchema = z.object({
   gender: z.enum(["male", "female", "other"]).optional(),
   locationId: z.string().uuid(),
   medicalNotes: z.string().max(2000).optional(),
+  // Wave 2 — optional so older callers keep working; when present it
+  // corrects the joining date.
+  joinedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const memberStatusValueSchema = z.enum(["trial", "active", "paused", "lapsed", "left"]);
@@ -171,6 +177,9 @@ export const createBatchSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   coachId: z.string().uuid().optional(),
+  // Wave 2 — optional so pre-Wave-2 callers keep working; the service
+  // falls back to the tenant's primary facility.
+  locationId: z.string().uuid().optional(),
 });
 
 export const deleteProgramSchema = z.string().uuid();
@@ -191,6 +200,8 @@ export const updateBatchSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
   coachId: z.string().uuid().optional(),
+  // Wave 2 — when present, moves the batch to another facility.
+  locationId: z.string().uuid().optional(),
 });
 
 export type CreateMemberInput = z.infer<typeof createMemberSchema>;

@@ -141,18 +141,27 @@ meter, demo reset action, per-location overrides (R.28).
 | W1-5 | Member joined date | `MemberListRow.createdAt` returned and rendered as `Joined 12 Sept 2026` on list + detail; test. |
 | W1-6 | Owner facility switcher + consolidated view | When the tenant has >1 location, owner screens show an `All facilities` + per-facility switcher persisted in `?facility=`; members list filters; Home shows a per-facility member/attendance breakdown in the All view; hidden when ≤1 location; tests. |
 
-### Wave 2 — schema decisions required (stop-and-ask)
+### Wave 2 — delivered (schema + full UI)
 
-1. Explicit `members.joined_on` (backdated admissions/imports) vs keep
-   using `created_at`.
-2. `batches.location_id` — needed before any per-facility
-   schedule/register/attendance reporting is honest.
-3. Member↔facility opt-ins: keep `members.location_id` as the home
-   facility and add subscriptions/opt-ins, or replace it.
-4. Per-facility pricing and invoicing: one consolidated invoice per
-   member (SportStr model) vs per-facility invoices (C-31's per-location
-   numbering).
-5. Facility GSTIN/legal entity vs one tenant GSTIN.
+Decisions taken 2026-09-13 (owner):
+1. `members.joined_on` — nullable date, backfilled from `created_at`,
+   editable in create/edit forms, display falls back to `created_at`.
+2. `batches.location_id` — nullable FK, backfilled to the tenant's
+   primary facility; create/edit forms send one; the service falls
+   back to the primary location.
+3. Member↔facility opt-ins — `member_facility_optins` (active =
+   `ended_on is null`), `members.location_id` stays the home facility.
+   Owner member detail has add/end; the members list facility filter
+   matches home OR active opt-in; the dashboard breakdown counts a
+   member at every facility they train at and attributes attendance to
+   the batch's facility.
+4. Billing — per-facility invoices when C-29 → C-33 land; C-31's
+   per-location numbering stands.
+5. GSTIN — one tenant GSTIN for now; per-facility GSTIN is a later
+   legal/entity decision.
+
+Deferred to Wave 3: pricing/subscriptions/invoices/payments, WhatsApp
+messaging, and any fee surface (nothing fakes money).
 
 ### Wave 3 — money + messaging (plan order)
 

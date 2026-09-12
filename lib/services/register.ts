@@ -7,7 +7,7 @@ import { tenants } from "@/db/schema/tenants";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { ActionCtx } from "@/lib/auth/context";
-import { isMinor } from "@/lib/time/tz";
+import { isMinor, todayInZone } from "@/lib/time/tz";
 import { createGuardianship, recordConsent, type ConsentGrantInput } from "@/lib/services/consent";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
 import { asPersonId, asMemberId, type MemberId, type PersonId, type UserId } from "@/lib/ids";
@@ -37,6 +37,9 @@ export async function createMember(
     guardian?: GuardianInput;
     consents: ConsentGrantInput[];
     witnessedByUserId?: UserId;
+    // Wave 2 — explicit joining date (yyyy-mm-dd). Omitted means "today
+    // in the tenant's timezone"; backdated admissions pass a value.
+    joinedOn?: string;
     // C-14: a trial booking creates the member with status 'trial'
     // instead of the default 'active' -- an initial value, not a
     // transition, so it bypasses transitionMemberStatus's allowed-
@@ -139,6 +142,7 @@ export async function createMember(
         locationId: input.locationId,
         memberCode: input.memberCode,
         status: input.initialStatus,
+        joinedOn: input.joinedOn ?? todayInZone(tenant.timezone),
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })

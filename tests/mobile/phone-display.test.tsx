@@ -29,6 +29,7 @@ function member(phone: string | null): MemberListRow {
     phone,
     status: "active",
     createdAt: "2026-09-01T06:00:00.000Z",
+    joinedOn: "2026-09-01",
   } as MemberListRow;
 }
 

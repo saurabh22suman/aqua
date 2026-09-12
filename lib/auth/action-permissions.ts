@@ -33,6 +33,10 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   createMemberAction: "members.write",
   updateMemberAction: "members.write",
   transitionMemberStatusAction: "members.write",
+  // Wave 2 — member facility opt-ins.
+  listOptedFacilitiesAction: "members.read",
+  addMemberFacilityAction: "members.write",
+  endMemberFacilityAction: "members.write",
 
   // Attendance
   getMemberAttendanceHistoryAction: "attendance.read",

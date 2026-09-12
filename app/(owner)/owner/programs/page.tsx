@@ -1,16 +1,19 @@
 import Link from "next/link";
 import { Calendar } from "lucide-react";
 import { listBatchesAction, listCoachesAction, listProgramsAction } from "@/lib/actions/programs";
+import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { ProgramsBatchesBoard } from "@/components/programs-batches-board";
 import { requireOwner } from "@/lib/auth/surface-guard";
 
 export default async function ProgramsPage() {
   await requireOwner();
-  const [programs, batches, coaches, terminology] = await Promise.all([
+  const [programs, batches, coaches, locations, terminology] = await Promise.all([
     listProgramsAction(),
     listBatchesAction(),
     listCoachesAction(),
+    // Wave 2 — facility picker for batch create/edit.
+    listLocationsAction(),
     // ProgramsBatchesBoard → BatchCreateForm / BatchEditForm use
     // closed-key `coach` and "Add a program first" copy (L3 audit).
     getTerminologyAction(),
@@ -34,6 +37,7 @@ export default async function ProgramsPage() {
           initialPrograms={programs}
           initialBatches={batches}
           coaches={coaches}
+          locations={locations}
           terminology={terminology}
         />
       </div>

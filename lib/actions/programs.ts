@@ -72,6 +72,7 @@ export async function createBatchAction(raw: {
   startTime: string;
   endTime: string;
   coachId?: string;
+  locationId?: string;
 }): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
   const input = createBatchSchema.parse(raw);
   const ctx = await requireDefaultCtx();
@@ -110,6 +111,7 @@ export async function updateBatchAction(raw: {
   startTime: string;
   endTime: string;
   coachId?: string;
+  locationId?: string;
 }): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
   const input = updateBatchSchema.parse(raw);
   const ctx = await requireDefaultCtx();

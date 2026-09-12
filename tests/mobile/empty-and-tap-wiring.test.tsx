@@ -93,6 +93,7 @@ describe("Tap wiring on icon-only controls", () => {
         initialPrograms={[PROGRAM]}
         initialBatches={[]}
         coaches={[]}
+        locations={[]}
         terminology={TERMINOLOGY}
       />,
     );

@@ -8,6 +8,7 @@ import {
   type CoachConflict,
 } from "@/lib/actions/coach-conflicts";
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
+import type { LocationOption } from "@/lib/services/people";
 import type { Program } from "@/db/schema/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
@@ -16,11 +17,16 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export function BatchCreateForm({
   programs,
   coaches,
+  locations,
   onCreated,
   terminology,
 }: {
   programs: Program[];
   coaches: CoachOption[];
+  // Wave 2 — the facility the batch runs at. The service falls back to
+  // the primary location if this is empty, but the form always sends a
+  // selection when the tenant has any location.
+  locations: LocationOption[];
   onCreated: (batch: BatchWithProgramName) => void;
   // Closed-key vocab resolved by the parent server page (L3 audit).
   // The "No {coach} assigned" option label is the only vocab word
@@ -30,6 +36,7 @@ export function BatchCreateForm({
   terminology: TerminologyState;
 }) {
   const [programId, setProgramId] = useState(programs[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("20");
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -78,6 +85,7 @@ export function BatchCreateForm({
         startTime,
         endTime,
         coachId: coachId || undefined,
+        locationId: locationId || undefined,
       });
       if (!res.ok) {
         setError(res.error);
@@ -104,6 +112,20 @@ export function BatchCreateForm({
           </option>
         ))}
       </select>
+      {locations.length > 1 ? (
+        <select
+          value={locationId}
+          onChange={(e) => setLocationId(e.target.value)}
+          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          data-testid="batch-location-picker"
+        >
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <input
         type="text"
         value={name}
