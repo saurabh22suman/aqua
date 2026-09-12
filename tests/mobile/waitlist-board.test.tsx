@@ -29,7 +29,7 @@ const ROWS = [
     memberName: "Aadhya Sharma",
     memberCode: "AWS-010",
     position: 1,
-    requestedAt: "2026-09-10T06:00:00.000Z",
+    requestedAt: new Date("2026-09-10T06:00:00.000Z"),
   },
   {
     entryId: "w2",
@@ -37,7 +37,7 @@ const ROWS = [
     memberName: "Vivaan Iyer",
     memberCode: "AWS-011",
     position: 2,
-    requestedAt: "2026-09-11T06:00:00.000Z",
+    requestedAt: new Date("2026-09-11T06:00:00.000Z"),
   },
 ];
 
