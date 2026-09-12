@@ -103,6 +103,13 @@ const ALLOWED = new Set<string>([
   // every text-bearing surface even if a future commit removes
   // the resolveTerm call.
   "app/(coach)/coach/members/page.tsx",
+  // Platform console — the staffType picker names the role keys
+  // verbatim ("coach", "receptionist", "worker", "accountant").
+  // These are tenant-agnostic role identifiers, not user-visible
+  // vocabulary; the operator picks a role key, not a localised
+  // label. Tenant-side copy is the resolveTerm surface; this
+  // platform form is not.
+  "app/(platform)/ops/tenants/[tenantId]/invite-owner-form.tsx",
 ]);
 
 function listTsxFiles(dir: string): string[] {

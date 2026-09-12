@@ -24,6 +24,7 @@ const TENANT_IDS = [tenantA, tenantB];
 // but lists 30; this is the verbatim list, all 30 rows.
 const ALL_PERMISSION_KEYS = [
   "members.read",
+  "members.read.assigned",
   "members.write",
   "members.delete",
   "attendance.read",
@@ -45,6 +46,7 @@ const ALL_PERMISSION_KEYS = [
   "staff.pay.write",
   "reports.operational",
   "reports.financial",
+  "dashboard.view",
   "settings.read",
   "settings.manage",
   "messaging.send",
@@ -90,7 +92,7 @@ const ROLE_MATRIX: Record<string, string[]> = {
   coach: [
     "attendance.read",
     "attendance.mark",
-    "members.read",
+    "members.read.assigned",
     "programs.read",
     "levels.read",
     "levels.assess",

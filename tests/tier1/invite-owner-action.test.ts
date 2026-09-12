@@ -84,6 +84,7 @@ async function cleanupTenant(id: string): Promise<void> {
   await admin.query("delete from platform_audit_log where tenant_id = $1::uuid", [id]);
   await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [id]);
   await admin.query("delete from roles where tenant_id = $1::uuid", [id]);
+  await admin.query("delete from persons where tenant_id = $1::uuid", [id]);
   await admin.query("delete from tenants where id = $1::uuid", [id]);
 }
 
@@ -258,7 +259,7 @@ describe("inviteOwnerAction (server action)", () => {
     const tenantId = await seedTenantWithOwnerRole();
     try {
       const phone = `+91${Math.floor(9000000000 + Math.random() * 1000000000)}`;
-      const result = await inviteOwnerAction(null, fd({ tenantId, phone }));
+      const result = await inviteOwnerAction(null, fd({ tenantId, phone, fullName: "Test Owner" }));
       expect(result.kind).toBe("ok");
       if (result.kind !== "ok") return;
       expect(result.wasNewUser).toBe(true);

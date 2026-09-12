@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { afterAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
@@ -143,7 +144,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
     expect(await staffCount(tenantId)).toBe(0);
 
     // Apply the migration in-process.
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );
@@ -154,7 +155,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
 
   it("the persons placeholder uses 'Role +••• Last4' format (phone-suffixed, not a real name)", async () => {
     const tenantId = await seedPreFixTenant("placeholder");
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );
@@ -169,7 +170,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
 
   it("sets users.person_id so the membership links to the persons row", async () => {
     const tenantId = await seedPreFixTenant("user-link");
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );
@@ -190,7 +191,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
 
   it("creates a staff row for coach and receptionist only (not owner / admin / accountant)", async () => {
     const tenantId = await seedPreFixTenant("staff-only");
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );
@@ -205,7 +206,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
 
   it("the staff row points at the same users row as the membership (FK to users.user_id)", async () => {
     const tenantId = await seedPreFixTenant("staff-fk");
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );
@@ -228,7 +229,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
 
   it("idempotent: running the migration twice produces the same state", async () => {
     const tenantId = await seedPreFixTenant("idempotent");
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );
@@ -245,7 +246,7 @@ describe("PR C backfill migration: db/migrations/20260911120000_invite_persons_s
     // them. After the backfill, the coach has a staff row, and
     // batches.coach_id resolves cleanly.
     const tenantId = await seedPreFixTenant("batch-assign");
-    const sql = require("node:fs").readFileSync(
+    const sql = readFileSync(
       `${process.cwd()}/db/migrations/20260911120000_invite_persons_staff_backfill.sql`,
       "utf8",
     );

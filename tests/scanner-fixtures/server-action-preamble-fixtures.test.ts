@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
@@ -16,20 +14,22 @@ import { describe, expect, it } from "vitest";
 //   service call. The fix removes requireDefaultCtx from that allowlist.
 //
 //   This file is the focused regression test for the RULE itself, not
-//   the application's use of the rule. It carries two fixtures with the
-//   same source shape as a real Server Action but lives outside lib/
-//   and app/ so the production scanner never sees them. A focused
-//   checker here applies the order check to the fixtures only.
+//   the application's use of the rule. It exercises inline fixtures
+//   (the same source shape as a real Server Action) and applies the
+//   focused checker to them. The fixtures under
+//   tests/scanner-fixtures/fixtures/ are now consumed by the
+//   page-guard-scan and action-permission-scan tests in
+//   tests/tier1/ (the D2 attack tests) and no longer carry the
+//   parse → permission → service shape; the inline cases below
+//   preserve that coverage here.
 //
 // What is in scope:
-//   1. The known-bad fixture (parse → requireDefaultCtx → service →
-//      requirePermission) must be flagged.
-//   2. The known-good fixture (parse → requirePermission → service)
-//      must pass.
-//   3. The "mutation" case the fix is intended to catch: an action
+//   1. The mutation case the fix is intended to catch: an action
 //      whose requirePermission moved after a service call must be
-//      flagged. (Reproduction by test below — no live source edit
-//      required.)
+//      flagged.
+//   2. The "requireDefaultCtx alone" case the audit caught:
+//      ctx construction used to satisfy the rule by itself. The
+//      rule under test pins this is NOT a permission check.
 //
 // This checker is deliberately narrower than the one in tests/tier1/:
 //   - No try-block recursion (the production checker has it because
@@ -183,27 +183,13 @@ function checkFixture(source: string): { ok: true } | { ok: false; reason: strin
   };
 }
 
-function readFixture(relPath: string): string {
-  return readFileSync(join(process.cwd(), relPath), "utf8");
-}
-
 describe("scanner fixtures — server-action-preamble ordering rule", () => {
-  it("flags the bad fixture (parse → requireDefaultCtx → service → requirePermission)", () => {
-    const src = readFixture("tests/scanner-fixtures/fixtures/known-bad-action.ts");
-    const verdict = checkFixture(src);
-    expect(verdict.ok, JSON.stringify(verdict)).toBe(false);
-  });
-
-  it("passes the good fixture (parse → requirePermission → service)", () => {
-    const src = readFixture("tests/scanner-fixtures/fixtures/known-good-action.ts");
-    const verdict = checkFixture(src);
-    expect(verdict.ok, JSON.stringify(verdict)).toBe(true);
-  });
-
-  it("mutation case: parse → service → requirePermission is flagged", () => {
-    // Inline reproduction of the production mutation proof run against
-    // lib/actions/attendance.ts in this PR. If a future contributor
-    // relaxes the rule to allow this order, this case flips red.
+  it("flags parse → service → requirePermission (the audit's bug shape)", () => {
+    // The mutation proof from the original audit: parse, ctx
+    // construction, then a service call, then the permission
+    // check at the bottom. The permission check is too late —
+    // the service side effect already ran. The order rule
+    // must flag this.
     const src = `
 "use server";
 import { z } from "zod";
@@ -222,11 +208,11 @@ async function doServiceCall(): Promise<void> {}
     expect(verdict.ok, JSON.stringify(verdict)).toBe(false);
   });
 
-  it("requireDefaultCtx alone (no requirePermission) is NOT enough — fixture must NOT pass", () => {
-    // Independent regression for the specific bug the fix closes:
-    // requireDefaultCtx used to be in the permission-call allowlist,
-    // so a body that calls only requireDefaultCtx (no requirePermission)
-    // passed the production checker. This test pins the rule: ctx
+  it("flags parse → requireDefaultCtx → service (no requirePermission at all)", () => {
+    // The audit's exact bug: requireDefaultCtx used to be in the
+    // permission-call allowlist, so a body that called only
+    // requireDefaultCtx (no requirePermission) passed the
+    // production checker. The order rule pins this: ctx
     // construction alone is not a permission check.
     const src = `
 "use server";
@@ -242,5 +228,27 @@ async function doServiceCall(): Promise<void> {}
 `;
     const verdict = checkFixture(src);
     expect(verdict.ok, JSON.stringify(verdict)).toBe(false);
+  });
+
+  it("passes parse → requirePermission → service (the correct order)", () => {
+    // Positive control: a well-formed action must pass. If a
+    // future change to the order rule accidentally flags this
+    // shape, this case flips red.
+    const src = `
+"use server";
+import { z } from "zod";
+import { requireDefaultCtx } from "@/lib/auth/context";
+import { requirePermission } from "@/lib/auth/permission";
+const inputSchema = z.object({ x: z.string() });
+export async function wellFormed(rawInput: unknown): Promise<void> {
+  const parsed = inputSchema.parse(rawInput);
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "members.read");
+  await doServiceCall();
+}
+async function doServiceCall(): Promise<void> {}
+`;
+    const verdict = checkFixture(src);
+    expect(verdict.ok, JSON.stringify(verdict)).toBe(true);
   });
 });

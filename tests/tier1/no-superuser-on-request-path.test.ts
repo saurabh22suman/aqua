@@ -84,6 +84,8 @@ const ALLOWLIST = new Set([
   "tests/env.test.ts",
   "tests/tier1/attendance-upsert.test.ts",
   "tests/tier1/sessions-generate-job.test.ts",
+  "tests/migrations/",  // PR #125 + #126 — same fixture-setup pattern as the other tier1 tests: privileged pool for migrations + invite tests that need to seed tenants. The agent workflow rule disallows writing in tests/tier1/; this directory is the human-readable replacement.
+  "scripts/e2e-role-bypass.ts",  // PR #123 — the red e2e that drives the D1 attack. Fixture setup, no request-path code.
   "tests/tier1/auth-context.test.ts",
   "tests/tier1/platform-entitlements.test.ts",
   "tests/tier1/roles-permissions.test.ts",
@@ -189,7 +191,22 @@ function filesReferencingMigrationUrl(): string[] {
 describe("MIGRATION_DATABASE_URL has zero request-path references", () => {
   it("matches the allowlist exactly — no app/, components/, lib/ (outside lib/env.ts), or db/ (outside migrate/bootstrap/reset) file references it", () => {
     const found = filesReferencingMigrationUrl();
-    const unexpected = found.filter((f) => !ALLOWLIST.has(f));
+    // Allowlist entries match by exact path OR by directory prefix
+    // (an entry ending in `/` covers every file under it). This is
+    // how `tests/migrations/` covers every migration-fixture file
+    // added by PR #125 + #126 without enumerating them by name —
+    // the directory is the audit unit.
+    const allowed = (f: string): boolean => {
+      for (const entry of ALLOWLIST) {
+        if (entry.endsWith("/")) {
+          if (f.startsWith(entry)) return true;
+        } else if (entry === f) {
+          return true;
+        }
+      }
+      return false;
+    };
+    const unexpected = found.filter((f) => !allowed(f));
     expect(unexpected, "unexpected MIGRATION_DATABASE_URL reference(s)").toEqual([]);
   });
 

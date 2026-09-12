@@ -54,6 +54,7 @@ async function seedTenantWithOwnerRole(label: string): Promise<string> {
 async function cleanupTenant(id: string): Promise<void> {
   await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [id]);
   await admin.query("delete from roles where tenant_id = $1::uuid", [id]);
+  await admin.query("delete from persons where tenant_id = $1::uuid", [id]);
   await admin.query("delete from tenants where id = $1::uuid", [id]);
 }
 

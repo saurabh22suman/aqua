@@ -84,7 +84,6 @@ import { runMigrations } from "@/db/migrate";
 // load it from CJS without top-level await. encodeReply returns a
 // STRING (the wire format is text), not a Uint8Array — verified
 // at runtime below.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const require = createRequire(import.meta.url);
 const { encodeReply, createTemporaryReferenceSet } = require(
   "next/dist/compiled/react-server-dom-webpack/cjs/react-server-dom-webpack-client.node.unbundled.production.js",

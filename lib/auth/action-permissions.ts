@@ -43,7 +43,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getCoachHomeAction: "attendance.read",
   getScheduleAction: "attendance.read",
   getCoachRosterAction: "attendance.read",
-  getCoachMemberDetailAction: "attendance.read",
+  getCoachMemberDetailAction: "members.read.assigned",
 
   // Programs and batches
   listProgramsAction: "programs.read",
