@@ -83,11 +83,13 @@ async function seedPreFixTenant(label: string): Promise<string> {
 
   // Memberships for owner, admin, accountant, coach, receptionist.
   // The pre-fix shape — no persons, no staff. Phone is built from
-  // the userId itself so every test seeding is unique even when
-  // RUN is module-level.
+  // the full userId hex (32 chars) so every seed is unique even
+  // when tests run in parallel within the same millisecond (UUIDv7
+  // time-prefix collisions are common at high concurrency; the
+  // earlier 12-char slice flaked in CI).
   for (const r of ["owner", "admin", "accountant", "coach", "receptionist"] as const) {
     const userId = uuidv7();
-    const phone = `+91bf${userId.replace(/-/g, "").slice(0, 12)}`;
+    const phone = `+91bf${userId.replace(/-/g, "")}`;
     await admin.query(
       "insert into users (id, phone) values ($1, $2)",
       [userId, phone],
