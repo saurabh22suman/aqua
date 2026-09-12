@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Building2,
   CalendarDays,
   ClipboardList,
   FileText,
   LayoutDashboard,
   ListChecks,
   Settings,
+  SlidersHorizontal,
   UserPlus,
   UserRound,
   Users,
@@ -21,12 +23,14 @@ import {
 // looks them up. Adding a nav item means adding the icon import
 // here AND a name entry; missing-from-map fails fast in dev.
 const ICONS: Record<string, LucideIcon> = {
+  "building-2": Building2,
   "calendar-days": CalendarDays,
   "clipboard-list": ClipboardList,
   "file-text": FileText,
   "layout-dashboard": LayoutDashboard,
   "list-checks": ListChecks,
   "settings": Settings,
+  "sliders-horizontal": SlidersHorizontal,
   "user-plus": UserPlus,
   "user-round": UserRound,
   "users": Users,

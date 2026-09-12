@@ -2,14 +2,26 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { BottomNav, type NavItem } from "@/components/bottom-nav";
 
 // Visually distinct from tenant surfaces so nobody confuses the two.
 // Per Phase 1.2: own navigation. Tenant nav has a four-item bottom bar
-// (DESIGN.md §2). The platform surface is desktop-first — operators
-// work from a laptop, not poolside — so the layout uses a vertical
-// sidebar instead. Color: dark marine, the same hero-block token, with
+// (DESIGN.md §2). The platform surface is desktop-first — sidebar and
+// data tables stay the primary operator experience — but the Sep 2026
+// mobile audit amendment makes it operable from a phone too: the same
+// four-item bottom bar (Overview / Tenants / Feature catalogue /
+// Presets), with sign-out in the mobile header so it never becomes a
+// fifth item. Color: dark marine, the same hero-block token, with
 // the accent reserved for the active nav item (DESIGN.md §1.2 — accent
 // is reserved for primary action, not arbitrary UI tinting).
+
+const PLATFORM_MOBILE_NAV: NavItem[] = [
+  { href: "/platform", label: "Overview", iconName: "layout-dashboard" },
+  { href: "/ops/tenants", label: "Tenants", iconName: "building-2" },
+  { href: "/ops/features", label: "Feature catalogue", iconName: "list-checks" },
+  { href: "/ops/presets", label: "Presets", iconName: "sliders-horizontal" },
+];
+
 export default async function PlatformLayout({
   children,
 }: {
@@ -38,7 +50,10 @@ export default async function PlatformLayout({
       </aside>
       <main className="flex-1 min-w-0 bg-deck text-ink">
         <MobilePlatformHeader status={status} />
-        <div className="px-5 py-6 md:px-10 md:py-10">{children}</div>
+        <div className="px-5 py-6 pb-24 md:px-10 md:py-10">{children}</div>
+        {status.kind === "authenticated" ? (
+          <BottomNav items={PLATFORM_MOBILE_NAV} />
+        ) : null}
       </main>
     </div>
   );
@@ -80,8 +95,19 @@ function MobilePlatformHeader({
 }) {
   if (status.kind !== "authenticated") return null;
   return (
-    <header className="md:hidden bg-marine text-paper px-5 py-3">
+    <header
+      data-testid="platform-mobile-header"
+      className="md:hidden bg-marine text-paper px-5 py-3 flex items-center justify-between gap-3"
+    >
       <p className="font-display text-[15px] font-semibold">Aqua operator</p>
+      <form action={signOutFormAction}>
+        <button
+          type="submit"
+          className="rounded-ctl border border-paper/20 px-3 py-1.5 text-[12px] text-paper hover:bg-paper/5 transition-colors duration-150"
+        >
+          Sign out
+        </button>
+      </form>
     </header>
   );
 }
