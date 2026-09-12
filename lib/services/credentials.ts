@@ -111,6 +111,15 @@ export async function setCredential(
 // plugin's temp email is the stripped form while redeem wrote the
 // canonical +91 form in some paths; the live difference is a real
 // shape that signInEmail must respect, not something we paper over.
+export async function hasCredentialByBaUserId(baUserId: string): Promise<boolean> {
+  const ctx = await auth.$context;
+  const account = await withPlatform(async () => {
+    const found = await ctx.internalAdapter.findCredentialAccount(baUserId);
+    return found;
+  });
+  return !!account?.password;
+}
+
 export async function hasCredentialByPhone(phone: string): Promise<boolean> {
   const baUserRow = await withPlatform(async () => {
     const rows = await db
@@ -122,12 +131,7 @@ export async function hasCredentialByPhone(phone: string): Promise<boolean> {
   });
   const baUserId = baUserRow[0]?.id;
   if (!baUserId) return false;
-  const ctx = await auth.$context;
-  const account = await withPlatform(async () => {
-    const found = await ctx.internalAdapter.findCredentialAccount(baUserId);
-    return found;
-  });
-  return !!account?.password;
+  return hasCredentialByBaUserId(baUserId);
 }
 
 // Lockout bookkeeping — write failed_pin_attempts and pin_locked_until.
