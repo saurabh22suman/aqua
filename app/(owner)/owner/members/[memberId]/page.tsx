@@ -17,6 +17,7 @@ import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
 import { requireOwner } from "@/lib/auth/surface-guard";
+import { BackLink } from "@/components/ui/BackLink";
 
 export default async function MemberDetailPage({
   params,
@@ -39,7 +40,8 @@ export default async function MemberDetailPage({
   if (!member) notFound();
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <main className="px-5 pt-6 pb-8">
+      <BackLink href="/owner/members" label="Members" />
       {cardCtx && terminology ? (
         <div className="print-isolate-block">
           <MemberIdCard

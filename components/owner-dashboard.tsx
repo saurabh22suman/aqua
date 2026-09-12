@@ -79,17 +79,17 @@ export function OwnerDashboard({
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className="rounded-ctl bg-deck px-2.5 py-3">
           <p className="font-display text-[17px] font-semibold tracking-tight">{data.activeMemberCount}</p>
-          <p className="mt-0.5 text-[11px] text-ink-3">Active {membersOther}</p>
+          <p className="mt-0.5 text-[13px] text-ink-3">Active {membersOther}</p>
         </div>
         <div className="rounded-ctl bg-deck px-2.5 py-3">
           <p className="font-display text-[17px] font-semibold tracking-tight">
             {data.attendanceThisWeekPct === null ? "—" : `${data.attendanceThisWeekPct}%`}
           </p>
-          <p className="mt-0.5 text-[11px] text-ink-3">Attendance this week</p>
+          <p className="mt-0.5 text-[13px] text-ink-3">Attendance this week</p>
         </div>
         <div className="rounded-ctl bg-deck px-2.5 py-3">
           <p className="font-display text-[17px] font-semibold tracking-tight">{data.activeBatchCount}</p>
-          <p className="mt-0.5 text-[11px] text-ink-3">{titleCase(batchesOther)} running</p>
+          <p className="mt-0.5 text-[13px] text-ink-3">{titleCase(batchesOther)} running</p>
         </div>
       </div>
 

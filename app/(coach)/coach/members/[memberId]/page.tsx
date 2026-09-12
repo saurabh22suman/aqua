@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, Phone, Stethoscope, Users } from "lucide-react";
+import { Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
+import { BackLink } from "@/components/ui/BackLink";
 
 // Coach member detail — the coach-scoped subset of the member's
 // record. The page is intentionally narrow: name, code, batches
@@ -24,13 +24,7 @@ export default async function CoachMemberDetailPage({
 
   return (
     <main className="px-5 pt-6 pb-8">
-      <Link
-        href="/coach/members"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
-      >
-        <ChevronLeft size={16} />
-        Members
-      </Link>
+      <BackLink href="/coach/members" label="Members" />
 
       <h1 className="font-display text-[19px] font-semibold leading-tight">
         {m.fullName}

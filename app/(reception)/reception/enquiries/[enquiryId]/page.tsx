@@ -5,6 +5,7 @@ import { listBatchesAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
 import { requireReception } from "@/lib/auth/surface-guard";
+import { BackLink } from "@/components/ui/BackLink";
 
 export default async function ReceptionEnquiryDetailPage({
   params,
@@ -23,7 +24,8 @@ export default async function ReceptionEnquiryDetailPage({
   if (!enquiry) notFound();
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <main className="px-5 pt-6 pb-8">
+      <BackLink href="/reception/enquiries" label="Enquiries" />
       <h1 className="font-display text-[19px] font-semibold">{enquiry.fullName}</h1>
       <p className="mt-0.5 text-[12.5px] text-ink-3">
         {enquiry.source}

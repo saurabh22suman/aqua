@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { ArrowLeft, UserCog } from "lucide-react";
+import { UserCog } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
@@ -8,6 +7,7 @@ import { listBatches } from "@/lib/services/programs";
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { requireOwner } from "@/lib/auth/surface-guard";
+import { BackLink } from "@/components/ui/BackLink";
 
 // F3 (R.1) — owner-facing upcoming-sessions page. Lists every
 // scheduled session in the tenant over the next two weeks, with
@@ -51,13 +51,7 @@ export default async function SessionsPage() {
 
   return (
     <main className="px-5 pt-6 pb-8">
-      <Link
-        href="/owner/programs"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
-      >
-        <ArrowLeft size={16} />
-        Programs
-      </Link>
+      <BackLink href="/owner/programs" label="Programs" />
 
       <div className="flex items-center gap-2">
         <UserCog size={20} className="text-ink-2" />

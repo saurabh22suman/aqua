@@ -131,6 +131,13 @@ export default async function CoachTodayPage() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
+                  {/* F21 (mobile UX plan v2): parity with the Up next
+                      card — the highest-frequency action (mark today)
+                      must look tappable, not just be tappable. */}
+                  <p className="mt-3 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--accent-ink)]">
+                    Open register
+                    <ArrowRight size={14} aria-hidden="true" />
+                  </p>
                 </Link>
               </li>
             );
