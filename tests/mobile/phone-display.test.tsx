@@ -28,6 +28,7 @@ function member(phone: string | null): MemberListRow {
     locationName: "Demo Main",
     phone,
     status: "active",
+    createdAt: "2026-09-01T06:00:00.000Z",
   } as MemberListRow;
 }
 
@@ -35,12 +36,12 @@ afterEach(cleanup);
 
 describe("owner member list phone display", () => {
   it("renders E.164 and local numbers as +91 5+5", () => {
-    render(<MembersBoard initialMembers={[member("+919812340010")]} locations={[]} />);
+    render(<MembersBoard initialMembers={[member("+919812340010")]} />);
     expect(screen.getByText(/\+91 98123 40010/)).toBeTruthy();
   });
 
   it("formats a 10-digit local number", () => {
-    render(<MembersBoard initialMembers={[member("9876500001")]} locations={[]} />);
+    render(<MembersBoard initialMembers={[member("9876500001")]} />);
     expect(screen.getByText(/\+91 98765 00001/)).toBeTruthy();
   });
 });

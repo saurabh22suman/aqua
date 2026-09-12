@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ChevronRight, Clock } from "lucide-react";
+import { AlertTriangle, CalendarRange, ChevronRight, ClipboardList, Clock, ListChecks, Users } from "lucide-react";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import { TenantMark } from "@/components/branding/tenant-mark";
@@ -44,6 +44,7 @@ export function OwnerDashboard({
   const batchesOther = resolveTerm(terminology, "batch", "other");
   const sessionsOther = resolveTerm(terminology, "session", "other");
   const sessionsOne = resolveTerm(terminology, "session", 1);
+  const facilitiesOther = resolveTerm(terminology, "facility", "other");
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -105,6 +106,60 @@ export function OwnerDashboard({
           <p className="mt-0.5 text-[13px] text-ink-3">{titleCase(batchesOther)} running</p>
         </div>
       </div>
+
+      {/* W1-4 (docs/role-surfaces-plan.md): resolves the deferred F26
+          owner-nav question without a fifth bottom-nav item — the
+          operational screens the audit found buried (Enquiries,
+          Programs/Sessions, Staff, Onboarding) get a one-tap grid
+          here, where the owner already starts their day. */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {[
+          { href: "/owner/enquiries", label: "Enquiries", icon: ClipboardList },
+          { href: "/owner/programs", label: "Programs & sessions", icon: CalendarRange },
+          { href: "/owner/staff", label: "Staff", icon: Users },
+          { href: "/owner/onboarding", label: "Onboarding", icon: ListChecks },
+        ].map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex items-center gap-2.5 rounded-ctl bg-paper border border-line px-3.5 min-h-[56px] py-3"
+          >
+            <link.icon size={16} className="text-ink-3 flex-none" aria-hidden="true" />
+            <span className="text-[13.5px] font-medium">{link.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* W1-6 — consolidated per-facility view, shown only when the
+          tenant has more than one facility. In the All-facilities view
+          this is the comparison the market's multi-location products
+          lead with; member-scoped data only until Wave 2 gives batches
+          a location. */}
+      {data.facilityBreakdown.length > 1 ? (
+        <section className="mt-7">
+          <h2 className="font-display text-[15px] font-semibold mb-2.5">
+            By {facilitiesOther}
+          </h2>
+          <ul className="divide-y divide-line rounded-card border border-line bg-paper">
+            {data.facilityBreakdown.map((row) => (
+              <li
+                key={row.locationId}
+                className="flex items-center justify-between gap-3 px-3.5 py-3"
+              >
+                <span className="min-w-0 truncate text-[13.5px] font-medium">
+                  {row.locationName}
+                </span>
+                <span className="flex-none text-[12px] text-ink-3">
+                  {row.activeMembers} active ·{" "}
+                  {row.attendancePct === null
+                    ? "no attendance yet"
+                    : `${row.attendancePct}% this week`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Needs you today</h2>
       {data.needsAttention.length === 0 ? (

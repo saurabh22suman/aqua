@@ -5,6 +5,7 @@ import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId } from "@/lib/ids";
+import { formatPhoneIN } from "@/lib/phone";
 import CoachMePage from "@/app/(coach)/coach/me/page";
 
 // F4 (mobile UX plan v2, Phase 0) — the coach "Me" tab crashed with
@@ -46,6 +47,12 @@ vi.mock("next/navigation", () => ({
 
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
+// Digits-only, unique per run. The previous `+9190${RUN}0002` was
+// flaky: RUN is base36, so after formatPhoneIN strips the letters the
+// remaining digits sometimes formed a formatable 10-digit number and
+// sometimes did not, which made the assertion below pass or fail by
+// wall-clock luck.
+const COACH_PHONE = `+9198${String(Date.now()).slice(-8)}`;
 
 const created: { tenantId: TenantId; userId: string }[] = [];
 
@@ -80,7 +87,7 @@ async function setup() {
 
   await admin.query(
     "insert into users (id, phone, better_auth_id) values ($1, $2, $3)",
-    [userId, `+9190${RUN}0002`, betterAuthId],
+    [userId, COACH_PHONE, betterAuthId],
   );
   await admin.query(
     "insert into tenant_memberships (id, tenant_id, user_id, role_id, all_locations, status) values ($1, $2, $3, $4, true, 'active')",
@@ -120,7 +127,8 @@ describe("CoachMePage — no members.read permission required (F4)", () => {
     const rendered = renderToString(result);
 
     expect(rendered).toContain("Coach Me Subject");
-    expect(rendered).toContain(`+9190${RUN}0002`);
+    expect(rendered).toContain(formatPhoneIN(COACH_PHONE));
+    expect(rendered).not.toContain(COACH_PHONE);
     expect(rendered).toContain("Sign out");
   });
 

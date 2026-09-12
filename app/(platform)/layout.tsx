@@ -16,7 +16,7 @@ import { BottomNav, type NavItem } from "@/components/bottom-nav";
 // is reserved for primary action, not arbitrary UI tinting).
 
 const PLATFORM_MOBILE_NAV: NavItem[] = [
-  { href: "/platform", label: "Overview", iconName: "layout-dashboard" },
+  { href: "/ops", label: "Overview", iconName: "layout-dashboard" },
   { href: "/ops/tenants", label: "Tenants", iconName: "building-2" },
   { href: "/ops/features", label: "Feature catalogue", iconName: "list-checks" },
   { href: "/ops/presets", label: "Presets", iconName: "sliders-horizontal" },
@@ -38,7 +38,7 @@ export default async function PlatformLayout({
             Aqua operator
           </p>
           <p className="mt-1 font-display text-[18px] font-semibold">
-            <Link href="/platform" className="hover:opacity-80">
+            <Link href="/ops" className="hover:opacity-80">
               Aqua Control Plane
             </Link>
           </p>
@@ -67,7 +67,7 @@ function PlatformNav({
   if (status.kind !== "authenticated") return null;
   return (
     <ul className="space-y-1">
-      <PlatformNavItem href="/platform" label="Overview" />
+      <PlatformNavItem href="/ops" label="Overview" />
       <PlatformNavItem href="/ops/tenants" label="Tenants" />
       <PlatformNavItem href="/ops/features" label="Feature catalogue" />
       <PlatformNavItem href="/ops/presets" label="Presets" />

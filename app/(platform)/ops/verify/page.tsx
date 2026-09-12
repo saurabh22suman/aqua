@@ -7,7 +7,7 @@ export default async function PlatformVerifyPage() {
   if (status.kind === "not_found" || status.kind === "expired") {
     redirect("/ops/login");
   }
-  if (status.kind === "authenticated") redirect("/platform");
+  if (status.kind === "authenticated") redirect("/ops");
   return (
     <div className="max-w-md">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">

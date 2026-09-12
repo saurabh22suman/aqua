@@ -1,6 +1,7 @@
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { members } from "@/db/schema/people";
+import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import { batches, programs } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
@@ -23,6 +24,13 @@ export type TodaysLane = {
   capacity: number;
 };
 
+export type FacilityBreakdownRow = {
+  locationId: string;
+  locationName: string;
+  activeMembers: number;
+  attendancePct: number | null;
+};
+
 export type OwnerDashboardData = {
   tenantName: string;
   today: string; // ISO date, tenant-timezone "today" -- the same value every other query below is scoped to
@@ -33,6 +41,11 @@ export type OwnerDashboardData = {
   activeBatchCount: number;
   needsAttention: NeedsAttentionItem[];
   todaysLanes: TodaysLane[];
+  // W1-6 (docs/role-surfaces-plan.md) — consolidated per-facility view.
+  // Wave 1 splits member-scoped data only: batches/sessions have no
+  // location column yet, so attendance here is grouped by each
+  // member's home facility (Wave 2 adds batch.location_id).
+  facilityBreakdown: FacilityBreakdownRow[];
 };
 
 // S4 (Owner home), not C-46 as literally specified: C-46 wants an
@@ -155,6 +168,38 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
     const attendanceThisWeekPct =
       weekRow.total > 0 ? Math.round((weekRow.present / weekRow.total) * 100) : null;
 
+    // W1-6 — per-facility consolidation. Member counts and the last-7-day
+    // attendance percentage, grouped by the member's home facility.
+    const facilityRows = await tx
+      .select({
+        locationId: members.locationId,
+        locationName: locations.name,
+        activeMembers: sql<number>`count(*) filter (where ${members.status} = 'active')::int`,
+        totalMarks: sql<number>`count(${attendance.id})::int`,
+        presentMarks: sql<number>`count(*) filter (where ${attendance.status} in ('present', 'late'))::int`,
+      })
+      .from(members)
+      .innerJoin(locations, eq(locations.id, members.locationId))
+      .leftJoin(
+        attendance,
+        and(
+          eq(attendance.memberId, members.id),
+          eq(attendance.tenantId, ctx.tenantId),
+          gte(attendance.markedAt, weekAgo),
+        ),
+      )
+      .where(and(eq(members.tenantId, ctx.tenantId), isNull(members.deletedAt)))
+      .groupBy(members.locationId, locations.name)
+      .orderBy(locations.name);
+
+    const facilityBreakdown: FacilityBreakdownRow[] = facilityRows.map((r) => ({
+      locationId: r.locationId,
+      locationName: r.locationName,
+      activeMembers: r.activeMembers,
+      attendancePct:
+        r.totalMarks > 0 ? Math.round((r.presentMarks / r.totalMarks) * 100) : null,
+    }));
+
     return {
       tenantName: tenant.name,
       today,
@@ -165,6 +210,7 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
       activeBatchCount,
       needsAttention,
       todaysLanes,
+      facilityBreakdown,
     };
   });
 }

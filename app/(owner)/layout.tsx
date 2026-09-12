@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
+import { FacilitySwitcher } from "@/components/facility-switcher";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
+import { listLocations } from "@/lib/services/people";
 
 // Owner layout — sub-PR 1 of the role-gating migration. The
 // layout is the gate: `sessionExists()` admits any role with a
@@ -27,8 +29,12 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   if (!canAccessSurface(ctx.roleKey, SURFACE_OWNER)) {
     notFound();
   }
+  // W1-6 — the switcher renders itself away for single-facility
+  // tenants, so this query is the only cost a small academy pays.
+  const locations = await listLocations(ctx);
   return (
     <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
+      <FacilitySwitcher locations={locations} />
       {children}
       <BottomNav
         items={[

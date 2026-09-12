@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
-import type { LocationOption, MemberListRow } from "@/lib/services/people";
+import type { MemberListRow } from "@/lib/services/people";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatPhoneIN } from "@/lib/phone";
+import { formatDateIST } from "@/lib/time/tz";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
@@ -29,11 +30,14 @@ const STATUS_TONE: Record<string, string> = {
 
 export function MembersBoard({
   initialMembers,
-  locations,
+  initialLocationId,
   terminology = DEFAULT_TERMINOLOGY,
 }: {
   initialMembers: MemberListRow[];
-  locations: LocationOption[];
+  // W1-6 — set by the owner layout's facility switcher via the page's
+  // `?facility=` param. The list-level filter is the global switcher
+  // now; there is no second location control inside the board.
+  initialLocationId?: string;
   // Closed-key vocab resolved by the parent server page; optional so
   // callers without tenant context render the generic terms.
   terminology?: TerminologyState;
@@ -41,7 +45,11 @@ export function MembersBoard({
   const [members, setMembers] = useState(initialMembers);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
-  const [locationId, setLocationId] = useState("");
+  // W1-6 — the facility comes from the URL via the page; the board's
+  // other filters are local state. A facility change is a server
+  // navigation (the switcher pushes `?facility=`), so this never needs
+  // a setter.
+  const locationId = initialLocationId ?? "";
   const [isPending, startTransition] = useTransition();
 
   function refetch(next: { search?: string; status?: string; locationId?: string }) {
@@ -55,8 +63,6 @@ export function MembersBoard({
       setMembers(rows);
     });
   }
-
-  const showLocationFilter = useMemo(() => locations.length > 1, [locations]);
 
   return (
     <div>
@@ -92,24 +98,6 @@ export function MembersBoard({
             </option>
           ))}
         </select>
-        {showLocationFilter ? (
-          <select
-            value={locationId}
-            onChange={(e) => {
-              setLocationId(e.target.value);
-              refetch({ locationId: e.target.value });
-            }}
-            className="rounded-ctl border border-line bg-paper px-2.5 py-2 text-[16px]"
-            data-testid="members-location-filter"
-          >
-            <option value="">All locations</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        ) : null}
       </div>
 
       <ul className="mt-3" data-testid="members-list" aria-busy={isPending}>
@@ -145,6 +133,9 @@ export function MembersBoard({
                   <p className="mt-0.5 text-[12px] text-ink-3">
                     {m.memberCode} · {m.locationName}
                     {m.phone ? ` · ${formatPhoneIN(m.phone)}` : ""}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-ink-3">
+                    Joined {formatDateIST(m.createdAt)}
                   </p>
                 </div>
                 <span

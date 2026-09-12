@@ -67,7 +67,7 @@ afterEach(cleanup);
 
 describe("EmptyState wiring", () => {
   it("members board with no members shows the designed empty state", () => {
-    render(<MembersBoard initialMembers={[]} locations={[]} />);
+    render(<MembersBoard initialMembers={[]} />);
     expect(screen.getByText("No members yet.")).toBeTruthy();
     expect(screen.getByText("Add your first member").closest("a")).not.toBeNull();
   });
