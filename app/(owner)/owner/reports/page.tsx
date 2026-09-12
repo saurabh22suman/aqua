@@ -1,6 +1,7 @@
 import { getAttendanceReportAction, getEnquiryFunnelAction, getRetentionViewAction, getCoachLoadAction } from "@/lib/actions/owner-reports";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
+import { formatDateIST } from "@/lib/time/tz";
 import { AttendanceReportCard } from "@/components/reports/attendance-report-card";
 import { EnquiryFunnelCard } from "@/components/reports/enquiry-funnel-card";
 import { RetentionCard } from "@/components/reports/retention-card";
@@ -35,9 +36,8 @@ export default async function ReportsPage({
     <main className="px-5 pt-6 pb-8">
       <h1 className="font-display text-[19px] font-semibold">Reports</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Period{" "}
-        <span className="font-mono">{period.from}</span> to{" "}
-        <span className="font-mono">{period.to}</span>{" "}
+        Period <span className="font-mono">{formatDateIST(period.from)}</span> to{" "}
+        <span className="font-mono">{formatDateIST(period.to)}</span>{" "}
         ({timezone}). This calendar month, in the tenant&apos;s timezone.
       </p>
 

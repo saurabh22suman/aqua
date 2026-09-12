@@ -3,6 +3,7 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import { formatPhoneIN } from "@/lib/phone";
 
 // K2 — coach's account surface. Minimum the K2 brief asks for: the
 // user's name and phone, plus a sign-out button. The bottom nav's
@@ -30,7 +31,7 @@ export default async function CoachMePage() {
           {identity?.fullName ?? "Signed in"}
         </p>
         <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ?? "No phone on file"}
+          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
 

@@ -5,7 +5,7 @@ import { SessionSubstituteControl } from "@/components/session-substitute-contro
 import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import type { CoachOption } from "@/lib/services/programs";
 import type { TerminologyState } from "@/lib/terminology/keys";
-import { formatTimeIST } from "@/lib/time/tz";
+import { formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
 import { EmptyState } from "@/components/ui/EmptyState";
 
 // F3 (R.1) — client island for /owner/sessions. Renders the
@@ -24,13 +24,7 @@ function groupByDate(rows: UpcomingSessionRow[]): Map<string, UpcomingSessionRow
 }
 
 function formatHeaderDate(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00Z`);
-  return d.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    timeZone: "Asia/Kolkata",
-  });
+  return formatWeekdayDateIST(dateStr);
 }
 
 export function UpcomingSessionsList({

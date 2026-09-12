@@ -29,15 +29,17 @@ export default async function ReceptionTodayPage() {
                       {formatTimeIST(s.startsAt)} {s.batchName}
                     </span>
                     <span className="text-[13px] text-ink-3">
-                      {s.marked} / {s.total}
+                      {s.total === 0 ? "No one enrolled" : `${s.marked} / ${s.total}`}
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-pill bg-deck overflow-hidden">
-                    <div
-                      className={`h-full rounded-pill ${fill}`}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
+                  {s.total > 0 ? (
+                    <div className="h-1.5 rounded-pill bg-deck overflow-hidden">
+                      <div
+                        className={`h-full rounded-pill ${fill}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  ) : null}
                   <p className="mt-2.5 text-[12px] text-ink-3">
                     Coach will mark attendance.
                   </p>

@@ -9,6 +9,8 @@ import {
 import { issueLoginLinkAction } from "@/lib/actions/invite-link";
 import { LinkQr } from "@/components/link-qr";
 import type { ListInvitationsRow } from "@/lib/services/staff-invitations";
+import { formatDateTimeIST } from "@/lib/time/tz";
+import { formatPhoneIN } from "@/lib/phone";
 
 // Phase 3.6 — invitations board. List with state pills, per-row
 // revoke + login-link issue. There is no delivery channel yet (no
@@ -103,7 +105,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
       } else {
         setLink({
           url: `${window.location.origin}${result.urlPath}`,
-          expiresAt: result.expiresAt.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          expiresAt: formatDateTimeIST(result.expiresAt),
         });
       }
       setBusy(null);
@@ -123,7 +125,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
   return (
     <li className="bg-paper border border-line rounded-ctl mb-2 last:mb-0 p-4">
       <div className="flex items-baseline justify-between gap-3">
-        <p className="font-mono text-[13.5px] text-ink truncate">{row.phone}</p>
+        <p className="font-mono text-[13.5px] text-ink truncate">{formatPhoneIN(row.phone)}</p>
         <span className={`text-[11px] font-medium px-2.5 py-1 rounded-pill ${STATUS_TONE[row.status]}`}>
           {STATUS_LABEL[row.status]}
         </span>

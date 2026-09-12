@@ -4,6 +4,8 @@ import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import { TenantMark } from "@/components/branding/tenant-mark";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
+import { formatWallTime12h } from "@/lib/time/tz";
+import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
 // S4 (Owner home) — composition follows docs/sports-club-ui-direction.html's
 // "Owner · home" mockup: one dominant hero, three stat chips, a
@@ -49,10 +51,21 @@ export function OwnerDashboard({
         <div className="flex-none">
           <TenantMark initials={branding.initials} accent={branding.accent} size={44} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="font-display text-[19px] font-semibold leading-tight">{displayName}</h1>
           <p className="text-[12.5px] text-ink-3">{dayLabel}</p>
         </div>
+        {/* P1-4 (mobile UX audit): sign-out was three taps deep in
+            Settings. The header is the one-tap surface every other role
+            already has (Ops header, coach/reception Me tabs). */}
+        <form action={logoutTenantAction} className="flex-none">
+          <button
+            type="submit"
+            className="rounded-ctl border border-line bg-paper px-3 min-h-[44px] text-[12.5px] font-medium text-ink-2"
+          >
+            Sign out
+          </button>
+        </form>
       </div>
 
       {/* Hero: today's attendance-marking progress across every batch —
@@ -101,6 +114,7 @@ export function OwnerDashboard({
       ) : (
         <ul>
           {data.needsAttention.map((item, i) => {
+            const linked = Boolean(item.href);
             const row = (
               <>
                 <div className="h-9 w-9 rounded-[11px] bg-warn-soft text-warn grid place-items-center flex-none">
@@ -110,7 +124,15 @@ export function OwnerDashboard({
                   <p className="text-[14px] font-medium leading-tight">{item.title}</p>
                   <p className="mt-0.5 text-[12px] text-ink-3 leading-tight truncate">{item.detail}</p>
                 </div>
-                <ChevronRight size={18} className="ml-auto text-ink-3 flex-none" />
+                {/* P1-5 (mobile UX audit): the chevron is the only
+                    affordance cue on mobile. An inert row must not
+                    advertise itself as tappable — same card shape, no
+                    chevron, spacer keeps the text column aligned. */}
+                {linked ? (
+                  <ChevronRight size={18} className="ml-auto text-ink-3 flex-none" />
+                ) : (
+                  <span className="ml-auto h-[18px] w-[18px] flex-none" aria-hidden="true" />
+                )}
               </>
             );
             const className = "flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 py-3 mb-2";
@@ -154,7 +176,7 @@ export function OwnerDashboard({
                 <div>
                   <div className="font-display text-[15px] font-semibold flex items-center gap-1.5">
                     <Clock size={13} className="text-ink-3" />
-                    {lane.startTime.slice(0, 5)} {lane.batchName}
+                    {formatWallTime12h(lane.startTime)} {lane.batchName}
                   </div>
                   <div className="text-[12.5px] text-ink-3 mt-0.5">{lane.programName}</div>
                 </div>

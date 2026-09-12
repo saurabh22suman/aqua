@@ -57,7 +57,12 @@ export function CoachRosterSearch({ roster }: { roster: CoachRosterRow[] }) {
                 data-testid="coach-roster-row"
               >
                 <div className="min-w-0">
-                  <p className="text-[14px] font-medium truncate">{m.name}</p>
+                  <p className="text-[14px] font-medium truncate">
+                    {m.name}
+                    {m.isMinor ? (
+                      <span className="text-[11px] text-ink-3">{" (minor)"}</span>
+                    ) : null}
+                  </p>
                   <p className="mt-0.5 text-[12px] text-ink-3 truncate">
                     {m.code}
                     {m.batches.length > 0 ? (

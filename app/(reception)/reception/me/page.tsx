@@ -4,6 +4,7 @@ import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireReception } from "@/lib/auth/surface-guard";
+import { formatPhoneIN } from "@/lib/phone";
 
 // K2 — reception's account surface. Mirrors /coach/me: name, phone,
 // sign-out. Reception's bottom nav had three tabs (Today / Add
@@ -24,7 +25,7 @@ export default async function ReceptionMePage() {
           {identity?.fullName ?? "Signed in"}
         </p>
         <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ?? "No phone on file"}
+          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
 

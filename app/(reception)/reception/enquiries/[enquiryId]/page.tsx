@@ -6,6 +6,8 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
+import { requireUuidParam } from "@/lib/params";
+import { formatPhoneIN } from "@/lib/phone";
 
 export default async function ReceptionEnquiryDetailPage({
   params,
@@ -14,6 +16,7 @@ export default async function ReceptionEnquiryDetailPage({
 }) {
   await requireReception();
   const { enquiryId } = await params;
+  requireUuidParam(enquiryId);
   const [enquiry, locations, batches, terminology] = await Promise.all([
     getEnquiryDetailAction(enquiryId),
     listLocationsAction(),
@@ -29,7 +32,7 @@ export default async function ReceptionEnquiryDetailPage({
       <h1 className="font-display text-[19px] font-semibold">{enquiry.fullName}</h1>
       <p className="mt-0.5 text-[12.5px] text-ink-3">
         {enquiry.source}
-        {enquiry.phone ? ` · ${enquiry.phone}` : ""}
+        {enquiry.phone ? ` · ${formatPhoneIN(enquiry.phone)}` : ""}
       </p>
       <div className="mt-4">
         <EnquiryDetailView

@@ -40,6 +40,20 @@ export function addDays(dateIso: string, days: number): string {
   return YMD.format(new Date(t));
 }
 
+// A display window anchored on "today" in a tenant's timezone. Used by
+// /owner/sessions (14 days). Deriving the anchor from UTC
+// (`toISOString().slice(0, 10)`) was P0-3 residue: between 00:00 and
+// 05:30 IST the UTC date is still yesterday, so the window included
+// sessions that had already run.
+export function daysAheadWindow(
+  timeZone: string,
+  days: number,
+  now = Date.now(),
+): { fromDate: string; toDate: string } {
+  const fromDate = todayInZone(timeZone, now);
+  return { fromDate, toDate: addDays(fromDate, days) };
+}
+
 export function weekdayOf(dateIso: string): number {
   const [y, m, d] = dateIso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -105,5 +119,39 @@ export function formatTimeIST(iso: string | Date): string {
     minute: "2-digit",
     hour12: true,
     timeZone: "Asia/Kolkata",
+  });
+}
+
+export function formatDateTimeIST(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return `${formatDateIST(d)}, ${formatTimeIST(d)}`;
+}
+
+export function formatWeekdayDateIST(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return d.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+// A wall-clock time from a `time` column ("07:00:00") or an input value
+// ("07:00"). Not an instant, so no zone conversion: the value is
+// already the academy's local time. Unknown shapes pass through, same
+// contract as formatPhoneIN.
+export function formatWallTime12h(wall: string): string {
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(wall);
+  if (!match) return wall;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return wall;
+  const d = new Date(Date.UTC(2000, 0, 1, hours, minutes));
+  return d.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "UTC",
   });
 }

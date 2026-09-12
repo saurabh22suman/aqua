@@ -140,7 +140,7 @@ export function MembersBoard({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-medium">
                     {m.fullName}
-                    {m.isMinor ? <span className="ml-1.5 text-[11px] text-ink-3">(minor)</span> : null}
+                    {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
                   </p>
                   <p className="mt-0.5 text-[12px] text-ink-3">
                     {m.memberCode} · {m.locationName}

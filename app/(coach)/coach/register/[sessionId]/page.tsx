@@ -6,6 +6,7 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatTimeIST } from "@/lib/time/tz";
+import { requireUuidParam } from "@/lib/params";
 
 export default async function RegisterPage({
   params,
@@ -14,6 +15,7 @@ export default async function RegisterPage({
 }) {
   await requireCoach();
   const { sessionId } = await params;
+  requireUuidParam(sessionId);
   const [data, terminology] = await Promise.all([
     getRosterAction(sessionId),
     // L3 audit — the empty-state copy (`Session not found`) routes

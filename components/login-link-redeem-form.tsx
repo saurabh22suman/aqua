@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { RedeemRouteResult } from "@/app/api/login-link/redeem/route";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
+import { formatPhoneIN } from "@/lib/phone";
 
 // Confirm screen for a staff magic-link login. The token arrived
 // in the URL (hand-forwarded by the owner -- there is no delivery
@@ -88,13 +89,13 @@ export function LoginLinkRedeemForm({
       {setPinMode ? (
         <>
           <p className="mt-2 text-[14px] text-ink-2">
-            This link is for <span className="font-mono">{phone}</span>. Pick a 6–12 digit
+            This link is for <span className="font-mono">{formatPhoneIN(phone)}</span>. Pick a 6–12 digit
             PIN — you will use your mobile number and this PIN to sign in from now on.
           </p>
         </>
       ) : (
         <p className="mt-2 text-[14px] text-ink-2">
-          This link signs in <span className="font-mono">{phone}</span> as {roleKey}.
+          This link signs in <span className="font-mono">{formatPhoneIN(phone)}</span> as {roleKey}.
         </p>
       )}
       <p className="mt-1 text-[13px] text-ink-3">

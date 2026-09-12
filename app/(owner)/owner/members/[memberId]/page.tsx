@@ -18,6 +18,7 @@ import { formatDateIST } from "@/lib/time/tz";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
+import { requireUuidParam } from "@/lib/params";
 
 export default async function MemberDetailPage({
   params,
@@ -26,6 +27,7 @@ export default async function MemberDetailPage({
 }) {
   await requireOwner();
   const { memberId } = await params;
+  requireUuidParam(memberId);
   const [member, attendanceHistory, cardCtx, terminology] = await Promise.all([
     getMemberDetailAction(memberId),
     getMemberAttendanceHistoryAction(memberId),
@@ -145,6 +147,7 @@ export default async function MemberDetailPage({
               ]}
               snapshot={member}
               valueClassName="capitalize"
+              placeholder="Not recorded"
             />
           </dd>
         </div>

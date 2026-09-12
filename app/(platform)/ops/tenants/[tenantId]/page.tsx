@@ -8,6 +8,7 @@ import { StatusTransitionControls } from "./status-transitions";
 import { TenantFeatureToggles } from "./tenant-feature-toggles";
 import { InviteOwnerForm } from "./invite-owner-form";
 import { RemoveSampleDataButton } from "./remove-sample-data-button";
+import { requireUuidParam } from "@/lib/params";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -54,6 +55,7 @@ export default async function PlatformTenantDetailPage({
   if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const { tenantId } = await params;
+  requireUuidParam(tenantId);
   const detail = await getTenantDetail(asTenantId(tenantId));
   if (!detail) notFound();
   const sampleState = await getSampleDataState(tenantId);
@@ -127,7 +129,7 @@ export default async function PlatformTenantDetailPage({
       <section className="mt-8">
         <SectionHeader
           title="Locations"
-          subtitle={`${detail.locations.length} live · soft-deleted hidden`}
+          subtitle={`${detail.locations.length} live · deleted locations hidden`}
         />
         {detail.locations.length === 0 ? (
           <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">

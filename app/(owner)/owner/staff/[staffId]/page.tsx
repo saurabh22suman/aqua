@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listStaffAction } from "@/lib/actions/staff";
 import { titleCase } from "@/lib/terminology/keys";
+import { formatDateIST } from "@/lib/time/tz";
 import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 3.5 — staff detail view. Read-only at this phase;
@@ -49,7 +50,7 @@ export default async function StaffDetailPage({
           </h1>
           <p className="text-[13px] text-ink-3 mt-0.5">
             {titleCase(staff.staffType)}
-            {staff.employedOn ? ` · employed ${staff.employedOn}` : ""}
+            {staff.employedOn ? ` · employed ${formatDateIST(staff.employedOn)}` : ""}
           </p>
         </div>
       </div>
