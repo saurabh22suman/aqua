@@ -94,6 +94,7 @@ const DASHBOARD: OwnerDashboardData = {
       capacity: 12,
     },
   ],
+  facilityBreakdown: [],
 };
 
 const BRANDING = {

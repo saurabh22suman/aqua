@@ -19,7 +19,7 @@ vi.mock("@/lib/actions/platform-auth", () => ({
   }),
 }));
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/platform",
+  usePathname: () => "/ops",
   redirect: (path: string) => {
     throw new Error(`unexpected redirect: ${path}`);
   },
@@ -39,7 +39,7 @@ describe("PlatformLayout mobile shell (F1)", () => {
     const links = within(nav).getAllByRole("link");
     expect(links).toHaveLength(4);
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
-      "/platform",
+      "/ops",
       "/ops/tenants",
       "/ops/features",
       "/ops/presets",

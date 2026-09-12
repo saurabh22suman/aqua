@@ -75,6 +75,9 @@ export default async function MemberDetailPage({
             {member.memberCode} · {member.locationName}
             {member.isMinor ? " · minor" : ""}
           </p>
+          <p className="mt-0.5 text-[11.5px] text-ink-3">
+            Joined {formatDateIST(member.createdAt)}
+          </p>
         </div>
         <Link
           href={`/owner/members/${member.memberId}/edit`}

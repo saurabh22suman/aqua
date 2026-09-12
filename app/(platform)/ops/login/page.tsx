@@ -7,7 +7,7 @@ import { PlatformLoginForm } from "./login-form";
 // but it removes a confusing two-step on the same screen.
 export default async function PlatformLoginPage() {
   const status = await platformAuthStatusAction();
-  if (status.kind === "authenticated") redirect("/platform");
+  if (status.kind === "authenticated") redirect("/ops");
   return (
     <div className="max-w-md">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">

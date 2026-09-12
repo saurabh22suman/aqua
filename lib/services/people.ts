@@ -31,6 +31,10 @@ export type MemberListRow = {
   locationId: string;
   locationName: string;
   isMinor: boolean;
+  // W1-5 (docs/role-surfaces-plan.md): the row's record-creation
+  // instant, displayed as the member's joining date until an explicit
+  // members.joined_on lands (Wave 2). UTC ISO; formatted at the edge.
+  createdAt: string;
 };
 
 // C-06 done-when covers "list with search and filters" -- search is a
@@ -71,6 +75,7 @@ export async function listMembers(
         status: members.status,
         locationId: members.locationId,
         locationName: locations.name,
+        createdAt: members.createdAt,
       })
       .from(members)
       .innerJoin(persons, eq(persons.id, members.personId))
@@ -88,6 +93,7 @@ export async function listMembers(
       locationId: r.locationId,
       locationName: r.locationName,
       isMinor: isMinorSafe(r.dateOfBirth, tenant.timezone),
+      createdAt: r.createdAt.toISOString(),
     }));
   });
 }
@@ -120,6 +126,9 @@ export type MemberDetail = {
   locationId: string;
   locationName: string;
   isMinor: boolean;
+  // See MemberListRow.createdAt — the joining-date display source until
+  // Wave 2's explicit members.joined_on.
+  createdAt: string;
   guardians: GuardianRow[];
   consents: ConsentRow[];
   statusHistory: Array<{
@@ -153,6 +162,7 @@ export async function getMemberDetail(
         status: members.status,
         locationId: members.locationId,
         locationName: locations.name,
+        createdAt: members.createdAt,
       })
       .from(members)
       .innerJoin(persons, eq(persons.id, members.personId))
@@ -218,6 +228,7 @@ export async function getMemberDetail(
       locationId: row.locationId,
       locationName: row.locationName,
       isMinor: isMinorSafe(row.dateOfBirth, tenant.timezone),
+      createdAt: row.createdAt.toISOString(),
       guardians: guardianRows,
       consents: consentRows.map((c) => ({
         purpose: c.purpose,
