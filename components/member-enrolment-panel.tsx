@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { enrolMemberAction, listMemberEnrolmentsAction } from "@/lib/actions/enrolment";
+import { addToWaitlistAction } from "@/lib/actions/waitlist";
 import type { MemberEnrolment } from "@/lib/services/enrolment";
 import type { BatchWithProgramName } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
@@ -47,6 +48,10 @@ export function MemberEnrolmentPanel({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  // R.5 — when the refusal is a full batch, offer the waitlist instead
+  // of leaving the user at a dead end.
+  const [fullBatch, setFullBatch] = useState(false);
+  const [waitlistMessage, setWaitlistMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -86,12 +91,37 @@ export function MemberEnrolmentPanel({
       const result = await enrolMemberAction({ memberId, batchId: effectiveBatchId });
       if (!result.ok) {
         setActionError(result.error);
+        setFullBatch(/full/i.test(result.error));
         return;
       }
       setSelectedBatchId("");
+      setFullBatch(false);
       const rows = await listMemberEnrolmentsAction(memberId);
       setEnrolments(rows);
       router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function joinWaitlist() {
+    if (!effectiveBatchId) return;
+    setBusy(true);
+    setWaitlistMessage(null);
+    try {
+      const res = await addToWaitlistAction({
+        memberId,
+        batchId: effectiveBatchId,
+      });
+      if (res.kind === "error") {
+        setActionError(res.message);
+        return;
+      }
+      setActionError(null);
+      setFullBatch(false);
+      setWaitlistMessage(
+        `Added to the waitlist at position ${res.position}.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -178,6 +208,19 @@ export function MemberEnrolmentPanel({
             </p>
           )}
           {actionError ? <p className="text-[12px] text-late">{actionError}</p> : null}
+          {fullBatch ? (
+            <button
+              type="button"
+              onClick={joinWaitlist}
+              disabled={busy}
+              className="rounded-ctl border border-line bg-deck px-3.5 min-h-[44px] text-[13px] font-medium text-ink-2 disabled:opacity-50"
+            >
+              {busy ? "Adding…" : "Join waitlist"}
+            </button>
+          ) : null}
+          {waitlistMessage ? (
+            <p className="text-[12px] text-ink-2">{waitlistMessage}</p>
+          ) : null}
         </div>
       )}
     </div>

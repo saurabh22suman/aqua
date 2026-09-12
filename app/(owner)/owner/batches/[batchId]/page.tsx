@@ -11,6 +11,8 @@ import {
   currentMonthPeriod,
   getBatchAttendanceSummary,
 } from "@/lib/services/attendance-history";
+import { listWaitlistAction } from "@/lib/actions/waitlist";
+import { WaitlistBoard } from "@/components/waitlist-board";
 import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 4.2 — per-batch attendance summary. Service existed
@@ -52,6 +54,9 @@ export default async function BatchDetailPage({
   const summary = await getBatchAttendanceSummary(ctx, batchId, period);
   if (!summary) notFound();
 
+  // R.5 — the queue for this batch (empty state included).
+  const waitlist = await listWaitlistAction({ batchId });
+
   return (
     <main className="px-5 pt-6 pb-8">
       <Link
@@ -86,6 +91,8 @@ export default async function BatchDetailPage({
           No sessions have run for this batch this month. Markers from later months would land here once the period is widened.
         </p>
       )}
+
+      <WaitlistBoard batchId={batchId} initialRows={waitlist} />
 
       <div className="mt-6 rounded-card border border-line bg-paper p-4">
         <Link
