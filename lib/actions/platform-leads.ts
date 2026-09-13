@@ -7,6 +7,10 @@ import {
   transitionLead,
   type LeadMutationResult,
 } from "@/db/platform-leads";
+import {
+  convertLead,
+  type ConvertLeadResult,
+} from "@/db/platform-lead-conversion";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
@@ -143,4 +147,54 @@ export async function transitionLeadAction(
     revalidatePath(`/ops/leads/${leadId}`);
   }
   return result;
+}
+
+const convertLeadFormInput = z.object({
+  slug: z.string().trim().min(1).max(120),
+  locationName: z.string().trim().min(1).max(200).optional(),
+  planKey: z.string().trim().max(60).optional(),
+  preset: z.string().trim().max(60).optional(),
+});
+
+export type ConvertLeadActionResult = ConvertLeadResult;
+
+export async function convertLeadAction(
+  _prev: unknown,
+  formData: FormData,
+): Promise<ConvertLeadResult> {
+  const leadId = String(formData.get("leadId") ?? "");
+  const surface = convertLeadFormInput.safeParse({
+    slug: String(formData.get("slug") ?? "").trim(),
+    locationName: String(formData.get("locationName") ?? "").trim() || undefined,
+    planKey: String(formData.get("planKey") ?? "").trim() || undefined,
+    preset: String(formData.get("preset") ?? "").trim() || undefined,
+  });
+  if (!surface.success || !z.string().uuid().safeParse(leadId).success) {
+    return {
+      kind: "error",
+      code: "invalid",
+      message: surface.success
+        ? "Invalid lead reference."
+        : (surface.error.issues[0]?.message ?? "Invalid conversion input."),
+    };
+  }
+
+  const status = await platformAuthStatusAction();
+  if (status.kind !== "authenticated") {
+    return {
+      kind: "error",
+      code: "invalid",
+      message: "Your session has expired. Sign in again.",
+    };
+  }
+
+  return opsAction(
+    {
+      scope: "platform_lead.convert",
+      actorId: asUserId(status.userId),
+      targetType: "platform_lead",
+      detail: { slug: surface.data.slug },
+    },
+    () => convertLead(leadId, surface.data, { actorId: asUserId(status.userId) }),
+  );
 }

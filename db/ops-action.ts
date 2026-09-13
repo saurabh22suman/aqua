@@ -33,6 +33,7 @@ export const OPS_SCOPES = [
   "tenant_feature.clear",
   "platform_lead.create",
   "platform_lead.update",
+  "platform_lead.convert",
 ] as const;
 
 export type OpsScope = (typeof OPS_SCOPES)[number];

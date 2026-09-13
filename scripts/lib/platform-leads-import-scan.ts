@@ -10,6 +10,7 @@ import { join } from "node:path";
 
 export const ALLOWED_IMPORTERS: readonly string[] = [
   "db/platform-leads.ts",
+  "db/platform-lead-conversion.ts",
   "db/schema/platform-leads.ts",
   "db/schema/index.ts",
   "lib/actions/platform-leads.ts",
