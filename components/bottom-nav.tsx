@@ -40,6 +40,12 @@ export type NavItem = {
   href: string;
   label: string;
   iconName: keyof typeof ICONS;
+  // Exact-route match only. Root tabs ("/owner", "/coach", "/ops")
+  // otherwise light up on every sibling route underneath them —
+  // /owner/enquiries was lighting "Home" (2026-09-13 audit §7.5).
+  // Section tabs (Members, Settings…) keep prefix matching so their
+  // own children stay lit.
+  exact?: boolean;
   // Sub-PR 3: optional feature gate. When set, the nav item is
   // hidden when ctx.features does NOT contain this key — the
   // owner/reports tile hides when an operator has turned the
@@ -60,16 +66,16 @@ export type BottomNavProps = {
 
 // Active-state detection: longest-prefix-wins, with an exact match
 // preferred when both apply. /owner/members/[id] lights "Members",
-// not "Home", even though /owner is a prefix; /owner/programs (which
-// is not in the nav) lights "Home" because the nav doesn't know
-// about it and the longer candidate doesn't exist. /login,
+// not "Home", even though /owner is a prefix; a root item marked
+// `exact` only lights on its own route, so /owner/enquiries lights
+// nothing rather than incorrectly lighting "Home". /login,
 // /platform/login and other paths outside the nav surface render no
 // active item.
 function findActiveHref(pathname: string, items: NavItem[]): string | null {
   let best: { href: string; exact: boolean } | null = null;
   for (const item of items) {
     const exact = pathname === item.href;
-    const prefix = exact || pathname.startsWith(item.href + "/");
+    const prefix = exact || (!item.exact && pathname.startsWith(item.href + "/"));
     if (!prefix) continue;
     const better =
       best === null ||

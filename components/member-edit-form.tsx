@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateMemberAction } from "@/lib/actions/people";
 import type { LocationOption, MemberDetail } from "@/lib/services/people";
+import { DateField } from "@/components/ui/DateField";
 
 export function MemberEditForm({
   member,
@@ -68,25 +69,22 @@ export function MemberEditForm({
         className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
       />
       <div>
-        <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
-        <input
-          type="date"
-          lang="en-IN"
-          placeholder="dd/mm/yyyy"
-          value={dateOfBirth}
-          onChange={(e) => setDateOfBirth(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
+        <label htmlFor="edit-dob" className="block text-[12px] text-ink-3 mb-1">
+          Date of birth
+        </label>
+        <DateField id="edit-dob" value={dateOfBirth} onChange={setDateOfBirth} />
       </div>
       <div>
-        <label className="block text-[12px] text-ink-3 mb-1">Joined on</label>
-        <input
-          type="date"
-          lang="en-IN"
-          placeholder="dd/mm/yyyy"
+        <label
+          htmlFor="edit-joined-on"
+          className="block text-[12px] text-ink-3 mb-1"
+        >
+          Joined on
+        </label>
+        <DateField
+          id="edit-joined-on"
           value={joinedOn}
-          onChange={(e) => setJoinedOn(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          onChange={setJoinedOn}
           data-testid="member-joined-on"
         />
       </div>

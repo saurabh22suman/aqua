@@ -22,7 +22,7 @@ export default async function ReceptionLayout({ children }: { children: ReactNod
       {children}
       <BottomNav
         items={[
-          { href: "/reception", label: "Today", iconName: "calendar-days" },
+          { href: "/reception", label: "Today", iconName: "calendar-days", exact: true },
           { href: "/reception/members/new", label: "Add member", iconName: "user-plus" },
           { href: "/reception/enquiries", label: "Enquiries", iconName: "clipboard-list" },
           // K2 — fourth tab matches the design's 4-item bottom bar

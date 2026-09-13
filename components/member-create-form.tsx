@@ -7,6 +7,7 @@ import { createMemberAction, searchPersonsAction } from "@/lib/actions/people";
 import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import { formatPhoneIN } from "@/lib/phone";
+import { DateField } from "@/components/ui/DateField";
 import {
   resolveTerm,
   titleCase,
@@ -105,20 +106,35 @@ export function MemberCreateForm({
     return undefined;
   }
 
+  // 2026-09-13 UI/UX audit R-D1 — the sticky save bar is deliberately
+  // always visible (long form), but the mandatory guardian/consent
+  // content can sit below the fold. On a failed validation, bring the
+  // offending field into view instead of leaving the user at a CTA
+  // that appeared to work with no visible cause for the error.
+  function focusField(testId: string) {
+    const el = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.focus?.();
+  }
+
   async function submit() {
     setError(null);
     if (!fullName.trim() || !dateOfBirth || !locationId) {
       setError("Full name, date of birth and location are required.");
+      focusField(!fullName.trim() ? "member-full-name" : "member-dob");
       return;
     }
     if (!consentGiven) {
       setError(
         `Consent to data processing is required before a ${resolveTerm(terminology, "member", 1)} can be registered.`,
       );
+      focusField("consent-checkbox");
       return;
     }
     if (minor === true && guardianMissing) {
       setError("A guardian is required to register a minor — select an existing one or enter their details.");
+      focusField("guardian-search");
       return;
     }
 
@@ -170,28 +186,30 @@ export function MemberCreateForm({
           className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         />
         <div>
-          <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
+          <label
+            htmlFor="member-dob"
+            className="block text-[12px] text-ink-3 mb-1"
+          >
+            Date of birth
+          </label>
+          <DateField
+            id="member-dob"
             value={dateOfBirth}
-            onChange={(e) => setDateOfBirth(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            onChange={setDateOfBirth}
             data-testid="member-dob"
           />
         </div>
         <div>
-          <label className="block text-[12px] text-ink-3 mb-1">
+          <label
+            htmlFor="member-joined-on"
+            className="block text-[12px] text-ink-3 mb-1"
+          >
             Joined on (optional — defaults to today)
           </label>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
+          <DateField
+            id="member-joined-on"
             value={joinedOn}
-            onChange={(e) => setJoinedOn(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            onChange={setJoinedOn}
             data-testid="member-joined-on"
           />
         </div>
@@ -339,8 +357,19 @@ export function MemberCreateForm({
           product, and with the guardian section open the submit scrolls
           two viewports down. The bar pins above the fixed bottom nav
           (4rem + safe-area + gap) so Save is always one thumb-tap away.
-          shadow-2 is the floating-element level per DESIGN.md §1.4. */}
+          R-D1 (2026-09-13 audit): the mandatory consent/guardian
+          content can be below the fold from here, so an incomplete
+          form states what is still required in the bar itself, and a
+          failed submit scrolls to the field. shadow-2 is the
+          floating-element level per DESIGN.md §1.4. */}
       <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] rounded-ctl border border-line bg-paper p-2 shadow-2">
+        {!consentGiven || (minor === true && guardianMissing) ? (
+          <p className="px-1 pb-1.5 text-center text-[12px] text-warn">
+            {!consentGiven
+              ? "Consent is required before saving."
+              : `A ${resolveTerm(terminology, "guardian", 1)} is required before saving.`}
+          </p>
+        ) : null}
         <button
           type="button"
           onClick={submit}

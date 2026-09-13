@@ -38,7 +38,7 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
       {children}
       <BottomNav
         items={[
-          { href: "/owner", label: "Home", iconName: "layout-dashboard" },
+          { href: "/owner", label: "Home", iconName: "layout-dashboard", exact: true },
           { href: "/owner/members", label: "Members", iconName: "users" },
           { href: "/owner/reports", label: "Reports", iconName: "file-text" },
           { href: "/owner/settings", label: "Settings", iconName: "settings" },

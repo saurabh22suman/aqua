@@ -42,7 +42,11 @@ export async function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) 
             <tr className="text-left">
               <th className="py-1">Source</th>
               <th className="py-1 text-right">Total</th>
-              <th className="py-1 text-right">New → Converted</th>
+              {/* O-D4 (2026-09-13 audit): a cell reading "1 → 0" was
+                  unlabelled once the header scrolled off. Each count
+                  now has its own labelled column. */}
+              <th className="py-1 text-right">New</th>
+              <th className="py-1 text-right">Converted</th>
               <th className="py-1 text-right">Conversion</th>
             </tr>
           </thead>
@@ -53,9 +57,8 @@ export async function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) 
                 <tr key={r.source} className="border-t border-line">
                   <td className="py-2 font-medium">{SOURCE_LABEL[r.source] ?? r.source}</td>
                   <td className="py-2 text-right tabular-nums">{r.total}</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {r.byStage.new} → {r.converted}
-                  </td>
+                  <td className="py-2 text-right tabular-nums">{r.byStage.new}</td>
+                  <td className="py-2 text-right tabular-nums">{r.converted}</td>
                   <td className="py-2 text-right tabular-nums">
                     {r.conversionPct === null ? "—" : `${r.conversionPct}%`}
                   </td>

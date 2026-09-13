@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { transitionMemberStatusAction } from "@/lib/actions/people";
 import { MEMBER_STATUS_LABELS, MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
 import type { MemberStatus } from "@/db/schema/people";
+import { Button } from "@/components/ui/Button";
 
 export function MemberStatusPanel({
   memberId,
@@ -63,39 +64,37 @@ export function MemberStatusPanel({
           />
           {error ? <p className="text-[12px] text-late">{error}</p> : null}
           <div className="flex gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={confirm}
               disabled={busy}
-              className="rounded-ctl bg-[var(--accent)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
               data-testid="confirm-status-change"
             >
               {busy ? "Saving…" : "Confirm"}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => {
                 setTarget(null);
                 setError(null);
               }}
-              className="rounded-ctl border border-line px-3.5 py-2 text-[13px]"
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           {options.map((option) => (
-            <button
+            <Button
               key={option}
-              type="button"
+              variant="secondary"
               onClick={() => setTarget(option)}
-              className="rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px]"
+              className="text-[12.5px]"
               data-testid={`status-to-${option}`}
             >
               Move to {MEMBER_STATUS_LABELS[option]}
-            </button>
+            </Button>
           ))}
         </div>
       )}

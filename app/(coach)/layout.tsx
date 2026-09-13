@@ -22,7 +22,7 @@ export default async function CoachLayout({ children }: { children: ReactNode })
       {children}
       <BottomNav
         items={[
-          { href: "/coach", label: "Today", iconName: "list-checks" },
+          { href: "/coach", label: "Today", iconName: "list-checks", exact: true },
           { href: "/coach/schedule", label: "Schedule", iconName: "calendar-days" },
           { href: "/coach/members", label: "Members", iconName: "users" },
           { href: "/coach/me", label: "Me", iconName: "user-round" },

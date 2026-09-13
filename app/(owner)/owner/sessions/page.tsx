@@ -62,12 +62,18 @@ export default async function SessionsPage() {
         reads who actually ran the session.
       </p>
 
-      <UpcomingSessionsList initialSessions={upcoming} coaches={coaches} terminology={terminology} />
+      <UpcomingSessionsList
+        initialSessions={upcoming}
+        coaches={coaches}
+        terminology={terminology}
+        timezone={timezone}
+      />
 
       <div className="mt-6 rounded-card border border-line bg-paper p-4">
         <p className="text-[12.5px] text-ink-3">
-          Showing the next 14 days. Cancel or reschedule a session inline —
-          reschedules guard against coach conflicts before they save.
+          The window opens on today. Use Manage on a row to substitute,
+          cancel or reschedule it inline — reschedules guard against coach
+          conflicts before they save.
         </p>
       </div>
     </main>

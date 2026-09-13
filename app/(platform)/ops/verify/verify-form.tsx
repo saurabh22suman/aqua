@@ -41,10 +41,12 @@ export function PlatformVerifyForm() {
   }, [error]);
 
   return (
+    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+    // suppress the case-only hydration warning React raises for
+    // server-action forms (POST vs post).
     <form
       ref={formRef}
-      action={formAction}
-      method="post"
+      action={formAction} method="post" suppressHydrationWarning
       className="space-y-4"
     >
       <label className="block">

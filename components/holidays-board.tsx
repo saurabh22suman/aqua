@@ -7,6 +7,7 @@ import { addHolidayAction, removeHolidayAction } from "@/lib/actions/holidays";
 import type { HolidayRow } from "@/lib/services/holidays";
 import { formatDateIST } from "@/lib/time/tz";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { DateField } from "@/components/ui/DateField";
 
 // R.3 (docs/five-day-work-guide.md) — owner holiday/closure editor.
 // The session generator already skips these dates; this is the surface
@@ -74,14 +75,17 @@ export function HolidaysBoard({
           data-testid="holiday-name"
         />
         <div>
-          <label className="block text-[12px] text-ink-3 mb-1">Date</label>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
+          <label
+            htmlFor="holiday-date"
+            className="block text-[12px] text-ink-3 mb-1"
+          >
+            Date
+          </label>
+          <DateField
+            id="holiday-date"
             value={holidayDate}
-            onChange={(e) => setHolidayDate(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            onChange={setHolidayDate}
+            tone="deck"
             data-testid="holiday-date"
           />
         </div>

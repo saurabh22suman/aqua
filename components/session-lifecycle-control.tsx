@@ -8,6 +8,7 @@ import {
   rescheduleSessionAction,
 } from "@/lib/actions/session-lifecycle";
 import { zonedWallTimeToInstant } from "@/lib/time/tz";
+import { DateField } from "@/components/ui/DateField";
 
 // R.4 (docs/five-day-work-guide.md) — per-session cancel/reschedule
 // controls for /owner/sessions. The service (cancelSession,
@@ -93,16 +94,16 @@ export function SessionLifecycleControl({
     return (
       <div className="mt-2 space-y-2 rounded-ctl border border-line bg-deck p-3">
         <div>
-          <label className="block text-[11.5px] text-ink-3 mb-1">
+          <label
+            htmlFor="reschedule-date"
+            className="block text-[11.5px] text-ink-3 mb-1"
+          >
             New date
           </label>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
+          <DateField
+            id="reschedule-date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
+            onChange={setDate}
             data-testid="reschedule-date"
           />
         </div>

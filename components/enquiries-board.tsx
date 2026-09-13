@@ -5,6 +5,10 @@ import Link from "next/link";
 import { createEnquiryAction } from "@/lib/actions/enquiries";
 import type { EnquiryRow } from "@/lib/services/enquiries";
 import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
+import {
+  StatusBadge,
+  ENQUIRY_STAGE_TONE,
+} from "@/components/ui/StatusBadge";
 import { formatPhoneIN } from "@/lib/phone";
 
 const SOURCES = ["walk-in", "phone", "referral", "online", "other"] as const;
@@ -99,9 +103,9 @@ export function EnquiriesBoard({
                     {e.phone ? ` · ${formatPhoneIN(e.phone)}` : ""}
                   </p>
                 </div>
-                <span className="flex-none rounded-pill bg-deck px-2.5 py-1 text-[11px] font-medium text-ink-2">
+                <StatusBadge tone={ENQUIRY_STAGE_TONE[e.stage] ?? "neutral"}>
                   {ENQUIRY_STAGE_LABELS[e.stage]}
-                </span>
+                </StatusBadge>
               </Link>
             </li>
           ))

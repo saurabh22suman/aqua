@@ -3,6 +3,10 @@ import { ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listTenants } from "@/db/platform-tenants";
+import {
+  StatusBadge,
+  TENANT_STATUS_TONE,
+} from "@/components/ui/StatusBadge";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -11,39 +15,17 @@ const STATUS_LABEL: Record<string, string> = {
   churned: "Churned",
 };
 
-// Map tenant status to a visual token. Following DESIGN.md §1.1:
-// semantic colours are reserved for money/attendance state; status
-// here is operational, so we use the neutral palette plus the
-// status pill pattern (coloured soft background + word). Suspended
-// reads as a problem (late-soft + 'late' text); the others use ink-3
-// on deck to keep the table visually quiet. Trial gets warn-soft + warn
-// so it doesn't blend into active.
-
-// Status pills — accessible word+colour per DESIGN.md §3. Every
-// status carries a word even if the colour is identical to its
-// neighbours; otherwise a colourblind reader can't tell 'trial' from
-// 'active'. None of the four statuses are money/attendance state —
-// warn/late/water are reserved for that — so the pills stay on the
-// neutral ink palette. The label is the source of truth.
+// Status pills were neutral for all four states until the 2026-09-13
+// UI/UX audit (§7.1) — Active and Churned computed to identical
+// colours, which made the list unskimmable. The shared StatusBadge
+// now carries the Members-list semantics: active=good, trial=warn,
+// suspended=late, churned=neutral. Every pill still carries its
+// word, so colour is never the only carrier (DESIGN.md §3).
 function StatusPill({ status }: { status: string }) {
-  if (status === "suspended") {
-    return (
-      <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-ink-2/15 text-ink-2">
-        {STATUS_LABEL[status]}
-      </span>
-    );
-  }
-  if (status === "trial") {
-    return (
-      <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-deck text-ink">
-        {STATUS_LABEL[status]}
-      </span>
-    );
-  }
   return (
-    <span className="text-[11px] font-medium px-3 py-1 rounded-pill bg-deck text-ink-2">
-      {STATUS_LABEL[status]}
-    </span>
+    <StatusBadge tone={TENANT_STATUS_TONE[status] ?? "neutral"}>
+      {STATUS_LABEL[status] ?? status}
+    </StatusBadge>
   );
 }
 

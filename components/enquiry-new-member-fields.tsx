@@ -8,6 +8,7 @@ import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import type { NewMemberDetails } from "@/lib/services/enquiries";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { formatPhoneIN } from "@/lib/phone";
+import { DateField } from "@/components/ui/DateField";
 
 function looksLikeMinor(dateOfBirth: string): boolean | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
@@ -97,16 +98,17 @@ export function EnquiryNewMemberFields({
   return (
     <div className="space-y-2.5">
       <div>
-        <label className="block text-[12px] text-ink-3 mb-1">Date of birth</label>
-        <input
-          type="date"
-          lang="en-IN"
-          placeholder="dd/mm/yyyy"
+        <label
+          htmlFor="enquiry-member-dob"
+          className="block text-[12px] text-ink-3 mb-1"
+        >
+          Date of birth
+        </label>
+        <DateField
+          id="enquiry-member-dob"
           value={dateOfBirth}
-          onChange={(e) => {
-            setDateOfBirth(e.target.value);
-          }}
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          onChange={setDateOfBirth}
+          tone="deck"
           data-testid="enquiry-member-dob"
         />
       </div>

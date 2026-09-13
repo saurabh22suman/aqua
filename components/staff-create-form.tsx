@@ -4,18 +4,37 @@ import Link from "next/link";
 import { useState } from "react";
 import { Loader2, Save, X } from "lucide-react";
 import { createStaffAction } from "@/lib/actions/staff";
-import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import {
+  resolveTerm,
+  titleCase,
+  type TerminologyState,
+} from "@/lib/terminology/keys";
+import { DateField } from "@/components/ui/DateField";
 
 type Mode = "new" | "existing";
+
+// Same labels/control shape as the sibling "Invite staff" form so the
+// same decision is asked the same way on both screens (2026-09-13
+// audit R-D6). The coach label still routes through the closed-key
+// resolver; Title Case here matches the other three role names.
+const ROLE_KEYS = ["coach", "receptionist", "worker", "accountant"] as const;
+type StaffType = (typeof ROLE_KEYS)[number];
 
 export function StaffCreateForm({ terminology }: { terminology: TerminologyState }) {
   const [mode, setMode] = useState<Mode>("new");
   const [fullName, setFullName] = useState("");
   const [existingPersonId, setExistingPersonId] = useState("");
-  const [staffType, setStaffType] = useState<"coach" | "receptionist" | "worker" | "accountant">("coach");
+  const [staffType, setStaffType] = useState<StaffType>("coach");
   const [employedOn, setEmployedOn] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function roleLabel(key: StaffType): string {
+    if (key === "coach") return titleCase(resolveTerm(terminology, "coach", 1));
+    if (key === "receptionist") return "Receptionist";
+    if (key === "worker") return "Worker";
+    return "Accountant";
+  }
 
   function submit() {
     setError(null);
@@ -92,33 +111,41 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
         </label>
       )}
 
-      <label className="block mb-4">
+      <div className="mb-4">
         <span className="block text-[12.5px] font-medium mb-1.5">Role</span>
-        <select
-          value={staffType}
-          onChange={(e) => setStaffType(e.target.value as typeof staffType)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          data-testid="staff-type"
-        >
-          <option value="coach">{resolveTerm(terminology, "coach", 1)}</option>
-          <option value="receptionist">Receptionist</option>
-          <option value="worker">Worker</option>
-          <option value="accountant">Accountant</option>
-        </select>
-      </label>
+        <div className="grid grid-cols-2 gap-2" data-testid="staff-type">
+          {ROLE_KEYS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setStaffType(key)}
+              aria-pressed={staffType === key}
+              className={`min-h-[44px] rounded-ctl border px-3 py-2 text-[13.5px] font-medium ${
+                staffType === key
+                  ? "border-ink bg-paper text-ink"
+                  : "border-line bg-paper text-ink-3"
+              }`}
+            >
+              {roleLabel(key)}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <label className="block mb-6">
-        <span className="block text-[12.5px] font-medium mb-1.5">Employed on (optional)</span>
-        <input
-          type="date"
-          lang="en-IN"
-          placeholder="dd/mm/yyyy"
+      <div className="mb-6">
+        <label
+          htmlFor="staff-employedOn"
+          className="block text-[12.5px] font-medium mb-1.5"
+        >
+          Employed on (optional)
+        </label>
+        <DateField
+          id="staff-employedOn"
           value={employedOn}
-          onChange={(e) => setEmployedOn(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          onChange={setEmployedOn}
           data-testid="staff-employedOn"
         />
-      </label>
+      </div>
 
       {error ? (
         <p className="mb-4 text-[13px] text-ink-3" role="alert">

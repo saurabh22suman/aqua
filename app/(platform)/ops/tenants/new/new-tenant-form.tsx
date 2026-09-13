@@ -36,7 +36,10 @@ export function NewTenantForm({
   const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form action={formAction} method="post" className="mt-8 space-y-6">
+    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+    // suppress the case-only hydration warning React raises for
+    // server-action forms (POST vs post).
+    <form action={formAction} method="post" suppressHydrationWarning className="mt-8 space-y-6">
       <Section title="Club details" subtitle="Public-facing name and URL slug.">
         <Field label="Club name" name="name" required autoComplete="off" />
         <Field

@@ -165,9 +165,11 @@ function TenantFeatureEditRow({
   const error = state?.kind === "error" ? state.message : null;
 
   return (
+    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+    // suppress the case-only hydration warning React raises for
+    // server-action forms (POST vs post).
     <form
-      action={formAction}
-      method="post"
+      action={formAction} method="post" suppressHydrationWarning
       className="space-y-3"
     >
       <input type="hidden" name="tenantId" value={tenantId} />

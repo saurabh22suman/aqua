@@ -198,11 +198,15 @@ describe("InlineEditField", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /edit dateOfBirth/i }));
+    // 2026-09-13 UI/UX audit §7.3: the DOB editor is now the masked
+    // dd/mm/yyyy field, so the displayed form of 2015-01-01 is
+    // 01/01/2015 and the user types day-first. The action still
+    // receives ISO.
     const input = screen.getByDisplayValue(
-      "2015-01-01",
+      "01/01/2015",
     ) as HTMLInputElement;
-    // No blur — change alone is the commit trigger for date.
-    fireEvent.change(input, { target: { value: "2014-12-31" } });
+    // No blur — a complete masked date is the commit trigger.
+    fireEvent.change(input, { target: { value: "31/12/2014" } });
     await waitFor(() => expect(updateMemberAction).toHaveBeenCalledTimes(1));
     expect(updateMemberAction).toHaveBeenCalledWith(
       expect.objectContaining({ dateOfBirth: "2014-12-31" }),

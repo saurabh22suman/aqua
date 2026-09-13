@@ -58,7 +58,10 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
   const err = status?.kind === "error" ? status.message : null;
 
   return (
-    <form action={formAction} method="post" className="space-y-3">
+    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+    // suppress the case-only hydration warning React raises for
+    // server-action forms (POST vs post).
+    <form action={formAction} method="post" suppressHydrationWarning className="space-y-3">
       <input type="hidden" name="tenantId" value={tenantId} />
       <p className="text-[13px] text-ink-2">
         Create the owner&apos;s membership for a phone number. Nothing is sent anywhere —

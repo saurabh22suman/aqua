@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listFeatures } from "@/db/platform-features";
+import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { FeatureCatalogue } from "./feature-catalogue";
 
 // Phase 1.7 — feature catalogue screen. The platform sidebar has
@@ -13,7 +14,10 @@ export default async function FeaturesPage() {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
 
-  const features = await listFeatures();
+  // X-D4 (2026-09-13 audit, see lib/feature-artifacts.ts) — filter the
+  // test-fixture rows before they cross the RSC boundary, so neither
+  // the UI nor the serialized payload carries them.
+  const features = withoutTestArtifactFeatureKeys(await listFeatures());
   return (
     <div className="max-w-4xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">

@@ -1,6 +1,6 @@
 import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
-import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { resolveTerm } from "@/lib/terminology/keys";
 import { MemberCreateForm } from "@/components/member-create-form";
 import { requireReception } from "@/lib/auth/surface-guard";
 
@@ -15,8 +15,11 @@ export default async function ReceptionNewMemberPage() {
 
   return (
     <main className="px-5 pt-10 pb-8">
+      {/* Sentence case (DESIGN.md §4): the term is already the
+          tenant-resolved noun, so titleCase() on top produced
+          "Add Swimmer" (audit R-D5). */}
       <h1 className="font-display text-[19px] font-semibold">
-        Add {titleCase(resolveTerm(terminology, "member", 1))}
+        Add {resolveTerm(terminology, "member", 1)}
       </h1>
       <div className="mt-4">
         <MemberCreateForm
