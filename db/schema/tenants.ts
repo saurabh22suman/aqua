@@ -9,11 +9,12 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { auditColumns } from "./_shared";
 import { presets } from "./platform";
-import type { TenantId } from "@/lib/ids";
+import type { TenantId, UserId } from "@/lib/ids";
 
 export const tenants = pgTable(
   "tenants",
@@ -77,3 +78,48 @@ export const tenants = pgTable(
     ),
   ],
 );
+
+// O-03 (docs/ops-platform-design.md §8) — the preset bound to a
+// location (copy-on-apply). One row per location; a re-apply replaces
+// it. It lives beside the tenant's own preset columns because the two
+// together are the preset-binding state: the tenant row owns the
+// tenant-wide content (terminology, roles, skills, plan shapes,
+// templates, dashboard cards) under O-03's interim first-wins rule,
+// and this row owns the location-scoped binding and is the
+// per-location idempotence key.
+//
+// The composite FK to locations and the pair FK to presets live in
+// migration 20260914020000_location_preset_binding.sql. The locations
+// FK is intentionally not declared here: locations.ts already imports
+// tenants.ts, and an eager back-import would make table-definition
+// order depend on which module loads first (a cycle that only crashes
+// on some import paths).
+export const locationPresets = pgTable(
+  "location_presets",
+  {
+    locationId: uuid("location_id").primaryKey(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id)
+      .$type<TenantId>(),
+    presetKey: text("preset_key").notNull(),
+    presetVersion: integer("preset_version").notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    appliedBy: uuid("applied_by").$type<UserId>(),
+  },
+  (t) => [
+    unique("location_presets_location_tenant_key").on(
+      t.locationId,
+      t.tenantId,
+    ),
+    foreignKey({
+      name: "location_presets_preset_fkey",
+      columns: [t.presetKey, t.presetVersion],
+      foreignColumns: [presets.key, presets.version],
+    }),
+  ],
+);
+
+export type LocationPreset = typeof locationPresets.$inferSelect;

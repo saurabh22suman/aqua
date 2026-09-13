@@ -11,9 +11,9 @@ import {
 } from "./schema/preset-engine";
 import { programs } from "./schema/programs";
 import { roles, rolePermissions } from "./schema/roles";
-import { locations } from "./schema/locations";
+import { locations, type LocationKind } from "./schema/locations";
 import { permissions } from "./schema/platform";
-import { tenants } from "./schema/tenants";
+import { tenants, locationPresets } from "./schema/tenants";
 import { tenantFeatures } from "./schema/tenant-features";
 import { sql as drizzleSql, sql } from "drizzle-orm";
 import { getActivePreset } from "./platform-presets";
@@ -45,6 +45,8 @@ export type ApplyPresetResult =
     }
   | { kind: "preset_not_found"; message: string }
   | { kind: "tenant_not_found"; message: string }
+  | { kind: "location_not_found"; message: string }
+  | { kind: "location_not_eligible"; message: string }
   | {
       kind: "lock_active";
       reason: "non_sample_member_exists" | "different_preset_already_applied";
@@ -52,10 +54,29 @@ export type ApplyPresetResult =
       message: string;
     };
 
+// O-03 — which location kinds a preset is offered for. §8 fixes the
+// kind set; which presets a kind accepts is a code decision, kept
+// beside the engine so the service and the form cannot disagree.
+// Unknown preset keys default to club/mixed, so a newly registered
+// definition is never silently unavailable; a café simply has no
+// preset yet.
+const PRESET_LOCATION_KINDS: Record<string, readonly LocationKind[]> = {
+  "start-from-scratch": ["club", "cafe", "mixed"],
+};
+const DEFAULT_PRESET_KINDS: readonly LocationKind[] = ["club", "mixed"];
+
+export function presetOfferedForKind(
+  presetKey: string,
+  kind: string,
+): boolean {
+  const allowed = PRESET_LOCATION_KINDS[presetKey] ?? DEFAULT_PRESET_KINDS;
+  return allowed.includes(kind as LocationKind);
+}
+
 export async function applyPreset(
   tenantId: TenantId,
   presetKey: string,
-  ctx: { actorId: UserId },
+  ctx: { actorId: UserId; locationId?: string },
 ): Promise<ApplyPresetResult> {
   // Two-step: the platform-side read for the preset definition is
   // outside the tenant transaction (it lives in the platform
@@ -93,73 +114,34 @@ export async function applyPreset(
       } satisfies ApplyPresetResult;
     }
 
-    // 2. Already-applied check. Same key+version → no-op idempotent
-    // re-run. Different key → refuse (manual reset required).
-    if (tenant.presetKey !== null) {
-      if (tenant.presetKey === presetKey) {
-        // Idempotent re-run of the same preset. Architecture rule 1
-        // ("Re-running is either a no-op or a full discard-and-reseed")
-        // — we pick the no-op branch. The earlier `applied_at` is
-        // preserved; the contract is "the tenant has the preset
-        // applied", not "this call was the first call".
-        return {
-          kind: "ok",
-          presetKey,
-          presetVersion: tenant.presetVersion ?? preset.version,
-          appliedAt: new Date(),
-          idempotent: true,
-        };
-      }
-      return {
-        kind: "lock_active",
-        reason: "different_preset_already_applied",
-        appliedKey: tenant.presetKey,
-        message: `Tenant already has preset "${tenant.presetKey}" applied; switching requires manual clean-up.`,
-      };
-    }
-
-    // 3. Member check. Architecture rule 5: any existing member
-    // blocks the apply. Members don't carry is_sample — every
-    // member is a real one by definition. This is the lock.
-    const memberRows = await tx
-      .select({ id: sql`gen_random_uuid()` })
-      .from(sql`members`)
-      .where(sql`members.tenant_id = ${tenantId}::uuid`)
-      .limit(1);
-    if (memberRows.length > 0) {
-      return {
-        kind: "lock_active",
-        reason: "non_sample_member_exists",
-        appliedKey: null,
-        message: `Tenant has at least one member — applyPreset is locked. Edit the seeded data by hand.`,
-      };
-    }
-
-    // 4.0 Resolve the tenant's primary location. O-01 binds
-    // facilities (and preset example batches) to a location; until
-    // O-03 moves preset scope down a level, a preset applies against
-    // the primary location. The O-01 migration guarantees non-churned
-    // tenants have one, so a missing row here is a real invariant
-    // break, not a case to paper over.
+    // 2. Resolve the target location. Default is the tenant's
+    // primary site, which keeps every pre-O-03 caller on the
+    // identical path. O-01 guarantees a non-churned tenant has one;
+    // a tenant created outside createTenant (fixtures) gets one
+    // self-healed in the same transaction rather than failing the
+    // apply.
     const locationRows = await tx
-      .select({ id: locations.id })
+      .select({ id: locations.id, kind: locations.kind })
       .from(locations)
-      .where(
-        and(eq(locations.tenantId, tenantId), isNull(locations.deletedAt)),
-      )
+      .where(and(eq(locations.tenantId, tenantId), isNull(locations.deletedAt)))
       .orderBy(
         desc(locations.isPrimary),
         asc(locations.createdAt),
         asc(locations.id),
-      )
-      .limit(1);
-    let primaryLocationId: string | undefined = locationRows[0]?.id;
-    if (!primaryLocationId) {
-      // Only a tenant created outside createTenant (hand-made rows,
-      // test fixtures) can reach here — the O-01 migration and
-      // provisioning both guarantee a site. Self-heal the invariant
-      // in the same transaction rather than failing the apply: a
-      // preset is meaningless without a location to bind to.
+      );
+
+    let targetLocation = ctx.locationId
+      ? locationRows.find((l) => l.id === ctx.locationId)
+      : locationRows[0];
+
+    if (!targetLocation && ctx.locationId) {
+      return {
+        kind: "location_not_found",
+        message: `No live location with id "${ctx.locationId}" on this tenant.`,
+      };
+    }
+
+    if (!targetLocation) {
       const created = await tx
         .insert(locations)
         .values({
@@ -171,20 +153,109 @@ export async function applyPreset(
           createdBy: ctx.actorId,
           updatedBy: ctx.actorId,
         })
-        .returning({ id: locations.id });
-      primaryLocationId = created[0]?.id;
-      if (!primaryLocationId) {
+        .returning({ id: locations.id, kind: locations.kind });
+      targetLocation = created[0];
+      if (!targetLocation) {
         throw new Error(
           `applyPreset: could not create a primary location for tenant "${tenantId}".`,
         );
       }
     }
+    const targetLocationId = targetLocation.id;
+
+    // 2b. location.kind constrains which presets are offered.
+    if (!presetOfferedForKind(presetKey, targetLocation.kind)) {
+      return {
+        kind: "location_not_eligible",
+        message: `Preset "${presetKey}" is not offered for a ${targetLocation.kind} location.`,
+      };
+    }
+
+    // 3. Locks, evaluated per location. Same key at this location →
+    // idempotent no-op. A different preset already bound to this
+    // location → refuse; switching is the manual path.
+    const bindingRows = await tx
+      .select({
+        presetKey: locationPresets.presetKey,
+        presetVersion: locationPresets.presetVersion,
+      })
+      .from(locationPresets)
+      .where(eq(locationPresets.locationId, targetLocationId))
+      .limit(1);
+    const binding = bindingRows[0];
+    if (binding) {
+      if (binding.presetKey === presetKey) {
+        return {
+          kind: "ok",
+          presetKey,
+          presetVersion: binding.presetVersion,
+          appliedAt: new Date(),
+          idempotent: true,
+        };
+      }
+      return {
+        kind: "lock_active",
+        reason: "different_preset_already_applied",
+        appliedKey: binding.presetKey,
+        message: `Location already has preset "${binding.presetKey}" applied; switching requires manual clean-up.`,
+      };
+    }
+
+    // The first preset applied to a tenant owns the tenant-wide
+    // content — the interim merge rule flagged in O-03. A later
+    // preset on another location writes location-scoped rows only.
+    // Re-applying the owning preset is the only path that rewrites
+    // tenant-wide content. See docs/ops-platform-design.md §3.
+    const owningApply = tenant.presetKey === null;
+
+    // 4. Member lock. Owning apply: any member blocks, exactly as
+    // before (architecture rule 5 — the free-reset guard). A
+    // subsequent location apply checks members attached to that
+    // location only, because the tenant is already live.
+    if (owningApply) {
+      const memberRows = await tx
+        .select({ id: sql`gen_random_uuid()` })
+        .from(sql`members`)
+        .where(sql`members.tenant_id = ${tenantId}::uuid`)
+        .limit(1);
+      if (memberRows.length > 0) {
+        return {
+          kind: "lock_active",
+          reason: "non_sample_member_exists",
+          appliedKey: null,
+          message: `Tenant has at least one member — applyPreset is locked. Edit the seeded data by hand.`,
+        };
+      }
+    } else {
+      const locatedMembers = await tx.execute(sql`
+        select 1
+          from members
+         where tenant_id = ${tenantId}::uuid
+           and location_id = ${targetLocationId}::uuid
+        union all
+        select 1
+          from enrolments e
+          join batches b on b.id = e.batch_id and b.tenant_id = e.tenant_id
+         where e.tenant_id = ${tenantId}::uuid
+           and b.location_id = ${targetLocationId}::uuid
+        limit 1
+      `);
+      if (locatedMembers.rows.length > 0) {
+        return {
+          kind: "lock_active",
+          reason: "non_sample_member_exists",
+          appliedKey: null,
+          message: `This location already has members — applyPreset is locked there. Edit the seeded data by hand.`,
+        };
+      }
+    }
 
     // 4. Apply the definition. Each step is itself idempotent at
     // the SQL layer (ON CONFLICT DO NOTHING) so a re-run after a
-    // partial application cannot duplicate rows. The trigger
-    // is the presence of `tenants.preset_key` (handled above);
-    // everything below the trigger runs once per tenant.
+    // partial application cannot duplicate rows. Tenant-wide
+    // sections run only for the owning apply; location-scoped
+    // sections (4g facilities, 4h batches) run on every apply.
+    if (owningApply) {
 
     // 4a. tenant_features: enable each feature key. Existing rows
     // are preserved — the operator's per-tenant overrides (1.8)
@@ -300,30 +371,6 @@ export async function applyPreset(
       }
     }
 
-    // 4d. Programs. Each program is keyed by (tenant, name);
-    // re-running inserts nothing new.
-    for (const p of definition.programs) {
-      await tx
-        .insert(programs)
-        .values({
-          id: uuidv7(),
-          tenantId,
-          name: p.name,
-          description: null,
-          isSample: true,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        })
-        .onConflictDoUpdate({
-          target: [programs.id, programs.tenantId],
-          set: {
-            isSample: true,
-            updatedAt: new Date(),
-            updatedBy: ctx.actorId,
-          },
-        });
-    }
-
     // 4e. Skill ladder. Skill levels and their skills are keyed by
     // (tenant, name) — re-running inserts nothing new. The rubric
     // is overwritten with the preset's version (presets are
@@ -429,14 +476,41 @@ export async function applyPreset(
         });
     }
 
-    // 4g. Facilities + sub-units.
+    } // end owningApply — tenant-wide sections
+
+    // 4d. Programs — written on every apply, but additively: a
+    // program that already exists by name is left alone, so a second
+    // preset on another location adds its own programs without
+    // touching the first preset's rows. 4h's example batches resolve
+    // programs by name, so this runs before 4h.
+    for (const p of definition.programs) {
+      const existingProgram = await tx
+        .select({ id: programs.id })
+        .from(programs)
+        .where(and(eq(programs.tenantId, tenantId), eq(programs.name, p.name)))
+        .limit(1);
+      if (existingProgram.length > 0) continue;
+      await tx.insert(programs).values({
+        id: uuidv7(),
+        tenantId,
+        name: p.name,
+        description: null,
+        isSample: true,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
+    }
+
+    // 4g. Facilities + sub-units — always written against the target
+    // location, on every apply. This is the location-bound content
+    // that makes multi-preset tenants possible.
     for (const fac of definition.facilities) {
       const facRow = await tx
         .insert(facilities)
         .values({
           id: uuidv7(),
           tenantId,
-          locationId: primaryLocationId,
+          locationId: targetLocationId,
           name: fac.name,
           kind: fac.kind,
           capacity: fac.capacity,
@@ -447,7 +521,7 @@ export async function applyPreset(
         .onConflictDoUpdate({
           target: [facilities.id, facilities.tenantId],
           set: {
-            locationId: primaryLocationId,
+            locationId: targetLocationId,
             name: fac.name,
             kind: fac.kind,
             capacity: fac.capacity,
@@ -557,7 +631,7 @@ export async function applyPreset(
              days_of_week, start_time, end_time, is_sample,
              created_by, updated_by, created_at, updated_at)
           values
-            (${uuidv7()}, ${tenantId}, ${programId}, ${primaryLocationId}, ${b.name}, ${b.capacity},
+            (${uuidv7()}, ${tenantId}, ${programId}, ${targetLocationId}, ${b.name}, ${b.capacity},
              ${dowArr}::int[], ${b.startTime}, ${endTime}, true,
              ${ctx.actorId}, ${ctx.actorId}, now(), now())
           on conflict (id, tenant_id) do nothing
@@ -576,6 +650,8 @@ export async function applyPreset(
       // exampleBatches produced zero rows costs nothing extra.
       await generateSessions(tx, tenantId, tenant.timezone);
     }
+
+    if (owningApply) {
 
     // 4i. Message templates — keyed by (tenant, key); re-runs
     // overwrite with the preset's content. Templates are preset
@@ -614,20 +690,48 @@ export async function applyPreset(
       })
       .where(eq(tenants.id, tenantId));
 
-    // 5. Stamp the tenant with the applied preset. The check
-    // above is the lock; setting preset_key is the unlock record
-    // for the no-op branch on the next apply.
-    const appliedAt = new Date();
+    // 5. Stamp the owning tenant with the applied preset. The lock
+    // check above is the guard; setting preset_key is the unlock
+    // record for the no-op branch on the next apply. Only the owning
+    // apply writes it — a second preset on another location must not
+    // claim tenant-wide ownership.
     await tx
       .update(tenants)
       .set({
         presetKey: presetKey,
         presetVersion: preset.version,
-        presetAppliedAt: appliedAt,
-        updatedAt: appliedAt,
+        presetAppliedAt: new Date(),
+        updatedAt: new Date(),
         updatedBy: ctx.actorId,
       })
       .where(eq(tenants.id, tenantId));
+
+    } // end owningApply — tenant-wide sections + tenant stamp
+
+    // 5b. Stamp the target location's binding. This is the
+    // copy-on-apply record and the per-location idempotence key:
+    // editing a preset definition later never changes an applied
+    // location.
+    const appliedAt = new Date();
+    await tx
+      .insert(locationPresets)
+      .values({
+        locationId: targetLocationId,
+        tenantId,
+        presetKey,
+        presetVersion: preset.version,
+        appliedAt,
+        appliedBy: ctx.actorId,
+      })
+      .onConflictDoUpdate({
+        target: [locationPresets.locationId],
+        set: {
+          presetKey,
+          presetVersion: preset.version,
+          appliedAt,
+          appliedBy: ctx.actorId,
+        },
+      });
 
     return {
       kind: "ok",

@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getActivePreset } from "@/db/platform-presets";
-import { previewPreset } from "@/db/preset-engine";
-import { listTenants } from "@/db/platform-tenants";
-import { PresetDetailForm } from "./preset-detail-form";
+import { presetOfferedForKind, previewPreset } from "@/db/preset-engine";
+import { listLocationsForOps, listTenants } from "@/db/platform-tenants";
+import { PresetDetailForm, type LocationOption } from "./preset-detail-form";
 
 // Phase 2.2b — per-preset detail page at /ops/presets/[key].
 // The catalogue page links here for the dominant "Open preview"
@@ -70,6 +70,25 @@ export default async function PresetDetailPage({
   const tenantsResult = await listTenants({ limit: 200, offset: 0 });
   const tenants = tenantsResult.rows;
 
+  // O-03 — the picker chooses a location, not just a tenant. One
+  // query for every live location; `eligible` is computed here so
+  // the client island never imports the engine's server module.
+  const allLocations = await listLocationsForOps();
+  const locationsByTenant: Record<string, LocationOption[]> = {};
+  for (const l of allLocations) {
+    const options = locationsByTenant[l.tenantId] ?? [];
+    options.push({
+      id: l.id,
+      name: l.name,
+      kind: l.kind,
+      isPrimary: l.isPrimary,
+      presetKey: l.presetKey,
+      presetVersion: l.presetVersion,
+      eligible: presetOfferedForKind(result.key, l.kind),
+    });
+    locationsByTenant[l.tenantId] = options;
+  }
+
   return (
     <div className="max-w-3xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
@@ -110,6 +129,7 @@ export default async function PresetDetailPage({
         presetKey={result.key}
         presetName={result.name}
         tenants={tenants}
+        locationsByTenant={locationsByTenant}
       />
     </div>
   );
