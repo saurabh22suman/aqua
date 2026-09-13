@@ -1,4 +1,5 @@
 export * from "./tenants";
+export * from "./config";
 export * from "./users";
 export * from "./locations";
 export * from "./memberships";

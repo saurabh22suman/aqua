@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
-import { withTenant } from "./tenant";
+import { withTenant, type TenantTx } from "./tenant";
 import {
   facilities,
   facilitySubUnits,
@@ -71,6 +71,42 @@ export function presetOfferedForKind(
 ): boolean {
   const allowed = PRESET_LOCATION_KINDS[presetKey] ?? DEFAULT_PRESET_KINDS;
   return allowed.includes(kind as LocationKind);
+}
+
+// O-04 — the config resolver's preset-scope lookup. It lives here
+// because preset-key reads are whitelisted to the engine and the
+// operator surface (architecture §7.4 rule 6); db/config.ts must not
+// name those fields itself. Returns '<key>@<version>' or null.
+export async function resolvePresetScope(
+  tx: TenantTx,
+  tenantId: TenantId,
+  locationId?: string,
+): Promise<string | null> {
+  if (locationId) {
+    const bindingRows = await tx
+      .select({
+        presetKey: locationPresets.presetKey,
+        presetVersion: locationPresets.presetVersion,
+      })
+      .from(locationPresets)
+      .where(eq(locationPresets.locationId, locationId))
+      .limit(1);
+    if (bindingRows[0]) {
+      return `${bindingRows[0].presetKey}@${bindingRows[0].presetVersion}`;
+    }
+  }
+
+  const tenantRows = await tx
+    .select({
+      presetKey: tenants.presetKey,
+      presetVersion: tenants.presetVersion,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  const tenant = tenantRows[0];
+  if (!tenant || tenant.presetKey === null) return null;
+  return `${tenant.presetKey}@${tenant.presetVersion ?? 1}`;
 }
 
 export async function applyPreset(

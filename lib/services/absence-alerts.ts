@@ -4,10 +4,16 @@ import { absenceAlerts, type AbsenceAlertKind } from "@/db/schema/absence-alerts
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { resolveConfigInTx, setTenantConfigValue } from "@/db/config";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
+
+// O-04 — the threshold is a configuration-registry value
+// (attendance.absence_alert_threshold_pct, default 50). Reads and
+// writes go through the resolver so the value carries provenance and
+// the ops console sees it like every other key.
+const THRESHOLD_KEY = "attendance.absence_alert_threshold_pct" as const;
 
 // R.8 (docs/five-day-work-guide.md, V-20) — absence alerts.
 //
@@ -29,11 +35,12 @@ export type DetectAbsenceAlertsResult = {
 
 export async function getAbsenceAlertThreshold(ctx: ActionCtx): Promise<number> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const [row] = await tx
-      .select({ threshold: tenants.absenceAlertThresholdPct })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId));
-    return row?.threshold ?? 50;
+    const resolved = await resolveConfigInTx<number>(
+      tx,
+      ctx.tenantId,
+      THRESHOLD_KEY,
+    );
+    return resolved.value;
   });
 }
 
@@ -44,26 +51,14 @@ export async function updateAbsenceAlertThreshold(
   if (!Number.isInteger(thresholdPct) || thresholdPct < 0 || thresholdPct > 100) {
     return { ok: false, error: "Threshold must be a whole number from 0 to 100." };
   }
-  return withTenant(ctx.tenantId, async (tx) => {
-    const [row] = await tx
-      .update(tenants)
-      .set({ absenceAlertThresholdPct: thresholdPct, updatedAt: new Date() })
-      .where(eq(tenants.id, ctx.tenantId))
-      .returning({ id: tenants.id });
-    if (!row) return { ok: false, error: "Tenant not found." };
-
-    if (ctx.userId) {
-      await tx.insert(auditLog).values({
-        tenantId: ctx.tenantId,
-        actorId: ctx.userId,
-        action: "absence_alert.settings_update",
-        entityType: "tenant",
-        entityId: ctx.tenantId,
-        after: { absenceAlertThresholdPct: thresholdPct },
-      });
-    }
-    return { ok: true };
+  const result = await setTenantConfigValue({
+    tenantId: ctx.tenantId,
+    key: THRESHOLD_KEY,
+    value: thresholdPct,
+    actorId: ctx.userId,
   });
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true };
 }
 
 // ISO-8601 week key ("2026-W37") for the tenant's local date.
@@ -82,13 +77,15 @@ export async function detectAbsenceAlerts(
 ): Promise<DetectAbsenceAlertsResult> {
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
-      .select({
-        timezone: tenants.timezone,
-        threshold: tenants.absenceAlertThresholdPct,
-      })
+      .select({ timezone: tenants.timezone })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId));
     if (!tenant) return { inserted: 0, candidates: 0 };
+    const { value: threshold } = await resolveConfigInTx<number>(
+      tx,
+      ctx.tenantId,
+      THRESHOLD_KEY,
+    );
 
     const today = todayInZone(tenant.timezone);
     const monthStart = `${today.slice(0, 7)}-01`;
@@ -164,7 +161,7 @@ export async function detectAbsenceAlerts(
       ).length;
       if (total >= MIN_MONTHLY_MARKS) {
         const pct = Math.round((present / total) * 100);
-        if (pct < tenant.threshold) {
+        if (pct < threshold) {
           toInsert.push({
             memberId: group.memberId,
             batchId: group.batchId,

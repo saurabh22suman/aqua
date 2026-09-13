@@ -9,6 +9,10 @@ export const PLATFORM_TABLES = [
   "plan_features",
   "presets",
   "permissions",
+  // O-04 — the configuration key catalogue. Platform-owned, seeded from
+  // code (db/config-definitions.ts); the per-tenant VALUES live in
+  // config_values, which is tenant-isolated and NOT exempt.
+  "config_keys",
   // OUR standard consent notice text, shown to every guardian/adult
   // member across every tenant -- not a per-tenant document (C-05a's
   // operator DPA is the separate, tenant-specific one). Same shape as
