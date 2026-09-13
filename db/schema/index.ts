@@ -7,6 +7,7 @@ export * from "./people";
 export * from "./facility-optins";
 export * from "./absence-alerts";
 export * from "./staff";
+export * from "./staff-locations";
 export * from "./consent";
 export * from "./programs";
 export * from "./scheduling";

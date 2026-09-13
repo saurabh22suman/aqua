@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant } from "./tenant";
 import {
@@ -11,6 +11,7 @@ import {
 } from "./schema/preset-engine";
 import { programs } from "./schema/programs";
 import { roles, rolePermissions } from "./schema/roles";
+import { locations } from "./schema/locations";
 import { permissions } from "./schema/platform";
 import { tenants } from "./schema/tenants";
 import { tenantFeatures } from "./schema/tenant-features";
@@ -132,6 +133,51 @@ export async function applyPreset(
         appliedKey: null,
         message: `Tenant has at least one member — applyPreset is locked. Edit the seeded data by hand.`,
       };
+    }
+
+    // 4.0 Resolve the tenant's primary location. O-01 binds
+    // facilities (and preset example batches) to a location; until
+    // O-03 moves preset scope down a level, a preset applies against
+    // the primary location. The O-01 migration guarantees non-churned
+    // tenants have one, so a missing row here is a real invariant
+    // break, not a case to paper over.
+    const locationRows = await tx
+      .select({ id: locations.id })
+      .from(locations)
+      .where(
+        and(eq(locations.tenantId, tenantId), isNull(locations.deletedAt)),
+      )
+      .orderBy(
+        desc(locations.isPrimary),
+        asc(locations.createdAt),
+        asc(locations.id),
+      )
+      .limit(1);
+    let primaryLocationId: string | undefined = locationRows[0]?.id;
+    if (!primaryLocationId) {
+      // Only a tenant created outside createTenant (hand-made rows,
+      // test fixtures) can reach here — the O-01 migration and
+      // provisioning both guarantee a site. Self-heal the invariant
+      // in the same transaction rather than failing the apply: a
+      // preset is meaningless without a location to bind to.
+      const created = await tx
+        .insert(locations)
+        .values({
+          id: uuidv7(),
+          tenantId,
+          name: "Main Location",
+          kind: "club",
+          isPrimary: true,
+          createdBy: ctx.actorId,
+          updatedBy: ctx.actorId,
+        })
+        .returning({ id: locations.id });
+      primaryLocationId = created[0]?.id;
+      if (!primaryLocationId) {
+        throw new Error(
+          `applyPreset: could not create a primary location for tenant "${tenantId}".`,
+        );
+      }
     }
 
     // 4. Apply the definition. Each step is itself idempotent at
@@ -390,6 +436,7 @@ export async function applyPreset(
         .values({
           id: uuidv7(),
           tenantId,
+          locationId: primaryLocationId,
           name: fac.name,
           kind: fac.kind,
           capacity: fac.capacity,
@@ -400,6 +447,7 @@ export async function applyPreset(
         .onConflictDoUpdate({
           target: [facilities.id, facilities.tenantId],
           set: {
+            locationId: primaryLocationId,
             name: fac.name,
             kind: fac.kind,
             capacity: fac.capacity,
@@ -505,11 +553,11 @@ export async function applyPreset(
         const dowArr = `{${b.daysOfWeek.join(",")}}`;
         await tx.execute(drizzleSql`
           insert into batches
-            (id, tenant_id, program_id, name, capacity,
+            (id, tenant_id, program_id, location_id, name, capacity,
              days_of_week, start_time, end_time, is_sample,
              created_by, updated_by, created_at, updated_at)
           values
-            (${uuidv7()}, ${tenantId}, ${programId}, ${b.name}, ${b.capacity},
+            (${uuidv7()}, ${tenantId}, ${programId}, ${primaryLocationId}, ${b.name}, ${b.capacity},
              ${dowArr}::int[], ${b.startTime}, ${endTime}, true,
              ${ctx.actorId}, ${ctx.actorId}, now(), now())
           on conflict (id, tenant_id) do nothing
