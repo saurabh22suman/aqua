@@ -25,6 +25,8 @@ let presetOfferedForKind: EngineModule["presetOfferedForKind"];
 
 const tenantA = asTenantId(uuidv7());
 const tenantB = asTenantId(uuidv7());
+// applyPreset's O-05 audit row FK-references platform_users, so the
+// actor must be a real operator row (production always passes one).
 const actorId = asUserId(uuidv7());
 
 const locA = uuidv7();
@@ -73,6 +75,11 @@ beforeAll(async () => {
   presetOfferedForKind = engine.presetOfferedForKind;
 
   admin = new Pool({ connectionString: adminUri });
+  await admin.query(
+    `insert into platform_users (id, email, name, password_hash, password_salt, role, status)
+     values ($1, $2, 'O-03 Operator', 'h', 's', 'admin', 'active')`,
+    [actorId, `o03-${RUN}@platform.test`],
+  );
   await seedTenant(tenantA, "o03-a");
   await seedTenant(tenantB, "o03-b");
   await admin.query(

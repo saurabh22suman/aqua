@@ -90,6 +90,12 @@ jobs:
       # run. This check closes that class permanently.
       - run: pnpm check:scripts-exist
 
+      # O-05: every mutating platform action must go through the
+      # audited opsAction pipeline. Pure source scan, no DB. The rule
+      # has a known-bad fixture proof in
+      # tests/scanner-fixtures/ops-action-fixtures.test.ts.
+      - run: pnpm check:ops-actions
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 

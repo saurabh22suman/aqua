@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withPlatformAdmin } from "./scope";
 import { tenants } from "./schema/tenants";
-import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // Phase 1.6 — platform-side tenant status transition. Sibling of
@@ -173,12 +173,14 @@ export async function transitionTenantStatus(
       .set({ status: to, updatedBy: ctx.actorId })
       .where(eq(tenants.id, tenantId));
 
-    await tx.insert(platformAuditLog).values({
+    await recordOpsAudit(tx, {
+      action: actionFor(to),
       actorId: ctx.actorId,
       tenantId,
-      action: actionFor(to),
       targetType: "tenant",
       targetId: tenantId,
+      before: { status: from },
+      after: { status: to },
       detail: {
         from,
         to,

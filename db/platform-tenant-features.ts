@@ -3,7 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { withPlatformAdmin } from "./scope";
 import { withTenant } from "./tenant";
 import { tenants } from "./schema/tenants";
-import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import { tenantFeatures } from "./schema/tenant-features";
 import { features } from "./schema/platform";
 import type { TenantId, UserId } from "@/lib/ids";
@@ -151,7 +151,7 @@ export async function upsertTenantFeature(
         .returning({ featureKey: tenantFeatures.featureKey });
 
       if (deleted.length > 0) {
-        await tx.insert(platformAuditLog).values({
+        await recordOpsAudit(tx, {
           actorId: ctx.actorId,
           tenantId,
           action: "tenant_feature.clear",
@@ -189,7 +189,7 @@ export async function upsertTenantFeature(
           },
         });
 
-      await tx.insert(platformAuditLog).values({
+      await recordOpsAudit(tx, {
         actorId: ctx.actorId,
         tenantId,
         action: "tenant_feature.upsert",

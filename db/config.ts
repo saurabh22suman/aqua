@@ -4,7 +4,7 @@ import { withPlatformAdmin } from "./scope";
 import { configKeys, configValues, type ConfigValue } from "./schema/config";
 import { tenants } from "./schema/tenants";
 import { auditLog } from "./schema/audit";
-import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import { resolvePresetScope } from "./preset-engine";
 import {
   CONFIG_KEYS,
@@ -253,12 +253,13 @@ export async function setPlatformConfigValue(params: {
       setAt: now,
       reason: params.reason ?? null,
     });
-    await tx.insert(platformAuditLog).values({
+    await recordOpsAudit(tx, {
+      action: "config.set",
       actorId: params.actorId,
       tenantId: null,
-      action: "config.set",
       targetType: "config_key",
       targetId: null,
+      after: { value: parsed.data },
       detail: {
         key: params.key,
         scopeType: params.scopeType,

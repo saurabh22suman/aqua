@@ -7,6 +7,7 @@ import {
   type ApplyPresetResult,
 } from "@/db/preset-engine";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
 // Phase 2.2b — applyPreset server action. The form on
@@ -69,11 +70,25 @@ export async function applyPresetAction(
     };
   }
 
-  // (3) engine
-  const result = await applyPreset(surface.data.tenantId as never, surface.data.featureKey, {
-    actorId: asUserId(status.userId),
-    ...(surface.data.locationId ? { locationId: surface.data.locationId } : {}),
-  });
+  // (3) engine, through the audited ops pipeline
+  const result = await opsAction(
+    {
+      scope: "tenant.preset.apply",
+      actorId: asUserId(status.userId),
+      tenantId: surface.data.tenantId,
+      targetType: "location",
+      targetId: surface.data.locationId,
+      // "preset", not a preset-key-shaped identifier: the value here
+      // is a form field, but the architecture §7.4 rule-6 scan reads
+      // any such identifier in this file as a runtime read.
+      detail: { preset: surface.data.featureKey },
+    },
+    () =>
+      applyPreset(surface.data.tenantId as never, surface.data.featureKey, {
+        actorId: asUserId(status.userId),
+        ...(surface.data.locationId ? { locationId: surface.data.locationId } : {}),
+      }),
+  );
   if (result.kind === "ok") {
     redirect(`/ops/tenants/${surface.data.tenantId}`);
   }

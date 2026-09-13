@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { inviteOwner, type InviteOwnerResult } from "@/db/tenant-invite";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
 // Phase 2.7 — server action for the "invite the owner" wizard
@@ -69,11 +70,21 @@ export async function inviteOwnerAction(
     };
   }
 
-  // (3) service
-  return inviteOwner(surface.data.tenantId as never, {
-    phone: surface.data.phone,
-    fullName: surface.data.fullName,
-    staffType: surface.data.staffType,
-    actorId: asUserId(status.userId),
-  });
+  // (3) service, through the audited ops pipeline
+  return opsAction(
+    {
+      scope: "tenant.invite_owner",
+      actorId: asUserId(status.userId),
+      tenantId: surface.data.tenantId,
+      targetType: "tenant_membership",
+      detail: { phone: surface.data.phone, staffType: surface.data.staffType },
+    },
+    () =>
+      inviteOwner(surface.data.tenantId as never, {
+        phone: surface.data.phone,
+        fullName: surface.data.fullName,
+        staffType: surface.data.staffType,
+        actorId: asUserId(status.userId),
+      }),
+  );
 }

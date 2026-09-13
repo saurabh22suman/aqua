@@ -12,6 +12,7 @@ import {
 import { programs } from "./schema/programs";
 import { roles, rolePermissions } from "./schema/roles";
 import { locations, type LocationKind } from "./schema/locations";
+import { recordOpsAudit } from "./ops-action";
 import { permissions } from "./schema/platform";
 import { tenants, locationPresets } from "./schema/tenants";
 import { tenantFeatures } from "./schema/tenant-features";
@@ -768,6 +769,24 @@ export async function applyPreset(
           appliedBy: ctx.actorId,
         },
       });
+
+    // O-05 — the ops mutation pipeline's audit row, in the same
+    // transaction as the writes above. Outside an opsAction wrapper
+    // (seeds, direct service calls) the fallback action/actor keep
+    // the row shape an operator action produces.
+    await recordOpsAudit(tx, {
+      action: "tenant.preset.apply",
+      actorId: ctx.actorId,
+      tenantId,
+      targetType: "location",
+      targetId: targetLocationId,
+      after: {
+        presetKey,
+        presetVersion: preset.version,
+        locationId: targetLocationId,
+        owningApply,
+      },
+    });
 
     return {
       kind: "ok",

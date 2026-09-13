@@ -7,6 +7,7 @@ import {
   type RemoveSampleDataResult,
 } from "@/db/preset-sample-data";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { opsAction } from "@/db/ops-action";
 
 // Phase 2.3 — server action for the "Remove sample data" button.
 // H1 — input is now FormData; tenantId arrives as a hidden field
@@ -46,10 +47,20 @@ export async function removeSampleDataAction(
     };
   }
 
-  // (3) service
-  const result = await removeSampleData(surface.data.tenantId as never, {
-    actorId: status.userId as never,
-  });
+  // (3) service, through the audited ops pipeline
+  const result = await opsAction(
+    {
+      scope: "tenant.remove_sample_data",
+      actorId: status.userId as never,
+      tenantId: surface.data.tenantId,
+      targetType: "tenant",
+      targetId: surface.data.tenantId,
+    },
+    () =>
+      removeSampleData(surface.data.tenantId as never, {
+        actorId: status.userId as never,
+      }),
+  );
   if (result.kind === "ok") {
     revalidatePath(`/ops/tenants/${surface.data.tenantId}`);
   }

@@ -30,6 +30,7 @@
     "check:lines": "tsx scripts/check-line-count.ts",
     "check:runbook-sync": "tsx scripts/check-runbook-sync.ts",
     "check:scripts-exist": "tsx scripts/check-scripts-exist.ts",
+    "check:ops-actions": "tsx scripts/check-ops-actions.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "dependencies": {
