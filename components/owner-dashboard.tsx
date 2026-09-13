@@ -72,10 +72,20 @@ export function OwnerDashboard({
       {/* Hero: today's attendance-marking progress across every batch —
           the honest substitute for the mockup's money figure. Null
           (not 0%) when nothing is scheduled today at all; that's a
-          different, truthful state, not a fabricated zero. */}
+          different, truthful state, not a fabricated zero.
+
+          F-2 (2026-09-13 Indian-user UX audit): the "nothing
+          scheduled" branch used to key off todayTotal (sum of
+          enrolments), so a day with a real session but no one enrolled
+          read "Nothing scheduled today" directly above a lane listing
+          that same session. "Is anything scheduled" is todayLanes,
+          full stop; enrolment is a separate fact stated in its own
+          branch. */}
       <div className="rounded-card bg-marine px-5 py-5 text-paper">
         <p className="text-[12.5px] font-medium text-paper/70">Today&apos;s registers</p>
-        {data.todayTotal > 0 ? (
+        {data.todaysLanes.length === 0 ? (
+          <p className="mt-1.5 text-[15px] font-medium text-white">Nothing scheduled today</p>
+        ) : data.todayTotal > 0 ? (
           <>
             <p className="mt-1.5 mb-1 font-display text-[38px] font-semibold tracking-tight leading-none">
               {todayPct}%
@@ -86,7 +96,11 @@ export function OwnerDashboard({
             </p>
           </>
         ) : (
-          <p className="mt-1.5 text-[15px] font-medium text-white">Nothing scheduled today</p>
+          <p className="mt-1.5 text-[15px] font-medium text-white">
+            {data.todaysLanes.length}{" "}
+            {data.todaysLanes.length === 1 ? sessionsOne : sessionsOther} scheduled &middot; no{" "}
+            {membersOther} enrolled yet
+          </p>
         )}
       </div>
 

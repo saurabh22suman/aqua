@@ -1,5 +1,5 @@
-import { FlaskConical } from "lucide-react";
 import { env } from "@/lib/env";
+import { DemoBannerStrip } from "./demo-banner-strip";
 
 // Demo-mode banner. Renders only when DEMO_MODE is on (and renders
 // nothing otherwise). The banner is the only place in the runtime
@@ -17,19 +17,16 @@ import { env } from "@/lib/env";
 // non-semantic but effectively invisible. The point is unmistakable
 // clarity to a real club owner looking at synthetic data, not an
 // alarm — but "unmissable" is part of that, not optional.
+//
+// F-7: the visual variant (tenant vs platform) lives in the client
+// strip; this gate stays a server component so DEMO_MODE is never
+// read in the browser bundle.
+const TENANT_COPY =
+  "Demo data — this is a demo tenant. None of this is real academy data.";
+const PLATFORM_COPY =
+  "Demo mode — this control plane manages demo tenants only. None of this is real customer data.";
+
 export function DemoBanner() {
   if (!env.DEMO_MODE) return null;
-  return (
-    <div
-      className="sticky top-0 z-40 bg-marine text-paper"
-      data-testid="demo-banner"
-    >
-      <div className="max-w-screen-md mx-auto px-5 py-1.5 flex items-center justify-center gap-2 text-[11.5px] font-medium">
-        <FlaskConical size={12} className="text-paper/70 flex-none" aria-hidden />
-        <span>
-          Demo data — this is a demo tenant. None of this is real academy data.
-        </span>
-      </div>
-    </div>
-  );
+  return <DemoBannerStrip tenantCopy={TENANT_COPY} platformCopy={PLATFORM_COPY} />;
 }

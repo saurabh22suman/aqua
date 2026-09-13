@@ -134,6 +134,42 @@ describe("owner dashboard affordances (P1-4, P1-5, P1-7)", () => {
   });
 });
 
+describe("owner dashboard today consistency (F-2)", () => {
+  it("never claims 'Nothing scheduled today' while a lane is listed", () => {
+    // The audit's exact contradiction: a day with a real session but
+    // zero enrolments rendered "Nothing scheduled today" directly
+    // above that session's lane.
+    const sessionNoEnrolments: OwnerDashboardData = {
+      ...DASHBOARD,
+      todayMarked: 0,
+      todayTotal: 0,
+      todaysLanes: [{ ...DASHBOARD.todaysLanes[0]!, enrolled: 0 }],
+    };
+    render(
+      <OwnerDashboard
+        data={sessionNoEnrolments}
+        branding={BRANDING}
+        terminology={TERMINOLOGY}
+      />,
+    );
+    const text = document.body.textContent ?? "";
+    expect(text).not.toContain("Nothing scheduled today");
+    expect(text).toContain("1 session scheduled");
+    expect(text).toContain("no members enrolled yet");
+  });
+
+  it("says 'Nothing scheduled today' only when there are truly no lanes", () => {
+    render(
+      <OwnerDashboard
+        data={{ ...DASHBOARD, todayMarked: 0, todayTotal: 0, todaysLanes: [] }}
+        branding={BRANDING}
+        terminology={TERMINOLOGY}
+      />,
+    );
+    expect(document.body.textContent).toContain("Nothing scheduled today");
+  });
+});
+
 describe("coach roster minor tag (P1-8, P1-9)", () => {
   it("marks minors with an accessible space before the tag", () => {
     const roster = [

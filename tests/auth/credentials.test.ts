@@ -79,6 +79,33 @@ async function seedUser(): Promise<{ userId: UserId; phone: string; baUserId: st
   return { userId, phone, baUserId: baId };
 }
 
+// F-1 (2026-09-13 Indian-user UX audit) — tests that need a real
+// 10-digit Indian mobile shape (not the opaque +91cr… test prefix)
+// seed through this and register the phone for afterEach cleanup.
+const extraCleanup: Array<{ userId: UserId; phone: string }> = [];
+
+async function seedUserWithRealMobile(
+  digits: string,
+): Promise<{ userId: UserId; phone: string; baUserId: string }> {
+  const phone = normaliseToE164(digits);
+  const userId = asUserId(uuidv7());
+  await withPlatform(async () => {
+    await db.insert(users).values({ id: userId, phone });
+  });
+  const baId = uuidv7();
+  await withPlatform(async () => {
+    await db.insert(baUser).values({
+      id: baId,
+      name: phone,
+      email: `${phone}@phone.aqua.local`,
+      phoneNumber: phone,
+      phoneNumberVerified: true,
+    });
+  });
+  extraCleanup.push({ userId, phone });
+  return { userId, phone, baUserId: baId };
+}
+
 afterEach(async () => {
   // Wipe every user that matches the run's PREFIX. Belt-and-braces
   // so a test that threw between seed and cleanup doesn't leak rows.
@@ -88,6 +115,9 @@ afterEach(async () => {
   );
   for (const r of rows.rows) {
     await cleanupRow(r.id, r.phone);
+  }
+  for (const r of extraCleanup.splice(0)) {
+    await cleanupRow(r.userId, r.phone);
   }
 });
 
@@ -154,6 +184,27 @@ describe("lib/services/credentials — pinLogin (success and lockout)", () => {
       [baUserId],
     );
     expect(parseInt(sessions.rows[0]!.n, 10)).toBeGreaterThan(0);
+  });
+
+  it("F-1 — a bare 10-digit mobile signs in exactly like the +91 form", async () => {
+    // The way an Indian user types their own number: ten digits, no
+    // country code. Before F-1 this normalized to itself, missed the
+    // stored +91 row, and returned the same generic 401 as a wrong
+    // PIN — with lockout counting it.
+    const digits = `9${Date.now().toString().slice(-9)}`;
+    const { phone, baUserId } = await seedUserWithRealMobile(digits);
+    await setCredential(baUserId, "123456");
+    expect(phone).toBe(`+91${digits}`);
+
+    const bare = await pinLogin(digits, "123456");
+    expect(bare.status).toBe(200);
+
+    // The spaced +91 form a user might also type still works.
+    const spaced = await pinLogin(
+      `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`,
+      "123456",
+    );
+    expect(spaced.status).toBe(200);
   });
 
   it("pinLogin with the wrong PIN returns a generic 4xx and bumps failed_pin_attempts", async () => {

@@ -207,11 +207,14 @@ export async function hasCredentialByPhone(phone: string): Promise<boolean> {
 export async function pinLogin(rawPhone: string, pin: string): Promise<Response> {
   // Normalize first so the lockout lookup uses the canonical form
   // (matches how the seed and OTP plugin store users.phone).
-  const phone = rawPhone.replace(/[\s\-()]/g, "").replace(/^0/, "+91");
-  // (The full normaliseToE164 handles more shapes; for the login path
-  // the above covers the common user input. If a future input shape
-  // gets here unchanged it won't match a stored user — that's the
-  // desired behaviour.)
+  //
+  // F-1 (2026-09-13 Indian-user UX audit): the old ad-hoc strip +
+  // leading-0 rewrite rejected the way most Indian users type their
+  // own number — a bare 10-digit mobile (e.g. 9000000001) never
+  // matched a stored +91 row and surfaced as "Wrong number or PIN".
+  // normaliseToE164 already handles every shape (bare 10-digit,
+  // 91-prefixed, trunk-0, spaced/hyphenated, +E.164 passthrough).
+  const phone = normaliseToE164(rawPhone);
 
   // 1. Look up the user row + lockout state.
   const userRow = await withPlatform(async () => {

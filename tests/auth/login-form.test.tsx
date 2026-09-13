@@ -71,6 +71,35 @@ describe("LoginForm (phone + PIN)", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/owner"));
   });
 
+  it("F-1 — accepts a bare 10-digit mobile, shows the +91 form, and posts E.164", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ kind: "ok" }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    homeForSessionAction.mockResolvedValue({ kind: "ok", path: "/owner" });
+
+    render(<LoginForm />);
+    const phoneInput = screen.getByPlaceholderText("+91 98765 43210");
+    fireEvent.change(phoneInput, { target: { value: "9876543210" } });
+    // The on-blur canonical form is the visible confirmation that a
+    // bare number is understood — the F-1 contributing cause was that
+    // the user could not tell what would be submitted.
+    fireEvent.blur(phoneInput);
+    expect((phoneInput as HTMLInputElement).value).toBe("+91 98765 43210");
+    fireEvent.change(screen.getByLabelText("PIN"), {
+      target: { value: "123456" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/login/pin");
+    expect(JSON.parse(String(init.body))).toEqual({
+      phone: "+919876543210",
+      pin: "123456",
+    });
+  });
+
   it("shows a generic error on a 401 and does not navigate", async () => {
     vi.stubGlobal(
       "fetch",

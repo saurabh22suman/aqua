@@ -6,8 +6,14 @@ import {
   type ParentViewAbsenceAlert,
 } from "@/lib/services/parent-view";
 import { getBranding } from "@/lib/services/branding";
+import { getTerminology } from "@/lib/services/terminology";
 import { asTenantId } from "@/lib/ids";
 import { currentMonthPeriod } from "@/lib/services/attendance-history";
+import {
+  DEFAULT_TERMS,
+  resolveTerm,
+  titleCase,
+} from "@/lib/terminology/keys";
 
 // C-45 — parent page. ZERO client JavaScript, no analytics, no
 // tracking, no service worker, ever (architecture § 11.3).
@@ -109,10 +115,16 @@ function statusColor(status: string): { color: string; bg: string } {
   return { color: "#D8453C", bg: "#FCE9E7" };
 }
 
-function renderExpired(): string {
+// F-3 (2026-09-13 Indian-user UX audit): this page used to hardcode
+// "Member view" / "Member" while every tenant surface resolved the
+// tenant's vocabulary ("Swimmer" for the swimming preset). The route
+// handler is architecturally separate from the React tree, so it has
+// to thread the resolved term itself — the resolved STRING is passed
+// in, not the resolver; the page still ships zero client JS.
+function renderExpired(memberTerm: string): string {
   const body = `<main style="max-width:480px;margin:0 auto;padding:32px 20px;font-family:system-ui,sans-serif;color:#0F1F1C;">
 <h1 style="font-size:22px;font-weight:600;margin:0 0 12px;">This link is no longer valid.</h1>
-<p style="font-size:14px;line-height:1.5;color:#3C534F;margin:0;">Magic links expire after seven days for safety. Ask the academy to send you a fresh link from the member&rsquo;s record.</p>
+<p style="font-size:14px;line-height:1.5;color:#3C534F;margin:0;">Magic links expire after seven days for safety. Ask the academy to send you a fresh link from the ${esc(memberTerm.toLowerCase())}&rsquo;s record.</p>
 </main>`;
   return wrapDocument("Link expired", body);
 }
@@ -144,6 +156,12 @@ function renderParentView(args: {
   clubInitials: string;
   accentBg: string;
   accentInk: string;
+  // F-3 — the tenant's resolved singular term for "member"
+  // (title-cased, e.g. "Swimmer") and the session forms. Resolved
+  // strings only; the page still ships zero client JS.
+  memberTerm: string;
+  sessionOne: string;
+  sessionOther: string;
 }): string {
   const fullName = esc(args.fullName);
   const memberCode = esc(args.memberCode);
@@ -151,6 +169,9 @@ function renderParentView(args: {
   const clubInitials = esc(args.clubInitials);
   const accentBg = esc(args.accentBg);
   const accentInk = esc(args.accentInk);
+  const memberTerm = esc(args.memberTerm);
+  const sessionOne = esc(args.sessionOne);
+  const sessionOther = esc(args.sessionOther);
 
   const nextSessionHtml = args.nextSession
     ? (() => {
@@ -166,16 +187,16 @@ function renderParentView(args: {
         return `<p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:22px;font-weight:600;margin:0;color:#FFFFFF;">${esc(dateText)}</p>
 <p style="font-size:14px;margin:6px 0 0;color:rgba(255,255,255,.85);">${timeRange} &middot; ${batchName}${coachPart}</p>`;
       })()
-    : `<p style="font-size:14px;margin:0;color:rgba(255,255,255,.85);">No upcoming sessions scheduled.</p>`;
+    : `<p style="font-size:14px;margin:0;color:rgba(255,255,255,.85);">No upcoming ${sessionOther} scheduled.</p>`;
 
   const attendanceHtml =
     args.attendance.totalCount === 0
-      ? `<p style="font-size:14px;color:#3C534F;margin:0;">No sessions have been marked yet this month.</p>`
+      ? `<p style="font-size:14px;color:#3C534F;margin:0;">No ${sessionOther} have been marked yet this month.</p>`
       : (() => {
           const pct = args.attendance.pct ?? 0;
           return `<div style="display:flex;align-items:baseline;gap:12px;">
 <p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:38px;font-weight:600;margin:0;color:#0D3B36;line-height:1;">${pct}%</p>
-<p style="font-size:14px;margin:0;color:#3C534F;">${args.attendance.presentCount} of ${args.attendance.totalCount} sessions marked present</p>
+<p style="font-size:14px;margin:0;color:#3C534F;">${args.attendance.presentCount} of ${args.attendance.totalCount} ${sessionOther} marked present</p>
 </div>`;
         })();
 
@@ -213,19 +234,19 @@ function renderParentView(args: {
 <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Bricolage Grotesque',system-ui,sans-serif" font-weight="600" font-size="${clubInitials.length === 1 ? 50 : 36}" fill="${accentInk}">${clubInitials}</text>
 </svg>
 <div>
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0;">Member view</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0;">${memberTerm} view</p>
 <h1 style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;font-weight:600;margin:4px 0 0;color:#0D3B36;">${displayName}</h1>
 </div>
 </header>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 8px;">Member</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 8px;">${memberTerm}</p>
 <p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:26px;font-weight:600;margin:0;color:#0D3B36;">${fullName}</p>
 <p style="font-size:13px;color:#3C534F;margin:6px 0 0;font-family:monospace;">${memberCode}</p>
 </section>
 
 <section style="background-color:#0D3B36;color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;">
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:rgba(255,255,255,.70);margin:0 0 8px;">Next session</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:rgba(255,255,255,.70);margin:0 0 8px;">Next ${sessionOne}</p>
 ${nextSessionHtml}
 </section>
 
@@ -276,13 +297,19 @@ export async function GET(
   const { token } = await context.params;
   const claims = verifyParentLinkToken(token);
   if (!claims) {
-    return new Response(renderExpired(), { status: 200, headers: pageHeaders() });
+    // No verified tenant, so no tenant vocabulary to resolve — the
+    // generic English default is the honest choice for a page that
+    // cannot know which club it belongs to.
+    return new Response(renderExpired(titleCase(DEFAULT_TERMS.en.member.one)), {
+      status: 200,
+      headers: pageHeaders(),
+    });
   }
 
   const tenantId = asTenantId(claims.tenantId);
   const today = todayInZone("Asia/Kolkata");
   const period = currentMonthPeriod(today);
-  const [branding, data] = await Promise.all([
+  const [branding, data, terminology] = await Promise.all([
     getBranding({ tenantId }),
     getParentViewData({
       tenantId,
@@ -291,7 +318,15 @@ export async function GET(
       monthStart: period.from,
       monthEnd: period.to,
     }),
+    getTerminology({ tenantId }),
   ]);
+
+  // F-3 — resolve the tenant vocabulary once, pass the strings into
+  // the renderer. titleCase gives "Swimmer"; the page's CSS
+  // uppercases the eyebrow and label.
+  const memberTerm = titleCase(resolveTerm(terminology, "member", 1));
+  const sessionOne = resolveTerm(terminology, "session", 1);
+  const sessionOther = resolveTerm(terminology, "session", "other");
 
   if (!data) {
     // Token was valid but the member is gone (deleted between issue
@@ -299,7 +334,10 @@ export async function GET(
     // leak "the signature is fine but the person doesn't exist" vs.
     // "the signature is bad" — a probing caller should learn
     // nothing either way.
-    return new Response(renderExpired(), { status: 200, headers: pageHeaders() });
+    return new Response(renderExpired(memberTerm), {
+      status: 200,
+      headers: pageHeaders(),
+    });
   }
 
   const accent = branding.accent;
@@ -334,6 +372,9 @@ export async function GET(
       clubInitials,
       accentBg,
       accentInk,
+      memberTerm,
+      sessionOne,
+      sessionOther,
     }),
     { status: 200, headers: pageHeaders() },
   );
