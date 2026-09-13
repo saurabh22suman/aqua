@@ -18,7 +18,12 @@ const TONE_CLASS: Record<StatusTone, string> = {
   good: "bg-good-soft text-good",
   warn: "bg-warn-soft text-warn",
   late: "bg-late-soft text-late",
-  neutral: "bg-deck text-ink-2",
+  // F-4 (2026-09-13 Indian-user UX audit): `bg-deck text-ink-2` was
+  // invisible wherever the badge sat directly on the deck-coloured
+  // page background (Enquiries' divided list) — the exact bug the
+  // shared primitive was extracted to fix. Paper + hairline keeps
+  // the pill legible on both white cards and the deck page.
+  neutral: "bg-paper text-ink-2 border border-line",
   water: "bg-water-soft text-water",
 };
 
