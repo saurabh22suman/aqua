@@ -942,8 +942,10 @@ async function markAttendance(
   // member tuple is genuinely unique.
   const clientId = `seed-${sessionDate}-${sessionId.slice(0, 8)}-${memberId}`;
   await adminPool.query(
-    `insert into attendance (id, tenant_id, session_id, member_id, status, client_id, marked_at)
-     values (gen_random_uuid(), $1, $2, $3, $4, $5, now())
+    `insert into attendance (id, tenant_id, session_id, location_id, member_id, status, client_id, marked_at)
+     values (gen_random_uuid(), $1, $2,
+             (select location_id from sessions where id = $2 and tenant_id = $1),
+             $3, $4, $5, now())
      on conflict (tenant_id, session_id, member_id) do nothing`,
     [tenantId, sessionId, memberId, status, clientId],
   );
@@ -980,8 +982,10 @@ async function ensurePastSessions(
       );
       const coachId = coachIdRow.rows[0]?.coach_id ?? null;
       await adminPool.query(
-        `insert into sessions (id, tenant_id, batch_id, session_date, starts_at, ends_at, status, coach_id)
-         values (gen_random_uuid(), $1, $2, $3, $4, $5, 'held', $6)`,
+        `insert into sessions (id, tenant_id, batch_id, location_id, session_date, starts_at, ends_at, status, coach_id)
+         values (gen_random_uuid(), $1, $2,
+                 (select location_id from batches where id = $2 and tenant_id = $1),
+                 $3, $4, $5, 'held', $6)`,
         [
           tenantId,
           batchId,
@@ -1330,8 +1334,10 @@ async function ensureFootballPastAttendance(
       const coachId = coachIdRow.rows[0]?.coach_id ?? null;
       sessionId = uuidv7();
       await adminPool.query(
-        `insert into sessions (id, tenant_id, batch_id, session_date, starts_at, ends_at, status, coach_id)
-         values ($1, $2, $3, $4, $5, $6, 'held', $7)`,
+        `insert into sessions (id, tenant_id, batch_id, location_id, session_date, starts_at, ends_at, status, coach_id)
+         values ($1, $2, $3,
+                 (select location_id from batches where id = $3 and tenant_id = $2),
+                 $4, $5, $6, 'held', $7)`,
         [
           sessionId,
           tenantId,
@@ -1352,8 +1358,10 @@ async function ensureFootballPastAttendance(
       const status = hash01(er.member_id) < 0.75 ? "present" : "absent";
       const clientId = `seed-football-${dateStr}-${sessionId.slice(0, 8)}-${er.member_id}`;
       await adminPool.query(
-        `insert into attendance (id, tenant_id, session_id, member_id, status, client_id, marked_at)
-         values (gen_random_uuid(), $1, $2, $3, $4, $5, now())
+        `insert into attendance (id, tenant_id, session_id, location_id, member_id, status, client_id, marked_at)
+         values (gen_random_uuid(), $1, $2,
+                 (select location_id from sessions where id = $2 and tenant_id = $1),
+                 $3, $4, $5, now())
          on conflict (tenant_id, session_id, member_id) do nothing`,
         [tenantId, sessionId, er.member_id, status, clientId],
       );

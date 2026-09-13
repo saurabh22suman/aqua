@@ -16,6 +16,7 @@ import { tenants } from "./tenants";
 import { members } from "./people";
 import { batches } from "./programs";
 import { staff } from "./staff";
+import { locations } from "./locations";
 import type { TenantId, MemberId, StaffId, UserId } from "@/lib/ids";
 
 export const enrolments = pgTable(
@@ -60,6 +61,10 @@ export const sessions = pgTable(
       .references(() => tenants.id)
       .$type<TenantId>(),
     batchId: uuid("batch_id").notNull(),
+    // O-02 — copied from the batch at generation time. Nullable for
+    // the same reason batches.location_id is: tenant-wide sessions
+    // stay tenant-wide instead of being guessed at a site.
+    locationId: uuid("location_id"),
     sessionDate: date("session_date").notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
@@ -75,6 +80,12 @@ export const sessions = pgTable(
     unique("sessions_tenant_batch_date_key").on(t.tenantId, t.batchId, t.sessionDate),
     unique("sessions_id_tenant_key").on(t.id, t.tenantId),
     index("sessions_tenant_starts_idx").on(t.tenantId, t.startsAt),
+    index("sessions_tenant_location_idx").on(t.tenantId, t.locationId),
+    foreignKey({
+      name: "sessions_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
+    }),
     check(
       "sessions_status_check",
       sql`${t.status} in ('scheduled', 'held', 'cancelled')`,
@@ -102,6 +113,9 @@ export const attendance = pgTable(
       .$type<TenantId>(),
     sessionId: uuid("session_id").notNull(),
     memberId: uuid("member_id").notNull().$type<MemberId>(),
+    // O-02 — copied from the session in the same transaction as the
+    // mark. Nullable only when the session itself is tenant-wide.
+    locationId: uuid("location_id"),
     status: text("status").notNull().default("present"),
     clientId: text("client_id").notNull(),
     markedBy: uuid("marked_by").$type<UserId>(),
@@ -112,6 +126,12 @@ export const attendance = pgTable(
     unique("attendance_tenant_session_member_key").on(t.tenantId, t.sessionId, t.memberId),
     unique("attendance_tenant_client_key").on(t.tenantId, t.clientId),
     index("attendance_tenant_session_idx").on(t.tenantId, t.sessionId),
+    index("attendance_tenant_location_idx").on(t.tenantId, t.locationId),
+    foreignKey({
+      name: "attendance_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
+    }),
     check(
       "attendance_status_check",
       sql`${t.status} in ('present', 'absent', 'late')`,

@@ -80,6 +80,9 @@ export async function generateSessions(
         .values({
           tenantId,
           batchId: batch.id,
+          // O-02 — the event carries the site it happens at. Null
+          // only when the batch itself is tenant-wide.
+          locationId: batch.locationId,
           sessionDate: date,
           startsAt,
           endsAt,
