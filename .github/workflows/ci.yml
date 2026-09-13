@@ -96,6 +96,12 @@ jobs:
       # tests/scanner-fixtures/ops-action-fixtures.test.ts.
       - run: pnpm check:ops-actions
 
+      # O-09: platform_leads (names + phone numbers, no RLS) may only
+      # be imported by its service, its ops action, the ops console UI
+      # and tests. Fixture proof in
+      # tests/scanner-fixtures/platform-leads-import-fixtures.test.ts.
+      - run: pnpm check:platform-leads
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 

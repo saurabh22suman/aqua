@@ -25,6 +25,10 @@ export const PLATFORM_TABLES = [
   "platform_users",
   "platform_sessions",
   "platform_audit_log",
+  // O-09 — sales leads hold real names and phone numbers and sit
+  // outside RLS like users. Direct imports are restricted by
+  // scripts/check-platform-leads-imports.ts.
+  "platform_leads",
 ] as const;
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];

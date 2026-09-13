@@ -14,6 +14,7 @@ export * from "./programs";
 export * from "./scheduling";
 export * from "./platform";
 export * from "./platform-users";
+export * from "./platform-leads";
 export * from "./tenant-features";
 export * from "./preset-engine";
 export * from "./roles";
