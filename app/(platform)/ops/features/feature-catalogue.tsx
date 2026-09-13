@@ -166,8 +166,11 @@ function FeatureEditRow({
   const error = state?.kind === "error" ? state.message : null;
 
   return (
+    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+    // suppress the case-only hydration warning React raises for
+    // server-action forms (POST vs post).
     <form
-      action={formAction}
+      action={formAction} method="post" suppressHydrationWarning
       className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end"
     >
       <input type="hidden" name="key" value={feature.key} />

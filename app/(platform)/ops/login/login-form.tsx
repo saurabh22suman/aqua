@@ -20,7 +20,10 @@ export function PlatformLoginForm() {
   const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form action={formAction} className="space-y-4">
+    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+    // suppress the case-only hydration warning React raises for
+    // server-action forms (POST vs post).
+    <form action={formAction} method="post" suppressHydrationWarning className="space-y-4">
       <Field
         label="Email"
         name="email"
