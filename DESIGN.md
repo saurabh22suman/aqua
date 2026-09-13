@@ -16,12 +16,18 @@ This instruction was missing until an S1/S2-vs-reference audit found
 real composition gaps that reading the HTML file first would likely
 have caught (register rows as full cards instead of a lean divided
 list, a generic progress bar instead of the coloured lane strip, bare
-counts instead of reasons). Two of those findings are still open, not
-yet closed: **the lane strip's owner reuse (per-batch capacity) and
-parent reuse (membership runway) don't exist anywhere in the codebase
-yet** — Owner home and Parent page are still stubs. S4 and S5 must
-build these, reading the reference file's Owner/Parent screens first,
-not invent a fresh treatment for either.
+counts instead of reasons). Two of those findings were open at the
+time; one is now closed. **Update (2026-09-13):** the lane strip's
+owner reuse (per-batch capacity, Owner Home "Today's lanes") and coach
+reuse (register/schedule marking progress) are confirmed **shipped**
+— verified via computed style (6px track, correct `water`/`warn` fill
+logic per session state) during a full UI/UX audit, see
+`docs/audits/2026-09-13-ui-ux-audit.md` §3. **The parent reuse
+(membership runway) is still genuinely open** — `/p/[token]` has no
+membership/plan card or progress track, reasonably blocked on Wave-3
+billing data not existing yet. Whoever builds the parent membership
+card should read the reference file's Parent screen first, not invent
+a fresh treatment.
 
 ---
 

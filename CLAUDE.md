@@ -7,6 +7,10 @@ Postgres · Drizzle · Better Auth · pg-boss · Razorpay · WhatsApp.
 - Task list: `docs/implementation-plan.md`. Work one task at a time, in order.
 - Technical decisions: `docs/architecture.md`. Read the sections the task names.
 - Visual rules: `DESIGN.md`. Non-negotiable.
+- Product scope, positioning, and phase-by-phase functional scope:
+  `docs/project-scope.md`. Cited as a companion by all three docs above —
+  read it for anything about competitive positioning, pricing model, or
+  which phase a feature belongs to.
 - Library APIs: **look them up with Context7 first.** See §4 of `docs/agent-setup.md`.
 
 ## Git workflow
