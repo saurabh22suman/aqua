@@ -7,8 +7,20 @@
 // sweeps them out — every reset of the local docker dev DB between
 // audit-and-clean cycles doesn't apply here, the orphans persist.
 //
+// F-6 (2026-09-13 Indian-user UX audit): the same class reappeared
+// one level up — tenants provisioned ad hoc against the shared dev
+// DB by throwaway verification flows show up in the operator-facing
+// Tenants list with nothing distinguishing them from real customers.
+// The committed tests already use disposable containers; the leak is
+// manual/agent provisioning, so the sweep now covers the slug
+// prefixes those flows leave behind, not just phase39-.
+//
 // What it deletes:
-//   - tenants where slug ~ '^phase39-' and status = 'trial'
+//   - tenants whose slug matches one of ORPHAN_SLUG_PATTERNS
+//
+// Add a pattern here when a new throwaway-provisioning prefix is
+// observed in the dev DB — do NOT make this match broadly enough to
+// catch a real customer slug.
 //
 // Hard guard against accidental production cleanup:
 //
@@ -31,6 +43,11 @@
 import { Client } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env, requireMigrationUrl } from "@/lib/env";
+
+// Known throwaway-provisioning slug prefixes. Anchored and
+// hyphen-terminated so `phase39-` never matches a customer called
+// "phase390-brothers".
+const ORPHAN_SLUG_PATTERNS = ["^phase39-", "^wave2-joined-"];
 
 const ACTION = (() => {
   const args = process.argv.slice(2);
@@ -80,13 +97,14 @@ async function main(): Promise<void> {
   await client.connect();
 
   try {
-    const slugRe = "^phase39-";
     const r = await client.query<{ id: string; slug: string }>(
-      `select id, slug from tenants where slug ~ $1 order by slug`,
-      [slugRe],
+      `select id, slug from tenants where slug ~ any($1::text[]) order by slug`,
+      [ORPHAN_SLUG_PATTERNS],
     );
     const targets = r.rows;
-    console.log(`l5-clean-dev-orphans: ${targets.length} phase39-* tenants.`);
+    console.log(
+      `l5-clean-dev-orphans: ${targets.length} orphan tenants matching ${ORPHAN_SLUG_PATTERNS.join(", ")}.`,
+    );
 
     if (ACTION === "list") {
       for (const t of targets) console.log(`  - ${t.slug}`);
@@ -119,16 +137,16 @@ async function main(): Promise<void> {
     // rows pointing at the target tenants.
     const pal = await client.query(
       `delete from platform_audit_log
-       where tenant_id in (select id from tenants where slug ~ $1)`,
-      [slugRe],
+       where tenant_id in (select id from tenants where slug ~ any($1::text[]))`,
+      [ORPHAN_SLUG_PATTERNS],
     );
     console.log(`  platform_audit_log: ${pal.rowCount ?? 0} rows`);
 
     for (const table of NO_ACTION_CHILD_TABLES) {
       try {
         const res = await client.query(
-          `delete from ${table} where tenant_id in (select id from tenants where slug ~ $1)`,
-          [slugRe],
+          `delete from ${table} where tenant_id in (select id from tenants where slug ~ any($1::text[]))`,
+          [ORPHAN_SLUG_PATTERNS],
         );
         if ((res.rowCount ?? 0) > 0) {
           console.log(`  ${table}: ${res.rowCount} rows`);
@@ -140,8 +158,8 @@ async function main(): Promise<void> {
     }
 
     const tenantsRes = await client.query(
-      `delete from tenants where slug ~ $1`,
-      [slugRe],
+      `delete from tenants where slug ~ any($1::text[])`,
+      [ORPHAN_SLUG_PATTERNS],
     );
     console.log(`  tenants: ${tenantsRes.rowCount} rows`);
 

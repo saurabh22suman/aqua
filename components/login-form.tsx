@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { homeForSessionAction } from "@/lib/actions/auth-ui";
+import { formatPhoneIN, normaliseToE164 } from "@/lib/phone";
 
 // 2026-09-11 auth feature: phone + PIN login.
 //
@@ -24,8 +25,18 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // F-1 (2026-09-13 Indian-user UX audit): the same shared helper the
+  // service uses, so what the client sends is exactly what the server
+  // looks up. Typing a bare 10-digit mobile now works; the on-blur
+  // format shows the user the canonical +91 form before they submit.
   function normalise(v: string) {
-    return v.replace(/[\s-]/g, "");
+    return normaliseToE164(v);
+  }
+
+  function showCanonical() {
+    setPhone((current) =>
+      current.trim().length > 0 ? formatPhoneIN(normalise(current)) : current,
+    );
   }
 
   const canSubmit = phone.length > 0 && /^\d{6,12}$/.test(pin) && !busy;
@@ -70,15 +81,25 @@ export function LoginForm() {
         SMS — if you have never set a PIN, ask your club for a login link.
       </p>
 
-      <input
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && canSubmit && submit()}
-        inputMode="tel"
-        autoComplete="tel"
-        placeholder="+91 98765 43210"
-        className="mt-8 w-full h-12 px-4 rounded-ctl bg-paper border border-line text-[16px]"
-      />
+      <label className="mt-8 block">
+        <span className="block text-[13px] font-medium text-ink-2">Mobile number</span>
+        <input
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          onBlur={showCanonical}
+          onKeyDown={(e) => e.key === "Enter" && canSubmit && submit()}
+          inputMode="tel"
+          autoComplete="tel"
+          aria-label="Mobile number"
+          placeholder="+91 98765 43210"
+          className="mt-1 w-full h-12 px-4 rounded-ctl bg-paper border border-line text-[16px]"
+        />
+        {/* F-1 contributing cause: a first-time user could not tell
+            whether the country code was required. It isn't — say so. */}
+        <span className="mt-1 block text-[12px] text-ink-3">
+          Any format works — 98765 43210 or +91 98765 43210. We add +91 for you.
+        </span>
+      </label>
 
       <label className="mt-4 block">
         <span className="block text-[13px] font-medium text-ink-2">PIN</span>
