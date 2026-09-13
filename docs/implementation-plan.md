@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| Covers | Setup, Phase 1 (foundation), Phase 2 (core), Phase 3 (vertical + staff pay + go-live) |
-| Task count | 148 |
+| Covers | Setup, Phase 1 (foundation), Phase 2 (core), Phase 3 (vertical + staff pay + go-live), the ops platform spine (O-01–O-11) |
+| Task count | 159 |
 | Estimated duration | 23–27 weeks with one to two people |
 | Companions | `project-scope.md`, `architecture.md`, `DESIGN.md` |
 
@@ -1049,6 +1049,245 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ---
 
+# Ops platform spine
+
+**Source:** `docs/ops-platform-design.md`. Extracted here as tasks at the
+author's request. Build order follows that document's §10. The design
+doc's own recommendations are adopted as decisions unless a task says
+otherwise:
+
+- Preset changes are **copy-on-apply**, never live inheritance (§3). No
+  edit to a preset definition or preset row may change an already-applied
+  tenant's configuration as a side effect.
+- Impersonation stays blocked (RED). The effective-configuration viewer
+  (O-06) is the support path until that decision is revisited (§6).
+- One WhatsApp number per tenant, owned by the tenant; Embedded Signup
+  v4 is deferred to roughly five tenants. Template sync and the metered
+  message log are needed from the first tenant (§9).
+- Legal entity / GSTIN-scoped invoice numbering is **not modelled yet**.
+  It must be settled before invoices exist (C-31 currently specifies
+  per-tenant numbering); O-01 leaves the door open at zero cost without
+  deciding it.
+
+**Lane notes.** O-01, O-02, O-04, O-05 and O-09 are schema-lane.
+O-06, O-07 and O-10 are UI-lane. O-03 and O-08 touch both — the schema
+change lands first as its own PR. Tasks in this section never edit
+`tests/tier1/**`, which agents must not write to.
+
+**Tables this section adds** (pre-clearing the plan's stop-and-ask
+rule): `staff_locations`, `config_keys`, `config_values`,
+`config_change_requests`, `platform_leads`. No other table or column is
+implied by these tasks.
+
+### O-01 · Hierarchy schema — locations.kind, facilities.location_id, staff_locations
+**Depends:** F-02, F-20
+**Lane:** schema
+**Read first:** ops-platform-design.md §8.
+**Build:** One migration: `locations.kind` (`'club' | 'cafe' | 'mixed'`,
+default `'club'`); `facilities.location_id` NOT NULL with composite FK
+`(location_id, tenant_id) → locations(id, tenant_id)` and an index
+`(tenant_id, location_id)`; backfill so every live tenant has exactly one
+primary location (auto-create one where none exists; resolve any
+multi-primary rows deterministically) and every facility points at its
+tenant's primary location; new `staff_locations` (`id`, `tenant_id`,
+`staff_id`, `location_id`, `is_primary`, audit columns, unique
+`(tenant_id, staff_id, location_id)`, composite FKs to `staff` and
+`locations`), RLS enabled, forced and policied like every tenant-scoped
+table. Drizzle schema files updated to match.
+**Done when:** a fresh migrated database and a database seeded with
+existing tenants both satisfy the invariant; `staff_locations` is covered
+by the isolation gate; `pnpm test`, `pnpm typecheck`, `pnpm lint` are
+green.
+**Never:** decide the legal-entity/GSTIN model here. No `legal_entity_id`
+column until that question is answered.
+
+### O-02 · Event rows carry location
+**Depends:** O-01
+**Lane:** schema + services
+**Read first:** ops-platform-design.md §8 ("Members belong to the tenant.
+Everything that happens carries a location.").
+**Build:** Migration adding `sessions.location_id` and
+`attendance.location_id` (NOT NULL, composite FK to `locations`, index
+`(tenant_id, location_id)`), backfilled from each session's batch. Write
+paths set it from the batch when a session is generated or created
+manually, and attendance marks copy it from their session in the same
+transaction. History is not rewritten when a batch later moves location.
+**Done when:** a session and every attendance mark against it carry the
+same location; moving a batch leaves existing rows untouched; the
+consolidated view (no filter) and the per-site view (filtered) are the
+same query shape.
+
+### O-03 · Preset applications become location-scoped
+**Depends:** O-01
+**Lane:** schema + UI
+**Read first:** ops-platform-design.md §3 and §8 ("Presets must apply per
+location, not per tenant").
+**Build:** Preset binding moves from the tenant to the location:
+`locations.preset_key`, `preset_version`, `preset_applied_at`; apply,
+idempotency and the "different preset" lock all evaluate per location.
+Facilities, sub-units and example batches are written against the target
+location; `location.kind` constrains which presets the UI offers. The ops
+preset detail page previews per location and applies per location.
+**Flagged decision (interim rule implemented here, revisit before a pilot
+tenant runs two presets):** tenant-wide preset content (terminology,
+roles, skills, plan shapes, message templates, dashboard cards, feature
+union) belongs to the **first** preset applied to the tenant. A later
+preset on another location writes location-bound content only; the
+preview lists the tenant-wide sections it will skip. Re-applying the
+owning preset is the only path that rewrites tenant-wide content. This is
+deliberately conservative and matches copy-on-apply.
+**Done when:** a tenant with a pool location and a café-kind location can
+hold a swimming preset on one and a different preset on the other; the
+second apply leaves the first location's rows and the tenant-wide content
+unchanged; `pnpm test` green including the existing preset suites.
+
+### O-04 · Config registry and resolver with provenance
+**Depends:** O-01
+**Lane:** schema
+**Read first:** ops-platform-design.md §2–§3.
+**Build:** `config_keys` (catalogue seeded and versioned in code:
+`key`, `value_schema` jsonb, `default_value` jsonb, `visibility`
+(`owner_edit | owner_read | ops_only`), `risk`
+(`safe | sensitive | dangerous`), `description`) and `config_values`
+(append-only: `id`, `key`, `scope_type`
+(`platform | plan | preset | tenant | location`), `scope_id`, `value`,
+`set_by`, `set_at`, `reason`, `superseded_at`). One resolver implementing
+the fixed order `platform → plan → preset → tenant → location`, returning
+the value **and** its provenance (`source`, `setBy`, `setAt`). Every write
+validates against `value_schema` and supersedes the prior row in the same
+transaction. Migrate the two existing scalar tenant settings into it —
+`tenants.absence_alert_threshold_pct` and `tenants.offline_sync_enabled` —
+with their current column defaults as the registry defaults, their reads
+routed through the resolver, and a test that default-only tenants resolve
+to a working system with no unconfigured state.
+**Done when:** resolution order is proven for all five scopes; provenance
+names the exact scope and actor for each; a bad value is rejected at the
+boundary; the two migrated keys behave exactly as before when unset.
+**Never:** put entitlements (`features`/`plan_features`/`tenant_features`)
+or content (branding, terminology) in the registry.
+
+### O-05 · Audited platform mutation wrapper and scan
+**Depends:** —
+**Lane:** schema + tests
+**Read first:** ops-platform-design.md §5; `docs/status-report-2026-09-13.md`
+§4 on `TODO(tenant-audit-log)`.
+**Build:** One `opsAction` wrapper all platform mutations go through:
+closed union of scopes, platform permission assertion, `platform_audit_log`
+row written in the same transaction as the mutation, recording actor,
+scope, tenant, target, before, after and reason (reason mandatory for
+`dangerous` risk). Convert every existing platform mutating action to it.
+A CI scan (`pnpm check:ops-actions`) fails on any exported platform action
+that mutates without going through the wrapper, and the scan must flag a
+known-bad fixture under `tests/scanner-fixtures/`.
+**Done when:** the scan is red on the fixture and green on the tree;
+existing platform actions are converted; audit rows carry before/after.
+**Never:** claim this closes the tenant-side `TODO(tenant-audit-log)`
+sites — that is F-15 and remains open.
+
+### O-06 · Effective-configuration viewer in /ops
+**Depends:** O-04, O-05
+**Lane:** UI
+**Read first:** ops-platform-design.md §6.
+**Build:** `/ops/tenants/[tenantId]/configuration`: for a chosen tenant
+and role, every resolved config value with provenance, the entitlement set
+with its source (plan / override / denied, reusing
+`resolveTenantFeatureSources`), the permission matrix, and the nav that
+role would render. **No member PII on the screen.**
+**Done when:** the "why can't my coach see Reports?" question is answered
+from this page alone; the page renders for a role with no permissions and
+for a role with all of them; a test asserts no person/member data is
+queried by the page.
+
+### O-07 · Owner settings from the registry, with Request change
+**Depends:** O-04, O-06
+**Lane:** schema + UI
+**Build:** Owner settings sections render from the same registry,
+filtered by `visibility`. `owner_edit` keys are editable; `owner_read`
+keys show the current value greyed with a **Request change** button that
+creates a `config_change_requests` row (tenant-scoped, RLS) with tenant,
+key, requested value and note, visible to ops from the viewer with a
+resolved/declined state. Owners never see mechanisms, only outcomes.
+**Done when:** editing an `owner_edit` key writes through the registry
+with provenance; a request for an `owner_read` key is visible to ops and
+carries the tenant and key; an owner cannot write an `ops_only` key and
+the attempt fails closed.
+**Empty state:** with no `owner_read` key seeded yet, the request path is
+exercised by tests with a fixture key and the UI shows nothing extra.
+
+### O-08 · Location-scoped staff access
+**Depends:** O-01, O-04
+**Lane:** schema + services + UI
+**Read first:** ops-platform-design.md §8 ("Location-scoped staff
+access"); `docs/review-checklist.md` on scoping the list versus the
+direct path.
+**Build:** Config key `access.location_scoped_staff` at tenant scope,
+default **off** (today's behaviour unchanged). When on: service-layer
+enforcement on every location-scoped read and write — list **and**
+by-id paths — and a CI scan with a known-bad fixture that fails on any
+location-scoped read skipping the filter. Staff are attached to locations
+via `staff_locations` (O-01), and the invite path gains admin, worker and
+accountant attachment (currently only coach and receptionist can hold a
+location).
+**Done when:** with the key off, every existing test is unchanged; with
+it on, a receptionist scoped to one location can list their members and
+cannot reach another location's member by id, proven against
+Testcontainers Postgres; the scan is red on its fixture.
+**Never:** describe this as an isolation boundary. It is an access-control
+boundary inside one tenant — one business, one controller.
+
+### O-09 · platform_leads
+**Depends:** —
+**Lane:** schema
+**Read first:** ops-platform-design.md §7.
+**Build:** Platform-scoped `platform_leads` (no `tenant_id` until
+conversion): contact fields, qualification answers captured as structured
+fields (sport, member-count band, fee model, collection mode, GST
+registered, coach count, locations), source channel, lifecycle status
+(`lead | qualified | demo_booked | trial | converted | lapsed | lost`),
+trial start/expiry, ops owner, lost reason, timestamps. Add the explicit
+allowlist entry and a source scan restricting which files may import it,
+the same treatment as `users`.
+**Done when:** RLS exemption is explicit and scanned; the table holds no
+child data by construction; lifecycle transitions are audited through
+O-05's wrapper.
+
+### O-10 · Lead → tenant conversion carrying configuration
+**Depends:** O-03, O-04, O-09, O-05
+**Lane:** UI
+**Read first:** ops-platform-design.md §7 ("a lead converts into a
+tenant, carrying its qualification answers forward").
+**Build:** `/ops/leads` list, detail and lifecycle actions; conversion
+selects the preset from the qualification answers and seeds the tenant's
+initial config values, so nothing captured in the sales conversation is
+re-entered. Trial expiry and the conversion decision with a reason are
+recorded; lost-reason data is queryable.
+**Done when:** a lead with answers converts into a working tenant whose
+preset and config match those answers, with one audited action and no
+re-entry.
+
+### O-11 · Messaging — provider abstraction, metered log, manual WABA onboarding
+**Depends:** C-40, C-41, C-43, O-04, O-05
+**Status:** **blocked — C-40–C-45 are unbuilt.** Decomposition only; do
+not start before the Phase 2 messaging tasks.
+**Lane:** schema + services + UI
+**Read first:** ops-platform-design.md §9.
+**Build:** `MessageProvider` abstraction with a WhatsApp Cloud API
+adapter; per-tenant WABA credentials stored as ops-only, `dangerous`-risk
+config keys, encrypted at rest, with a restricted import path and a
+documented rotation procedure; per-tenant template copies with approval
+status tracked and graceful degradation when a tenant's templates are not
+yet approved; a metered message log that assumes every message costs
+something (the free 24-hour service window closes 1 October 2026);
+on-screen manual fallback for credential delivery that is never removed.
+Embedded Signup v4 is deferred until roughly five tenants.
+**Done when:** a tenant without WhatsApp onboarding can still have its
+credentials delivered by hand from a screen; every send writes a metered
+log row; a failed send surfaces rather than fails silently.
+**Never:** a shared platform-owned number; marketing templates without the
+corresponding entitlement.
+
+---
+
 # Phases 4 to 6 — not yet decomposed
 
 Deliberately left at epic level. Decompose only after Phase 3 ships, because real usage will change the priorities.
@@ -1093,6 +1332,8 @@ F-01…04  Schema ──► F-05…08  ISOLATION GATE ◄── blocking
 ```
 
 **Critical path:** F-05 → F-08 → C-19 → C-20 → C-22 → V-30. Everything downstream of C-20 depends on substitution recording the coach who actually took the session.
+
+**Ops spine (O-01…O-11):** O-01 → {O-02, O-03, O-04, O-08}; O-04 → {O-06, O-07, O-08}; O-09 → O-10; O-05 feeds O-06, O-09, O-10 and O-11. O-11 is blocked on C-40–C-45.
 
 ---
 
