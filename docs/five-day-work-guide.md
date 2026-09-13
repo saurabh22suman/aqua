@@ -220,18 +220,28 @@ Forty-two tasks at working speed is under five days. The reserve is therefore ex
 > block of work. Standing rule (recorded in the F1 section above):
 > a task is not done until the behaviour its text describes is
 > reachable by the user it names.
+>
+> **Update (2026-09-13):** R.3–R.8's UIs shipped in commits
+> `87afa9d`/`09e4669`/`0753aab`/`8326b99`/`e2a368b`/`e0bde6e`,
+> consolidated in `ed80887` (#140), and their user-reachable surfaces
+> were independently confirmed live during a full role-by-role UI/UX
+> audit — see `docs/audits/2026-09-13-ui-ux-audit.md` §8.1 (Owner:
+> Holidays screen, Sessions cancel/reschedule, member-detail Transfer
+> and Makeup-credits panels, Absence-alerts settings) and §8.2/§8.4
+> (Coach member-detail alert list; Parent `/p/[token]` alert line).
+> All six marked [x] below per the F3 standing rule.
 
 - [x] **R.1** Coach substitution — records who actually took the session. `C-20`. **Critical for `V-31` payout computation**, which reads `sessions.coach_id`. Service: `substituteCoach` in `lib/services/coach-substitution.ts`. UI: `/owner/sessions` page + `SessionSubstituteControl` (`components/session-substitute-control.tsx`); the F2 conflict guard surfaces inline as a coach_conflict error. Marked [x] per F3 standing rule (UI shipped). `GREEN`
 - [x] **R.2** Coach conflict detection — a coach double-booked across overlapping sessions warns on assignment, with the warning emitted before the save, not after. `C-21`. Service: `detectCoachConflicts` + `detectSessionConflicts` (the latter added by F2). UI: warning banner in `BatchEditForm` (already shipped pre-F3) and `BatchCreateForm` (added by F3 to cover creation, where the gap was). Marked [x] per F3 standing rule. `GREEN`
-- [ ] **R.3** Holiday and closure calendar — annual holidays the owner declares; one-off closures that block bookings; the session generator skips both. Without this, a national holiday still generates a session and a coach registers against an empty pool. `GREEN`
-- [ ] **R.4** Session cancellation and rescheduling — closed reason vocabulary; reschedule preserves the `client_id` linkage so the offline queue still drains. Guardian notification surfaces in-app; WhatsApp delivery is excluded. `GREEN`
+- [x] **R.3** Holiday and closure calendar — annual holidays the owner declares; one-off closures that block bookings; the session generator skips both. Without this, a national holiday still generates a session and a coach registers against an empty pool. UI: `/owner/settings/holidays` (`87afa9d`), confirmed live 2026-09-13. `GREEN`
+- [x] **R.4** Session cancellation and rescheduling — closed reason vocabulary; reschedule preserves the `client_id` linkage so the offline queue still drains. Guardian notification surfaces in-app; WhatsApp delivery is excluded. UI: `/owner/sessions` cancel/reschedule controls (`09e4669`), confirmed live 2026-09-13. `GREEN`
 
 ### Capacity and movement
 
-- [ ] **R.5** Waitlists for full batches — a member joins a queue when capacity is hit and auto-enrols on the next withdrawal. In-app notification on promotion; WhatsApp excluded. `GREEN`
-- [ ] **R.6** Batch transfer — move a member between batches preserving attendance history, enrolment rows and the subscription. `V-19`. `GREEN`
-- [ ] **R.7** Makeup sessions — compensatory entitlement from an excused absence; redeemable against another batch within a window. `V-18`. **Do not let this drift into a fee credit.** One free session against the absent batch; no refund, no subscription adjustment. `GREEN`
-- [ ] **R.8** Absence alerts — daily job detecting streaks and low monthly attendance; surfaces in-app to coach and parent surfaces. Dedupe key is `(member_id, batch_id, alert_kind, calendar_week)` — three consecutive absences trigger one alert, not three. `V-20`. `GREEN`
+- [x] **R.5** Waitlists for full batches — a member joins a queue when capacity is hit and auto-enrols on the next withdrawal. In-app notification on promotion; WhatsApp excluded. UI: waitlist queue/join path (`0753aab`), confirmed live 2026-09-13. `GREEN`
+- [x] **R.6** Batch transfer — move a member between batches preserving attendance history, enrolment rows and the subscription. `V-19`. UI: member-detail Transfer control (`8326b99`), confirmed live 2026-09-13 (44px touch target, verified via computed style). `GREEN`
+- [x] **R.7** Makeup sessions — compensatory entitlement from an excused absence; redeemable against another batch within a window. `V-18`. **Do not let this drift into a fee credit.** One free session against the absent batch; no refund, no subscription adjustment. UI: member-detail Makeup-credits panel (`e2a368b`), confirmed live 2026-09-13. `GREEN`
+- [x] **R.8** Absence alerts — daily job detecting streaks and low monthly attendance; surfaces in-app to coach and parent surfaces. Dedupe key is `(member_id, batch_id, alert_kind, calendar_week)` — three consecutive absences trigger one alert, not three. `V-20`. UI: `/owner/settings/alerts`, coach member-detail list, parent `/p/[token]` line (`e0bde6e`), confirmed live 2026-09-13. `GREEN`
 
 ### Facilities and lanes
 

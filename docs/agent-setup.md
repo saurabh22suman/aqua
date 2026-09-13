@@ -30,7 +30,7 @@ The rule underneath both: **encode every repeated procedure as a file the agent 
 
 | Tool | Version | Note |
 |---|---|---|
-| Node | 22 LTS | Pin with `.nvmrc` |
+| Node | 22 LTS | Pinned in `.nvmrc` at the repo root, and in CI (`.github/workflows/ci.yml`, `node-version: 22`) |
 | pnpm | latest | Faster installs, stricter resolution than npm |
 | Docker Desktop | latest | Local Postgres 16 |
 | Git | latest | |
@@ -58,54 +58,33 @@ Store everything in a password manager. `.env.example` lists variable names only
 
 ### 3.1 The hierarchy
 
+What actually exists in the repo today:
+
 ```
-CLAUDE.md              ← repo root. Always loaded. Keep it SHORT.
-AGENTS.md              ← symlink to CLAUDE.md for non-Claude agents
-DESIGN.md              ← design tokens and rules
-architecture.md        ← referenced, not auto-loaded
-implementation-plan.md ← referenced, not auto-loaded
+CLAUDE.md                            ← repo root. Always loaded.
+AGENTS.md                            ← symlink to CLAUDE.md for non-Claude agents
+DESIGN.md                            ← design tokens and rules
+docs/architecture.md                 ← referenced, not auto-loaded
+docs/implementation-plan.md          ← referenced, not auto-loaded
+db/CLAUDE.md                         ← directory-scoped rules
 .claude/
-  skills/              ← project skills, travel with the repo
-  settings.json        ← MCP servers, hooks, permissions
-db/CLAUDE.md           ← directory-scoped rules
-app/CLAUDE.md          ← directory-scoped rules
+  settings.local.json                ← local permissions (not checked in for sharing)
+  skills/execute-task/SKILL.md       ← the one project skill authored so far
 ```
+
+There is no `app/CLAUDE.md` and no checked-in `.claude/settings.json`.
 
 ### 3.2 Root CLAUDE.md
 
-Keep this **under 100 lines**. It loads on every request — bloat here costs context on every single task and gets skimmed rather than read.
+See the real `CLAUDE.md` at the repo root — do not duplicate it here, a
+copy is guaranteed to drift.
 
-```markdown
-# Aqua
-
-Multi-tenant SaaS for sports academies in India. Next.js 15 · TypeScript ·
-Postgres · Drizzle · Better Auth · pg-boss · Razorpay · WhatsApp.
-
-## Before writing code
-- Task list: `implementation-plan.md`. Work one task at a time, in order.
-- Technical decisions: `architecture.md`. Read the sections the task names.
-- Visual rules: `DESIGN.md`. Non-negotiable.
-- Library APIs: **look them up with Context7 first.** See §4 of agent-setup.md.
-
-## Absolute rules
-- Tenant data ONLY through `withTenant()`. Never import `@/db/client`.
-- Money is `bigint` paise. Never float, never numeric.
-- Timestamps `timestamptz`, stored UTC, displayed IST.
-- Every mutation writes `audit_log` in the same transaction.
-- TypeScript strict. No `any`. Zod at every boundary.
-- Files under 300 lines.
-- Icons: individual imports from lucide-react. Never the barrel.
-- No new dependency without asking.
-- Never edit an applied migration. Add a new one.
-
-## Verify before claiming done
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
-
-## Stop and ask when
-- A task needs a table or column not in the plan
-- The bundle budget would be exceeded
-- Anything about money, tenant isolation or children's data is ambiguous
-```
+It loads on every request, so keep it tight; but note the real file has
+outgrown the "under 100 lines" target, because each absolute rule now
+carries an annotation saying whether it is *mechanically checked* or
+review-only. That annotation is worth the lines: an agent that assumes
+"absolute" means "the test suite will catch it" is the exact failure the
+annotations prevent.
 
 ### 3.3 Directory-scoped files
 
@@ -134,7 +113,7 @@ Migrations are forward-only and checked in. Never edit an applied migration.
 `tenant_id`; one bad query enumerates every user on the platform.
 ```
 
-**`app/CLAUDE.md`**
+**`app/CLAUDE.md`** — not yet created. Sketch of what it should contain:
 
 ```markdown
 # Application
@@ -215,66 +194,51 @@ The `description` is the trigger. Write it as a clear answer to "when should the
 
 Repo-level skills go in `.claude/skills/` and travel with the project. The format is an open standard, so these work in Cursor, Codex and Gemini CLI too.
 
-### 5.1 Skills to author before starting
+### 5.1 Skills
 
-| Skill | Encodes | Author before |
+**Only `execute-task` exists today.** Add rows to this table as skills are
+actually authored — a table of skills that don't exist sends an agent
+looking for files that aren't there.
+
+| Skill | Encodes | Status |
 |---|---|---|
-| `execute-task` | The plan's task loop and verification gate | S-01 |
-| `rls-table` | Creating a tenant-scoped table correctly | F-01 |
-| `drizzle-migration` | Generate, review, apply | F-01 |
-| `tenant-query` | Data access through `withTenant` | F-06 |
-| `new-screen` | Building UI against DESIGN.md | F-22 |
-| `money` | Paise, tax in basis points, `en-IN` formatting | C-28 |
-| `pgboss-job` | Idempotent, tenant-scoped, chunked jobs | C-19 |
-| `verify` | The full done-check | S-05 |
+| `execute-task` | The plan's task loop, stop levels and verification gate | Authored |
+
+Candidates worth authoring when the pattern they encode is understood
+(and not before — see §5.4): `rls-table`, `drizzle-migration`,
+`tenant-query`, `new-screen`, `money`, `pgboss-job`, `verify`.
 
 ### 5.2 The most important one
 
-`.claude/skills/execute-task/SKILL.md`
+`.claude/skills/execute-task/SKILL.md` — read the real file; what follows
+is a description of what it does, not a copy to paste.
 
-```markdown
----
-name: execute-task
-description: >
-  Execute a numbered task from implementation-plan.md (IDs like S-01, F-08,
-  C-22, V-30). Use whenever the user asks to build, implement, start or
-  continue a task by ID, or says "next task". Reads the task's dependencies
-  and architecture sections, fetches current library docs, implements, and
-  runs the full verification gate before reporting done.
----
+It executes a numbered task from `docs/implementation-plan.md` (IDs like
+S-01, F-08, B-05, C-22, V-45) and covers four things the sketch above
+this document's first draft did not:
 
-# Executing a plan task
+- **Stop levels.** Every task is GREEN (build, verify, commit, continue
+  without asking), AMBER (build, verify, commit, then stop and report —
+  new dependencies, schema changes to a completed task's table,
+  anything that changes a decision in `architecture.md`) or RED (stop
+  *before* building and propose — tenant isolation, auth, money,
+  children's data, consent, anything marked FLAGGED DECISION NEEDED).
+  A GREEN task that turns out to need a dependency becomes AMBER on
+  the spot. When a task spans subjects, the highest tier wins.
+- **Proving tests can fail.** A green test alone proves nothing. Where
+  a task guards a safety property, the skill requires showing that
+  breaking the thing makes the test red — a mutation proof, not a
+  passing run.
+- **Task-ID-prefixed commits.** One commit per task, message prefixed
+  with the ID: `feat(B4): ...`, `docs(V-45): ...`.
+- **Batch execution.** Given a range ("run B3 to B8"), it runs
+  consecutive tasks and pauses at the first AMBER or RED, reporting
+  once at the end of the batch rather than once per task.
 
-## 1. Load context
-- Find the task in `implementation-plan.md`
-- Confirm every dependency task is complete. If not, STOP and say so.
-- Read any architecture section the task names under "Read first"
-- Read `DESIGN.md` if the task touches UI
-
-## 2. Check the docs
-If the task uses any library in agent-setup.md §4.2, fetch current
-documentation before writing code. Do not rely on recall.
-
-## 3. Implement
-- Smallest change that satisfies the acceptance criteria
-- No adjacent refactoring, no extra features, no "while I'm here"
-- Files under 300 lines
-
-## 4. Verify
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
-
-Then check the task's specific acceptance criteria by hand.
-
-## 5. Report
-State: what changed, which files, how acceptance was verified, and anything
-deferred. If any criterion is unmet, say so plainly — do not claim done.
-
-## Never
-- Start the next task without being asked
-- Add an npm dependency without asking
-- Modify a schema from a completed task
-- Disable a lint rule or skip a test to make the gate pass
-```
+The verification gate is `pnpm typecheck && pnpm lint && pnpm test`
+plus the task's own named proof; data-layer work adds `pnpm db:migrate`
+against a clean database and, when RLS or grants changed, the
+`pg_class` and role-flag queries from `docs/review-checklist.md`.
 
 ### 5.3 A worked example
 
@@ -320,7 +284,7 @@ indexes on soft-deletable tables.
 ## After
 1. Add the Drizzle schema in `db/schema/<domain>.ts`
 2. Generate the migration — never hand-edit an applied one
-3. Extend `tests/isolation.test.ts` to cover the new table
+3. Extend `tests/tier1/isolation.test.ts` to cover the new table
 4. Confirm `app_user` still cannot bypass the policy
 
 ## Never
@@ -341,44 +305,49 @@ Guidelines: one procedure per skill; body short with detail in supporting files;
 
 ---
 
-## 6. Hooks — mechanical guardrails
+## 6. Hooks — not configured
 
-Instructions get ignored under pressure. Hooks do not.
+Instructions get ignored under pressure. Hooks do not — which is why
+it matters that **this project has none.** There is no
+`.claude/hooks/` directory and no checked-in `.claude/settings.json`
+declaring `PreToolUse` or `PostToolUse` commands. Nothing intercepts an
+edit before it lands.
 
-`.claude/settings.json`:
+In particular: there is **no `guard.sh`**, so there is no hook making
+`tests/tier1/**` read-only to the agent, and no hook blocking edits to
+applied migrations, stray hex colours, `lucide-react` barrel imports or
+float arithmetic near money. Anything claiming otherwise is describing
+a design that was never built. Those rules are real, but they are
+enforced — where they are enforced at all — by ESLint, by tests under
+`tests/tier1/`, and by CI. See the per-rule annotations in the root
+`CLAUDE.md`, which say for each absolute rule whether it is checked
+mechanically or by review.
 
-```jsonc
-{
-  "hooks": {
-    "PreToolUse": [
-      { "matcher": "Edit|Write",
-        "command": ".claude/hooks/guard.sh" }
-    ],
-    "PostToolUse": [
-      { "matcher": "Edit|Write",
-        "command": "pnpm typecheck --silent" }
-    ]
-  }
-}
-```
-
-`guard.sh` should block, not warn:
-
-- Edits to migrations under `db/migrations/` that are already applied
-- `@/db/client` imported outside `db/` or the platform module
-- New hex colour literals in `app/` or `components/`
-- Barrel imports from `lucide-react`
-- `parseFloat` or `Number(` near anything named amount, price, fee or paise
+A hook layer is still worth building. If it gets built, it should
+block, not warn, and this section should be rewritten to describe what
+exists rather than what was intended.
 
 ### Pre-commit
 
-```
-lint-staged → eslint --max-warnings=0 → typecheck → related tests
-```
+Also not configured — no `lint-staged` / husky wiring in the repo. The
+verification gate is run by hand (`pnpm typecheck && pnpm lint && pnpm
+test && pnpm build`) and again by CI.
 
 ### CI is the real gate
 
-Section 5 of the implementation plan lists it: typecheck, lint, test (including `isolation.test.ts`), build, bundlesize at 150 KB. **CI must be able to fail the build.** An agent that can merge past a red pipeline has no guardrails at all.
+This part holds, and it is now the load-bearing one. CI runs typecheck,
+lint, test (including `tests/tier1/isolation.test.ts`), build and the
+bundle budget at 150 KB. **CI must be able to fail the build.** An
+agent that can merge past a red pipeline has no guardrails at all.
+
+Since 2026-09-04 that is enforced rather than hoped for: the `main
+protection` repository ruleset is active, requires a pull request, and
+requires both the `ci` and `agent-protected-paths` status checks to be
+green with `bypass_actors: []`. The remaining gap is
+`required_approving_review_count: 0` — no human approval is
+mechanically required, which is why `CLAUDE.md`'s F1 self-merge
+suspension exists as the compensating control. See
+`docs/branch-protection.md`.
 
 ---
 

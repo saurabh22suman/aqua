@@ -387,9 +387,30 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm check:migrations                       # M1: filename/ordering
+      # M1: fails in ~1s on a migration numbering collision or a
+      # non-conforming filename, before db:reset would hit the same
+      # problem ~2min later at runtime.
+      - run: pnpm check:migrations
+      # H3: scripts/seed-demo.ts and docs/demo-runbook.md must move
+      # together — drift lands the operator walkthrough on stale
+      # numbers. Pure git-diff check, no DB.
+      - run: pnpm check:runbook-sync
+      # F5: every script referenced in package.json must point at a
+      # file that exists. A "passing" parent-link test was once a
+      # phantom — the script it named was in no commit and CI never
+      # ran it.
+      - run: pnpm check:scripts-exist
       - run: pnpm exec tsx scripts/check-lane-overlap.ts # M2: non-blocking
-      - run: pnpm db:reset                              # bootstrap roles + migrate
+      # db/reset.ts refuses to run without an explicit declaration of
+      # intent (db/reset-guard.ts); CI's Postgres is ephemeral but the
+      # script cannot know that on its own.
+      - run: pnpm db:reset -- --i-understand
+      # D2/D3: db/deploy.ts is the only thing that bootstraps pg-boss's
+      # own schema (pgboss.*, under the privileged
+      # MIGRATION_DATABASE_URL) and grants app_user on it. db:reset runs
+      # our migrations only, so a fresh CI Postgres has no
+      # pgboss.schedule — tests touching it failed until this landed.
+      - run: pnpm db:deploy
       - run: pnpm test                                  # vitest, all tiers
       - run: pnpm exec tsx scripts/check-bundle-budget.ts
       - run: pnpm exec tsx scripts/check-font-budget.ts
@@ -397,12 +418,30 @@ jobs:
       - run: pnpm seed                                  # demo-academy fixture
       - run: pnpm exec tsx scripts/e2e-offline.ts        # S3 sync, six VERIFYs
       - run: pnpm exec tsx scripts/e2e-offline-disabled.ts # online-only counterpart
+      # H1 follow-up: the shipped parent page must contain zero
+      # <script> tags. Builds and runs `next start` — a dev-server
+      # assertion would bundle differently than what a visitor gets.
+      - run: pnpm e2e:parent-link-zero-js
+      # H1 follow-up: credential-leak check on every pre-hydration form
+      # submit in the platform surface — live submit with JS disabled,
+      # live submit with JS enabled, plus a source scan pinning
+      # method="post" on every other form.
+      - run: pnpm e2e:platform-form-leak
+      # A: host boundary. Platform lives at ops.<base>, tenant at
+      # <base>; middleware.ts enforces it, this pins it with explicit
+      # Host headers and 200-vs-404 assertions.
+      - run: pnpm e2e:host-boundary
+      # D1: role-bypass attack e2e. Real OTP login as owner / coach /
+      # receptionist, then three attack shapes (plain GET, RSC with a
+      # forged Next-Router-State-Tree, POST with Next-Action against
+      # every action hash in the manifest). Asserts no protected data
+      # reaches a role that isn't entitled to it, with an entitled-role
+      # positive control gating false negatives.
+      - run: pnpm e2e:role-bypass
 ```
 
-Two things this list does not contain that the previous version
+One thing this list does not contain that an earlier version
 claimed:
-- `pnpm lint --max-warnings=0` — `pnpm lint` is run, but **without
-  `--max-warnings=0`**. Known gap; fix in flight.
 - `pnpm test:unit` / `pnpm test:integration` / `pnpm test:isolation`
   — there's a single `pnpm test`. The `vitest.config.ts`
   `fileParallelism: false` is what keeps the cross-file state-sharing
@@ -411,13 +450,20 @@ claimed:
   Testcontainers spun up inside the test itself, not a separate
   npm script.
 
-`scripts/e2e-offline.ts` and `scripts/e2e-offline-disabled.ts` are
-the only test-time scripts not part of the standard `pnpm test` run.
-They live in `scripts/` because they need a real dev server and a
-real Chromium — both are heavier than what vitest is set up for.
-Their timing-sensitive failure mode (VERIFY 5) is the documented
-exception; everything else either passes deterministically or
-points at a real bug.
+**Resolved 2026-09-13:** this section also used to claim `pnpm
+lint` ran *without* `--max-warnings=0`. The `lint` script in
+`package.json` is now `eslint . --max-warnings=0`, so a warning
+fails CI. No longer a gap.
+
+The six e2e scripts under `scripts/` (`e2e-offline`,
+`e2e-offline-disabled`, `e2e-parent-link-zero-js`,
+`e2e-platform-form-leak`, `e2e-host-boundary`, `e2e-role-bypass`)
+are the test-time work that is *not* part of the standard `pnpm
+test` run. They live in `scripts/` because they need a real dev or
+production server and a real Chromium — heavier than what vitest is
+set up for. The offline pair's timing-sensitive failure mode
+(VERIFY 5) is the documented exception; everything else either
+passes deterministically or points at a real bug.
 
 **The pipeline must be able to say no.** An agent that can merge
 past a red CI has no guardrails at all. Today that gate is enforced

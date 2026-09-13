@@ -61,9 +61,15 @@ not always know you need them until after the mistake.
   content in context. A fresh agent picking up mid-task would not have
   had that.
 - **Never merge a PR touching schema or code without explicit
-  authorization.** Not mechanically blocked — `main` has no branch
-  protection as of this writing (verified via the GitHub API, not
-  assumed). See the table below; this is a pure discipline rule.
+  authorization.** `main` *is* protected now (ruleset `main
+  protection`, active since 2026-09-04, verified via the GitHub API,
+  not assumed): you cannot push to `main` directly, and a PR cannot
+  merge until `ci` and `agent-protected-paths` are both green.
+  But `required_approving_review_count: 0` — zero human approvals are
+  actually required, so those two status checks are the *only*
+  mechanical guards. Nothing forces a human to look at the diff. That
+  is exactly why `CLAUDE.md`'s F1 rule suspends self-merge entirely:
+  every merge goes to the human. See the table below.
 - **Never add an npm dependency, change a schema from a completed
   task, or add a table not named in your task, without asking first.**
 - **Never hard-code behaviour to a role key** (`if (ctx.roleKey ===
@@ -93,12 +99,14 @@ distinction is drawn from).
 | TypeScript strict, no implicit `any` | `tsc --noEmit` |
 | `--accent` never inside a status/state style | `tests/tier1/hardcoded-brand-color.test.ts` (vitest source-scan, NOT a lint rule — see DESIGN.md §1.2. F4 audit correction: the previous table said "dedicated lint rule"; it is a vitest test that scans `app/` and `components/` for Tailwind classes like `bg-mango` / `text-indigo`. Same mechanical guarantee as a lint rule, just running under `pnpm test` instead of `pnpm lint`. The misnaming stopped the next agent from looking.) |
 | A new tenant-scoped table without RLS | F-08a's catch-all query over `pg_class`, no per-table test needed |
+| No direct push to `main`; every change arrives by PR with `ci` and `agent-protected-paths` green | Repository ruleset `main protection` (active 2026-09-04), `strict_required_status_checks_policy: true`, `bypass_actors: []`. Covers the *mechanics* of merging only — see the memory-dependent table for what it does not cover |
+| A PR touching `db/migrations/**`, `lib/auth/**`, `lib/money/**` or consent paths cannot merge without a `human-approved-merge` label | `.github/workflows/agent-protected-paths.yml` (required status check) + `tests/tier1/agent-protected-paths.test.ts`. The agent's own token cannot apply the label, so this one is genuinely un-bypassable from the agent side |
 
 | Memory-dependent — discipline only | Why nothing catches it |
 |---|---|
 | **DESIGN.md's composition rules** (one dominant element per screen, the lane strip's three reuses, colour means money/attendance and nothing else) | A screen with the wrong composition still typechecks, still passes every test, still builds under budget. This is the single most consequential item on this list — an S1/S2-vs-reference audit already found real composition gaps that reading the HTML reference first would have caught. |
 | Schema-lane exclusivity on `db/migrations/` | CI's lane-overlap check (M2) *warns*, does not block, and a UI-lane agent writing valid SQL passes the naming check regardless of which lane wrote it |
-| No merge without explicit authorization on schema/code PRs | `main` has no branch protection; nothing in GitHub stops a direct merge |
+| **Human review of a PR before merge** | `main protection` sets `required_approving_review_count: 0`. Branch protection stops a *direct push*, and the two required status checks stop a *red* PR — but zero approvals are required, so a green PR nobody read can still merge. `CLAUDE.md`'s F1 self-merge suspension is the compensating control, and it is memory-dependent by construction: it failed 3 for 3 in the audit window that produced it |
 | "Never hard-code behaviour to a role key" (F-04) | No lint rule greps for `roleKey ===`; the existing interim instances are tracked by comment, not by tooling |
 | "Smallest change that satisfies Done when" / no scope creep | Nothing measures scope; a PR that does more than its task asked still passes CI |
 | Icons imported individually from `lucide-react`, never the barrel | Only indirectly caught, and only if the barrel import pushes a route over the bundle budget — a small barrel pull might not |
