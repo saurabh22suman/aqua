@@ -53,6 +53,12 @@ export const tenants = pgTable(
     // Per-tenant, default off — a canary is one specific tenant, not
     // every tenant on a plan. See docs/architecture.md §12.2.
     offlineSyncEnabled: boolean("offline_sync_enabled").notNull().default(false),
+    // R.8 — owner-configurable low-attendance alert threshold
+    // (percentage). Default 50; the monthly alert also requires at
+    // least 4 recorded marks (fixed noise guard).
+    absenceAlertThresholdPct: integer("absence_alert_threshold_pct")
+      .notNull()
+      .default(50),
     ...auditColumns,
   },
   (t) => [

@@ -7,7 +7,7 @@ import { tenants } from "./schema/tenants";
 import { locations } from "./schema/locations";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
-import { registerSessionsGenerateSchedule } from "./queue";
+import { registerAbsenceAlertsSchedule, registerSessionsGenerateSchedule } from "./queue";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
@@ -267,9 +267,11 @@ export async function createTenant(
     if (result.kind === "ok") {
       try {
         await registerSessionsGenerateSchedule(result.tenantId, input.timezone);
+        // R.8 — absence alerts run daily alongside session generation.
+        await registerAbsenceAlertsSchedule(result.tenantId, input.timezone);
       } catch (err) {
         console.error(
-          `createTenant: failed to register sessions.generate schedule for tenant ${result.tenantId}`,
+          `createTenant: failed to register schedules for tenant ${result.tenantId}`,
           err,
         );
         await withPlatform(() =>

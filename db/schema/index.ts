@@ -5,6 +5,7 @@ export * from "./memberships";
 export * from "./better-auth";
 export * from "./people";
 export * from "./facility-optins";
+export * from "./absence-alerts";
 export * from "./staff";
 export * from "./consent";
 export * from "./programs";

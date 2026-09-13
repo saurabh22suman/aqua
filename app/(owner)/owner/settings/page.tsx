@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarOff, LogOut, ChevronRight, Languages, ListChecks, Palette, Users } from "lucide-react";
+import { BellRing, CalendarOff, LogOut, ChevronRight, Languages, ListChecks, Palette, Users } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
@@ -110,6 +110,24 @@ export default async function Page() {
           </p>
           <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
             Dates the session generator should skip.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+      <Link
+        href="/owner/settings/alerts"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+        data-testid="settings-alerts"
+      >
+        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
+          <BellRing size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">
+            Absence alerts
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            When coaches and parents should be told about missed sessions.
           </p>
         </div>
         <ChevronRight size={18} className="text-ink-3 flex-none" />

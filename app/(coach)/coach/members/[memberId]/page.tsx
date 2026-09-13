@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
+import { listMemberAlertsAction } from "@/lib/actions/absence-alerts";
+import { AbsenceAlertsList } from "@/components/absence-alerts-list";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 import { BackLink } from "@/components/ui/BackLink";
@@ -21,7 +23,11 @@ export default async function CoachMemberDetailPage({
   await requireCoach();
   const { memberId } = await params;
   requireUuidParam(memberId);
-  const m = await getCoachMemberDetailAction(memberId);
+  const [m, alerts] = await Promise.all([
+    getCoachMemberDetailAction(memberId),
+    // R.8 — read-only attendance alerts for this member.
+    listMemberAlertsAction(memberId),
+  ]);
   if (!m) notFound();
 
   return (
@@ -65,6 +71,8 @@ export default async function CoachMemberDetailPage({
           </div>
         </div>
       </section>
+
+      <AbsenceAlertsList alerts={alerts} />
 
       {m.isMinor && m.guardians.length > 0 ? (
         <section className="mt-4">

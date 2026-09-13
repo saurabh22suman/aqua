@@ -99,6 +99,11 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   listMakeupCreditsAction: "attendance.read",
   listMakeupSourcesAction: "attendance.read",
   listMakeupTargetsAction: "attendance.read",
+
+  // Absence alerts (R.8)
+  getAbsenceAlertThresholdAction: "settings.manage",
+  updateAbsenceAlertThresholdAction: "settings.manage",
+  listMemberAlertsAction: "members.read.assigned",
   promoteHeadAction: "enquiries.write",
 
   // Makeup credits

@@ -1,7 +1,8 @@
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
+import { absenceAlerts } from "@/db/schema/absence-alerts";
 import { members, persons } from "@/db/schema/people";
 import { asMemberId, type TenantId } from "@/lib/ids";
 
@@ -38,6 +39,12 @@ export type ParentViewAttendance = {
   }>;
 };
 
+export type ParentViewAbsenceAlert = {
+  alertKind: "consecutive_absences" | "low_monthly_attendance";
+  batchName: string;
+  calendarWeek: string;
+};
+
 export type ParentViewData = {
   child: {
     id: string;
@@ -46,10 +53,21 @@ export type ParentViewData = {
   };
   nextSession: ParentViewNextSession | null;
   attendance: ParentViewAttendance;
+  // R.8 — the most recent absence alert, if any (read-only).
+  absenceAlert: ParentViewAbsenceAlert | null;
   // Placeholder for R.16 progress data. Reserved here so the route
   // shape is stable; populated once the assessments schema lands.
   progress: null;
 };
+
+// R.8 — the one-line parent-facing copy, kept here so the route and
+// its tests share a single phrasing.
+export function parentAlertLine(alert: ParentViewAbsenceAlert): string {
+  if (alert.alertKind === "consecutive_absences") {
+    return `Missed the last 3 ${alert.batchName} sessions in a row — talk to the coach.`;
+  }
+  return `Attendance in ${alert.batchName} is below the club's alert level this month.`;
+}
 
 const MAX_RECENT = 8;
 
@@ -163,6 +181,24 @@ export async function getParentViewData(args: {
       .orderBy(asc(sessions.sessionDate))
       .limit(MAX_RECENT);
 
+    // R.8 — most recent absence alert for this child.
+    const [alertRow] = await tx
+      .select({
+        alertKind: absenceAlerts.alertKind,
+        batchName: batches.name,
+        calendarWeek: absenceAlerts.calendarWeek,
+      })
+      .from(absenceAlerts)
+      .innerJoin(batches, eq(batches.id, absenceAlerts.batchId))
+      .where(
+        and(
+          eq(absenceAlerts.tenantId, args.tenantId),
+          eq(absenceAlerts.memberId, asMemberId(args.personId)),
+        ),
+      )
+      .orderBy(desc(absenceAlerts.createdAt))
+      .limit(1);
+
     return {
       child: {
         id: child.id,
@@ -184,13 +220,22 @@ export async function getParentViewData(args: {
         totalCount,
         pct: totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : null,
         recent: recentRows
-          .filter((r) => r.status === "present" || r.status === "absent" || r.status === "late")
+          .filter(
+            (r) => r.status === "present" || r.status === "absent" || r.status === "late",
+          )
           .map((r) => ({
             sessionDate: r.sessionDate,
             batchName: r.batchName,
             status: r.status as "present" | "absent" | "late",
           })),
       },
+      absenceAlert: alertRow
+        ? {
+            alertKind: alertRow.alertKind as ParentViewAbsenceAlert["alertKind"],
+            batchName: alertRow.batchName,
+            calendarWeek: alertRow.calendarWeek,
+          }
+        : null,
       progress: null,
     };
   });

@@ -7,6 +7,10 @@ import {
   SESSIONS_GENERATE_QUEUE,
   scheduleSessionsGenerate,
 } from "@/lib/jobs/sessions-generate-schedule";
+import {
+  ABSENCE_ALERTS_QUEUE,
+  scheduleAbsenceAlerts,
+} from "@/lib/jobs/absence-alerts-schedule";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -15,7 +19,7 @@ type JobTenant = { id: string; timezone: string };
 // DDL right app_user deliberately does not have (see
 // grantAppUserOnPgBossSchema below) — so it belongs here, in the
 // privileged deploy step, not in the worker.
-const QUEUES = [SESSIONS_GENERATE_QUEUE];
+const QUEUES = [SESSIONS_GENERATE_QUEUE, ABSENCE_ALERTS_QUEUE];
 
 // pg-boss owns its own schema and version history (pgboss.version table) —
 // deliberately NOT vendored into db/migrations alongside our own SQL.
@@ -50,6 +54,22 @@ async function syncSessionGenerateSchedules(boss: PgBoss, tenants: JobTenant[]):
 
   for (const t of tenants) {
     await scheduleSessionsGenerate(boss, t.id, t.timezone);
+  }
+}
+
+// R.8 — same reconciliation for the absence-alert schedule.
+async function syncAbsenceAlertSchedules(boss: PgBoss, tenants: JobTenant[]): Promise<void> {
+  const desired = new Set(tenants.map((t) => t.id));
+
+  const existing = await boss.getSchedules(ABSENCE_ALERTS_QUEUE);
+  for (const sched of existing) {
+    if (sched.key && !desired.has(sched.key)) {
+      await boss.unschedule(ABSENCE_ALERTS_QUEUE, sched.key);
+    }
+  }
+
+  for (const t of tenants) {
+    await scheduleAbsenceAlerts(boss, t.id, t.timezone);
   }
 }
 
@@ -125,6 +145,7 @@ async function main(): Promise<void> {
   await ensurePgBossQueues(boss);
   const tenants = await fetchJobTenants(migrationUrl);
   await syncSessionGenerateSchedules(boss, tenants);
+  await syncAbsenceAlertSchedules(boss, tenants);
   await boss.stop({ graceful: false, timeout: 5000 });
 
   await grantAppUserOnPgBossSchema(migrationUrl);

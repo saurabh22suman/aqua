@@ -186,29 +186,24 @@ Open questions (owner, 2026-09-13) — to settle before Wave 3 starts:
   Needs a design pass before R.28 (per-location overrides) and the
   platform feature catalogue work.
 
-## 5. R.8 proposal — absence alerts (owner decision needed)
+## 5. R.8 — absence alerts (delivered)
 
-R.3–R.7 are in PR #140 (awaiting CI and merge). R.8 was held because
-it needs a new table plus a daily job over children's attendance,
-which the repo's stop rules reserve for the owner. Proposed shape:
+Owner decisions 2026-09-13, implemented in PR #140:
+- low-attendance threshold **owner-configurable, default 50%**; the
+  monthly alert also requires **≥ 4 recorded marks** (fixed noise
+  guard), so a single miss never fires;
+- coach surface = **member detail only** (read-only list);
+- parent surface = **one line under "This month"** on `/p/[token]`;
+- **read-only** — no acknowledgement state.
 
-- **Detection:** daily job per tenant (tenant timezone) computing two
-  alert kinds — `consecutive_absences` (3 in a row for a member in a
-  batch) and `low_monthly_attendance` (below a threshold to be set).
-  Dedupe key `(member_id, batch_id, alert_kind, calendar_week)` so a
-  streak alerts once, not once per day.
-- **Schema:** `absence_alerts` (tenant, member, batch, kind, week,
-  created_at; unique on the dedupe key; RLS + composite tenant FKs).
-  Attendance is already read by coaches/parents, so no new personal
-  data class — a direct operational signal, not profiling.
-- **Surfaces:** coach member detail (a line per alert) and the
-  zero-JS parent page. In-app only — no WhatsApp (messaging chain
-  unbuilt).
-- **Decisions:** (1) confirm the two kinds and the low-attendance
-  threshold; (2) coach surface — member detail, today list, or both;
-  (3) parent page placement; (4) read-only or acknowledged state.
-- **Effort:** one migration, one pg-boss job, two surface touches,
-  tests. Ready to build on your word.
+Built: `absence_alerts` table + `tenants.absence_alert_threshold_pct`
+(migration `20260913000300`), `lib/services/absence-alerts.ts`
+(detection + ISO-week dedupe), daily `alerts.absence` job scheduled per
+tenant at 07:00 local alongside `sessions.generate`, owner settings at
+`/owner/settings/alerts`, coach list component, and the parent line.
+Tests: `tests/mobile/absence-alerts.test.ts` (hermetic container:
+dedupe, threshold, parent data), `absence-alerts-list.test.tsx`,
+`alert-settings-form.test.tsx`.
 
 ## 6. Defects to fix regardless of waves
 

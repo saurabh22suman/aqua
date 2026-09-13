@@ -3,6 +3,7 @@ import { PgBoss, fromDrizzle } from "pg-boss";
 import { db } from "./client";
 import { withPlatform } from "./scope";
 import { scheduleSessionsGenerate } from "@/lib/jobs/sessions-generate-schedule";
+import { scheduleAbsenceAlerts } from "@/lib/jobs/absence-alerts-schedule";
 
 // pg-boss needs a role-aware connection. db/client.ts's pool already runs
 // `set role app_user` on every connection (its onConnect hook) — routing
@@ -49,6 +50,21 @@ export async function registerSessionsGenerateSchedule(
   await boss.start();
   try {
     await scheduleSessionsGenerate(boss, tenantId, timezone);
+  } finally {
+    await boss.stop({ graceful: false, timeout: 5000 });
+  }
+}
+
+// R.8 — the absence-alert schedule is registered with the same
+// best-effort contract at tenant creation.
+export async function registerAbsenceAlertsSchedule(
+  tenantId: string,
+  timezone: string,
+): Promise<void> {
+  const boss = createAppScopedBoss();
+  await boss.start();
+  try {
+    await scheduleAbsenceAlerts(boss, tenantId, timezone);
   } finally {
     await boss.stop({ graceful: false, timeout: 5000 });
   }
