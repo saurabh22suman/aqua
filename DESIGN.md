@@ -213,6 +213,19 @@ Fill colour: `water` normally, `warn` when under-filled, `late` when a problem.
 
 **Always carries a word or icon, never colour alone** — accessibility requirement and it survives sunlight.
 
+Shipped as `components/ui/StatusBadge.tsx` (2026-09-13 UI/UX audit §7.1). Tones map 1:1 to the semantic tokens plus a neutral pair for terminal states. Lifecycle maps shipped with it: `MEMBER_STATUS_TONE`, `ENQUIRY_STAGE_TONE`, `TENANT_STATUS_TONE`. Any new lifecycle field uses one of those (or adds a map entry) rather than a one-off pill.
+
+### List conventions (audited 2026-09-13 §7.4 — two tiers, both deliberate)
+
+- **Row-card** (bordered, `rounded-card`, `bg-paper`, one row per card): short, curated lists — dashboard "Needs you today", settings hub, staff list. The card makes each row feel like a destination.
+- **Divided list** (one container, `divide-y`/`border-b` on `line`, no per-row radius): long, dense lists — members, enquiries, register. Card-per-row over dozens of rows is noise and pushes the page into unreadable scroll.
+
+Rule of thumb: **≤ ~10 curated items → row-card; more or working lists → divided list.** Both use the same type scale and status treatment; only the chrome differs.
+
+### Button
+
+`components/ui/Button.tsx` (2026-09-13 audit §7.2). Enforced sizes: `sm` = 44px (the §2 floor, met exactly), `md`/`lg` = 48px. Variants: `primary` (the single accent action), `secondary`, `ghost`, and `destructive` (the `late` token — hard-to-reverse actions like "Mark churned"). Never hand-roll a height below 44px.
+
 ### Primary action
 
 ```jsx

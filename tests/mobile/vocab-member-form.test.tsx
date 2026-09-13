@@ -55,7 +55,7 @@ describe("MemberCreateForm — vocabulary (F18)", () => {
 
     // Open the minor/guardian branch so the relationship input mounts.
     fireEvent.change(screen.getByTestId("member-dob"), {
-      target: { value: "2015-01-01" },
+      target: { value: "01/01/2015" },
     });
 
     const relationship = screen.getByTestId("guardian-relationship");

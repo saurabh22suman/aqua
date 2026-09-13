@@ -9,6 +9,7 @@ import { transferMemberToBatchAction } from "@/lib/actions/transfer";
 import type { MemberEnrolment } from "@/lib/services/enrolment";
 import type { BatchWithProgramName } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { Button } from "@/components/ui/Button";
 
 // B3 — a member created through reception's add-member form, or
 // produced by converting an enquiry with no prior trial booking,
@@ -171,14 +172,14 @@ export function MemberEnrolmentPanel({
           Enrolment
         </h2>
         <p className="mt-2 text-[13px] text-late">{loadError}</p>
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={load}
-          className="mt-2 rounded-ctl border border-late px-3 py-1.5 text-[12.5px] font-medium text-late"
+          className="mt-2 border-late text-late hover:bg-late-soft"
           data-testid="enrolment-retry"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -278,15 +279,14 @@ export function MemberEnrolmentPanel({
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
+              <Button
+                variant="primary"
                 onClick={enrol}
                 disabled={busy || !effectiveBatchId}
-                className="rounded-ctl bg-[var(--accent)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
                 data-testid="enrol-member"
               >
                 {busy ? "Enrolling…" : "Enrol"}
-              </button>
+              </Button>
             </div>
           ) : batches!.length === 0 ? (
             <p className="text-[13px] text-ink-3">

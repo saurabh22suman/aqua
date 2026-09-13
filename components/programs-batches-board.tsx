@@ -18,6 +18,18 @@ import type { LocationOption } from "@/lib/services/people";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { formatWallTime12h } from "@/lib/time/tz";
 
+// O-D5 (2026-09-13 audit) — the row prefixes the coach term, but real
+// (and seed) names can already lead with it ("Coach Aanya Rao"),
+// producing "coach Coach Aanya Rao". Skip the prefix when the name
+// already carries it.
+function coachLabel(name: string, terminology: TerminologyState): string {
+  const term = resolveTerm(terminology, "coach", 1);
+  const lower = name.toLowerCase();
+  return lower === term.toLowerCase() || lower.startsWith(`${term.toLowerCase()} `)
+    ? name
+    : `${term} ${name}`;
+}
+
 export function ProgramsBatchesBoard({
   initialPrograms,
   initialBatches,
@@ -280,7 +292,7 @@ export function ProgramsBatchesBoard({
                     </Link>
                     <span className="text-ink-3"> — {b.programName}, capacity {b.capacity}, {formatWallTime12h(b.startTime)}–{formatWallTime12h(b.endTime)}</span>
                     {b.locationName ? <span className="text-ink-3"> · {b.locationName}</span> : null}
-                    {b.coachName ? <span className="text-ink-3"> · {resolveTerm(terminology, "coach", 1)} {b.coachName}</span> : null}
+                    {b.coachName ? <span className="text-ink-3"> · {coachLabel(b.coachName, terminology)}</span> : null}
                   </div>
                   <Tap>
                     <button

@@ -58,7 +58,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
   const err = status?.kind === "error" ? status.message : null;
 
   return (
-    <form action={formAction} method="post" className="space-y-3">
+    <form action={formAction} className="space-y-3">
       <input type="hidden" name="tenantId" value={tenantId} />
       <p className="text-[13px] text-ink-2">
         Create the owner&apos;s membership for a phone number. Nothing is sent anywhere —

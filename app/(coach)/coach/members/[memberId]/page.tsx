@@ -5,6 +5,7 @@ import { listMemberAlertsAction } from "@/lib/actions/absence-alerts";
 import { AbsenceAlertsList } from "@/components/absence-alerts-list";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
+import { formatDateIST } from "@/lib/time/tz";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 
@@ -130,7 +131,7 @@ export default async function CoachMemberDetailPage({
                 className="flex items-center justify-between px-3.5 py-2.5 text-[13px]"
               >
                 <span>
-                  {r.sessionDate} · {r.batchName}
+                  {formatDateIST(r.sessionDate)} · {r.batchName}
                 </span>
                 <span
                   className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${

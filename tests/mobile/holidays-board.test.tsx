@@ -55,7 +55,7 @@ describe("HolidaysBoard (R.3)", () => {
       target: { value: "Independence Day" },
     });
     fireEvent.change(screen.getByTestId("holiday-date"), {
-      target: { value: "2026-08-15" },
+      target: { value: "15/08/2026" },
     });
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /add holiday/i }));
@@ -81,7 +81,7 @@ describe("HolidaysBoard (R.3)", () => {
       target: { value: "Independence Day" },
     });
     fireEvent.change(screen.getByTestId("holiday-date"), {
-      target: { value: "2026-08-15" },
+      target: { value: "15/08/2026" },
     });
     fireEvent.click(screen.getByRole("button", { name: /add holiday/i }));
 

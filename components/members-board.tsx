@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import type { MemberListRow } from "@/lib/services/people";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
@@ -18,14 +19,6 @@ const STATUS_LABELS: Record<string, string> = {
   paused: "Paused",
   lapsed: "Lapsed",
   left: "Left",
-};
-
-const STATUS_TONE: Record<string, string> = {
-  trial: "bg-warn-soft text-warn",
-  active: "bg-good-soft text-good",
-  paused: "bg-warn-soft text-warn",
-  lapsed: "bg-late-soft text-late",
-  left: "bg-deck text-ink-3",
 };
 
 export function MembersBoard({
@@ -138,11 +131,9 @@ export function MembersBoard({
                     Joined {formatDateIST(m.joinedOn)}
                   </p>
                 </div>
-                <span
-                  className={`flex-none rounded-pill px-2.5 py-1 text-[11px] font-medium ${STATUS_TONE[m.status]}`}
-                >
+                <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
                   {STATUS_LABELS[m.status]}
-                </span>
+                </StatusBadge>
               </Link>
             </li>
           ))

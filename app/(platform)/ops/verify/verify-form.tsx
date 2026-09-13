@@ -44,7 +44,6 @@ export function PlatformVerifyForm() {
     <form
       ref={formRef}
       action={formAction}
-      method="post"
       className="space-y-4"
     >
       <label className="block">

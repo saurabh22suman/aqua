@@ -4,6 +4,8 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { getSampleDataState } from "@/db/sample-data-state";
 import { asTenantId } from "@/lib/ids";
+import { StatusBadge, TENANT_STATUS_TONE } from "@/components/ui/StatusBadge";
+import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { StatusTransitionControls } from "./status-transitions";
 import { TenantFeatureToggles } from "./tenant-feature-toggles";
 import { InviteOwnerForm } from "./invite-owner-form";
@@ -18,18 +20,13 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function StatusPill({ status }: { status: string }) {
-  // Status pill colour stays neutral ink regardless of the
-  // underlying state — late (overdue/absent) and warn (needs
-  // attention) are reserved semantic tokens for money and
-  // attendance state (DESIGN.md §1.1). A tenant being suspended
-  // or on trial is neither, so the label is the source of truth.
-  // F4 audit correction: this branch had reverted back to
-  // bg-late-soft / bg-warn-soft after the ea6c1f7 audit fix;
-  // the early-audit fix's `bg-deck text-ink-2` is restored.
+  // 2026-09-13 UI/UX audit §7.1 — this pill was neutral for every
+  // state, so active and suspended looked identical. The shared
+  // badge now uses the same lifecycle semantics as the tenants list.
   return (
-    <span className="text-[12px] font-medium px-3 py-1 rounded-pill bg-deck text-ink-2">
+    <StatusBadge tone={TENANT_STATUS_TONE[status] ?? "neutral"}>
       {STATUS_LABEL[status] ?? status}
-    </span>
+    </StatusBadge>
   );
 }
 
@@ -59,6 +56,21 @@ export default async function PlatformTenantDetailPage({
   const detail = await getTenantDetail(asTenantId(tenantId));
   if (!detail) notFound();
   const sampleState = await getSampleDataState(tenantId);
+
+  // X-D4 (2026-09-13 audit) — hide test-fixture feature keys that the
+  // resolution suites leave in the shared dev database; see
+  // lib/feature-artifacts.ts.
+  const featureRows = withoutTestArtifactFeatureKeys(
+    detail.featureKeys.map((f) => {
+      const out: {
+        key: string;
+        source: "plan" | "tenant_override" | "denied";
+        expiresAt?: Date;
+      } = { key: f.key, source: f.source };
+      if (f.expiresAt) out.expiresAt = f.expiresAt;
+      return out;
+    }),
+  );
 
   return (
     <div className="max-w-5xl">
@@ -126,6 +138,21 @@ export default async function PlatformTenantDetailPage({
         <StatCard label="Sessions this month" value={detail.sessionsThisMonth} />
       </section>
 
+      {/* 2026-09-13 UI/UX audit X-D6: the Owner block is the one
+          genuinely mutable action on this page and was buried below a
+          30+ row feature list at the bottom. It now sits directly
+          under the identity/status stats, before the read-only
+          settings and configuration sections. */}
+      <section className="mt-8">
+        <SectionHeader
+          title="Owner"
+          subtitle="Step 3 of the onboarding wizard: create the owner's membership, then mint a login link and share it with them yourself. Nothing is delivered automatically."
+        />
+        <div className="rounded-card bg-paper border border-line px-5 py-5">
+          <InviteOwnerForm tenantId={detail.id} />
+        </div>
+      </section>
+
       <section className="mt-8">
         <SectionHeader
           title="Locations"
@@ -169,24 +196,28 @@ export default async function PlatformTenantDetailPage({
         )}
       </section>
 
-      <section className="mt-8">
-        <SectionHeader
-          title="Feature state"
-          subtitle="Resolved from the plan; per-tenant overrides toggle each row on or off (and may carry an expiry)"
-        />
-        <TenantFeatureToggles
-          tenantId={detail.id}
-          initial={detail.featureKeys.map((f) => {
-            const out: {
-              key: string;
-              source: "plan" | "tenant_override" | "denied";
-              expiresAt?: Date;
-            } = { key: f.key, source: f.source };
-            if (f.expiresAt) out.expiresAt = f.expiresAt;
-            return out;
-          })}
-        />
-      </section>
+      {/* X-D6 (2026-09-13 audit) — this section was the bulk of the
+          ~5,450px page and had no reason to be open by default; it is
+          now collapsed. The mutation lives in the Owner block above. */}
+      <details className="mt-8 group">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-ctl px-1">
+          <span className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+            Feature state
+          </span>
+          <span className="text-[12px] text-ink-3">
+            {featureRows.length} features ·{" "}
+            <span className="group-open:hidden">expand</span>
+            <span className="hidden group-open:inline">collapse</span>
+          </span>
+        </summary>
+        <p className="mt-1 text-[13px] text-ink-2">
+          Resolved from the plan; per-tenant overrides toggle each row
+          on or off (and may carry an expiry).
+        </p>
+        <div className="mt-3">
+          <TenantFeatureToggles tenantId={detail.id} initial={featureRows} />
+        </div>
+      </details>
 
       {sampleState.hasSample && !sampleState.hasReal ? (
         <section className="mt-8">
@@ -234,16 +265,6 @@ export default async function PlatformTenantDetailPage({
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="mt-8">
-        <SectionHeader
-          title="Owner"
-          subtitle="Step 3 of the onboarding wizard: create the owner's membership, then mint a login link and share it with them yourself. Nothing is delivered automatically."
-        />
-        <div className="rounded-card bg-paper border border-line px-5 py-5">
-          <InviteOwnerForm tenantId={detail.id} />
-        </div>
       </section>
     </div>
   );

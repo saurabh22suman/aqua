@@ -30,7 +30,7 @@ export function RemoveSampleDataButton({
 
   return (
     <div className="mt-2">
-      <form action={formAction} method="post" className="flex items-center gap-3">
+      <form action={formAction} className="flex items-center gap-3">
         <input type="hidden" name="tenantId" value={tenantId} />
         <button
           type="submit"

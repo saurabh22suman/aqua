@@ -71,6 +71,22 @@ const WHITELIST = new Set([
   // member-status-panel.tsx — member status display surface.
   "components/member-status-panel.tsx",
 
+  // ui/StatusBadge.tsx — the shared status pill primitive extracted in
+  // the 2026-09-13 UI/UX audit §7.1 (before it, each list re-declared
+  // its own tones). It is the single home of the lifecycle tone maps
+  // (member, enquiry stage, tenant status). Enquiry stages are the
+  // entry point to money and tenant states are the platform lifecycle
+  // the existing tenants/[tenantId] whitelist entry already sanctions;
+  // centralising the classes here is what stops the same semantic
+  // tokens being copy-pasted into every new list.
+  "components/ui/StatusBadge.tsx",
+
+  // ui/Button.tsx — the shared button primitive from the same audit
+  // §7.2. Its `destructive` variant is `late` by design (hard-to-reverse
+  // actions such as "Mark churned"); the Ops semantic-token whitelist
+  // entry above covers that surface.
+  "components/ui/Button.tsx",
+
   // owner-dashboard.tsx — needs-attention list (legitimate
   // `warn` use, DESIGN.md §1.1: warn = needs attention).
   "components/owner-dashboard.tsx",

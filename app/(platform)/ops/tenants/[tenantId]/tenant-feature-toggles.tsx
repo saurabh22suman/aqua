@@ -167,7 +167,6 @@ function TenantFeatureEditRow({
   return (
     <form
       action={formAction}
-      method="post"
       className="space-y-3"
     >
       <input type="hidden" name="tenantId" value={tenantId} />

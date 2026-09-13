@@ -16,7 +16,7 @@ import { BottomNav, type NavItem } from "@/components/bottom-nav";
 // is reserved for primary action, not arbitrary UI tinting).
 
 const PLATFORM_MOBILE_NAV: NavItem[] = [
-  { href: "/ops", label: "Overview", iconName: "layout-dashboard" },
+  { href: "/ops", label: "Overview", iconName: "layout-dashboard", exact: true },
   { href: "/ops/tenants", label: "Tenants", iconName: "building-2" },
   { href: "/ops/features", label: "Feature catalogue", iconName: "list-checks" },
   { href: "/ops/presets", label: "Presets", iconName: "sliders-horizontal" },
@@ -51,8 +51,15 @@ export default async function PlatformLayout({
       <main className="flex-1 min-w-0 bg-deck text-ink">
         <MobilePlatformHeader status={status} />
         <div className="px-5 py-6 pb-24 md:px-10 md:py-10">{children}</div>
+        {/* X-D1 (2026-09-13 audit §7.5): at md+ the desktop sidebar
+            takes over; the bottom bar must not render alongside it.
+            The wrapper, not the nav's own classes, carries the
+            breakpoint because BottomNav is shared with mobile-first
+            tenant surfaces. */}
         {status.kind === "authenticated" ? (
-          <BottomNav items={PLATFORM_MOBILE_NAV} />
+          <div className="md:hidden">
+            <BottomNav items={PLATFORM_MOBILE_NAV} />
+          </div>
         ) : null}
       </main>
     </div>

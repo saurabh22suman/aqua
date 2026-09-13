@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, Copy, Eye, Link2 } from "lucide-react";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { formatDateTimeIST } from "@/lib/time/tz";
 
 // C-45 — owner-side control to mint a parent-page link for the
@@ -84,18 +85,18 @@ export function ParentLinkPanel({
           </p>
         </div>
         {!open ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={() => {
               setOpen(true);
               if (!url) void mint();
             }}
-            className="flex-none rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] font-medium text-ink-2"
+            className="flex-none"
             data-testid="parent-link-open"
           >
-            <Eye size={14} className="inline-block mr-1" />
+            <Eye size={14} aria-hidden="true" />
             Get link
-          </button>
+          </Button>
         ) : null}
       </div>
       {open ? (
@@ -117,20 +118,23 @@ export function ParentLinkPanel({
                     ? `${window.location.origin}${url}`
                     : url}
                 </code>
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   onClick={copyLink}
-                  className="flex-none rounded-ctl border border-line bg-paper px-2.5 py-2 text-[12px]"
+                  className="flex-none px-3"
                   aria-label="Copy link"
                   data-testid="parent-link-copy"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
-                </button>
+                </Button>
                 <a
                   href={url}
                   target="_blank"
                   rel="noopener"
-                  className="flex-none rounded-ctl bg-[var(--accent)] px-3 py-2 text-[12.5px] font-medium text-paper"
+                  className={buttonClasses({
+                    variant: "primary",
+                    className: "flex-none text-[12.5px]",
+                  })}
                   data-testid="parent-link-open-tab"
                 >
                   <Link2 size={14} className="inline-block mr-1" />

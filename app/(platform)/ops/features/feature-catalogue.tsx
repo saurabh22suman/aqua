@@ -37,6 +37,8 @@ export function FeatureCatalogue({
 }) {
   // Group by category for the visual order. Categories are
   // freeform text in the schema, so we sort alphabetically.
+  // (Test-fixture rows are filtered by the server page before this
+  // component is rendered — X-D4, lib/feature-artifacts.ts.)
   const grouped = new Map<string, Feature[]>();
   for (const f of initial) {
     const arr = grouped.get(f.category) ?? [];
@@ -166,7 +168,6 @@ function FeatureEditRow({
   return (
     <form
       action={formAction}
-      method="post"
       className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end"
     >
       <input type="hidden" name="key" value={feature.key} />

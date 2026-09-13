@@ -72,7 +72,7 @@ describe("SessionLifecycleControl (R.4)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /reschedule/i }));
     fireEvent.change(screen.getByTestId("reschedule-date"), {
-      target: { value: "2026-09-14" },
+      target: { value: "14/09/2026" },
     });
     fireEvent.change(screen.getByTestId("reschedule-start"), {
       target: { value: "18:00" },
@@ -140,7 +140,7 @@ describe("SessionLifecycleControl (R.4)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /reschedule/i }));
     fireEvent.change(screen.getByTestId("reschedule-date"), {
-      target: { value: "2026-09-14" },
+      target: { value: "14/09/2026" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save new time/i }));
 

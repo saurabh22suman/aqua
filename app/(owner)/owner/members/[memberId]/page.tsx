@@ -275,7 +275,7 @@ export default async function MemberDetailPage({
             {attendanceHistory.rows.map((r) => (
               <li key={r.sessionId} className="flex items-center justify-between px-3.5 py-2.5 text-[13px]">
                 <span>
-                  {r.sessionDate} · {r.batchName}
+                  {formatDateIST(r.sessionDate)} · {r.batchName}
                 </span>
                 <span
                   className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${

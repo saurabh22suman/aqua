@@ -1,12 +1,31 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { useState } from "react";
+import { Check, Clock, X } from "lucide-react";
 import type { RosterRow } from "@/lib/actions/coach";
 import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
+
+// C-D1 (2026-09-13 audit) — present / late / absent as three 44px hit
+// areas. The domain stores `late` already; the register never offered
+// it. `warn`, not `late` — a late arrival is not the absent state.
+const TOGGLE_BASE =
+  "h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150";
+const TOGGLE_TONES: Record<Mark, { on: string; label: string }> = {
+  present: { on: "bg-good-soft border-good text-good", label: "Present" },
+  late: { on: "bg-warn-soft border-warn text-warn", label: "Late" },
+  absent: { on: "bg-late-soft border-late text-late", label: "Absent" },
+};
+const TOGGLE_ICONS: Record<Mark, typeof Check> = {
+  present: Check,
+  late: Clock,
+  absent: X,
+};
+const TOGGLE_ORDER: Mark[] = ["present", "late", "absent"];
 
 export function RegisterBoard({
   sessionId,
@@ -37,13 +56,34 @@ export function RegisterBoard({
     retrySync,
   } = useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled);
 
+  // C-D1 (2026-09-13 audit) — bulk marking for the common case where
+  // nearly everyone is present. Only unmarked rows are touched, so it
+  // never overwrites a mark the coach already made by hand. The marks
+  // are written sequentially: with the offline queue off, each tap is
+  // its own server action, and firing a dozen concurrently in dev
+  // dropped responses; sequential writes keep the count honest and let
+  // the button show progress.
+  const unmarked = rows.filter((r) => !marks[r.memberId]);
+  const canMark = offlineSyncEnabled || online;
+  const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+
+  async function markAllPresent() {
+    if (bulk) return;
+    const targets = [...unmarked];
+    setBulk({ done: 0, total: targets.length });
+    for (let i = 0; i < targets.length; i++) {
+      await mark(targets[i]!.memberId, "present");
+      setBulk({ done: i + 1, total: targets.length });
+    }
+    setBulk(null);
+  }
+
   return (
     <div>
-      {/* Kill switch off (issue #4 postmortem, docs/architecture.md §12.2):
-          this must appear the INSTANT connectivity drops, not only after
-          a failed tap — the whole point is that a coach never believes a
-          mark saved when it didn't, and a banner that only shows up after
-          a failure is a banner that shows up too late. */}
+      {/* Kill switch off (issue #4 postmortem, docs/architecture.md
+          §12.2): show the instant connectivity drops, not only after a
+          failed tap — a coach must never believe a mark saved when it
+          didn't. */}
       {!offlineSyncEnabled && !online ? (
         <div
           className="mb-2 rounded-card border border-late bg-late-soft px-4 py-3"
@@ -181,6 +221,19 @@ export function RegisterBoard({
               />
             </div>
           ) : null}
+          {(unmarked.length > 0 || bulk !== null) && canMark ? (
+            <Button
+              variant="secondary"
+              className="mt-2.5 w-full"
+              disabled={bulk !== null}
+              onClick={() => void markAllPresent()}
+              data-testid="mark-all-present"
+            >
+              {bulk
+                ? `Marking ${bulk.done} of ${bulk.total}…`
+                : `Mark all ${unmarked.length} present`}
+            </Button>
+          ) : null}
         </div>
 
         {/* Rule 1: a mark that fails to sync must be SEEN, not folded into
@@ -228,46 +281,34 @@ export function RegisterBoard({
                 </p>
               </div>
 
-              {/*
-                Un-carded on purpose (U1): a bordered card + full-width
-                buttons per row cost 2-3x the vertical space of a single
-                line, which means more scrolling one-handed at a poolside —
-                directly against the 60-second-register target.
-
-                TOUCH TARGET: the glyph below is ~18px, deliberately smaller
-                than the tap target. The button itself is h-11 w-11 (44px)
-                — that's the hit box, extended by padding around the small
-                glyph, not the glyph's own size. Do not "tidy" these back
-                into full-width labelled buttons to make them look bigger;
-                that undoes U1 and the 44px requirement is already met.
-              */}
+              {/* Un-carded on purpose (U1): full-width buttons per row
+                  cost 2-3x the vertical space, against the
+                  60-second-register target. Each glyph is ~18px but the
+                  button is h-11 w-11 (44px) — the hit box meets
+                  DESIGN.md §2; don't "tidy" these into labelled
+                  buttons. */}
               <div className="flex gap-1.5 flex-none">
-                <button
-                  type="button"
-                  onClick={() => mark(r.memberId, "present")}
-                  aria-label="Present"
-                  aria-pressed={marks[r.memberId] === "present"}
-                  className={`h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150 ${
-                    marks[r.memberId] === "present"
-                      ? "bg-good-soft border-good text-good"
-                      : "bg-deck border-line text-ink-3"
-                  }`}
-                >
-                  <Check size={18} strokeWidth={2.4} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => mark(r.memberId, "absent")}
-                  aria-label="Absent"
-                  aria-pressed={marks[r.memberId] === "absent"}
-                  className={`h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150 ${
-                    marks[r.memberId] === "absent"
-                      ? "bg-late-soft border-late text-late"
-                      : "bg-deck border-line text-ink-3"
-                  }`}
-                >
-                  <X size={18} strokeWidth={2.4} />
-                </button>
+                {TOGGLE_ORDER.map((next) => {
+                  const Icon = TOGGLE_ICONS[next];
+                  const active = marks[r.memberId] === next;
+                  return (
+                    <button
+                      key={next}
+                      type="button"
+                      onClick={() => mark(r.memberId, next)}
+                      aria-label={TOGGLE_TONES[next].label}
+                      aria-pressed={active}
+                      className={`${TOGGLE_BASE} ${
+                        active
+                          ? TOGGLE_TONES[next].on
+                          : "bg-deck border-line text-ink-3"
+                      }`}
+                      data-testid={`mark-${next}-${r.memberId}`}
+                    >
+                      <Icon size={18} strokeWidth={2.4} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </li>

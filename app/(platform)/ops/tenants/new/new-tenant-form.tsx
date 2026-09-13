@@ -36,7 +36,7 @@ export function NewTenantForm({
   const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form action={formAction} method="post" className="mt-8 space-y-6">
+    <form action={formAction} className="mt-8 space-y-6">
       <Section title="Club details" subtitle="Public-facing name and URL slug.">
         <Field label="Club name" name="name" required autoComplete="off" />
         <Field

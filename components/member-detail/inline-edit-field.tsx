@@ -10,6 +10,8 @@ import {
 import { Pencil } from "lucide-react";
 import { updateMemberAction } from "@/lib/actions/people";
 import { formatPhoneIN } from "@/lib/phone";
+import { formatDateIST } from "@/lib/time/tz";
+import { DateField } from "@/components/ui/DateField";
 
 // Member-detail inline edit. Replaces the read-only field block on
 // /owner/members/[id] with a click-to-edit affordance for the five
@@ -176,6 +178,11 @@ export function InlineEditField({
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === "Enter" && type !== "textarea") {
       e.preventDefault();
+      // Same rule as blur: an incomplete date is a cancel.
+      if (type === "date" && !draft) {
+        setDraft(displayValue);
+        return;
+      }
       void commit(draft);
     } else if (e.key === "Escape") {
       e.preventDefault();
@@ -190,11 +197,10 @@ export function InlineEditField({
   ) {
     const newValue = e.target.value;
     setDraft(newValue);
-    // Date and select inputs save on change — no blur step needed.
-    // A date input's onChange fires when the user picks a day; a
-    // <select>'s onChange fires on pick. For text/textarea the user
-    // finishes with blur or Enter.
-    if (type === "date" || type === "select") {
+    // Select inputs save on change — no blur step needed. Date fields
+    // use DateField (masked dd/mm/yyyy) and commit on blur/Enter, so a
+    // partially typed date never round-trips to the server.
+    if (type === "select") {
       void commit(newValue);
     }
   }
@@ -202,6 +208,13 @@ export function InlineEditField({
   function handleBlur() {
     if (status.kind === "saving") return;
     if (!editing) return;
+    // An incomplete/cleared date is a cancel, not a wipe — DOB is
+    // required, and emitting "" would optimistically blank the field.
+    if (type === "date" && !draft) {
+      setDraft(displayValue);
+      setEditing(false);
+      return;
+    }
     void commit(draft);
   }
 
@@ -215,8 +228,15 @@ export function InlineEditField({
     "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent)]";
 
   // P2-8/P2-9: empty fields style the placeholder as editable and keep
-  // the pencil visible (no hover on a phone).
-  const shown = formatAs === "phone" ? formatPhoneIN(displayValue) : displayValue;
+  // the pencil visible (no hover on a phone). Dates read in the
+  // DESIGN.md §4 format (`22 Aug`), never raw ISO, while the edit
+  // draft stays ISO for the write.
+  const shown =
+    formatAs === "phone"
+      ? formatPhoneIN(displayValue)
+      : type === "date" && displayValue
+        ? formatDateIST(displayValue)
+        : displayValue;
   const isEmpty = !shown;
 
   return (
@@ -252,16 +272,31 @@ export function InlineEditField({
               rows={2}
               className={`${baseInputClass} py-2 min-w-[200px]`}
             />
+          ) : type === "date" ? (
+            <DateField
+              inputRef={inputRef as React.RefObject<HTMLInputElement>}
+              value={draft}
+              onChange={(iso) => {
+                setDraft(iso);
+                // Date saves on change ("saves on change, not blur"):
+                // DateField only emits a complete valid date, so a
+                // partial keypress never reaches the server.
+                if (iso) void commit(iso);
+              }}
+              onBlur={handleBlur}
+              onKeyDown={handleKeyDown}
+              aria-label={field}
+              className="h-11 min-w-[140px]"
+            />
           ) : (
             <input
               ref={inputRef as React.RefObject<HTMLInputElement>}
-              type={type === "date" ? "date" : "text"}
-              lang={type === "date" ? "en-IN" : undefined}
+              type="text"
               value={draft}
               onChange={handleChange}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
-              placeholder={placeholder ?? (type === "date" ? "dd/mm/yyyy" : undefined)}
+              placeholder={placeholder}
               aria-label={field}
               className={`${baseInputClass} h-11 min-w-[140px]`}
             />

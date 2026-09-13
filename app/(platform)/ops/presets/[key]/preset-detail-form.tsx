@@ -55,7 +55,7 @@ export function PresetDetailForm({
   const error = state?.kind === "error" ? state.message : null;
 
   return (
-    <form action={formAction} method="post" className="mt-8 space-y-4">
+    <form action={formAction} className="mt-8 space-y-4">
       <input type="hidden" name="featureKey" value={presetKey} />
       <section className="rounded-card bg-paper border border-line p-5 space-y-4">
         <div>

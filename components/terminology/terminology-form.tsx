@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, RotateCcw, Save } from "lucide-react";
+import { RotateCcw, Save } from "lucide-react";
 import {
   DEFAULT_TERMS,
   titleCase,
@@ -13,6 +13,7 @@ import {
   updateTermOverrideAction,
   clearTermOverrideAction,
 } from "@/lib/actions/terminology";
+import { Button } from "@/components/ui/Button";
 
 // Phase 2.10 + 4.20 — terminology editor. Eight rows, each
 // with singular + plural forms, scoped to a single locale at a
@@ -84,9 +85,39 @@ export function TerminologyForm({
     }
     return out;
   });
+  // 2026-09-13 UI/UX audit §11 #9 — eight always-primary Save buttons
+  // diluted "one primary action" and invited no-op saves. `baselines`
+  // tracks the live value per row (override or locale default) so Save
+  // stays disabled until a row actually differs from what is stored.
+  // Saving or resetting advances the baseline in place, so a row goes
+  // quiet again the moment its write lands.
+  const [baselines, setBaselines] = useState<Record<TermKey, RowState | undefined>>(() => {
+    const out = {} as Record<TermKey, RowState | undefined>;
+    for (const row of ROW_KEYS) {
+      const loc = initial.overrides[row.key]?.[locale];
+      out[row.key] = loc ? { one: loc.one, other: loc.other } : undefined;
+    }
+    return out;
+  });
   const [pendingKey, setPendingKey] = useState<TermKey | null>(null);
   const [errors, setErrors] = useState<Partial<Record<TermKey, string>>>({});
   const [saved, setSaved] = useState<Partial<Record<TermKey, Date>>>({});
+
+  function liveRow(key: TermKey): RowState {
+    const baseline = baselines[key];
+    if (baseline) return baseline;
+    return {
+      one: DEFAULT_TERMS[locale][key].one,
+      other: DEFAULT_TERMS[locale][key].other,
+    };
+  }
+
+  function isDirty(key: TermKey): boolean {
+    const draft = overrides[key];
+    if (!draft) return false;
+    const live = liveRow(key);
+    return draft.one !== live.one || draft.other !== live.other;
+  }
 
   // Preview state — keyed to the active locale — drives the
   // "Reads as:" sentence at the row top so the user sees the
@@ -123,6 +154,10 @@ export function TerminologyForm({
         setErrors({ ...errors, [key]: result.message });
       } else {
         setSaved({ ...saved, [key]: new Date() });
+        setBaselines({
+          ...baselines,
+          [key]: { one: row.one.trim(), other: row.other.trim() },
+        });
       }
     });
   }
@@ -139,6 +174,7 @@ export function TerminologyForm({
         // so the inputs match the live state.
         setOverrides({ ...overrides, [key]: undefined });
         setSaved({ ...saved, [key]: new Date() });
+        setBaselines({ ...baselines, [key]: undefined });
       }
     });
   }
@@ -157,6 +193,7 @@ export function TerminologyForm({
         const isPending = pendingKey === row.key;
         const errorMsg = errors[row.key];
         const savedAt = saved[row.key];
+        const dirty = isDirty(row.key);
 
         return (
           <li key={row.key} className="bg-paper border border-line rounded-ctl p-4">
@@ -208,26 +245,27 @@ export function TerminologyForm({
             ) : null}
 
             <div className="mt-3 flex gap-2">
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                pill
                 onClick={() => saveRow(row.key)}
-                disabled={isPending}
-                className="flex-1 min-h-[44px] rounded-pill py-2.5 text-[13.5px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center justify-center gap-1.5"
+                disabled={isPending || !dirty}
+                className="flex-1"
                 data-testid={`term-${row.key}-save`}
               >
-                {isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                Save
-              </button>
+                <Save size={14} aria-hidden="true" />
+                {isPending ? "Saving…" : "Save"}
+              </Button>
               {isCustom ? (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  pill
                   onClick={() => resetRow(row.key)}
                   disabled={isPending}
-                  className="min-h-[44px] rounded-pill py-2.5 px-3 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 flex items-center gap-1.5"
                   data-testid={`term-${row.key}-reset`}
                 >
-                  <RotateCcw size={13} /> Use default
-                </button>
+                  <RotateCcw size={13} aria-hidden="true" /> Use default
+                </Button>
               ) : null}
             </div>
           </li>

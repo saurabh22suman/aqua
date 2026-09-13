@@ -108,9 +108,11 @@ describe("MemberEditForm joined date (Wave 2)", () => {
     render(<MemberEditForm member={MEMBER} locations={LOCATIONS} />);
 
     const input = screen.getByTestId("member-joined-on") as HTMLInputElement;
-    expect(input.value).toBe("2026-08-01");
+    // Masked dd/mm/yyyy field (2026-09-13 audit §7.3): the display is
+    // day-first; the action still receives ISO.
+    expect(input.value).toBe("01/08/2026");
 
-    fireEvent.change(input, { target: { value: "2026-07-15" } });
+    fireEvent.change(input, { target: { value: "15/07/2026" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     await vi.waitFor(() =>
@@ -125,7 +127,9 @@ describe("MemberCreateForm joined date (Wave 2)", () => {
   it("offers an optional joined date", () => {
     render(<MemberCreateForm locations={LOCATIONS} terminology={TERMINOLOGY} />);
     const input = screen.getByTestId("member-joined-on") as HTMLInputElement;
-    expect(input.type).toBe("date");
+    // Masked dd/mm/yyyy text field, not a native date input
+    // (2026-09-13 audit §7.3).
+    expect(input.type).toBe("text");
     expect(input.value).toBe("");
   });
 });

@@ -6,6 +6,7 @@ import {
   transitionTenantStatusAction,
   type TransitionFormInput,
 } from "@/lib/actions/platform-tenants";
+import { buttonClasses } from "@/components/ui/Button";
 
 // Phase 1.6 — status transitions for the operator detail page. The
 // full detail page is server-rendered; this island owns the only
@@ -37,19 +38,18 @@ const BUTTON_LABEL: Record<Action, string> = {
 };
 
 function buttonClass(action: Action): string {
-  // Status actions are operator workflow controls, not money or
-  // attendance state — DESIGN.md §1.1 reserves warn / late / water
-  // for those meanings. We use the accent token (the only token
-  // DESIGN.md §1.2 explicitly endorses for non-status primary
-  // actions) and the neutral ink palette for the rest. The label is
-  // the source of truth.
+  // 2026-09-13 UI/UX audit §7.2 — "Mark churned" is destructive and
+  // hard to reverse, but was styled as a plain neutral button. It now
+  // uses the shared destructive variant (`late` token) while suspend
+  // stays a neutral secondary and reactivate is the accent primary.
+  // The confirm dialog still gates churn/suspend behind a reason.
   if (action === "tenant.churn") {
-    return "rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-ink-2 hover:bg-ink transition-colors duration-150";
+    return buttonClasses({ variant: "destructive", pill: true });
   }
   if (action === "tenant.suspend") {
-    return "rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck transition-colors duration-150";
+    return buttonClasses({ variant: "secondary", pill: true });
   }
-  return "rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-[var(--accent)] hover:opacity-90 transition-colors duration-150";
+  return buttonClasses({ variant: "primary", pill: true });
 }
 
 export function StatusTransitionControls({
@@ -200,7 +200,13 @@ export function StatusTransitionControls({
                 type="button"
                 disabled={isPending}
                 onClick={confirmWithReason}
-                className="rounded-pill px-5 py-2.5 text-[14px] font-semibold text-white bg-[var(--accent)] transition-colors duration-150 disabled:opacity-60"
+                className={buttonClasses({
+                  variant:
+                    pendingAction === "tenant.churn" ? "destructive" : "primary",
+                  size: "md",
+                  pill: true,
+                  className: "font-semibold",
+                })}
               >
                 {isPending ? "Saving…" : `Confirm ${BUTTON_LABEL[pendingAction]}`}
               </button>

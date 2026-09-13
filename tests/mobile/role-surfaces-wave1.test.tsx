@@ -33,7 +33,7 @@ vi.mock("@/lib/actions/people", () => ({ listMembersAction: vi.fn() }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { MembersBoard } from "@/components/members-board";
-import ParentPage from "@/app/(parent)/parent/page";
+import { ParentLinkExplainer } from "@/components/parent-link-explainer";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import type { MemberListRow } from "@/lib/services/people";
@@ -85,7 +85,11 @@ describe("W1-2 no dead /platform links", () => {
 
 describe("W1-3 parent explainer (not a bare stub)", () => {
   it("explains how parents get their link", () => {
-    render(<ParentPage />);
+    // P-D3 (2026-09-13 UI/UX audit): the role check moved from the
+    // (parent) layout into the page so its 404 can render this same
+    // explainer. The content test renders the shared component; the
+    // page's gate is exercised by the role-gating suites.
+    render(<ParentLinkExplainer />);
     expect(document.body.textContent).toMatch(/club|academy/i);
     expect(document.body.textContent).toMatch(/link/i);
   });
