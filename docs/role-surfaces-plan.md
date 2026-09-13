@@ -43,6 +43,9 @@ surfaces that do not exist yet.
 
 ## 2. Current state (post-#137)
 
+Point-in-time snapshot as of PR #137. Superseded in part — see Wave 1
+(#138), Wave 2 (#139) and §5 for what has shipped since.
+
 | Role | Nav | Notable gaps |
 | --- | --- | --- |
 | Owner | Home / Members / Reports / Settings | Sessions, Programs, Enquiries, Staff, Onboarding only via cards/back-links (F26 deferred). No facility switch. Member list/detail has no joined date or attendance summary. |
@@ -76,16 +79,19 @@ substitution, Staff/invites, Branding, Vocabulary, Onboarding.
 - Make "Register not started" actionable; finish report copy polish
   (`—`, `1 → 0`).
 
-**Add (later, planned):** money hero and dues (C-46, C-29–C-39),
-holiday editor (R.3), cancel/reschedule UI (R.4), waitlist/transfer/
-makeup UIs (R.5–R.7), absence alerts (R.8/V-20), progress and skills
-(V-09–V-11), payroll (V-23–V-34), facilities/booking (V-01–V-08),
-importer, documents, consent withdrawal/export, staff edit (3.5 tail),
-member↔facility opt-ins and per-facility pricing (new tasks, Wave 2).
+**Delivered since v1:** holiday editor (R.3), cancel/reschedule UI
+(R.4), waitlist (R.5), batch transfer (R.6), makeup credits (R.7),
+absence alerts (R.8) — see §5.
 
-**Remove/move:** the false cancel/reschedule copy on `/owner/sessions`;
-the "Today's facilities" heading (it renders batches); the `/platform`
-and `/ops/plans` dead links; the GA flag on unbuilt billing/messaging.
+**Add (later, planned):** money hero and dues (C-46, C-29–C-39),
+progress and skills (V-09–V-11), payroll (V-23–V-34),
+facilities/booking (V-01–V-08), importer, documents, consent
+withdrawal/export, staff edit (3.5 tail), member↔facility opt-ins and
+per-facility pricing (new tasks, Wave 2).
+
+**Remove/move:** the "Today's facilities" heading (it renders batches);
+the `/platform` and `/ops/plans` dead links; the GA flag on unbuilt
+billing/messaging.
 
 ### Reception
 
@@ -102,9 +108,9 @@ centre (R.19).
 **Keep:** Today, Schedule, Members, Register, Me.
 **Add (now):** "Mark all present", a Late option, and undo on the
 register; attendance %/last-marked on the roster.
+**Delivered since v1:** absence alerts on member detail (R.8, §5).
 **Add (later):** assessments (V-10), progress pips (V-11), lane
-grouping (V-12), absence alerts (R.8), self check-in (V-25), shift
-roster (V-23).
+grouping (V-12), self check-in (V-25), shift roster (V-23).
 **Remove:** nothing.
 
 ### Parent
@@ -113,8 +119,10 @@ roster (V-23).
 **Add (now):** branded explainer page for `/parent` ("your club sends
 you a link") instead of the bare stub; 7-day upcoming sessions, coach
 name and facility on the parent page.
+**Delivered since v1:** the absence-alert line under "This month"
+(R.8/V-20, §5).
 **Add (later):** fees/payment links (C-32/C-36), progress pips (V-11),
-absence alerts (V-20), consent withdrawal (V-45), full schedule.
+consent withdrawal (V-45), full schedule.
 **Remove:** the bare `h1 Parent` stub.
 
 ### Ops
@@ -186,7 +194,50 @@ Open questions (owner, 2026-09-13) — to settle before Wave 3 starts:
   Needs a design pass before R.28 (per-location overrides) and the
   platform feature catalogue work.
 
-## 5. R.8 — absence alerts (delivered)
+## 5. R.3 → R.8 — delivered
+
+All six shipped in PR #140 (`ed80887`), closing the "backend-only with
+no UI" gap listed in §2.
+
+### R.3 — holidays and closures (`87afa9d`)
+
+Owner calendar at `/owner/settings/holidays` plus the settings entry
+point: `components/holidays-board.tsx` (add/remove, recurring toggle,
+duplicate messaging), `listHolidays` in `lib/services/holidays.ts` and
+`lib/actions/holidays.ts`. No migration — the table and the
+generator skip already existed. Test:
+`tests/mobile/holidays-board.test.tsx`.
+
+### R.4 — session cancel and reschedule (`09e4669`)
+
+`components/session-lifecycle-control.tsx` inline on
+`/owner/sessions`, wired through `components/upcoming-sessions-list.tsx`;
+reschedule guards against coach conflicts before saving. Date helpers
+in `lib/time/tz.ts`. Tests:
+`tests/mobile/session-lifecycle-control.test.tsx`,
+`upcoming-sessions-list.test.tsx`, `date-display-helpers.test.ts`.
+
+### R.5 — waitlist (`0753aab`, fixture fix `c631983`)
+
+`components/waitlist-board.tsx` on the batch detail page plus a
+join-waitlist path on `components/member-enrolment-panel.tsx` when a
+batch is full; `lib/actions/waitlist.ts` and the service promote/remove
+calls. Tests: `tests/mobile/waitlist-board.test.tsx`,
+`enrolment-waitlist-cta.test.tsx`.
+
+### R.6 — batch transfer (`8326b99`)
+
+Transfer control added to `components/member-enrolment-panel.tsx`
+(UI-only change over the existing service). Test:
+`tests/mobile/enrolment-transfer.test.tsx`.
+
+### R.7 — makeup credits (`e2a368b`)
+
+`components/makeup-credits-panel.tsx` on owner member detail — grant
+and redeem — with `lib/actions/makeup.ts` and the grant/redeem/list
+service calls. Test: `tests/mobile/makeup-credits-panel.test.tsx`.
+
+### R.8 — absence alerts (`e0bde6e`)
 
 Owner decisions 2026-09-13, implemented in PR #140:
 - low-attendance threshold **owner-configurable, default 50%**; the
@@ -208,7 +259,6 @@ dedupe, threshold, parent data), `absence-alerts-list.test.tsx`,
 ## 6. Defects to fix regardless of waves
 
 - `/platform` links/redirects (5 sites) and `/ops/plans/[planId]` link.
-- `/owner/sessions` copy promises cancel/reschedule with no UI (R.4).
 - Feature catalogue marks `billing` and `messaging` as GA while unbuilt.
 - `components/ui/Row.tsx` and `FieldError.tsx` have no product call
   sites (wire or delete).
@@ -219,5 +269,6 @@ dedupe, threshold, parent data), `absence-alerts-list.test.tsx`,
 1. Consolidated vs per-facility invoicing (Wave 2, affects C-31/C-32).
 2. Worker surface: build `(worker)/tasks` (R.13) or give workers a
    real placeholder instead of `/parent`.
-3. Owner quick-links grid vs a "More" sheet — grid proposed here
-   because the four-item rule is absolute.
+
+Resolved: owner quick-links grid vs a "More" sheet — settled in favour
+of the grid and shipped as W1-4 in Wave 1 (`components/owner-dashboard.tsx`).

@@ -5,10 +5,19 @@ that exist, every path that should call each one, and whether it
 does. It is the response to "this is the sixth instance of 'a
 guard built, a second path added later, the guard never re-run.'"
 
-The matrix is also the source of truth for the companion source-scan
-test (`tests/tier1/guard-coverage.test.ts`), which pins the call
-relationship so a future agent cannot silently add a path that
-bypasses an existing guard.
+**This table and `tests/tier1/guard-coverage.test.ts`'s
+`MATRIX_PATHS`/`EXPECTED` constants are two independent copies of
+the same data — if you add or change a row here, you must also
+update the test file, or they will silently drift. The test does
+not derive its data from this file.** The only thing the test
+reads out of this markdown is a `toContain()` check for the guard
+ID strings (`G1`…`G10`) plus the literals `rescheduleSession` and
+`substituteCoach`. Everything else it asserts comes from its own
+hardcoded TypeScript constants.
+
+Note also that `tests/tier1/**` is read-only to the agent (see
+`docs/testing-strategy.md` §5) — so a change that adds a row here
+needs a human to land the matching test-side change.
 
 ## Glossary
 
@@ -64,6 +73,33 @@ guard SHOULD be called but is not (F2 finding or known gap).
 | `transitionMemberStatus` | member-status.ts | ⚪ | ⚪ | ⚪ | ⚪ | ✅ via action | ⚪ | ✅ allowed-graph | ⚪ |
 | `recordConsent` | consent.ts | ⚪ | ⚪ | ⚪ | ⚪ | ✅ via action | ✅ unique (tenant, person, purpose, version, granted-at) | ⚪ | ⚪ |
 
+### Paths added after the F2 audit — documented here, NOT yet pinned by the test
+
+Every row below is missing from `guard-coverage.test.ts`'s
+`MATRIX_PATHS`/`EXPECTED`. They are covered by nothing mechanical;
+adding them to the test needs a human (Tier-1 files are read-only
+to the agent). G1/G2/G4 are `⚪` for all of them — none of these
+paths touch batch or session scheduling — so those columns are
+omitted for width.
+
+| Path | Where | G3 capacity | G7 permission | G8 uniqueness | G9 status graph | G10 consent |
+|---|---|---|---|---|---|---|
+| `createEnquiry` | enquiries.ts | ⚪ | ✅ via `lib/actions/enquiries.ts` | ⚪ (an enquiry is not a natural-key entity — duplicates are legitimate) | ⚪ | ⚪ |
+| `transitionEnquiryStage` | enquiries.ts | ⚪ | ✅ via action | ⚪ | ✅ **but a second implementation** — `ENQUIRY_STAGE_TRANSITIONS` in `enquiries.ts`, not `transitionMemberStatus`; takes `for("update")` on the row first | ⚪ |
+| `addFollowUp` | enquiries.ts | ⚪ | ✅ via action | ⚪ (composite FK `enquiry_follow_ups_enquiry_tenant_fkey` pins the parent to the same tenant) | ⚪ | ⚪ |
+| `addMemberFacility` | facility-optins.ts | ⚪ | ✅ via `lib/actions/facility-optins.ts` | ✅ open-optin pre-check + partial `uniqueIndex` `member_facility_optins_active_idx` | ⚪ | ⚪ |
+| `createGuardianship` | consent.ts | ⚪ | ⚪ **not a top-level path** — takes a `TenantTx`, sole caller is `register.ts:createMember`, which carries the G7/G10 checks | ⚪ | ⚪ | ⚪ (its caller enforces) |
+| `updateBranding` | branding.ts | ⚪ | ✅ via `lib/actions/branding.ts`; also re-parses its own input at the service | ⚪ | ⚪ | ⚪ |
+| `inviteStaff` | staff-invitations.ts | ⚪ | ✅ via `lib/actions/staff-invitations.ts` | ✅ find-or-create user by phone + existing-membership pre-check on (tenant, user) | ⚪ | ⚪ |
+| `createStaff` | staff.ts | ⚪ | ✅ via `lib/actions/staff.ts` | ✅ `onConflictDoNothing` on (tenant, person, staffType) where not deleted | ⚪ | ⚪ |
+| `updateMember` | people.ts | ⚪ | ✅ via `lib/actions/people.ts` | ⚪ | ⚪ | ⚠️ **needs a human decision** — see the finding below |
+| `updateTermOverride` | terminology.ts | ⚪ | ✅ via `lib/actions/terminology.ts` | ⚪ (closed-key schema re-validation of the merged object, which is a different invariant) | ⚪ | ⚪ |
+| `updateAbsenceAlertThreshold` | absence-alerts.ts | ⚪ | ✅ via `lib/actions/absence-alerts.ts` | ⚪ | ⚪ | ⚪ |
+| `setCredential` | credentials.ts | ⚪ | ⚪ **not tenant-scoped** — runs under `withPlatform()`; the boundary check is at `app/api/account/set-pin/route.ts` | ⚪ (overwrite-by-design: reset must replace an existing PIN) | ⚪ | ⚪ |
+| `setCredentialForPhone` | credentials.ts | ⚪ | ⚪ **no HTTP caller** — seed/demo path only; wraps `ensureBaUserForPhone` + `setCredential` | ⚪ | ⚪ | ⚪ |
+| `issueLoginLink` | invite-link-issue.ts | ⚪ | ✅ via `lib/actions/invite-link.ts` | ⚪ | ✅ membership must be `invited` or `active`; `revoked` is refused explicitly | ⚪ |
+| `redeemLoginLink` | invite-link.ts | ⚪ | ⚪ **unauthenticated by design** — the signed token *is* the credential; verified via `verifyInviteLinkToken`, plus a defence-in-depth `roleKey === "owner"` check for `reset` tokens | ✅ single-use: `onConflictDoNothing` on `invite_link_uses.jti`, consumed before any other write | ✅ membership `revoked` refused; tenant must be `trial`/`active` | ⚪ |
+
 ## Findings
 
 ### F2 fixed: rescheduleSession × G2
@@ -111,23 +147,60 @@ product decision (does promotion auto-enrol, or does it remain a
 "head-of-queue, please enrol" surface?). **Logged as a known gap;
 F2 does not fix this either — out of scope.**
 
-### ✅ Audit coverage gap (G6 + G7)
-Parse-first is enforced by the AST walk. Permission-second is
-declared in CLAUDE.md as not enforced (the AST walk's ordering
-check is dead code per CLAUDE.md's own annotation). This is a
-known, documented gap — F2 does not address it.
+### ⚠️ updateMember × G10 — flagged for human review, not yet classified
+`createMember` (register.ts) enforces G10: a minor cannot be
+created without a guardian processing-consent row.
+`updateMember` (people.ts) writes `dateOfBirth` straight through
+to `persons` with no re-check. On the face of it, editing an
+adult member's date of birth to a minor's would produce an active
+minor with no consent row — the exact state G10 exists to
+prevent. **Not asserted as a bug here**: whether that's reachable
+depends on product intent for DOB edits (correction of a typo vs
+a real change of status), which is a children's-data question and
+therefore a stop-and-ask per CLAUDE.md. Needs a human decision
+before it's marked ✅, ⚠️ or ⚪.
+
+### ✅ Fixed since F2: G6 + G7 ordering is now enforced
+This entry previously recorded the ordering half of the preamble
+rule as a gap: the AST walk's `permIndex < serviceIndex`
+comparison was dead code, because the `site.isServiceCall` field
+it gated on was declared and never set to `true`, so
+`serviceIndex` never advanced past `-1`.
+
+**That is fixed (F5/J5).** The never-set field is gone;
+`tests/tier1/server-action-preamble.test.ts` now evaluates
+`statementLooksLikeServiceCall(stmt)` on every statement, with
+built-ins (`String`, `Number`, `revalidatePath`, `formData.get`,
+…) excluded from the service-call set so post-parse normalisation
+doesn't trip the check. Both halves of the rule — parse first,
+then permission-check, before any service call — are enforced.
+Proven live: moving the permission check in
+`lib/actions/platform-invite-owner.ts` past the service call
+flips the test red.
 
 ## Companion source-scan test
 
-`tests/tier1/guard-coverage.test.ts` reads this file and asserts:
+`tests/tier1/guard-coverage.test.ts` asserts, against its own
+`MATRIX_PATHS`/`EXPECTED` constants (not against this table):
 
-1. Every path listed in the matrix exists in `lib/services/`.
-2. For every row marked ✅, the path imports the named guard.
-3. For every row marked ⚠️, the row includes a "F2 finding"
-   comment that names the gap (so a future reader cannot read
-   the matrix as "everything is fine").
+1. Every path listed in `MATRIX_PATHS` exists in `lib/services/`
+   as an `export [async] function <name>(`.
+2. For every `"yes"` cell, the **service source file** either
+   references the named guard (`GUARD_IMPORT_NAMES`) or contains
+   one of the configured `INLINE_ANCHORS` strings for guards that
+   are enforced inline rather than via a helper.
+3. For every `"warn"` cell, the **service source file** — not this
+   markdown table, and not the row text — matches
+   `GAP_COMMENT_REGEX` (`/F2 finding|logged as known gap|form-only|
+   intentionally|known gap/i`), i.e. the code itself carries a
+   comment near the gap so a reader of the source cannot mistake
+   it for complete enforcement.
+
+Separately it asserts this file `toContain()`s each guard ID and
+the strings `rescheduleSession` / `substituteCoach` — a presence
+check only, not a parse of the table.
 
 This is what prevents the seventh instance of "a guard built, a
-second path added later, the guard never re-run" — the matrix
-file and the test together make the call relationship
-machine-checkable, not memory-checkable.
+second path added later, the guard never re-run" — but only for
+the paths the test's own constants list. A row added here and
+nowhere else is documentation, not enforcement.

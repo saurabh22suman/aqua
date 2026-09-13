@@ -1,5 +1,11 @@
 # Self-review (Phase 5.10)
 
+> **Superseded, kept for history.** This verdict is retroactively wrong —
+> it did not catch that R.1–R.7 shipped backend-only. See
+> `docs/retroactive-checklist-audit.md` for the correction and
+> `docs/five-day-work-guide.md` item 5.10 for current status. Archived
+> 2026-09-13.
+
 Mechanical run of `docs/review-checklist.md` against the work
 shipped in this batch. Each item gets an explicit verdict
 (pass / fail / follow-up) — interpretable rather than

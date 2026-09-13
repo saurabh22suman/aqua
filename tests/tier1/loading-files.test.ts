@@ -25,7 +25,7 @@ import { describe, expect, it } from "vitest";
 // Cold-load e2e (dev log shows `Compiling /<route>` followed by
 // `GET <route>` returning the skeleton, not blank) is verified by
 // running `pnpm dev` once per route — that is noted in
-// docs/owner-fixes.md, not scripted here, because restarting the
+// docs/archive/owner-fixes.md, not scripted here, because restarting the
 // dev server mid-suite would mask any of the real regressions
 // this test is built to catch.
 
