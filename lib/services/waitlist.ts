@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { waitlistEntries } from "@/db/schema/waitlist-entries";
+import { members, persons } from "@/db/schema/people";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { z } from "zod";
@@ -164,6 +165,44 @@ export async function cancelWaitlist(
 
 const batchSchema = z.object({ batchId: z.string().uuid() });
 
+export type WaitlistRow = {
+  entryId: string;
+  memberId: string;
+  memberName: string;
+  memberCode: string;
+  position: number;
+  requestedAt: Date;
+};
+
+// R.5 UI read — the full queue for a batch, in position order.
+export async function listWaitlist(
+  ctx: ActionCtx,
+  batchId: string,
+): Promise<WaitlistRow[]> {
+  return withTenant(ctx.tenantId, (tx) =>
+    tx
+      .select({
+        entryId: waitlistEntries.id,
+        memberId: waitlistEntries.memberId,
+        memberName: persons.fullName,
+        memberCode: members.memberCode,
+        position: waitlistEntries.position,
+        requestedAt: waitlistEntries.requestedAt,
+      })
+      .from(waitlistEntries)
+      .innerJoin(members, eq(members.id, waitlistEntries.memberId))
+      .innerJoin(persons, eq(persons.id, members.personId))
+      .where(
+        and(
+          eq(waitlistEntries.tenantId, ctx.tenantId),
+          eq(waitlistEntries.batchId, batchId),
+          eq(waitlistEntries.status, "waiting"),
+        ),
+      )
+      .orderBy(asc(waitlistEntries.position)),
+  );
+}
+
 export type WaitlistHead = {
   entryId: string;
   memberId: string;
@@ -215,7 +254,6 @@ export async function promoteHead(
   ctx: ActionCtx,
   raw: unknown,
 ): Promise<WaitlistResult> {
-  console.log("promote called");
   const parsed = promoteSchema.safeParse(raw);
   if (!parsed.success) {
     return { kind: "error", code: "invalid", message: "Invalid promotion." };

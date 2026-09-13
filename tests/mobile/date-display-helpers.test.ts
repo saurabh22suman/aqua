@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatDateTimeIST,
   formatWallTime12h,
+  formatWallTime24hIST,
   formatWeekdayDateIST,
 } from "@/lib/time/tz";
 
@@ -32,6 +33,13 @@ describe("formatWeekdayDateIST", () => {
 
   it("renders an instant in IST", () => {
     expect(formatWeekdayDateIST("2026-09-12T11:30:00.000Z")).toBe("Sat, 12 Sept");
+  });
+});
+
+describe("formatWallTime24hIST", () => {
+  it("renders an instant as IST wall time for time inputs", () => {
+    expect(formatWallTime24hIST("2026-09-12T11:30:00.000Z")).toBe("17:00");
+    expect(formatWallTime24hIST("2026-09-12T02:05:00.000Z")).toBe("07:35");
   });
 });
 

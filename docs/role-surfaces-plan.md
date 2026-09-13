@@ -170,7 +170,42 @@ unlock reception fee collection, owner dues/collections, parent fees
 and receipts, and every reminder flow. Nothing above should fake these
 surfaces before they land.
 
-## 5. Defects to fix regardless of waves
+Open questions (owner, 2026-09-13) — to settle before Wave 3 starts:
+- Plan shapes/pricing: per-facility plans vs tenant-wide plans with
+  per-facility prices; duration vs session-pack vs one-time.
+- Billing cycle: monthly anniversary vs 1st-of-month; proration on
+  mid-cycle opt-in/out.
+- Pause/refund policy (C-30 "pause extends end date"; V-17 scope).
+- Messaging provider (C-40 BSP, credentials, cost).
+- **Ops-controlled shapes with dependencies:** when creating a tenant,
+  all modules would be a single opt-in/opt-out, but some options
+  require others to be enabled (e.g. a booking module needs facilities;
+  invoicing needs a plan). The feature/preset catalogue needs a
+  dependency graph — enabling a child auto-enables (or refuses without)
+  its parent, and disabling a parent disables or blocks its children.
+  Needs a design pass before R.28 (per-location overrides) and the
+  platform feature catalogue work.
+
+## 5. R.8 — absence alerts (delivered)
+
+Owner decisions 2026-09-13, implemented in PR #140:
+- low-attendance threshold **owner-configurable, default 50%**; the
+  monthly alert also requires **≥ 4 recorded marks** (fixed noise
+  guard), so a single miss never fires;
+- coach surface = **member detail only** (read-only list);
+- parent surface = **one line under "This month"** on `/p/[token]`;
+- **read-only** — no acknowledgement state.
+
+Built: `absence_alerts` table + `tenants.absence_alert_threshold_pct`
+(migration `20260913000300`), `lib/services/absence-alerts.ts`
+(detection + ISO-week dedupe), daily `alerts.absence` job scheduled per
+tenant at 07:00 local alongside `sessions.generate`, owner settings at
+`/owner/settings/alerts`, coach list component, and the parent line.
+Tests: `tests/mobile/absence-alerts.test.ts` (hermetic container:
+dedupe, threshold, parent data), `absence-alerts-list.test.tsx`,
+`alert-settings-form.test.tsx`.
+
+## 6. Defects to fix regardless of waves
 
 - `/platform` links/redirects (5 sites) and `/ops/plans/[planId]` link.
 - `/owner/sessions` copy promises cancel/reschedule with no UI (R.4).
@@ -179,7 +214,7 @@ surfaces before they land.
   sites (wire or delete).
 - `/owner/reports` `—` and `1 → 0` copy (partially swept).
 
-## 6. Open decisions
+## 7. Open decisions
 
 1. Consolidated vs per-facility invoicing (Wave 2, affects C-31/C-32).
 2. Worker surface: build `(worker)/tasks` (R.13) or give workers a

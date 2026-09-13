@@ -8,6 +8,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/components/session-substitute-control", () => ({
   SessionSubstituteControl: () => null,
 }));
+// The R.4 lifecycle control uses useRouter; the row test is about time
+// rendering, so a stub router keeps the app-router invariant happy.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";

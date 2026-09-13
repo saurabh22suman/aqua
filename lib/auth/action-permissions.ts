@@ -85,6 +85,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   checkCoachConflictsAction: "programs.read",
 
   // Holidays
+  listHolidaysAction: "settings.manage",
   addHolidayAction: "settings.manage",
   removeHolidayAction: "settings.manage",
 
@@ -92,6 +93,17 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   addToWaitlistAction: "enquiries.write",
   cancelWaitlistAction: "enquiries.write",
   getWaitlistHeadAction: "enquiries.read",
+  listWaitlistAction: "enquiries.read",
+
+  // Makeup credits (R.7)
+  listMakeupCreditsAction: "attendance.read",
+  listMakeupSourcesAction: "attendance.read",
+  listMakeupTargetsAction: "attendance.read",
+
+  // Absence alerts (R.8)
+  getAbsenceAlertThresholdAction: "settings.manage",
+  updateAbsenceAlertThresholdAction: "settings.manage",
+  listMemberAlertsAction: "members.read.assigned",
   promoteHeadAction: "enquiries.write",
 
   // Makeup credits

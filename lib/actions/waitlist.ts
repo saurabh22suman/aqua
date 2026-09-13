@@ -7,9 +7,11 @@ import {
   addToWaitlist,
   cancelWaitlist,
   getWaitlistHead,
+  listWaitlist,
   promoteHead,
   type WaitlistResult,
   type WaitlistHead,
+  type WaitlistRow,
 } from "@/lib/services/waitlist";
 
 // Phase R.5 — waitlist actions. parse-then-permission preamble;
@@ -43,6 +45,16 @@ export async function cancelWaitlistAction(raw: unknown): Promise<WaitlistResult
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.write");
   return cancelWaitlist({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
+}
+
+export async function listWaitlistAction(
+  raw: unknown,
+): Promise<WaitlistRow[]> {
+  const parsed = batchSchema.safeParse(raw);
+  if (!parsed.success) return [];
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "enquiries.read");
+  return listWaitlist(ctx, parsed.data.batchId);
 }
 
 export async function getWaitlistHeadAction(raw: unknown): Promise<WaitlistHead | null> {

@@ -1,7 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { makeupCredits } from "@/db/schema/makeup-credits";
-import { attendance } from "@/db/schema/scheduling";
+import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
+import { batches } from "@/db/schema/programs";
+import { tenants } from "@/db/schema/tenants";
+import { todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 
@@ -30,6 +33,118 @@ import { asMemberId } from "@/lib/ids";
 //      redeemed. No fee-anything touched.
 
 const DEFAULT_EXPIRY_DAYS = 60;
+
+// ---- R.7 UI reads (member detail panel) ----
+
+export type MakeupCreditRow = {
+  creditId: string;
+  sourceSessionId: string;
+  sourceDate: string;
+  status: string;
+  expiresAt: string;
+};
+
+export type MakeupSessionOption = {
+  sessionId: string;
+  sessionDate: string;
+  batchName: string;
+};
+
+export async function listMakeupCredits(
+  ctx: ActionCtx,
+  memberId: string,
+): Promise<MakeupCreditRow[]> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const rows = await tx
+      .select({
+        creditId: makeupCredits.id,
+        sourceSessionId: makeupCredits.sourceSessionId,
+        sourceDate: sessions.sessionDate,
+        status: makeupCredits.status,
+        expiresAt: makeupCredits.expiresAt,
+      })
+      .from(makeupCredits)
+      .innerJoin(sessions, eq(sessions.id, makeupCredits.sourceSessionId))
+      .where(
+        and(
+          eq(makeupCredits.tenantId, ctx.tenantId),
+          eq(makeupCredits.memberId, asMemberId(memberId)),
+        ),
+      )
+      .orderBy(desc(makeupCredits.grantedAt));
+    return rows.map((r) => ({ ...r, expiresAt: r.expiresAt.toISOString() }));
+  });
+}
+
+// Absences that can still be excused into a credit: absent marks with
+// no makeup_credits row for that source.
+export async function listMakeupSources(
+  ctx: ActionCtx,
+  memberId: string,
+): Promise<MakeupSessionOption[]> {
+  return withTenant(ctx.tenantId, (tx) =>
+    tx
+      .select({
+        sessionId: sessions.id,
+        sessionDate: sessions.sessionDate,
+        batchName: batches.name,
+      })
+      .from(attendance)
+      .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .leftJoin(
+        makeupCredits,
+        and(
+          eq(makeupCredits.sourceSessionId, sessions.id),
+          eq(makeupCredits.memberId, attendance.memberId),
+        ),
+      )
+      .where(
+        and(
+          eq(attendance.tenantId, ctx.tenantId),
+          eq(attendance.memberId, asMemberId(memberId)),
+          eq(attendance.status, "absent"),
+          isNull(makeupCredits.id),
+        ),
+      )
+      .orderBy(desc(sessions.sessionDate))
+      .limit(10),
+  );
+}
+
+// Upcoming sessions in the member's batches — the redeem targets.
+export async function listMakeupTargets(
+  ctx: ActionCtx,
+  memberId: string,
+): Promise<MakeupSessionOption[]> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const [tenant] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const today = todayInZone(tenant.timezone);
+    return tx
+      .select({
+        sessionId: sessions.id,
+        sessionDate: sessions.sessionDate,
+        batchName: batches.name,
+      })
+      .from(enrolments)
+      .innerJoin(batches, eq(batches.id, enrolments.batchId))
+      .innerJoin(sessions, eq(sessions.batchId, batches.id))
+      .where(
+        and(
+          eq(enrolments.tenantId, ctx.tenantId),
+          eq(enrolments.memberId, asMemberId(memberId)),
+          gte(sessions.sessionDate, today),
+          sql`${sessions.status} <> 'cancelled'`,
+        ),
+      )
+      .orderBy(asc(sessions.sessionDate), asc(sessions.startsAt))
+      .limit(20);
+  });
+}
+
 
 export type MakeupCreditResult =
   | { kind: "ok"; creditId: string; memberId: string; sourceSessionId: string }

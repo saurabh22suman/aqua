@@ -1,5 +1,6 @@
 import { createAppScopedBoss } from "@/db/queue";
 import { runSessionsGenerateJob } from "@/lib/jobs/sessions-generate-job";
+import { runAbsenceAlertsJob } from "@/lib/jobs/absence-alerts-job";
 import { asTenantId } from "@/lib/ids";
 
 // Connects as app_user (via db/queue.ts's drizzle-backed adapter) —
@@ -13,6 +14,7 @@ import { asTenantId } from "@/lib/ids";
 // mechanically, source-file level, by the no-superuser-on-request-path
 // test).
 const QUEUE = "sessions.generate";
+const ALERTS_QUEUE = "alerts.absence";
 
 async function main(): Promise<void> {
   const boss = createAppScopedBoss();
@@ -28,7 +30,11 @@ async function main(): Promise<void> {
     await runSessionsGenerateJob(asTenantId(job.data.tenantId));
   });
 
-  console.log(`[worker] started — listening on ${QUEUE}`);
+  await boss.work<{ tenantId: string }>(ALERTS_QUEUE, async ([job]) => {
+    await runAbsenceAlertsJob(asTenantId(job.data.tenantId));
+  });
+
+  console.log(`[worker] started — listening on ${QUEUE}, ${ALERTS_QUEUE}`);
 }
 
 main().catch((err) => {

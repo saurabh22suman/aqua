@@ -1,6 +1,10 @@
 import { formatTimeIST, todayInZone } from "@/lib/time/tz";
 import { verifyParentLinkToken } from "@/lib/services/parent-link";
-import { getParentViewData } from "@/lib/services/parent-view";
+import {
+  getParentViewData,
+  parentAlertLine,
+  type ParentViewAbsenceAlert,
+} from "@/lib/services/parent-view";
 import { getBranding } from "@/lib/services/branding";
 import { asTenantId } from "@/lib/ids";
 import { currentMonthPeriod } from "@/lib/services/attendance-history";
@@ -133,6 +137,9 @@ function renderParentView(args: {
       status: string;
     }>;
   };
+  // R.8 — optional so older callers/tests keep compiling; the route
+  // passes the latest alert when one exists.
+  absenceAlert?: ParentViewAbsenceAlert | null;
   displayName: string;
   clubInitials: string;
   accentBg: string;
@@ -171,6 +178,12 @@ function renderParentView(args: {
 <p style="font-size:14px;margin:0;color:#3C534F;">${args.attendance.presentCount} of ${args.attendance.totalCount} sessions marked present</p>
 </div>`;
         })();
+
+  // R.8 — one plain line under this month's attendance; read-only and
+  // never a substitute for talking to the coach.
+  const alertHtml = args.absenceAlert
+    ? `<p style="font-size:13px;margin:16px 0 0;padding:10px 12px;border-radius:12px;background-color:#FBEBD9;color:#7A4A12;">${esc(parentAlertLine(args.absenceAlert))}</p>`
+    : "";
 
   const recentListHtml =
     args.attendance.recent.length === 0
@@ -219,6 +232,7 @@ ${nextSessionHtml}
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
 <p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">This month</p>
 ${attendanceHtml}
+${alertHtml}
 ${recentListHtml}
 </section>
 
@@ -315,6 +329,7 @@ export async function GET(
         totalCount: data.attendance.totalCount,
         recent: data.attendance.recent,
       },
+      absenceAlert: data.absenceAlert,
       displayName,
       clubInitials,
       accentBg,
