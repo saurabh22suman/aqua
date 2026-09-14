@@ -15,6 +15,8 @@ import { auditColumns } from "./_shared";
 import { tenants } from "./tenants";
 import { members } from "./people";
 import { membershipPlans } from "./membership-plans";
+import { locations } from "./locations";
+import { facilities } from "./preset-engine";
 import type { TenantId, MemberId } from "@/lib/ids";
 
 // C-30 — subscriptions: a member's plan over time. Pause records the
@@ -31,6 +33,8 @@ export const subscriptions = pgTable(
       .$type<TenantId>(),
     memberId: uuid("member_id").notNull().$type<MemberId>(),
     planId: uuid("plan_id").notNull(),
+    locationId: uuid("location_id").notNull(),
+    activityId: uuid("activity_id"),
     startsOn: date("starts_on").notNull(),
     endsOn: date("ends_on").notNull(),
     status: text("status").notNull().default("active"),
@@ -68,6 +72,19 @@ export const subscriptions = pgTable(
       name: "subscriptions_plan_tenant_fkey",
       columns: [t.planId, t.tenantId],
       foreignColumns: [membershipPlans.id, membershipPlans.tenantId],
+    }),
+    index("subscriptions_tenant_location_idx")
+      .on(t.tenantId, t.locationId)
+      .where(sql`status = 'active'`),
+    foreignKey({
+      name: "subscriptions_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
+    }),
+    foreignKey({
+      name: "subscriptions_activity_tenant_fkey",
+      columns: [t.activityId, t.tenantId],
+      foreignColumns: [facilities.id, facilities.tenantId],
     }),
   ],
 );

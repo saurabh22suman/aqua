@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgTable,
@@ -14,6 +15,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
+import { locations } from "./locations";
+import { facilities } from "./preset-engine";
 import type { TenantId } from "@/lib/ids";
 
 // C-29 — the priced plan a tenant sells. Preset `plan_shapes` are the
@@ -28,12 +31,13 @@ export const membershipPlans = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" })
       .$type<TenantId>(),
+    locationId: uuid("location_id").notNull(),
+    activityId: uuid("activity_id"),
     name: text("name").notNull(),
     kind: text("kind").notNull(),
     durationDays: integer("duration_days"),
     sessions: integer("sessions"),
     amountPaise: bigint("amount_paise", { mode: "bigint" }).notNull(),
-    taxRateBp: integer("tax_rate_bp").notNull().default(1800),
     sourceShapeId: uuid("source_shape_id"),
     isActive: boolean("is_active").notNull().default(true),
     ...softDelete,
@@ -50,17 +54,31 @@ export const membershipPlans = pgTable(
     ),
     check("membership_plans_amount_check", sql`${t.amountPaise} > 0`),
     check(
-      "membership_plans_tax_rate_check",
-      sql`${t.taxRateBp} between 0 and 10000`,
-    ),
-    check(
       "membership_plans_name_check",
       sql`char_length(${t.name}) between 1 and 120`,
     ),
     unique("membership_plans_id_tenant_key").on(t.id, t.tenantId),
     uniqueIndex("membership_plans_shape_live_uidx")
-      .on(t.tenantId, t.sourceShapeId)
+      .on(
+        t.tenantId,
+        t.locationId,
+        sql`coalesce(activity_id, '00000000-0000-0000-0000-000000000000'::uuid)`,
+        t.sourceShapeId,
+      )
       .where(sql`deleted_at is null and source_shape_id is not null`),
+    index("membership_plans_tenant_location_live_idx")
+      .on(t.tenantId, t.locationId, t.activityId)
+      .where(sql`deleted_at is null`),
+    foreignKey({
+      name: "membership_plans_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
+    }),
+    foreignKey({
+      name: "membership_plans_activity_tenant_fkey",
+      columns: [t.activityId, t.tenantId],
+      foreignColumns: [facilities.id, facilities.tenantId],
+    }),
     index("membership_plans_tenant_live_idx")
       .on(t.tenantId, t.isActive, t.name)
       .where(sql`deleted_at is null`),

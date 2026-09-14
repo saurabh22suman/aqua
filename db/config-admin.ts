@@ -11,14 +11,29 @@ import {
 } from "./config-definitions";
 import type { TenantId, UserId } from "@/lib/ids";
 
-// O-07/O-08 integration — ops writing a tenant-scope configuration
-// value (an access boundary, a kill switch, the value an owner asked
-// for). The owner path (db/config-owner.ts) is owner_edit only;
-// owner_read keys change here, after a request
-// (db/config-requests.ts resolves with applyValue).
+// Ops writing a configuration value. The owner path
+// (db/config-owner.ts) handles owner_edit tenant-scope keys; this is
+// the platform's path for any key the console edits — access
+// boundaries, kill switches, the GST rate per facility/activity, and
+// the value an owner asked for after a change request.
 //
-// Platform operators are not tenant users, so the write audits to
-// platform_audit_log through the O-05 recorder.
+// Platform operators are not tenant users, so every write audits to
+// platform_audit_log through the O-05 recorder. Validation always comes
+// from the code catalogue.
+
+export type PlatformConfigScope =
+  | { scopeType: "tenant" }
+  | { scopeType: "location"; scopeId: string }
+  | { scopeType: "activity"; scopeId: string };
+
+export type PlatformScopedConfigParams = {
+  tenantId: TenantId;
+  key: ConfigKeyName;
+  value: unknown;
+  scope: PlatformConfigScope;
+  actorId: UserId;
+  reason?: string;
+};
 
 export type PlatformTenantConfigParams = {
   tenantId: TenantId;
@@ -28,13 +43,14 @@ export type PlatformTenantConfigParams = {
   reason?: string;
 };
 
-export type PlatformTenantConfigValidation =
+export type PlatformConfigValidation =
   | { ok: true; value: unknown }
   | { ok: false; error: string };
 
-export function validatePlatformTenantConfigValue(
-  params: Pick<PlatformTenantConfigParams, "key" | "value">,
-): PlatformTenantConfigValidation {
+export function validatePlatformConfigValue(params: {
+  key: ConfigKeyName;
+  value: unknown;
+}): PlatformConfigValidation {
   const definition: ConfigKeyDefinition = CONFIG_KEYS[params.key];
   const parsed = definition.valueSchema.safeParse(params.value);
   if (!parsed.success) {
@@ -43,17 +59,28 @@ export function validatePlatformTenantConfigValue(
   return { ok: true, value: parsed.data };
 }
 
+// Kept for the O-07 change-request resolution's import path.
+export const validatePlatformTenantConfigValue = validatePlatformConfigValue;
+
+function scopeIdFor(
+  tenantId: TenantId,
+  scope: PlatformConfigScope,
+): string {
+  return scope.scopeType === "tenant" ? (tenantId as string) : scope.scopeId;
+}
+
 // In-tx variant for callers that already hold a platform-admin
-// transaction (the change-request resolution): the write commits or
-// rolls back with the resolution. No audit here — the caller records
-// one row for the whole decision.
-export async function applyPlatformTenantConfigValueInTx(
+// transaction (the change-request resolution, the tax action):
+// the write commits or rolls back with the caller's unit of work.
+// No audit here — the caller records the row for the whole decision.
+export async function applyPlatformScopedConfigValueInTx(
   tx: TenantTx,
-  params: PlatformTenantConfigParams,
+  params: PlatformScopedConfigParams,
 ): Promise<SetConfigResult> {
-  const validation = validatePlatformTenantConfigValue(params);
+  const validation = validatePlatformConfigValue(params);
   if (!validation.ok) return validation;
 
+  const scopeId = scopeIdFor(params.tenantId, params.scope);
   const now = new Date();
   await tx
     .update(configValues)
@@ -61,33 +88,33 @@ export async function applyPlatformTenantConfigValueInTx(
     .where(
       and(
         eq(configValues.key, params.key),
-        eq(configValues.scopeType, "tenant"),
-        eq(configValues.scopeId, params.tenantId),
+        eq(configValues.scopeType, params.scope.scopeType),
+        eq(configValues.scopeId, scopeId),
         isNull(configValues.supersededAt),
       ),
     );
   await tx.insert(configValues).values({
     key: params.key,
-    scopeType: "tenant",
-    scopeId: params.tenantId,
+    scopeType: params.scope.scopeType,
+    scopeId,
     tenantId: params.tenantId,
     value: validation.value,
     setBy: params.actorId,
     setAt: now,
     reason: params.reason ?? null,
   });
-  return { ok: true, scopeType: "tenant", scopeId: params.tenantId };
+  return { ok: true, scopeType: params.scope.scopeType, scopeId };
 }
 
 // Standalone ops write: same transaction as its audit row.
-export async function setPlatformTenantConfigValue(
-  params: PlatformTenantConfigParams,
+export async function setPlatformScopedConfigValue(
+  params: PlatformScopedConfigParams,
 ): Promise<SetConfigResult> {
-  const validation = validatePlatformTenantConfigValue(params);
+  const validation = validatePlatformConfigValue(params);
   if (!validation.ok) return validation;
 
   return withPlatformAdmin(async (tx) => {
-    const result = await applyPlatformTenantConfigValueInTx(tx, params);
+    const result = await applyPlatformScopedConfigValueInTx(tx, params);
     if (!result.ok) return result;
     await recordOpsAudit(tx, {
       action: "config.set",
@@ -98,11 +125,33 @@ export async function setPlatformTenantConfigValue(
       after: { value: validation.value },
       detail: {
         key: params.key,
-        scopeType: "tenant",
+        scopeType: params.scope.scopeType,
+        scopeId: result.scopeId,
         value: validation.value,
         reason: params.reason ?? null,
       },
     });
     return result;
+  });
+}
+
+// Tenant-scope convenience kept for existing callers
+// (db/config-requests.ts, O-08's tests).
+export async function applyPlatformTenantConfigValueInTx(
+  tx: TenantTx,
+  params: PlatformTenantConfigParams,
+): Promise<SetConfigResult> {
+  return applyPlatformScopedConfigValueInTx(tx, {
+    ...params,
+    scope: { scopeType: "tenant" },
+  });
+}
+
+export async function setPlatformTenantConfigValue(
+  params: PlatformTenantConfigParams,
+): Promise<SetConfigResult> {
+  return setPlatformScopedConfigValue({
+    ...params,
+    scope: { scopeType: "tenant" },
   });
 }

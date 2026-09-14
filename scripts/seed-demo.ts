@@ -300,6 +300,28 @@ async function ensureLocation(
     [tenantId, name],
   );
   if (existing.rows.length > 0) return existing.rows[0].id;
+  // applyPreset (db/preset-engine.ts) auto-creates a primary location
+  // named "Main Location" for any tenant that doesn't already have one,
+  // so by the time the seed calls ensureLocation a primary row usually
+  // exists under a different name. Match by is_primary, rename to the
+  // runbook's expected name, and stamp the demo address — keeps the
+  // tenant's live data aligned with what the demo-runbook (and the
+  // mobile tests under tests/mobile/) reference.
+  const primary = await adminPool.query<{ id: string }>(
+    "select id from locations where tenant_id = $1 and is_primary = true and deleted_at is null",
+    [tenantId],
+  );
+  if (primary.rows.length > 0) {
+    const primaryId = primary.rows[0].id;
+    await adminPool.query(
+      `update locations
+          set name = $2,
+              address = $3::jsonb
+        where id = $1`,
+      [primaryId, name, JSON.stringify(address)],
+    );
+    return primaryId;
+  }
   const id = uuidv7();
   await adminPool.query(
     `insert into locations (id, tenant_id, name, is_primary, address)

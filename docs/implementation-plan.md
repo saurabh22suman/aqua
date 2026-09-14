@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Covers | Setup, Phase 1 (foundation), Phase 2 (core), Phase 3 (vertical + staff pay + go-live), the ops platform spine (O-01–O-11) |
-| Task count | 159 |
+| Task count | 164 |
 | Estimated duration | 23–27 weeks with one to two people |
 | Companions | `project-scope.md`, `architecture.md`, `DESIGN.md` |
 
@@ -636,12 +636,33 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ### C-29 · Membership plans
 **Depends:** C-28, C-16
-**Status:** complete — `membership_plans` is a new priced table; preset `plan_shapes` remain unpriced templates and are activated by pricing them.
+**Status:** complete, then reworked — the first cut was tenant-level; C-29c moves plans onto facility + activity and drops the per-plan tax rate (2026-09-14 decisions: facility = location, activity = the schema's facilities row, GST is config per activity).
 **Build:** `membership_plans` — duration, session pack, one-time. Amount required and non-null on activation.
 **Done when:** a preset-seeded plan cannot activate until a price is entered.
 
+### C-29a · Activity catalog
+**Depends:** O-01
+**Lane:** schema + services + UI
+**Status:** complete (PR #162) — kind set gains `table`; facilities and facility_sub_units gain soft delete and live-name uniqueness; owners/admins CRUD at /owner/settings/activities; ops reuses the same service.
+**Build:** Activities are the schema's `facilities` (pool, court, table, café counter) under a location. Catalog only — bookings are V-01.
+
+### C-29b · GST rate configuration (activity scope)
+**Depends:** C-28, O-04
+**Lane:** schema + services + UI
+**Status:** complete — key `billing.gst_rate_bp` (ops_only, default 1800); resolver order extended with activity: platform → tenant → facility → activity; ops sets it per level at /ops/tenants/[id]/tax.
+**Build:** Invoices apply and snapshot the resolved rate; plan prices stay GST-exclusive.
+**Done when:** a café activity can carry 5% while the pool beside it carries 18%.
+
+### C-29c · Plans per facility and activity
+**Depends:** C-29, C-29a, C-29b
+**Lane:** schema + services + UI
+**Status:** complete — `location_id NOT NULL` + optional `activity_id` (null = all-access); `tax_rate_bp` dropped; uniqueness per (tenant, facility, activity, template); subscriptions copy facility/activity from the plan at creation and O-08 scoping follows them.
+**Build:** `membership_plans` gains `location_id NOT NULL` and optional `activity_id` (null = all-access/combo); `tax_rate_bp` is dropped (one GST source of truth); the per-template live uniqueness moves to (tenant, location, activity, template); owner UI groups by facility with an activity picker.
+**Done when:** the same preset template is priced independently at each facility and for all-access vs a single activity.
+
 ### C-30 · Subscriptions
 **Depends:** C-29, C-03
+**Status:** complete — first cut; facilities/activities arrive through the plan once C-29c lands.
 **Status:** complete — start/end (inclusive end date), pause/resume extends by the elapsed paused days, cancel; subscription state is independent of the member lifecycle.
 **Build:** `subscriptions` with start, end, pause, resume, cancel. Pause extends the end date.
 **Done when:** a seven-day pause moves the end date by exactly seven days.
@@ -1350,6 +1371,25 @@ credentials delivered by hand from a screen; every send writes a metered
 log row; a failed send surfaces rather than fails silently.
 **Never:** a shared platform-owned number; marketing templates without the
 corresponding entitlement.
+
+### O-12 · Ops plan management
+**Depends:** C-29c, O-05
+**Lane:** UI
+**Status:** pending — step D of the 2026-09-14 reshuffle.
+**Build:** A Plans section on the tenant detail page: activate preset templates
+per facility/activity, create/edit/archive plans (names and prices as the
+tenant wants), through platform actions wrapped in `opsAction`. Same service
+the owner console uses; every mutation audited.
+
+### O-13 · Ops subscription lookup (audited)
+**Depends:** C-30, O-05
+**Lane:** UI
+**Status:** pending — step D of the 2026-09-14 reshuffle.
+**Build:** Support lookup by phone or member code from the ops console:
+read-only view of that member's subscriptions (plan, activity, facility,
+period, status, pause history). No browsable member directory in `/ops`;
+every lookup writes a platform audit row.
+**Never:** expose children's data beyond what the support case needs.
 
 ---
 
