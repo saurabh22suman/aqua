@@ -26,6 +26,7 @@ const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 const durationPlanId = uuidv7();
 const sessionsPlanId = uuidv7();
+const facilityId = uuidv7();
 const oneTimePlanId = uuidv7();
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
@@ -62,6 +63,10 @@ beforeAll(async () => {
     [locationId, tenantA],
   );
   await admin.query(
+    "insert into facilities (id, tenant_id, location_id, name, kind, capacity) values ($1, $2, $3, 'Swimming pool', 'pool', 24)",
+    [facilityId, tenantA, locationId],
+  );
+  await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Subs Member')",
     [personId, tenantA],
   );
@@ -71,12 +76,12 @@ beforeAll(async () => {
     [memberId, tenantA, personId, locationId, `SUB-${RUN}`],
   );
   await admin.query(
-    `insert into membership_plans (id, tenant_id, name, kind, duration_days, sessions, amount_paise)
+    `insert into membership_plans (id, tenant_id, name, kind, duration_days, sessions, amount_paise, location_id, activity_id)
      values
-       ($1, $3, 'Monthly', 'duration', 30, null, 250000),
-       ($2, $3, '10-class pack', 'sessions', null, 10, 400000),
-       ($4, $3, 'Registration', 'one_time', null, null, 100000)`,
-    [durationPlanId, sessionsPlanId, tenantA, oneTimePlanId],
+       ($1, $3, 'Monthly', 'duration', 30, null, 250000, $5, null),
+       ($2, $3, '10-class pack', 'sessions', null, 10, 400000, $5, $6),
+       ($4, $3, 'Registration', 'one_time', null, null, 100000, $5, null)`,
+    [durationPlanId, sessionsPlanId, tenantA, oneTimePlanId, locationId, facilityId],
   );
 }, 240_000);
 
@@ -105,6 +110,8 @@ describe("C-30 subscriptions", () => {
       planName: "Monthly",
       planKind: "duration",
       amountPaise: 250000,
+      locationId,
+      activityId: null,
     });
   });
 
@@ -121,6 +128,11 @@ describe("C-30 subscriptions", () => {
       await subs.listMemberSubscriptions(ctx, memberId)
     ).find((s) => s.planId === sessionsPlanId);
     expect(created?.endsOn).toBe(addDays(today, 89));
+    expect(created).toMatchObject({
+      locationId,
+      activityId: facilityId,
+      activityName: "Swimming pool",
+    });
   });
 
   it("refuses one-time plans and inverted date ranges", async () => {

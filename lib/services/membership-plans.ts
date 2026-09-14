@@ -1,20 +1,23 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import {
   membershipPlans,
   type MembershipPlanKind,
 } from "@/db/schema/membership-plans";
 import { planShapes } from "@/db/schema/preset-engine";
+import { facilities } from "@/db/schema/preset-engine";
+import { locations } from "@/db/schema/locations";
 import { auditLog } from "@/db/schema/audit";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 
-// C-29 — membership plans. Preset plan_shapes are templates; a template
-// is activated by pricing it, which creates a membership_plans row.
-// Owners/admins manage plans (settings.manage at the action layer).
+// C-29/C-29c — membership plans. Preset plan_shapes are templates; a
+// template is activated by pricing it at a facility, optionally for a
+// single activity (null = all-access/combo). Plan prices are
+// GST-exclusive; the rate comes from billing.gst_rate_bp at invoice
+// time (C-29b). Owners/admins manage plans; ops reuses this service.
 
-// ₹10,00,000 — a sanity ceiling, not a business rule.
 export const MAX_PLAN_AMOUNT_PAISE = 100_000_000;
 
 export type PlanKind = MembershipPlanKind;
@@ -26,7 +29,10 @@ export type PlanRow = {
   durationDays: number | null;
   sessions: number | null;
   amountPaise: number;
-  taxRateBp: number;
+  locationId: string;
+  locationName: string;
+  activityId: string | null;
+  activityName: string | null;
   isActive: boolean;
   sourceShapeId: string | null;
   createdAt: string;
@@ -38,37 +44,32 @@ export type PlanTemplateRow = {
   kind: "duration" | "sessions";
   durationDays: number | null;
   sessions: number | null;
-  activatedPlanId: string | null;
-  activatedAmountPaise: number | null;
 };
 
 export type PlanMutationResult =
   | { ok: true; id: string }
   | { ok: false; error: string };
 
-const amountSchema = z
-  .number()
-  .int()
-  .min(1)
-  .max(MAX_PLAN_AMOUNT_PAISE);
-const taxSchema = z.number().int().min(0).max(10000);
+const amountSchema = z.number().int().min(1).max(MAX_PLAN_AMOUNT_PAISE);
 const nameSchema = z.string().trim().min(1).max(120);
 
 export const activatePlanInput = z.object({
   shapeId: z.string().uuid(),
+  locationId: z.string().uuid(),
+  activityId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(120).optional(),
   amountPaise: amountSchema,
-  taxRateBp: taxSchema.optional(),
 });
 
 export const createPlanInput = z
   .object({
+    locationId: z.string().uuid(),
+    activityId: z.string().uuid().optional(),
     name: nameSchema,
     kind: z.enum(["duration", "sessions", "one_time"]),
     durationDays: z.number().int().min(1).max(3650).optional(),
     sessions: z.number().int().min(1).max(10000).optional(),
     amountPaise: amountSchema,
-    taxRateBp: taxSchema.optional(),
   })
   .superRefine((value, ctx) => {
     if (value.kind === "duration" && value.durationDays === undefined) {
@@ -86,13 +87,16 @@ export const updatePlanInput = z.object({
   id: z.string().uuid(),
   name: nameSchema.optional(),
   amountPaise: amountSchema.optional(),
-  taxRateBp: taxSchema.optional(),
   isActive: z.boolean().optional(),
 });
 
 export async function listPlans(
   ctx: ActionCtx,
-  options: { includeInactive?: boolean } = {},
+  options: {
+    includeInactive?: boolean;
+    locationId?: string;
+    activityId?: string;
+  } = {},
 ): Promise<PlanRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
     const conditions = [
@@ -102,12 +106,41 @@ export async function listPlans(
     if (!options.includeInactive) {
       conditions.push(eq(membershipPlans.isActive, true));
     }
+    if (options.locationId) {
+      conditions.push(eq(membershipPlans.locationId, options.locationId));
+    }
+    if (options.activityId) {
+      conditions.push(
+        or(
+          eq(membershipPlans.activityId, options.activityId),
+          isNull(membershipPlans.activityId),
+        )!,
+      );
+    }
     const rows = await tx
-      .select()
+      .select({
+        plan: membershipPlans,
+        locationName: locations.name,
+        activityName: facilities.name,
+      })
       .from(membershipPlans)
+      .innerJoin(locations, eq(locations.id, membershipPlans.locationId))
+      .leftJoin(
+        facilities,
+        and(
+          eq(facilities.id, membershipPlans.activityId),
+          eq(facilities.tenantId, ctx.tenantId),
+        ),
+      )
       .where(and(...conditions))
-      .orderBy(asc(membershipPlans.name));
-    return rows.map(toPlanRow);
+      .orderBy(
+        asc(locations.name),
+        asc(facilities.name),
+        asc(membershipPlans.name),
+      );
+    return rows.map(({ plan, locationName, activityName }) =>
+      toPlanRow(plan, locationName, activityName),
+    );
   });
 }
 
@@ -120,37 +153,13 @@ export async function listPlanTemplates(
       .from(planShapes)
       .where(eq(planShapes.tenantId, ctx.tenantId))
       .orderBy(asc(planShapes.name));
-    const plans = await tx
-      .select({
-        id: membershipPlans.id,
-        amountPaise: membershipPlans.amountPaise,
-        sourceShapeId: membershipPlans.sourceShapeId,
-      })
-      .from(membershipPlans)
-      .where(
-        and(
-          eq(membershipPlans.tenantId, ctx.tenantId),
-          isNull(membershipPlans.deletedAt),
-        ),
-      );
-    const byShape = new Map(
-      plans
-        .filter((p) => p.sourceShapeId !== null)
-        .map((p) => [p.sourceShapeId as string, p]),
-    );
-    return shapes.map((shape) => {
-      const plan = byShape.get(shape.id);
-      return {
-        shapeId: shape.id,
-        name: shape.name,
-        kind: shape.kind as "duration" | "sessions",
-        durationDays: shape.durationDays,
-        sessions: shape.sessions,
-        activatedPlanId: plan?.id ?? null,
-        activatedAmountPaise:
-          plan !== undefined ? Number(plan.amountPaise) : null,
-      };
-    });
+    return shapes.map((shape) => ({
+      shapeId: shape.id,
+      name: shape.name,
+      kind: shape.kind as "duration" | "sessions",
+      durationDays: shape.durationDays,
+      sessions: shape.sessions,
+    }));
   });
 }
 
@@ -179,12 +188,24 @@ export async function activatePlanFromShape(
     const shape = shapeRows[0];
     if (!shape) return { ok: false, error: "Plan template not found." };
 
+    const scope = await resolvePlanScope(
+      tx,
+      ctx.tenantId,
+      parsed.data.locationId,
+      parsed.data.activityId,
+    );
+    if (!scope.ok) return scope;
+
     const existing = await tx
       .select({ id: membershipPlans.id })
       .from(membershipPlans)
       .where(
         and(
           eq(membershipPlans.tenantId, ctx.tenantId),
+          eq(membershipPlans.locationId, parsed.data.locationId),
+          parsed.data.activityId
+            ? eq(membershipPlans.activityId, parsed.data.activityId)
+            : isNull(membershipPlans.activityId),
           eq(membershipPlans.sourceShapeId, shape.id),
           isNull(membershipPlans.deletedAt),
         ),
@@ -193,7 +214,8 @@ export async function activatePlanFromShape(
     if (existing[0]) {
       return {
         ok: false,
-        error: "That template is already activated — edit the plan instead.",
+        error:
+          "That template is already activated here — edit the plan instead.",
       };
     }
 
@@ -203,24 +225,24 @@ export async function activatePlanFromShape(
         .insert(membershipPlans)
         .values({
           tenantId: ctx.tenantId,
+          locationId: parsed.data.locationId,
+          activityId: parsed.data.activityId ?? null,
           name: parsed.data.name ?? shape.name,
           kind: shape.kind,
           durationDays: shape.durationDays,
           sessions: shape.sessions,
           amountPaise: BigInt(parsed.data.amountPaise),
-          taxRateBp: parsed.data.taxRateBp ?? 1800,
           sourceShapeId: shape.id,
           createdBy: ctx.userId,
           updatedBy: ctx.userId,
         })
         .returning({ id: membershipPlans.id });
     } catch (err) {
-      // The partial unique index is the race-proof half of the
-      // check above: two concurrent activations, one friendly error.
       if (isUniqueViolation(err)) {
         return {
           ok: false,
-          error: "That template is already activated — edit the plan instead.",
+          error:
+            "That template is already activated here — edit the plan instead.",
         };
       }
       throw err;
@@ -229,6 +251,8 @@ export async function activatePlanFromShape(
 
     await writeAudit(tx, ctx, "membership_plan.activate", row.id, {
       fromShape: shape.name,
+      locationId: parsed.data.locationId,
+      activityId: parsed.data.activityId ?? null,
       amountPaise: parsed.data.amountPaise,
     });
     return { ok: true, id: row.id };
@@ -247,10 +271,20 @@ export async function createPlan(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    const scope = await resolvePlanScope(
+      tx,
+      ctx.tenantId,
+      parsed.data.locationId,
+      parsed.data.activityId,
+    );
+    if (!scope.ok) return scope;
+
     const [row] = await tx
       .insert(membershipPlans)
       .values({
         tenantId: ctx.tenantId,
+        locationId: parsed.data.locationId,
+        activityId: parsed.data.activityId ?? null,
         name: parsed.data.name,
         kind: parsed.data.kind,
         durationDays:
@@ -258,7 +292,6 @@ export async function createPlan(
         sessions:
           parsed.data.kind === "sessions" ? parsed.data.sessions! : null,
         amountPaise: BigInt(parsed.data.amountPaise),
-        taxRateBp: parsed.data.taxRateBp ?? 1800,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })
@@ -267,6 +300,8 @@ export async function createPlan(
     await writeAudit(tx, ctx, "membership_plan.create", row.id, {
       name: parsed.data.name,
       kind: parsed.data.kind,
+      locationId: parsed.data.locationId,
+      activityId: parsed.data.activityId ?? null,
       amountPaise: parsed.data.amountPaise,
     });
     return { ok: true, id: row.id };
@@ -336,18 +371,56 @@ export async function archivePlan(
   });
 }
 
-function toPlanRow(row: {
-  id: string;
-  name: string;
-  kind: string;
-  durationDays: number | null;
-  sessions: number | null;
-  amountPaise: bigint;
-  taxRateBp: number;
-  isActive: boolean;
-  sourceShapeId: string | null;
-  createdAt: Date;
-}): PlanRow {
+// A plan's facility must exist and be live; an activity, when given,
+// must be live and belong to that facility (kind is data, not a branch).
+async function resolvePlanScope(
+  tx: TenantTx,
+  tenantId: Awaited<ActionCtx["tenantId"]>,
+  locationId: string,
+  activityId?: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const locationRows = await tx
+    .select({ id: locations.id })
+    .from(locations)
+    .where(
+      and(
+        eq(locations.id, locationId),
+        eq(locations.tenantId, tenantId),
+        isNull(locations.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!locationRows[0]) return { ok: false, error: "Facility not found." };
+
+  if (activityId) {
+    const activityRows = await tx
+      .select({ id: facilities.id, locationId: facilities.locationId })
+      .from(facilities)
+      .where(
+        and(
+          eq(facilities.id, activityId),
+          eq(facilities.tenantId, tenantId),
+          isNull(facilities.deletedAt),
+        ),
+      )
+      .limit(1);
+    const activity = activityRows[0];
+    if (!activity) return { ok: false, error: "Activity not found." };
+    if (activity.locationId !== locationId) {
+      return {
+        ok: false,
+        error: "That activity belongs to a different facility.",
+      };
+    }
+  }
+  return { ok: true };
+}
+
+function toPlanRow(
+  row: typeof membershipPlans.$inferSelect,
+  locationName: string,
+  activityName: string | null,
+): PlanRow {
   return {
     id: row.id,
     name: row.name,
@@ -355,17 +428,18 @@ function toPlanRow(row: {
     durationDays: row.durationDays,
     sessions: row.sessions,
     amountPaise: Number(row.amountPaise),
-    taxRateBp: row.taxRateBp,
+    locationId: row.locationId,
+    locationName,
+    activityId: row.activityId,
+    activityName,
     isActive: row.isActive,
     sourceShapeId: row.sourceShapeId,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
-type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
-
 async function writeAudit(
-  tx: Tx,
+  tx: TenantTx,
   ctx: ActionCtx,
   action: string,
   entityId: string,
