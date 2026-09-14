@@ -272,11 +272,12 @@ describe("O-04 config registry", () => {
     expect(a.value).toBe(13);
   });
 
-  it("exposes the catalogue with every registered key", async () => {
+  it("exposes every key the code catalogue defines", async () => {
+    const { CONFIG_KEYS } = await import("@/db/config-definitions");
     const catalogue = await config.listConfigCatalogue();
     const keys = catalogue.map((row) => row.key).sort();
-    expect(keys).toEqual(
-      [KEY, OFFLINE_KEY, "access.location_scoped_staff"].sort(),
-    );
+    // Asserting against the code catalogue rather than a hand-kept list:
+    // adding a key should never break this test, only drift should.
+    expect(keys).toEqual(Object.keys(CONFIG_KEYS).sort());
   });
 });

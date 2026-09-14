@@ -26,6 +26,8 @@ export const EXEMPTIONS: Record<string, string> = {
     "session teardown: audited by db/platform-auth.ts (platform.logout)",
   "lib/actions/platform-auth.ts#platformAuthStatusAction":
     "read-only: resolves the current platform session",
+  "lib/actions/platform-tax.ts#getTenantTaxConfigAction":
+    "read-only: returns resolved GST rates per scope for the ops console",
   "lib/actions/platform-login-link.ts#issueOwnerLoginLinkAction":
     "credential issuance: follow-up to route through opsAction when messaging lands (O-11); the token is single-purpose and short-lived",
   "lib/actions/platform-login-link.ts#issueOwnerResetLinkAction":
