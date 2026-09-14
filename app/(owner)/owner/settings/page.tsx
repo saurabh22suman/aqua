@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BellRing, CalendarOff, CreditCard, LogOut, ChevronRight, Languages, ListChecks, Palette, QrCode, SlidersHorizontal, Users } from "lucide-react";
+import { BellRing, CalendarOff, CreditCard, Dumbbell, LogOut, ChevronRight, Languages, ListChecks, Palette, QrCode, SlidersHorizontal, Users } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
@@ -128,6 +128,24 @@ export default async function Page() {
           </p>
           <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
             Every academy setting in one place, with change requests to the platform.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+      <Link
+        href="/owner/settings/activities"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+        data-testid="settings-activities"
+      >
+        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
+          <Dumbbell size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">
+            Facilities &amp; activities
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Pools, courts, tables and counters at each facility.
           </p>
         </div>
         <ChevronRight size={18} className="text-ink-3 flex-none" />

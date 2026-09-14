@@ -171,6 +171,14 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   pauseSubscriptionAction: "members.write",
   resumeSubscriptionAction: "members.write",
   cancelSubscriptionAction: "members.write",
+
+  // Activity catalog (2026-09-14).
+  listActivitiesAction: "settings.read",
+  createActivityAction: "settings.manage",
+  updateActivityAction: "settings.manage",
+  deleteActivityAction: "settings.manage",
+  addSubUnitAction: "settings.manage",
+  removeSubUnitAction: "settings.manage",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.
