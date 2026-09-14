@@ -7,6 +7,11 @@ import { tenants } from "@/db/schema/tenants";
 import { memberFacilityOptins } from "@/db/schema/facility-optins";
 import { memberStatusTransitions } from "@/db/schema/people";
 import type { ActionCtx } from "@/lib/auth/context";
+import {
+  locationPredicate,
+  locationVisible,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import { isMinor } from "@/lib/time/tz";
 import { asMemberId } from "@/lib/ids";
 
@@ -88,6 +93,12 @@ export async function listMembers(
       const term = `%${filters.search.trim()}%`;
       conditions.push(or(ilike(persons.fullName, term), ilike(persons.phone, term))!);
     }
+
+    // O-08 — when location scoping is on, the list is constrained to
+    // the caller's locations. OFF by default: no predicate, no change.
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(members.locationId, access);
+    if (accessPredicate) conditions.push(accessPredicate);
 
     const rows = await tx
       .select({
@@ -200,6 +211,12 @@ export async function getMemberDetail(
       .where(and(eq(members.id, asMemberId(memberId)), eq(members.tenantId, ctx.tenantId)));
     if (!row) return null;
 
+    // O-08 — the by-id path is the one the review checklist names:
+    // scoping the list while leaving the direct path reachable. Same
+    // answer as a missing member (404, not 403).
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, row.locationId)) return null;
+
     const guardianRows = await tx
       .select({
         personId: persons.id,
@@ -290,10 +307,21 @@ export async function updateMember(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
     const [member] = await tx
-      .select({ personId: members.personId })
+      .select({ personId: members.personId, locationId: members.locationId })
       .from(members)
       .where(and(eq(members.id, asMemberId(memberId)), eq(members.tenantId, ctx.tenantId)));
     if (!member) return { ok: false, error: "Member not found." };
+
+    // O-08 — a scoped caller cannot edit a member outside their
+    // locations, and cannot move a member out of them. Same
+    // "not found" answer as a missing row.
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, member.locationId)) {
+      return { ok: false, error: "Member not found." };
+    }
+    if (!locationVisible(access, input.locationId)) {
+      return { ok: false, error: "That location is not available to you." };
+    }
 
     await tx
       .update(persons)

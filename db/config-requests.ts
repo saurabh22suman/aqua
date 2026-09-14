@@ -9,6 +9,12 @@ import {
 import { tenants } from "./schema/tenants";
 import { auditLog } from "./schema/audit";
 import { recordOpsAudit } from "./ops-action";
+import { applyPlatformTenantConfigValueInTx } from "./config-admin";
+import {
+  CONFIG_KEYS,
+  type ConfigKeyDefinition,
+  type ConfigKeyName,
+} from "./config-definitions";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // O-07 (docs/ops-platform-design.md §4) — the "Request change" path for
@@ -106,11 +112,36 @@ export async function listConfigChangeRequests(
   });
 }
 
+// Maps a request's free-text value onto the key's declared type. A
+// request is reviewed by a person, so the text is human ("on", "35");
+// the applied value still has to satisfy the key's schema.
+function coerceRequestedValue(
+  schema: Record<string, unknown>,
+  raw: string,
+): unknown {
+  const type = schema["type"];
+  const text = raw.trim();
+  if (type === "boolean") {
+    const lowered = text.toLowerCase();
+    if (["true", "on", "yes", "enabled"].includes(lowered)) return true;
+    if (["false", "off", "no", "disabled"].includes(lowered)) return false;
+    return text;
+  }
+  if (type === "integer" || type === "number") {
+    const parsed = Number(text);
+    return Number.isFinite(parsed) ? parsed : text;
+  }
+  return raw;
+}
+
 export async function resolveConfigChangeRequest(
   params: {
     requestId: string;
     status: "resolved" | "declined";
     resolutionNote?: string;
+    // Apply the requested value to the tenant in the same transaction
+    // as the resolution. A failed apply leaves the request requested.
+    applyValue?: boolean;
     actorId: UserId;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -126,6 +157,41 @@ export async function resolveConfigChangeRequest(
     }
     if (request.status !== "requested") {
       return { ok: false, error: "This request has already been decided." };
+    }
+
+    let applied = false;
+    let appliedValue: unknown = null;
+    if (params.applyValue && params.status === "resolved") {
+      const definition = CONFIG_KEYS[request.key as ConfigKeyName] as
+        | ConfigKeyDefinition
+        | undefined;
+      if (!definition) {
+        return {
+          ok: false,
+          error: "This key cannot be applied automatically.",
+        };
+      }
+      const keyRows = await tx
+        .select({ valueSchema: configKeys.valueSchema })
+        .from(configKeys)
+        .where(eq(configKeys.key, request.key))
+        .limit(1);
+      const coerced = coerceRequestedValue(
+        keyRows[0]?.valueSchema ?? definition.jsonSchema,
+        request.requestedValue,
+      );
+      const appliedResult = await applyPlatformTenantConfigValueInTx(tx, {
+        tenantId: request.tenantId as TenantId,
+        key: request.key as ConfigKeyName,
+        value: coerced,
+        actorId: params.actorId,
+        reason: `change request ${request.id}`,
+      });
+      if (!appliedResult.ok) {
+        return { ok: false, error: appliedResult.error };
+      }
+      applied = true;
+      appliedValue = coerced;
     }
 
     const now = new Date();
@@ -156,6 +222,8 @@ export async function resolveConfigChangeRequest(
       detail: {
         key: request.key,
         resolutionNote: params.resolutionNote ?? null,
+        applied,
+        ...(applied ? { appliedValue } : {}),
       },
     });
 

@@ -102,6 +102,11 @@ jobs:
       # tests/scanner-fixtures/platform-leads-import-fixtures.test.ts.
       - run: pnpm check:platform-leads
 
+      # O-08: location-bearing service reads must consult the
+      # location-access helper or be allowlisted with a reason. Fixture
+      # proof in tests/scanner-fixtures/location-scope-fixtures.test.ts.
+      - run: pnpm check:location-scope
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 

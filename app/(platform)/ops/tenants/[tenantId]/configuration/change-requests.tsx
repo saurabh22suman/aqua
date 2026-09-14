@@ -58,6 +58,15 @@ function RequestForm({ request }: { request: ChangeRequestItem }) {
           placeholder="Resolution note (optional)"
           className="grow min-w-[14rem] rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink focus:border-[var(--accent)] focus:outline-none"
         />
+        <label className="flex items-center gap-1.5 text-[12px] text-ink-2">
+          <input
+            type="checkbox"
+            name="applyValue"
+            defaultChecked
+            className="h-4 w-4"
+          />
+          Apply on resolve
+        </label>
         <button
           type="submit"
           name="status"

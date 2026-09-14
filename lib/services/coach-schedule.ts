@@ -7,6 +7,10 @@ import { members, persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
 import { tenants } from "@/db/schema/tenants";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
+import {
+  locationPredicate,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import { addDays, isMinor } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -29,8 +33,20 @@ export async function listCoachSchedule(
   fromDate: string,
   toDate: string,
 ): Promise<CoachScheduleRow[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — a scoped coach sees only their locations' sessions (plus
+    // tenant-wide ones). OFF by default.
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(sessions.locationId, access);
+    const conditions = [
+      eq(sessions.tenantId, ctx.tenantId),
+      eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)),
+      sql`${sessions.sessionDate} >= ${fromDate}`,
+      sql`${sessions.sessionDate} <= ${toDate}`,
+    ];
+    if (accessPredicate) conditions.push(accessPredicate);
+
+    return tx
       .select({
         id: sessions.id,
         sessionDate: sessions.sessionDate,
@@ -50,16 +66,9 @@ export async function listCoachSchedule(
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
-      .where(
-        and(
-          eq(sessions.tenantId, ctx.tenantId),
-          eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)),
-          sql`${sessions.sessionDate} >= ${fromDate}`,
-          sql`${sessions.sessionDate} <= ${toDate}`,
-        ),
-      )
-      .orderBy(sessions.sessionDate, sessions.startsAt),
-  );
+      .where(and(...conditions))
+      .orderBy(sessions.sessionDate, sessions.startsAt);
+  });
 }
 
 export type UpcomingSessionRow = {
@@ -193,6 +202,18 @@ export async function listCoachRoster(
       .where(eq(tenants.id, ctx.tenantId));
     const timezone = tenantRow?.timezone ?? "UTC";
 
+    // O-08 — the coach roster (members enrolled in this coach's
+    // batches) is location-scoped when the key is on.
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(batches.locationId, access);
+    const rosterConditions = [
+      eq(enrolments.tenantId, ctx.tenantId),
+      eq(batches.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)),
+      isNull(members.deletedAt),
+      isNull(batches.deletedAt),
+    ];
+    if (accessPredicate) rosterConditions.push(accessPredicate);
+
     const rows = await tx
       .select({
         memberId: members.id,
@@ -205,14 +226,7 @@ export async function listCoachRoster(
       .innerJoin(members, eq(members.id, enrolments.memberId))
       .innerJoin(persons, eq(persons.id, members.personId))
       .innerJoin(batches, eq(batches.id, enrolments.batchId))
-      .where(
-        and(
-          eq(enrolments.tenantId, ctx.tenantId),
-          eq(batches.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)),
-          isNull(members.deletedAt),
-          isNull(batches.deletedAt),
-        ),
-      )
+      .where(and(...rosterConditions))
       .orderBy(persons.fullName, batches.name);
 
     const byMember = new Map<string, CoachRosterRow>();

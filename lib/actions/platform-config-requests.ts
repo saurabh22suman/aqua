@@ -14,6 +14,9 @@ const resolveFormInput = z.object({
   requestId: z.string().uuid(),
   status: z.enum(["resolved", "declined"]),
   resolutionNote: z.string().trim().max(500).optional(),
+  // The checkbox posts "on" when ticked; only a resolved decision
+  // applies the value.
+  applyValue: z.boolean().optional(),
 });
 
 export async function resolveConfigChangeRequestAction(
@@ -25,6 +28,7 @@ export async function resolveConfigChangeRequestAction(
     status: String(formData.get("status") ?? ""),
     resolutionNote:
       String(formData.get("resolutionNote") ?? "").trim() || undefined,
+    applyValue: formData.get("applyValue") === "on",
   });
   if (!surface.success) {
     return {
@@ -51,6 +55,7 @@ export async function resolveConfigChangeRequestAction(
         requestId: surface.data.requestId,
         status: surface.data.status,
         resolutionNote: surface.data.resolutionNote,
+        applyValue: surface.data.applyValue,
         actorId: asUserId(status.userId),
       }),
   );

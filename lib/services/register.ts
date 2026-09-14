@@ -6,10 +6,15 @@ import type { MemberStatus } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
-import type { ActionCtx } from "@/lib/auth/context";
+import { NotFoundError, type ActionCtx } from "@/lib/auth/context";
 import { isMinor, todayInZone } from "@/lib/time/tz";
 import { createGuardianship, recordConsent, type ConsentGrantInput } from "@/lib/services/consent";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
+import {
+  locationPredicate,
+  locationVisible,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import { asPersonId, asMemberId, type MemberId, type PersonId, type UserId } from "@/lib/ids";
 
 export type GuardianInput =
@@ -53,6 +58,14 @@ export async function createMember(
       .select({ timezone: tenants.timezone })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId));
+
+    // O-08 — a scoped caller cannot register a member at a location
+    // that is not theirs. OFF by default: no change.
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, input.locationId)) {
+      return { ok: false, error: "That location is not available to you." };
+    }
+
     const minor = isMinor(input.dateOfBirth, tenant.timezone);
 
     const processingGrant = input.consents.find((c) => c.purpose === "processing");
@@ -176,7 +189,7 @@ export async function enrolMember(
     // error, since a deleted batch isn't a valid enrolment target
     // either way.
     const [batch] = await tx
-      .select({ capacity: batches.capacity })
+      .select({ capacity: batches.capacity, locationId: batches.locationId })
       .from(batches)
       .where(
         and(
@@ -187,6 +200,13 @@ export async function enrolMember(
       )
       .for("update");
     if (!batch) return { ok: false, error: "Batch not found." };
+
+    // O-08 — enrolling into another location's batch is refused with
+    // the same answer as a missing batch.
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, batch.locationId)) {
+      return { ok: false, error: "Batch not found." };
+    }
 
     const alreadyEnrolled = await tx
       .select({ memberId: enrolments.memberId })
@@ -240,6 +260,15 @@ export async function markAttendance(
       .limit(1);
     const sessionLocationId = sessionRows[0]?.locationId ?? null;
 
+    // O-08 — a scoped caller cannot mark another location's register,
+    // even with a known session id.
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, sessionLocationId)) {
+      // Same shape as a missing session: the caller must not learn
+      // that another location's register exists.
+      throw new NotFoundError();
+    }
+
     await tx
       .insert(attendance)
       .values({
@@ -266,10 +295,22 @@ export async function countAttendanceForSession(
   sessionId: string,
 ): Promise<number> {
   return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — a session outside the caller's locations counts as zero
+    // (the join makes the predicate effective without leaking whether
+    // the session exists).
+    const access = await resolveLocationAccess(tx, ctx);
+    const predicate = locationPredicate(sessions.locationId, access);
+    const conditions = [
+      eq(attendance.tenantId, ctx.tenantId),
+      eq(attendance.sessionId, sessionId),
+    ];
+    if (predicate) conditions.push(predicate);
+
     const rows = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(attendance)
-      .where(and(eq(attendance.tenantId, ctx.tenantId), eq(attendance.sessionId, sessionId)));
+      .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
+      .where(and(...conditions));
     return rows[0].n;
   });
 }
@@ -299,6 +340,12 @@ export async function listTodaySessions(
     if (ctx.roleKey === "coach") {
       conditions.push(eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)));
     }
+    // O-08 — the day's list is location-scoped for scoped staff.
+    const accessPredicate = locationPredicate(
+      sessions.locationId,
+      await resolveLocationAccess(tx, ctx),
+    );
+    if (accessPredicate) conditions.push(accessPredicate);
 
     const rows = await tx
       .select({
@@ -334,6 +381,11 @@ export async function sessionVisibleToCaller(
     if (ctx.roleKey === "coach") {
       conditions.push(eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)));
     }
+    const accessPredicate = locationPredicate(
+      sessions.locationId,
+      await resolveLocationAccess(tx, ctx),
+    );
+    if (accessPredicate) conditions.push(accessPredicate);
     const rows = await tx
       .select({ id: sessions.id })
       .from(sessions)
@@ -379,6 +431,11 @@ export async function getRosterForSession(
     if (ctx.roleKey === "coach") {
       conditions.push(eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)));
     }
+    const accessPredicate = locationPredicate(
+      sessions.locationId,
+      await resolveLocationAccess(tx, ctx),
+    );
+    if (accessPredicate) conditions.push(accessPredicate);
 
     const [session] = await tx
       .select({

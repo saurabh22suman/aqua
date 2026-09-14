@@ -213,22 +213,88 @@ describe("O-07 owner configuration", () => {
     expect(again.ok).toBe(false);
   });
 
+  it("applies the requested value on resolve, atomically with the decision", async () => {
+    const ACCESS_KEY = "access.location_scoped_staff" as const;
+    const requested = await requests.requestConfigChange(
+      { tenantId: tenantB, userId: ownerUserId },
+      { key: ACCESS_KEY, requestedValue: "on", note: "Branch scoping please." },
+    );
+    expect(requested.ok).toBe(true);
+    if (!requested.ok) return;
+
+    const resolved = await requests.resolveConfigChangeRequest({
+      requestId: requested.requestId,
+      status: "resolved",
+      resolutionNote: "Enabled.",
+      applyValue: true,
+      actorId: platformUserId,
+    });
+    expect(resolved.ok).toBe(true);
+
+    const configModule = await import("@/db/config");
+    const value = await configModule.resolveConfig<boolean>(tenantB, ACCESS_KEY);
+    expect(value.value).toBe(true);
+    expect(value.source.scopeType).toBe("tenant");
+
+    // One audit row for the whole decision (the in-tx apply does not
+    // write a second one).
+    const audit = await admin.query<{ detail: Record<string, unknown> }>(
+      `select detail from platform_audit_log
+        where action = 'config.request.resolve' and target_id = $1`,
+      [requested.requestId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0].detail).toMatchObject({ applied: true, appliedValue: true });
+  });
+
+  it("refuses to resolve when the requested value cannot be applied", async () => {
+    const ACCESS_KEY = "access.location_scoped_staff" as const;
+    const requested = await requests.requestConfigChange(
+      { tenantId: tenantA, userId: ownerUserId },
+      { key: ACCESS_KEY, requestedValue: "maybe" },
+    );
+    expect(requested.ok).toBe(true);
+    if (!requested.ok) return;
+
+    const resolved = await requests.resolveConfigChangeRequest({
+      requestId: requested.requestId,
+      status: "resolved",
+      applyValue: true,
+      actorId: platformUserId,
+    });
+    expect(resolved.ok).toBe(false);
+
+    // The failed apply left the request undecided.
+    const rows = await admin.query<{ status: string }>(
+      "select status from config_change_requests where id = $1",
+      [requested.requestId],
+    );
+    expect(rows.rows[0].status).toBe("requested");
+  });
+
   it("keeps requests tenant-isolated under RLS", async () => {
-    await requests.requestConfigChange(
+    const requested = await requests.requestConfigChange(
       { tenantId: tenantA, userId: ownerUserId },
       { key: READ_KEY, requestedValue: "off" },
     );
+    expect(requested.ok).toBe(true);
+    if (!requested.ok) return;
 
     const { withTenant } = await import("@/db/tenant");
     const { configChangeRequests } = await import("@/db/schema/config");
+
+    // Earlier tests leave rows for both tenants; what matters is that
+    // neither context can see the other's rows.
     const rowsForB = await withTenant(tenantB, (tx) =>
       tx.select().from(configChangeRequests),
     );
-    expect(rowsForB).toHaveLength(0);
+    expect(rowsForB.find((r) => r.id === requested.requestId)).toBeUndefined();
+    expect(rowsForB.every((r) => r.tenantId === tenantB)).toBe(true);
 
     const rowsForA = await withTenant(tenantA, (tx) =>
       tx.select().from(configChangeRequests),
     );
-    expect(rowsForA.length).toBeGreaterThan(0);
+    expect(rowsForA.find((r) => r.id === requested.requestId)).toBeDefined();
+    expect(rowsForA.every((r) => r.tenantId === tenantA)).toBe(true);
   });
 });
