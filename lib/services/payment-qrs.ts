@@ -3,6 +3,7 @@ import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { paymentQrs } from "@/db/schema/payment-qrs";
 import { auditLog } from "@/db/schema/audit";
+import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 import {
   PAYMENT_QR_IMAGE_MAX_BYTES,
@@ -328,15 +329,4 @@ async function writeAudit(
     entityId,
     after,
   });
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  if ((err as { code?: unknown }).code === "23505") return true;
-  // drizzle wraps driver errors (DrizzleQueryError) and puts the
-  // Postgres error on `.cause`.
-  const cause = (err as { cause?: unknown }).cause;
-  return cause !== undefined && cause !== null && cause !== err
-    ? isUniqueViolation(cause)
-    : false;
 }

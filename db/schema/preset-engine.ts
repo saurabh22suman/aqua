@@ -9,11 +9,12 @@ import {
   pgTable,
   text,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { v7 as uuidv7 } from "uuid";
 import { sql } from "drizzle-orm";
-import { auditColumns } from "./_shared";
+import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { locations } from "./locations";
 import type { TenantId } from "@/lib/ids";
@@ -132,11 +133,18 @@ export const facilities = pgTable(
     kind: text("kind").notNull(),
     capacity: integer("capacity").notNull(),
     isSample: boolean("is_sample").notNull().default(false),
+    ...softDelete,
     ...auditColumns,
   },
   (t) => [
     unique("facilities_id_tenant_key").on(t.id, t.tenantId),
     index("facilities_tenant_location_idx").on(t.tenantId, t.locationId),
+    uniqueIndex("facilities_tenant_location_name_live_uidx")
+      .on(t.tenantId, t.locationId, sql`lower(${t.name})`)
+      .where(sql`deleted_at is null`),
+    index("facilities_tenant_location_live_idx")
+      .on(t.tenantId, t.locationId)
+      .where(sql`deleted_at is null`),
     foreignKey({
       name: "facilities_location_tenant_fkey",
       columns: [t.locationId, t.tenantId],
@@ -144,7 +152,7 @@ export const facilities = pgTable(
     }).onDelete("cascade"),
     check(
       "facilities_kind_check",
-      sql`${t.kind} in ('pool', 'court', 'turf', 'studio', 'field', 'counter')`,
+      sql`${t.kind} in ('pool', 'court', 'turf', 'studio', 'field', 'counter', 'table')`,
     ),
     check("facilities_capacity_check", sql`${t.capacity} > 0`),
   ],
@@ -160,10 +168,14 @@ export const facilitySubUnits = pgTable(
       .$type<TenantId>(),
     facilityId: uuid("facility_id").notNull(),
     name: text("name").notNull(),
+    ...softDelete,
     ...auditColumns,
   },
   (t) => [
     unique("facility_sub_units_id_tenant_key").on(t.id, t.tenantId),
+    uniqueIndex("facility_sub_units_name_live_uidx")
+      .on(t.tenantId, t.facilityId, sql`lower(${t.name})`)
+      .where(sql`deleted_at is null`),
     foreignKey({
       name: "facility_sub_units_facility_tenant_fkey",
       columns: [t.facilityId, t.tenantId],

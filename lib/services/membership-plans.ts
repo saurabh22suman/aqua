@@ -7,6 +7,7 @@ import {
 } from "@/db/schema/membership-plans";
 import { planShapes } from "@/db/schema/preset-engine";
 import { auditLog } from "@/db/schema/audit";
+import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // C-29 — membership plans. Preset plan_shapes are templates; a template
@@ -379,15 +380,4 @@ async function writeAudit(
     entityId,
     after,
   });
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  if ((err as { code?: unknown }).code === "23505") return true;
-  // drizzle wraps driver errors (DrizzleQueryError) and puts the
-  // Postgres error on `.cause`.
-  const cause = (err as { cause?: unknown }).cause;
-  return cause !== undefined && cause !== null && cause !== err
-    ? isUniqueViolation(cause)
-    : false;
 }
