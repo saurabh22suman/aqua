@@ -12,6 +12,7 @@ import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import type { StaffType } from "@/db/schema/staff";
+import { staffLocations } from "@/db/schema/staff-locations";
 import { ensurePersonAndStaff } from "@/db/invite-helpers";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type UserId } from "@/lib/ids";
@@ -50,6 +51,11 @@ export const STAFF_INVITABLE_ROLES = [
   "admin",
   "coach",
   "receptionist",
+  // O-08 — worker and accountant close the attachment gap: before
+  // this they could not be invited at all, so they could never carry
+  // a location list (or a staff record).
+  "worker",
+  "accountant",
 ] as const;
 
 export type StaffInvitableRoleKey = (typeof STAFF_INVITABLE_ROLES)[number];
@@ -250,6 +256,11 @@ export async function inviteStaff(
     const STAFF_TYPE_FOR_ROLE: Partial<Record<StaffInvitableRoleKey, StaffType>> = {
       coach: "coach",
       receptionist: "receptionist",
+      // O-08 — worker and accountant can hold a location too; before
+      // this they got a membership but no staff record, so they could
+      // never be attached to a site or paid per location.
+      worker: "worker",
+      accountant: "accountant",
     };
     const staffType = STAFF_TYPE_FOR_ROLE[input.roleKey];
     try {
@@ -265,11 +276,30 @@ export async function inviteStaff(
           message: "Invite requires an authenticated actor.",
         };
       }
-      await ensurePersonAndStaff(tx, ctx.tenantId, ctx.userId, {
+      const invited = await ensurePersonAndStaff(tx, ctx.tenantId, ctx.userId, {
         fullName: input.fullName,
         userId: user.id as UserId,
         staffType,
       });
+      // O-08 — mirror the invite's explicit locations onto the staff
+      // record (the access decision is still the membership's
+      // location list; this is the staff↔location linkage the staff
+      // record and per-location pay will read).
+      if (invited.staffId && input.locationIds.length > 0) {
+        for (const locationId of input.locationIds) {
+          await tx
+            .insert(staffLocations)
+            .values({
+              tenantId: ctx.tenantId,
+              staffId: invited.staffId,
+              locationId,
+              isPrimary: false,
+              createdBy: ctx.userId,
+              updatedBy: ctx.userId,
+            })
+            .onConflictDoNothing();
+        }
+      }
     } catch {
       return {
         kind: "error",

@@ -272,9 +272,11 @@ describe("O-04 config registry", () => {
     expect(a.value).toBe(13);
   });
 
-  it("exposes the catalogue with both keys", async () => {
+  it("exposes the catalogue with every registered key", async () => {
     const catalogue = await config.listConfigCatalogue();
     const keys = catalogue.map((row) => row.key).sort();
-    expect(keys).toEqual([KEY, OFFLINE_KEY].sort());
+    expect(keys).toEqual(
+      [KEY, OFFLINE_KEY, "access.location_scoped_staff"].sort(),
+    );
   });
 });

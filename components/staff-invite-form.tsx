@@ -10,12 +10,16 @@ type LocationOption = { id: string; name: string };
 const ROLE_OPTIONS = [
   { key: "coach", label: "Coach" },
   { key: "receptionist", label: "Receptionist" },
+  { key: "worker", label: "Worker" },
+  { key: "accountant", label: "Accountant" },
 ] as const;
 
 export function StaffInviteForm({ locations }: { locations: LocationOption[] }) {
   const [phone, setPhone] = useState("");
   const [fullName, setFullName] = useState("");
-  const [roleKey, setRoleKey] = useState<"coach" | "receptionist">("coach");
+  const [roleKey, setRoleKey] = useState<
+    "coach" | "receptionist" | "worker" | "accountant"
+  >("coach");
   const [locationIds, setLocationIds] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -7,6 +7,10 @@ import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import type { ActionCtx } from "@/lib/auth/context";
+import {
+  locationPredicate,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import { asStaffId } from "@/lib/ids";
 
 export async function listPrograms(ctx: ActionCtx): Promise<Program[]> {
@@ -90,8 +94,18 @@ export type BatchWithProgramName = Batch & {
 };
 
 export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — scoped staff see their locations' batches plus
+    // tenant-wide batches (location_id IS NULL).
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(batches.locationId, access);
+    const conditions = [
+      eq(batches.tenantId, ctx.tenantId),
+      isNull(batches.deletedAt),
+    ];
+    if (accessPredicate) conditions.push(accessPredicate);
+
+    return tx
       .select({
         id: batches.id,
         tenantId: batches.tenantId,
@@ -118,9 +132,9 @@ export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[
       .leftJoin(staff, eq(staff.id, batches.coachId))
       .leftJoin(persons, eq(persons.id, staff.personId))
       .leftJoin(locations, eq(locations.id, batches.locationId))
-      .where(and(eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
-      .orderBy(programs.name, batches.name),
-  );
+      .where(and(...conditions))
+      .orderBy(programs.name, batches.name);
+  });
 }
 
 // Wave 2 — a batch created without an explicit facility lands at the

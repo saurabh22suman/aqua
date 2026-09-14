@@ -35,6 +35,19 @@ export const CONFIG_KEYS = {
     description:
       "The share of a member's recorded marks that can be absences before the monthly low-attendance alert fires. 0-100.",
   },
+  // O-08 — location-scoped staff access. OFF is today's tenant-wide
+  // behaviour. This is an access-control boundary inside one business,
+  // never tenant isolation. Visibility is owner_read: owners see it
+  // and ask for it through the change-request path; ops enables it.
+  "access.location_scoped_staff": {
+    valueSchema: z.boolean(),
+    jsonSchema: { type: "boolean" },
+    defaultValue: false,
+    visibility: "owner_read",
+    risk: "sensitive",
+    description:
+      "When on, staff see only the locations they are attached to. An access control inside one academy, not tenant isolation.",
+  },
   // Registered now, still stored in tenants.offline_sync_enabled: a
   // human-owned tier-1 test pins that column (platform-tenants-detail),
   // so the storage migration lands when that test is updated. Reads and
