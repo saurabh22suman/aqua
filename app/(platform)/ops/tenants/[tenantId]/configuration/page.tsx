@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getEffectiveConfiguration } from "@/db/ops-configuration-view";
+import { listConfigChangeRequests } from "@/db/config-requests";
 import type { ResolvedConfig } from "@/db/config";
 import { navForRole } from "@/lib/nav";
 import { asTenantId } from "@/lib/ids";
+import { ChangeRequests } from "./change-requests";
 
 // O-06 (docs/ops-platform-design.md §6) — the effective-configuration
 // viewer. Answers "why can't my coach see Reports?" from resolved
@@ -64,6 +66,8 @@ export default async function EffectiveConfigurationPage({
   const { role } = await searchParams;
   const view = await getEffectiveConfiguration(asTenantId(tenantId));
   if (!view) notFound();
+
+  const changeRequests = await listConfigChangeRequests(view.tenant.id);
 
   const selectedRoleKey =
     role && view.roles.some((r) => r.key === role) ? role : view.roles[0]?.key;
@@ -176,6 +180,23 @@ export default async function EffectiveConfigurationPage({
             ))}
           </div>
         )}
+      </section>
+
+      <section className="mt-8">
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+          Change requests
+        </h2>
+        <ChangeRequests
+          requests={changeRequests.map((request) => ({
+            id: request.id,
+            key: request.key,
+            requestedValue: request.requestedValue,
+            note: request.note,
+            status: request.status as "requested" | "resolved" | "declined",
+            resolutionNote: request.resolutionNote,
+            createdAt: request.createdAt.toISOString(),
+          }))}
+        />
       </section>
 
       <section className="mt-8">

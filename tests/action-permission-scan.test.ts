@@ -105,6 +105,11 @@ const EXEMPTIONS: Exemption[] = [
     reason: "Platform-scoped: ops.<base>-only route (middleware gates); tenant permission keys don't apply. Mutations go through the O-05 opsAction pipeline.",
   },
   {
+    file: "lib/actions/platform-config-requests.ts",
+    exportedName: "*",
+    reason: "Platform-scoped: ops.<base>-only route (middleware gates); tenant permission keys don't apply. Resolution goes through the O-05 opsAction pipeline.",
+  },
+  {
     file: "lib/actions/platform-login-link.ts",
     exportedName: "*",
     reason: "Platform-scoped: ops.<base>-only route (middleware gates); tenant permission keys don't apply.",
