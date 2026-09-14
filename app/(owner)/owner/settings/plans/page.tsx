@@ -4,6 +4,8 @@ import {
   listPlanTemplatesAction,
   listPlansAction,
 } from "@/lib/actions/membership-plans";
+import { listActivitiesAction } from "@/lib/actions/activities";
+import { listLocationsAction } from "@/lib/actions/people";
 import { PlanManager } from "@/components/plan-manager";
 
 // C-29 — owner surface for membership plans: preset templates become
@@ -11,9 +13,11 @@ import { PlanManager } from "@/components/plan-manager";
 
 export default async function PlansPage() {
   await requireOwner();
-  const [templates, plans] = await Promise.all([
+  const [templates, plans, locations, activities] = await Promise.all([
     listPlanTemplatesAction(),
     listPlansAction(),
+    listLocationsAction(),
+    listActivitiesAction(),
   ]);
 
   return (
@@ -36,7 +40,16 @@ export default async function PlansPage() {
         plans. Subscriptions are started from a member&apos;s page.
       </p>
       <div className="mt-5">
-        <PlanManager templates={templates} plans={plans} />
+        <PlanManager
+          templates={templates}
+          plans={plans}
+          locations={locations}
+          activities={activities.map((activity) => ({
+            id: activity.id,
+            name: activity.name,
+            locationId: activity.locationId,
+          }))}
+        />
       </div>
     </main>
   );

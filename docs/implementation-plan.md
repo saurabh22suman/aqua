@@ -656,6 +656,7 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 ### C-29c · Plans per facility and activity
 **Depends:** C-29, C-29a, C-29b
 **Lane:** schema + services + UI
+**Status:** complete — `location_id NOT NULL` + optional `activity_id` (null = all-access); `tax_rate_bp` dropped; uniqueness per (tenant, facility, activity, template); subscriptions copy facility/activity from the plan at creation and O-08 scoping follows them.
 **Build:** `membership_plans` gains `location_id NOT NULL` and optional `activity_id` (null = all-access/combo); `tax_rate_bp` is dropped (one GST source of truth); the per-template live uniqueness moves to (tenant, location, activity, template); owner UI groups by facility with an activity picker.
 **Done when:** the same preset template is priced independently at each facility and for all-access vs a single activity.
 

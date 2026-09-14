@@ -4,10 +4,13 @@ import { withTenant } from "@/db/tenant";
 import { subscriptions } from "@/db/schema/subscriptions";
 import { membershipPlans } from "@/db/schema/membership-plans";
 import { members } from "@/db/schema/people";
+import { locations } from "@/db/schema/locations";
+import { facilities } from "@/db/schema/preset-engine";
 import { tenants } from "@/db/schema/tenants";
 import { auditLog } from "@/db/schema/audit";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import {
+  locationPredicate,
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
@@ -31,6 +34,10 @@ export type SubscriptionRow = {
   planName: string;
   planKind: string;
   amountPaise: number;
+  locationId: string;
+  locationName: string;
+  activityId: string | null;
+  activityName: string | null;
   startsOn: string;
   endsOn: string;
   status: "active" | "paused" | "expired" | "cancelled";
@@ -76,21 +83,15 @@ export async function listMemberSubscriptions(
   memberId: string,
 ): Promise<SubscriptionRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
-    // O-08 — scoped callers only read subscriptions of members inside
-    // their locations.
+    // O-08 — scoped callers only read subscriptions at their own
+    // facilities (the subscription carries the plan's facility).
     const access = await resolveLocationAccess(tx, ctx);
-    const memberRows = await tx
-      .select({ locationId: members.locationId })
-      .from(members)
-      .where(
-        and(
-          eq(members.id, asMemberId(memberId)),
-          eq(members.tenantId, ctx.tenantId),
-        ),
-      )
-      .limit(1);
-    const member = memberRows[0];
-    if (!member || !locationVisible(access, member.locationId)) return [];
+    const conditions = [
+      eq(subscriptions.tenantId, ctx.tenantId),
+      eq(subscriptions.memberId, asMemberId(memberId)),
+    ];
+    const accessPredicate = locationPredicate(subscriptions.locationId, access);
+    if (accessPredicate) conditions.push(accessPredicate);
 
     const rows = await tx
       .select({
@@ -98,6 +99,8 @@ export async function listMemberSubscriptions(
         planName: membershipPlans.name,
         planKind: membershipPlans.kind,
         amountPaise: membershipPlans.amountPaise,
+        locationName: locations.name,
+        activityName: facilities.name,
       })
       .from(subscriptions)
       .innerJoin(
@@ -107,28 +110,37 @@ export async function listMemberSubscriptions(
           eq(membershipPlans.tenantId, ctx.tenantId),
         ),
       )
-      .where(
+      .innerJoin(locations, eq(locations.id, subscriptions.locationId))
+      .leftJoin(
+        facilities,
         and(
-          eq(subscriptions.tenantId, ctx.tenantId),
-          eq(subscriptions.memberId, asMemberId(memberId)),
+          eq(facilities.id, subscriptions.activityId),
+          eq(facilities.tenantId, ctx.tenantId),
         ),
       )
+      .where(and(...conditions))
       .orderBy(desc(subscriptions.startsOn));
-    return rows.map(({ subscription, planName, planKind, amountPaise }) => ({
-      id: subscription.id,
-      memberId: subscription.memberId,
-      planId: subscription.planId,
-      planName,
-      planKind,
-      amountPaise: Number(amountPaise),
-      startsOn: subscription.startsOn,
-      endsOn: subscription.endsOn,
-      status: subscription.status as SubscriptionRow["status"],
-      pausedFrom: subscription.pausedFrom,
-      pausedUntil: subscription.pausedUntil,
-      autoRenew: subscription.autoRenew,
-      createdAt: subscription.createdAt.toISOString(),
-    }));
+    return rows.map(
+      ({ subscription, planName, planKind, amountPaise, locationName, activityName }) => ({
+        id: subscription.id,
+        memberId: subscription.memberId,
+        planId: subscription.planId,
+        planName,
+        planKind,
+        amountPaise: Number(amountPaise),
+        locationId: subscription.locationId,
+        locationName,
+        activityId: subscription.activityId,
+        activityName,
+        startsOn: subscription.startsOn,
+        endsOn: subscription.endsOn,
+        status: subscription.status as SubscriptionRow["status"],
+        pausedFrom: subscription.pausedFrom,
+        pausedUntil: subscription.pausedUntil,
+        autoRenew: subscription.autoRenew,
+        createdAt: subscription.createdAt.toISOString(),
+      }),
+    );
   });
 }
 
@@ -185,6 +197,10 @@ export async function createSubscription(
         error: "One-time plans are sold through invoices, not subscriptions.",
       };
     }
+    // O-08 — the plan's facility must be in the caller's scope too.
+    if (!locationVisible(access, plan.locationId)) {
+      return { ok: false, error: "Plan not found or not active." };
+    }
 
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
@@ -211,6 +227,8 @@ export async function createSubscription(
         tenantId: ctx.tenantId,
         memberId: asMemberId(parsed.data.memberId),
         planId: plan.id,
+        locationId: plan.locationId,
+        activityId: plan.activityId,
         startsOn,
         endsOn,
         status: "active",
@@ -223,6 +241,8 @@ export async function createSubscription(
     await writeAudit(tx, ctx, "subscription.create", row.id, {
       planId: plan.id,
       planName: plan.name,
+      locationId: plan.locationId,
+      activityId: plan.activityId,
       startsOn,
       endsOn,
     });
@@ -243,7 +263,11 @@ export async function pauseSubscription(
   }
   return withTenant(ctx.tenantId, async (tx) => {
     const rows = await tx
-      .select({ id: subscriptions.id, status: subscriptions.status })
+      .select({
+        id: subscriptions.id,
+        status: subscriptions.status,
+        locationId: subscriptions.locationId,
+      })
       .from(subscriptions)
       .where(
         and(
@@ -254,6 +278,11 @@ export async function pauseSubscription(
       .limit(1);
     const subscription = rows[0];
     if (!subscription) return { ok: false, error: "Subscription not found." };
+    // O-08 — another facility's subscription is not found.
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, subscription.locationId)) {
+      return { ok: false, error: "Subscription not found." };
+    }
     if (subscription.status !== "active") {
       return { ok: false, error: "Only an active subscription can be paused." };
     }
@@ -305,6 +334,7 @@ export async function resumeSubscription(
         status: subscriptions.status,
         endsOn: subscriptions.endsOn,
         pausedFrom: subscriptions.pausedFrom,
+        locationId: subscriptions.locationId,
       })
       .from(subscriptions)
       .where(
@@ -316,6 +346,10 @@ export async function resumeSubscription(
       .limit(1);
     const subscription = rows[0];
     if (!subscription) return { ok: false, error: "Subscription not found." };
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, subscription.locationId)) {
+      return { ok: false, error: "Subscription not found." };
+    }
     if (subscription.status !== "paused" || !subscription.pausedFrom) {
       return { ok: false, error: "Only a paused subscription can be resumed." };
     }
@@ -362,7 +396,11 @@ export async function cancelSubscription(
   }
   return withTenant(ctx.tenantId, async (tx) => {
     const rows = await tx
-      .select({ id: subscriptions.id, status: subscriptions.status })
+      .select({
+        id: subscriptions.id,
+        status: subscriptions.status,
+        locationId: subscriptions.locationId,
+      })
       .from(subscriptions)
       .where(
         and(
@@ -373,6 +411,10 @@ export async function cancelSubscription(
       .limit(1);
     const subscription = rows[0];
     if (!subscription) return { ok: false, error: "Subscription not found." };
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, subscription.locationId)) {
+      return { ok: false, error: "Subscription not found." };
+    }
     if (subscription.status === "cancelled") {
       return { ok: false, error: "This subscription is already cancelled." };
     }
