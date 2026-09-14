@@ -636,11 +636,13 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ### C-29 · Membership plans
 **Depends:** C-28, C-16
+**Status:** complete — `membership_plans` is a new priced table; preset `plan_shapes` remain unpriced templates and are activated by pricing them.
 **Build:** `membership_plans` — duration, session pack, one-time. Amount required and non-null on activation.
 **Done when:** a preset-seeded plan cannot activate until a price is entered.
 
 ### C-30 · Subscriptions
 **Depends:** C-29, C-03
+**Status:** complete — start/end (inclusive end date), pause/resume extends by the elapsed paused days, cancel; subscription state is independent of the member lifecycle.
 **Build:** `subscriptions` with start, end, pause, resume, cancel. Pause extends the end date.
 **Done when:** a seven-day pause moves the end date by exactly seven days.
 
