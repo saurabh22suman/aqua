@@ -981,7 +981,7 @@ create table invoices (
   tenant_id       uuid not null,
   location_id     uuid not null,
   member_id       uuid not null references members(id),
-  invoice_number  text not null,          -- gapless, per FY, per location
+  invoice_number  text not null,          -- gapless, per FY, per tenant (per GSTIN; 2026-09-14)
   financial_year  text not null,
   issued_on       date not null,
   due_on          date not null,

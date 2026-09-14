@@ -24,3 +24,4 @@ export * from "./audit";
 export * from "./message-log";
 export * from "./membership-plans";
 export * from "./subscriptions";
+export * from "./invoice-numbering";

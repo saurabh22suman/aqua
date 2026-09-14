@@ -669,7 +669,8 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ### C-31 · Invoice numbering
 **Depends:** C-28
-**Build:** Gapless per financial year per location using a counter row with `select … for update` inside the invoice transaction.
+**Status:** complete — gapless per tenant per financial year. Decision 2026-09-14: one tenant = one GSTIN for now, so per tenant *is* per GSTIN. The counter key `(tenant_id, financial_year)` is the extension point if a second GSTIN is ever needed (never renumber issued invoices).
+**Build:** Gapless per financial year per tenant using a counter row with `select … for update` inside the invoice transaction.
 **Done when:** a concurrency test of fifty parallel invoices produces fifty sequential numbers with no gaps or duplicates.
 **Never:** a Postgres sequence — rollbacks leave gaps and GST requires none.
 
