@@ -7,9 +7,9 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { asTenantId, asUserId } from "@/lib/ids";
 
-// C-29 — membership plans: preset templates become priced plans.
-// amount_paise is NOT NULL > 0, so "a preset-seeded plan cannot
-// activate until a price is entered" is enforced twice (Zod + DB).
+// C-29/C-29c — plans price a preset template at a facility, optionally
+// for one activity (all-access when none). Prices are GST-exclusive;
+// the GST rate is configuration (C-29b).
 
 type PlansModule = typeof import("@/lib/services/membership-plans");
 
@@ -20,6 +20,10 @@ let plans: PlansModule;
 const tenantA = asTenantId(uuidv7());
 const tenantB = asTenantId(uuidv7());
 const ownerId = asUserId(uuidv7());
+const locA = uuidv7();
+const locB = uuidv7();
+const actPool = uuidv7();
+const actCafe = uuidv7();
 const shapeMonthly = uuidv7();
 const RUN = Date.now().toString(36);
 
@@ -49,6 +53,18 @@ beforeAll(async () => {
     `+9194${String(Date.now()).slice(-8)}`,
   ]);
   await admin.query(
+    `insert into locations (id, tenant_id, name, is_primary) values
+       ($1, $3, 'Splashh', true),
+       ($2, $3, 'Annex', false)`,
+    [locA, locB, tenantA],
+  );
+  await admin.query(
+    `insert into facilities (id, tenant_id, location_id, name, kind, capacity) values
+       ($1, $3, $4, 'Swimming pool', 'pool', 24),
+       ($2, $3, $4, 'Café counter', 'counter', 1)`,
+    [actPool, actCafe, tenantA, locA],
+  );
+  await admin.query(
     `insert into plan_shapes (id, tenant_id, name, kind, duration_days, sessions, amount_paise, currency, is_sample)
      values ($1, $2, 'Monthly', 'duration', 30, null, null, 'INR', true)`,
     [shapeMonthly, tenantA],
@@ -62,8 +78,8 @@ afterAll(async () => {
   await container?.stop();
 });
 
-describe("C-29 membership plans", () => {
-  it("shows the preset template unpriced and not yet activated", async () => {
+describe("C-29c membership plans per facility and activity", () => {
+  it("lists the preset template without activation state", async () => {
     const templates = await plans.listPlanTemplates(ctx);
     expect(templates).toHaveLength(1);
     expect(templates[0]).toMatchObject({
@@ -71,60 +87,107 @@ describe("C-29 membership plans", () => {
       name: "Monthly",
       kind: "duration",
       durationDays: 30,
-      activatedPlanId: null,
-      activatedAmountPaise: null,
     });
+    expect("activatedPlanId" in templates[0]).toBe(false);
   });
 
-  it("refuses to activate a template without a price", async () => {
-    const zero = await plans.activatePlanFromShape(ctx, {
+  it("requires a facility and refuses a template without a price", async () => {
+    const noLocation = await plans.activatePlanFromShape(ctx, {
       shapeId: shapeMonthly,
+      amountPaise: 250000,
+    });
+    expect(noLocation.ok).toBe(false);
+
+    const noPrice = await plans.activatePlanFromShape(ctx, {
+      shapeId: shapeMonthly,
+      locationId: locA,
       amountPaise: 0,
     });
-    expect(zero.ok).toBe(false);
+    expect(noPrice.ok).toBe(false);
 
-    const negative = await plans.activatePlanFromShape(ctx, {
-      shapeId: shapeMonthly,
-      amountPaise: -100,
-    });
-    expect(negative.ok).toBe(false);
-
-    const stillEmpty = await plans.listPlans(ctx);
-    expect(stillEmpty).toHaveLength(0);
+    expect(await plans.listPlans(ctx)).toHaveLength(0);
   });
 
-  it("activates a template by pricing it, and refuses a second activation", async () => {
-    const result = await plans.activatePlanFromShape(ctx, {
+  it("refuses an unknown facility and an activity from another facility", async () => {
+    const ghost = await plans.activatePlanFromShape(ctx, {
       shapeId: shapeMonthly,
+      locationId: uuidv7(),
       amountPaise: 250000,
     });
-    expect(result.ok).toBe(true);
+    expect(ghost.ok).toBe(false);
 
-    const list = await plans.listPlans(ctx);
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({
-      name: "Monthly",
-      kind: "duration",
-      durationDays: 30,
-      amountPaise: 250000,
-      taxRateBp: 1800,
-      isActive: true,
-      sourceShapeId: shapeMonthly,
-    });
-
-    const templates = await plans.listPlanTemplates(ctx);
-    expect(templates[0].activatedPlanId).toBe(list[0].id);
-    expect(templates[0].activatedAmountPaise).toBe(250000);
-
-    const again = await plans.activatePlanFromShape(ctx, {
+    // actPool belongs to locA, not locB.
+    const mismatched = await plans.activatePlanFromShape(ctx, {
       shapeId: shapeMonthly,
+      locationId: locB,
+      activityId: actPool,
+      amountPaise: 250000,
+    });
+    expect(mismatched.ok).toBe(false);
+  });
+
+  it("activates per facility/activity, all-access distinct from activity-scoped", async () => {
+    const allAccess = await plans.activatePlanFromShape(ctx, {
+      shapeId: shapeMonthly,
+      locationId: locA,
+      amountPaise: 250000,
+    });
+    expect(allAccess.ok).toBe(true);
+
+    const forPool = await plans.activatePlanFromShape(ctx, {
+      shapeId: shapeMonthly,
+      locationId: locA,
+      activityId: actPool,
       amountPaise: 300000,
     });
-    expect(again.ok).toBe(false);
+    expect(forPool.ok).toBe(true);
+
+    // Same template at the other facility is its own plan.
+    const otherFacility = await plans.activatePlanFromShape(ctx, {
+      shapeId: shapeMonthly,
+      locationId: locB,
+      amountPaise: 200000,
+    });
+    expect(otherFacility.ok).toBe(true);
+
+    // And the exact same (facility, activity) is refused.
+    const duplicate = await plans.activatePlanFromShape(ctx, {
+      shapeId: shapeMonthly,
+      locationId: locA,
+      activityId: actPool,
+      amountPaise: 999,
+    });
+    expect(duplicate.ok).toBe(false);
+
+    const list = await plans.listPlans(ctx);
+    expect(list).toHaveLength(3);
+    const poolPlan = list.find((plan) => plan.activityId === actPool)!;
+    expect(poolPlan).toMatchObject({
+      locationId: locA,
+      locationName: "Splashh",
+      activityName: "Swimming pool",
+      amountPaise: 300000,
+      sourceShapeId: shapeMonthly,
+    });
+    const allAccessPlan = list.find(
+      (plan) => plan.locationId === locA && plan.activityId === null,
+    )!;
+    expect(allAccessPlan.activityName).toBeNull();
+    expect("taxRateBp" in poolPlan).toBe(false);
+
+    const forFacilityA = await plans.listPlans(ctx, {
+      locationId: locA,
+      activityId: actPool,
+    });
+    // The activity filter also surfaces all-access plans.
+    expect(forFacilityA.map((plan) => plan.id).sort()).toEqual(
+      [poolPlan.id, allAccessPlan.id].sort(),
+    );
   });
 
-  it("creates custom plans and enforces the kind payload", async () => {
+  it("creates custom plans with location/activity and validates the payload", async () => {
     const oneTime = await plans.createPlan(ctx, {
+      locationId: locA,
       name: "Registration fee",
       kind: "one_time",
       amountPaise: 100000,
@@ -132,6 +195,7 @@ describe("C-29 membership plans", () => {
     expect(oneTime.ok).toBe(true);
 
     const badOneTime = await plans.createPlan(ctx, {
+      locationId: locA,
       name: "Bad one-time",
       kind: "one_time",
       durationDays: 30,
@@ -139,14 +203,9 @@ describe("C-29 membership plans", () => {
     });
     expect(badOneTime.ok).toBe(false);
 
-    const noDuration = await plans.createPlan(ctx, {
-      name: "No days",
-      kind: "duration",
-      amountPaise: 100000,
-    });
-    expect(noDuration.ok).toBe(false);
-
     const pack = await plans.createPlan(ctx, {
+      locationId: locA,
+      activityId: actCafe,
       name: "10-class pack",
       kind: "sessions",
       sessions: 10,
@@ -154,34 +213,40 @@ describe("C-29 membership plans", () => {
     });
     expect(pack.ok).toBe(true);
 
-    const list = await plans.listPlans(ctx);
-    expect(list.map((p) => p.name)).toContain("10-class pack");
+    const cafePlan = (await plans.listPlans(ctx)).find(
+      (plan) => plan.name === "10-class pack",
+    );
+    expect(cafePlan).toMatchObject({
+      activityId: actCafe,
+      activityName: "Café counter",
+      sessions: 10,
+    });
   });
 
   it("updates price and name, then archives", async () => {
     const list = await plans.listPlans(ctx);
-    const monthly = list.find((p) => p.name === "Monthly")!;
+    const monthly = list.find((plan) => plan.activityId === actPool)!;
     const updated = await plans.updatePlan(ctx, {
       id: monthly.id,
-      name: "Monthly (new)",
-      amountPaise: 260000,
+      name: "Monthly (pool)",
+      amountPaise: 320000,
     });
     expect(updated.ok).toBe(true);
 
     const renamed = (await plans.listPlans(ctx)).find(
-      (p) => p.id === monthly.id,
+      (plan) => plan.id === monthly.id,
     );
-    expect(renamed?.name).toBe("Monthly (new)");
-    expect(renamed?.amountPaise).toBe(260000);
+    expect(renamed?.name).toBe("Monthly (pool)");
+    expect(renamed?.amountPaise).toBe(320000);
 
     const archived = await plans.archivePlan(ctx, monthly.id);
     expect(archived.ok).toBe(true);
     expect(
-      (await plans.listPlans(ctx)).find((p) => p.id === monthly.id),
+      (await plans.listPlans(ctx)).find((plan) => plan.id === monthly.id),
     ).toBeUndefined();
     const withInactive = await plans.listPlans(ctx, { includeInactive: true });
     expect(
-      withInactive.find((p) => p.id === monthly.id)?.isActive,
+      withInactive.find((plan) => plan.id === monthly.id)?.isActive,
     ).toBe(false);
   });
 
@@ -191,17 +256,18 @@ describe("C-29 membership plans", () => {
     expect(await plans.listPlanTemplates(otherCtx)).toHaveLength(0);
     const foreignActivation = await plans.activatePlanFromShape(otherCtx, {
       shapeId: shapeMonthly,
+      locationId: locA,
       amountPaise: 1000,
     });
     expect(foreignActivation.ok).toBe(false);
   });
 
-  it("audits every plan mutation", async () => {
+  it("audits every plan mutation with its scope", async () => {
     const audit = await admin.query<{ action: string }>(
       "select action from audit_log where tenant_id = $1",
       [tenantA],
     );
-    const actions = audit.rows.map((r) => r.action);
+    const actions = audit.rows.map((row) => row.action);
     for (const expected of [
       "membership_plan.activate",
       "membership_plan.create",
