@@ -498,6 +498,12 @@ Rules:
   whatever the weekday.
 - Keep at least one enquiry at a non-converted stage so the
   enquiry-detail flow has something to click.
+- The `firstLocation.name` constant matters. `applyPreset`
+  auto-creates the primary location as `Main Location`; the
+  seed then renames it to the value above so the live data
+  matches what the mobile tests reference (`Worli Main`,
+  `Bandra Turf`). Editing the constant is a real change —
+  re-run `pnpm demo:reset`.
 
 After editing:
 
