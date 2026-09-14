@@ -35,7 +35,8 @@ export function LinkQr({
       <div
         data-testid="link-qr-loading"
         aria-hidden
-        className="h-[180px] w-[180px] rounded-ctl border border-line bg-paper"
+        style={{ width: size, height: size }}
+        className="rounded-ctl border border-line bg-paper"
       />
     );
   }
