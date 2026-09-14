@@ -130,13 +130,19 @@ export default async function PlatformTenantDetailPage({
             value={`${DATE_FMT.format(detail.createdAt)} · updated ${DATETIME_FMT.format(detail.updatedAt)}`}
           />
         </div>
-        <div className="mt-2">
+        <div className="mt-2 flex flex-col gap-1">
           <Link
             href={`/ops/tenants/${detail.id}/configuration`}
             className="text-[13px] text-[var(--accent)] underline underline-offset-2"
           >
             Effective configuration — resolved values, entitlements,
             permissions and nav per role
+          </Link>
+          <Link
+            href={`/ops/tenants/${detail.id}/tax`}
+            className="text-[13px] text-[var(--accent)] underline underline-offset-2"
+          >
+            GST rates — tenant default, per facility and per activity
           </Link>
         </div>
       </section>

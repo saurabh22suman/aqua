@@ -35,6 +35,21 @@ export const CONFIG_KEYS = {
     description:
       "The share of a member's recorded marks that can be absences before the monthly low-attendance alert fires. 0-100.",
   },
+  // 2026-09-14 — the GST rate, in basis points (1800 = 18%). Plan
+  // prices are GST-exclusive; invoices apply this rate at issue and
+  // snapshot it. Resolution is the registry's fixed order extended with
+  // activity: platform 18% -> tenant default -> facility (location)
+  // -> activity, so café food can differ from sports inside one site.
+  // Money semantics: ops-only.
+  "billing.gst_rate_bp": {
+    valueSchema: z.number().int().min(0).max(10000),
+    jsonSchema: { type: "integer", minimum: 0, maximum: 10000 },
+    defaultValue: 1800,
+    visibility: "ops_only",
+    risk: "sensitive",
+    description:
+      "GST rate in basis points (1800 = 18%). Inherited platform -> tenant -> facility -> activity; invoices snapshot the resolved rate.",
+  },
   // O-08 — location-scoped staff access. OFF is today's tenant-wide
   // behaviour. This is an access-control boundary inside one business,
   // never tenant isolation. Visibility is owner_read: owners see it
