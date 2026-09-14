@@ -1,5 +1,6 @@
 export * from "./tenants";
 export * from "./config";
+export * from "./payment-qrs";
 export * from "./users";
 export * from "./locations";
 export * from "./memberships";
