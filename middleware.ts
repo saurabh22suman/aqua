@@ -57,6 +57,11 @@ const APEX_ALLOWLIST = [
   // session exists but no credential does). The page redirects to
   // /login when there is no session.
   "/set-pin",
+  // C-35 — uploaded payment-QR images. Session-gated: the route
+  // handler resolves the tenant context and refuses without
+  // settings.read, so the middleware only needs to let it reach the
+  // app.
+  "/api/payment-qr/",
   "/api/health",
   // Next.js internals and static assets. Required for HMR, RSC
   // payloads, and the _next/static directory the build emits.

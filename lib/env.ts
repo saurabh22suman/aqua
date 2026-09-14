@@ -70,6 +70,14 @@ const envSchema = z
       emptyAsUndefined,
       z.string().min(12, "must be at least 12 characters").optional(),
     ),
+    // C-40a — messaging provider selection. Optional at parse time:
+    // lib/messaging/provider.ts resolves `mock` outside production and
+    // `disabled` in production. Setting `mock` in production is refused
+    // at boot (superRefine below) — no silent mocking of deliveries.
+    WHATSAPP_PROVIDER: z.preprocess(
+      emptyAsUndefined,
+      z.enum(["mock", "cloud", "disabled"]).optional(),
+    ),
   })
   .superRefine((val, ctx) => {
     // `next build` forces NODE_ENV=production for the child process that
@@ -158,6 +166,19 @@ const envSchema = z
           "DEMO_MODE=true is not permitted in production — refusing to boot. An env var accidentally set in a real deployment would seed demo data into a real database.",
       });
     }
+
+    // The WhatsApp mock records messages in the database and pretends
+    // they were delivered. Never in production, for the same reason as
+    // DEMO_MODE: a misconfigured env var would silently turn every real
+    // notification into a no-op.
+    if (requireProductionVars && val.WHATSAPP_PROVIDER === "mock") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["WHATSAPP_PROVIDER"],
+        message:
+          "WHATSAPP_PROVIDER=mock is not permitted in production — the mock pretends to deliver. Refusing to boot.",
+      });
+    }
   });
 
 export type ParsedEnv = {
@@ -169,6 +190,7 @@ export type ParsedEnv = {
   PARENT_LINK_SECRET?: string;
   OPS_EMAIL?: string;
   OPS_PASSWORD?: string;
+  WHATSAPP_PROVIDER?: "mock" | "cloud" | "disabled";
   NODE_ENV: "development" | "test" | "production";
   DEMO_MODE: boolean;
 };
@@ -196,6 +218,7 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
     PARENT_LINK_SECRET: parsed.data.PARENT_LINK_SECRET,
     OPS_EMAIL: parsed.data.OPS_EMAIL,
     OPS_PASSWORD: parsed.data.OPS_PASSWORD,
+    WHATSAPP_PROVIDER: parsed.data.WHATSAPP_PROVIDER,
     NODE_ENV: parsed.data.NODE_ENV,
     DEMO_MODE: parsed.data.DEMO_MODE,
   };

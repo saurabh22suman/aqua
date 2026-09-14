@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { getTodayAction } from "@/lib/actions/coach";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -10,6 +12,20 @@ export default async function ReceptionTodayPage() {
   return (
     <main className="px-5 pt-10">
       <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
+
+      <Link
+        href="/reception/collect-payment"
+        className="mt-6 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+        data-testid="collect-payment-link"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Collect payment</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Show a club payment QR with the amount.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
 
       {sessions.length === 0 ? (
         <EmptyState

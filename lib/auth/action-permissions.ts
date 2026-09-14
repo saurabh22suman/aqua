@@ -147,6 +147,13 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   listOwnerVisibleConfigAction: "settings.read",
   setOwnerConfigValueAction: "settings.manage",
   requestConfigChangeAction: "settings.manage",
+
+  // C-35 — payment QRs. Reception reads for the collect screen;
+  // owner/admin manage.
+  listPaymentQrsAction: "settings.read",
+  createPaymentQrAction: "settings.manage",
+  updatePaymentQrAction: "settings.manage",
+  deletePaymentQrAction: "settings.manage",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.
