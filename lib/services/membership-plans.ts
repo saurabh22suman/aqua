@@ -196,21 +196,34 @@ export async function activatePlanFromShape(
       };
     }
 
-    const [row] = await tx
-      .insert(membershipPlans)
-      .values({
-        tenantId: ctx.tenantId,
-        name: parsed.data.name ?? shape.name,
-        kind: shape.kind,
-        durationDays: shape.durationDays,
-        sessions: shape.sessions,
-        amountPaise: BigInt(parsed.data.amountPaise),
-        taxRateBp: parsed.data.taxRateBp ?? 1800,
-        sourceShapeId: shape.id,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      })
-      .returning({ id: membershipPlans.id });
+    let row: { id: string } | undefined;
+    try {
+      [row] = await tx
+        .insert(membershipPlans)
+        .values({
+          tenantId: ctx.tenantId,
+          name: parsed.data.name ?? shape.name,
+          kind: shape.kind,
+          durationDays: shape.durationDays,
+          sessions: shape.sessions,
+          amountPaise: BigInt(parsed.data.amountPaise),
+          taxRateBp: parsed.data.taxRateBp ?? 1800,
+          sourceShapeId: shape.id,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })
+        .returning({ id: membershipPlans.id });
+    } catch (err) {
+      // The partial unique index is the race-proof half of the
+      // check above: two concurrent activations, one friendly error.
+      if (isUniqueViolation(err)) {
+        return {
+          ok: false,
+          error: "That template is already activated — edit the plan instead.",
+        };
+      }
+      throw err;
+    }
     if (!row) return { ok: false, error: "The plan could not be saved." };
 
     await writeAudit(tx, ctx, "membership_plan.activate", row.id, {
@@ -366,4 +379,15 @@ async function writeAudit(
     entityId,
     after,
   });
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  if ((err as { code?: unknown }).code === "23505") return true;
+  // drizzle wraps driver errors (DrizzleQueryError) and puts the
+  // Postgres error on `.cause`.
+  const cause = (err as { cause?: unknown }).cause;
+  return cause !== undefined && cause !== null && cause !== err
+    ? isUniqueViolation(cause)
+    : false;
 }
