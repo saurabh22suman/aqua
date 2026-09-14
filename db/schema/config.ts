@@ -82,6 +82,46 @@ export const configValues = pgTable(
   ],
 );
 
+// O-07 — an owner's request to change an owner_read key. Reviewed by
+// ops; see db/config-requests.ts.
+export const configChangeRequests = pgTable(
+  "config_change_requests",
+  {
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    key: text("key")
+      .notNull()
+      .references(() => configKeys.key),
+    requestedValue: text("requested_value").notNull(),
+    note: text("note"),
+    status: text("status").notNull().default("requested"),
+    requestedBy: uuid("requested_by"),
+    resolvedBy: uuid("resolved_by"),
+    resolutionNote: text("resolution_note"),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "config_change_requests_status_check",
+      sql`${t.status} in ('requested', 'resolved', 'declined')`,
+    ),
+    index("config_change_requests_tenant_idx").on(
+      t.tenantId,
+      t.status,
+      t.createdAt.desc(),
+    ),
+  ],
+);
+
 export type ConfigKey = typeof configKeys.$inferSelect;
 export type ConfigValue = typeof configValues.$inferSelect;
 export type NewConfigValue = typeof configValues.$inferInsert;
+export type ConfigChangeRequest = typeof configChangeRequests.$inferSelect;

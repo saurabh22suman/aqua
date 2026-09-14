@@ -142,6 +142,11 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getTenantTimezoneAction: "members.read",
   getTerminologyAction: "members.read",
   getBrandingAction: "members.read",
+
+  // O-07 — registry-rendered owner settings + change requests.
+  listOwnerVisibleConfigAction: "settings.read",
+  setOwnerConfigValueAction: "settings.manage",
+  requestConfigChangeAction: "settings.manage",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.

@@ -159,9 +159,18 @@ export async function setTenantConfigValue(params: {
 }): Promise<SetConfigResult> {
   // Widened deliberately: no key is `dangerous` yet, but the guard is
   // real for the day one is.
+  // O-07 — tenant writes are owner_edit only. owner_read keys are
+  // changed by ops after a change request (db/config-requests.ts);
+  // ops_only keys are never tenant-writable. Fails closed.
   const definition: ConfigKeyDefinition = CONFIG_KEYS[params.key];
-  if (definition.visibility === "ops_only") {
-    return { ok: false, error: `This key is set by the platform.` };
+  if (definition.visibility !== "owner_edit") {
+    return {
+      ok: false,
+      error:
+        definition.visibility === "owner_read"
+          ? "This setting is changed by the platform — send a change request instead."
+          : "This key is set by the platform.",
+    };
   }
   const parsed = definition.valueSchema.safeParse(params.value);
   if (!parsed.success) {

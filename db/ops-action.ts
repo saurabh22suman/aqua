@@ -34,6 +34,7 @@ export const OPS_SCOPES = [
   "platform_lead.create",
   "platform_lead.update",
   "platform_lead.convert",
+  "config.request.resolve",
 ] as const;
 
 export type OpsScope = (typeof OPS_SCOPES)[number];
