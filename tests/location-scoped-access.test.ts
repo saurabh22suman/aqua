@@ -15,19 +15,20 @@ import { asTenantId, asUserId } from "@/lib/ids";
 
 type PeopleModule = typeof import("@/lib/services/people");
 type RegisterModule = typeof import("@/lib/services/register");
-type ConfigModule = typeof import("@/db/config");
+type ConfigAdminModule = typeof import("@/db/config-admin");
 type InvitationsModule = typeof import("@/lib/services/staff-invitations");
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;
 let people: PeopleModule;
 let register: RegisterModule;
-let config: ConfigModule;
+let configAdmin: ConfigAdminModule;
 let invitations: InvitationsModule;
 
 const tenantId = asTenantId(uuidv7());
 const ownerUserId = asUserId(uuidv7());
 const receptionUserId = asUserId(uuidv7());
+const platformUserId = asUserId(uuidv7());
 const ownerMembershipId = uuidv7();
 const receptionMembershipId = uuidv7();
 const locA = uuidv7();
@@ -80,7 +81,7 @@ beforeAll(async () => {
 
   people = await import("@/lib/services/people");
   register = await import("@/lib/services/register");
-  config = await import("@/db/config");
+  configAdmin = await import("@/db/config-admin");
   invitations = await import("@/lib/services/staff-invitations");
 
   admin = new Pool({ connectionString: adminUri });
@@ -95,6 +96,11 @@ beforeAll(async () => {
     [locA, locB, tenantId],
   );
   await seedRoleTemplates(tenantId);
+  await admin.query(
+    `insert into platform_users (id, email, name, password_hash, password_salt, role, status)
+     values ($1, $2, 'O-08 Operator', 'h', 's', 'admin', 'active')`,
+    [platformUserId, `o08-${RUN}@platform.test`],
+  );
   await admin.query(
     "insert into users (id, phone) values ($1, $2), ($3, $4)",
     [
@@ -189,11 +195,13 @@ describe("O-08 location-scoped staff access", () => {
   });
 
   it("scopes lists and by-id paths when the key is on", async () => {
-    const enabled = await config.setTenantConfigValue({
+    // Production path: ops enables the key (it is owner_read, so the
+    // owner path rejects it by design — see O-07).
+    const enabled = await configAdmin.setPlatformTenantConfigValue({
       tenantId,
       key: KEY,
       value: true,
-      actorId: ownerUserId,
+      actorId: platformUserId,
     });
     expect(enabled.ok).toBe(true);
 
@@ -295,11 +303,11 @@ describe("O-08 location-scoped staff access", () => {
   });
 
   it("restores tenant-wide visibility when the key is turned off", async () => {
-    const disabled = await config.setTenantConfigValue({
+    const disabled = await configAdmin.setPlatformTenantConfigValue({
       tenantId,
       key: KEY,
       value: false,
-      actorId: ownerUserId,
+      actorId: platformUserId,
     });
     expect(disabled.ok).toBe(true);
     const members = await people.listMembers(scopedReception, {});
