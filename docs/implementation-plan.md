@@ -1051,26 +1051,22 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 # Ops platform spine
 
-**Implementation status (2026-09-14).** O-01 … O-06, O-09 and O-10 are
-implemented as a stacked PR chain, CI-green except for the
-`agent-protected-paths` gate on the migration PRs (they need the
-human's `human-approved-merge` label). Merge in order, labels on the
-migration PRs:
+**Implementation status (2026-09-14).** O-01 … O-06 and O-09 … O-10
+merged to `main` via PR #154. O-07 and O-08 are open PRs (#155, #156),
+each branched from `main`:
 
 | Task | PR | Notes |
 |---|---|---|
-| O-01 | #146 | migration PR — needs the label |
-| O-02 | #147 | migration PR — needs the label |
-| O-03 | #148 | migration PR — needs the label; interim first-wins rule flagged in the task below |
-| O-04 | #149 | migration PR — needs the label; `attendance.offline_sync_enabled` is registered but its storage stays in `tenants.offline_sync_enabled` until the human-owned tier-1 test that pins the column is updated |
-| O-05 | #150 | scan has a known-bad fixture; credential-link actions exempted with a stated reason |
-| O-06 | #151 | the support path that keeps impersonation blocked |
-| O-09 | #152 | migration PR — needs the label; import allowlist + CI scan |
-| O-10 | #153 | conversion provisions the trial tenant from the lead's answers |
+| O-01 … O-06, O-09, O-10 | #154 | merged; see the individual commit messages for the per-task detail |
+| O-07 | #155 | migration PR — needs the `human-approved-merge` label; owner settings rendered from the registry + the change-request path |
+| O-08 | #156 | new key `access.location_scoped_staff` (owner_read, default off); `check:location-scope` scan with a known-bad fixture; invite path now covers worker/accountant and mirrors locations onto `staff_locations` |
 
-**Not started:** O-07 (owner settings + request change), O-08
-(location-scoped staff access). **Blocked:** O-11 (messaging) on
-C-40–C-45, as its task text says.
+Two carried-forward decisions: `attendance.offline_sync_enabled` is
+registered but its storage stays in `tenants.offline_sync_enabled` until
+the human-owned tier-1 test that pins the column is updated; O-05's
+credential-link actions remain exempted with a stated reason.
+
+**Blocked:** O-11 (messaging) on C-40–C-45, as its task text says.
 
 **Source:** `docs/ops-platform-design.md`. Extracted here as tasks at the
 author's request. Build order follows that document's §10. The design
