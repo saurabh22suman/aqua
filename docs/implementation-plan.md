@@ -665,28 +665,51 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Build:** Daily collection report by method and by staff member, with a cash count confirmation step.
 **Done when:** the report matches a manual count for a full day at the reference business.
 
-### C-35 · Razorpay adapter
-**Depends:** C-32
-**Build:** Order creation with the invoice id as receipt, config validated at boot.
-**Done when:** an order is created in test mode against a real invoice.
+### C-35 · Payment QRs
+**Depends:** C-28
+**Lane:** schema + services + UI
+**Build:** `payment_qrs` — owner-managed, several per tenant, each with a
+nickname. Two kinds: a UPI QR generated from the owner's UPI ID + payee
+name, and an uploaded image QR (PNG/JPEG/WebP, strict size cap; stored in
+Postgres because no object store exists yet). Active flag and display
+order. Tenant RLS, audit on every mutation, owner/admin write only.
+**Done when:** an owner adds one UPI QR and one uploaded-image QR, both
+listed with nicknames and usable; a wrong MIME type or an oversize file is
+refused; a receptionist can read them and cannot write them.
 
-### C-36 · Payment links
-**Depends:** C-35, C-42
-**Build:** Generate and send a payment link for an outstanding invoice.
-**Done when:** a link opens Razorpay pre-filled with the correct amount.
-
-### C-37 · Webhook endpoint
+### C-36 · Collect-payment screen
 **Depends:** C-35
-**Build:** Signature verification before parsing, insert-on-conflict-do-nothing into `webhook_events`, enqueue, return 200. Under 50 ms.
-**Done when:** the same event delivered five times stores one row and enqueues one job.
+**Lane:** UI
+**Build:** Read-only `/reception/collect-payment`, linked from reception
+Today: choose a QR by nickname, optionally enter an amount, render the QR
+large for the payer to scan. Generated UPI QRs carry the amount in the
+`upi://pay` payload; uploaded images do not. The screen cannot create,
+edit or delete.
+**Done when:** a receptionist shows a ₹2,500 QR in two taps and has no
+path to changing the QR itself.
 
-### C-38 · Webhook worker
-**Depends:** C-37, C-33
-**Build:** Apply payment, update invoice, emit receipt. Idempotent, retryable, dead-letters with an alert.
-**Done when:** a replayed event produces no duplicate payment and no second receipt.
+### C-37 · QR reuse
+**Depends:** C-35, C-40a
+**Build:** One service produces the `upi://pay` URI (and QR SVG) for a
+tenant QR with an optional amount, so the collect screen, the message
+composer and future receipts share one implementation. Amount formatting
+is bigint paise throughout.
+**Done when:** the same QR payload appears on screen and in a mock
+WhatsApp message byte-for-byte, for the same amount.
+
+### Payment gateway decision — 2026-09-14
+
+The Razorpay adapter, payment links, webhook endpoint and webhook worker
+(C-35…C-38 as originally planned) are **removed from scope**. Owners
+collect over their own UPI QR codes and payments are recorded at the
+counter (C-33); no card data touches our systems and there is no PSP
+integration. The zero-commission positioning (project-scope §7.3) is
+unaffected — that section's Razorpay wording is flagged for rewrite
+pending owner approval. A hosted flow, if ever wanted, returns as a new
+task rather than by reopening these.
 
 ### C-39 · Receipts
-**Depends:** C-38, F-17
+**Depends:** C-33, F-17
 **Build:** Branded receipt PDF, sent on payment, stored against the payment record.
 **Done when:** the receipt carries the tenant's mark, not ours.
 
@@ -694,8 +717,28 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ### C-40 · Provider interface
 **Depends:** F-26
-**Build:** `MessageProvider` interface plus one BSP adapter. Nothing above the interface knows the provider.
-**Done when:** swapping in a stub provider requires no changes outside the adapter.
+**Build:** `MessageProvider` interface; one real adapter (WhatsApp Cloud
+API) once a tenant-owned WABA exists. Nothing above the interface knows
+the provider. The non-prod mock and the metered log ship in C-40a, which
+is what makes this interface testable before Meta onboarding.
+**Done when:** swapping provider requires no changes outside the adapter.
+
+### C-40a · Provider abstraction, metered log and non-prod mock
+**Depends:** F-26, O-04
+**Lane:** schema + services + UI
+**Build:** `message_log` written by every send and receive (direction,
+provider, template key, body, status, cost in paise per message). Provider
+selected from `WHATSAPP_PROVIDER` — `mock` in dev/test, and **production
+fails closed** unless a real provider is configured; no silent mocking in
+production. Mock send plus simulated inbound through the same handler the
+real webhook will call, so inbound flows are testable now. Non-production
+`/ops/whatsapp` screen: list conversations, compose an outbound mock
+message, inject an inbound payload.
+**Done when:** a mock send and a mock receive both appear in the log with
+a cost recorded (mock cost may be zero, but the column and code path are
+real), the screen shows them, and a production boot with the mock selected
+is refused.
+**Never:** in production, a mock that pretends to deliver.
 
 ### C-41 · Template registry
 **Depends:** C-40
@@ -703,8 +746,9 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 **Done when:** registering a `marketing` template for an automated flow fails validation.
 
 ### C-42 · Message log and metering
-**Depends:** C-41
-**Build:** `message_log` with cost in paise, per-tenant monthly counters, hourly metering job.
+**Depends:** C-41, C-40a
+**Build:** Per-tenant monthly counters and the hourly metering job on top
+of the `message_log` written by C-40a.
 **Done when:** sending 100 messages produces an accurate per-tenant cost figure.
 
 ### C-43 · Notification queue
@@ -1283,9 +1327,11 @@ preset and config match those answers, with one audited action and no
 re-entry.
 
 ### O-11 · Messaging — provider abstraction, metered log, manual WABA onboarding
-**Depends:** C-40, C-41, C-43, O-04, O-05
-**Status:** **blocked — C-40–C-45 are unbuilt.** Decomposition only; do
-not start before the Phase 2 messaging tasks.
+**Depends:** C-40a, C-40, C-41, C-43, O-04, O-05
+**Status:** **partially unblocked (2026-09-14).** The provider
+abstraction, metered log and non-prod mock ship as C-40a; the Cloud API
+adapter and WABA onboarding below remain demand-driven (first real
+number). The mock must never reach production — production fails closed.
 **Lane:** schema + services + UI
 **Read first:** ops-platform-design.md §9.
 **Build:** `MessageProvider` abstraction with a WhatsApp Cloud API

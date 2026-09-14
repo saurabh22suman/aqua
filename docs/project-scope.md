@@ -709,6 +709,15 @@ Every tenant is a data fiduciary; we are a processor. The data processing agreem
 
 ### 7.3 Payments
 
+> **2026-09-14 — pending owner approval.** Online gateways are out of
+> scope: no Razorpay adapter, no card data, no PSP webhooks. Owners
+> manage their own UPI QR codes in the app and receptionists show them
+> for collection; payments are recorded manually at the counter. The
+> wording below still names Razorpay and must be rewritten once the owner
+> signs off (implementation-plan C-35…C-37, "Payment gateway decision").
+> The mandate analysis is retained only for the case where a
+> recurring-debit flow is ever wanted.
+
 - No card data ever touches our systems — Razorpay hosted flows only
 - Settlement reconciliation reporting
 - Refund policy surfaced to the payer before payment

@@ -330,6 +330,17 @@ The clean shape is a `legal_entity` record carrying GSTIN, legal name and bank d
 
 ## 9. Messaging channel
 
+> **Implementation note (2026-09-14).** v1 ships the provider abstraction,
+> the metered `message_log` and a **non-production mock** (implementation
+> plan C-40a), so WhatsApp flows can be built and tested before Meta
+> onboarding. The provider is env-selected; the mock is refused in
+> production, where the platform fails closed until a real provider is
+> configured. The Cloud API adapter, per-tenant WABA onboarding (Embedded
+> Signup v4) and template approval tracking below remain the plan for when
+> the first real number is onboarded — nothing in the mock should leak
+> into production, and the sections below are unchanged except for that
+> starting point.
+
 WhatsApp is the primary channel for credential delivery, fee reminders, absence alerts, receipts and parent links. SMS is not a fallback worth building: commercial SMS in India requires DLT registration, which is paperwork outside our control, and WhatsApp authentication messages cost a fraction of SMS in this market.
 
 ### Decision: one WhatsApp number per tenant, owned by the tenant
