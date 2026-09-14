@@ -27,7 +27,13 @@ import type { TenantId, UserId } from "@/lib/ids";
 // transaction. Every write is Zod-validated against the code catalogue
 // and a dangerous key requires a reason.
 
-export type ConfigScopeType = "platform" | "plan" | "preset" | "tenant" | "location";
+export type ConfigScopeType =
+  | "platform"
+  | "plan"
+  | "preset"
+  | "tenant"
+  | "location"
+  | "activity";
 
 export type ResolvedConfig<T = unknown> = {
   key: ConfigKeyName;
@@ -43,7 +49,7 @@ export type ResolvedConfig<T = unknown> = {
   };
 };
 
-export type ResolveOptions = { locationId?: string };
+export type ResolveOptions = { locationId?: string; activityId?: string };
 
 // In-tx resolver for services that already hold a withTenant()
 // transaction (nesting withTenant inside withTenant throws by design).
@@ -82,6 +88,7 @@ export async function resolveConfigInTx<T = unknown>(
     { scopeType: "preset", scopeId: presetRef },
     { scopeType: "tenant", scopeId: tenantId as string },
     { scopeType: "location", scopeId: options.locationId ?? null },
+    { scopeType: "activity", scopeId: options.activityId ?? null },
   ];
 
   let chosen: { row: ConfigValue; scopeType: ConfigScopeType; scopeId: string | null } | null =
