@@ -6,6 +6,7 @@ import {
 } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
+import { MemberSubscriptionPanel } from "@/components/member-subscription-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { requireReception } from "@/lib/auth/surface-guard";
@@ -66,6 +67,8 @@ export default async function ReceptionMemberDetailPage({
       </p>
 
       <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
+
+      <MemberSubscriptionPanel memberId={member.memberId} />
 
       {member.isMinor ? (
         <section className="mt-4">

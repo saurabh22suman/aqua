@@ -11,6 +11,7 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { listOptedFacilitiesAction } from "@/lib/actions/facility-optins";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
+import { MemberSubscriptionPanel } from "@/components/member-subscription-panel";
 import { MemberFacilitiesPanel } from "@/components/member-facilities-panel";
 import { MakeupCreditsPanel } from "@/components/makeup-credits-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
@@ -106,6 +107,8 @@ export default async function MemberDetailPage({
       </div>
 
       <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
+
+      <MemberSubscriptionPanel memberId={member.memberId} />
 
       <MemberFacilitiesPanel
         memberId={member.memberId}

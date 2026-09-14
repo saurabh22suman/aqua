@@ -154,6 +154,23 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   createPaymentQrAction: "settings.manage",
   updatePaymentQrAction: "settings.manage",
   deletePaymentQrAction: "settings.manage",
+
+  // C-29 — membership plans. The member subscription panel reads
+  // plans for its picker; owner/admin manage them.
+  listPlansAction: "settings.read",
+  listPlanTemplatesAction: "settings.read",
+  activatePlanFromShapeAction: "settings.manage",
+  createPlanAction: "settings.manage",
+  updatePlanAction: "settings.manage",
+  archivePlanAction: "settings.manage",
+
+  // C-30 — subscriptions. Owner/admin/receptionist start and manage
+  // them at the desk.
+  listMemberSubscriptionsAction: "members.read",
+  createSubscriptionAction: "members.write",
+  pauseSubscriptionAction: "members.write",
+  resumeSubscriptionAction: "members.write",
+  cancelSubscriptionAction: "members.write",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.
