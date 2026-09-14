@@ -110,6 +110,11 @@ const EXEMPTIONS: Exemption[] = [
     reason: "Platform-scoped: ops.<base>-only route (middleware gates); tenant permission keys don't apply. Resolution goes through the O-05 opsAction pipeline.",
   },
   {
+    file: "lib/actions/platform-whatsapp-mock.ts",
+    exportedName: "*",
+    reason: "Platform-scoped, non-production-only dev screen; needs an ops session and refuses in production. Sends go through the O-05 opsAction pipeline.",
+  },
+  {
     file: "lib/actions/platform-login-link.ts",
     exportedName: "*",
     reason: "Platform-scoped: ops.<base>-only route (middleware gates); tenant permission keys don't apply.",

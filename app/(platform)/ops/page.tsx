@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Activity, ClipboardList, SlidersHorizontal } from "lucide-react";
+import { Activity, ClipboardList, MessageCircle, SlidersHorizontal } from "lucide-react";
+import { mockMessagingEnabled } from "@/lib/messaging/provider";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 
 // Operator landing screen after a successful 2FA. The substantive
@@ -69,6 +70,19 @@ export default async function PlatformHome() {
             Sales pipeline: qualification answers become the tenant&apos;s preset and configuration.
           </p>
         </Link>
+        {mockMessagingEnabled() ? (
+          <Link
+            href="/ops/whatsapp"
+            className="rounded-card bg-paper border border-line p-4 hover:border-[var(--accent)] transition-colors duration-150"
+          >
+            <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
+              <MessageCircle size={13} strokeWidth={2} /> WhatsApp mock
+            </p>
+            <p className="mt-1 text-[12px] text-ink-3">
+              Non-production: send and receive mock messages through the real pipeline.
+            </p>
+          </Link>
+        ) : null}
         <Link
           href="/ops/activity"
           className="rounded-card bg-paper border border-line p-4 hover:border-[var(--accent)] transition-colors duration-150"
