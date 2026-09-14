@@ -10,10 +10,17 @@ import {
 
 // Phase 2.2b — applyPreset client island. Lives on /ops/presets/[key].
 //
+// O-03 — presets bind to a location, not a tenant. The tenant picker
+// chooses the business; the location picker chooses the site the
+// preset's location-scoped content (facilities, example batches) is
+// written against. Omitting a location would apply to the primary
+// site, but the form always sends the selected one so what the
+// operator sees is what the engine gets.
+//
 // H1 — the form uses <form action={applyPresetAction}> rather than
 // onSubmit. Pre-hydration submit goes via POST to the action
-// endpoint; the tenantId + presetKey never appear in a query string.
-// On success the action calls redirect() to the tenant detail page.
+// endpoint; the ids never appear in a query string. On success the
+// action calls redirect() to the tenant detail page.
 
 type Tenant = {
   id: string;
@@ -24,35 +31,67 @@ type Tenant = {
   presetVersion: number | null;
 };
 
+export type LocationOption = {
+  id: string;
+  name: string;
+  kind: string;
+  isPrimary: boolean;
+  presetKey: string | null;
+  presetVersion: number | null;
+  eligible: boolean;
+};
+
 export function PresetDetailForm({
   presetKey,
   presetName,
   tenants,
+  locationsByTenant,
 }: {
   presetKey: string;
   presetName: string;
   tenants: ReadonlyArray<Tenant>;
+  locationsByTenant: Record<string, ReadonlyArray<LocationOption>>;
 }) {
-  // The action returns a discriminated union; initial state is a
-  // generic error-shaped value with an empty message (no inline
-  // pill rendered until the action returns a non-empty error).
   const [state, formAction, isPending] = useActionState(applyPresetAction, {
     kind: "error",
     code: "invalid",
     message: "",
   } as ApplyPresetActionResult);
 
-  // Track per-tenant-applied-state from the list. The list comes
-  // server-rendered; the form's defaults are read once.
-  const [tenantId, setTenantId] = useState<string>(
-    tenants[0]?.id ?? "",
+  const [tenantId, setTenantId] = useState<string>(tenants[0]?.id ?? "");
+  const [locationId, setLocationId] = useState<string>(
+    () => locationsByTenant[tenants[0]?.id ?? ""]?.[0]?.id ?? "",
   );
 
-  const selected = tenants.find((t) => t.id === tenantId);
-  const selectedAlreadyApplied =
-    selected?.presetKey !== null && selected?.presetKey !== undefined;
+  const tenantLocations = locationsByTenant[tenantId] ?? [];
+  const selectedLocation =
+    tenantLocations.find((l) => l.id === locationId) ?? tenantLocations[0];
 
-  const error = state?.kind === "error" ? state.message : null;
+  const selected = tenants.find((t) => t.id === tenantId);
+  const tenantAlreadyApplied =
+    selected?.presetKey !== null && selected?.presetKey !== undefined;
+  const locationAlreadyApplied = selectedLocation?.presetKey != null;
+  const locationIneligible = selectedLocation != null && !selectedLocation.eligible;
+  // A tenant with an owning preset and a fresh location: this apply
+  // writes location-scoped content only (O-03's interim rule).
+  const tenantWideSkipped =
+    tenantAlreadyApplied &&
+    selectedLocation != null &&
+    selectedLocation.presetKey === null &&
+    !locationIneligible;
+
+  const error =
+    state?.kind === "error" || state?.kind === "location_not_found"
+      ? state.message
+      : state?.kind === "location_not_eligible"
+        ? state.message
+        : null;
+
+  function onTenantChange(nextTenantId: string) {
+    setTenantId(nextTenantId);
+    const first = locationsByTenant[nextTenantId]?.[0];
+    setLocationId(first?.id ?? "");
+  }
 
   return (
     // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
@@ -60,15 +99,16 @@ export function PresetDetailForm({
     // server-action forms (POST vs post).
     <form action={formAction} method="post" suppressHydrationWarning className="mt-8 space-y-4">
       <input type="hidden" name="featureKey" value={presetKey} />
+      <input type="hidden" name="locationId" value={selectedLocation?.id ?? ""} />
       <section className="rounded-card bg-paper border border-line p-5 space-y-4">
         <div>
           <h2 className="font-display text-[16px] font-semibold text-ink">
-            Apply to a tenant
+            Apply to a location
           </h2>
           <p className="mt-1 text-[13px] text-ink-3">
             The engine writes every row in one transaction. Applying
-            twice does not duplicate. Switching from a different
-            applied preset is refused.
+            twice does not duplicate. Switching a location from a
+            different applied preset is refused.
           </p>
         </div>
 
@@ -91,7 +131,7 @@ export function PresetDetailForm({
             <select
               name="tenantId"
               value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
+              onChange={(e) => onTenantChange(e.target.value)}
               className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] focus:outline-none"
             >
               {tenants.map((t) => (
@@ -106,15 +146,67 @@ export function PresetDetailForm({
           )}
         </label>
 
-        {selectedAlreadyApplied ? (
+        {tenants.length > 0 ? (
+          <label className="block">
+            <span className="block text-[12px] font-medium text-ink-2 mb-1">
+              Location
+            </span>
+            {tenantLocations.length === 0 ? (
+              <p className="mt-1 text-[13px] text-ink-3">
+                This tenant has no live location. Locations are created
+                at provisioning; add one before applying a preset.
+              </p>
+            ) : (
+              <select
+                value={selectedLocation?.id ?? ""}
+                onChange={(e) => setLocationId(e.target.value)}
+                className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] focus:outline-none"
+              >
+                {tenantLocations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name} ({l.kind}
+                    {l.isPrimary ? ", primary" : ""})
+                    {l.presetKey ? ` · preset: ${l.presetKey}` : ""}
+                    {l.eligible ? "" : " · not offered"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </label>
+        ) : null}
+
+        {locationIneligible ? (
+          <p
+            role="status"
+            className="rounded-ctl border border-ink-2/30 bg-deck px-3 py-2 text-[12px] text-ink-2"
+          >
+            This preset is not offered for {selectedLocation?.kind}{" "}
+            locations.
+          </p>
+        ) : null}
+
+        {locationAlreadyApplied ? (
+          <p
+            role="status"
+            className="rounded-ctl border border-ink-2/30 bg-deck px-3 py-2 text-[12px] text-ink-2"
+          >
+            This location already has preset{" "}
+            <span className="font-medium">{selectedLocation?.presetKey}</span>{" "}
+            applied. The engine will refuse this apply and report a lock
+            error — switching presets requires manual clean-up first.
+          </p>
+        ) : null}
+
+        {tenantWideSkipped ? (
           <p
             role="status"
             className="rounded-ctl border border-ink-2/30 bg-deck px-3 py-2 text-[12px] text-ink-2"
           >
             This tenant already has preset{" "}
-            <span className="font-medium">{selected?.presetKey}</span> applied.
-            The engine will refuse this apply and report a lock error
-            — switching presets requires manual clean-up first.
+            <span className="font-medium">{selected?.presetKey}</span>{" "}
+            applied. This location gets its own facilities and example
+            batches; tenant-wide settings (terminology, roles, skills)
+            stay with the first preset.
           </p>
         ) : null}
       </section>
@@ -131,12 +223,17 @@ export function PresetDetailForm({
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={isPending || tenants.length === 0}
+          disabled={
+            isPending ||
+            tenants.length === 0 ||
+            !selectedLocation ||
+            locationIneligible
+          }
           className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
         >
           {isPending
             ? "Applying…"
-            : `Apply ${presetName} to this tenant`}
+            : `Apply ${presetName} to ${selectedLocation?.name ?? "this location"}`}
         </button>
         <Link
           href="/ops/presets"

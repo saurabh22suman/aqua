@@ -5,6 +5,7 @@ import { FacilitySwitcher } from "@/components/facility-switcher";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { listLocations } from "@/lib/services/people";
+import { TENANT_SURFACE_NAV } from "@/lib/nav";
 
 // Owner layout — sub-PR 1 of the role-gating migration. The
 // layout is the gate: `sessionExists()` admits any role with a
@@ -36,14 +37,7 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
     <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
       <FacilitySwitcher locations={locations} />
       {children}
-      <BottomNav
-        items={[
-          { href: "/owner", label: "Home", iconName: "layout-dashboard", exact: true },
-          { href: "/owner/members", label: "Members", iconName: "users" },
-          { href: "/owner/reports", label: "Reports", iconName: "file-text" },
-          { href: "/owner/settings", label: "Settings", iconName: "settings" },
-        ]}
-      />
+      <BottomNav items={TENANT_SURFACE_NAV.owner} />
     </div>
   );
 }

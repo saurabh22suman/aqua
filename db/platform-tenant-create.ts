@@ -7,6 +7,7 @@ import { tenants } from "./schema/tenants";
 import { locations } from "./schema/locations";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import { registerAbsenceAlertsSchedule, registerSessionsGenerateSchedule } from "./queue";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
@@ -225,12 +226,13 @@ export async function createTenant(
       });
 
       // platform_audit_log is RLS-exempt (db/allowlist.ts). The
-      // insert goes through the same withPlatformAdmin transaction
-      // so audit and data commit together.
-      await tx.insert(platformAuditLog).values({
+      // recorder goes through the same withPlatformAdmin transaction
+      // so audit and data commit together; inside opsAction the
+      // actor/scope/reason come from the wrapping action.
+      await recordOpsAudit(tx, {
+        action: "tenant.create",
         actorId: ctx.actorId,
         tenantId: tenant.id,
-        action: "tenant.create",
         targetType: "tenant",
         targetId: tenant.id,
         detail: {

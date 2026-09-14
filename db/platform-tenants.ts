@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withPlatformAdmin } from "./scope";
 import { withTenant } from "./tenant";
-import { tenants } from "./schema/tenants";
+import { tenants, locationPresets } from "./schema/tenants";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
 import { locations } from "./schema/locations";
@@ -194,7 +194,10 @@ export type TenantDetail = {
   locations: Array<{
     id: string;
     name: string;
+    kind: string;
     isPrimary: boolean;
+    presetKey: string | null;
+    presetVersion: number | null;
     createdAt: Date;
   }>;
   featureKeys: Array<{
@@ -295,10 +298,17 @@ export async function getTenantDetail(
         .select({
           id: locations.id,
           name: locations.name,
+          kind: locations.kind,
           isPrimary: locations.isPrimary,
+          presetKey: locationPresets.presetKey,
+          presetVersion: locationPresets.presetVersion,
           createdAt: locations.createdAt,
         })
         .from(locations)
+        .leftJoin(
+          locationPresets,
+          eq(locationPresets.locationId, locations.id),
+        )
         .where(sql`${locations.deletedAt} is null`)
         .orderBy(sql`${locations.isPrimary} desc, ${locations.name} asc`);
       return rows;
@@ -351,7 +361,10 @@ export async function getTenantDetail(
     locations: locationsList.map((l) => ({
       id: l.id,
       name: l.name,
+      kind: l.kind,
       isPrimary: l.isPrimary,
+      presetKey: l.presetKey,
+      presetVersion: l.presetVersion,
       createdAt: l.createdAt,
     })),
     recentActivity: activity.map((a) => ({
@@ -362,4 +375,42 @@ export async function getTenantDetail(
       createdAt: a.createdAt,
     })),
   };
+}
+
+// O-03 — every live location across every tenant, for the preset
+// apply picker. One query instead of N: the picker needs all of them
+// to render "apply this preset here" without a per-tenant round trip.
+export type PlatformLocationRow = {
+  id: string;
+  tenantId: string;
+  name: string;
+  kind: string;
+  isPrimary: boolean;
+  presetKey: string | null;
+  presetVersion: number | null;
+};
+
+export async function listLocationsForOps(): Promise<PlatformLocationRow[]> {
+  return withPlatformAdmin(async (tx) => {
+    const rows = await tx
+      .select({
+        id: locations.id,
+        tenantId: locations.tenantId,
+        name: locations.name,
+        kind: locations.kind,
+        isPrimary: locations.isPrimary,
+        presetKey: locationPresets.presetKey,
+        presetVersion: locationPresets.presetVersion,
+      })
+      .from(locations)
+      .leftJoin(
+        locationPresets,
+        eq(locationPresets.locationId, locations.id),
+      )
+      .where(sql`${locations.deletedAt} is null`)
+      .orderBy(
+        sql`${locations.tenantId} asc, ${locations.isPrimary} desc, ${locations.name} asc`,
+      );
+    return rows.map((r) => ({ ...r, tenantId: r.tenantId as string }));
+  });
 }

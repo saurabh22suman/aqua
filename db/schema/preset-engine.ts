@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -14,6 +15,7 @@ import { v7 as uuidv7 } from "uuid";
 import { sql } from "drizzle-orm";
 import { auditColumns } from "./_shared";
 import { tenants } from "./tenants";
+import { locations } from "./locations";
 import type { TenantId } from "@/lib/ids";
 
 // Phase 2.2a — schema for the applyPreset engine. The tables
@@ -111,9 +113,12 @@ export const planShapes = pgTable(
   ],
 );
 
-// facilities — kind and capacity per the §7.4 shape. Sub-units
-// (lanes, courts, etc.) are a separate table to keep the parent
-// row light and the per-unit list query cheap.
+// facilities — a bookable resource at a location: kind and capacity
+// per the §7.4 shape. Sub-units (lanes, courts, etc.) are a separate
+// table to keep the parent row light and the per-unit list query
+// cheap. location_id is NOT NULL as of O-01: a facility with no site
+// cannot be resolved, and which location a row points at is data
+// (design doc §8's pool-next-to-café example).
 export const facilities = pgTable(
   "facilities",
   {
@@ -122,6 +127,7 @@ export const facilities = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" })
       .$type<TenantId>(),
+    locationId: uuid("location_id").notNull(),
     name: text("name").notNull(),
     kind: text("kind").notNull(),
     capacity: integer("capacity").notNull(),
@@ -130,9 +136,15 @@ export const facilities = pgTable(
   },
   (t) => [
     unique("facilities_id_tenant_key").on(t.id, t.tenantId),
+    index("facilities_tenant_location_idx").on(t.tenantId, t.locationId),
+    foreignKey({
+      name: "facilities_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
+    }).onDelete("cascade"),
     check(
       "facilities_kind_check",
-      sql`${t.kind} in ('pool', 'court', 'turf', 'studio', 'field')`,
+      sql`${t.kind} in ('pool', 'court', 'turf', 'studio', 'field', 'counter')`,
     ),
     check("facilities_capacity_check", sql`${t.capacity} > 0`),
   ],

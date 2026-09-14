@@ -9,6 +9,10 @@ export const PLATFORM_TABLES = [
   "plan_features",
   "presets",
   "permissions",
+  // O-04 — the configuration key catalogue. Platform-owned, seeded from
+  // code (db/config-definitions.ts); the per-tenant VALUES live in
+  // config_values, which is tenant-isolated and NOT exempt.
+  "config_keys",
   // OUR standard consent notice text, shown to every guardian/adult
   // member across every tenant -- not a per-tenant document (C-05a's
   // operator DPA is the separate, tenant-specific one). Same shape as
@@ -21,6 +25,10 @@ export const PLATFORM_TABLES = [
   "platform_users",
   "platform_sessions",
   "platform_audit_log",
+  // O-09 — sales leads hold real names and phone numbers and sit
+  // outside RLS like users. Direct imports are restricted by
+  // scripts/check-platform-leads-imports.ts.
+  "platform_leads",
 ] as const;
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];

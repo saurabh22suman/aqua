@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "./client";
 import { withPlatform } from "./scope";
 import { features, type Feature } from "./schema/platform";
-import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import type { UserId } from "@/lib/ids";
 
 // Phase 1.7 — feature catalogue editor. `features` is in the
@@ -189,7 +189,7 @@ export async function updateFeature(
         })
         .where(eq(features.key, input.key));
 
-      await tx.insert(platformAuditLog).values({
+      await recordOpsAudit(tx, {
         actorId: ctx.actorId,
         // tenantId is null — the platform action targets a feature,
         // not a tenant. The schema allows it (nullable FK).

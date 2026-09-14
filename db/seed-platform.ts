@@ -11,6 +11,7 @@ import {
   GYM_PRESET_DEFINITION,
 START_FROM_SCRATCH_PRESET_DEFINITION,
 } from "./preset-definitions-r22";
+import { CONFIG_KEYS } from "./config-definitions";
 
 // Phase 2.1 — preset catalogue seed entries. Authored as
 // constants in db/preset-definitions.ts and
@@ -325,6 +326,33 @@ export async function seedPlatformCatalogue(
           preset.description,
           JSON.stringify(preset.definition),
           preset.status,
+        ],
+      );
+    }
+
+    // O-04 — the configuration key catalogue. Code is the source of
+    // truth (db/config-definitions.ts); this upsert re-asserts it on
+    // every seed run, so a description or schema change ships with the
+    // code that reads it. Values for a key live in config_values, never
+    // here.
+    for (const [key, definition] of Object.entries(CONFIG_KEYS)) {
+      await client.query(
+        `insert into config_keys (key, value_schema, default_value, visibility, risk, description)
+         values ($1, $2::jsonb, $3::jsonb, $4, $5, $6)
+         on conflict (key) do update
+           set value_schema = excluded.value_schema,
+               default_value = excluded.default_value,
+               visibility = excluded.visibility,
+               risk = excluded.risk,
+               description = excluded.description,
+               updated_at = now()`,
+        [
+          key,
+          JSON.stringify(definition.jsonSchema),
+          JSON.stringify(definition.defaultValue),
+          definition.visibility,
+          definition.risk,
+          definition.description,
         ],
       );
     }

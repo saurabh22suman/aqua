@@ -10,7 +10,7 @@ import {
 } from "./schema/preset-engine";
 import { programs, batches } from "./schema/programs";
 import { sessions } from "./schema/scheduling";
-import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // Phase 2.3 — "remove sample data" affordance. The applyPreset
@@ -247,7 +247,7 @@ export async function removeSampleData(
     // audit channel; the engine's "applied preset" actions write
     // there too. This row records what the operator removed, with
     // the row counts per entity.
-    await tx.insert(platformAuditLog).values({
+    await recordOpsAudit(tx, {
       actorId: ctx.actorId,
       tenantId,
       action: "tenant.remove_sample_data",

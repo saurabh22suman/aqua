@@ -198,6 +198,10 @@ picks) and the "different accent per tenant" detail.
     Masters waitlist (the batch is near-empty).
   - **R.7 makeup credit** — `Aaradhya Iyer` (AWS-002) holds one
     makeup credit against a 5-days-ago Morning Squad session.
+  - **O-02 event locations** — every seeded session and attendance
+    mark carries its batch's location. All demo data sits at the
+    single primary location, so the per-site view and the
+    consolidated view agree by construction.
 - Enquiries (Aqua Worli): 8 rows spanning `new`, `contacted`,
   `trial_scheduled`, `trial_completed`, `converted`, `lost`. The
   operator can move a `new` enquiry to `contacted`, add a

@@ -7,7 +7,7 @@ import { users } from "./schema/users";
 import { tenantMemberships } from "./schema/memberships";
 import { roles } from "./schema/roles";
 import { tenants } from "./schema/tenants";
-import { platformAuditLog } from "./schema/platform-users";
+import { recordOpsAudit } from "./ops-action";
 import { ensurePersonAndStaff } from "./invite-helpers";
 import type { StaffType } from "./schema/staff";
 import type { TenantId, UserId } from "@/lib/ids";
@@ -197,7 +197,7 @@ export async function inviteOwner(
       staffType: input.staffType,
     });
 
-    await tx.insert(platformAuditLog).values({
+    await recordOpsAudit(tx, {
       actorId: input.actorId,
       tenantId,
       action: "tenant.invite_owner",

@@ -130,6 +130,15 @@ export default async function PlatformTenantDetailPage({
             value={`${DATE_FMT.format(detail.createdAt)} · updated ${DATETIME_FMT.format(detail.updatedAt)}`}
           />
         </div>
+        <div className="mt-2">
+          <Link
+            href={`/ops/tenants/${detail.id}/configuration`}
+            className="text-[13px] text-[var(--accent)] underline underline-offset-2"
+          >
+            Effective configuration — resolved values, entitlements,
+            permissions and nav per role
+          </Link>
+        </div>
       </section>
 
       <section className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">

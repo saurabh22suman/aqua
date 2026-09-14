@@ -19,6 +19,7 @@ import {
   type TransitionResult,
 } from "@/db/platform-tenant-status";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { opsAction } from "@/db/ops-action";
 import { asUserId, asTenantId } from "@/lib/ids";
 
 // Phase 1.5 + 1.6 — server actions for the operator surface:
@@ -85,7 +86,15 @@ export async function createTenantAction(
     };
   }
 
-  const result = await createTenant(normalised, { actorId: asUserId(status.userId) });
+  const result = await opsAction(
+    {
+      scope: "tenant.create",
+      actorId: asUserId(status.userId),
+      targetType: "tenant",
+      detail: { slug: normalised.slug },
+    },
+    () => createTenant(normalised, { actorId: asUserId(status.userId) }),
+  );
   if (result.kind === "ok") {
     redirect(`/ops/tenants/${result.tenantId}`);
   }
@@ -135,9 +144,27 @@ export async function transitionTenantStatusAction(
     };
   }
 
-  const result = await transitionTenantStatus(asTenantId(tenantId), normalised, {
-    actorId: asUserId(status.userId),
-  });
+  const scope =
+    surface.data.targetStatus === "active"
+      ? ("tenant.activate" as const)
+      : surface.data.targetStatus === "suspended"
+        ? ("tenant.suspend" as const)
+        : ("tenant.churn" as const);
+
+  const result = await opsAction(
+    {
+      scope,
+      actorId: asUserId(status.userId),
+      tenantId,
+      reason: normalised.reason,
+      targetType: "tenant",
+      targetId: tenantId,
+    },
+    () =>
+      transitionTenantStatus(asTenantId(tenantId), normalised, {
+        actorId: asUserId(status.userId),
+      }),
+  );
   if (result.kind === "ok") {
     revalidatePath(`/ops/tenants/${tenantId}`);
   }

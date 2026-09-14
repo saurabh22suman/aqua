@@ -16,6 +16,7 @@ import {
 // Re-export for client islands that wire the action to useActionState.
 export type { UpsertTenantFeatureResult };
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
 // Phase 1.7 + 1.8 — server actions for the platform surface.
@@ -73,7 +74,15 @@ export async function updateFeatureAction(
     };
   }
 
-  const result = await updateFeature(normalised, { actorId: asUserId(status.userId) });
+  const result = await opsAction(
+    {
+      scope: "feature.update",
+      actorId: asUserId(status.userId),
+      targetType: "feature",
+      detail: { key: normalised.key },
+    },
+    () => updateFeature(normalised, { actorId: asUserId(status.userId) }),
+  );
   if (result.kind === "ok") {
     revalidatePath("/ops/features");
   }
@@ -129,9 +138,22 @@ export async function upsertTenantFeatureAction(
     };
   }
 
-  const result = await upsertTenantFeature(normalised, {
-    actorId: asUserId(status.userId),
-  });
+  const result = await opsAction(
+    {
+      scope:
+        surface.data.mode === "clear"
+          ? "tenant_feature.clear"
+          : "tenant_feature.upsert",
+      actorId: asUserId(status.userId),
+      tenantId,
+      targetType: "tenant_feature",
+      detail: { featureKey: normalised.featureKey },
+    },
+    () =>
+      upsertTenantFeature(normalised, {
+        actorId: asUserId(status.userId),
+      }),
+  );
   if (result.kind === "ok") {
     revalidatePath(`/ops/tenants/${tenantId}`);
   }

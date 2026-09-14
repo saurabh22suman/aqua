@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { BottomNav } from "@/components/bottom-nav";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_RECEPTION } from "@/lib/auth/surface-access";
+import { TENANT_SURFACE_NAV } from "@/lib/nav";
 
 // See app/(owner)/layout.tsx. Reception surface: receptionist only
 // (today). Owner/admin have the owner surface; coach has the coach
@@ -21,14 +22,7 @@ export default async function ReceptionLayout({ children }: { children: ReactNod
     <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
       {children}
       <BottomNav
-        items={[
-          { href: "/reception", label: "Today", iconName: "calendar-days", exact: true },
-          { href: "/reception/members/new", label: "Add member", iconName: "user-plus" },
-          { href: "/reception/enquiries", label: "Enquiries", iconName: "clipboard-list" },
-          // K2 — fourth tab matches the design's 4-item bottom bar
-          // (DESIGN.md §2). The sign-out form lives at /reception/me.
-          { href: "/reception/me", label: "Me", iconName: "user-round" },
-        ]}
+        items={TENANT_SURFACE_NAV.reception}
       />
     </div>
   );

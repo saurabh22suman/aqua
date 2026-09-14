@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Activity, SlidersHorizontal } from "lucide-react";
+import { Activity, ClipboardList, SlidersHorizontal } from "lucide-react";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 
 // Operator landing screen after a successful 2FA. The substantive
@@ -56,6 +56,17 @@ export default async function PlatformHome() {
           </p>
           <p className="mt-1 text-[12px] text-ink-3">
             Apply a feature and vocabulary preset to a tenant.
+          </p>
+        </Link>
+        <Link
+          href="/ops/leads"
+          className="rounded-card bg-paper border border-line p-4 hover:border-[var(--accent)] transition-colors duration-150"
+        >
+          <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
+            <ClipboardList size={13} strokeWidth={2} /> Leads
+          </p>
+          <p className="mt-1 text-[12px] text-ink-3">
+            Sales pipeline: qualification answers become the tenant&apos;s preset and configuration.
           </p>
         </Link>
         <Link

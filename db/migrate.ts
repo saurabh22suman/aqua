@@ -4,7 +4,10 @@ import { Client } from "pg";
 
 const MIGRATIONS_DIR = join(process.cwd(), "db", "migrations");
 
-export async function runMigrations(connectionString: string): Promise<number> {
+export async function runMigrations(
+  connectionString: string,
+  options: { upToExclusive?: string } = {},
+): Promise<number> {
   const client = new Client({ connectionString });
   await client.connect();
 
@@ -16,20 +19,26 @@ export async function runMigrations(connectionString: string): Promise<number> {
       )
     `);
 
-    const files = readdirSync(MIGRATIONS_DIR)
+    const allFiles = readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql"))
       .sort();
+    // upToExclusive exists for migration backfill tests: seed the
+    // pre-migration shape, then apply the target migration last. The
+    // ascending-order guard below always validates the full set.
+    const files = options.upToExclusive
+      ? allFiles.filter((f) => f < options.upToExclusive!)
+      : allFiles;
 
-    if (files.length === 0) {
+    if (allFiles.length === 0) {
       throw new Error(`No migrations found in ${MIGRATIONS_DIR}`);
     }
 
-    for (let i = 1; i < files.length; i++) {
-      const prev = files[i - 1].match(/^(\d+)/)?.[1];
-      const curr = files[i].match(/^(\d+)/)?.[1];
+    for (let i = 1; i < allFiles.length; i++) {
+      const prev = allFiles[i - 1].match(/^(\d+)/)?.[1];
+      const curr = allFiles[i].match(/^(\d+)/)?.[1];
       if (!prev || !curr || BigInt(curr) <= BigInt(prev)) {
         throw new Error(
-          `Migration files must be numbered NNNN_name.sql in ascending order. Offending pair: ${files[i - 1]}, ${files[i]}`,
+          `Migration files must be numbered NNNN_name.sql in ascending order. Offending pair: ${allFiles[i - 1]}, ${allFiles[i]}`,
         );
       }
     }

@@ -225,18 +225,38 @@ export async function markAttendance(
   input: { sessionId: string; memberId: string; status: "present" | "absent" | "late"; clientId: string },
 ): Promise<void> {
   await withTenant(ctx.tenantId, async (tx) => {
+    // O-02 — the mark carries the session's site, read in the same
+    // transaction. A re-mark picks up the session's current value;
+    // history is never rewritten by a later batch move.
+    const sessionRows = await tx
+      .select({ locationId: sessions.locationId })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.tenantId, ctx.tenantId),
+          eq(sessions.id, input.sessionId),
+        ),
+      )
+      .limit(1);
+    const sessionLocationId = sessionRows[0]?.locationId ?? null;
+
     await tx
       .insert(attendance)
       .values({
         tenantId: ctx.tenantId,
         sessionId: input.sessionId,
+        locationId: sessionLocationId,
         memberId: asMemberId(input.memberId),
         status: input.status,
         clientId: input.clientId,
       })
       .onConflictDoUpdate({
         target: [attendance.tenantId, attendance.sessionId, attendance.memberId],
-        set: { status: input.status, markedAt: new Date() },
+        set: {
+          status: input.status,
+          locationId: sessionLocationId,
+          markedAt: new Date(),
+        },
       });
   });
 }

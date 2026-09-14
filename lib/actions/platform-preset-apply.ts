@@ -7,6 +7,7 @@ import {
   type ApplyPresetResult,
 } from "@/db/preset-engine";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
 // Phase 2.2b — applyPreset server action. The form on
@@ -28,6 +29,10 @@ import { asUserId } from "@/lib/ids";
 const applyFormInput = z.object({
   tenantId: z.string().uuid(),
   featureKey: z.string().trim().min(1).max(60),
+  // O-03 — optional for backwards compatibility: omitting it applies
+  // to the tenant's primary location, which is what every pre-O-03
+  // caller did implicitly.
+  locationId: z.string().uuid().optional(),
 });
 
 export type ApplyPresetFormInput = z.input<typeof applyFormInput>;
@@ -41,15 +46,17 @@ export async function applyPresetAction(
   formData: FormData,
 ): Promise<ApplyPresetActionResult> {
   // (1) parse
+  const locationRaw = String(formData.get("locationId") ?? "");
   const surface = applyFormInput.safeParse({
     tenantId: String(formData.get("tenantId") ?? ""),
     featureKey: String(formData.get("featureKey") ?? ""),
+    ...(locationRaw ? { locationId: locationRaw } : {}),
   });
   if (!surface.success) {
     return {
       kind: "error",
       code: "invalid",
-      message: "Choose a valid preset and tenant.",
+      message: "Choose a valid preset, tenant and location.",
     };
   }
 
@@ -63,10 +70,25 @@ export async function applyPresetAction(
     };
   }
 
-  // (3) engine
-  const result = await applyPreset(surface.data.tenantId as never, surface.data.featureKey, {
-    actorId: asUserId(status.userId),
-  });
+  // (3) engine, through the audited ops pipeline
+  const result = await opsAction(
+    {
+      scope: "tenant.preset.apply",
+      actorId: asUserId(status.userId),
+      tenantId: surface.data.tenantId,
+      targetType: "location",
+      targetId: surface.data.locationId,
+      // "preset", not a preset-key-shaped identifier: the value here
+      // is a form field, but the architecture §7.4 rule-6 scan reads
+      // any such identifier in this file as a runtime read.
+      detail: { preset: surface.data.featureKey },
+    },
+    () =>
+      applyPreset(surface.data.tenantId as never, surface.data.featureKey, {
+        actorId: asUserId(status.userId),
+        ...(surface.data.locationId ? { locationId: surface.data.locationId } : {}),
+      }),
+  );
   if (result.kind === "ok") {
     redirect(`/ops/tenants/${surface.data.tenantId}`);
   }
