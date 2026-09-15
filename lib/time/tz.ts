@@ -77,6 +77,21 @@ export function zonedWallTimeToInstant(
   return new Date(guess);
 }
 
+// The UTC instants bounding one calendar day in a tenant's timezone —
+// used by the daily collection report (C-34) so "today's payments"
+// means the academy's day, not the server's. Both ends go through the
+// zone-aware conversion, so a DST transition can never silently shift
+// the window (India has none; the helper does not depend on that).
+export function dayRangeUtc(
+  dateIso: string,
+  timeZone: string,
+): { fromUtc: Date; toUtc: Date } {
+  return {
+    fromUtc: zonedWallTimeToInstant(dateIso, "00:00", timeZone),
+    toUtc: zonedWallTimeToInstant(addDays(dateIso, 1), "00:00", timeZone),
+  };
+}
+
 export function isMinor(
   dateOfBirth: string | null | undefined,
   timeZone: string,

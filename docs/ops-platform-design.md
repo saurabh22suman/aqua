@@ -305,6 +305,13 @@ The existing invite path also creates staff rows only for coach and receptionist
 
 ### Open question: legal entities and GST
 
+> **Resolved 2026-09-14 (for now):** one tenant = one GSTIN. C-31 numbers
+> per tenant per financial year, which is therefore per GSTIN; its counter
+> key `(tenant_id, financial_year)` grows a legal-entity reference if a
+> tenant ever needs a second GSTIN, so no issued invoice is renumbered.
+> `legal_entity_id` is still not modelled; the paragraph below remains the
+> design for the day it is needed.
+
 If a tenant's sites are separate legal entities — especially across states, with separate GSTINs — then invoice numbering cannot be gapless per tenant. It must be gapless **per GSTIN**, and C-31 currently specifies per tenant.
 
 The clean shape is a `legal_entity` record carrying GSTIN, legal name and bank details, with locations pointing at one. One tenant, consolidated view intact, invoicing scoped correctly. Whether to build it now depends on whether any pilot tenant is actually multi-entity; the nullable `legal_entity_id` above keeps the door open at near-zero cost.

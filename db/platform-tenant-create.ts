@@ -8,8 +8,13 @@ import { locations } from "./schema/locations";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
 import { recordOpsAudit } from "./ops-action";
-import { registerAbsenceAlertsSchedule, registerSessionsGenerateSchedule } from "./queue";
+import {
+  registerAbsenceAlertsSchedule,
+  registerBillingSchedules,
+  registerSessionsGenerateSchedule,
+} from "./queue";
 import { seedRoleTemplates } from "@/lib/services/roles";
+import { GSTIN_RE } from "@/lib/gst";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
 // Phase 1.5 — platform-side tenant creation. Replaces the CLI path
@@ -32,7 +37,8 @@ import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 // fields stay null.
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])$/;
-const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+// GSTIN_RE moved to lib/gst.ts (C-32) — invoice issue and the receipt
+// validate the same shape, so there is one definition.
 
 // Intl.supportedValuesOf('timeZone') returns the ICU/CLDR list, not
 // the full IANA database — and that list varies by Node version
@@ -271,6 +277,8 @@ export async function createTenant(
         await registerSessionsGenerateSchedule(result.tenantId, input.timezone);
         // R.8 — absence alerts run daily alongside session generation.
         await registerAbsenceAlertsSchedule(result.tenantId, input.timezone);
+        // C-47 — the nightly billing jobs (expire / generate / rollup).
+        await registerBillingSchedules(result.tenantId, input.timezone);
       } catch (err) {
         console.error(
           `createTenant: failed to register schedules for tenant ${result.tenantId}`,

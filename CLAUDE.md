@@ -124,6 +124,19 @@ component, the demo reset scripts).
 ## Verify before claiming done
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 
+## Testing role surfaces
+Any manual/UI verification of a role-specific surface — owner, coach,
+reception, parent — happens at **mobile resolution (390×844)**, the
+same viewport the audits use. The role surfaces are field surfaces:
+a flow that works at 1280px and breaks at 390px is broken. The ops
+platform console is the one exception (desktop, 1280×900) — it is a
+back-office tool, not a frontline surface.
+
+Note when using the dev server: the offline service worker caches
+chunks across sessions, so a client-side error can be a stale bundle,
+not the code on disk. Unregister the SW + clear caches before
+trusting it (or hard-reload).
+
 ## Stop and ask when
 - A task needs a table or column not in the plan
 - The bundle budget would be exceeded

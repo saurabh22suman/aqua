@@ -4,6 +4,9 @@ import { db } from "./client";
 import { withPlatform } from "./scope";
 import { scheduleSessionsGenerate } from "@/lib/jobs/sessions-generate-schedule";
 import { scheduleAbsenceAlerts } from "@/lib/jobs/absence-alerts-schedule";
+import { scheduleSubscriptionsExpire } from "@/lib/jobs/subscriptions-expire-schedule";
+import { scheduleInvoicesGenerate } from "@/lib/jobs/invoices-generate-schedule";
+import { scheduleReportsRollup } from "@/lib/jobs/reports-rollup-schedule";
 
 // pg-boss needs a role-aware connection. db/client.ts's pool already runs
 // `set role app_user` on every connection (its onConnect hook) — routing
@@ -65,6 +68,25 @@ export async function registerAbsenceAlertsSchedule(
   await boss.start();
   try {
     await scheduleAbsenceAlerts(boss, tenantId, timezone);
+  } finally {
+    await boss.stop({ graceful: false, timeout: 5000 });
+  }
+}
+
+// C-47 — the three nightly billing jobs (subscriptions.expire,
+// invoices.generate, reports.rollup) are registered together in one
+// best-effort call: same contract as the two above, but one pg-boss
+// start per tenant creation instead of three.
+export async function registerBillingSchedules(
+  tenantId: string,
+  timezone: string,
+): Promise<void> {
+  const boss = createAppScopedBoss();
+  await boss.start();
+  try {
+    await scheduleSubscriptionsExpire(boss, tenantId, timezone);
+    await scheduleInvoicesGenerate(boss, tenantId, timezone);
+    await scheduleReportsRollup(boss, tenantId, timezone);
   } finally {
     await boss.stop({ graceful: false, timeout: 5000 });
   }

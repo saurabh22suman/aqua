@@ -18,6 +18,11 @@ import { formatINR } from "@/lib/money/format";
 // active plan, pause/resume (pause extends the end date by the paused
 // days), cancel. Independent of the member's own lifecycle status.
 
+// C-32 — fired after any successful subscription change so the
+// invoices panel can refresh its own client-side copy (a
+// router.refresh() re-renders the server tree but keeps client state).
+export const SUBSCRIPTIONS_CHANGED_EVENT = "aqua:subscriptions-changed";
+
 const inputClass =
   "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
 
@@ -45,6 +50,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
   const [planId, setPlanId] = useState("");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
+  const [autoRenew, setAutoRenew] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +80,9 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
       if (result.ok) {
         await load();
         router.refresh();
+        // Sibling panels (the invoices panel's raise picker) hold their
+        // own client state; a server refresh does not remount them.
+        window.dispatchEvent(new Event(SUBSCRIPTIONS_CHANGED_EVENT));
       }
       setBusy(false);
     })();
@@ -238,6 +247,14 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
               />
             </label>
           </div>
+          <label className="mt-2 flex items-center gap-2 text-[12px] text-ink-2">
+            <input
+              type="checkbox"
+              checked={autoRenew}
+              onChange={(e) => setAutoRenew(e.target.checked)}
+            />
+            Raise the next invoice automatically (payments stay manual)
+          </label>
           <button
             type="button"
             disabled={busy || plans.length === 0}
@@ -248,6 +265,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                   planId,
                   ...(startsOn ? { startsOn } : {}),
                   ...(endsOn ? { endsOn } : {}),
+                  autoRenew,
                 }),
               )
             }

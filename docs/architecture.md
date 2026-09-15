@@ -981,7 +981,7 @@ create table invoices (
   tenant_id       uuid not null,
   location_id     uuid not null,
   member_id       uuid not null references members(id),
-  invoice_number  text not null,          -- gapless, per FY, per location
+  invoice_number  text not null,          -- gapless, per FY, per tenant (per GSTIN; 2026-09-14)
   financial_year  text not null,
   issued_on       date not null,
   due_on          date not null,
@@ -1015,6 +1015,8 @@ create table payments (
 **Invoice numbering** must be gapless per financial year per location — a GST requirement. It is issued inside the invoice transaction using a per-scope counter row with `select ... for update`, never a sequence (sequences leave gaps on rollback).
 
 **Cash matters.** A meaningful share of collections in this market is cash at the counter. `channel = 'counter'` with a recorded `received_by` and a daily reconciliation report is not an afterthought; if the product cannot handle cash, the register survives.
+
+> **As built (C-31–C-39, C-47).** The sketch above is the target shape; the shipped tables differ where the 2026-09-14 decisions and Indian GST law required it. `membership_plans` carries `location_id` (not `program_id`) + optional `activity_id` and no `tax_rate_bp` (C-29c). `invoices` adds `subscription_id`, `gstin` (snapshot; null ⇒ Bill of Supply) and `location_id`; numbering is per tenant per FY (1 tenant = 1 GSTIN decision). `invoice_line_items` carries the SAC and the GST rate snapshot. `payments` drops the Razorpay columns (see §10's removal note), adds `location_id`, and is written only at the counter. `receipts`, `cash_counts` and `daily_rollups` support C-39, C-34 and C-47. The intra-state CGST/SGST split is derived at render time; IGST (inter-state) is not modelled yet.
 
 ### 8.7 Facilities and bookings (Phase 3)
 
@@ -1426,6 +1428,8 @@ Closing it needed to know which coach a session belongs to, and nothing did — 
 ---
 
 ## 10. Payments integration
+
+> **Removed from scope (2026-09-14, plan §"Payment gateway decision").** The Razorpay adapter, payment links, webhook endpoint and webhook worker (C-35–C-38 as originally written) were removed. Owners collect over their own UPI QRs (C-35) and payments are recorded at the counter (C-33); no card data touches these systems and there is no PSP integration. This section is retained as the design the hosted flow would return to if it is ever re-opened as a new task — it is not a description of the built system.
 
 ### 10.1 Flow
 
