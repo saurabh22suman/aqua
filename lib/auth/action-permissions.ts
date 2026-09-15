@@ -192,6 +192,10 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   recordPaymentAction: "payments.record",
   getDailyCollectionAction: "reports.financial",
   confirmCashCountAction: "payments.record",
+  // Reopening a closed count is the escape hatch a dishonest recount
+  // would want — owner/admin-only, same gate as an over-₹2,000 close.
+  reopenCashCountAction: "settings.manage",
+  listCashCountHistoryAction: "reports.financial",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.
