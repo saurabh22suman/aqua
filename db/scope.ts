@@ -6,6 +6,7 @@ export type Scope =
   | { kind: "tenant"; tenantId: string }
   | { kind: "platform" }
   | { kind: "platform_admin" }
+  | { kind: "platform_metrics_writer" }
   | { kind: "user"; userId: string };
 
 export const scopeStorage = new AsyncLocalStorage<Scope>();
@@ -81,6 +82,51 @@ export async function withPlatformAdmin<T>(
     db.transaction(async (tx) => {
       await tx.execute(
         sql`select set_config('app.platform_admin', 'true', true)`,
+      );
+      return fn(tx);
+    }),
+  );
+}
+
+// withPlatformMetricsWriter is the scope that owns writes to
+// platform_metrics_daily. It sets app.platform_metrics_writer =
+// 'true' transaction-scoped. The platform_metrics_daily RLS
+// policies (migration 20260917000000_platform_metrics_writer_scope.sql)
+// grant ALL on that table only when this flag is set; FORCE RLS
+// makes the gate mechanical rather than convention.
+//
+// Why this scope does NOT also set app.platform_admin: tenant
+// tables' platform_admin_write policies (`for all to app_user using
+// (app.platform_admin = 'true')`) would otherwise activate inside
+// this scope and the scope would be able to write every tenant
+// table with that policy. By setting ONLY the writer flag,
+// withPlatformMetricsWriter is incapable of reaching any tenant
+// table — the tenant_isolation policy blocks reads, and the
+// platform_admin_write policies have no key on the writer flag.
+// This is the mutual-exclusion guarantee: this scope's write
+// surface is exactly {platform_metrics_daily} and nothing else.
+//
+// Read cross-tenant still requires withPlatformAdmin (sets
+// app.platform_admin = 'true', activates platform_admin_select on
+// tenant tables). The platform-metrics-snapshot job uses both
+// scopes in sequence: a withPlatformAdmin transaction computes
+// the counts, a withPlatformMetricsWriter transaction writes the
+// row. Reads and writes are no longer atomic, but the upsert is
+// idempotent and the snapshot is one row per day — a partial
+// failure means the row is stale until the next run, not that
+// counts go missing.
+//
+// Scope-kind namespace: `platform_metrics_writer` is intentionally
+// NOT in PLATFORM_ADMIN_SQL_SCOPED_KINDS — the writer flag is
+// deliberately orthogonal to the tenant/user variables so it
+// cannot widen their visibility by accident.
+export async function withPlatformMetricsWriter<T>(
+  fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
+): Promise<T> {
+  return enterScope({ kind: "platform_metrics_writer" }, () =>
+    db.transaction(async (tx) => {
+      await tx.execute(
+        sql`select set_config('app.platform_metrics_writer', 'true', true)`,
       );
       return fn(tx);
     }),
