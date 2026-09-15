@@ -18,6 +18,7 @@ type InvoiceMutations = typeof import("@/lib/services/invoice-mutations");
 type InvoiceReads = typeof import("@/lib/services/invoices");
 type Payments = typeof import("@/lib/services/payments");
 type Reconciliation = typeof import("@/lib/services/reconciliation");
+type ReconciliationClosedState = typeof import("@/lib/services/reconciliation-closed-state");
 type Roles = typeof import("@/lib/services/roles");
 
 let container: StartedPostgreSqlContainer;
@@ -26,6 +27,7 @@ let mutations: InvoiceMutations;
 let reads: InvoiceReads;
 let payments: Payments;
 let reconciliation: Reconciliation;
+let reconciliationClosedState: ReconciliationClosedState;
 
 const tenantA = asTenantId(uuidv7());
 const tenantB = asTenantId(uuidv7());
@@ -42,6 +44,7 @@ const personDesk1 = uuidv7();
 const personDesk2 = uuidv7();
 const memberA = asMemberId(uuidv7());
 const planA = uuidv7();
+const planB = uuidv7();
 const subA = uuidv7();
 const subB = uuidv7();
 const RUN = Date.now().toString(36);
@@ -74,6 +77,7 @@ beforeAll(async () => {
   reads = await import("@/lib/services/invoices");
   payments = await import("@/lib/services/payments");
   reconciliation = await import("@/lib/services/reconciliation");
+  reconciliationClosedState = await import("@/lib/services/reconciliation-closed-state");
   const roles: Roles = await import("@/lib/services/roles");
 
   admin = new Pool({ connectionString: adminUri });
@@ -107,16 +111,22 @@ beforeAll(async () => {
     "insert into membership_plans (id, tenant_id, location_id, name, kind, duration_days, amount_paise) values ($1, $2, $3, 'Monthly', 'duration', 30, 250000)",
     [planA, tenantA, locA],
   );
+  // A second plan so the role-label test's subscription (subB) can
+  // stay active alongside subA — one active subscription per
+  // (member, plan) is enforced now, so subB needs a distinct plan
+  // to raise its own invoice (a subscription may hold only one live
+  // invoice per due date).
+  await admin.query(
+    "insert into membership_plans (id, tenant_id, location_id, name, kind, duration_days, amount_paise) values ($1, $2, $3, 'Monthly B', 'duration', 30, 250000)",
+    [planB, tenantA, locA],
+  );
   await admin.query(
     "insert into subscriptions (id, tenant_id, member_id, plan_id, location_id, starts_on, ends_on, status) values ($1, $2, $3, $4, $5, $6, $7, 'active')",
     [subA, tenantA, memberA, planA, locA, today, endsOn],
   );
-  // A second subscription so the role-label test can raise its own
-  // invoice (a subscription may hold only one live invoice per due
-  // date).
   await admin.query(
     "insert into subscriptions (id, tenant_id, member_id, plan_id, location_id, starts_on, ends_on, status) values ($1, $2, $3, $4, $5, $6, $7, 'active')",
-    [subB, tenantA, memberA, planA, locA, today, endsOn],
+    [subB, tenantA, memberA, planB, locA, today, endsOn],
   );
 
   // Desk users with login identity, reached by the report through
@@ -300,7 +310,7 @@ describe("C-34 daily collection report", () => {
     expect(report.byMethod).toEqual([]);
   });
 
-  it("confirms the cash count with a variance and replaces on recount", async () => {
+  it("confirms the cash count with a variance, blocks a silent re-confirm once closed, and preserves both counts across a reopen", async () => {
     const onDate = todayInZone(TZ);
     const before = await reconciliation.getDailyCollection(ctx1, {
       onDate,
@@ -318,6 +328,7 @@ describe("C-34 daily collection report", () => {
     if (short.ok) {
       expect(short.systemPaise).toBe(150000);
       expect(short.variancePaise).toBe(-10000);
+      expect(short.needsReview).toBe(false);
     }
 
     const after = await reconciliation.getDailyCollection(ctx1, {
@@ -327,6 +338,27 @@ describe("C-34 daily collection report", () => {
     expect(after.cashCount?.variancePaise).toBe(-10000);
     expect(after.cashCount?.confirmedByName).toBe("Rhea Desk");
 
+    // Fix B — a closed day cannot be silently overwritten. A second
+    // confirm for the same day is refused, not applied.
+    const blockedRecount = await reconciliation.confirmCashCount(ctx2, {
+      locationId: locA,
+      onDate,
+      countedPaise: before.cashPaise,
+    });
+    expect(blockedRecount.ok).toBe(false);
+    if (!blockedRecount.ok) {
+      expect(blockedRecount.error).toMatch(/already closed/i);
+    }
+
+    // reopenCashCount is the only way back — it supersedes the live
+    // row rather than deleting or overwriting it.
+    const reopened = await reconciliationClosedState.reopenCashCount(ctx2, {
+      locationId: locA,
+      onDate,
+      reason: "Found a note behind the drawer",
+    });
+    expect(reopened.ok).toBe(true);
+
     const recount = await reconciliation.confirmCashCount(ctx2, {
       locationId: locA,
       onDate,
@@ -335,11 +367,31 @@ describe("C-34 daily collection report", () => {
     expect(recount.ok).toBe(true);
     if (recount.ok) expect(recount.variancePaise).toBe(0);
 
+    // Both the original (now superseded) close and the recount exist
+    // as independent rows — the whole point of Fix B.
     const { rows } = await admin.query<{ count: string }>(
       "select count(*)::text as count from cash_counts where tenant_id = $1",
       [tenantA],
     );
-    expect(rows[0]?.count).toBe("1");
+    expect(rows[0]?.count).toBe("2");
+
+    const history = await reconciliationClosedState.listCashCountHistory(ctx1, {
+      locationId: locA,
+      onDate,
+    });
+    expect(history).toHaveLength(2);
+    expect(history[0]?.status).toBe("reopened");
+    expect(history[0]?.variancePaise).toBe(-10000);
+    expect(history[0]?.reopenReason).toBe("Found a note behind the drawer");
+    expect(history[1]?.status).toBe("closed");
+    expect(history[1]?.variancePaise).toBe(0);
+
+    // The daily collection report only ever shows the live count.
+    const afterRecount = await reconciliation.getDailyCollection(ctx1, {
+      onDate,
+      locationId: locA,
+    });
+    expect(afterRecount.cashCount?.variancePaise).toBe(0);
   });
 
   it("refuses to confirm a count for another tenant's location", async () => {

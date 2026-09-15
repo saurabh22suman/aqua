@@ -35,6 +35,9 @@ const personMember = uuidv7();
 const personDesk1 = uuidv7();
 const memberA = asMemberId(uuidv7());
 const planA = uuidv7();
+const planB = uuidv7();
+const planC = uuidv7();
+const planD = uuidv7();
 const subA = uuidv7();
 const subB = uuidv7();
 const subC = uuidv7();
@@ -92,16 +95,31 @@ beforeAll(async () => {
     "insert into members (id, tenant_id, person_id, location_id, member_code, status) values ($1, $2, $3, $4, $5, 'active')",
     [memberA, tenantA, personMember, locA, `REF-${RUN}`],
   );
-  await admin.query(
-    "insert into membership_plans (id, tenant_id, location_id, name, kind, duration_days, amount_paise) values ($1, $2, $3, 'Monthly', 'duration', 30, 250000)",
-    [planA, tenantA, locA],
-  );
+  // Four plans, one per subscription below: each subscription must be
+  // its own (member, plan) pair now that only one active subscription
+  // per (member, plan) is allowed.
+  for (const [plan, name] of [
+    [planA, "Monthly A"],
+    [planB, "Monthly B"],
+    [planC, "Monthly C"],
+    [planD, "Monthly D"],
+  ] as const) {
+    await admin.query(
+      "insert into membership_plans (id, tenant_id, location_id, name, kind, duration_days, amount_paise) values ($1, $2, $3, $4, 'duration', 30, 250000)",
+      [plan, tenantA, locA, name],
+    );
+  }
   // Four subscriptions so four separate invoices can each be raised
   // (a subscription may hold only one live invoice per due date).
-  for (const sub of [subA, subB, subC, subD]) {
+  for (const [sub, plan] of [
+    [subA, planA],
+    [subB, planB],
+    [subC, planC],
+    [subD, planD],
+  ] as const) {
     await admin.query(
       "insert into subscriptions (id, tenant_id, member_id, plan_id, location_id, starts_on, ends_on, status) values ($1, $2, $3, $4, $5, $6, $7, 'active')",
-      [sub, tenantA, memberA, planA, locA, today, endsOn],
+      [sub, tenantA, memberA, plan, locA, today, endsOn],
     );
   }
 

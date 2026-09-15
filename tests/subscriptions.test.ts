@@ -33,6 +33,18 @@ const TZ = "Asia/Kolkata";
 
 const ctx = { tenantId: tenantA, userId: ownerId };
 
+// Several tests below reuse durationPlanId for memberId and don't care
+// about dedup semantics — they need a clean slate so the new
+// active-subscription-per-member-plan check (bug fix under test) doesn't
+// reject their unrelated creates. Cancel any leftover active row first.
+async function cancelActiveDurationSubs(): Promise<void> {
+  await admin.query(
+    `update subscriptions set status = 'cancelled'
+     where tenant_id = $1 and member_id = $2 and plan_id = $3 and status = 'active'`,
+    [tenantA, memberId, durationPlanId],
+  );
+}
+
 beforeAll(async () => {
   container = await new PostgreSqlContainer("postgres:16").start();
   const adminUri = container.getConnectionUri();
@@ -152,6 +164,7 @@ describe("C-30 subscriptions", () => {
   });
 
   it("moves the end date by exactly seven days across a seven-day pause", async () => {
+    await cancelActiveDurationSubs();
     const today = todayInZone(TZ);
     const created = await subs.createSubscription(ctx, {
       memberId,
@@ -186,6 +199,7 @@ describe("C-30 subscriptions", () => {
   });
 
   it("guards pause, resume and cancel transitions", async () => {
+    await cancelActiveDurationSubs();
     const created = await subs.createSubscription(ctx, {
       memberId,
       planId: durationPlanId,
@@ -209,6 +223,47 @@ describe("C-30 subscriptions", () => {
       await subs.listMemberSubscriptions(ctx, memberId)
     ).find((s) => s.id === created.id);
     expect(after?.status).toBe("cancelled");
+  });
+
+  it("refuses a second active subscription for the same member+plan, and allows one once the first is cancelled", async () => {
+    await cancelActiveDurationSubs();
+
+    const first = await subs.createSubscription(ctx, {
+      memberId,
+      planId: durationPlanId,
+    });
+    expect(first.ok).toBe(true);
+
+    // Live-attack audit bug: a second createSubscription call for the
+    // same member+plan while the first is still active must be refused,
+    // not silently inserted as a second active row.
+    const duplicate = await subs.createSubscription(ctx, {
+      memberId,
+      planId: durationPlanId,
+    });
+    expect(duplicate.ok).toBe(false);
+    if (!duplicate.ok) {
+      expect(duplicate.error).toMatch(/already has an active subscription/i);
+    }
+
+    const activeRows = await admin.query<{ n: string }>(
+      `select count(*)::int as n from subscriptions
+       where tenant_id = $1 and member_id = $2 and plan_id = $3 and status = 'active'`,
+      [tenantA, memberId, durationPlanId],
+    );
+    expect(Number(activeRows.rows[0]?.n)).toBe(1);
+
+    if (!first.ok) return;
+    const cancelled = await subs.cancelSubscription(ctx, { id: first.id });
+    expect(cancelled.ok).toBe(true);
+
+    // Not a false-positive block: once the prior subscription is
+    // cancelled, a new one for the same member+plan is allowed.
+    const second = await subs.createSubscription(ctx, {
+      memberId,
+      planId: durationPlanId,
+    });
+    expect(second.ok).toBe(true);
   });
 
   it("keeps subscriptions tenant-isolated", async () => {
