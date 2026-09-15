@@ -91,14 +91,20 @@ export type TenantHealthResult = {
   details: TenantHealthDetail[];
 };
 
-// Thresholds are the whole rule — see the PR description for the
-// admission reasoning behind each one. Changing a number here IS a
-// behaviour change and needs its own test, same as changing the logic.
-const NO_ACTIVITY_ATTENTION_DAYS = 14;
-const OVERDUE_AT_RISK_DAYS = 14;
-const TRIAL_ATTENTION_DAYS = 7;
-const FAILED_MESSAGE_ATTENTION_THRESHOLD = 3;
-const PENDING_REQUEST_ATTENTION_DAYS = 3;
+// Thresholds are the whole rule. Each is the only place the value
+// is set; tests/tenant-health.test.ts pins every constant so a
+// change is deliberate. docs/project-scope.md names the constants
+// and points here — do NOT restate the numbers in the doc, a
+// duplicated number drifts.
+export const NO_ACTIVITY_ATTENTION_DAYS = 14;
+/** Invoice overdue beyond this is at_risk; at or under is attention. */
+export const OVERDUE_AT_RISK_DAYS = 14;
+/** Trial expiring within this many days surfaces attention; expired surfaces at_risk. */
+export const TRIAL_ATTENTION_DAYS = 7;
+/** Weekly failed-message count above which attention fires; 0..2 silent. */
+export const FAILED_MESSAGE_ATTENTION_THRESHOLD = 3;
+/** A pending change request older than this surfaces attention. */
+export const PENDING_REQUEST_ATTENTION_DAYS = 3;
 
 function daysBetween(later: Date, earlier: Date): number {
   return Math.floor(

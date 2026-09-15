@@ -31,7 +31,9 @@ export const PLATFORM_TABLES = [
   "platform_leads",
   // PR3 (ops console improvements) — one row per day of aggregate,
   // platform-wide tenant counts (no PII, no tenant_id). Written by
-  // the one deliberately cross-tenant job in worker/index.ts.
+  // the one cross-tenant job in worker/index.ts
+  // (platform.metrics-snapshot); reports.rollup is the per-tenant
+  // summary writer and uses daily_rollups instead, under withTenant.
   "platform_metrics_daily",
 ] as const;
 

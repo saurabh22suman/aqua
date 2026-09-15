@@ -26,6 +26,7 @@
     "seed": "tsx scripts/seed.ts",
     "platform:code": "tsx scripts/platform-code.ts",
     "check:bundle": "tsx scripts/check-bundle-budget.ts",
+    "check:focus-contrast": "tsx scripts/check-focus-contrast.ts",
     "check:fonts": "tsx scripts/check-font-budget.ts",
     "check:lines": "tsx scripts/check-line-count.ts",
     "check:runbook-sync": "tsx scripts/check-runbook-sync.ts",

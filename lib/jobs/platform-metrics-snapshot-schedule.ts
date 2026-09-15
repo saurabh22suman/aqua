@@ -3,8 +3,10 @@ import type { PgBoss } from "pg-boss";
 // PR3 (ops console improvements) — platform.metrics-snapshot. Unlike
 // every other schedule in this codebase, this one is NOT per-tenant:
 // there is exactly one schedule, registered once, with no `key` and
-// no tenant timezone (see worker/index.ts for why this job is a
-// deliberate, singular exception to "every job is per-tenant").
+// no tenant timezone. The worker comment at worker/index.ts's
+// HANDLERS explains why reports.rollup (per-tenant) and the snapshot
+// (cross-tenant) are the two summary writers, each with its own
+// scope and schedule shape.
 //
 // 22:00 UTC ≈ 03:30 IST — after the per-tenant reports.rollup jobs
 // (which run at 03:00 in each tenant's own local time) have had a

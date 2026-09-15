@@ -132,7 +132,7 @@ export function PresetDetailForm({
               name="tenantId"
               value={tenantId}
               onChange={(e) => onTenantChange(e.target.value)}
-              className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               {tenants.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -160,7 +160,7 @@ export function PresetDetailForm({
               <select
                 value={selectedLocation?.id ?? ""}
                 onChange={(e) => setLocationId(e.target.value)}
-                className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+              className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 {tenantLocations.map((l) => (
                   <option key={l.id} value={l.id}>
