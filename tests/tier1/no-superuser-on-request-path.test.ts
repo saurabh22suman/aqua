@@ -174,6 +174,17 @@ const ALLOWLIST = new Set([
   "scripts/e2e-platform-form-leak.ts",
   "scripts/e2e-parent-link-zero-js.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist
+  // Ops console improvements — Testcontainers-only tests (per that
+  // work's standing instruction) that set MIGRATION_DATABASE_URL to
+  // point @/db/client at a disposable, per-test Postgres container
+  // before dynamically importing it. Same fixture-setup pattern as
+  // tests/tier1/* above (privileged pool for setup, never the app's
+  // own request path) — these just provision their own container
+  // instead of using the shared dev/CI database.
+  "tests/tenant-health-query-shape.test.ts",
+  "tests/platform-metrics-snapshot-job.test.ts",
+  "tests/platform-overview.test.ts",
+  "tests/platform-tenants-filters.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

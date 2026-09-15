@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { withPlatformAdmin } from "./scope";
+import { db } from "./client";
+import { withPlatformAdmin, withPlatform } from "./scope";
 import { withTenant } from "./tenant";
 import { tenants, locationPresets } from "./schema/tenants";
 import { plans } from "./schema/platform";
@@ -291,6 +292,50 @@ export type TenantDetail = {
 };
 
 export type TenantDetailResult = TenantDetail | null;
+
+// PR4 (ops console improvements) — the tab-bar layout needs only
+// name/slug/status/id, not the full detail (locations, features,
+// activity). A separate, cheap query rather than having the layout
+// and every tab both pay for getTenantDetail's full join.
+export type TenantHeader = {
+  id: TenantId;
+  name: string;
+  slug: string;
+  status: "trial" | "active" | "suspended" | "churned";
+};
+
+export async function getTenantHeader(
+  tenantId: TenantId,
+): Promise<TenantHeader | null> {
+  return withPlatformAdmin(async (tx) => {
+    const [row] = await tx
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        status: tenants.status,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    return row ? { ...row, status: row.status as TenantHeader["status"] } : null;
+  });
+}
+
+// PR4 (ops console improvements) — options for the tenants-list Plan
+// filter. All plans, not just active ones (listActivePlans in
+// db/platform-tenant-create.ts): a tenant may sit on a plan that's
+// since been deprecated, and the filter needs to still find it.
+export type PlanFilterOption = { id: string; name: string };
+
+export async function listAllPlansForFilter(): Promise<PlanFilterOption[]> {
+  return withPlatform(async () => {
+    const rows = await db
+      .select({ id: plans.id, name: plans.name })
+      .from(plans)
+      .orderBy(plans.sortOrder);
+    return rows;
+  });
+}
 
 export async function getTenantDetail(
   tenantId: TenantId,

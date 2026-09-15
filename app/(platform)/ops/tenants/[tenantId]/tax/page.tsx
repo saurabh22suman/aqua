@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantTaxConfigAction } from "@/lib/actions/platform-tax";
@@ -21,27 +20,10 @@ export default async function TenantTaxPage({
   if (!config) notFound();
 
   return (
-    <div className="max-w-3xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/ops/tenants"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Tenants
-        </Link>
-        {" / "}
-        <Link
-          href={`/ops/tenants/${tenantId}`}
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          tenant
-        </Link>
-        {" / "}
-        GST
-      </p>
-      <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
+    <div>
+      <h2 className="font-display text-[20px] font-semibold text-marine">
         GST rates
-      </h1>
+      </h2>
       <p className="mt-1 text-[14px] text-ink-2">
         The rate applied when invoicing, most specific scope winning.
         Plan prices are exclusive of GST; invoices snapshot the rate at

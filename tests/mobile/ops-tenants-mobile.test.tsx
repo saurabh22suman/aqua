@@ -51,6 +51,12 @@ vi.mock("@/db/platform-tenants", () => ({
       },
     ],
   }),
+  // PR4 (ops console improvements) — Plan filter options; none of
+  // these test cases exercise filtering itself.
+  listAllPlansForFilter: async () => [],
+}));
+vi.mock("@/db/platform-presets", () => ({
+  listPresets: async () => [],
 }));
 
 import PlatformTenantsPage from "@/app/(platform)/ops/tenants/page";

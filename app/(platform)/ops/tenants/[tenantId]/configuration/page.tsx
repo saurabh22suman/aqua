@@ -91,30 +91,17 @@ export default async function EffectiveConfigurationPage({
   );
 
   return (
-    <div className="max-w-4xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/ops/tenants"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Tenants
-        </Link>
-        {" / "}
-        <Link
-          href={`/ops/tenants/${view.tenant.id}`}
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          {view.tenant.name}
-        </Link>
-        {" / "}
-        configuration
-      </p>
-      <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
-        Effective configuration
-      </h1>
-      <p className="mt-1 text-[14px] text-ink-2">
+    <div>
+      <p className="text-[14px] text-ink-2">
         Every value this tenant resolves, where it came from, and what
-        each role can reach. Read-only — no member data on this page.
+        each role can reach. Read-only — no member data on this page.{" "}
+        <Link
+          href={`/ops/tenants/${view.tenant.id}/tax`}
+          className="text-[var(--accent)] underline underline-offset-2"
+        >
+          GST rates live on their own page
+        </Link>
+        .
       </p>
 
       <section className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
