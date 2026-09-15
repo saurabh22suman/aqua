@@ -24,6 +24,23 @@ vi.mock("next/navigation", () => ({
     throw new Error(`unexpected redirect: ${path}`);
   },
 }));
+// PR3 (ops console improvements) — PlatformHome now reads the metrics
+// snapshot, the needs-attention queue and recent activity; none of
+// this test's cases care about that data, so it's mocked to a
+// harmless empty/default shape rather than hitting a real DB.
+vi.mock("@/db/platform-overview", () => ({
+  getPlatformMetricsSummary: async () => ({
+    activeTenants: { current: 0, previous: null },
+    trialTenants: { current: 0, previous: null },
+    atRiskTenants: { current: 0, previous: null },
+    openOpsTasks: { current: 0, previous: null },
+    asOf: null,
+  }),
+  getNeedsAttentionQueue: async () => [],
+}));
+vi.mock("@/db/platform-activity", () => ({
+  listPlatformActivity: async () => ({ rows: [], total: 0 }),
+}));
 
 import PlatformLayout from "@/app/(platform)/layout";
 import PlatformHome from "@/app/(platform)/ops/page";

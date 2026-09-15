@@ -30,3 +30,4 @@ export * from "./payments";
 export * from "./receipts";
 export * from "./cash-counts";
 export * from "./daily-rollups";
+export * from "./platform-metrics";

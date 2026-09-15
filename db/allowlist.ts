@@ -29,6 +29,10 @@ export const PLATFORM_TABLES = [
   // outside RLS like users. Direct imports are restricted by
   // scripts/check-platform-leads-imports.ts.
   "platform_leads",
+  // PR3 (ops console improvements) — one row per day of aggregate,
+  // platform-wide tenant counts (no PII, no tenant_id). Written by
+  // the one deliberately cross-tenant job in worker/index.ts.
+  "platform_metrics_daily",
 ] as const;
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];
