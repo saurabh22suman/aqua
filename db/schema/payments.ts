@@ -9,6 +9,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { auditColumns } from "./_shared";
@@ -61,6 +62,12 @@ export const payments = pgTable(
       sql`${t.reference} is null or char_length(${t.reference}) between 1 and 120`,
     ),
     unique("payments_id_tenant_key").on(t.id, t.tenantId),
+    // Bug fix (live-attack audit): the same UPI/bank reference cannot
+    // justify two different payments. Partial — cash never carries a
+    // reference. See db/migrations/20260915140000_payments_reference_uniqueness.sql.
+    uniqueIndex("payments_tenant_method_reference_uidx")
+      .on(t.tenantId, t.method, t.reference)
+      .where(sql`${t.reference} is not null`),
     index("payments_tenant_received_idx").on(t.tenantId, t.receivedAt.desc()),
     index("payments_tenant_invoice_idx").on(t.tenantId, t.invoiceId),
     index("payments_tenant_member_idx").on(t.tenantId, t.memberId),
