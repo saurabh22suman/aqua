@@ -56,7 +56,7 @@ function RequestForm({ request }: { request: ChangeRequestItem }) {
         <input
           name="resolutionNote"
           placeholder="Resolution note (optional)"
-          className="grow min-w-[14rem] rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink focus:border-[var(--accent)] focus:outline-none"
+          className="grow min-w-[14rem] rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
         />
         <label className="flex items-center gap-1.5 text-[12px] text-ink-2">
           <input

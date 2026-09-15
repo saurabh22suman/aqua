@@ -43,7 +43,7 @@ export default async function PlatformLayout({
             </Link>
           </p>
         </div>
-        <nav className="flex-1 px-2 py-3 text-[14px]">
+        <nav aria-label="Platform" className="flex-1 px-2 py-3 text-[14px]">
           <PlatformNav status={status} />
         </nav>
         <SignedInBlock status={status} />
@@ -76,8 +76,11 @@ function PlatformNav({
     <ul className="space-y-1">
       <PlatformNavItem href="/ops" label="Overview" />
       <PlatformNavItem href="/ops/tenants" label="Tenants" />
+      <PlatformNavItem href="/ops/leads" label="Leads" />
       <PlatformNavItem href="/ops/features" label="Feature catalogue" />
       <PlatformNavItem href="/ops/presets" label="Presets" />
+      <PlatformNavItem href="/ops/whatsapp" label="WhatsApp" />
+      <PlatformNavItem href="/ops/activity" label="Activity log" />
     </ul>
   );
 }
