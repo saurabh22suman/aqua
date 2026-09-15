@@ -44,6 +44,7 @@ const personDesk1 = uuidv7();
 const personDesk2 = uuidv7();
 const memberA = asMemberId(uuidv7());
 const planA = uuidv7();
+const planB = uuidv7();
 const subA = uuidv7();
 const subB = uuidv7();
 const RUN = Date.now().toString(36);
@@ -110,16 +111,22 @@ beforeAll(async () => {
     "insert into membership_plans (id, tenant_id, location_id, name, kind, duration_days, amount_paise) values ($1, $2, $3, 'Monthly', 'duration', 30, 250000)",
     [planA, tenantA, locA],
   );
+  // A second plan so the role-label test's subscription (subB) can
+  // stay active alongside subA — one active subscription per
+  // (member, plan) is enforced now, so subB needs a distinct plan
+  // to raise its own invoice (a subscription may hold only one live
+  // invoice per due date).
+  await admin.query(
+    "insert into membership_plans (id, tenant_id, location_id, name, kind, duration_days, amount_paise) values ($1, $2, $3, 'Monthly B', 'duration', 30, 250000)",
+    [planB, tenantA, locA],
+  );
   await admin.query(
     "insert into subscriptions (id, tenant_id, member_id, plan_id, location_id, starts_on, ends_on, status) values ($1, $2, $3, $4, $5, $6, $7, 'active')",
     [subA, tenantA, memberA, planA, locA, today, endsOn],
   );
-  // A second subscription so the role-label test can raise its own
-  // invoice (a subscription may hold only one live invoice per due
-  // date).
   await admin.query(
     "insert into subscriptions (id, tenant_id, member_id, plan_id, location_id, starts_on, ends_on, status) values ($1, $2, $3, $4, $5, $6, $7, 'active')",
-    [subB, tenantA, memberA, planA, locA, today, endsOn],
+    [subB, tenantA, memberA, planB, locA, today, endsOn],
   );
 
   // Desk users with login identity, reached by the report through
