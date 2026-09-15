@@ -9,6 +9,7 @@ import {
   pgTable,
   text,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { auditColumns } from "./_shared";
@@ -59,6 +60,13 @@ export const subscriptions = pgTable(
       sql`${t.pausedUntil} is null or (${t.pausedFrom} is not null and ${t.pausedUntil} >= ${t.pausedFrom})`,
     ),
     unique("subscriptions_id_tenant_key").on(t.id, t.tenantId),
+    // Bug fix (live-attack audit): a member can have at most one active
+    // subscription to a given plan. The app-layer check in
+    // createSubscription gives the clear UX message; this index is the
+    // concurrency backstop.
+    uniqueIndex("subscriptions_active_member_plan_uidx")
+      .on(t.tenantId, t.memberId, t.planId)
+      .where(sql`status = 'active'`),
     index("subscriptions_tenant_ends_idx")
       .on(t.tenantId, t.endsOn)
       .where(sql`status = 'active'`),

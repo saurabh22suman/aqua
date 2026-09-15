@@ -224,6 +224,29 @@ export async function createSubscription(
       return { ok: false, error: "The end date cannot be before the start." };
     }
 
+    // Bug fix (live-attack audit) — a member can have at most one
+    // active subscription to a given plan. This is the clear-UX-message
+    // half of the fix; subscriptions_active_member_plan_uidx (a partial
+    // unique index) is the concurrency backstop.
+    const existingActive = await tx
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.tenantId, ctx.tenantId),
+          eq(subscriptions.memberId, asMemberId(parsed.data.memberId)),
+          eq(subscriptions.planId, plan.id),
+          eq(subscriptions.status, "active"),
+        ),
+      )
+      .limit(1);
+    if (existingActive[0]) {
+      return {
+        ok: false,
+        error: "This member already has an active subscription to this plan.",
+      };
+    }
+
     const [row] = await tx
       .insert(subscriptions)
       .values({
