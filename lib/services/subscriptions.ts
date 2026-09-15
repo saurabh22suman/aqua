@@ -60,6 +60,9 @@ export const createSubscriptionInput = z.object({
   planId: z.string().uuid(),
   startsOn: dateSchema.optional(),
   endsOn: dateSchema.optional(),
+  // C-47 — opt-in to the nightly renewal invoice (invoices.generate).
+  // No auto-debit exists; the renewal is invoiced, payment stays manual.
+  autoRenew: z.boolean().optional(),
 });
 
 export const pauseSubscriptionInput = z.object({
@@ -232,6 +235,7 @@ export async function createSubscription(
         startsOn,
         endsOn,
         status: "active",
+        autoRenew: parsed.data.autoRenew ?? false,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })
@@ -245,6 +249,7 @@ export async function createSubscription(
       activityId: plan.activityId,
       startsOn,
       endsOn,
+      autoRenew: parsed.data.autoRenew ?? false,
     });
     return { ok: true, id: row.id };
   });

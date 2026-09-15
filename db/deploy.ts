@@ -11,6 +11,18 @@ import {
   ABSENCE_ALERTS_QUEUE,
   scheduleAbsenceAlerts,
 } from "@/lib/jobs/absence-alerts-schedule";
+import {
+  SUBSCRIPTIONS_EXPIRE_QUEUE,
+  scheduleSubscriptionsExpire,
+} from "@/lib/jobs/subscriptions-expire-schedule";
+import {
+  INVOICES_GENERATE_QUEUE,
+  scheduleInvoicesGenerate,
+} from "@/lib/jobs/invoices-generate-schedule";
+import {
+  REPORTS_ROLLUP_QUEUE,
+  scheduleReportsRollup,
+} from "@/lib/jobs/reports-rollup-schedule";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -19,7 +31,19 @@ type JobTenant = { id: string; timezone: string };
 // DDL right app_user deliberately does not have (see
 // grantAppUserOnPgBossSchema below) — so it belongs here, in the
 // privileged deploy step, not in the worker.
-const QUEUES = [SESSIONS_GENERATE_QUEUE, ABSENCE_ALERTS_QUEUE];
+const QUEUES = [
+  SESSIONS_GENERATE_QUEUE,
+  ABSENCE_ALERTS_QUEUE,
+  SUBSCRIPTIONS_EXPIRE_QUEUE,
+  INVOICES_GENERATE_QUEUE,
+  REPORTS_ROLLUP_QUEUE,
+];
+
+type ScheduleFn = (
+  boss: PgBoss,
+  tenantId: string,
+  timezone: string,
+) => Promise<void>;
 
 // pg-boss owns its own schema and version history (pgboss.version table) —
 // deliberately NOT vendored into db/migrations alongside our own SQL.
@@ -42,34 +66,27 @@ async function ensurePgBossQueues(boss: PgBoss): Promise<void> {
 // distinct tenants don't collide (pgboss.schedule's primary key is
 // (name, key)). Stale schedules for tenants that churned or were deleted
 // are removed here, not left to fire forever.
-async function syncSessionGenerateSchedules(boss: PgBoss, tenants: JobTenant[]): Promise<void> {
+//
+// One generic pass per queue — the sessions.generate and absence-alert
+// syncs this replaced were identical apart from the queue name, and
+// C-47 added three more queues of the same shape.
+async function syncPerTenantSchedules(
+  boss: PgBoss,
+  queue: string,
+  tenants: JobTenant[],
+  schedule: ScheduleFn,
+): Promise<void> {
   const desired = new Set(tenants.map((t) => t.id));
 
-  const existing = await boss.getSchedules(SESSIONS_GENERATE_QUEUE);
+  const existing = await boss.getSchedules(queue);
   for (const sched of existing) {
     if (sched.key && !desired.has(sched.key)) {
-      await boss.unschedule(SESSIONS_GENERATE_QUEUE, sched.key);
+      await boss.unschedule(queue, sched.key);
     }
   }
 
   for (const t of tenants) {
-    await scheduleSessionsGenerate(boss, t.id, t.timezone);
-  }
-}
-
-// R.8 — same reconciliation for the absence-alert schedule.
-async function syncAbsenceAlertSchedules(boss: PgBoss, tenants: JobTenant[]): Promise<void> {
-  const desired = new Set(tenants.map((t) => t.id));
-
-  const existing = await boss.getSchedules(ABSENCE_ALERTS_QUEUE);
-  for (const sched of existing) {
-    if (sched.key && !desired.has(sched.key)) {
-      await boss.unschedule(ABSENCE_ALERTS_QUEUE, sched.key);
-    }
-  }
-
-  for (const t of tenants) {
-    await scheduleAbsenceAlerts(boss, t.id, t.timezone);
+    await schedule(boss, t.id, t.timezone);
   }
 }
 
@@ -144,8 +161,11 @@ async function main(): Promise<void> {
   await boss.start();
   await ensurePgBossQueues(boss);
   const tenants = await fetchJobTenants(migrationUrl);
-  await syncSessionGenerateSchedules(boss, tenants);
-  await syncAbsenceAlertSchedules(boss, tenants);
+  await syncPerTenantSchedules(boss, SESSIONS_GENERATE_QUEUE, tenants, scheduleSessionsGenerate);
+  await syncPerTenantSchedules(boss, ABSENCE_ALERTS_QUEUE, tenants, scheduleAbsenceAlerts);
+  await syncPerTenantSchedules(boss, SUBSCRIPTIONS_EXPIRE_QUEUE, tenants, scheduleSubscriptionsExpire);
+  await syncPerTenantSchedules(boss, INVOICES_GENERATE_QUEUE, tenants, scheduleInvoicesGenerate);
+  await syncPerTenantSchedules(boss, REPORTS_ROLLUP_QUEUE, tenants, scheduleReportsRollup);
   await boss.stop({ graceful: false, timeout: 5000 });
 
   await grantAppUserOnPgBossSchema(migrationUrl);

@@ -108,19 +108,32 @@ describe("parsePaise — round-trips formatINR exactly", () => {
 });
 
 // Standing rule (docs/implementation-plan.md): money is bigint paise,
-// never a float. formatINR is the one granted exception -- display
+// never a float. formatINR is the first granted exception -- display
 // only, isolated to that single function, never fed back into
-// arithmetic (see the comment at its definition). Mechanical, not
-// just a comment someone could drift away from: the only "/ 100"
-// division anywhere under lib/money must be that one line.
+// arithmetic (see the comment at its definition). amountInWords
+// (lib/money/words.ts, C-39) is the second, same shape: integer paise
+// in, a display string out, and the division only splits rupees from
+// the paise remainder. Mechanical, not just a comment someone could
+// drift away from: each file may contain exactly its one "/ 100"
+// division and nowhere else under lib/money may have any.
+const DISPLAY_EXCEPTION_FILES = new Map<string, number>([
+  ["lib/money/format.ts", 1], // formatINR's paise -> rupees display step
+  // amountInWords: the rupees/paise split and the hundreds extraction.
+  ["lib/money/words.ts", 2],
+]);
+
 describe("no paise-to-Number conversion outside formatINR", () => {
-  it("the only float division in lib/money is the one inside formatINR", () => {
+  it("the only float divisions in lib/money are the two display helpers", () => {
     let output = "";
     try {
-      output = execFileSync("grep", ["-rn", "/ 100", "--include=*.ts", "lib/money"], {
-        cwd: process.cwd(),
-        encoding: "utf8",
-      });
+      // [^_0-9] keeps the match on a literal "/ 100" divisor: without
+      // it, words.ts's Indian grouping constants ("/ 100_000") would
+      // count as paise conversions they are not.
+      output = execFileSync(
+        "grep",
+        ["-rn", "/ 100[^_0-9]", "--include=*.ts", "lib/money"],
+        { cwd: process.cwd(), encoding: "utf8" },
+      );
     } catch (err) {
       // grep exits 1 when it finds nothing -- that would mean formatINR
       // itself no longer matches the expected shape, which the second
@@ -131,13 +144,19 @@ describe("no paise-to-Number conversion outside formatINR", () => {
     }
 
     const lines = output.split("\n").filter(Boolean);
-    const outsideFormat = lines.filter((l) => !l.startsWith("lib/money/format.ts:"));
-    expect(outsideFormat, "found a '/ 100' division outside lib/money/format.ts").toEqual([]);
-
-    const insideFormat = lines.filter((l) => l.startsWith("lib/money/format.ts:"));
+    for (const [file, expected] of DISPLAY_EXCEPTION_FILES) {
+      const matches = lines.filter((l) => l.startsWith(`${file}:`));
+      expect(
+        matches.length,
+        `expected exactly ${expected} '/ 100' in ${file}`,
+      ).toBe(expected);
+    }
+    const outside = lines.filter(
+      (l) => ![...DISPLAY_EXCEPTION_FILES.keys()].some((f) => l.startsWith(`${f}:`)),
+    );
     expect(
-      insideFormat.length,
-      "expected exactly one '/ 100' in lib/money/format.ts (formatINR's own conversion)",
-    ).toBe(1);
+      outside,
+      "found a '/ 100' division outside the sanctioned display helpers",
+    ).toEqual([]);
   });
 });
