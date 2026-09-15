@@ -2,6 +2,7 @@ import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
+import { addDays } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 
@@ -20,11 +21,21 @@ export function currentMonthPeriod(today: string): Period {
   return { from, to };
 }
 
+// The 15-day grid window: today plus the 14 days before it. The
+// /owner/member attendance section replaced its month list with the
+// grid (2026-09-15 redesign); the month helpers below still serve the
+// batch page and the zero-JS parent view.
+export function lastDaysPeriod(today: string, days: number): Period {
+  return { from: addDays(today, -(days - 1)), to: addDays(today, 1) };
+}
+
 export type AttendanceHistoryRow = {
   sessionId: string;
   sessionDate: string;
   batchName: string;
   status: "present" | "absent" | "late";
+  // When it was marked (ISO), for the grid's day detail.
+  markedAt: string | null;
 };
 
 export type MemberAttendanceHistory = {
@@ -51,6 +62,7 @@ export async function getMemberAttendanceHistory(
         sessionDate: sessions.sessionDate,
         batchName: batches.name,
         status: attendance.status,
+        markedAt: attendance.markedAt,
       })
       .from(attendance)
       .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
@@ -74,6 +86,7 @@ export async function getMemberAttendanceHistory(
         sessionDate: r.sessionDate,
         batchName: r.batchName,
         status: r.status as AttendanceHistoryRow["status"],
+        markedAt: r.markedAt ? r.markedAt.toISOString() : null,
       })),
       presentCount,
       totalCount,

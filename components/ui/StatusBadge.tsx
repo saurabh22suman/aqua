@@ -14,7 +14,12 @@ import type { ReactNode } from "react";
 
 export type StatusTone = "good" | "warn" | "late" | "neutral" | "water";
 
-const TONE_CLASS: Record<StatusTone, string> = {
+// Exported so surfaces that fill a shape with a tone (the member
+// attendance grid's day cells, its legend swatches) don't copy the
+// token strings out of this file — the semantic-token scan reserves
+// good/late/warn to money/attendance files, and this primitive is the
+// sanctioned home of the tone maps (2026-09-13 audit §7.1).
+export const TONE_SURFACE_CLASS: Record<StatusTone, string> = {
   good: "bg-good-soft text-good",
   warn: "bg-warn-soft text-warn",
   late: "bg-late-soft text-late",
@@ -25,6 +30,25 @@ const TONE_CLASS: Record<StatusTone, string> = {
   // the pill legible on both white cards and the deck page.
   neutral: "bg-paper text-ink-2 border border-line",
   water: "bg-water-soft text-water",
+};
+
+// Solid variant for small swatches (legend dots), where the soft
+// surface tones are too pale to read against paper.
+export const TONE_DOT_CLASS: Record<StatusTone, string> = {
+  good: "bg-good",
+  warn: "bg-warn",
+  late: "bg-late",
+  neutral: "bg-ink-3",
+  water: "bg-water",
+};
+
+// Attendance marks (C-27 grid, 2026-09-15 redesign): present is
+// healthy, late is the needs-attention amber, absent is the red
+// problem state. Kept here so the grid and the register agree.
+export const ATTENDANCE_MARK_TONE: Record<string, StatusTone> = {
+  present: "good",
+  late: "warn",
+  absent: "late",
 };
 
 // Members list lifecycle (formerly inline in members-board.tsx).
@@ -72,7 +96,7 @@ export function StatusBadge({
 }) {
   return (
     <span
-      className={`inline-flex flex-none items-center gap-1 rounded-pill px-3 py-1 text-[11px] font-medium ${TONE_CLASS[tone]} ${className}`}
+      className={`inline-flex flex-none items-center gap-1 rounded-pill px-3 py-1 text-[11px] font-medium ${TONE_SURFACE_CLASS[tone]} ${className}`}
     >
       {children}
     </span>

@@ -22,6 +22,7 @@ import { resolveTerm } from "@/lib/terminology/keys";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
+import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { BackLink } from "@/components/ui/BackLink";
@@ -269,40 +270,12 @@ export default async function MemberDetailPage({
       <section className="mt-4">
         <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
           <CalendarCheck size={15} className="text-ink-3" />
-          Attendance this month
+          Attendance
         </h2>
-        <div className="mt-2 rounded-card border border-line bg-paper p-3.5">
-          <p className="font-display text-[24px] font-semibold">
-            {attendanceHistory.pct === null ? "—" : `${attendanceHistory.pct}%`}
-          </p>
-          <p className="text-[12px] text-ink-3">
-            {attendanceHistory.totalCount === 0
-              ? "No sessions marked yet this month."
-              : `${attendanceHistory.presentCount} of ${attendanceHistory.totalCount} sessions present`}
-          </p>
-        </div>
-        {attendanceHistory.rows.length > 0 ? (
-          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
-            {attendanceHistory.rows.map((r) => (
-              <li key={r.sessionId} className="flex items-center justify-between px-3.5 py-2.5 text-[13px]">
-                <span>
-                  {formatDateIST(r.sessionDate)} · {r.batchName}
-                </span>
-                <span
-                  className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${
-                    r.status === "present"
-                      ? "bg-good-soft text-good"
-                      : r.status === "late"
-                        ? "bg-warn-soft text-warn"
-                        : "bg-late-soft text-late"
-                  }`}
-                >
-                  {r.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <MemberAttendanceGrid
+          rows={attendanceHistory.rows}
+          today={attendanceHistory.today}
+        />
       </section>
     </main>
   );
