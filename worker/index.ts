@@ -4,11 +4,13 @@ import { runAbsenceAlertsJob } from "@/lib/jobs/absence-alerts-job";
 import { runSubscriptionsExpireJob } from "@/lib/jobs/subscriptions-expire-job";
 import { runInvoicesGenerateJob } from "@/lib/jobs/invoices-generate-job";
 import { runReportsRollupJob } from "@/lib/jobs/reports-rollup-job";
+import { runPlatformMetricsSnapshotJob } from "@/lib/jobs/platform-metrics-snapshot-job";
 import { SESSIONS_GENERATE_QUEUE } from "@/lib/jobs/sessions-generate-schedule";
 import { ABSENCE_ALERTS_QUEUE } from "@/lib/jobs/absence-alerts-schedule";
 import { SUBSCRIPTIONS_EXPIRE_QUEUE } from "@/lib/jobs/subscriptions-expire-schedule";
 import { INVOICES_GENERATE_QUEUE } from "@/lib/jobs/invoices-generate-schedule";
 import { REPORTS_ROLLUP_QUEUE } from "@/lib/jobs/reports-rollup-schedule";
+import { PLATFORM_METRICS_SNAPSHOT_QUEUE } from "@/lib/jobs/platform-metrics-snapshot-schedule";
 import { asTenantId, type TenantId } from "@/lib/ids";
 
 // Connects as app_user (via db/queue.ts's drizzle-backed adapter) —
@@ -27,6 +29,18 @@ import { asTenantId, type TenantId } from "@/lib/ids";
 // of cast as a Zod-validated request body) — db/deploy.ts and
 // db/platform-tenant-create.ts are the only enqueuers and both always
 // write a real tenants.id.
+//
+// PR3 (ops console improvements) — platform.metrics-snapshot is the
+// one deliberate exception to "no tenant enumeration happens here or
+// anywhere in this process." It carries no tenantId at all: it reads
+// aggregate, platform-wide counts (active/trial/at-risk tenants, open
+// ops tasks) under withPlatformAdmin(), the same cross-tenant-read
+// scope every /ops server action already uses — it is not the
+// superuser/migration connection tests/tier1/no-superuser-on-request-path.test.ts
+// guards against, and it enumerates nothing per-row (it's a COUNT, not
+// a listing). It is registered once, globally, not per tenant (see
+// lib/jobs/platform-metrics-snapshot-schedule.ts), and handled
+// separately below rather than forced into HANDLERS' per-tenant shape.
 
 const HANDLERS: ReadonlyArray<{
   queue: string;
@@ -51,8 +65,12 @@ async function main(): Promise<void> {
     });
   }
 
+  await boss.work(PLATFORM_METRICS_SNAPSHOT_QUEUE, async () => {
+    await runPlatformMetricsSnapshotJob();
+  });
+
   console.log(
-    `[worker] started — listening on ${HANDLERS.map((h) => h.queue).join(", ")}`,
+    `[worker] started — listening on ${[...HANDLERS.map((h) => h.queue), PLATFORM_METRICS_SNAPSHOT_QUEUE].join(", ")}`,
   );
 }
 

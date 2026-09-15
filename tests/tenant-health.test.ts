@@ -24,13 +24,14 @@ describe("classifyTenantHealth", () => {
   it("is not scored for churned tenants", () => {
     expect(
       classifyTenantHealth({ ...BASE, tenantStatus: "churned" }),
-    ).toEqual({ status: null, reasons: [] });
+    ).toEqual({ status: null, reasons: [], details: [] });
   });
 
   it("is healthy when every signal is clean", () => {
     expect(classifyTenantHealth(BASE)).toEqual({
       status: "healthy",
       reasons: [],
+      details: [],
     });
   });
 
@@ -149,5 +150,35 @@ describe("classifyTenantHealth", () => {
     });
     expect(result.status).toBe("at_risk");
     expect(result.reasons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // PR3 (ops console improvements) — the needs-attention queue reads
+  // `details`, not `reasons`, for per-issue severity and age.
+  it("details carries per-issue severity, independent of the tenant's overall status", () => {
+    const result = classifyTenantHealth({
+      ...BASE,
+      memberCount: 0, // at_risk
+      failed7d: 5, // attention
+    });
+    expect(result.status).toBe("at_risk");
+    // Both issues survive — a previous version of this function
+    // dropped attention-level reasons whenever any at_risk reason
+    // fired, silently losing information the queue needs.
+    expect(result.details).toHaveLength(2);
+    const zeroMembers = result.details.find((d) => d.text === "Zero members");
+    const failedMsgs = result.details.find((d) => d.text.includes("failed messages"));
+    expect(zeroMembers?.severity).toBe("at_risk");
+    expect(failedMsgs?.severity).toBe("attention");
+  });
+
+  it("details carries ageDays for date-based issues, null for count-based ones", () => {
+    const overdue = classifyTenantHealth({ ...BASE, maxOverdueDays: 20 });
+    expect(overdue.details[0]).toMatchObject({ ageDays: 20, severity: "at_risk" });
+
+    const zeroMembers = classifyTenantHealth({ ...BASE, memberCount: 0 });
+    expect(zeroMembers.details[0]).toMatchObject({ ageDays: null });
+
+    const failedMsgs = classifyTenantHealth({ ...BASE, failed7d: 4 });
+    expect(failedMsgs.details[0]).toMatchObject({ ageDays: null });
   });
 });

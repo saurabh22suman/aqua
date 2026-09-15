@@ -73,10 +73,22 @@ export type TenantHealthInput = {
   now?: Date;
 };
 
+// PR3 (ops console improvements) — the needs-attention queue needs a
+// per-issue severity and age, not just a formatted string. Built from
+// the exact same branches as `reasons` (see classifyTenantHealth) so
+// the queue and the health pill can never drift apart from each other
+// — `reasons` is `details.map(d => d.text)`, kept for PR2 compatibility.
+export type TenantHealthDetail = {
+  text: string;
+  severity: "attention" | "at_risk";
+  ageDays: number | null;
+};
+
 export type TenantHealthResult = {
   // null = not scored (churned tenants).
   status: TenantHealthStatus | null;
   reasons: string[];
+  details: TenantHealthDetail[];
 };
 
 // Thresholds are the whole rule — see the PR description for the
@@ -97,30 +109,41 @@ function daysBetween(later: Date, earlier: Date): number {
 export function classifyTenantHealth(
   input: TenantHealthInput,
 ): TenantHealthResult {
-  if (input.tenantStatus === "churned") return { status: null, reasons: [] };
+  if (input.tenantStatus === "churned") {
+    return { status: null, reasons: [], details: [] };
+  }
 
   const now = input.now ?? new Date();
-  const atRisk: string[] = [];
-  const attention: string[] = [];
+  const details: TenantHealthDetail[] = [];
 
   if (input.memberCount === 0) {
-    atRisk.push("Zero members");
+    details.push({ text: "Zero members", severity: "at_risk", ageDays: null });
   }
 
   if (input.maxOverdueDays != null) {
-    if (input.maxOverdueDays > OVERDUE_AT_RISK_DAYS) {
-      atRisk.push(`Invoice overdue ${input.maxOverdueDays}d`);
-    } else {
-      attention.push(`Invoice overdue ${input.maxOverdueDays}d`);
-    }
+    const severity: TenantHealthDetail["severity"] =
+      input.maxOverdueDays > OVERDUE_AT_RISK_DAYS ? "at_risk" : "attention";
+    details.push({
+      text: `Invoice overdue ${input.maxOverdueDays}d`,
+      severity,
+      ageDays: input.maxOverdueDays,
+    });
   }
 
   if (input.tenantStatus === "trial" && input.trialExpiresAt) {
     const daysLeft = daysBetween(input.trialExpiresAt, now);
     if (daysLeft < 0) {
-      atRisk.push("Trial expired");
+      details.push({
+        text: "Trial expired",
+        severity: "at_risk",
+        ageDays: -daysLeft,
+      });
     } else if (daysLeft <= TRIAL_ATTENTION_DAYS) {
-      attention.push(`Trial expires in ${daysLeft}d`);
+      details.push({
+        text: `Trial expires in ${daysLeft}d`,
+        severity: "attention",
+        ageDays: daysLeft,
+      });
     }
   }
 
@@ -131,22 +154,39 @@ export function classifyTenantHealth(
     const since = input.lastActiveOn ?? input.createdAt;
     const daysSinceActivity = daysBetween(now, since);
     if (daysSinceActivity > NO_ACTIVITY_ATTENTION_DAYS) {
-      attention.push(`No activity in ${daysSinceActivity}d`);
+      details.push({
+        text: `No activity in ${daysSinceActivity}d`,
+        severity: "attention",
+        ageDays: daysSinceActivity,
+      });
     }
   }
 
   if (input.failed7d >= FAILED_MESSAGE_ATTENTION_THRESHOLD) {
-    attention.push(`${input.failed7d} failed messages this week`);
+    details.push({
+      text: `${input.failed7d} failed messages this week`,
+      severity: "attention",
+      ageDays: null,
+    });
   }
 
   if (input.oldestPendingAt) {
     const pendingDays = daysBetween(now, input.oldestPendingAt);
     if (pendingDays >= PENDING_REQUEST_ATTENTION_DAYS) {
-      attention.push(`Change request pending ${pendingDays}d`);
+      details.push({
+        text: `Change request pending ${pendingDays}d`,
+        severity: "attention",
+        ageDays: pendingDays,
+      });
     }
   }
 
-  if (atRisk.length > 0) return { status: "at_risk", reasons: atRisk };
-  if (attention.length > 0) return { status: "attention", reasons: attention };
-  return { status: "healthy", reasons: [] };
+  const reasons = details.map((d) => d.text);
+  if (details.some((d) => d.severity === "at_risk")) {
+    return { status: "at_risk", reasons, details };
+  }
+  if (details.length > 0) {
+    return { status: "attention", reasons, details };
+  }
+  return { status: "healthy", reasons: [], details: [] };
 }

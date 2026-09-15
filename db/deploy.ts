@@ -23,6 +23,10 @@ import {
   REPORTS_ROLLUP_QUEUE,
   scheduleReportsRollup,
 } from "@/lib/jobs/reports-rollup-schedule";
+import {
+  PLATFORM_METRICS_SNAPSHOT_QUEUE,
+  schedulePlatformMetricsSnapshot,
+} from "@/lib/jobs/platform-metrics-snapshot-schedule";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -37,6 +41,7 @@ const QUEUES = [
   SUBSCRIPTIONS_EXPIRE_QUEUE,
   INVOICES_GENERATE_QUEUE,
   REPORTS_ROLLUP_QUEUE,
+  PLATFORM_METRICS_SNAPSHOT_QUEUE,
 ];
 
 type ScheduleFn = (
@@ -166,6 +171,9 @@ async function main(): Promise<void> {
   await syncPerTenantSchedules(boss, SUBSCRIPTIONS_EXPIRE_QUEUE, tenants, scheduleSubscriptionsExpire);
   await syncPerTenantSchedules(boss, INVOICES_GENERATE_QUEUE, tenants, scheduleInvoicesGenerate);
   await syncPerTenantSchedules(boss, REPORTS_ROLLUP_QUEUE, tenants, scheduleReportsRollup);
+  // Single global schedule, not per-tenant — see worker/index.ts for
+  // why this one job carries no tenantId at all.
+  await schedulePlatformMetricsSnapshot(boss);
   await boss.stop({ graceful: false, timeout: 5000 });
 
   await grantAppUserOnPgBossSchema(migrationUrl);
