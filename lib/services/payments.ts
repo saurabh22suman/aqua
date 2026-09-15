@@ -126,24 +126,75 @@ export async function recordPayment(
     const newPaid = paid + input.amountPaise;
     const newStatus = newPaid === Number(invoice.totalPaise) ? "paid" : "partial";
 
-    const [payment] = await tx
-      .insert(payments)
-      .values({
-        tenantId: ctx.tenantId,
-        invoiceId: invoice.id,
-        memberId: invoice.memberId,
-        locationId: invoice.locationId,
-        amountPaise: BigInt(input.amountPaise),
-        method: input.method,
-        channel: "counter",
-        receivedAt: new Date(),
-        receivedBy: actorId,
-        reference: input.reference ?? null,
-        status: "captured",
-        createdBy: actorId,
-        updatedBy: actorId,
-      })
-      .returning({ id: payments.id });
+    // Bug fix (live-attack audit): the same UPI UTR / bank reference
+    // cannot justify two different payments. Pre-check here for a
+    // clear, actionable error; the partial unique index
+    // (payments_tenant_method_reference_uidx) is the backstop against
+    // a race between two concurrent recordings with the same
+    // reference — see db/migrations/20260915140000_payments_reference_uniqueness.sql.
+    if (input.reference) {
+      const dupes = await tx
+        .select({ id: payments.id })
+        .from(payments)
+        .where(
+          and(
+            eq(payments.tenantId, ctx.tenantId),
+            eq(payments.method, input.method),
+            eq(payments.reference, input.reference),
+          ),
+        )
+        .limit(1);
+      if (dupes.length > 0) {
+        return {
+          ok: false,
+          error: "This reference has already been used for another payment.",
+        };
+      }
+    }
+
+    let payment: { id: string } | undefined;
+    try {
+      [payment] = await tx
+        .insert(payments)
+        .values({
+          tenantId: ctx.tenantId,
+          invoiceId: invoice.id,
+          memberId: invoice.memberId,
+          locationId: invoice.locationId,
+          amountPaise: BigInt(input.amountPaise),
+          method: input.method,
+          channel: "counter",
+          receivedAt: new Date(),
+          receivedBy: actorId,
+          reference: input.reference ?? null,
+          status: "captured",
+          createdBy: actorId,
+          updatedBy: actorId,
+        })
+        .returning({ id: payments.id });
+    } catch (err) {
+      // Backstop for the race the pre-check above cannot close: two
+      // concurrent recordings against different invoices can both
+      // pass the pre-check before either commits. The partial unique
+      // index (payments_tenant_method_reference_uidx) surfaces as
+      // 23505; translate it to the same friendly message rather than
+      // a raw Postgres error. Drizzle may wrap the pg error in a
+      // higher-level exception — walk the cause chain (same pattern
+      // as lib/services/holidays.ts).
+      let code: string | undefined = (err as { code?: string }).code;
+      let cursor: unknown = err;
+      while (!code && cursor && typeof cursor === "object" && "cause" in cursor) {
+        cursor = (cursor as { cause: unknown }).cause;
+        code = (cursor as { code?: string } | null)?.code;
+      }
+      if (code === "23505") {
+        return {
+          ok: false,
+          error: "This reference has already been used for another payment.",
+        };
+      }
+      throw err;
+    }
     if (!payment) return { ok: false, error: "The payment could not be saved." };
 
     await tx

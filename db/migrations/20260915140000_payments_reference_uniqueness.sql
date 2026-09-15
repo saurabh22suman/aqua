@@ -1,0 +1,32 @@
+-- C-33 bug fix — a live-attack audit found `payments.reference` (the
+-- UPI UTR / bank transaction reference entered at the counter) had no
+-- uniqueness constraint: two different invoices were paid live using
+-- the identical UPI reference "DUPTEST123" and both succeeded, so the
+-- same real-world UPI receipt could be used to justify two different
+-- payments. Applies identically to bank_transfer references (same
+-- column, same check, no method-specific distinction).
+--
+-- A partial unique index, not a plain unique constraint: `reference`
+-- is nullable (cash payments never carry one, see
+-- payments_reference_check) and a plain unique index would treat
+-- every null as distinct anyway, but being explicit here matches the
+-- documented convention (invoices_subscription_due_live_uidx in
+-- db/schema/invoices.ts) and states the intent — uniqueness only
+-- matters once a reference exists. Scoped to (tenant_id, method,
+-- reference): two tenants can coincidentally share a UTR (different
+-- banks, different counters), and the same UTR string is not
+-- comparable across cash/upi/bank_transfer since only upi and
+-- bank_transfer carry one at all.
+--
+-- NOTE for the human applying this to the real deployed database: run
+--   select tenant_id, method, reference, count(*)
+--   from payments
+--   where reference is not null
+--   group by 1, 2, 3
+--   having count(*) > 1;
+-- first. If it returns any rows, this migration will fail with a
+-- unique-violation and those rows must be resolved (which of the two
+-- payments is real, refund/void the other) before it can be applied.
+create unique index payments_tenant_method_reference_uidx
+  on payments (tenant_id, method, reference)
+  where reference is not null;
