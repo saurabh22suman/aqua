@@ -185,6 +185,7 @@ const ALLOWLIST = new Set([
   "tests/platform-metrics-snapshot-job.test.ts",
   "tests/platform-overview.test.ts",
   "tests/platform-tenants-filters.test.ts",
+  "tests/config-chain.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
