@@ -13,6 +13,7 @@ import {
   defaultPlanId,
   seedPlatformCatalogue,
 } from "../db/seed-platform";
+import { setPlatformConfigValue, setTenantConfigValue } from "../db/config";
 import { env, requireMigrationUrl } from "@/lib/env";
 import { asTenantId, asUserId, type TenantId, type UserId } from "../lib/ids";
 import { todayInZone } from "../lib/time/tz";
@@ -1425,6 +1426,28 @@ async function main() {
         isSystem: false,
       })
       .onConflictDoNothing({ target: [roles.tenantId, roles.key] });
+  });
+
+  // PR5 (ops console improvements) — the demo tenant had zero config
+  // overrides, so the effective-configuration screen's "why this
+  // value" waterfall was never visually exercised beyond the platform
+  // default. Two levels here (plan, then tenant — the more specific
+  // one winning) give it something real to show: default 50 → plan
+  // override 65 → tenant override 40 applied. Tenant-scope write omits
+  // actorId — the demo bootstrap actor is a platform_users row, not a
+  // tenant users row, and audit_log.actor_id has a real FK to users.
+  const demoPlanId = await defaultPlanId(requireMigrationUrl("scripts/seed-demo.ts"));
+  await setPlatformConfigValue({
+    key: "attendance.absence_alert_threshold_pct",
+    scopeType: "plan",
+    scopeId: demoPlanId,
+    value: 65,
+    actorId: actor,
+  });
+  await setTenantConfigValue({
+    tenantId,
+    key: "attendance.absence_alert_threshold_pct",
+    value: 40,
   });
 
   const locationId = await ensureLocation(

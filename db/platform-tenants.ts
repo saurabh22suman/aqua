@@ -293,6 +293,20 @@ export type TenantDetail = {
 
 export type TenantDetailResult = TenantDetail | null;
 
+// PR5 (ops console improvements) — options for the effective-
+// configuration screen's tenant selector.
+export type TenantSelectorOption = { id: string; name: string; slug: string };
+
+export async function listAllTenantsForSelector(): Promise<TenantSelectorOption[]> {
+  return withPlatformAdmin(async (tx) => {
+    const rows = await tx
+      .select({ id: tenants.id, name: tenants.name, slug: tenants.slug })
+      .from(tenants)
+      .orderBy(tenants.name);
+    return rows;
+  });
+}
+
 // PR4 (ops console improvements) — the tab-bar layout needs only
 // name/slug/status/id, not the full detail (locations, features,
 // activity). A separate, cheap query rather than having the layout
