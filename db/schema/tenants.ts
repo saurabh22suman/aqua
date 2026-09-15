@@ -50,6 +50,12 @@ export const tenants = pgTable(
     presetKey: text("preset_key"),
     presetVersion: integer("preset_version"),
     presetAppliedAt: timestamp("preset_applied_at", { withTimezone: true }),
+    // PR2 (ops tenant health) — nullable; only set for tenants that
+    // came through lead conversion (backfilled from
+    // platform_leads.trial_expires_at) or that ops sets by hand.
+    // A tenant with no value here just produces no trial-expiry
+    // signal in db/tenant-health.ts.
+    trialExpiresAt: timestamp("trial_expires_at", { withTimezone: true }),
     // Kill switch for the offline attendance write path (issue #4).
     // Per-tenant, default off — a canary is one specific tenant, not
     // every tenant on a plan. See docs/architecture.md §12.2.

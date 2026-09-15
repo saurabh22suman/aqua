@@ -7,6 +7,12 @@ import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
 import { locations } from "./schema/locations";
 import { resolveTenantFeatureSources } from "./features";
+import {
+  TENANT_HEALTH_JOINS,
+  TENANT_HEALTH_COLUMNS,
+  classifyTenantHealth,
+  type TenantHealthStatus,
+} from "./tenant-health";
 import type { TenantId } from "@/lib/ids";
 
 // Aggregated row for the operator tenant list. Member count and
@@ -24,6 +30,10 @@ export type TenantListRow = {
   createdAt: Date;
   presetKey: string | null;
   presetVersion: number | null;
+  trialExpiresAt: Date | null;
+  // null = not scored (churned tenants) — see db/tenant-health.ts.
+  health: TenantHealthStatus | null;
+  healthReasons: string[];
 };
 
 export type TenantListResult = {
@@ -94,8 +104,10 @@ export async function listTenants(
         ${tenants.createdAt}       as "createdAt",
         ${tenants.presetKey}       as "presetKey",
         ${tenants.presetVersion}   as "presetVersion",
+        ${tenants.trialExpiresAt}  as "trialExpiresAt",
         coalesce(members.cnt, 0)   as "memberCount",
-        coalesce(locations.cnt, 0) as "locationCount"
+        coalesce(locations.cnt, 0) as "locationCount",
+        ${TENANT_HEALTH_COLUMNS}
       from ${tenants}
       left join ${plans} on ${plans.id} = ${tenants.planId}
       left join (
@@ -109,6 +121,7 @@ export async function listTenants(
         where deleted_at is null
         group by tenant_id
       ) locations on locations.tenant_id = ${tenants.id}
+      ${TENANT_HEALTH_JOINS}
       where ${where}
       order by
         case ${tenants.status}
@@ -141,21 +154,44 @@ export async function listTenants(
       createdAt: string;
       presetKey: string | null;
       presetVersion: number | null;
+      trialExpiresAt: string | null;
+      healthMaxOverdueDays: number | null;
+      healthLastActiveOn: string | null;
+      healthFailed7d: number | string;
+      healthOldestPendingAt: string | null;
     };
 
-    const rows = (data as unknown as { rows: RowShape[] }).rows.map((r) => ({
-      id: r.id as TenantId,
-      slug: r.slug,
-      name: r.name,
-      status: r.status,
-      planId: r.planId,
-      planName: r.planName,
-      memberCount: Number(r.memberCount),
-      locationCount: Number(r.locationCount),
-      createdAt: new Date(r.createdAt),
-      presetKey: r.presetKey,
-      presetVersion: r.presetVersion,
-    }));
+    const rows = (data as unknown as { rows: RowShape[] }).rows.map((r) => {
+      const createdAt = new Date(r.createdAt);
+      const trialExpiresAt = r.trialExpiresAt ? new Date(r.trialExpiresAt) : null;
+      const memberCount = Number(r.memberCount);
+      const { status: health, reasons: healthReasons } = classifyTenantHealth({
+        tenantStatus: r.status,
+        createdAt,
+        memberCount,
+        trialExpiresAt,
+        maxOverdueDays: r.healthMaxOverdueDays,
+        lastActiveOn: r.healthLastActiveOn ? new Date(r.healthLastActiveOn) : null,
+        failed7d: Number(r.healthFailed7d),
+        oldestPendingAt: r.healthOldestPendingAt ? new Date(r.healthOldestPendingAt) : null,
+      });
+      return {
+        id: r.id as TenantId,
+        slug: r.slug,
+        name: r.name,
+        status: r.status,
+        planId: r.planId,
+        planName: r.planName,
+        memberCount,
+        locationCount: Number(r.locationCount),
+        createdAt,
+        presetKey: r.presetKey,
+        presetVersion: r.presetVersion,
+        trialExpiresAt,
+        health,
+        healthReasons,
+      };
+    });
 
     const totalRows = (countResult as unknown as { rows: Array<{ total: number }> })
       .rows;

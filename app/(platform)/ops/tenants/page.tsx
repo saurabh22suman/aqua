@@ -6,7 +6,9 @@ import { listTenants } from "@/db/platform-tenants";
 import {
   StatusBadge,
   TENANT_STATUS_TONE,
+  type StatusTone,
 } from "@/components/ui/StatusBadge";
+import type { TenantHealthStatus } from "@/db/tenant-health";
 
 const STATUS_LABEL: Record<string, string> = {
   trial: "Trial",
@@ -34,6 +36,42 @@ const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   month: "short",
   year: "numeric",
 });
+
+// PR2 (ops tenant health) — db/tenant-health.ts computes the status;
+// this is only the display mapping. `null` (churned tenants — not
+// scored) renders as a dash, not a pill, per the same "don't imply
+// there's a value when there isn't one" rule the rest of this page
+// already follows for planName.
+const HEALTH_LABEL: Record<TenantHealthStatus, string> = {
+  healthy: "Healthy",
+  attention: "Attention",
+  at_risk: "At risk",
+};
+const HEALTH_TONE: Record<TenantHealthStatus, StatusTone> = {
+  healthy: "good",
+  attention: "warn",
+  at_risk: "late",
+};
+
+function HealthPill({ health }: { health: TenantHealthStatus | null | undefined }) {
+  if (!health) return <span className="text-ink-3">—</span>;
+  return <StatusBadge tone={HEALTH_TONE[health]}>{HEALTH_LABEL[health]}</StatusBadge>;
+}
+
+// Renewal date isn't wired up yet (that's a subscriptions join, not
+// part of this PR's admitted signals) — a trial tenant with no
+// trial_expires_at set shows "Trial" rather than a fabricated date.
+function TrialRenewalCell({
+  status,
+  trialExpiresAt,
+}: {
+  status: string;
+  trialExpiresAt: Date | null | undefined;
+}) {
+  if (status !== "trial") return <span className="text-ink-3">—</span>;
+  if (!trialExpiresAt) return <span className="text-ink-2">Trial</span>;
+  return <span className="text-ink-2">Trial ends {DATE_FMT.format(trialExpiresAt)}</span>;
+}
 
 type SearchParams = { search?: string; status?: string };
 
@@ -173,6 +211,10 @@ export default async function PlatformTenantsPage({
                     <span>Locations: {row.locationCount}</span>
                     <ChevronRight size={16} className="text-ink-3" aria-hidden="true" />
                   </div>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-[13px]">
+                    <HealthPill health={row.health} />
+                    <TrialRenewalCell status={row.status} trialExpiresAt={row.trialExpiresAt} />
+                  </div>
                 </Link>
               </li>
             ))}
@@ -191,6 +233,8 @@ export default async function PlatformTenantsPage({
                 <th className="px-4 py-3 font-medium text-right">Locations</th>
                 <th className="px-4 py-3 font-medium">Plan</th>
                 <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium">Health</th>
+                <th className="px-4 py-3 font-medium">Trial / Renewal</th>
               </tr>
             </thead>
             <tbody>
@@ -222,6 +266,12 @@ export default async function PlatformTenantsPage({
                   <td className="px-4 py-3 text-ink-2">{row.planName ?? "—"}</td>
                   <td className="px-4 py-3 text-ink-2">
                     {DATE_FMT.format(row.createdAt)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <HealthPill health={row.health} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <TrialRenewalCell status={row.status} trialExpiresAt={row.trialExpiresAt} />
                   </td>
                 </tr>
               ))}
