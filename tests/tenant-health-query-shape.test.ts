@@ -57,7 +57,6 @@ beforeAll(async () => {
     if (client[WRAPPED]) return client;
     client[WRAPPED] = true;
     const origQuery = client.query.bind(client);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     client.query = ((...qargs: unknown[]) => {
       const first = qargs[0] as string | { text?: string } | undefined;
       const text = typeof first === "string" ? first : first?.text ?? "";
