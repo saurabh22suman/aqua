@@ -7,9 +7,11 @@ import {
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberSubscriptionPanel } from "@/components/member-subscription-panel";
+import { MemberInvoicesPanel } from "@/components/member-detail/member-invoices-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { requireReception } from "@/lib/auth/surface-guard";
+import { hasPermission } from "@/lib/auth/permission";
 import { formatDateIST } from "@/lib/time/tz";
 import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
@@ -28,7 +30,7 @@ export default async function ReceptionMemberDetailPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
-  await requireReception();
+  const ctx = await requireReception();
   const { memberId } = await params;
   requireUuidParam(memberId);
   const [member, cardCtx, terminology] = await Promise.all([
@@ -69,6 +71,12 @@ export default async function ReceptionMemberDetailPage({
       <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
 
       <MemberSubscriptionPanel memberId={member.memberId} />
+
+      <MemberInvoicesPanel
+        memberId={member.memberId}
+        canWrite={hasPermission(ctx, "invoices.write")}
+        canRecord={hasPermission(ctx, "payments.record")}
+      />
 
       {member.isMinor ? (
         <section className="mt-4">

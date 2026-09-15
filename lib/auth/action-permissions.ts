@@ -179,6 +179,19 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   deleteActivityAction: "settings.manage",
   addSubUnitAction: "settings.manage",
   removeSubUnitAction: "settings.manage",
+
+  // C-32/C-33 — invoices and counter payments. Reception holds
+  // invoices.read + payments.record; accountant/owner/admin hold the
+  // write set; the daily collection report is accountant-grade
+  // (reports.financial).
+  listMemberInvoicesAction: "invoices.read",
+  getInvoiceAction: "invoices.read",
+  createInvoiceAction: "invoices.write",
+  voidInvoiceAction: "invoices.write",
+  listInvoicePaymentsAction: "invoices.read",
+  recordPaymentAction: "payments.record",
+  getDailyCollectionAction: "reports.financial",
+  confirmCashCountAction: "payments.record",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.

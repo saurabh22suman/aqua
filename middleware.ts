@@ -62,6 +62,10 @@ const APEX_ALLOWLIST = [
   // settings.read, so the middleware only needs to let it reach the
   // app.
   "/api/payment-qr/",
+  // C-39 — payment receipt PDFs. Session-gated: the route handler
+  // resolves the tenant context and refuses without invoices.read,
+  // so the middleware only needs to let it reach the app.
+  "/api/receipts/",
   "/api/health",
   // Next.js internals and static assets. Required for HMR, RSC
   // payloads, and the _next/static directory the build emits.

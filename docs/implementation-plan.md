@@ -669,23 +669,27 @@ either import form; `docs/review-checklist.md` §5 verifies by running
 
 ### C-31 · Invoice numbering
 **Depends:** C-28
-**Build:** Gapless per financial year per location using a counter row with `select … for update` inside the invoice transaction.
+**Status:** complete — gapless per tenant per financial year. Decision 2026-09-14: one tenant = one GSTIN for now, so per tenant *is* per GSTIN. The counter key `(tenant_id, financial_year)` is the extension point if a second GSTIN is ever needed (never renumber issued invoices).
+**Build:** Gapless per financial year per tenant using a counter row with `select … for update` inside the invoice transaction.
 **Done when:** a concurrency test of fifty parallel invoices produces fifty sequential numbers with no gaps or duplicates.
 **Never:** a Postgres sequence — rollbacks leave gaps and GST requires none.
 
 ### C-32 · Invoices
 **Depends:** C-31, C-30
+**Status:** complete — `invoices` + `invoice_line_items`: GSTIN snapshot (null ⇒ Bill of Supply, no tax — an unregistered supplier cannot collect GST), SAC code from `billing.sac_code` (default 999723) and the resolved GST rate snapshotted per line, subtotal + tax = total in integer paise, gapless number from C-31. CGST/SGST split derived at render time (intra-state; IGST not modelled — needs a place-of-supply decision). Owner/reception raise from an active subscription; `invoice.void` before any payment arrives.
 **Build:** `invoices` with line items, GSTIN, HSN/SAC, subtotal, tax, total, due date, status.
 **Done when:** a generated invoice is arithmetically correct and GST-valid.
 
 ### C-33 · Cash and manual payments
 **Depends:** C-32
+**Status:** complete — `payments` recorded at the counter: cash, UPI reference, bank transfer, `received_by`, location inherited from the invoice. The invoice row is locked `for update` so concurrent desks cannot win the same outstanding balance; an overpayment is refused. Two partials settle to `paid`.
 **Build:** `payments` recorded at the counter — cash, UPI reference, bank transfer — with `received_by`. Partial payments update invoice balance.
 **Done when:** two partial cash payments settle an invoice and mark it paid.
 
 ### C-34 · Daily reconciliation
 **Depends:** C-33
 **Build:** Daily collection report by method and by staff member, with a cash count confirmation step.
+**Status:** complete — `/owner/reports/collections`: tenant-local day (Asia/Kolkata by tenant), totals by method and by the staff member who received them (users reachable only through `tenant_memberships`), and `cash_counts` snapshots the system cash figure beside the counted amount. A variance is surfaced, never adjusted; a recount replaces the row with an audit trail. Confirming needs `payments.record`, reading `reports.financial`.
 **Done when:** the report matches a manual count for a full day at the reference business.
 
 ### C-35 · Payment QRs
@@ -733,6 +737,7 @@ task rather than by reopening these.
 
 ### C-39 · Receipts
 **Depends:** C-33, F-17
+**Status:** complete — dependency-free PDF 1.4 writer (`lib/receipts/pdf.ts`), one A4 page carrying the tenant's initials-on-accent mark, the amount in figures and Indian-format words, and the invoice's GST references (number, document kind, GSTIN, place of supply, SAC). Generated lazily on first read and stored in `receipts` (unique per payment — a second read returns the stored bytes, never a second document). Download at `/api/receipts/[paymentId]` (invoices.read). **Sent on payment is not wired:** the only provider is the non-prod mock, which carries no attachments; it lands with the real WhatsApp adapter (O-11).
 **Build:** Branded receipt PDF, sent on payment, stored against the payment record.
 **Done when:** the receipt carries the tenant's mark, not ours.
 
@@ -806,6 +811,7 @@ of the `message_log` written by C-40a.
 
 ### C-47 · Scheduled jobs
 **Depends:** C-30, C-32
+**Status:** complete — the three billing queues ship with per-tenant schedules (02:15 / 02:30 / 03:00 tenant time) registered at tenant creation and reconciled by `db/deploy.ts`. `subscriptions.expire` marks lapsed actives; `invoices.generate` raises one renewal invoice for an `auto_renew` subscription inside the 7-day window, due the day the period ends, made idempotent by `invoices_subscription_due_live_uidx`; `reports.rollup` upserts `daily_rollups` for the day that just ended. Job mutations carry no tenant audit row — `audit_log.actor_id` is NOT NULL and jobs have no user actor (the standing F-15 gap; same as `sessions.generate`).
 **Build:** `subscriptions.expire`, `invoices.generate`, `reports.rollup`. Idempotent, tenant-scoped, chunked.
 **Done when:** re-running a night's jobs changes nothing.
 

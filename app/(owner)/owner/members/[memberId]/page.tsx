@@ -12,6 +12,7 @@ import { listOptedFacilitiesAction } from "@/lib/actions/facility-optins";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberSubscriptionPanel } from "@/components/member-subscription-panel";
+import { MemberInvoicesPanel } from "@/components/member-detail/member-invoices-panel";
 import { MemberFacilitiesPanel } from "@/components/member-facilities-panel";
 import { MakeupCreditsPanel } from "@/components/makeup-credits-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
@@ -23,6 +24,7 @@ import { formatDateIST } from "@/lib/time/tz";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
 import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
 import { requireOwner } from "@/lib/auth/surface-guard";
+import { hasPermission } from "@/lib/auth/permission";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 
@@ -31,7 +33,7 @@ export default async function MemberDetailPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
-  await requireOwner();
+  const ctx = await requireOwner();
   const { memberId } = await params;
   requireUuidParam(memberId);
   const [member, attendanceHistory, cardCtx, terminology, optedFacilities, locations] =
@@ -110,6 +112,12 @@ export default async function MemberDetailPage({
       <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
 
       <MemberSubscriptionPanel memberId={member.memberId} />
+
+      <MemberInvoicesPanel
+        memberId={member.memberId}
+        canWrite={hasPermission(ctx, "invoices.write")}
+        canRecord={hasPermission(ctx, "payments.record")}
+      />
 
       <MemberFacilitiesPanel
         memberId={member.memberId}

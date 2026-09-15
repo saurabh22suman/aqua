@@ -96,22 +96,12 @@ function normaliseStored(raw: StoredBranding | null | undefined): {
   };
 }
 
-// Shared between getBranding (read) and updateBranding (write)
-// — the latter wants the post-merge values without opening a
-// second withTenant (those cannot nest, see db/scope.ts).
-async function readBrandingFromTx(
-  tx: TenantTx,
-  tenantId: TenantId,
-): Promise<BrandingData> {
-  const [row] = await tx
-    .select({
-      tenantName: tenants.name,
-      branding: tenants.branding,
-    })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId));
-  const tenantName = row?.tenantName ?? "";
-  const stored = normaliseStored(row?.branding as StoredBranding);
+// Pure resolver from (tenant name, stored jsonb) to BrandingData.
+// Exported for callers that already hold the tenants row inside their
+// own withTenant (the receipt renderer, C-39) and must not open a
+// second scope — withTenant cannot nest (db/scope.ts).
+export function brandDataFrom(tenantName: string, raw: unknown): BrandingData {
+  const stored = normaliseStored(raw as StoredBranding);
 
   // Fallbacks: shortName from the tenant name's first word if a
   // shortName hasn't been set; same for displayName. Strips
@@ -131,6 +121,23 @@ async function readBrandingFromTx(
     fallbackShortName,
     initials,
   };
+}
+
+// Shared between getBranding (read) and updateBranding (write)
+// — the latter wants the post-merge values without opening a
+// second withTenant (those cannot nest, see db/scope.ts).
+async function readBrandingFromTx(
+  tx: TenantTx,
+  tenantId: TenantId,
+): Promise<BrandingData> {
+  const [row] = await tx
+    .select({
+      tenantName: tenants.name,
+      branding: tenants.branding,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+  return brandDataFrom(row?.tenantName ?? "", row?.branding);
 }
 
 export async function getBranding(

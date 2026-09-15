@@ -50,6 +50,20 @@ export const CONFIG_KEYS = {
     description:
       "GST rate in basis points (1800 = 18%). Inherited platform -> tenant -> facility -> activity; invoices snapshot the resolved rate.",
   },
+  // C-32 — the SAC code printed on invoice lines. Services use SAC
+  // (goods use HSN); 999723 is the common code for sports and
+  // recreation services, but it is a default, not a legal claim — the
+  // tenant's accountant confirms the right code. Snapshotted onto
+  // each invoice line at issue.
+  "billing.sac_code": {
+    valueSchema: z.string().trim().regex(/^\d{4,8}$/),
+    jsonSchema: { type: "string", pattern: "^\\d{4,8}$" },
+    defaultValue: "999723",
+    visibility: "ops_only",
+    risk: "sensitive",
+    description:
+      "SAC code printed on invoice lines (4-8 digits). Default 999723 (sports and recreation services) — confirm with the tenant's accountant.",
+  },
   // O-08 — location-scoped staff access. OFF is today's tenant-wide
   // behaviour. This is an access-control boundary inside one business,
   // never tenant isolation. Visibility is owner_read: owners see it
