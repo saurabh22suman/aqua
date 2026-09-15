@@ -64,3 +64,28 @@ describe("PlatformHome cards (F34)", () => {
     expect(presets?.getAttribute("href")).toBe("/ops/presets");
   });
 });
+
+describe("PlatformLayout desktop sidebar", () => {
+  // Every route under app/(platform)/ops that isn't an auth screen
+  // (login/verify) must be reachable from the desktop sidebar — the
+  // gap this closes: leads/activity/whatsapp existed as routes but
+  // weren't linked from anywhere in the nav. Deliberately separate
+  // from the mobile bottom bar above, which stays capped at four
+  // items (F1) — the two navs are allowed to diverge.
+  it("links every reachable /ops surface", async () => {
+    const ui = await PlatformLayout({ children: <p>content</p> });
+    render(ui);
+
+    const nav = screen.getByRole("navigation", { name: "Platform" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/ops",
+      "/ops/tenants",
+      "/ops/leads",
+      "/ops/features",
+      "/ops/presets",
+      "/ops/whatsapp",
+      "/ops/activity",
+    ]);
+  });
+});

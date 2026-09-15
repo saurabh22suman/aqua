@@ -73,7 +73,7 @@ export function PlatformVerifyForm() {
             }
           }}
           required
-          className="mt-1 w-full rounded-ctl border border-line bg-paper px-4 py-3 text-[24px] tracking-[0.3em] text-center text-ink placeholder:text-ink-3 focus:border-[var(--accent)] focus:outline-none"
+          className="mt-1 w-full rounded-ctl border border-line bg-paper px-4 py-3 text-[24px] tracking-[0.3em] text-center text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
         />
       </label>
       {error ? (
