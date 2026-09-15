@@ -46,9 +46,20 @@ export type TenantListResult = {
 const TENANT_STATUS = ["trial", "active", "suspended", "churned"] as const;
 type TenantStatus = (typeof TENANT_STATUS)[number];
 
+const TENANT_HEALTH_FILTER_VALUES = ["healthy", "attention", "at_risk"] as const;
+const TENANT_TRIAL_FILTER_VALUES = ["expiring_soon", "expired"] as const;
+
 export const listTenantsInput = z.object({
   search: z.string().trim().max(120).optional(),
   status: z.enum(TENANT_STATUS).optional(),
+  // PR4 (ops console improvements) — plan/preset filter in SQL directly.
+  // health/trial below are the two that can't: health is JS-computed
+  // (see db/tenant-health.ts) and trial needs the "expiring soon"
+  // window, not a raw column match.
+  planId: z.string().uuid().optional(),
+  presetKey: z.string().optional(),
+  health: z.enum(TENANT_HEALTH_FILTER_VALUES).optional(),
+  trial: z.enum(TENANT_TRIAL_FILTER_VALUES).optional(),
   limit: z.number().int().min(1).max(200).default(50),
   offset: z.number().int().min(0).default(0),
 });
@@ -77,6 +88,21 @@ function buildFilters(input: ListTenantsInput) {
   if (input.status) {
     conds.push(sql`${tenants.status} = ${input.status}`);
   }
+  if (input.planId) {
+    conds.push(sql`${tenants.planId} = ${input.planId}`);
+  }
+  if (input.presetKey) {
+    conds.push(sql`${tenants.presetKey} = ${input.presetKey}`);
+  }
+  if (input.trial === "expiring_soon") {
+    conds.push(
+      sql`${tenants.status} = 'trial' and ${tenants.trialExpiresAt} is not null and ${tenants.trialExpiresAt} >= now() and ${tenants.trialExpiresAt} <= now() + interval '7 days'`,
+    );
+  } else if (input.trial === "expired") {
+    conds.push(
+      sql`${tenants.status} = 'trial' and ${tenants.trialExpiresAt} is not null and ${tenants.trialExpiresAt} < now()`,
+    );
+  }
   return conds.length === 0
     ? sql`true`
     : sql.join(conds, sql` and `);
@@ -92,6 +118,14 @@ export async function listTenants(
   const input = listTenantsInput.parse(rawInput);
   return withPlatformAdmin(async (tx) => {
     const where = buildFilters(input);
+    // PR4 — health is JS-computed (db/tenant-health.ts), so it can't
+    // be pushed into the SQL WHERE. When a health filter is active,
+    // this fetches every row matching the OTHER filters (no SQL
+    // LIMIT/OFFSET) and paginates in JS after classifying — still one
+    // query, no fan-out, just skipping the SQL-side page slice for
+    // this one filter dimension. Every other call (the common case)
+    // takes the unchanged, cheaper SQL-paginated path.
+    const needsJsPagination = input.health !== undefined;
 
     const data = await tx.execute(sql`
       select
@@ -132,14 +166,7 @@ export async function listTenants(
           else 4
         end,
         ${tenants.createdAt} desc
-      limit ${input.limit}
-      offset ${input.offset}
-    `);
-
-    const countResult = await tx.execute(sql`
-      select count(*)::int as total
-      from ${tenants}
-      where ${where}
+      ${needsJsPagination ? sql`` : sql`limit ${input.limit} offset ${input.offset}`}
     `);
 
     type RowShape = {
@@ -193,6 +220,19 @@ export async function listTenants(
       };
     });
 
+    if (needsJsPagination) {
+      const filtered = rows.filter((r) => r.health === input.health);
+      return {
+        rows: filtered.slice(input.offset, input.offset + input.limit),
+        total: filtered.length,
+      };
+    }
+
+    const countResult = await tx.execute(sql`
+      select count(*)::int as total
+      from ${tenants}
+      where ${where}
+    `);
     const totalRows = (countResult as unknown as { rows: Array<{ total: number }> })
       .rows;
     const totalRow = totalRows[0];
