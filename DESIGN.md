@@ -86,6 +86,8 @@ mango (default) · marine · indigo · plum · forest · slate
 
 Use for: the single primary action on a screen, active nav state, focus rings.
 
+Focus rings use a dedicated `--focus-ring` token, which **must meet WCAG 1.4.11 (≥3:1 contrast) against every control surface** — `paper` `#FFFFFF` and `deck` `#EDF0EC` today. Mango `#FF7A18` itself fails (2.61:1 / 2.27:1) and is not used for focus rings; the currently approved focus-ring colour is `--accent-ink` `#B84E00` (5.09:1 / 4.43:1). Enforced by `pnpm check:focus-contrast`. The token's value must remain a literal hex so the check can parse it; a CSS expression here (e.g. `color-mix(...)`) fails the check loudly rather than silently.
+
 **`--accent` may never appear inside a status or state style.** Enforced by lint. Semantic tokens are not derived from the accent and do not change with it.
 
 ### 1.3 Type

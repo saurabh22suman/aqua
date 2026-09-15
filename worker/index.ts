@@ -31,16 +31,24 @@ import { asTenantId, type TenantId } from "@/lib/ids";
 // write a real tenants.id.
 //
 // PR3 (ops console improvements) — platform.metrics-snapshot is the
-// one deliberate exception to "no tenant enumeration happens here or
-// anywhere in this process." It carries no tenantId at all: it reads
-// aggregate, platform-wide counts (active/trial/at-risk tenants, open
-// ops tasks) under withPlatformAdmin(), the same cross-tenant-read
-// scope every /ops server action already uses — it is not the
-// superuser/migration connection tests/tier1/no-superuser-on-request-path.test.ts
-// guards against, and it enumerates nothing per-row (it's a COUNT, not
-// a listing). It is registered once, globally, not per tenant (see
+// one cross-tenant job in this process. Every other job in HANDLERS
+// (sessions.generate, absence.alerts, subscriptions.expire,
+// invoices.generate, reports.rollup) is per-tenant: the worker
+// receives a `tenantId` per job from pg-boss and the job opens a
+// `withTenant()` transaction. The snapshot carries no tenantId —
+// it writes one row per day to `platform_metrics_daily`, an
+// aggregate, platform-wide table with no tenant_id. Reads happen
+// under `withPlatformAdmin()`, the same cross-tenant-read scope
+// every /ops server action already uses; writes happen against the
+// allowlisted platform table, which is reachable by any app_user
+// connection (no policy gate). It enumerates nothing per-row —
+// its reads are COUNTs, not listings. It is registered once,
+// globally, not per tenant (see
 // lib/jobs/platform-metrics-snapshot-schedule.ts), and handled
-// separately below rather than forced into HANDLERS' per-tenant shape.
+// separately below rather than forced into HANDLERS' per-tenant
+// shape. tests/tier1/no-superuser-on-request-path.test.ts is the
+// mechanical guard that this job's connection is app_user, never
+// the migration role.
 
 const HANDLERS: ReadonlyArray<{
   queue: string;
