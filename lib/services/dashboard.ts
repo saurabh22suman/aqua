@@ -8,6 +8,8 @@ import { batches, programs } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import { todayInZone } from "@/lib/time/tz";
 import { listOverdueFollowUps } from "@/lib/services/enquiries";
+import { listCashCountsNeedingReview } from "@/lib/services/reconciliation-closed-state";
+import { formatINR } from "@/lib/money/format";
 import type { ActionCtx } from "@/lib/auth/context";
 
 export type NeedsAttentionItem = {
@@ -67,6 +69,12 @@ export type OwnerDashboardData = {
 // dashboard's own withTenant() below, not inside it.
 export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardData> {
   const overdueFollowUps = await listOverdueFollowUps(ctx);
+  // C-34 audit fix, Fix A's dashboard surfacing — a cash count closed
+  // with a variance over ₹500 needs a human to look at it. Its own
+  // withTenant() call, same reason listOverdueFollowUps is fetched up
+  // here rather than inside the dashboard's own transaction below
+  // (withTenant cannot nest — db/scope.ts).
+  const reviewCashCounts = await listCashCountsNeedingReview(ctx);
 
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
@@ -142,6 +150,19 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
         title: "Follow-up overdue",
         detail: `${f.enquiryName} — due ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} ago${f.note ? `: ${f.note}` : ""}`,
         href: `/owner/enquiries/${f.enquiryId}`,
+      });
+    }
+
+    // C-34 audit fix, Fix A — a cash count closed with a variance
+    // over ₹500 needs a human to look at it, not just a database row
+    // nobody reads. Same reason-stated shape as every other
+    // needs-attention item; no href yet (no reconciliation page
+    // exists in the UI today).
+    for (const c of reviewCashCounts) {
+      const direction = c.variancePaise < 0 ? "short" : "over";
+      needsAttention.push({
+        title: "Cash count needs review",
+        detail: `${c.locationName} — ${c.onDate}: ${formatINR(Math.abs(c.variancePaise))} ${direction}`,
       });
     }
 

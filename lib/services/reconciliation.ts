@@ -27,18 +27,16 @@ import type { ActionCtx } from "@/lib/auth/context";
 // system figure next to the physically counted cash so a variance
 // stays explainable.
 //
-// Audit fix (Fix B, this commit) — a live-attack audit found that a
-// second confirm for the same tenant+location+day silently overwrote
-// the row (hard unique key + onConflictDoUpdate); the prior value
-// survived only as a separate audit_log row (entity_id null), never
-// in the table itself. Fixed by a closed-state model: a "closed" day
-// inserts a row and blocks a second confirm; reopenCashCount (in
-// ./reconciliation-closed-state) is the only way back, and it
-// supersedes rather than overwrites — same append-only idiom as
-// db/config.ts's config_values (see db/schema/cash-counts.ts).
-//
-// A second problem the same audit found — no policy gate on variance
-// size at all — is Fix A, a separate commit on top of this one.
+// Audit fix (this file) — two problems a live-attack audit found in
+// confirmCashCount: (a) no policy gate on variance size at all, and
+// (b) a second confirm for the same day silently overwrote the row
+// (hard unique key + onConflictDoUpdate). Fix A below is the variance
+// policy (X = ₹500 needs a reason, Y = ₹2,000 needs an owner/admin
+// permission). Fix B is the closed-state model: a "closed" day
+// inserts a row and blocks a second confirm; reopenCashCount is the
+// only way back, and it supersedes rather than overwrites (same
+// append-only idiom as db/config.ts's config_values — see
+// db/schema/cash-counts.ts).
 
 export type CollectionGroup = {
   key: string;
@@ -54,6 +52,7 @@ export type CashCountRow = {
   note: string | null;
   confirmedByName: string | null;
   confirmedAt: string;
+  needsReview: boolean;
 };
 
 export type DailyCollection = {
@@ -80,6 +79,17 @@ const methodLabels: Record<string, string> = {
   upi: "UPI",
   bank_transfer: "Bank transfer",
 };
+
+// Fix A's exact thresholds — do not adjust. X: a variance above this
+// needs a typed reason and surfaces as "needs review" on the owner
+// dashboard. Y: a variance above this can only be closed by a caller
+// holding an owner-level permission (settings.manage).
+export const REVIEW_THRESHOLD_PAISE = 50_000; // ₹500
+export const OWNER_CLOSE_THRESHOLD_PAISE = 200_000; // ₹2,000
+
+function needsReviewFor(variancePaise: number): boolean {
+  return Math.abs(variancePaise) > REVIEW_THRESHOLD_PAISE;
+}
 
 export async function getDailyCollection(
   ctx: ActionCtx,
@@ -206,13 +216,15 @@ export async function getDailyCollection(
         .limit(1);
       const row = countRows[0];
       if (row) {
+        const variancePaise = Number(row.variancePaise);
         cashCount = {
           countedPaise: Number(row.countedPaise),
           systemPaise: Number(row.systemPaise),
-          variancePaise: Number(row.variancePaise),
+          variancePaise,
           note: row.note,
           confirmedByName: userLabel(row.confirmerName, row.confirmerRole),
           confirmedAt: row.confirmedAt.toISOString(),
+          needsReview: needsReviewFor(variancePaise),
         };
       }
     }
@@ -233,17 +245,43 @@ const confirmInput = z.object({
   locationId: z.string().uuid(),
   onDate: dateSchema,
   countedPaise: z.number().int().min(0).max(10_000_000_000),
+  // Doubles as the >₹500 variance reason. Optional up to ₹500 of
+  // variance; the schema can't see systemPaise (queried inside the
+  // transaction below), so "required beyond ₹500" is enforced there,
+  // not here — but it's still a real Zod-validated string (trimmed,
+  // 1–500 chars), never an implicit pass-through.
   note: z.string().trim().min(1).max(500).optional(),
 });
 
 export type ConfirmCashCountResult =
-  | { ok: true; variancePaise: number; systemPaise: number }
+  | {
+      ok: true;
+      variancePaise: number;
+      systemPaise: number;
+      needsReview: boolean;
+    }
   | { ok: false; error: string };
 
 const CASH_COUNT_ACTION = "cash_count.confirm";
+// Distinct from CASH_COUNT_ACTION — Fix A requires an over-₹2,000
+// close to be its own, separately identifiable audit event, not
+// folded into the normal confirm action name.
+const CASH_COUNT_OVER_THRESHOLD_ACTION = "cash_count.confirm_over_threshold";
+
+// ActionCtx (lib/auth/context.ts, M3) deliberately carries only
+// tenantId + userId — every other lib/services/*.ts function leaves
+// permission resolution entirely to the action layer, because no
+// other service's authorization decision depends on data the service
+// itself computes. This one does: whether the ₹2,000 gate even
+// applies is only known after systemPaise is queried inside the
+// transaction below. So the action layer still does the one
+// resolution (requireDefaultCtx() already carries `permissions`) and
+// this service reads it off an optional field, rather than
+// re-deriving it — the resolution itself happens exactly once.
+export type ConfirmCashCountCtx = ActionCtx & { permissions?: Set<string> };
 
 export async function confirmCashCount(
-  ctx: ActionCtx,
+  ctx: ConfirmCashCountCtx,
   raw: unknown,
 ): Promise<ConfirmCashCountResult> {
   const parsed = confirmInput.safeParse(raw);
@@ -322,6 +360,33 @@ export async function confirmCashCount(
       0,
     );
     const variancePaise = countedPaise - systemPaise;
+    const varianceAbs = Math.abs(variancePaise);
+    const needsReview = varianceAbs > REVIEW_THRESHOLD_PAISE;
+
+    // Fix A — variance policy. Up to ₹500 closes normally. Above
+    // ₹500, a reason is required (real input, Zod-validated above —
+    // not implicit). Above ₹2,000, only a caller holding an
+    // owner-level permission may close it.
+    if (needsReview && !note) {
+      return {
+        ok: false,
+        error:
+          "Variance is over ₹500 — add a reason before closing this count.",
+      };
+    }
+
+    let action: string = CASH_COUNT_ACTION;
+    if (varianceAbs > OWNER_CLOSE_THRESHOLD_PAISE) {
+      const canCloseOverThreshold = ctx.permissions?.has("settings.manage") ?? false;
+      if (!canCloseOverThreshold) {
+        return {
+          ok: false,
+          error:
+            "Variance is over ₹2,000 — only an owner or admin can close this count.",
+        };
+      }
+      action = CASH_COUNT_OVER_THRESHOLD_ACTION;
+    }
 
     let insertedId: string | undefined;
     try {
@@ -364,7 +429,7 @@ export async function confirmCashCount(
     await tx.insert(auditLog).values({
       tenantId: ctx.tenantId,
       actorId,
-      action: CASH_COUNT_ACTION,
+      action,
       entityType: "cash_count",
       entityId: insertedId ?? null,
       after: {
@@ -373,15 +438,16 @@ export async function confirmCashCount(
         countedPaise,
         systemPaise,
         variancePaise,
+        needsReview,
+        note: note ?? null,
       },
     });
 
-    return { ok: true, variancePaise, systemPaise };
+    return { ok: true, variancePaise, systemPaise, needsReview };
   });
 }
 
-// reopenCashCount and listCashCountHistory live in
-// ./reconciliation-closed-state — split out once this file's own
-// policy gate (Fix A, the next commit) pushed it past CLAUDE.md's
-// 300-line guideline. Same module (C-34), same audit fix, just a
-// second file.
+// reopenCashCount, listCashCountHistory and listCashCountsNeedingReview
+// live in ./reconciliation-closed-state — split out once this file's
+// own policy gate pushed it past CLAUDE.md's 300-line guideline. Same
+// module (C-34), same audit fix, just a second file.
