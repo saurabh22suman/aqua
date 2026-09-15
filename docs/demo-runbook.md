@@ -347,12 +347,20 @@ cookie) and the routing layer refuses tenant paths on the ops host
   the swimming-club deep dive. Orphan Demo (Churned) is at the
   bottom; click it once to show the "no transitions available"
   lifecycle state.
-- **Tenant detail (`/ops/tenants/<aqua-worli-id>`)** — shows
-  Settings (timezone Asia/Kolkata, plan Standard, preset
-  swimming v1), Feature state (all enabled by plan baseline),
+- **Tenant detail (`/ops/tenants/<aqua-worli-id>`)** — now six tabs
+  (Overview, Configuration, Entitlements, Locations, Messaging,
+  Audit) instead of one long scroll. Overview shows Settings
+  (timezone Asia/Kolkata, plan Standard, preset swimming v1), the
   Status section with the lifecycle buttons (Suspend / Mark
-  churned). The "Owner" section has a phone field with "Invite
-  owner" button.
+  churned), and the "Owner" section with a phone field and "Invite
+  owner" button. Entitlements has the feature-state toggles (all
+  enabled by plan baseline).
+- **Configuration tab → "Why this value?"** — click it on
+  `attendance.absence_alert_threshold_pct` to show the full waterfall
+  the seed now exercises on purpose: platform default 50 → plan
+  override 65 → tenant override 40 (applied). Before this, the demo
+  tenant had zero config overrides and the waterfall was never
+  visually shown.
 - **`/ops/presets`** — the catalogue shows swimming and
   multi-sport. Click into swimming.
 - **Preset detail (`/ops/presets/swimming`)** — the preview

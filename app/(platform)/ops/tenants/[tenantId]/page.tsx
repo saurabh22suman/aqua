@@ -1,48 +1,18 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { getSampleDataState } from "@/db/sample-data-state";
 import { asTenantId } from "@/lib/ids";
-import { StatusBadge, TENANT_STATUS_TONE } from "@/components/ui/StatusBadge";
-import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
-import { StatusTransitionControls } from "./status-transitions";
-import { TenantFeatureToggles } from "./tenant-feature-toggles";
+import { requireUuidParam } from "@/lib/params";
 import { InviteOwnerForm } from "./invite-owner-form";
 import { RemoveSampleDataButton } from "./remove-sample-data-button";
-import { requireUuidParam } from "@/lib/params";
+import { StatusTransitionControls } from "./status-transitions";
+import { DATE_FMT, DATETIME_FMT, SectionHeader, DescriptionRow, StatCard } from "./tenant-detail-shared";
 
-const STATUS_LABEL: Record<string, string> = {
-  trial: "Trial",
-  active: "Active",
-  suspended: "Suspended",
-  churned: "Churned",
-};
-
-function StatusPill({ status }: { status: string }) {
-  // 2026-09-13 UI/UX audit §7.1 — this pill was neutral for every
-  // state, so active and suspended looked identical. The shared
-  // badge now uses the same lifecycle semantics as the tenants list.
-  return (
-    <StatusBadge tone={TENANT_STATUS_TONE[status] ?? "neutral"}>
-      {STATUS_LABEL[status] ?? status}
-    </StatusBadge>
-  );
-}
-
-const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
-const DATETIME_FMT = new Intl.DateTimeFormat("en-IN", {
-  day: "2-digit",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
+// PR4 (ops console improvements) — the Overview tab. Status, settings,
+// stats and the owner-invite action — the things an operator checks
+// or acts on first. Locations, entitlements, messaging and the
+// activity log each moved to their own tab (see layout.tsx).
 export default async function PlatformTenantDetailPage({
   params,
 }: {
@@ -57,39 +27,9 @@ export default async function PlatformTenantDetailPage({
   if (!detail) notFound();
   const sampleState = await getSampleDataState(tenantId);
 
-  // X-D4 (2026-09-13 audit) — hide test-fixture feature keys that the
-  // resolution suites leave in the shared dev database; see
-  // lib/feature-artifacts.ts.
-  const featureRows = withoutTestArtifactFeatureKeys(
-    detail.featureKeys.map((f) => {
-      const out: {
-        key: string;
-        source: "plan" | "tenant_override" | "denied";
-        expiresAt?: Date;
-      } = { key: f.key, source: f.source };
-      if (f.expiresAt) out.expiresAt = f.expiresAt;
-      return out;
-    }),
-  );
-
   return (
-    <div className="max-w-5xl">
-      <Link
-        href="/ops/tenants"
-        className="text-[13px] text-ink-3 hover:text-ink underline-offset-2 hover:underline"
-      >
-        ← All tenants
-      </Link>
-
-      <div className="mt-3 flex items-baseline gap-4">
-        <h1 className="font-display text-[28px] font-semibold text-marine">
-          {detail.name}
-        </h1>
-        <StatusPill status={detail.status} />
-      </div>
-      <p className="mt-1 font-mono text-[13px] text-ink-3">{detail.slug}</p>
-
-      <section className="mt-6">
+    <>
+      <section>
         <SectionHeader
           title="Status"
           subtitle="Suspends and reactivations take effect immediately and write to the audit log."
@@ -130,21 +70,6 @@ export default async function PlatformTenantDetailPage({
             value={`${DATE_FMT.format(detail.createdAt)} · updated ${DATETIME_FMT.format(detail.updatedAt)}`}
           />
         </div>
-        <div className="mt-2 flex flex-col gap-1">
-          <Link
-            href={`/ops/tenants/${detail.id}/configuration`}
-            className="text-[13px] text-[var(--accent)] underline underline-offset-2"
-          >
-            Effective configuration — resolved values, entitlements,
-            permissions and nav per role
-          </Link>
-          <Link
-            href={`/ops/tenants/${detail.id}/tax`}
-            className="text-[13px] text-[var(--accent)] underline underline-offset-2"
-          >
-            GST rates — tenant default, per facility and per activity
-          </Link>
-        </div>
       </section>
 
       <section className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -156,8 +81,7 @@ export default async function PlatformTenantDetailPage({
       {/* 2026-09-13 UI/UX audit X-D6: the Owner block is the one
           genuinely mutable action on this page and was buried below a
           30+ row feature list at the bottom. It now sits directly
-          under the identity/status stats, before the read-only
-          settings and configuration sections. */}
+          under the identity/status stats. */}
       <section className="mt-8">
         <SectionHeader
           title="Owner"
@@ -167,72 +91,6 @@ export default async function PlatformTenantDetailPage({
           <InviteOwnerForm tenantId={detail.id} />
         </div>
       </section>
-
-      <section className="mt-8">
-        <SectionHeader
-          title="Locations"
-          subtitle={`${detail.locations.length} live · deleted locations hidden`}
-        />
-        {detail.locations.length === 0 ? (
-          <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-            <p className="text-[14px] font-medium text-ink">
-              No locations yet
-            </p>
-            <p className="mt-2 text-[13px] text-ink-3">
-              New tenants ship with one location from the create-tenant
-              form. Adding more is part of the onboarding wizard.
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-card bg-paper border border-line overflow-hidden">
-            <ul>
-              {detail.locations.map((loc) => (
-                <li
-                  key={loc.id}
-                  className="flex items-center justify-between px-4 py-3 border-b border-line last:border-b-0"
-                >
-                  <div>
-                    <p className="text-[14px] font-medium text-ink">
-                      {loc.name}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-ink-3">
-                      Added {DATE_FMT.format(loc.createdAt)}
-                    </p>
-                  </div>
-                  {loc.isPrimary ? (
-                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-pill bg-water-soft text-water">
-                      Primary
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </section>
-
-      {/* X-D6 (2026-09-13 audit) — this section was the bulk of the
-          ~5,450px page and had no reason to be open by default; it is
-          now collapsed. The mutation lives in the Owner block above. */}
-      <details className="mt-8 group">
-        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-ctl px-1">
-          <span className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-            Feature state
-          </span>
-          <span className="text-[12px] text-ink-3">
-            {featureRows.length} features ·{" "}
-            <span className="group-open:hidden">expand</span>
-            <span className="hidden group-open:inline">collapse</span>
-          </span>
-        </summary>
-        <p className="mt-1 text-[13px] text-ink-2">
-          Resolved from the plan; per-tenant overrides toggle each row
-          on or off (and may carry an expiry).
-        </p>
-        <div className="mt-3">
-          <TenantFeatureToggles tenantId={detail.id} initial={featureRows} />
-        </div>
-      </details>
 
       {sampleState.hasSample && !sampleState.hasReal ? (
         <section className="mt-8">
@@ -248,159 +106,6 @@ export default async function PlatformTenantDetailPage({
           </div>
         </section>
       ) : null}
-
-      <section className="mt-8">
-        <SectionHeader
-          title="Recent activity"
-          subtitle="Last 20 platform events scoped to this tenant"
-        />
-        {detail.recentActivity.length === 0 ? (
-          <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-            <p className="text-[14px] font-medium text-ink">
-              No activity yet
-            </p>
-            <p className="mt-2 text-[13px] text-ink-3">
-              Status changes, suspensions, churns, and feature edits
-              write to the audit log and surface here once they happen.
-            </p>
-          </div>
-        ) : (
-          <ul className="rounded-card bg-paper border border-line overflow-hidden">
-            {detail.recentActivity.map((event) => (
-              <li
-                key={event.id}
-                className="px-4 py-3 border-b border-line last:border-b-0"
-              >
-                <p className="text-[14px] text-ink font-mono">{event.action}</p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  {DATETIME_FMT.format(event.createdAt)}
-                </p>
-                <ActivityDetail detail={event.detail} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function SectionHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="mb-3">
-      <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-        {title}
-      </h2>
-      {subtitle ? (
-        <p className="mt-1 text-[13px] text-ink-2">{subtitle}</p>
-      ) : null}
-    </div>
-  );
-}
-
-function DescriptionRow({
-  label,
-  value,
-  mono,
-  href,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-  href?: string;
-}) {
-  return (
-    <div className="grid grid-cols-3 px-4 py-3 border-b border-line last:border-b-0">
-      <p className="text-[13px] text-ink-3">{label}</p>
-      <div className="col-span-2">
-        {href ? (
-          <Link
-            href={href}
-            className={`text-[14px] text-ink hover:underline underline-offset-2 ${mono ? "font-mono" : ""}`}
-          >
-            {value}
-          </Link>
-        ) : (
-          <p
-            className={`text-[14px] text-ink ${mono ? "font-mono" : ""}`}
-          >
-            {value}
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-card bg-paper border border-line px-4 py-3">
-      <p className="text-[11px] uppercase tracking-[0.10em] text-ink-3">
-        {label}
-      </p>
-      <p className="mt-2 font-display text-[28px] font-semibold text-marine tabular-nums">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-// Renders the structured detail JSON written by the platform-side
-// service actions. The audit row carries enough to answer "why did
-// this happen" without re-opening the row — show the reason if there
-// is one, then any before/after diff. Falls back to the raw JSON for
-// unknown action shapes so the timeline never silently drops detail.
-function ActivityDetail({ detail }: { detail: Record<string, unknown> }) {
-  if (!detail || Object.keys(detail).length === 0) return null;
-
-  const reason =
-    typeof detail.reason === "string" && detail.reason.length > 0
-      ? detail.reason
-      : null;
-
-  const fromTo =
-    typeof detail.from === "string" && typeof detail.to === "string"
-      ? `${detail.from} → ${detail.to}`
-      : null;
-
-  const before =
-    detail.before && typeof detail.before === "object"
-      ? (detail.before as Record<string, unknown>)
-      : null;
-  const after =
-    detail.after && typeof detail.after === "object"
-      ? (detail.after as Record<string, unknown>)
-      : null;
-
-  return (
-    <div className="mt-1.5 text-[12px] text-ink-2 space-y-1">
-      {reason ? (
-        <p>
-          <span className="text-ink-3">Reason:</span> {reason}
-        </p>
-      ) : null}
-      {fromTo ? (
-        <p>
-          <span className="text-ink-3">Status:</span> {fromTo}
-        </p>
-      ) : null}
-      {before && after ? (
-        <p className="font-mono text-[11px] text-ink-3 break-all">
-          {Object.keys(after)
-            .map((k) => {
-              const b = before[k];
-              const a = after[k];
-              return `${k}: ${String(b)} → ${String(a)}`;
-            })
-            .join(" · ")}
-        </p>
-      ) : null}
-    </div>
+    </>
   );
 }

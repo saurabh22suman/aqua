@@ -1,12 +1,19 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
-import { withPlatformAdmin } from "./scope";
+import { db } from "./client";
+import { withPlatformAdmin, withPlatform } from "./scope";
 import { withTenant } from "./tenant";
 import { tenants, locationPresets } from "./schema/tenants";
 import { plans } from "./schema/platform";
 import { platformAuditLog } from "./schema/platform-users";
 import { locations } from "./schema/locations";
 import { resolveTenantFeatureSources } from "./features";
+import {
+  TENANT_HEALTH_JOINS,
+  TENANT_HEALTH_COLUMNS,
+  classifyTenantHealth,
+  type TenantHealthStatus,
+} from "./tenant-health";
 import type { TenantId } from "@/lib/ids";
 
 // Aggregated row for the operator tenant list. Member count and
@@ -24,6 +31,10 @@ export type TenantListRow = {
   createdAt: Date;
   presetKey: string | null;
   presetVersion: number | null;
+  trialExpiresAt: Date | null;
+  // null = not scored (churned tenants) — see db/tenant-health.ts.
+  health: TenantHealthStatus | null;
+  healthReasons: string[];
 };
 
 export type TenantListResult = {
@@ -36,9 +47,20 @@ export type TenantListResult = {
 const TENANT_STATUS = ["trial", "active", "suspended", "churned"] as const;
 type TenantStatus = (typeof TENANT_STATUS)[number];
 
+const TENANT_HEALTH_FILTER_VALUES = ["healthy", "attention", "at_risk"] as const;
+const TENANT_TRIAL_FILTER_VALUES = ["expiring_soon", "expired"] as const;
+
 export const listTenantsInput = z.object({
   search: z.string().trim().max(120).optional(),
   status: z.enum(TENANT_STATUS).optional(),
+  // PR4 (ops console improvements) — plan/preset filter in SQL directly.
+  // health/trial below are the two that can't: health is JS-computed
+  // (see db/tenant-health.ts) and trial needs the "expiring soon"
+  // window, not a raw column match.
+  planId: z.string().uuid().optional(),
+  presetKey: z.string().optional(),
+  health: z.enum(TENANT_HEALTH_FILTER_VALUES).optional(),
+  trial: z.enum(TENANT_TRIAL_FILTER_VALUES).optional(),
   limit: z.number().int().min(1).max(200).default(50),
   offset: z.number().int().min(0).default(0),
 });
@@ -67,6 +89,21 @@ function buildFilters(input: ListTenantsInput) {
   if (input.status) {
     conds.push(sql`${tenants.status} = ${input.status}`);
   }
+  if (input.planId) {
+    conds.push(sql`${tenants.planId} = ${input.planId}`);
+  }
+  if (input.presetKey) {
+    conds.push(sql`${tenants.presetKey} = ${input.presetKey}`);
+  }
+  if (input.trial === "expiring_soon") {
+    conds.push(
+      sql`${tenants.status} = 'trial' and ${tenants.trialExpiresAt} is not null and ${tenants.trialExpiresAt} >= now() and ${tenants.trialExpiresAt} <= now() + interval '7 days'`,
+    );
+  } else if (input.trial === "expired") {
+    conds.push(
+      sql`${tenants.status} = 'trial' and ${tenants.trialExpiresAt} is not null and ${tenants.trialExpiresAt} < now()`,
+    );
+  }
   return conds.length === 0
     ? sql`true`
     : sql.join(conds, sql` and `);
@@ -82,6 +119,14 @@ export async function listTenants(
   const input = listTenantsInput.parse(rawInput);
   return withPlatformAdmin(async (tx) => {
     const where = buildFilters(input);
+    // PR4 — health is JS-computed (db/tenant-health.ts), so it can't
+    // be pushed into the SQL WHERE. When a health filter is active,
+    // this fetches every row matching the OTHER filters (no SQL
+    // LIMIT/OFFSET) and paginates in JS after classifying — still one
+    // query, no fan-out, just skipping the SQL-side page slice for
+    // this one filter dimension. Every other call (the common case)
+    // takes the unchanged, cheaper SQL-paginated path.
+    const needsJsPagination = input.health !== undefined;
 
     const data = await tx.execute(sql`
       select
@@ -94,8 +139,10 @@ export async function listTenants(
         ${tenants.createdAt}       as "createdAt",
         ${tenants.presetKey}       as "presetKey",
         ${tenants.presetVersion}   as "presetVersion",
+        ${tenants.trialExpiresAt}  as "trialExpiresAt",
         coalesce(members.cnt, 0)   as "memberCount",
-        coalesce(locations.cnt, 0) as "locationCount"
+        coalesce(locations.cnt, 0) as "locationCount",
+        ${TENANT_HEALTH_COLUMNS}
       from ${tenants}
       left join ${plans} on ${plans.id} = ${tenants.planId}
       left join (
@@ -109,6 +156,7 @@ export async function listTenants(
         where deleted_at is null
         group by tenant_id
       ) locations on locations.tenant_id = ${tenants.id}
+      ${TENANT_HEALTH_JOINS}
       where ${where}
       order by
         case ${tenants.status}
@@ -119,14 +167,7 @@ export async function listTenants(
           else 4
         end,
         ${tenants.createdAt} desc
-      limit ${input.limit}
-      offset ${input.offset}
-    `);
-
-    const countResult = await tx.execute(sql`
-      select count(*)::int as total
-      from ${tenants}
-      where ${where}
+      ${needsJsPagination ? sql`` : sql`limit ${input.limit} offset ${input.offset}`}
     `);
 
     type RowShape = {
@@ -141,22 +182,58 @@ export async function listTenants(
       createdAt: string;
       presetKey: string | null;
       presetVersion: number | null;
+      trialExpiresAt: string | null;
+      healthMaxOverdueDays: number | null;
+      healthLastActiveOn: string | null;
+      healthFailed7d: number | string;
+      healthOldestPendingAt: string | null;
     };
 
-    const rows = (data as unknown as { rows: RowShape[] }).rows.map((r) => ({
-      id: r.id as TenantId,
-      slug: r.slug,
-      name: r.name,
-      status: r.status,
-      planId: r.planId,
-      planName: r.planName,
-      memberCount: Number(r.memberCount),
-      locationCount: Number(r.locationCount),
-      createdAt: new Date(r.createdAt),
-      presetKey: r.presetKey,
-      presetVersion: r.presetVersion,
-    }));
+    const rows = (data as unknown as { rows: RowShape[] }).rows.map((r) => {
+      const createdAt = new Date(r.createdAt);
+      const trialExpiresAt = r.trialExpiresAt ? new Date(r.trialExpiresAt) : null;
+      const memberCount = Number(r.memberCount);
+      const { status: health, reasons: healthReasons } = classifyTenantHealth({
+        tenantStatus: r.status,
+        createdAt,
+        memberCount,
+        trialExpiresAt,
+        maxOverdueDays: r.healthMaxOverdueDays,
+        lastActiveOn: r.healthLastActiveOn ? new Date(r.healthLastActiveOn) : null,
+        failed7d: Number(r.healthFailed7d),
+        oldestPendingAt: r.healthOldestPendingAt ? new Date(r.healthOldestPendingAt) : null,
+      });
+      return {
+        id: r.id as TenantId,
+        slug: r.slug,
+        name: r.name,
+        status: r.status,
+        planId: r.planId,
+        planName: r.planName,
+        memberCount,
+        locationCount: Number(r.locationCount),
+        createdAt,
+        presetKey: r.presetKey,
+        presetVersion: r.presetVersion,
+        trialExpiresAt,
+        health,
+        healthReasons,
+      };
+    });
 
+    if (needsJsPagination) {
+      const filtered = rows.filter((r) => r.health === input.health);
+      return {
+        rows: filtered.slice(input.offset, input.offset + input.limit),
+        total: filtered.length,
+      };
+    }
+
+    const countResult = await tx.execute(sql`
+      select count(*)::int as total
+      from ${tenants}
+      where ${where}
+    `);
     const totalRows = (countResult as unknown as { rows: Array<{ total: number }> })
       .rows;
     const totalRow = totalRows[0];
@@ -215,6 +292,64 @@ export type TenantDetail = {
 };
 
 export type TenantDetailResult = TenantDetail | null;
+
+// PR5 (ops console improvements) — options for the effective-
+// configuration screen's tenant selector.
+export type TenantSelectorOption = { id: string; name: string; slug: string };
+
+export async function listAllTenantsForSelector(): Promise<TenantSelectorOption[]> {
+  return withPlatformAdmin(async (tx) => {
+    const rows = await tx
+      .select({ id: tenants.id, name: tenants.name, slug: tenants.slug })
+      .from(tenants)
+      .orderBy(tenants.name);
+    return rows;
+  });
+}
+
+// PR4 (ops console improvements) — the tab-bar layout needs only
+// name/slug/status/id, not the full detail (locations, features,
+// activity). A separate, cheap query rather than having the layout
+// and every tab both pay for getTenantDetail's full join.
+export type TenantHeader = {
+  id: TenantId;
+  name: string;
+  slug: string;
+  status: "trial" | "active" | "suspended" | "churned";
+};
+
+export async function getTenantHeader(
+  tenantId: TenantId,
+): Promise<TenantHeader | null> {
+  return withPlatformAdmin(async (tx) => {
+    const [row] = await tx
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        status: tenants.status,
+      })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    return row ? { ...row, status: row.status as TenantHeader["status"] } : null;
+  });
+}
+
+// PR4 (ops console improvements) — options for the tenants-list Plan
+// filter. All plans, not just active ones (listActivePlans in
+// db/platform-tenant-create.ts): a tenant may sit on a plan that's
+// since been deprecated, and the filter needs to still find it.
+export type PlanFilterOption = { id: string; name: string };
+
+export async function listAllPlansForFilter(): Promise<PlanFilterOption[]> {
+  return withPlatform(async () => {
+    const rows = await db
+      .select({ id: plans.id, name: plans.name })
+      .from(plans)
+      .orderBy(plans.sortOrder);
+    return rows;
+  });
+}
 
 export async function getTenantDetail(
   tenantId: TenantId,

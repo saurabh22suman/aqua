@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Phase 2 (mobile UX plan v2) — F2. The tenants table is six columns
@@ -32,6 +32,9 @@ vi.mock("@/db/platform-tenants", () => ({
         locationCount: 2,
         planName: "Growth",
         createdAt: new Date("2026-04-22T00:00:00.000Z"),
+        trialExpiresAt: null,
+        health: "healthy",
+        healthReasons: [],
       },
       {
         id: "t2",
@@ -42,9 +45,18 @@ vi.mock("@/db/platform-tenants", () => ({
         locationCount: 1,
         planName: null,
         createdAt: new Date("2026-05-02T00:00:00.000Z"),
+        trialExpiresAt: new Date("2026-09-20T00:00:00.000Z"),
+        health: "attention",
+        healthReasons: ["Trial expires in 5d"],
       },
     ],
   }),
+  // PR4 (ops console improvements) — Plan filter options; none of
+  // these test cases exercise filtering itself.
+  listAllPlansForFilter: async () => [],
+}));
+vi.mock("@/db/platform-presets", () => ({
+  listPresets: async () => [],
 }));
 
 import PlatformTenantsPage from "@/app/(platform)/ops/tenants/page";
@@ -90,5 +102,35 @@ describe("Ops tenants mobile card list (F2)", () => {
 
     const search = screen.getByPlaceholderText("name or slug");
     expect(search.className).toContain("text-[16px]");
+  });
+});
+
+describe("Ops tenants list — Health and Trial/Renewal columns (PR2c)", () => {
+  it("renders a Health pill and Trial/Renewal cell per tenant in the desktop table", async () => {
+    const ui = await PlatformTenantsPage({
+      searchParams: Promise.resolve({}),
+    });
+    render(ui);
+
+    const table = screen.getByTestId("ops-tenants-table");
+    expect(within(table).getByText("Health")).toBeDefined();
+    expect(within(table).getByText("Trial / Renewal")).toBeDefined();
+    expect(within(table).getByText("Healthy")).toBeDefined();
+    expect(within(table).getByText("Attention")).toBeDefined();
+    // Active tenant with no trial_expires_at: no fabricated renewal date.
+    expect(within(table).getAllByText("—").length).toBeGreaterThanOrEqual(1);
+    // Trial tenant with a trial_expires_at: the real date, not a placeholder.
+    expect(table.textContent).toContain("Trial ends 20 Sept 2026");
+  });
+
+  it("also renders Health on the mobile card list", async () => {
+    const ui = await PlatformTenantsPage({
+      searchParams: Promise.resolve({}),
+    });
+    render(ui);
+
+    const cards = screen.getByTestId("ops-tenants-cards");
+    expect(within(cards).getByText("Healthy")).toBeDefined();
+    expect(within(cards).getByText("Attention")).toBeDefined();
   });
 });

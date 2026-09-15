@@ -24,6 +24,23 @@ vi.mock("next/navigation", () => ({
     throw new Error(`unexpected redirect: ${path}`);
   },
 }));
+// PR3 (ops console improvements) — PlatformHome now reads the metrics
+// snapshot, the needs-attention queue and recent activity; none of
+// this test's cases care about that data, so it's mocked to a
+// harmless empty/default shape rather than hitting a real DB.
+vi.mock("@/db/platform-overview", () => ({
+  getPlatformMetricsSummary: async () => ({
+    activeTenants: { current: 0, previous: null },
+    trialTenants: { current: 0, previous: null },
+    atRiskTenants: { current: 0, previous: null },
+    openOpsTasks: { current: 0, previous: null },
+    asOf: null,
+  }),
+  getNeedsAttentionQueue: async () => [],
+}));
+vi.mock("@/db/platform-activity", () => ({
+  listPlatformActivity: async () => ({ rows: [], total: 0 }),
+}));
 
 import PlatformLayout from "@/app/(platform)/layout";
 import PlatformHome from "@/app/(platform)/ops/page";
@@ -62,5 +79,30 @@ describe("PlatformHome cards (F34)", () => {
 
     const presets = screen.getByText("Presets").closest("a");
     expect(presets?.getAttribute("href")).toBe("/ops/presets");
+  });
+});
+
+describe("PlatformLayout desktop sidebar", () => {
+  // Every route under app/(platform)/ops that isn't an auth screen
+  // (login/verify) must be reachable from the desktop sidebar — the
+  // gap this closes: leads/activity/whatsapp existed as routes but
+  // weren't linked from anywhere in the nav. Deliberately separate
+  // from the mobile bottom bar above, which stays capped at four
+  // items (F1) — the two navs are allowed to diverge.
+  it("links every reachable /ops surface", async () => {
+    const ui = await PlatformLayout({ children: <p>content</p> });
+    render(ui);
+
+    const nav = screen.getByRole("navigation", { name: "Platform" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((l) => l.getAttribute("href"))).toEqual([
+      "/ops",
+      "/ops/tenants",
+      "/ops/leads",
+      "/ops/features",
+      "/ops/presets",
+      "/ops/whatsapp",
+      "/ops/activity",
+    ]);
   });
 });

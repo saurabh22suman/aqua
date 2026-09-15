@@ -129,6 +129,100 @@ export async function resolveConfigInTx<T = unknown>(
   };
 }
 
+// PR5 (ops console improvements) — "why this value" as a full
+// waterfall (platform default, plan, preset, tenant, location,
+// activity), not only the winning source. Shares resolveConfigInTx's
+// exact candidate order and query so the winner this reports can
+// never disagree with what resolveConfig() actually returns — it is
+// a read-only, richer view of the same computation, not a second one.
+export type ConfigChainEntry = {
+  scopeType: ConfigScopeType;
+  scopeId: string | null;
+  // undefined = no row at this level. The "platform" level always has
+  // a value (the code-level default when no override row exists) —
+  // there is never an unconfigured tenant, by design (docs/ops-platform-design.md §1).
+  value: unknown;
+  hasOverride: boolean;
+  setBy: string | null;
+  setAt: Date | null;
+  isWinner: boolean;
+};
+
+export async function resolveConfigChain(
+  tenantId: TenantId,
+  key: ConfigKeyName,
+  options: ResolveOptions = {},
+): Promise<ConfigChainEntry[]> {
+  return withTenant(tenantId, async (tx) => {
+    const definition = CONFIG_KEYS[key];
+
+    const tenantRows = await tx
+      .select({ planId: tenants.planId })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    const tenant = tenantRows[0];
+    if (!tenant) {
+      throw new Error(`resolveConfigChain: no tenant "${tenantId}".`);
+    }
+
+    const presetRef = await resolvePresetScope(tx, tenantId, options.locationId);
+
+    const live = await tx
+      .select()
+      .from(configValues)
+      .where(and(eq(configValues.key, key), isNull(configValues.supersededAt)))
+      .orderBy(asc(configValues.setAt));
+
+    const candidates: Array<{ scopeType: ConfigScopeType; scopeId: string | null }> = [
+      { scopeType: "platform", scopeId: null },
+      { scopeType: "plan", scopeId: tenant.planId },
+      { scopeType: "preset", scopeId: presetRef },
+      { scopeType: "tenant", scopeId: tenantId as string },
+      { scopeType: "location", scopeId: options.locationId ?? null },
+      { scopeType: "activity", scopeId: options.activityId ?? null },
+    ];
+
+    const rowAt = (candidate: (typeof candidates)[number]): ConfigValue | undefined => {
+      if (candidate.scopeType !== "platform" && candidate.scopeId === null) {
+        return undefined;
+      }
+      return live.find(
+        (r) =>
+          r.scopeType === candidate.scopeType &&
+          (r.scopeId ?? null) === candidate.scopeId,
+      );
+    };
+
+    let winnerIndex = -1;
+    const rows = candidates.map((candidate, i) => {
+      const row = rowAt(candidate);
+      if (row) winnerIndex = i;
+      return row;
+    });
+    // Nothing overrides anything: the platform default itself wins.
+    if (winnerIndex === -1) winnerIndex = 0;
+
+    return candidates.map((candidate, i) => {
+      const row = rows[i];
+      const isPlatform = candidate.scopeType === "platform";
+      return {
+        scopeType: candidate.scopeType,
+        scopeId: candidate.scopeId,
+        value: row
+          ? definition.valueSchema.parse(row.value)
+          : isPlatform
+            ? definition.defaultValue
+            : undefined,
+        hasOverride: Boolean(row),
+        setBy: row?.setBy ?? null,
+        setAt: row?.setAt ?? null,
+        isWinner: i === winnerIndex,
+      };
+    });
+  });
+}
+
 export async function resolveConfig<T = unknown>(
   tenantId: TenantId,
   key: ConfigKeyName,
