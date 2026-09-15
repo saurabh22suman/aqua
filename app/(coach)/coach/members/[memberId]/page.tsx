@@ -3,9 +3,9 @@ import { Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
 import { listMemberAlertsAction } from "@/lib/actions/absence-alerts";
 import { AbsenceAlertsList } from "@/components/absence-alerts-list";
+import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
-import { formatDateIST } from "@/lib/time/tz";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 
@@ -102,52 +102,13 @@ export default async function CoachMemberDetailPage({
       ) : null}
 
       <section className="mt-5">
-        <h2 className="font-display text-[14px] font-semibold">
-          Last 90 days
-        </h2>
-        <div className="mt-2 rounded-card border border-line bg-paper p-4">
-          <div className="flex items-baseline justify-between">
-            <p className="font-display text-[24px] font-semibold">
-              {m.attendance.pct === null ? "—" : `${m.attendance.pct}%`}
-            </p>
-            <p className="text-[12px] text-ink-3">
-              {m.attendance.totalCount === 0
-                ? "No sessions marked yet"
-                : `${m.attendance.presentCount} of ${m.attendance.totalCount} sessions present`}
-            </p>
-          </div>
-          {m.attendance.totalCount > 0 ? (
-            <p className="mt-1.5 text-[11.5px] text-ink-3">
-              Counts only sessions from batches you coach.
-            </p>
-          ) : null}
-        </div>
-
-        {m.attendance.rows.length > 0 ? (
-          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
-            {m.attendance.rows.map((r) => (
-              <li
-                key={r.sessionId}
-                className="flex items-center justify-between px-3.5 py-2.5 text-[13px]"
-              >
-                <span>
-                  {formatDateIST(r.sessionDate)} · {r.batchName}
-                </span>
-                <span
-                  className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${
-                    r.status === "present"
-                      ? "bg-good-soft text-good"
-                      : r.status === "late"
-                        ? "bg-warn-soft text-warn"
-                        : "bg-late-soft text-late"
-                  }`}
-                >
-                  {r.status}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        <h2 className="font-display text-[14px] font-semibold">Attendance</h2>
+        <MemberAttendanceGrid
+          rows={m.attendance.rows}
+          today={m.attendance.today}
+          scopeNote="Counts only sessions from batches you coach."
+          registerBasePath="/coach/register"
+        />
       </section>
     </main>
   );

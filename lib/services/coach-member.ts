@@ -41,11 +41,15 @@ export type CoachMemberDetail = {
     pct: number | null;
     presentCount: number;
     totalCount: number;
+    // Tenant-local today, so the member page's 15-day grid places its
+    // window without a second round trip.
+    today: string;
     rows: Array<{
       sessionId: string;
       sessionDate: string;
       batchName: string;
       status: "present" | "absent" | "late";
+      markedAt: string | null;
     }>;
   };
 };
@@ -153,6 +157,7 @@ export async function getCoachMemberDetail(
         sessionDate: sessions.sessionDate,
         batchName: batches.name,
         status: attendance.status,
+        markedAt: attendance.markedAt,
       })
       .from(attendance)
       .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
@@ -188,11 +193,13 @@ export async function getCoachMemberDetail(
         pct,
         presentCount,
         totalCount,
+        today,
         rows: attRows.map((r) => ({
           sessionId: r.sessionId,
           sessionDate: r.sessionDate,
           batchName: r.batchName,
           status: r.status as "present" | "absent" | "late",
+          markedAt: r.markedAt ? r.markedAt.toISOString() : null,
         })),
       },
     };
