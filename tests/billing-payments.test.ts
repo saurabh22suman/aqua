@@ -321,6 +321,7 @@ describe("C-34 daily collection report", () => {
     if (short.ok) {
       expect(short.systemPaise).toBe(150000);
       expect(short.variancePaise).toBe(-10000);
+      expect(short.needsReview).toBe(false);
     }
 
     const after = await reconciliation.getDailyCollection(ctx1, {
