@@ -186,6 +186,14 @@ const ALLOWLIST = new Set([
   "tests/platform-overview.test.ts",
   "tests/platform-tenants-filters.test.ts",
   "tests/config-chain.test.ts",
+  // PR #176 follow-up — the render-based focus test boots a real
+  // Chromium against a real next dev (Testcontainer Postgres, seed
+  // via scripts/seed.ts). Same fixture-setup pattern as the four
+  // Ops-console-improvements entries above; this is a mechanical
+  // closure extension for the new file, not a Tier-1 test
+  // semantics change. agent-protected-paths source-scans this
+  // allowlist for any future drift.
+  "tests/a11y/ops-focus-rendered.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
