@@ -17,36 +17,54 @@ export function currentScope(): Scope | undefined {
 
 // withTenant and withUser each open their own transaction and set a
 // Postgres session variable RLS policies branch on (app.tenant_id,
-// app.user_id respectively). Nesting either inside the other — or inside
-// itself — would risk both variables being visible to the same
-// transaction, OR-ing their RLS policies together into a wider view than
-// either mode intends on its own. withPlatform sets no such variable —
-// it never calls set_config — so it is safe to nest freely in either
-// direction (better-auth's own call chain does this: an outer
-// withPlatform around auth.api.verifyPhoneNumber legitimately triggers an
-// inner withPlatform around linkBetterAuthUser via callbackOnVerification).
+// app.user_id respectively). withPlatformMetricsWriter opens a
+// transaction and sets app.platform_metrics_writer. Each of these
+// sets is a Postgres session variable an RLS policy could read;
+// nesting two of them inside one transaction is unsafe because the
+// inner one's set_config stays visible to the outer one's statements
+// (unless the outer also calls set_config with the same `true` arg,
+// which our scope functions don't — they each set their own flag and
+// leave the others alone). Two SQL-scoped scopes at once would let
+// each one widen the visibility the other granted. The guard
+// below throws on any pair where both sides are SQL-scoped, EXCEPT
+// for `platform_admin` which is the documented design that ORs onto
+// tenant/user policies by design.
 //
-// The set of scopes that DO set a Postgres session variable is the
-// union of the two below. The platform scope (`withPlatform()`) is
-// the only scope that opens a session-scoped variable other than the
-// tenant/user pair (via withPlatformAdmin).
-const PLATFORM_ADMIN_SQL_SCOPED_KINDS = new Set<Scope["kind"]>([
+// withPlatform sets no such variable — it never calls set_config —
+// so it is safe to nest freely with anyone: better-auth's own call
+// chain does this (an outer withPlatform around
+// auth.api.verifyPhoneNumber legitimately triggers an inner
+// withPlatform around linkBetterAuthUser via callbackOnVerification).
+//
+// PR #177 follow-up: the set now also includes
+// `platform_metrics_writer`. The platform.metrics-snapshot job is
+// the ONLY legitimate writer of platform_metrics_daily; reaching
+// that table from inside a tenant/user transaction would be a
+// request-path write of a platform-wide aggregate, which is a
+// different surface than the platform_admin policy set is meant
+// for. Throwing on nesting means an accidentally-imported
+// withPlatformMetricsWriter inside a request-path function fails
+// the same way accidentally-importing the privileged db/client
+// pool would: at the first call, not at the first audit.
+const SQL_SCOPED_SCOPE_KINDS = new Set<Scope["kind"]>([
   "tenant",
+
   "user",
+  "platform_metrics_writer",
 ]);
 
 export function enterScope<T>(scope: Scope, fn: () => Promise<T>): Promise<T> {
   const existing = currentScope();
   if (
     existing &&
-    PLATFORM_ADMIN_SQL_SCOPED_KINDS.has(scope.kind) &&
-    PLATFORM_ADMIN_SQL_SCOPED_KINDS.has(existing.kind) &&
+    SQL_SCOPED_SCOPE_KINDS.has(scope.kind) &&
+    SQL_SCOPED_SCOPE_KINDS.has(existing.kind) &&
     scope.kind !== "platform_admin" &&
     existing.kind !== "platform_admin"
   ) {
     throw new Error(
       `Cannot enter ${scope.kind} scope while already inside a ${existing.kind} scope — ` +
-        `withTenant() and withUser() must not nest with each other. ` +
+        `withTenant(), withUser(), and withPlatformMetricsWriter() must not nest with each other. ` +
         `withPlatformAdmin() nests with both (the platform variable ORs onto the tenant/user policies).`,
     );
   }
@@ -135,10 +153,14 @@ export async function withPlatformAdmin<T>(
 // failure means the row is stale until the next run, not that
 // counts go missing.
 //
-// Scope-kind namespace: `platform_metrics_writer` is intentionally
-// NOT in PLATFORM_ADMIN_SQL_SCOPED_KINDS — the writer flag is
-// deliberately orthogonal to the tenant/user variables so it
-// cannot widen their visibility by accident.
+// Scope-kind namespace: `platform_metrics_writer` is in
+// SQL_SCOPED_SCOPE_KINDS so the ALS nest guard above rejects
+// nesting with withTenant/withUser (the only valid callers are the
+// platform.metrics-snapshot job in lib/jobs/, see eslint
+// import/no-restricted-paths in eslint.config.mjs). The writer flag
+// is deliberately orthogonal to the tenant/user variables so it
+// cannot widen their visibility by accident — the guard enforces
+// that the scope never opens a door it wasn't meant to.
 export async function withPlatformMetricsWriter<T>(
   fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => Promise<T>,
 ): Promise<T> {
