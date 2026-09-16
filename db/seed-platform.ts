@@ -29,7 +29,9 @@ import { CONFIG_KEYS } from "./config-definitions";
 // tests/tier1/preset-catalogue-coverage.test.ts asserts the
 // presets table contains every *_PRESET_DEFINITION exported
 // from db/preset-definitions*.ts.
-const PRESETS: ReadonlyArray<{
+// Exported so scripts/build-catalogue-migration.ts and the catalogue-
+// parity test can read the same array the seed uses.
+export const PRESETS: ReadonlyArray<{
   key: string;
   version: number;
   name: string;
@@ -124,7 +126,10 @@ const PRESETS: ReadonlyArray<{
   },
 ];
 
-const FEATURES: ReadonlyArray<{
+// Exported so scripts/build-catalogue-migration.ts (which produces
+// db/migrations/<timestamp>_reference_catalogue.sql) and any future
+// catalogue-parity test can read the same array the seed uses.
+export const FEATURES: ReadonlyArray<{
   key: string;
   name: string;
   category: string;
