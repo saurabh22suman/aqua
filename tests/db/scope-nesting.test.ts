@@ -114,6 +114,16 @@ describe("withPlatformMetricsWriter is request-path-excluded", () => {
     // exempted from the throw because the platform variable ORs onto
     // tenant/user policies by design. Pin the exemption so a future
     // tightening can't drop it without a test catching it.
+    //
+    // NOTE: this exemption is a DESIGN INTENT, not a guard. The ALS
+    // nest guard in db/scope.ts does not enforce it — the eslint
+    // import/no-restricted-imports rule in eslint.config.mjs is what
+    // keeps withPlatformMetricsWriter out of arbitrary call sites
+    // outside lib/jobs/. If anyone removes that rule, the confinement
+    // collapses — this assertion does not, and cannot, prevent that.
+    // If a future refactor adds another "platform admin" call site
+    // outside lib/jobs/, the new code must add itself to the eslint
+    // rule's allow-list OR the import will fail lint.
     let reached = false;
     await withPlatformAdmin(async () => {
       await withPlatformMetricsWriter(async () => {

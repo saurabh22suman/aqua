@@ -12,7 +12,20 @@ const admin = new Pool({ connectionString: requireMigrationUrl("tests/tier1/plat
 
 const RUN = Date.now().toString(36);
 const PILOT_KEY = `pilot-${RUN}`;
-const PLATFORM_TABLES = [
+// F-04 catalogue only — NOT the production PLATFORM_TABLES in
+// db/allowlist.ts. That list has a different scope: "platform-owned
+// tables that are RLS-exempt and have no tenant_id", and includes
+// ba_*, users, platform_*, config_keys, policy_versions,
+// platform_audit_log, platform_leads. The catalogue closure
+// (per-PR #178 follow-up) is "every permission key the code uses
+// has a row in `permissions`" — not "every row in `permissions`
+// is the F-04 list", which is the older test at line 200's claim.
+// This local list is the F-04 subset that the test's "RLS-free"
+// assertion (below) checks — the rest of the production allowlist
+// has a different shape (RLS off, tenant_id sometimes present)
+// and is exercised by tests/tier1/isolation.test.ts against the
+// production PLATFORM_TABLES directly.
+const F04_CATALOGUE_TABLES = [
   "plans",
   "features",
   "plan_features",
@@ -226,11 +239,11 @@ describe("platform catalogue and plan-baseline entitlements", () => {
        from pg_class c
        join pg_namespace n on n.oid = c.relnamespace
        where n.nspname = 'public' and c.relname = any($1)`,
-      [PLATFORM_TABLES],
+      [F04_CATALOGUE_TABLES],
     );
 
     expect(rows.map((r) => r.relname).sort()).toEqual(
-      [...PLATFORM_TABLES].sort(),
+      [...F04_CATALOGUE_TABLES].sort(),
     );
     for (const row of rows) {
       expect(row.rls, `${row.relname} must not have RLS`).toBe(false);
