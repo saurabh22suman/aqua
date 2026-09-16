@@ -194,6 +194,13 @@ const ALLOWLIST = new Set([
   // semantics change. agent-protected-paths source-scans this
   // allowlist for any future drift.
   "tests/a11y/ops-focus-rendered.test.ts",
+  // PR #177 — the platform_metrics_writer scope mutation test.
+  // Testcontainer Postgres (startIsolatedDb) with two-transaction
+  // shape: withPlatformAdmin for setup, withPlatformMetricsWriter
+  // for the write assertion. Same fixture-setup pattern as the four
+  // Ops-console-improvements entries above; mechanical closure
+  // extension for the new file.
+  "tests/platform-metrics-snapshot-scope.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

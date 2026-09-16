@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { withPlatformAdmin } from "@/db/scope";
+import { withPlatformAdmin, withPlatformMetricsWriter } from "@/db/scope";
 import { tenants } from "@/db/schema/tenants";
 import { platformMetricsDaily } from "@/db/schema/platform-metrics";
 import {
@@ -25,10 +25,22 @@ import { todayInZone } from "@/lib/time/tz";
 // Runs once/day for the whole platform, not per tenant-timezone (there
 // is no single tenant to anchor to) — dated in IST, this product's
 // home timezone (CLAUDE.md: timestamps displayed IST).
+//
+// Two-transaction shape: a withPlatformAdmin transaction reads the
+// tenant tables; a withPlatformMetricsWriter transaction writes the
+// platform_metrics_daily row. Atomicity is sacrificed for mutual
+// exclusion between the two scopes — withPlatformMetricsWriter
+// sets ONLY app.platform_metrics_writer, so it cannot reach any
+// tenant table; withPlatformAdmin's RLS privilege on platform_
+// metrics_daily is read-only after migration
+// 20260917000000_platform_metrics_writer_scope.sql, so it cannot
+// write the snapshot. The upsert is idempotent and the snapshot is
+// one row per day, so a partial failure means a stale row until
+// the next run, not missing counts.
 export async function runPlatformMetricsSnapshotJob(): Promise<void> {
   const onDate = todayInZone("Asia/Kolkata");
 
-  await withPlatformAdmin(async (tx) => {
+  const counts = await withPlatformAdmin(async (tx) => {
     const statusCountsResult = await tx.execute(sql`
       select
         count(*) filter (where status = 'active')::int as "activeTenants",
@@ -78,8 +90,7 @@ export async function runPlatformMetricsSnapshotJob(): Promise<void> {
           lastActiveOn: r.healthLastActiveOn ? new Date(r.healthLastActiveOn) : null,
           failed7d: Number(r.healthFailed7d),
           oldestPendingAt: r.healthOldestPendingAt
-            ? new Date(r.healthOldestPendingAt)
-            : null,
+            ? new Date(r.healthOldestPendingAt) : null,
         }).status === "at_risk",
     ).length;
 
@@ -92,20 +103,21 @@ export async function runPlatformMetricsSnapshotJob(): Promise<void> {
       openTasksResult as unknown as { rows: Array<{ openOpsTasks: number }> }
     ).rows[0]!;
 
-    const values = {
+    return {
       activeTenants: statusCounts.activeTenants,
       trialTenants: statusCounts.trialTenants,
       atRiskTenants,
       openOpsTasks,
-      computedAt: new Date(),
     };
+  });
 
+  await withPlatformMetricsWriter(async (tx) => {
     await tx
       .insert(platformMetricsDaily)
-      .values({ onDate, ...values })
+      .values({ onDate, ...counts, computedAt: new Date() })
       .onConflictDoUpdate({
         target: platformMetricsDaily.onDate,
-        set: values,
+        set: { ...counts, computedAt: new Date() },
       });
   });
 
