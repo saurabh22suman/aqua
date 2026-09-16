@@ -33,7 +33,11 @@ import { runMigrations } from "@/db/migrate";
 import { execFileSync } from "node:child_process";
 
 const PORT = 3410;                            // 3400-3499, never 3000
-const PLAYWRIGHT_TIMEOUT_MS = 15_000;
+// next dev's compile-on-demand is slow on first hit. Per-test
+// 15s is tight for a cold-compile first page load; bump to 60s
+// for safety. The beforeAll has 120s for next.prepare() +
+// bootstrapRoles + runMigrations + seed.
+const PLAYWRIGHT_TIMEOUT_MS = 60_000;
 
 let container: Awaited<ReturnType<PostgreSqlContainer["start"]>>;
 let appUri: string;
