@@ -81,6 +81,14 @@ jobs:
       # no DB needed; runs in well under a second.
       - run: pnpm check:runbook-sync
 
+      # Item 3 (PR #176 follow-up) — --focus-ring must meet WCAG 1.4.11
+      # (≥3:1) against every control surface. Parses app/globals.css for
+      # the literal hex (refuses CSS expressions so a colour-mix(...)
+      # migration can't silently disable the check), computes the
+      # WCAG contrast ratio, fails the build on any value below
+      # threshold. Pure source parse, runs in <1s.
+      - run: pnpm check:focus-contrast
+
       # F5: every script referenced in package.json must point to a
       # file that exists. The E1 follow-up landed a "passing"
       # parent-link zero-script test that was actually a phantom:
