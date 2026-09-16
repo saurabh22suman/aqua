@@ -29,13 +29,15 @@ export const PLATFORM_TABLES = [
   // outside RLS like users. Direct imports are restricted by
   // scripts/check-platform-leads-imports.ts.
   "platform_leads",
-  // PR3 (ops console improvements) — one row per day of aggregate,
-  // platform-wide tenant counts (no PII, no tenant_id). Written by
-  // the one cross-tenant job in worker/index.ts
-  // (platform.metrics-snapshot); reports.rollup is the per-tenant
-  // summary writer and uses daily_rollups instead, under withTenant.
-  "platform_metrics_daily",
-] as const;
+  // platform_metrics_daily is INTENTIONALLY NOT in this list.
+  // Migration 20260917000000_platform_metrics_writer_scope.sql
+  // enables + forces RLS on it and gates ALL on app.platform_metrics_
+  // writer = 'true' (with a separate platform_admin_select policy
+  // for Overview reads). Listing it here would land it in
+  // RLS_EXEMPT_TABLES, which tests/tier1/isolation.test.ts then
+  // uses to skip the "every table must be RLS+forced" assertion —
+  // a real RLS gate silently masked by an allowlist entry.
+];
 
 export type PlatformTable = (typeof PLATFORM_TABLES)[number];
 

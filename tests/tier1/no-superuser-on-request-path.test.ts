@@ -87,6 +87,12 @@ const ALLOWLIST = new Set([
   "tests/migrations/",  // PR #125 + #126 — same fixture-setup pattern as the other tier1 tests: privileged pool for migrations + invite tests that need to seed tenants. The agent workflow rule disallows writing in tests/tier1/; this directory is the human-readable replacement.
   "scripts/e2e-role-bypass.ts",  // PR #123 — the red e2e that drives the D1 attack. Fixture setup, no request-path code.
   "tests/auth/",  // 2026-09-11 phone+PIN auth feature — same pattern as tests/migrations/: a privileged pool for fixture setup (seeding ba_user/ba_account/users rows the credentials service then exercises). No request-path code; the tests call the service directly and the route handlers in later slices.
+  "tests/db/",  // PR #180 — catalogue-deploy-order.test.ts, catalogue-parity.test.ts,
+  // and (already added under tests/platform-metrics-snapshot-scope.test.ts) scope-nesting.test.ts.
+  // Same pattern as tests/migrations/ above: Testcontainer Postgres, privileged pool
+  // for setup, never the app's own request path. Mechanical closure extension for
+  // the new files added by the catalogue-into-migrations PR — none of them touch
+  // the request-path code in app/, components/, lib/.
   "tests/tier1/auth-context.test.ts",
   "tests/tier1/platform-entitlements.test.ts",
   "tests/tier1/roles-permissions.test.ts",
