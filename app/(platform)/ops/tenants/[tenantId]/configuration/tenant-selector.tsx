@@ -34,7 +34,7 @@ export function TenantSelector({
             `/ops/tenants/${e.target.value}/configuration${qs ? `?${qs}` : ""}`,
           );
         }}
-        className="rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          className="rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >
         {tenants.map((t) => (
           <option key={t.id} value={t.id}>

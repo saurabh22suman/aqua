@@ -60,11 +60,30 @@ export async function withPlatform<T>(fn: () => Promise<T>): Promise<T> {
 // 'true' transaction-scoped. RLS policies on tenant-scoped tables
 // (`platform_admin_select`, migration
 // 20260901162028_platform_admin_tenant_read) key on this variable and
-// grant cross-tenant visibility for SELECT only. Writes remain gated by
-// the original `tenant_isolation` policy — the platform scope can read
-// every tenant but cannot mutate tenant data through this path. Audit
-// writes (platform_audit_log) are RLS-exempt at the table level
-// (allowlist) and reachable via plain withPlatform().
+// grant cross-tenant visibility for SELECT only. Writes are NOT
+// blanket-gated by `tenant_isolation` — every tenant table with a
+// `platform_admin_write` policy (see migrations 20260902230000,
+// 20260902210100, 20260902200000, 20260902210000,
+// 20260914020000, 20260914030000, 20260915000000,
+// 20260915010000, 20260915020000, 20260915030000,
+// 20260915040000, 20260915050000, 20260915090000,
+// 20260915100000, 20260915110000, 20260915120000,
+// 20260915130000) is reachable for ALL operations under this scope.
+// The platform operator legitimately writes tenant rows on a small
+// set of paths: preset application (facilities, sub-units,
+// location_presets), config resolution (config_values for
+// plan/preset scope), change-request resolution
+// (config_change_requests), reconciliation (cash_counts, payments,
+// invoices, invoice_line_items), and platform-wide message
+// metering (message_log via the cloud adapter).
+//
+// The invariant this scope comment is trying to express —
+// "the platform scope cannot reach member PII" — lives in the
+// *absence* of the platform_admin_write policy on members,
+// persons, attendance, consents, and similar tables, NOT in a
+// blanket refusal here. tests/tier1/no-superuser-on-request-
+// path.test.ts is the mechanical guard that the underlying
+// connection is app_user, never the migration role.
 //
 // Nesting: withPlatformAdmin nests freely with itself and with
 // withPlatform (both kinds of platform scope share the same "no

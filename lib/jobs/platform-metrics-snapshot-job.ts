@@ -9,12 +9,14 @@ import {
 } from "@/db/tenant-health";
 import { todayInZone } from "@/lib/time/tz";
 
-// PR3 (ops console improvements) — platform.metrics-snapshot, the one
-// cross-tenant job in worker/index.ts (see the comment there for why
-// this is a deliberate exception). Upserts one row per day so the
-// Overview KPI cards have a real number to diff against instead of a
-// fabricated delta — a snapshot that doesn't exist yet for "N days
-// ago" just means no delta is shown, not an error.
+// PR3 (ops console improvements) — platform.metrics-snapshot, the
+// one cross-tenant job in worker/index.ts (see the comment there
+// for why this is a deliberate, singular exception; reports.rollup
+// is the per-tenant summary writer, separate from this). Upserts
+// one row per day so the Overview KPI cards have a real number to
+// diff against instead of a fabricated delta — a snapshot that
+// doesn't exist yet for "N days ago" just means no delta is shown,
+// not an error.
 //
 // "At risk" reuses db/tenant-health.ts's own classifier rather than
 // re-deriving the rule in SQL — the KPI count and the tenants-list

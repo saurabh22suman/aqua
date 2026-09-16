@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { classifyTenantHealth } from "@/db/tenant-health";
+import {
+  classifyTenantHealth,
+  NO_ACTIVITY_ATTENTION_DAYS,
+  OVERDUE_AT_RISK_DAYS,
+  TRIAL_ATTENTION_DAYS,
+  FAILED_MESSAGE_ATTENTION_THRESHOLD,
+  PENDING_REQUEST_ATTENTION_DAYS,
+} from "@/db/tenant-health";
 
 // PR2 (ops console improvements) — the classification rule is pure
 // and DB-free by design so every threshold gets a fast, exact test
@@ -19,6 +26,14 @@ const BASE = {
   oldestPendingAt: null,
   now: NOW,
 };
+
+describe("tenant health thresholds (pinned — change is a deliberate behaviour change)", () => {
+  it("NO_ACTIVITY_ATTENTION_DAYS = 14",   () => expect(NO_ACTIVITY_ATTENTION_DAYS).toBe(14));
+  it("OVERDUE_AT_RISK_DAYS = 14",        () => expect(OVERDUE_AT_RISK_DAYS).toBe(14));
+  it("TRIAL_ATTENTION_DAYS = 7",          () => expect(TRIAL_ATTENTION_DAYS).toBe(7));
+  it("FAILED_MESSAGE_ATTENTION_THRESHOLD = 3", () => expect(FAILED_MESSAGE_ATTENTION_THRESHOLD).toBe(3));
+  it("PENDING_REQUEST_ATTENTION_DAYS = 3", () => expect(PENDING_REQUEST_ATTENTION_DAYS).toBe(3));
+});
 
 describe("classifyTenantHealth", () => {
   it("is not scored for churned tenants", () => {
