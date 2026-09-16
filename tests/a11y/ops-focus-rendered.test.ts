@@ -118,7 +118,22 @@ beforeAll(async () => {
   handle = nextApp.getRequestHandler();
   await nextApp.prepare();
   server = createServer((req, res) => handle(req, res));
-  await new Promise<void>((r) => server.listen(PORT, "127.0.0.1", () => r()));
+  // Bind EADDRINUSE detection explicitly: the previous (r) =>
+  // server.listen(...) callback resolves on success AND on failure,
+  // because the listen callback's `err` arg is the only signal that
+  // the port was already taken, and the original code discarded it.
+  // On a busy runner with another vitest pool holding the port,
+  // that turned a 1s failure into a 120s beforeAll timeout as the
+  // test waited for Playwright to time out its first page load.
+  // The check is host-pinned to 127.0.0.1 so it can't accidentally
+  // collide with anything bound to a different interface.
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(PORT, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
   browser = await chromium.launch();
 }, 120_000);
 
