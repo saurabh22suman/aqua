@@ -50,7 +50,7 @@ export const payments = pgTable(
     check("payments_amount_check", sql`${t.amountPaise} > 0`),
     check(
       "payments_method_check",
-      sql`${t.method} in ('cash', 'upi', 'bank_transfer')`,
+      sql`${t.method} in ('cash', 'upi', 'bank_transfer', 'card', 'other')`,
     ),
     check("payments_channel_check", sql`${t.channel} in ('counter', 'online')`),
     check(
@@ -90,4 +90,9 @@ export const payments = pgTable(
 );
 
 export type Payment = typeof payments.$inferSelect;
-export type PaymentMethod = "cash" | "upi" | "bank_transfer";
+export type PaymentMethod =
+  | "cash"
+  | "upi"
+  | "bank_transfer"
+  | "card"
+  | "other";

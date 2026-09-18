@@ -35,13 +35,13 @@ const recordPaymentInput = z
   .object({
     invoiceId: z.string().uuid(),
     amountPaise: z.number().int().positive().max(MAX_PAYMENT_PAISE),
-    method: z.enum(["cash", "upi", "bank_transfer"]),
+    method: z.enum(["cash", "upi", "bank_transfer", "card", "other"]),
     reference: z.string().trim().min(1).max(120).optional(),
   })
   .refine(
     (value) => value.method === "cash" || (value.reference?.length ?? 0) > 0,
     {
-      message: "A UPI or bank transfer needs its reference (UTR / transaction id).",
+      message: "A non-cash payment needs its reference (UTR / terminal / transaction id).",
       path: ["reference"],
     },
   )
@@ -120,6 +120,17 @@ export async function recordPayment(
       return {
         ok: false,
         error: `That is more than the outstanding balance of ${formatINR(outstanding)}.`,
+      };
+    }
+    // K-04 — café counter rule: a café bill settles in full, in one
+    // payment. Partial payments are refused in Release 1 (and the
+    // overpayment branch above already makes the equality the only
+    // passing amount). The member wallet ledger that lifts this
+    // constraint is K-05, deliberately out of R1.
+    if (invoice.source === "cafe" && input.amountPaise !== outstanding) {
+      return {
+        ok: false,
+        error: `A café bill settles in full — the amount must equal the outstanding balance of ${formatINR(outstanding)}.`,
       };
     }
 
@@ -288,5 +299,7 @@ export async function listInvoicePayments(
 export function methodLabel(method: PaymentMethod): string {
   if (method === "cash") return "Cash";
   if (method === "upi") return "UPI";
+  if (method === "card") return "Card";
+  if (method === "other") return "Other";
   return "Bank transfer";
 }

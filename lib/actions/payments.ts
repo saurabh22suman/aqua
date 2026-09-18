@@ -19,7 +19,7 @@ import {
 const recordInput = z.object({
   invoiceId: z.string().uuid(),
   amountPaise: z.number().int().positive().max(MAX_PAYMENT_PAISE),
-  method: z.enum(["cash", "upi", "bank_transfer"]),
+  method: z.enum(["cash", "upi", "bank_transfer", "card", "other"]),
   reference: z.string().trim().min(1).max(120).optional(),
 });
 const invoiceInput = z.object({ invoiceId: z.string().uuid() });

@@ -22,6 +22,11 @@ import type { TenantId } from "@/lib/ids";
 //   payments_count     captured payments received that day
 //   collections_paise  their total, integer paise
 //   invoices_issued    non-void invoices issued that day
+//   cafe_paise         captured payments that day settled against
+//                      invoices with source = 'cafe' (K-06)
+//   cafe_orders        distinct such café invoices settled that day —
+//                      the same definition as the live daily
+//                      collection report (lib/services/reconciliation.ts)
 export async function runReportsRollupJob(tenantId: TenantId): Promise<void> {
   const summary = await withTenant(tenantId, async (tx) => {
     const [row] = await tx
@@ -103,6 +108,32 @@ export async function runReportsRollupJob(tenantId: TenantId): Promise<void> {
         ),
       );
 
+    // K-06 — café payments are the same payment rows, narrowed by the
+    // source of the invoice they settle. Counted by distinct invoice
+    // so the figure is "orders settled", not "payment rows".
+    const [cafeRow] = await tx
+      .select({
+        count: sql<number>`count(distinct ${payments.invoiceId})::int`,
+        total: sql<string>`coalesce(sum(${payments.amountPaise}), 0)::text`,
+      })
+      .from(payments)
+      .innerJoin(
+        invoices,
+        and(
+          eq(invoices.id, payments.invoiceId),
+          eq(invoices.tenantId, tenantId),
+        ),
+      )
+      .where(
+        and(
+          eq(payments.tenantId, tenantId),
+          eq(payments.status, "captured"),
+          eq(invoices.source, "cafe"),
+          gte(payments.receivedAt, fromUtc),
+          lt(payments.receivedAt, toUtc),
+        ),
+      );
+
     const values = {
       sessionsHeld: sessionRow?.count ?? 0,
       attendanceMarked: attendanceRow?.count ?? 0,
@@ -111,6 +142,8 @@ export async function runReportsRollupJob(tenantId: TenantId): Promise<void> {
       collectionsPaise: BigInt(paymentRow?.total ?? "0"),
       invoicesIssued: invoiceRow?.count ?? 0,
       invoicesTotalPaise: BigInt(invoiceRow?.total ?? "0"),
+      cafePaise: BigInt(cafeRow?.total ?? "0"),
+      cafeOrders: cafeRow?.count ?? 0,
     };
 
     await tx
