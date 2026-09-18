@@ -14,6 +14,10 @@ import {
   type EnquiryFunnelRow,
   type RetentionRow,
 } from "@/lib/services/owner-reports";
+import {
+  getFacilityUtilisation,
+  type UtilisationReport,
+} from "@/lib/services/utilisation";
 
 type CsvEnvelope = {
   filename: string;
@@ -55,6 +59,15 @@ export async function getCoachLoadAction(raw: unknown): Promise<CoachLoadRow[]> 
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
   return getCoachLoad({ tenantId: ctx.tenantId }, period);
+}
+
+// V-08 — facility utilisation card. A read of the last 4 weeks of
+// bookings against configured business hours; no input beyond the
+// caller's tenant scope.
+export async function getFacilityUtilisationAction(): Promise<UtilisationReport> {
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "reports.operational");
+  return getFacilityUtilisation({ tenantId: ctx.tenantId });
 }
 
 export async function attendanceReportCsvAction(raw: unknown): Promise<CsvEnvelope> {

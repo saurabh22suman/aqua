@@ -32,6 +32,7 @@ export * from "./invoices";
 export * from "./menu";
 export * from "./orders";
 export * from "./account-entries";
+export * from "./bookings";
 export * from "./payments";
 export * from "./receipts";
 export * from "./cash-counts";

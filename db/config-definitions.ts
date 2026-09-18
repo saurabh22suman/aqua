@@ -157,6 +157,17 @@ export const CONFIG_KEYS = {
     description:
       "Kill switch for the offline attendance queue. Ops only — a tenant must not be able to disable its own write path.",
   },
+  // V-03 — how far ahead a facility booking may be made. Resolved
+  // platform -> tenant -> location; the resolver refuses a start
+  // beyond the window rather than silently accepting it.
+  "bookings.advance_window_days": {
+    valueSchema: z.number().int().min(1).max(365),
+    jsonSchema: { type: "integer", minimum: 1, maximum: 365 },
+    defaultValue: 30,
+    visibility: "owner_edit",
+    risk: "safe",
+    description: "How many days ahead a facility booking can be made. Default 30.",
+  },
 } as const satisfies Record<string, ConfigKeyDefinition>;
 
 export type ConfigKeyName = keyof typeof CONFIG_KEYS;

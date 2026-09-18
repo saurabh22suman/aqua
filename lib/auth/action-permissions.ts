@@ -261,6 +261,21 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // alongside the capture and settlement actions above.
   listOpenCafeOrdersAction: "payments.record",
   requestCafeBillAction: "payments.record",
+
+  // V-02..V-04 — facility bookings. Reads ride bookings.read; the
+  // create/cancel mutations ride bookings.write; billing rides
+  // payments.record, mirroring the café split. The receptionist role
+  // already carries all three (lib/services/roles.ts).
+  listBookableFacilitiesAction: "bookings.read",
+  listBookingsAction: "bookings.read",
+  quoteBookingAction: "bookings.read",
+  createBookingAction: "bookings.write",
+  cancelBookingAction: "bookings.write",
+  requestBookingBillAction: "payments.record",
+  readBookingBillAction: "payments.record",
+
+  // V-08 — facility utilisation on /owner/reports.
+  getFacilityUtilisationAction: "reports.operational",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.

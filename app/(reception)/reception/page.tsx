@@ -46,6 +46,20 @@ export default async function ReceptionTodayPage() {
         <ChevronRight size={18} className="text-ink-3 flex-none" />
       </Link>
 
+      <Link
+        href="/reception/bookings"
+        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+        data-testid="bookings-link"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Bookings</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Reserve a lane or court, or settle one on the board.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+
       <ReceptionCheckIns sessions={sessions} canMark={canMark} />
     </main>
   );

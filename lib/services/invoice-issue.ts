@@ -57,6 +57,12 @@ export const issueInvoiceInputSchema = z.object({
           .regex(/^\d{4,8}$/, "The SAC code must be 4-8 digits.")
           .nullish(),
         taxRateBp: z.number().int().min(0).max(10000).nullish(),
+        // V-04 — an explicit tax for callers that hold a GST-inclusive
+        // amount and split it themselves (the booking bill). Trusted
+        // exactly like the SAC/rate snapshot above: the service layer,
+        // not the client, computed it. Without it the invoice applies
+        // computeTax(amountPaise, rateBp) as before.
+        taxPaise: z.number().int().min(0).nullish(),
       }),
     )
     .min(1, "An invoice needs at least one line."),
@@ -140,7 +146,10 @@ export async function issueInvoiceInTx(
       sacCode: lineSacCode,
       amountPaise: line.amountPaise,
       taxRateBp: rateBp,
-      taxPaise: computeTax(line.amountPaise, rateBp),
+      taxPaise:
+        line.taxPaise !== undefined && line.taxPaise !== null
+          ? line.taxPaise
+          : computeTax(line.amountPaise, rateBp),
     });
   }
 

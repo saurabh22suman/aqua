@@ -279,6 +279,14 @@ const ALLOWLIST = new Set([
   // the K-01…K-06 entries above (privileged pool for tenants/members/
   // menu; orders, billing and payments through the services).
   "tests/tier1/cafe-billing-flow.test.ts",
+  // V-02..V-04, V-08 — facility bookings, pricing, staff flow and
+  // utilisation: same fixture-setup pattern as the K entries above
+  // (privileged pool for tenants/locations/facilities/members; every
+  // service call under test goes through withTenant()/the services).
+  "tests/tier1/bookings-overlap.test.ts",
+  "tests/tier1/bookings-pricing.test.ts",
+  "tests/tier1/bookings-staff-flow.test.ts",
+  "tests/tier1/utilisation.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

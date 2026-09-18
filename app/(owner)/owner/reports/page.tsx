@@ -1,4 +1,4 @@
-import { getAttendanceReportAction, getEnquiryFunnelAction, getRetentionViewAction, getCoachLoadAction } from "@/lib/actions/owner-reports";
+import { getAttendanceReportAction, getEnquiryFunnelAction, getRetentionViewAction, getCoachLoadAction, getFacilityUtilisationAction } from "@/lib/actions/owner-reports";
 import { getOperationalAnalyticsAction, getMoneyAnalyticsAction } from "@/lib/actions/owner-analytics";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
@@ -9,6 +9,7 @@ import { AttendanceReportCard } from "@/components/reports/attendance-report-car
 import { EnquiryFunnelCard } from "@/components/reports/enquiry-funnel-card";
 import { RetentionCard } from "@/components/reports/retention-card";
 import { CoachLoadCard } from "@/components/reports/coach-load-card";
+import { UtilisationCard } from "@/components/reports/utilisation-card";
 import {
   AttendanceTrendCard,
   CollectionsExpensesCard,
@@ -35,19 +36,29 @@ export default async function ReportsPage({
     return defaultMonthPeriod(timezone);
   })();
 
-  const [attendance, enquiry, retention, coachLoad, operational, money, terminology] =
-    await Promise.all([
-      getAttendanceReportAction(period),
-      getEnquiryFunnelAction(period),
-      getRetentionViewAction(),
-      getCoachLoadAction(period),
-      // U-01 — the analytics series. Operational and financial are
-      // separate actions because they carry different permission keys;
-      // an owner holds both.
-      getOperationalAnalyticsAction(period),
-      getMoneyAnalyticsAction(period),
-      getTerminologyAction(),
-    ]);
+  const [
+    attendance,
+    enquiry,
+    retention,
+    coachLoad,
+    utilisation,
+    operational,
+    money,
+    terminology,
+  ] = await Promise.all([
+    getAttendanceReportAction(period),
+    getEnquiryFunnelAction(period),
+    getRetentionViewAction(),
+    getCoachLoadAction(period),
+    // V-08 — facility utilisation for the last 4 weeks.
+    getFacilityUtilisationAction(),
+    // U-01 — the analytics series. Operational and financial are
+    // separate actions because they carry different permission keys;
+    // an owner holds both.
+    getOperationalAnalyticsAction(period),
+    getMoneyAnalyticsAction(period),
+    getTerminologyAction(),
+  ]);
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -100,6 +111,7 @@ export default async function ReportsPage({
         <EnquiryFunnelCard rows={enquiry} />
         <RetentionCard row={retention} />
         <CoachLoadCard rows={coachLoad} />
+        <UtilisationCard report={utilisation} />
       </div>
     </main>
   );
