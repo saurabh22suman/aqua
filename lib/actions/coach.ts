@@ -17,6 +17,7 @@ import {
   type RosterRow,
 } from "@/lib/services/register";
 import { coachScheduleSchema, markAttendanceSchema, sessionIdSchema } from "@/lib/schemas";
+import { emitActivityEvents } from "@/lib/events/emit";
 
 const memberIdSchema = z.string().uuid();
 import type { CoachRosterRow, CoachScheduleRow } from "@/lib/services/coach-schedule";
@@ -209,6 +210,36 @@ export async function markAttendanceSessionAction(raw: {
   }
 
   await markAttendance(ctx, input);
+
+  // E-05 — emit after the mutation transaction has committed, never
+  // inside it (architecture.md §8.11). Properties carry opaque ids and
+  // the status only: no member name, no DOB, no PII. clientEventId is
+  // the register's existing per-mark clientId, so the event is
+  // attributable to the same mark the attendance upsert dedupes; the
+  // pg-boss payload freezes occurred_at, which is what makes a job
+  // redelivery insert exactly one row. A fresh action invocation with
+  // the same clientId but a new occurred_at is a new event — the
+  // stream is at-least-once analytics, not a ledger.
+  await emitActivityEvents(ctx.tenantId, [
+    {
+      eventName: "session.attendance_marked",
+      occurredAt: new Date(),
+      clientEventId: input.clientId,
+      actorId: ctx.userId,
+      actorKind: "user",
+      requestId: ctx.requestId,
+      entityType: "session",
+      entityId: input.sessionId,
+      properties: {
+        sessionId: input.sessionId,
+        memberId: input.memberId,
+        status: input.status,
+      },
+      context: {},
+      source: "web",
+    },
+  ]);
+
   return { ok: true };
 }
 

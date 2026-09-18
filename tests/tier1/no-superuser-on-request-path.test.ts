@@ -214,6 +214,15 @@ const ALLOWLIST = new Set([
   // new files.
   "tests/tier1/hardening-indexes.test.ts",
   "tests/tier1/rls-policy-shape.test.ts",
+  // E-01/H-04 — audit actor model: creates tenants + subscriptions via
+  // the privileged pool (tenants has FORCE RLS), then exercises the job
+  // through the app path. Same fixture-setup pattern as every entry
+  // above; the base branch landed the file without this entry.
+  "tests/tier1/audit-actor-model.test.ts",
+  // E-05 — activity_events: same fixture-setup pattern (privileged pool
+  // for tenants, runActivityIngestJob/withTenant for everything the app
+  // would do, admin reads for partition/ACL introspection).
+  "tests/tier1/activity-events.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
