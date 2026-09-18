@@ -111,12 +111,19 @@ describe("invite-link issue/preview/redeem (database)", () => {
       await tx.insert(locations).values({ tenantId, name: "Main", isPrimary: true });
     });
     await seedRoleTemplates(tenantId);
+    // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
+    // sentinel needs a real row before an audited mutation runs.
+    await admin.query(
+      "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+      [SYSTEM_USER, `system-link-${RUN}`],
+    );
     for (const [test, suffix] of [
       ["issue", "01"],
       ["preview", "02"],
       ["redeem", "03"],
       ["singleUse", "04"],
       ["relogin", "05"],
+      ["audit", "06"],
     ] as const) {
       const invited = await inviteStaff(
         { tenantId, userId: SYSTEM_USER },
@@ -141,8 +148,11 @@ describe("invite-link issue/preview/redeem (database)", () => {
       await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
       await admin.query("delete from roles where tenant_id = $1", [tenantId]);
       await admin.query("delete from tenants where id = $1", [tenantId]);
+      // E-02 — redeem writes membership.activate rows whose actor is
+      // the invited user; drop the trail before the users below.
+      await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
     }
-    for (const suffix of ["01", "02", "03", "04", "05"]) {
+    for (const suffix of ["01", "02", "03", "04", "05", "06"]) {
       const p = phone(suffix);
       await admin.query("delete from ba_session where user_id in (select id from ba_user where phone_number = $1)", [p]);
       await admin.query("delete from ba_user where phone_number = $1", [p]);
@@ -215,6 +225,45 @@ describe("invite-link issue/preview/redeem (database)", () => {
       ]),
     );
     expect(sessions.rows[0].n).toBe(1);
+  });
+
+  it("redeeming an invite link writes exactly one membership.activate row with the invited user as the actor", async () => {
+    const membershipId = membershipByTest["audit"]!;
+    const owner = await admin.query<{ user_id: string }>(
+      "select user_id from tenant_memberships where id = $1::uuid",
+      [membershipId],
+    );
+    const invitedUserId = owner.rows[0]!.user_id;
+
+    const issued = await issueLoginLink(tenantId, membershipId);
+    if (issued.kind !== "ok") throw new Error("setup issue failed");
+    const redeemed = await redeemLoginLink(issued.token);
+    expect(redeemed.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      actor_type: string;
+      actor_id: string;
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      before: { status: string } | null;
+      after: { status: string } | null;
+      changed_fields: string[] | null;
+    }>(
+      `select actor_type, actor_id, action, entity_type, entity_id, before, after, changed_fields
+         from audit_log
+        where tenant_id = $1::uuid and action = 'membership.activate' and entity_id = $2::uuid`,
+      [tenantId, membershipId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.actor_type).toBe("user");
+    expect(row.actor_id).toBe(invitedUserId);
+    expect(row.entity_type).toBe("tenant_membership");
+    expect(row.entity_id).toBe(membershipId);
+    expect(row.before).toEqual({ status: "invited" });
+    expect(row.after).toEqual({ status: "active" });
+    expect(row.changed_fields).toEqual(["status"]);
   });
 
   it("refuses the second redeem of the same link (single-use)", async () => {

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
+import { writeAudit } from "@/lib/audit/write";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import {
@@ -163,10 +164,26 @@ export async function updateTermOverride(
       })
       .where(eq(tenants.id, ctx.tenantId));
 
-    // TODO(tenant-audit-log): write a row to the tenant-side
-    // audit table once it lands (architecture § 8.10).
-    // updatedBy/updatedAt on tenants carries the actor until
-    // then.
+    // E-02 — same transaction as the UPDATE. before/after carry the
+    // one term key the call touched (previous forms may be null on a
+    // first override); changedFields names it in column form so
+    // "every 'member' change" is one array query.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "terminology.update",
+      entityType: "tenant",
+      entityId: ctx.tenantId,
+      before: {
+        key: input.key,
+        en: current.overrides[input.key]?.en ?? null,
+      },
+      after: { key: input.key, en: { one: input.one, other: input.other } },
+      changedFields: [`terminology.${input.key}`],
+      requestId: ctx.requestId ?? null,
+    });
+
     const reloaded = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
     return { kind: "ok", terminology: reloaded };
   });
@@ -190,6 +207,7 @@ export async function clearTermOverride(
 
   return withTenant(ctx.tenantId, async (tx) => {
     const current = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
+    const previous = current.overrides[input.key]?.en ?? null;
     const next: TerminologyOverrides = { ...current.overrides };
     if (next[input.key]) {
       const perLocale: LocaleOverrides = { ...next[input.key] };
@@ -209,6 +227,21 @@ export async function clearTermOverride(
         updatedAt: new Date(),
       })
       .where(eq(tenants.id, ctx.tenantId));
+
+    // E-02 — clear is a mutation of the same jsonb column, so it
+    // audits with the removed forms in `before` and null in `after`.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "terminology.clear",
+      entityType: "tenant",
+      entityId: ctx.tenantId,
+      before: { key: input.key, en: previous },
+      after: { key: input.key, en: null },
+      changedFields: [`terminology.${input.key}`],
+      requestId: ctx.requestId ?? null,
+    });
 
     const reloaded = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
     return { kind: "ok", terminology: reloaded };

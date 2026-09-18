@@ -58,6 +58,9 @@ afterAll(async () => {
     await admin.query("delete from persons where tenant_id = $1", [id]);
     await admin.query("delete from locations where tenant_id = $1", [id]);
     await admin.query("delete from platform_audit_log where tenant_id = $1", [id]);
+    // E-02 — membership activation audits the invited user; drop the
+    // tenant's trail before userIdsToClean deletes that user.
+    await admin.query("delete from audit_log where tenant_id = $1", [id]);
     await admin.query(
       "delete from pgboss.schedule where name = 'sessions.generate' and key = $1",
       [id],

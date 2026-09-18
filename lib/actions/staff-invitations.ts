@@ -62,7 +62,10 @@ export async function inviteStaffAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.invite");
-  return inviteStaff({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
+  return inviteStaff(
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
+    parsed.data,
+  );
 }
 
 const membershipIdSchema = z.string().uuid();
@@ -81,7 +84,7 @@ export async function revokeInvitationAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.invite");
   return revokeInvitation(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
     parsed.data,
   );
 }
@@ -99,7 +102,7 @@ export async function resendInvitationAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.invite");
   return resendInvitation(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
     parsed.data,
   );
 }

@@ -40,12 +40,24 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Branding Test', $3, $4)",
     [tenantId, `branding-${RUN}`, plan?.id ?? null, TZ],
   );
+  // E-02 — audit_log.actor_id FKs to users(id). The suite's
+  // SYSTEM_USER sentinel needs a real row before any audited
+  // mutation runs; production ctx.userId always resolves to one.
+  await admin.query(
+    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+    [SYSTEM_USER, `system-branding-${RUN}`],
+  );
 });
 
 afterAll(async () => {
   if (tenantId) {
+    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
+  await admin.query(
+    "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
+    [SYSTEM_USER],
+  );
   await admin.end();
 });
 
@@ -146,6 +158,72 @@ describe("updateBranding (Phase 2.9)", () => {
       )
     ).rows[0];
     expect(row?.updated_by).toBe(SYSTEM_USER);
+  });
+});
+
+describe("updateBranding writes an audit row (E-02)", () => {
+  it("writes exactly one row naming the actor, the request id, and the before/after branding", async () => {
+    await admin.query(
+      "update tenants set branding = $1::jsonb where id = $2::uuid",
+      [JSON.stringify({ displayName: "Old Name", shortName: "OLD", accent: "mango" }), tenantId],
+    );
+    const requestId = uuidv7();
+
+    const result = await updateBranding(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { displayName: "Audited Aquatics", accent: "marine" },
+    );
+    expect(result.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      actor_type: string;
+      actor_id: string;
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      before: { displayName: string; shortName: string; accent: string } | null;
+      after: { displayName: string; shortName: string; accent: string } | null;
+      changed_fields: string[] | null;
+      source: string;
+      request_id: string | null;
+    }>(
+      `select actor_type, actor_id, action, entity_type, entity_id, before, after,
+              changed_fields, source, request_id
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("branding.update");
+    expect(row.entity_type).toBe("tenant");
+    expect(row.entity_id).toBe(tenantId);
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.source).toBe("web");
+    expect(row.request_id).toBe(requestId);
+    expect(row.before).toEqual({ displayName: "Old Name", shortName: "OLD", accent: "mango" });
+    expect(row.after).toEqual({
+      displayName: "Audited Aquatics",
+      shortName: "OLD",
+      accent: "marine",
+    });
+    expect(row.changed_fields).toEqual(["displayName", "accent"]);
+  });
+
+  it("writes zero rows when the mutation is rejected as invalid", async () => {
+    const requestId = uuidv7();
+    const result = await updateBranding(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { accent: "neon-pink" as never },
+    );
+    expect(result.kind).toBe("error");
+
+    const rows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, requestId],
+    );
+    expect(rows.rows[0]!.n).toBe(0);
   });
 });
 

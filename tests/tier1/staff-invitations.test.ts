@@ -67,6 +67,12 @@ beforeAll(async () => {
     locationId = loc!.id;
   });
   await seedRoleTemplates(tenantId);
+  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
+  // sentinel needs a real row before an audited mutation runs.
+  await admin.query(
+    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+    [SYSTEM_USER, `system-invite-${RUN}`],
+  );
 });
 
 afterAll(async () => {
@@ -88,6 +94,10 @@ afterAll(async () => {
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
     await withPlatform(() => Promise.resolve());
+    // E-02 — audit_log rows are insert-only for app_user, so the
+    // cleanup runs on the privileged pool before the actor/target
+    // users are deleted (audit_log.actor_id FKs to users(id)).
+    await admin.query("delete from audit_log where tenant_id = $1", [tenantId]);
     // Cleanup is scoped to this run's RUN_NUM. The previous pattern
     // was '+91987%', which matched users from any test file's previous
     // run that happened to use the same prefix -- their tenant_membership
@@ -105,6 +115,10 @@ afterAll(async () => {
     await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
+  await admin.query(
+    "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
+    [SYSTEM_USER],
+  );
   await admin.end();
 });
 
@@ -442,6 +456,223 @@ describe("resendInvitation (Phase 3.6)", () => {
     if (result.kind === "error") {
       expect(result.code).toBe("not_invited");
     }
+  });
+});
+
+describe("staff invitation mutations write audit rows (E-02)", () => {
+  it("inviteStaff writes exactly one staff.invite row — actor, target, role, locations, and never the phone", async () => {
+    const phone = `+91987${RUN_NUM}11`;
+    const requestId = uuidv7();
+    const result = await inviteStaff(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { phone, fullName: "Audited Invitee", roleKey: "coach", locationIds: [locationId] },
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+
+    const rows = await admin.query<{
+      actor_type: string;
+      actor_id: string;
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      before: unknown;
+      after: {
+        userId: string;
+        roleKey: string;
+        locationIds: string[];
+        status: string;
+        staffId: string | null;
+      } | null;
+      changed_fields: string[] | null;
+      request_id: string | null;
+    }>(
+      `select actor_type, actor_id, action, entity_type, entity_id, before, after,
+              changed_fields, request_id
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("staff.invite");
+    expect(row.entity_type).toBe("tenant_membership");
+    expect(row.entity_id).toBe(result.membershipId);
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.request_id).toBe(requestId);
+    expect(row.before).toBeNull();
+    expect(row.changed_fields).toBeNull();
+    expect(row.after).not.toBeNull();
+    expect(row.after!.userId).toBe(result.userId);
+    expect(row.after!.roleKey).toBe("coach");
+    expect(row.after!.locationIds).toEqual([locationId]);
+    expect(row.after!.status).toBe("invited");
+    expect(typeof row.after!.staffId).toBe("string");
+
+    // The invite moves by phone; the number is personal data and has
+    // no home in the trail. Tokens don't exist on this path, but the
+    // same "never the secret" rule applies to the contact string.
+    expect(JSON.stringify(row.after)).not.toContain(phone);
+  });
+
+  it("writes zero rows when the invite is rejected by the closed role set", async () => {
+    const requestId = uuidv7();
+    const result = await inviteStaff(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      {
+        phone: `+91987${RUN_NUM}12`,
+        fullName: "Sneak",
+        roleKey: "sneak" as never,
+        locationIds: [],
+      },
+    );
+    expect(result.kind).toBe("error");
+
+    const rows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, requestId],
+    );
+    expect(rows.rows[0]!.n).toBe(0);
+  });
+
+  it("writes zero rows when there is no authenticated actor — and commits no membership", async () => {
+    const phone = `+91987${RUN_NUM}13`;
+    const requestId = uuidv7();
+    const result = await inviteStaff(
+      { tenantId, requestId },
+      { phone, fullName: "No Actor", roleKey: "coach", locationIds: [] },
+    );
+    expect(result.kind).toBe("error");
+    if (result.kind === "error") {
+      expect(result.code).toBe("invalid");
+    }
+
+    const auditRows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, requestId],
+    );
+    expect(auditRows.rows[0]!.n).toBe(0);
+
+    // The guard runs before any write: no user and no membership
+    // may exist for this phone.
+    const userRows = await admin.query<{ id: string }>(
+      "select id from users where phone = $1",
+      [phone],
+    );
+    expect(userRows.rows.length).toBe(0);
+  });
+
+  it("revokeInvitation writes exactly one staff.invitation.revoke row with before/after status", async () => {
+    const phone = `+91987${RUN_NUM}14`;
+    const inv = await inviteStaff(
+      { tenantId, userId: SYSTEM_USER },
+      { phone, fullName: "Revoke Audit", roleKey: "coach", locationIds: [] },
+    );
+    expect(inv.kind).toBe("ok");
+    if (inv.kind !== "ok") return;
+
+    const requestId = uuidv7();
+    const result = await revokeInvitation(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { membershipId: inv.membershipId },
+    );
+    expect(result.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      action: string;
+      actor_type: string;
+      actor_id: string;
+      entity_type: string;
+      entity_id: string;
+      before: { status: string } | null;
+      after: { status: string; revokedAt: string } | null;
+      changed_fields: string[] | null;
+    }>(
+      `select action, actor_type, actor_id, entity_type, entity_id, before, after, changed_fields
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("staff.invitation.revoke");
+    expect(row.entity_type).toBe("tenant_membership");
+    expect(row.entity_id).toBe(inv.membershipId);
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.before).toEqual({ status: "invited" });
+    expect(row.after?.status).toBe("revoked");
+    expect(typeof row.after?.revokedAt).toBe("string");
+    expect(row.changed_fields).toEqual(["status"]);
+
+    // Second revoke is a rejected no-op: still exactly one row.
+    const secondRequestId = uuidv7();
+    const second = await revokeInvitation(
+      { tenantId, userId: SYSTEM_USER, requestId: secondRequestId },
+      { membershipId: inv.membershipId },
+    );
+    expect(second.kind).toBe("error");
+    const secondRows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, secondRequestId],
+    );
+    expect(secondRows.rows[0]!.n).toBe(0);
+  });
+
+  it("resendInvitation writes exactly one staff.invitation.resend row for an invited membership", async () => {
+    const phone = `+91987${RUN_NUM}15`;
+    const inv = await inviteStaff(
+      { tenantId, userId: SYSTEM_USER },
+      { phone, fullName: "Resend Audit", roleKey: "coach", locationIds: [] },
+    );
+    expect(inv.kind).toBe("ok");
+    if (inv.kind !== "ok") return;
+
+    const requestId = uuidv7();
+    const result = await resendInvitation(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { membershipId: inv.membershipId },
+    );
+    expect(result.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      actor_type: string;
+      actor_id: string;
+      after: { delivered: boolean } | null;
+    }>(
+      `select action, entity_type, entity_id, actor_type, actor_id, after
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("staff.invitation.resend");
+    expect(row.entity_type).toBe("tenant_membership");
+    expect(row.entity_id).toBe(inv.membershipId);
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.after).toEqual({ delivered: false });
+
+    // A resend against a revoked membership is rejected: no row.
+    await revokeInvitation({ tenantId, userId: SYSTEM_USER }, {
+      membershipId: inv.membershipId,
+    });
+    const refusedRequestId = uuidv7();
+    const refused = await resendInvitation(
+      { tenantId, userId: SYSTEM_USER, requestId: refusedRequestId },
+      { membershipId: inv.membershipId },
+    );
+    expect(refused.kind).toBe("error");
+    const refusedRows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, refusedRequestId],
+    );
+    expect(refusedRows.rows[0]!.n).toBe(0);
   });
 });
 

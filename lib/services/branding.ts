@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
+import { writeAudit } from "@/lib/audit/write";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import {
@@ -173,30 +174,49 @@ export async function updateBranding(
     const merged = normaliseStored(
       (existing?.branding ?? {}) as StoredBranding,
     );
+    const before = {
+      displayName: merged.displayName,
+      shortName: merged.shortName,
+      accent: merged.accent,
+    };
     if (input.displayName !== undefined) merged.displayName = input.displayName;
     if (input.shortName !== undefined) merged.shortName = input.shortName;
     if (input.accent !== undefined) merged.accent = input.accent;
+    const after = {
+      displayName: merged.displayName,
+      shortName: merged.shortName,
+      accent: merged.accent,
+    };
+    const changedFields = (
+      ["displayName", "shortName", "accent"] as const
+    ).filter((key) => before[key] !== after[key]);
 
     await tx
       .update(tenants)
       .set({
-        branding: {
-          displayName: merged.displayName,
-          shortName: merged.shortName,
-          accent: merged.accent,
-        },
+        branding: after,
         updatedBy: ctx.userId,
         updatedAt: new Date(),
       })
       .where(eq(tenants.id, ctx.tenantId));
 
-    // TODO(tenant-audit-log): write to tenants' audit table here
-    // (architecture § 8.10) once it exists. The platform-side
-    // service layer writes to platform_audit_log; the tenant-side
-    // analogue is unbuilt and the standing rule's "every mutation
-    // writes audit in the same transaction" applies to it when it
-    // lands. Until then, updatedBy/updatedAt on the row itself
-    // carry the actor and timestamp.
+    // E-02 — standing rule: the mutation and its audit row commit
+    // together. before/after are the branding jsonb sub-keys (no
+    // secrets live in it); changedFields carries only the keys the
+    // caller actually moved.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "branding.update",
+      entityType: "tenant",
+      entityId: ctx.tenantId,
+      before,
+      after,
+      changedFields: changedFields.length > 0 ? changedFields : null,
+      requestId: ctx.requestId ?? null,
+    });
+
     return { kind: "ok" } as const;
   });
 }

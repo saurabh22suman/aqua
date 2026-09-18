@@ -73,6 +73,9 @@ afterAll(async () => {
     await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from roles where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1::uuid", [tenantId]);
+    // E-02 — invite + activation audit rows reference the invited
+    // user (activation actor); drop them before the user delete.
+    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from users where phone = $1", [phone]);
     await admin.query("delete from tenants where id = $1::uuid", [tenantId]);
   }
@@ -105,6 +108,12 @@ describe("inviteStaff + redemption → persons + staff rows are reachable", () =
   it("after invite + activate, the membership links to a persons row and a staff row", async () => {
     const { tenantId, phone } = await seedTenant("staffInvite");
     const sysUserId: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+    // E-02 — audit_log.actor_id FKs to users(id); the sentinel
+    // inviter needs a real row before the audited invite runs.
+    await admin.query(
+      "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+      [sysUserId, `prc-system-${RUN}`],
+    );
     const result = await inviteStaff(
       { tenantId, userId: sysUserId },
       { phone, fullName: "Coach Re", roleKey: "coach", locationIds: [] },

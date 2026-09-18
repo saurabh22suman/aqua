@@ -14,6 +14,7 @@ import { tenants } from "@/db/schema/tenants";
 import type { StaffType } from "@/db/schema/staff";
 import { staffLocations } from "@/db/schema/staff-locations";
 import { ensurePersonAndStaff } from "@/db/invite-helpers";
+import { writeAudit } from "@/lib/audit/write";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type UserId } from "@/lib/ids";
 
@@ -114,6 +115,21 @@ export async function inviteStaff(
       message: "Phone must be E.164 with country code (e.g. +919876543210).",
     };
   }
+
+  // E-02 — the authenticated-actor guard runs BEFORE the first
+  // write. (It used to sit after the membership insert, inside the
+  // try: an unauthenticated call returned "invalid" while the
+  // transaction still committed the membership and users row. The
+  // audit requirement exposed that: a rejected invite must write
+  // nothing at all, not merely skip its audit row.)
+  if (!ctx.userId) {
+    return {
+      kind: "error",
+      code: "invalid",
+      message: "Invite requires an authenticated actor.",
+    };
+  }
+  const actorId = ctx.userId;
 
   // 1. Find-or-create the `users` row — through withPlatform()
   // because the users table is in the platform allowlist (RLS-
@@ -263,24 +279,14 @@ export async function inviteStaff(
       accountant: "accountant",
     };
     const staffType = STAFF_TYPE_FOR_ROLE[input.roleKey];
+    let invitedStaffId: string | null = null;
     try {
-      if (!ctx.userId) {
-        // inviteStaff is only called from a server action whose
-        // ctx was built by requireDefaultCtx — that path always
-        // sets userId. An undefined userId here means a future
-        // caller bypassed the auth boundary; surface as invalid
-        // so the action's error branch handles it.
-        return {
-          kind: "error",
-          code: "invalid",
-          message: "Invite requires an authenticated actor.",
-        };
-      }
-      const invited = await ensurePersonAndStaff(tx, ctx.tenantId, ctx.userId, {
+      const invited = await ensurePersonAndStaff(tx, ctx.tenantId, actorId, {
         fullName: input.fullName,
         userId: user.id as UserId,
         staffType,
       });
+      invitedStaffId = invited.staffId;
       // O-08 — mirror the invite's explicit locations onto the staff
       // record (the access decision is still the membership's
       // location list; this is the staff↔location linkage the staff
@@ -308,16 +314,26 @@ export async function inviteStaff(
       };
     }
 
-    // TODO(tenant-audit-log): the actor on a staff invite is a
-    // tenant user, not a platform operator; writing here would
-    // violate platform_audit_log.actor_id's FK to platform_users.
-    // membership-activation.ts makes the same call (D1's README
-    // notes the gap and points at architecture §8.10). When the
-    // tenant-side audit_log lands, every tenant-initiated
-    // mutation in this file gets one in the same transaction
-    // — invite, revoke, resend. For now these mutations are
-    // unaudited; the standing rule's violation is recorded
-    // explicitly so future audit readers see it.
+    // E-02 — one row for the invite, written after every child write
+    // succeeded and before the commit. The payload deliberately
+    // carries identifiers (user, role, locations, staff) and never
+    // the phone number or a link token.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId,
+      action: "staff.invite",
+      entityType: "tenant_membership",
+      entityId: membershipId,
+      after: {
+        userId: user.id,
+        roleKey: input.roleKey,
+        locationIds: input.locationIds,
+        status: "invited",
+        staffId: invitedStaffId,
+      },
+      requestId: ctx.requestId ?? null,
+    });
 
     return {
       kind: "ok",
@@ -510,8 +526,21 @@ export async function revokeInvitation(
         ),
       );
 
-    // TODO(tenant-audit-log): see inviteStaff above. Tenant-
-    // initiated mutations stay unaudited until §8.10 lands.
+    // E-02 — same transaction as the status change; before carries
+    // whatever state the row was in ('invited' or 'active') so the
+    // trail survives the row's own overwrite.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "staff.invitation.revoke",
+      entityType: "tenant_membership",
+      entityId: membershipId,
+      before: { status: m.status },
+      after: { status: "revoked", revokedAt: revokedAt.toISOString() },
+      changedFields: ["status"],
+      requestId: ctx.requestId ?? null,
+    });
 
     return { kind: "ok", revokedAt };
   });
@@ -555,8 +584,19 @@ export async function resendInvitation(
         message: "This membership is no longer in 'invited' state.",
       };
     }
-    // TODO(tenant-audit-log): see inviteStaff above.
-    void 0;
+    // E-02 — the send itself is a no-op until the messaging chain
+    // ships, but the operator's intent to re-issue is durable: one
+    // row per accepted resend, delivery state included.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "staff.invitation.resend",
+      entityType: "tenant_membership",
+      entityId: membershipId,
+      after: { delivered: false },
+      requestId: ctx.requestId ?? null,
+    });
     return { kind: "ok", delivered: false };
   });
 }

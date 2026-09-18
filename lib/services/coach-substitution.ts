@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { sessions } from "@/db/schema/scheduling";
 import { staff } from "@/db/schema/staff";
+import { writeAudit } from "@/lib/audit/write";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asStaffId, asTenantId } from "@/lib/ids";
@@ -154,9 +155,22 @@ export async function substituteCoach(
       })
       .where(eq(sessions.id, s.id));
 
-    // TODO(tenant-audit-log): tenant-initiated mutation
-    // (substitute). Same gap as the rest of the staff-invitations
-    // and transfer code; architecture §8.10.
+    // E-02 — the payout driver (sessions.coach_id) changed; the row
+    // records both coaches in the same transaction as the UPDATE.
+    // The no-change path above returns before here, so an idempotent
+    // re-submit writes no audit row.
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "session.substitute",
+      entityType: "session",
+      entityId: s.id,
+      before: { coachId: previousCoachId },
+      after: { coachId: coach.id },
+      changedFields: ["coach_id"],
+      requestId: ctx.requestId ?? null,
+    });
 
     return {
       kind: "ok",
