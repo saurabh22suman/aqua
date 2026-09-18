@@ -129,6 +129,13 @@ jobs:
       # proof in tests/scanner-fixtures/location-scope-fixtures.test.ts.
       - run: pnpm check:location-scope
 
+      # H-02: new migrations (>= 20260918050000) must lead tenant-table
+      # indexes with tenant_id and must not default ids to v4
+      # gen_random_uuid(). Older migrations are grandfathered. Fixture
+      # proof in
+      # tests/scanner-fixtures/tenant-conventions-fixtures.test.ts.
+      - run: pnpm check:tenant-conventions
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
