@@ -249,6 +249,12 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   updateLocationAction: "settings.manage",
   getBusinessHoursAction: "settings.read",
   setBusinessHoursAction: "settings.manage",
+
+  // K-08 — reception café billing flow. Listing open orders and
+  // requesting the bill are counter work; they ride payments.record
+  // alongside the capture and settlement actions above.
+  listOpenCafeOrdersAction: "payments.record",
+  requestCafeBillAction: "payments.record",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.

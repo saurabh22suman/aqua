@@ -61,6 +61,8 @@ export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
     "announcement audience resolution is a tenant-wide fan-out decided by the owner (audience all/batch/parents); announcements carry no location column, so per-location scoping does not apply",
   "lib/services/announcement-audience.ts":
     "the fan-out resolution itself (same reason as announcements.ts): owner-decided tenant-wide audience, no location column to scope",
+  "lib/services/wallet-core.ts":
+    "K-05 ledger primitives: the member row is locked by id for balance re-derivation and idempotency, never listed; topUp (wallet.ts) does the location visibility check before calling in",
 };
 
 // Comments must not count as calling the helper (the ops-action scan

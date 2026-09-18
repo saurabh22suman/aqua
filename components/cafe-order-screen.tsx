@@ -10,34 +10,33 @@ import {
   CafeMenuGrid,
 } from "@/components/cafe-menu-grid";
 import { CafeMemberPicker } from "@/components/cafe-member-picker";
-import {
-  CafePaymentPanel,
-  CafeReceipt,
-} from "@/components/cafe-payment-panel";
-import { createOrderAction, finalizeOrderAction } from "@/lib/actions/orders";
+import { CafeReceipt } from "@/components/cafe-payment-panel";
+import { CafeBillPanel } from "@/components/cafe-bill-panel";
+import { createOrderAction, requestCafeBillAction } from "@/lib/actions/orders";
 import {
   WALK_IN_NOTE,
   type CartLine,
   type PaymentMethod,
   type PlacedOrder,
-  type RaisedInvoice,
 } from "@/components/cafe-order-shared";
 import type {
   LocationOption,
   MemberListRow,
 } from "@/lib/services/people";
 import type { MenuCategoryRow, MenuItemRow } from "@/lib/services/menu";
+import type { CafeBill } from "@/lib/services/cafe-billing";
 import type { TerminologyState } from "@/lib/terminology/keys";
 
-// K-07 — reception café counter, one screen end to end: menu grid →
-// cart → optional member → order → bill → pay → receipt. The
-// back end is frozen; every rule below is the server's, surfaced
-// rather than re-implemented:
-//   * walk-in orders record but cannot bill (finalizeOrder refuses
+// K-07/K-08 — reception café counter, one screen end to end: menu grid
+// → cart → optional member → order → request bill → amount due →
+// collect payment → receipt. The back end is frozen; every rule below
+// is the server's, surfaced rather than re-implemented:
+//   * walk-in orders record but cannot bill (the K-03 bridge refuses
 //     an order with no member_id) — the bill action stays disabled
 //     and states the exact limitation;
-//   * a café bill settles in full in one payment (K-04) — the
-//     amount sent is the order total and any refusal is shown.
+//   * requesting the bill issues the invoice (if needed) and returns
+//     the itemized amount due; the payment panel then collects it in
+//     full (K-04) and any refusal is shown.
 
 export function CafeOrderScreen({
   categories,
@@ -65,7 +64,7 @@ export function CafeOrderScreen({
   const [qty, setQty] = useState<Record<string, number>>({});
   const [member, setMember] = useState<MemberListRow | null>(null);
   const [placed, setPlaced] = useState<PlacedOrder | null>(null);
-  const [invoice, setInvoice] = useState<RaisedInvoice | null>(null);
+  const [bill, setBill] = useState<CafeBill | null>(null);
   const [paid, setPaid] = useState(false);
   const [paidMethod, setPaidMethod] = useState<PaymentMethod>("cash");
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +104,7 @@ export function CafeOrderScreen({
     setQty({});
     setMember(null);
     setPlaced(null);
-    setInvoice(null);
+    setBill(null);
     setPaid(false);
     setPaidMethod("cash");
     setError(null);
@@ -137,7 +136,7 @@ export function CafeOrderScreen({
     }
   }
 
-  async function billAndPay() {
+  async function requestBill() {
     if (!billable || lines.length === 0) {
       setError(WALK_IN_NOTE);
       return;
@@ -163,16 +162,12 @@ export function CafeOrderScreen({
         };
         setPlaced(current);
       }
-      const billed = await finalizeOrderAction({ orderId: current.orderId });
+      const billed = await requestCafeBillAction({ orderId: current.orderId });
       if (!billed.ok) {
         setError(billed.error);
         return;
       }
-      setInvoice({
-        invoiceId: billed.invoiceId,
-        invoiceNumber: billed.invoiceNumber,
-        totalPaise: current.totalPaise,
-      });
+      setBill(billed.bill);
     } catch {
       setError("The bill could not be raised. Try again.");
     } finally {
@@ -180,22 +175,16 @@ export function CafeOrderScreen({
     }
   }
 
-  if (invoice && paid) {
-    return (
-      <CafeReceipt
-        invoice={invoice}
-        method={paidMethod}
-        onReset={reset}
-      />
-    );
+  if (bill && paid) {
+    return <CafeReceipt bill={bill} method={paidMethod} onReset={reset} />;
   }
 
-  if (invoice) {
+  if (bill) {
     return (
       <div className="space-y-5">
         {error ? <CafeErrorNote message={error} /> : null}
-        <CafePaymentPanel
-          invoice={invoice}
+        <CafeBillPanel
+          bill={bill}
           onPaid={(method) => {
             setPaidMethod(method);
             setPaid(true);
@@ -273,10 +262,10 @@ export function CafeOrderScreen({
               variant="primary"
               size="lg"
               className="w-full"
-              onClick={billAndPay}
+              onClick={requestBill}
               disabled={busy || lines.length === 0 || !billable}
             >
-              {busy ? "Working…" : "Bill & pay"}
+              {busy ? "Working…" : "Request bill"}
             </Button>
             {locked ? (
               <Button

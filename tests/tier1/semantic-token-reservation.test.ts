@@ -176,6 +176,11 @@ const WHITELIST = new Set([
   "app/(owner)/owner/fees/page.tsx",
   "components/fees/fees-invoice-list.tsx",
   "components/owner-schedule-grid.tsx",
+  // cafe-open-orders.tsx — the K-08 reception billing surface
+  // (open-order list). `warn-soft` marks the walk-in billing
+  // limitation — the same money/needs-attention state as the K-07
+  // order screen's note.
+  "components/cafe-open-orders.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

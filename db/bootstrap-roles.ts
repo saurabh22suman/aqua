@@ -45,22 +45,24 @@ export async function bootstrapRoles(
         to app_user;
     `);
 
-    // Append-only tenant tables (E-05, H-03, U-06). The blanket GRANT
-    // above is deliberately broad, and ALTER DEFAULT PRIVILEGES below
-    // re-applies it to every table created by this role — which means a
-    // migration's own REVOKE is undone the next time bootstrapRoles
-    // runs, and db/deploy.ts re-bootstraps on every deploy. All three
-    // are append-only for the app role: E-06 retention drops whole
-    // activity_events partitions, H-03 audit rows are never updated or
-    // deleted by the app, and U-06 announcements are immutable once
-    // sent (a correction is a new announcement). Revoke after the
-    // blanket grant so the guarantee survives re-bootstraps.
-    // Partitions are included: "all tables" reaches them, and a REVOKE
-    // on the parent does not cascade.
+    // Append-only tenant tables (E-05, H-03, U-06, K-05). The blanket
+    // GRANT above is deliberately broad, and ALTER DEFAULT PRIVILEGES
+    // below re-applies it to every table created by this role — which
+    // means a migration's own REVOKE is undone the next time
+    // bootstrapRoles runs, and db/deploy.ts re-bootstraps on every
+    // deploy. All of these are append-only for the app role: E-06
+    // retention drops whole activity_events partitions, H-03 audit
+    // rows are never updated or deleted by the app, U-06 announcements
+    // are immutable once sent (a correction is a new announcement),
+    // and K-05 wallet corrections are new account_entries, not edits.
+    // Revoke after the blanket grant so the guarantee survives
+    // re-bootstraps. Partitions are included: "all tables" reaches
+    // them, and a REVOKE on the parent does not cascade.
     const APPEND_ONLY_TENANT_TABLES = [
       "activity_events",
       "audit_log",
       "announcements",
+      "account_entries",
     ];
     for (const table of APPEND_ONLY_TENANT_TABLES) {
       await client.query(`
