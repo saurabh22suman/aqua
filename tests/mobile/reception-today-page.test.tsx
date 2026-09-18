@@ -94,4 +94,13 @@ describe("ReceptionTodayPage — today card is not a coach link (F5)", () => {
     expect(text).toContain("2");
     expect(text).toContain("16");
   });
+
+  it("links to the café counter (K-07 entry point)", async () => {
+    getTodayAction.mockResolvedValue({ sessions: SESSIONS });
+
+    const result = await ReceptionTodayPage();
+    const hrefs = collectHrefs(result);
+
+    expect(hrefs).toContain("/reception/cafe");
+  });
 });

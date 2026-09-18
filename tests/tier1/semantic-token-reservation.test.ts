@@ -156,6 +156,14 @@ const WHITELIST = new Set([
   // state — the same use as owner/members/[id], which is also
   // whitelisted.
   "app/(coach)/coach/members/[memberId]/page.tsx",
+
+  // cafe-order-screen.tsx + cafe-payment-panel.tsx — the K-07 café
+  // counter money surface. `warn-soft` marks the walk-in billing
+  // limitation and the server's refusal (needs attention, money);
+  // `good` marks the "Paid" receipt state (DESIGN.md §1.1: good =
+  // paid). Both files exist only to settle a counter payment.
+  "components/cafe-order-screen.tsx",
+  "components/cafe-payment-panel.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {
