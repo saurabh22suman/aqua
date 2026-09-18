@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { withTenant, withUser } from "./tenant";
 import { tenantMemberships } from "./schema/memberships";
+import { writeAudit } from "@/lib/audit/write";
 import type { UserId } from "@/lib/ids";
 
 // D1 — runs from lib/auth/server.ts's callbackOnVerification, the
@@ -18,23 +19,23 @@ import type { UserId } from "@/lib/ids";
 // this function performs. An 'active' or 'revoked' row is left alone;
 // revocation, once built, stays sticky against a later login.
 //
-// No platform_audit_log write here on purpose: that table's actorId is
-// a FK to platform_users.id (platform operators), and the person
-// accepting their own invite is a tenant member, not a platform user
-// — writing their id there would violate the FK. There's also no
-// tenant-side audit_log yet (CLAUDE.md, architecture §8.10). Recording
-// that gap rather than papering over it with a wrong write.
-//
-// TODO(F-14): invited -> active is a security-relevant transition
-// (it's what grants tenant access) and today it is completely
-// unaudited — no row anywhere records who/when/from-what-invite. Once
-// F-14's tenant-side audit_log lands (docs/implementation-plan.md),
-// write one here in the same withTenant() transaction as the status
-// update. Do not build a one-off table for this before then.
+// This used to write platform_audit_log (wrong actor space: that
+// table's actorId FKs to platform_users.id, and the person accepting
+// their own invite is a tenant member). E-02 closes the gap with the
+// tenant-side audit_log instead: one membership.activate row per
+// flipped membership, in the same withTenant() transaction as the
+// status update. The actor is the invited user themselves —
+// actor_type 'user', not 'staff': they are accepting their own
+// invite (and an invited admin may have no staff row at all), so the
+// action is a self-service identity transition rather than tenant
+// staff acting on tenant data.
 export async function activateInvitedMemberships(userId: UserId): Promise<void> {
-  const invitedTenantIds = await withUser(userId, async (tx) => {
+  const invited = await withUser(userId, async (tx) => {
     const rows = await tx
-      .select({ tenantId: tenantMemberships.tenantId })
+      .select({
+        membershipId: tenantMemberships.id,
+        tenantId: tenantMemberships.tenantId,
+      })
       .from(tenantMemberships)
       .where(
         and(
@@ -43,21 +44,38 @@ export async function activateInvitedMemberships(userId: UserId): Promise<void> 
           isNull(tenantMemberships.deletedAt),
         ),
       );
-    return rows.map((r) => r.tenantId);
+    return rows;
   });
 
-  for (const tenantId of invitedTenantIds) {
-    await withTenant(tenantId, (tx) =>
-      tx
+  for (const row of invited) {
+    await withTenant(row.tenantId, async (tx) => {
+      // `.returning` makes the audit conditional on the state change
+      // actually landing: a concurrent activation that won the race
+      // matches zero rows and must not leave a phantom audit row.
+      const updated = await tx
         .update(tenantMemberships)
         .set({ status: "active", updatedAt: new Date(), updatedBy: userId })
         .where(
           and(
-            eq(tenantMemberships.tenantId, tenantId),
+            eq(tenantMemberships.tenantId, row.tenantId),
             eq(tenantMemberships.userId, userId),
             eq(tenantMemberships.status, "invited"),
           ),
-        ),
-    );
+        )
+        .returning({ id: tenantMemberships.id });
+      if (updated.length === 0) return;
+
+      await writeAudit(tx, {
+        tenantId: row.tenantId,
+        actorType: "user",
+        actorId: userId,
+        action: "membership.activate",
+        entityType: "tenant_membership",
+        entityId: row.membershipId,
+        before: { status: "invited" },
+        after: { status: "active" },
+        changedFields: ["status"],
+      });
+    });
   }
 }

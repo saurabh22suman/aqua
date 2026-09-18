@@ -106,23 +106,40 @@ function isAllowed(pathname: string, allowlist: readonly string[]): boolean {
   return false;
 }
 
+// H-04 — one correlation id per request, created here, forwarded to
+// the app via the request headers (so `headers().get("x-request-id")`
+// and Ctx can read it) and echoed on the response (so an operator
+// reading a browser network tab or an access log can join the two).
+// Inbound ids are preserved — a reverse proxy or an upstream caller
+// may already have one.
+function withRequestId(response: NextResponse, requestId: string): NextResponse {
+  response.headers.set("x-request-id", requestId);
+  return response;
+}
+
 export function middleware(request: NextRequest): NextResponse {
   const host = request.headers.get("host");
   const pathname = request.nextUrl.pathname;
   const surface = classifyHost(host);
+  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
 
   if (surface === "unknown") {
     // No Host header at all, or a host we don't recognise. The
     // production reverse proxy always sets Host; the absence of
     // it means a misconfigured client. Fail closed.
-    return new NextResponse("not found", { status: 404 });
+    return withRequestId(new NextResponse("not found", { status: 404 }), requestId);
   }
 
   const allowlist = surface === "ops" ? OPS_ALLOWLIST : APEX_ALLOWLIST;
   if (isAllowed(pathname, allowlist)) {
-    return NextResponse.next();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-request-id", requestId);
+    return withRequestId(
+      NextResponse.next({ request: { headers: requestHeaders } }),
+      requestId,
+    );
   }
-  return new NextResponse("not found", { status: 404 });
+  return withRequestId(new NextResponse("not found", { status: 404 }), requestId);
 }
 
 // Skip static files and the favicon — Next's own matcher handles

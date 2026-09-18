@@ -42,6 +42,12 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Term Test', $3, $4)",
     [tenantId, `term-${RUN}`, plan?.id ?? null, TZ],
   );
+  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
+  // sentinel needs a real row before an audited mutation runs.
+  await admin.query(
+    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+    [SYSTEM_USER, `system-term-${RUN}`],
+  );
 });
 
 // Tests share a tenant fixture — each case wipes terminology to
@@ -53,12 +59,20 @@ beforeAll(async () => {
 // pattern the other tier-1 setup paths use.
 beforeEach(async () => {
   await admin.query("update tenants set terminology = '{}'::jsonb where id = $1", [tenantId]);
+  // E-02 — each case counts audit rows; wipe the tenant's trail so
+  // the counts are per-case, not cumulative.
+  await admin.query("delete from audit_log where tenant_id = $1", [tenantId]);
 });
 
 afterAll(async () => {
   if (tenantId) {
+    await admin.query("delete from audit_log where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
+  await admin.query(
+    "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
+    [SYSTEM_USER],
+  );
   await admin.end();
 });
 
@@ -193,6 +207,132 @@ describe("clearTermOverride (Phase 2.10)", () => {
     const data = await getTerminology({ tenantId });
     expect(data.overrides.batch).toBeUndefined();
     expect(data.overrides.member?.en?.one).toBe("swimmer");
+  });
+});
+
+describe("terminology mutations write audit rows (E-02)", () => {
+  it("updateTermOverride writes exactly one row with the previous and next forms, keyed by request id", async () => {
+    await admin.query(
+      "update tenants set terminology = $1::jsonb where id = $2::uuid",
+      [
+        JSON.stringify({ member: { en: { one: "swimmer", other: "swimmers" } } }),
+        tenantId,
+      ],
+    );
+    const requestId = uuidv7();
+
+    const result = await updateTermOverride(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { key: "member", locale: "en", one: "athlete", other: "athletes" },
+    );
+    expect(result.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      actor_type: string;
+      actor_id: string;
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      before: { key: string; en: { one: string; other: string } | null } | null;
+      after: { key: string; en: { one: string; other: string } | null } | null;
+      changed_fields: string[] | null;
+      request_id: string | null;
+    }>(
+      `select actor_type, actor_id, action, entity_type, entity_id, before, after,
+              changed_fields, request_id
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("terminology.update");
+    expect(row.entity_type).toBe("tenant");
+    expect(row.entity_id).toBe(tenantId);
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.request_id).toBe(requestId);
+    expect(row.before).toEqual({
+      key: "member",
+      en: { one: "swimmer", other: "swimmers" },
+    });
+    expect(row.after).toEqual({
+      key: "member",
+      en: { one: "athlete", other: "athletes" },
+    });
+    expect(row.changed_fields).toEqual(["terminology.member"]);
+  });
+
+  it("writes zero rows when the override is rejected by the closed-key schema", async () => {
+    const requestId = uuidv7();
+    const result = await updateTermOverride(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { key: "membership_number" as never, locale: "en", one: "x", other: "y" },
+    );
+    expect(result.kind).toBe("error");
+
+    const rows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, requestId],
+    );
+    expect(rows.rows[0]!.n).toBe(0);
+  });
+
+  it("clearTermOverride writes exactly one terminology.clear row carrying the removed forms", async () => {
+    await admin.query(
+      "update tenants set terminology = $1::jsonb where id = $2::uuid",
+      [
+        JSON.stringify({ session: { en: { one: "class", other: "classes" } } }),
+        tenantId,
+      ],
+    );
+    const requestId = uuidv7();
+
+    const result = await clearTermOverride(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { key: "session", locale: "en" },
+    );
+    expect(result.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      action: string;
+      actor_type: string;
+      actor_id: string;
+      before: { key: string; en: { one: string; other: string } | null } | null;
+      after: { key: string; en: null } | null;
+      changed_fields: string[] | null;
+    }>(
+      `select action, actor_type, actor_id, before, after, changed_fields
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("terminology.clear");
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.before).toEqual({
+      key: "session",
+      en: { one: "class", other: "classes" },
+    });
+    expect(row.after).toEqual({ key: "session", en: null });
+    expect(row.changed_fields).toEqual(["terminology.session"]);
+  });
+
+  it("writes zero rows when the clear input is invalid", async () => {
+    const requestId = uuidv7();
+    const result = await clearTermOverride(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { key: "session", locale: "hi" as never },
+    );
+    expect(result.kind).toBe("error");
+
+    const rows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, requestId],
+    );
+    expect(rows.rows[0]!.n).toBe(0);
   });
 });
 

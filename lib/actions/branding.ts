@@ -59,7 +59,7 @@ export async function updateBrandingAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.manage");
   return updateBranding(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
     parsed.data,
   );
 }

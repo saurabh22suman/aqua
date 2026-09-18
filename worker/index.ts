@@ -4,12 +4,19 @@ import { runAbsenceAlertsJob } from "@/lib/jobs/absence-alerts-job";
 import { runSubscriptionsExpireJob } from "@/lib/jobs/subscriptions-expire-job";
 import { runInvoicesGenerateJob } from "@/lib/jobs/invoices-generate-job";
 import { runReportsRollupJob } from "@/lib/jobs/reports-rollup-job";
+import { runEventsRollupJob } from "@/lib/jobs/events-rollup-job";
 import { runPlatformMetricsSnapshotJob } from "@/lib/jobs/platform-metrics-snapshot-job";
+import {
+  ACTIVITY_INGEST_QUEUE,
+  runActivityIngestJob,
+  type ActivityIngestJobData,
+} from "@/lib/jobs/activity-ingest-job";
 import { SESSIONS_GENERATE_QUEUE } from "@/lib/jobs/sessions-generate-schedule";
 import { ABSENCE_ALERTS_QUEUE } from "@/lib/jobs/absence-alerts-schedule";
 import { SUBSCRIPTIONS_EXPIRE_QUEUE } from "@/lib/jobs/subscriptions-expire-schedule";
 import { INVOICES_GENERATE_QUEUE } from "@/lib/jobs/invoices-generate-schedule";
 import { REPORTS_ROLLUP_QUEUE } from "@/lib/jobs/reports-rollup-schedule";
+import { EVENTS_ROLLUP_QUEUE } from "@/lib/jobs/events-rollup-schedule";
 import { PLATFORM_METRICS_SNAPSHOT_QUEUE } from "@/lib/jobs/platform-metrics-snapshot-schedule";
 import { asTenantId, type TenantId } from "@/lib/ids";
 
@@ -33,7 +40,7 @@ import { asTenantId, type TenantId } from "@/lib/ids";
 // PR3 (ops console improvements) — platform.metrics-snapshot is the
 // one cross-tenant job in this process. Every other job in HANDLERS
 // (sessions.generate, absence.alerts, subscriptions.expire,
-// invoices.generate, reports.rollup) is per-tenant: the worker
+// invoices.generate, reports.rollup, events.rollup) is per-tenant: the worker
 // receives a `tenantId` per job from pg-boss and the job opens a
 // `withTenant()` transaction. The snapshot carries no tenantId —
 // it writes one row per day to `platform_metrics_daily`, an
@@ -59,6 +66,7 @@ const HANDLERS: ReadonlyArray<{
   { queue: SUBSCRIPTIONS_EXPIRE_QUEUE, run: runSubscriptionsExpireJob },
   { queue: INVOICES_GENERATE_QUEUE, run: runInvoicesGenerateJob },
   { queue: REPORTS_ROLLUP_QUEUE, run: runReportsRollupJob },
+  { queue: EVENTS_ROLLUP_QUEUE, run: runEventsRollupJob },
 ];
 
 async function main(): Promise<void> {
@@ -77,8 +85,24 @@ async function main(): Promise<void> {
     await runPlatformMetricsSnapshotJob();
   });
 
+  // E-05 — activity.ingest is tenant-scoped via job data (same rule as
+  // HANDLERS) but carries a per-job `events` payload, so it registers
+  // its own work call rather than being forced into HANDLERS' shape.
+  // No per-tenant schedule exists for it: it is an event consumer, not
+  // a cron (see lib/jobs/activity-ingest-job.ts).
+  await boss.work<ActivityIngestJobData>(
+    ACTIVITY_INGEST_QUEUE,
+    async ([job]) => {
+      await runActivityIngestJob(asTenantId(job.data.tenantId), job.data.events);
+    },
+  );
+
   console.log(
-    `[worker] started — listening on ${[...HANDLERS.map((h) => h.queue), PLATFORM_METRICS_SNAPSHOT_QUEUE].join(", ")}`,
+    `[worker] started — listening on ${[
+      ...HANDLERS.map((h) => h.queue),
+      PLATFORM_METRICS_SNAPSHOT_QUEUE,
+      ACTIVITY_INGEST_QUEUE,
+    ].join(", ")}`,
   );
 }
 

@@ -125,12 +125,14 @@ component, the demo reset scripts).
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
 
 ## Testing role surfaces
-Any manual/UI verification of a role-specific surface — owner, coach,
-reception, parent — happens at **mobile resolution (390×844)**, the
-same viewport the audits use. The role surfaces are field surfaces:
-a flow that works at 1280px and breaks at 390px is broken. The ops
-platform console is the one exception (desktop, 1280×900) — it is a
-back-office tool, not a frontline surface.
+Any manual/UI verification of a role-specific surface happens at the
+same viewport the audits use. Owner is dual-surface: verified at
+**both 390×844 and 1280×900**. Coach and reception are field surfaces,
+verified at **mobile resolution (390×844)** — a flow that works at
+1280px and breaks at 390px is broken. The ops platform console is
+**desktop-only (1280×900)**; mobile is best-effort and not a gate — it
+is a back-office tool, not a frontline surface. The parent surface
+stays the zero-JS token link.
 
 Note when using the dev server: the offline service worker caches
 chunks across sessions, so a client-side error can be a stale bundle,

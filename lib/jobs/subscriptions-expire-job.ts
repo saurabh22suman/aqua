@@ -2,6 +2,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { subscriptions } from "@/db/schema/subscriptions";
+import { writeAudit } from "@/lib/audit/write";
 import { todayInZone } from "@/lib/time/tz";
 import type { TenantId } from "@/lib/ids";
 
@@ -11,9 +12,9 @@ import type { TenantId } from "@/lib/ids";
 // alone (a pause extends the end date; expiry applies to the live
 // series only), and cancelled stays cancelled.
 //
-// System mutation: no tenant audit row (audit_log.actor_id is NOT
-// NULL and a job has no user actor — the standing F-15 gap; the
-// status/updated_at columns and this log line are the trace).
+// System mutation: one audit row per expired subscription, written in
+// the same transaction as the status change, actor_type='system',
+// actor_id NULL (E-01; this was the standing F-15 job gap).
 export async function runSubscriptionsExpireJob(
   tenantId: TenantId,
 ): Promise<void> {
@@ -36,6 +37,20 @@ export async function runSubscriptionsExpireJob(
         ),
       )
       .returning({ id: subscriptions.id });
+
+    for (const expiredRow of rows) {
+      await writeAudit(tx, {
+        tenantId,
+        actorType: "system",
+        actorId: null,
+        source: "job",
+        action: "subscription.expire",
+        entityType: "subscription",
+        entityId: expiredRow.id,
+        after: { status: "expired" },
+        changedFields: ["status"],
+      });
+    }
     return rows.length;
   });
 

@@ -4,6 +4,7 @@ import {
   check,
   date,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   timestamp,
@@ -15,6 +16,9 @@ import type { TenantId } from "@/lib/ids";
 // C-47 — precomputed daily summaries, one row per tenant per day.
 // Upserted by the nightly reports.rollup job for the day that just
 // ended; idempotent by primary key. Money stays integer paise.
+// E-06 — events.rollup (03:15, after reports.rollup) fills the
+// event_counts/events_total columns on the same row, touching nothing
+// else; both jobs are keyed on (tenant_id, on_date).
 
 export const dailyRollups = pgTable(
   "daily_rollups",
@@ -35,6 +39,11 @@ export const dailyRollups = pgTable(
     invoicesTotalPaise: bigint("invoices_total_paise", { mode: "bigint" })
       .notNull()
       .default(0n),
+    eventCounts: jsonb("event_counts")
+      .$type<Record<string, number>>()
+      .notNull()
+      .default({}),
+    eventsTotal: integer("events_total").notNull().default(0),
     computedAt: timestamp("computed_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -51,6 +60,7 @@ export const dailyRollups = pgTable(
       "daily_rollups_invoices_total_check",
       sql`${t.invoicesTotalPaise} >= 0`,
     ),
+    check("daily_rollups_events_total_check", sql`${t.eventsTotal} >= 0`),
   ],
 );
 

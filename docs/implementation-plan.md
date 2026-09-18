@@ -1522,7 +1522,8 @@ gateway** is integrated — every payment in this release is counter-recorded
 (cash, UPI reference, card-terminal reference, other). The member wallet ledger
 (`account_entries`, K-05) is a **fast-follow**, not part of the R1 gate.
 `boring-avatars` (MIT, local npm package, no external service) is an approved
-new dependency for U-09.
+new dependency for U-09. Owner ships web + mobile (U-10); ops is web-only with
+mobile best-effort; coach/reception mobile-only.
 
 **Series:** H hardening · E events/audit · M module kernel · K café · U UI
 closure. H, E and the M schema seams land first; K runs beside the Phase 3
@@ -1546,6 +1547,12 @@ created_at)`; `platform_audit_log(action)`. One migration; `concurrently` where
 the table is live.
 **Done when:** EXPLAIN on the member, tenant-resolution, reconciliation and
 webhook-dedupe hot paths shows index scans, not sequential scans.
+**Status:** complete — `20260918050000_h01_hardening_indexes.sql`, 17 indexes.
+FK-supporting lookups with tenant context were added tenant-leading
+(`(tenant_id, col)`), not bare. Two deliberate exemptions are pinned with
+reasons in `scripts/lib/tenant-conventions-scan.ts`: `tenant_memberships(user_id)`
+and `message_log(provider_message_id)` run before a tenant is selected.
+`tests/tier1/hardening-indexes.test.ts` asserts every index definition.
 
 ### H-02 · Convention convergence
 **Lane:** schema + CI
@@ -1559,6 +1566,14 @@ that fails any new tenant table whose indexes do not lead with `tenant_id`
 new id column defaulting to v4.
 **Done when:** the scan fails on a known-bad fixture and passes on `main`; no
 tenant table carries a raw `tenant_id::text = current_setting(...)` policy.
+**Status:** complete — `20260918051000_h02_rls_policy_convergence.sql` converged
+15 tenant-isolation policies (the 8 text-shaped from the audit plus 7 older
+`current_setting(...)::uuid` ones the shape test surfaced), never
+platform-admin/user_resolution. `scripts/check-tenant-conventions.ts` +
+`tests/scanner-fixtures/tenant-conventions-fixtures.test.ts` gate new
+migrations (tenant-leading indexes, no v4 UUID defaults) from 20260918050000 on.
+`db/schema/index.ts` exports are complete; the `audit_log` Drizzle/SQL FK
+divergence was resolved to the SQL side (no FK) in E-01.
 
 ### H-03 · Partition infrastructure
 **Lane:** schema + jobs
@@ -1571,6 +1586,13 @@ months ahead for `audit_log` and `activity_events`, and alerts on failure.
 **Done when:** a test inserting a row in month+3 succeeds; a month with no
 partition fails loudly, never silently; the dual-write phase produces zero row
 count drift.
+**Status:** deferred to a dedicated PR (2026-09-18) — the migration pattern
+changed: runtime partition DDL is not available (`app_user` has no CREATE;
+`MIGRATION_DATABASE_URL` is migrations-only by design), so the target mechanism
+is a static horizon created in migrations + a loud failure beyond it, as proven
+in E-05's migration, not a pg-boss DDL job. Rebuilding a live, append-only
+`audit_log` (expand/contract + backfill + grants/RLS/trigger re-application) is
+a solitary migration that deserves its own review, not the tail of this batch.
 
 ### H-04 · Request correlation
 **Lane:** services
@@ -1579,6 +1601,12 @@ flows through `Ctx` into every `audit_log` row and every `activity_events` row;
 structured log lines carry `tenant_id` + `request_id`.
 **Done when:** one action's audit row and its activity event share the same
 `request_id`, and the value survives jobs (enqueued with the job data).
+**Status:** complete for the request path — `middleware.ts` generates/forwards
+`x-request-id`, `Ctx.requestId` carries it, `lib/audit/write.ts` persists it,
+and `session.attendance_marked` events carry it. The thirteen pre-existing
+inline audit writers were not refactored in this batch; E-02's sites pass
+`requestId` explicitly, and the rest default to NULL until they migrate to
+`writeAudit`. Extending the id into job payloads is tracked with H-03.
 
 ## E — Events and audit
 
@@ -1596,6 +1624,13 @@ activation could not write because `platform_audit_log.actor_id` FKs to
 **Done when:** `subscriptions.expire` writes one audit row with no user actor;
 a job run with no actor passes the schema; the F-14 `TODO` in
 `db/membership-activation.ts` is gone.
+**Status:** complete — `20260918060000_e01_audit_actor_model.sql` adds
+`actor_type` (default `'user'`), nullable `actor_id`, `impersonator_id`,
+`source`, `changed_fields`, `request_id` and `(tenant_id, action, created_at)`.
+`lib/audit/write.ts` is the one writer. `subscriptions.expire` and
+system-issued invoice renewals now write `actor_type='system'`,
+`source='job'`. The Drizzle declaration was aligned to the applied schema
+(no tenant FK) — the divergence H-02 named.
 
 ### E-02 · Audit coverage closure
 **Lane:** services
@@ -1605,6 +1640,15 @@ activation gap. Add a coverage test that asserts each of these service
 mutations writes exactly one `audit_log` row in the same transaction.
 **Done when:** removing any one audit write flips the coverage test red; the
 list of `TODO(tenant-audit-log)` occurrences is empty.
+**Status:** complete — the six TODO sites plus both membership-activation paths
+(OTP and magic-link redemption) now audit via `writeAudit`, with
+`tests/tier1/tenant-audit-coverage.test.ts` pinning the action names and
+`grep` proving zero TODOs remain. Two audits were added beyond the literal list
+(`terminology.clear`, `membership.activate` on the link path) because leaving
+half of a paired mutation unaudited was the actual coverage hole. Review catch:
+the same change fixed `inviteStaff`'s missing-user guard, which previously sat
+after the membership insert — an unauthenticated call could commit a
+membership.
 
 ### E-03 · Tamper evidence — daily signed checkpoint
 **Lane:** schema + jobs
@@ -1619,6 +1663,11 @@ latest partition is detected via the checkpoint; the nightly job is idempotent
 across retries.
 **Never:** claim this is a per-row hash chain; if an enterprise tenant ever
 requires one, that is a new task, not an extension of this one.
+**Status:** deferred to Release 1.1 — the plan requires R2 (no object-store
+integration exists yet; receipts and payment QRs still live in Postgres) and a
+checkpoint signing key/secret decision. Building the digest half without an
+external anchor would be security theatre, so nothing shipped. Blocked on:
+R2 wiring + `AUDIT_CHECKPOINT_SECRET` approval.
 
 ### E-04 · Sensitive-read auditing
 **Lane:** services
@@ -1626,6 +1675,9 @@ requires one, that is a new task, not an extension of this one.
 entity, `request_id`; denials write `staff.pay.read.denied`.
 **Done when:** an owner viewing pay produces one audit row; a denied coach
 produces one denial row and no data.
+**Status:** deferred to Phase 3 — there is no pay read path to audit yet
+(V-30–V-33 are unbuilt); wiring this before the surface exists would produce a
+test that audits a fixture, not a product. Pairs with V-33a.
 
 ### E-05 · activity_events
 **Lane:** schema + services
@@ -1640,6 +1692,18 @@ pg-boss batch consumer, never inside a business transaction. No writes from
 `/p/[token]` or any parent/student surface — enforced by a source-scan test.
 **Done when:** register marking emits `session.attendance_marked` events; a
 duplicate delivery inserts exactly one row; the parent surface emits zero.
+**Status:** complete — `20260918070000_e05_activity_events.sql` creates the
+table with 28 monthly partitions (2026-09…2028-12), no default partition (a
+beyond-horizon insert fails loudly; auto-extension needs a privileged DDL
+path, see H-03), RLS forced, SELECT+INSERT only. Idempotency is
+`unique (tenant_id, client_event_id, occurred_at)` — PostgreSQL requires the
+partition key in partitioned-table unique indexes, so a retry must resend the
+original `occurred_at`; this is an at-least-once analytics stream, not a ledger.
+`lib/events/registry.ts` validates names; `lib/jobs/activity-ingest-job.ts`
+consumes the pg-boss `activity.ingest` queue; the attendance register is the
+first caller. `db/bootstrap-roles.ts` now re-revokes UPDATE/DELETE after its
+blanket deploy-time grant, or the app role's append-only guarantee would
+silently regress on every `db:deploy`.
 
 ### E-06 · Event rollups and export
 **Lane:** jobs
@@ -1649,6 +1713,14 @@ closed partitions to R2 as Parquet (one file per tenant-day), then drops raw
 partitions older than the configured window (default 180 days).
 **Done when:** a dropped partition's numbers remain queryable from rollups;
 the export re-imports in DuckDB; the job is idempotent across retries.
+**Status:** partial — the rollup half is complete:
+`20260918080000_e06_daily_rollups_events.sql` adds `event_counts jsonb` +
+`events_total` to `daily_rollups`; `events.rollup` (03:15 tenant-local) folds
+the day's events and its upsert updates only the event columns, never
+`reports.rollup`'s counters. **Deferred:** the R2/Parquet export and the
+retention partition drop — no R2 integration exists, and DROP is DDL the
+runtime role does not have. Retention stays a migration/manual ops step until
+H-03's privileged path lands.
 
 ## M — Module kernel (multi-sport)
 
@@ -1852,6 +1924,11 @@ must be a client component, it is excluded from the parent surface.
 **Done when:** avatars render identically on server and client, the bundle
 budget check passes, and no photo-upload affordance exists anywhere.
 
+### U-10 · Owner desktop shell
+**Lane:** UI
+**Build:** Responsive shell over the existing `(owner)` layout: sidebar + top bar at `lg` (≥1024px) matching the owner target design (search, location switcher, notifications affordance deferred), the existing four-item bottom nav preserved below `lg`. Coach and reception bundles must remain free of owner components (route groups already enforce this). Ops stays desktop-only (mobile best-effort, not a gate — decision 2026-09-18).
+**Done when:** every owner route renders at both 1280×900 and 390×844 from the same layout, the bundle-budget check passes, and coach/reception route bundles contain no owner code.
+
 ## Release 1.1 — fast-follow (not in the gate)
 
 | Item | Why deferred |
@@ -1863,7 +1940,7 @@ budget check passes, and no photo-upload affordance exists anywhere.
 | Discount codes, offline POS, inventory, tables | Phase 5 per `project-scope.md` |
 
 ### R1-01 · Release 1 gate
-**Depends:** H-01 … U-09 (K-05 excluded)
+**Depends:** H-01 … U-10 (K-05 excluded)
 **Verify:** the reference business runs sports **and** café for one full month
 without the register. Café cash count matches the system figure daily. F-15
 audit coverage is closed and the coverage test is green. `activity_events`

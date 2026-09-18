@@ -26,5 +26,8 @@ export async function substituteCoachAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "programs.write");
-  return substituteCoach({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
+  return substituteCoach(
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
+    parsed.data,
+  );
 }

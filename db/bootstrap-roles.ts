@@ -45,6 +45,38 @@ export async function bootstrapRoles(
         to app_user;
     `);
 
+    // Append-only tenant tables (E-05). The blanket GRANT above is
+    // deliberately broad, and ALTER DEFAULT PRIVILEGES below re-applies
+    // it to every table created by this role — which means a migration's
+    // own REVOKE is undone the next time bootstrapRoles runs, and
+    // db/deploy.ts re-bootstraps on every deploy. activity_events is
+    // append-only for the app role: E-06 retention drops whole
+    // partitions, the app never updates or deletes a row. Revoke after
+    // the blanket grant so the guarantee survives re-bootstraps.
+    // Partitions are included: "all tables" reaches them, and a REVOKE
+    // on the parent does not cascade.
+    const APPEND_ONLY_TENANT_TABLES = ["activity_events"];
+    for (const table of APPEND_ONLY_TENANT_TABLES) {
+      await client.query(`
+        do $$
+        declare
+          part regclass;
+        begin
+          if to_regclass('public.${table}') is not null then
+            revoke update, delete on public.${table} from app_user;
+            for part in
+              select inhrelid::regclass
+                from pg_inherits
+               where inhparent = 'public.${table}'::regclass
+            loop
+              execute format('revoke update, delete on %s from app_user', part);
+            end loop;
+          end if;
+        end
+        $$;
+      `);
+    }
+
     await client.query(`
       grant usage on schema public to app_user;
     `);

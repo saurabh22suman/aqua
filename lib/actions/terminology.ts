@@ -55,7 +55,7 @@ export async function updateTermOverrideAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.manage");
   return updateTermOverride(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
     parsed.data,
   );
 }
@@ -74,7 +74,7 @@ export async function clearTermOverrideAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.manage");
   return clearTermOverride(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
     parsed.data,
   );
 }

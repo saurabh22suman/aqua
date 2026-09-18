@@ -24,9 +24,14 @@ import {
   scheduleReportsRollup,
 } from "@/lib/jobs/reports-rollup-schedule";
 import {
+  EVENTS_ROLLUP_QUEUE,
+  scheduleEventsRollup,
+} from "@/lib/jobs/events-rollup-schedule";
+import {
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
   schedulePlatformMetricsSnapshot,
 } from "@/lib/jobs/platform-metrics-snapshot-schedule";
+import { ACTIVITY_INGEST_QUEUE } from "@/lib/jobs/activity-ingest-job";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -41,7 +46,9 @@ const QUEUES = [
   SUBSCRIPTIONS_EXPIRE_QUEUE,
   INVOICES_GENERATE_QUEUE,
   REPORTS_ROLLUP_QUEUE,
+  EVENTS_ROLLUP_QUEUE,
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
+  ACTIVITY_INGEST_QUEUE,
 ];
 
 type ScheduleFn = (
@@ -171,6 +178,7 @@ async function main(): Promise<void> {
   await syncPerTenantSchedules(boss, SUBSCRIPTIONS_EXPIRE_QUEUE, tenants, scheduleSubscriptionsExpire);
   await syncPerTenantSchedules(boss, INVOICES_GENERATE_QUEUE, tenants, scheduleInvoicesGenerate);
   await syncPerTenantSchedules(boss, REPORTS_ROLLUP_QUEUE, tenants, scheduleReportsRollup);
+  await syncPerTenantSchedules(boss, EVENTS_ROLLUP_QUEUE, tenants, scheduleEventsRollup);
   // Single global schedule, not per-tenant — see worker/index.ts for
   // why this one job carries no tenantId at all.
   await schedulePlatformMetricsSnapshot(boss);

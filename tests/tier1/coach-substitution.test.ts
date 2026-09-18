@@ -31,6 +31,12 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Substitution Test', $3)",
     [tenantId, "substitution-" + RUN, TZ],
   );
+  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
+  // sentinel needs a real row before an audited mutation runs.
+  await admin.query(
+    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+    [SYSTEM_USER, `system-substitution-${RUN}`],
+  );
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -96,9 +102,14 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
     await admin.query(
       "delete from users where id in ($1::uuid, $2::uuid)",
       [coachAUserId, coachBUserId],
+    );
+    await admin.query(
+      "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
+      [SYSTEM_USER],
     );
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
@@ -109,6 +120,7 @@ beforeEach(async () => {
   await withTenant(tenantId, async (tx) => {
     await tx.delete(sessions).where(eq(sessions.tenantId, tenantId));
   });
+  await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
   // Use a future date 5 days out — generated sessions need to be
   // dated such that the test stays stable.
   const future = new Date();
@@ -233,5 +245,88 @@ describe("substituteCoach (Phase R.1)", () => {
     if (result.kind === "error") {
       expect(result.code).toBe("session_not_found");
     }
+  });
+});
+
+describe("substituteCoach writes an audit row (E-02)", () => {
+  it("writes exactly one session.substitute row naming the previous and next coach", async () => {
+    const requestId = uuidv7();
+    const result = await substituteCoach(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { sessionId, newCoachId: coachBStaffId },
+    );
+    expect(result.kind).toBe("ok");
+
+    const rows = await admin.query<{
+      actor_type: string;
+      actor_id: string;
+      action: string;
+      entity_type: string;
+      entity_id: string;
+      before: { coachId: string | null } | null;
+      after: { coachId: string } | null;
+      changed_fields: string[] | null;
+      request_id: string | null;
+    }>(
+      `select actor_type, actor_id, action, entity_type, entity_id, before, after,
+              changed_fields, request_id
+         from audit_log
+        where tenant_id = $1::uuid and request_id = $2::uuid`,
+      [tenantId, requestId],
+    );
+    expect(rows.rows.length).toBe(1);
+    const row = rows.rows[0]!;
+    expect(row.action).toBe("session.substitute");
+    expect(row.entity_type).toBe("session");
+    expect(row.entity_id).toBe(sessionId);
+    expect(row.actor_type).toBe("staff");
+    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.request_id).toBe(requestId);
+    expect(row.before).toEqual({ coachId: coachAStaffId });
+    expect(row.after).toEqual({ coachId: coachBStaffId });
+    expect(row.changed_fields).toEqual(["coach_id"]);
+  });
+
+  it("writes zero rows when the substitute isn't a coach in this tenant", async () => {
+    const requestId = uuidv7();
+    const result = await substituteCoach(
+      { tenantId, userId: SYSTEM_USER, requestId },
+      { sessionId, newCoachId: uuidv7() },
+    );
+    expect(result.kind).toBe("error");
+
+    const rows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, requestId],
+    );
+    expect(rows.rows[0]!.n).toBe(0);
+  });
+
+  it("writes zero rows when the requested coach is already assigned (no mutation)", async () => {
+    const firstRequestId = uuidv7();
+    const first = await substituteCoach(
+      { tenantId, userId: SYSTEM_USER, requestId: firstRequestId },
+      { sessionId, newCoachId: coachBStaffId },
+    );
+    expect(first.kind).toBe("ok");
+
+    const secondRequestId = uuidv7();
+    const second = await substituteCoach(
+      { tenantId, userId: SYSTEM_USER, requestId: secondRequestId },
+      { sessionId, newCoachId: coachBStaffId },
+    );
+    expect(second.kind).toBe("ok");
+
+    const firstRows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, firstRequestId],
+    );
+    expect(firstRows.rows[0]!.n).toBe(1);
+
+    const secondRows = await admin.query<{ n: number }>(
+      "select count(*)::int as n from audit_log where tenant_id = $1::uuid and request_id = $2::uuid",
+      [tenantId, secondRequestId],
+    );
+    expect(secondRows.rows[0]!.n).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
 import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
+import { writeAudit } from "@/lib/audit/write";
 import {
   verifyInviteLinkToken,
 } from "./invite-link-token";
@@ -236,7 +237,11 @@ export async function redeemLoginLink(
     if (used.length === 0) return { kind: "error" as const, code: "used" as const };
 
     if (m.status === "invited") {
-      await tx
+      // E-02 — the second membership-activation path (the OTP
+      // callback is the other). `.returning` keeps the audit
+      // conditional on the flip actually landing; actor is the
+      // invited user redeeming their own link.
+      const activated = await tx
         .update(tenantMemberships)
         .set({ status: "active", updatedAt: new Date(), updatedBy: m.userId })
         .where(
@@ -244,7 +249,21 @@ export async function redeemLoginLink(
             eq(tenantMemberships.id, m.membershipId),
             eq(tenantMemberships.status, "invited"),
           ),
-        );
+        )
+        .returning({ id: tenantMemberships.id });
+      if (activated.length > 0) {
+        await writeAudit(tx, {
+          tenantId,
+          actorType: "user",
+          actorId: m.userId,
+          action: "membership.activate",
+          entityType: "tenant_membership",
+          entityId: m.membershipId,
+          before: { status: "invited" },
+          after: { status: "active" },
+          changedFields: ["status"],
+        });
+      }
     }
     return {
       kind: "ok" as const,

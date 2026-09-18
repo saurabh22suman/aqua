@@ -62,6 +62,12 @@ beforeAll(async () => {
     await tx.insert(locations).values({ tenantId, name: "Main", isPrimary: true });
   });
   await seedRoleTemplates(tenantId);
+  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
+  // sentinel needs a real row before an audited mutation runs.
+  await admin.query(
+    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
+    [SYSTEM_USER, `system-pin-link-${RUN}`],
+  );
   for (const [test, suffix] of [
     ["previewNone", "01"],
     ["noPin", "02"],
@@ -93,6 +99,9 @@ afterAll(async () => {
     await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
     await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    // E-02 — redeem writes membership.activate rows whose actor is
+    // the invited user; drop the trail before the users below.
+    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
   }
   for (const suffix of ["01", "02", "03", "04", "05", "06", "07"]) {
     const p = phone(suffix);

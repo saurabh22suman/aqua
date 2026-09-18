@@ -207,6 +207,26 @@ const ALLOWLIST = new Set([
   // Ops-console-improvements entries above; mechanical closure
   // extension for the new file.
   "tests/platform-metrics-snapshot-scope.test.ts",
+  // H-01/H-02 — schema-audit tests that read pg_indexes/pg_policies
+  // through the privileged pool against the migrated database. Same
+  // fixture-setup pattern as the other tier1 tests above (never the
+  // app's own request path); mechanical closure extension for the two
+  // new files.
+  "tests/tier1/hardening-indexes.test.ts",
+  "tests/tier1/rls-policy-shape.test.ts",
+  // E-01/H-04 — audit actor model: creates tenants + subscriptions via
+  // the privileged pool (tenants has FORCE RLS), then exercises the job
+  // through the app path. Same fixture-setup pattern as every entry
+  // above; the base branch landed the file without this entry.
+  "tests/tier1/audit-actor-model.test.ts",
+  // E-05 — activity_events: same fixture-setup pattern (privileged pool
+  // for tenants, runActivityIngestJob/withTenant for everything the app
+  // would do, admin reads for partition/ACL introspection).
+  "tests/tier1/activity-events.test.ts",
+  // E-06 — events rollup: same fixture-setup pattern (privileged pool to
+  // seed partitioned activity_events rows, the job itself under
+  // withTenant).
+  "tests/tier1/events-rollup-job.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
@@ -219,7 +239,15 @@ function filesReferencingMigrationUrl(): string[] {
     .split("\n")
     .filter(Boolean)
     .map((f) => f.replace(/^\.\//, ""))
-    .filter((f) => !f.startsWith("node_modules/") && !f.startsWith(".next/"))
+    .filter(
+      (f) =>
+        !f.startsWith("node_modules/") &&
+        !f.startsWith(".next/") &&
+        // Local agent worktrees are git-ignored full repo copies; every
+        // finding in them is a duplicate of one in the real tree. CI
+        // never has this directory.
+        !f.startsWith(".claude/"),
+    )
     .sort();
 }
 

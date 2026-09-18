@@ -10,3 +10,7 @@ coverage/
 
 # Playwright MCP session artifacts (screenshots, snapshots) -- not repo content
 .playwright-mcp/
+
+# Local agent worktrees and local design references -- never repo content
+.claude/worktrees/
+docs/images/
