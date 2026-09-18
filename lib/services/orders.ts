@@ -31,6 +31,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 // 300-line rule.
 
 export * from "./orders-billing";
+export * from "./cafe-billing";
 export type {
   CreateOrderInput,
   CreateOrderResult,

@@ -9,21 +9,22 @@ import {
   inputClass,
   METHOD_OPTIONS,
   REFERENCE_LABEL,
+  type BillSummary,
   type PaymentMethod,
-  type RaisedInvoice,
 } from "@/components/cafe-order-shared";
 
-// K-07 — bill settlement. The amount is the invoice total (café
-// bills settle in full, K-04); the server's refusal — partial
+// K-07/K-08 — bill settlement, the "Collect payment" step after the
+// bill's amount due is visible. The amount sent is the amount due
+// (café bills settle in full, K-04); the server's refusal — partial
 // payment, duplicate reference — is surfaced verbatim. Cash has no
 // reference; UPI / card / other require one before the button is
 // live.
 
 export function CafePaymentPanel({
-  invoice,
+  bill,
   onPaid,
 }: {
-  invoice: RaisedInvoice;
+  bill: BillSummary;
   onPaid: (method: PaymentMethod) => void;
 }) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
@@ -38,8 +39,8 @@ export function CafePaymentPanel({
     setError(null);
     try {
       const result = await recordPaymentAction({
-        invoiceId: invoice.invoiceId,
-        amountPaise: invoice.totalPaise,
+        invoiceId: bill.invoiceId,
+        amountPaise: bill.amountDuePaise,
         method,
         ...(method === "cash" ? {} : { reference: reference.trim() }),
       });
@@ -61,12 +62,12 @@ export function CafePaymentPanel({
       data-testid="cafe-payment"
     >
       <div>
-        <p className="text-[12px] text-ink-3">Bill raised</p>
+        <p className="text-[12px] text-ink-3">Collect payment</p>
         <p className="font-display text-[18px] font-semibold text-ink">
-          {invoice.invoiceNumber}
+          {bill.invoiceNumber}
         </p>
         <p className="mt-1 text-[13px] text-ink-2">
-          Amount due {formatINR(invoice.totalPaise)}
+          Amount due {formatINR(bill.amountDuePaise)}
         </p>
       </div>
 
@@ -139,11 +140,11 @@ export function CafePaymentPanel({
 }
 
 export function CafeReceipt({
-  invoice,
+  bill,
   method,
   onReset,
 }: {
-  invoice: RaisedInvoice;
+  bill: BillSummary;
   method: PaymentMethod;
   onReset: () => void;
 }) {
@@ -159,10 +160,10 @@ export function CafeReceipt({
         <p className="text-[14px] font-semibold">Paid</p>
       </div>
       <p className="mt-2 font-display text-[20px] font-semibold text-ink">
-        {invoice.invoiceNumber}
+        {bill.invoiceNumber}
       </p>
       <p className="mt-1 text-[13px] text-ink-2">
-        {formatINR(invoice.totalPaise)} · {methodLabel}
+        {formatINR(bill.totalPaise)} · {methodLabel}
       </p>
       <Button
         variant="secondary"

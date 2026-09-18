@@ -253,6 +253,14 @@ const ALLOWLIST = new Set([
   "tests/tier1/cafe-orders.test.ts",
   "tests/tier1/cafe-payments.test.ts",
   "tests/tier1/cafe-reconciliation.test.ts",
+  // K-05 — member wallet ledger: same fixture-setup pattern (privileged
+  // pool seeds tenants/locations/members, then every service call and
+  // the RLS/grant probes go through withTenant()/app_user).
+  "tests/tier1/wallet-ledger.test.ts",
+  // K-08 — reception café billing flow: same fixture-setup pattern as
+  // the K-01…K-06 entries above (privileged pool for tenants/members/
+  // menu; orders, billing and payments through the services).
+  "tests/tier1/cafe-billing-flow.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

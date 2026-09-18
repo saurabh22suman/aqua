@@ -6,9 +6,13 @@ import { requirePermission } from "@/lib/auth/permission";
 import {
   createOrder,
   finalizeOrder,
+  listOpenCafeOrders,
+  requestCafeBill,
   voidOrder,
+  type CafeBillResult,
   type CreateOrderResult,
   type FinalizeOrderResult,
+  type OpenCafeOrderRow,
   type VoidOrderResult,
 } from "@/lib/services/orders";
 
@@ -68,4 +72,33 @@ export async function voidOrderAction(raw: unknown): Promise<VoidOrderResult> {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "payments.record");
   return voidOrder(ctx, parsed.data.orderId, parsed.data.reason);
+}
+
+// K-08 — reception café billing flow. The open-order list is a counter
+// read; requesting the bill issues the invoice through the K-03 bridge
+// and returns the itemized amount due. Both ride payments.record, the
+// same permission that reads the counter and settles the bill.
+
+const openOrdersInput = z.object({
+  locationId: z.string().uuid().optional(),
+});
+
+export async function listOpenCafeOrdersAction(
+  raw: unknown,
+): Promise<OpenCafeOrderRow[]> {
+  const parsed = openOrdersInput.safeParse(raw);
+  if (!parsed.success) return [];
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "payments.record");
+  return listOpenCafeOrders(ctx, parsed.data);
+}
+
+export async function requestCafeBillAction(
+  raw: unknown,
+): Promise<CafeBillResult> {
+  const parsed = orderInput.safeParse(raw);
+  if (!parsed.success) return { ok: false, error: "Invalid order." };
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "payments.record");
+  return requestCafeBill(ctx, parsed.data.orderId);
 }

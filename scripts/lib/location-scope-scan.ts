@@ -55,6 +55,8 @@ export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
     "follow-up: waitlist queues are reached through enquiry/member surfaces; scope when the receptionist surface needs it",
   "lib/services/onboarding-checklist.ts":
     "owner onboarding checklist; the owner surface is never location-restricted",
+  "lib/services/wallet-core.ts":
+    "K-05 ledger primitives: the member row is locked by id for balance re-derivation and idempotency, never listed; topUp (wallet.ts) does the location visibility check before calling in",
 };
 
 // Comments must not count as calling the helper (the ops-action scan
