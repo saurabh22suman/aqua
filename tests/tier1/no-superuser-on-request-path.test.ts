@@ -227,6 +227,11 @@ const ALLOWLIST = new Set([
   // seed partitioned activity_events rows, the job itself under
   // withTenant).
   "tests/tier1/events-rollup-job.test.ts",
+  // H-03 — audit_log partitioning: same fixture-setup pattern
+  // (privileged pool for partition/RLS/ACL introspection and partition
+  // seeding; every write and the UPDATE/DELETE denials go through
+  // withTenant over app_user, never the superuser).
+  "tests/tier1/audit-partitioning.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
