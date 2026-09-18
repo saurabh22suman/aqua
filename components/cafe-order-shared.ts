@@ -1,7 +1,8 @@
 import { computeTax } from "@/lib/money/arithmetic";
 import type { MenuItemRow } from "@/lib/services/menu";
+import type { CafeBill } from "@/lib/services/cafe-billing";
 
-// K-07 — shapes and constants shared by the café counter client
+// K-07/K-08 — shapes and constants shared by the café counter client
 // islands. No React, no database: cart arithmetic mirrors the
 // service exactly (integer paise, per-line computeTax, line + tax).
 
@@ -13,16 +14,17 @@ export type PlacedOrder = {
   memberId: string | null;
 };
 
-export type RaisedInvoice = {
-  invoiceId: string;
-  invoiceNumber: string;
-  totalPaise: number;
-};
+// The payment panel only needs the document identity and the amount
+// due; the itemized bill above it (K-08) carries the lines.
+export type BillSummary = Pick<
+  CafeBill,
+  "invoiceId" | "invoiceNumber" | "totalPaise" | "amountDuePaise"
+>;
 
 export type CartLine = { item: MenuItemRow; qty: number };
 
 export const WALK_IN_NOTE =
-  "A walk-in order needs a member before it can be billed. Record it with Place order, or add a member and use Bill & pay.";
+  "A walk-in order needs a member before it can be billed. Record it with Place order, or add a member and use Request bill.";
 
 export const METHOD_OPTIONS: {
   value: PaymentMethod;

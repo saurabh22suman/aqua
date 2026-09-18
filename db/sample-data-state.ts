@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { withTenant } from "./tenant";
+import { withTenant, type TenantTx } from "./tenant";
 import { programs, batches } from "./schema/programs";
 
 // Phase 2.3 — sample-data state query. Used by the tenant detail
@@ -68,4 +68,32 @@ export async function getSampleDataState(
       hasReal: n(programReal as { n: number }[]) > 0 || n(batchReal as { n: number }[]) > 0,
     };
   });
+}
+
+// M-05 — the "lock after first real use" predicate, in the same shape
+// applyPreset applies (preset-engine.ts rule 5: any member row blocks;
+// members are never sample) plus the sample-data-state definition of
+// "real" (a non-sample program or batch). Exported so module
+// apply/upgrade and the preset engine can share one answer instead of
+// drifting apart.
+export async function tenantHasNonSampleData(
+  tx: TenantTx,
+  tenantId: string,
+): Promise<boolean> {
+  const rows = await tx.execute(sql`
+    select 1 from members
+     where tenant_id = ${tenantId}::uuid
+    union all
+    select 1 from programs
+     where tenant_id = ${tenantId}::uuid
+       and is_sample = false
+       and deleted_at is null
+    union all
+    select 1 from batches
+     where tenant_id = ${tenantId}::uuid
+       and is_sample = false
+       and deleted_at is null
+    limit 1
+  `);
+  return rows.rows.length > 0;
 }

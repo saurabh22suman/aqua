@@ -2,12 +2,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// K-07 — reception café counter render tests.
+// K-07/K-08 — reception café counter render tests.
 //   * empty menu state
 //   * menu grid grouped by category
 //   * cart maths in integer paise (price × qty + per-line GST)
 //   * bill-without-member disabled with the exact server limitation
 //   * partial-payment refusal surfaced verbatim by the server
+//   * the K-08 split: Request bill → itemized amount due → Collect
+//     payment (the button no longer says "Bill & pay")
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -27,13 +29,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 const createOrderAction = vi.hoisted(() => vi.fn());
-const finalizeOrderAction = vi.hoisted(() => vi.fn());
+const requestCafeBillAction = vi.hoisted(() => vi.fn());
 const recordPaymentAction = vi.hoisted(() => vi.fn());
 const listMembersAction = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/actions/orders", () => ({
   createOrderAction,
-  finalizeOrderAction,
+  requestCafeBillAction,
 }));
 vi.mock("@/lib/actions/payments", () => ({ recordPaymentAction }));
 vi.mock("@/lib/actions/people", () => ({ listMembersAction }));
@@ -118,7 +120,7 @@ async function chooseMember() {
 async function reachPaymentPhase() {
   fireEvent.click(screen.getByRole("button", { name: "Add Masala chai" }));
   await chooseMember();
-  fireEvent.click(screen.getByRole("button", { name: /bill & pay/i }));
+  fireEvent.click(screen.getByRole("button", { name: /request bill/i }));
   await screen.findByTestId("cafe-payment");
 }
 
@@ -128,10 +130,35 @@ beforeEach(() => {
     orderId: "o1",
     totalPaise: 26250,
   });
-  finalizeOrderAction.mockResolvedValue({
+  requestCafeBillAction.mockResolvedValue({
     ok: true,
-    invoiceId: "inv1",
-    invoiceNumber: "INV-2026-0001",
+    alreadyBilled: false,
+    bill: {
+      orderId: "o1",
+      status: "billed",
+      memberId: "m1",
+      memberName: "Aadhya Sharma",
+      locationId: LOCATION,
+      locationName: "Worli",
+      documentKind: "tax_invoice",
+      invoiceId: "inv1",
+      invoiceNumber: "INV-2026-0001",
+      invoiceStatus: "issued",
+      lines: [
+        {
+          itemName: "Masala chai",
+          qty: 1,
+          unitPricePaise: 25000,
+          linePaise: 25000,
+          taxRateBp: 500,
+          taxPaise: 1250,
+        },
+      ],
+      subtotalPaise: 25000,
+      taxPaise: 1250,
+      totalPaise: 26250,
+      amountDuePaise: 26250,
+    },
   });
   recordPaymentAction.mockResolvedValue({
     ok: true,
@@ -191,32 +218,32 @@ describe("CafeOrderScreen — menu and cart", () => {
 });
 
 describe("CafeOrderScreen — walk-in billing limitation", () => {
-  it("disables Bill & pay and states the exact limitation when no member is chosen", () => {
+  it("disables Request bill and states the exact limitation when no member is chosen", () => {
     renderScreen();
     fireEvent.click(screen.getByRole("button", { name: "Add Masala chai" }));
 
-    const bill = screen.getByRole("button", { name: /bill & pay/i });
+    const bill = screen.getByRole("button", { name: /request bill/i });
     expect((bill as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByTestId("cafe-walk-in-note").textContent).toMatch(
       /walk-in order needs a member before it can be billed/i,
     );
   });
 
-  it("stays disabled after a walk-in order is placed and does not call finalize", async () => {
+  it("stays disabled after a walk-in order is placed and does not request the bill", async () => {
     renderScreen();
     fireEvent.click(screen.getByRole("button", { name: "Add Masala chai" }));
     fireEvent.click(screen.getByRole("button", { name: /place order/i }));
     await screen.findByTestId("cafe-order-status");
 
-    const bill = screen.getByRole("button", { name: /bill & pay/i });
+    const bill = screen.getByRole("button", { name: /request bill/i });
     expect((bill as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(bill);
-    expect(finalizeOrderAction).not.toHaveBeenCalled();
+    expect(requestCafeBillAction).not.toHaveBeenCalled();
   });
 });
 
-describe("CafeOrderScreen — bill and pay flow", () => {
-  it("bills a member order and records the counter payment to the invoice total", async () => {
+describe("CafeOrderScreen — request bill and collect payment", () => {
+  it("shows the itemized amount due before collecting the counter payment", async () => {
     renderScreen();
     await reachPaymentPhase();
 
@@ -226,7 +253,15 @@ describe("CafeOrderScreen — bill and pay flow", () => {
       lines: [{ itemId: "i1", qty: 1 }],
     });
     await vi.waitFor(() =>
-      expect(finalizeOrderAction).toHaveBeenCalledWith({ orderId: "o1" }),
+      expect(requestCafeBillAction).toHaveBeenCalledWith({ orderId: "o1" }),
+    );
+
+    // K-08 split: amount visible first, payment second.
+    const due = screen.getByTestId("cafe-amount-due");
+    expect(due.getAttribute("data-amount-paise")).toBe("26250");
+    expect(due.textContent).toContain("262.50");
+    expect(screen.getByTestId("cafe-bill-lines").textContent).toContain(
+      "Masala chai",
     );
     expect(screen.getByTestId("cafe-payment").textContent).toContain(
       "INV-2026-0001",

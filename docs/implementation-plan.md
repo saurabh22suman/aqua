@@ -1877,10 +1877,35 @@ UI yet (`voidOrderAction` exists; a placed walk-in has no screen to void it).
 
 ### K-05 · Member wallet ledger — **fast-follow, not in R1**
 **Lane:** schema + services
-**Status:** deferred 2026-09-18. Append-only `account_entries` (direction,
-amount_paise, `balance_after`, source, idempotency) for tabs, advances and
-package credits. Release 1 café takes counter payments only; this lands
-immediately after R1-01 with balance re-derivation tests.
+**Status:** complete (2026-09-18, moving out of fast-follow) —
+`20260918130000_k05_account_entries.sql`: append-only `account_entries`
+(direction, amount_paise, `balance_after_paise`, source_type/source_id,
+idempotency_key, unique per tenant), RLS forced, INSERT+SELECT only and the
+revoke made bootstrap-proof. `lib/services/wallet.ts` + `wallet-core.ts`:
+`topUp` (counter payment row with NULL invoice + credit entry, same
+transaction), `charge` (refuses overdraft), `refund`; balance re-derives from
+entries and the stored `balance_after` is asserted equal at every write.
+Audited (`wallet.topup|charge|refund`). **Not wired yet:** settling a café
+invoice from the wallet (next K task), wallet UI, credit limits (open
+decision in project-scope §5.12).
+
+### K-08 · Reception café billing flow
+**Lane:** services + UI
+**Depends:** K-03, K-04, K-07
+**Build:** Café billing at reception only, mirroring membership/activity
+billing: the receptionist selects an open café order, the system requests the
+bill (finalizing into its invoice when needed) and shows the itemized bill
+with the payment amount due, then collects payment through the existing
+panel. Walk-ins without a member stay unbillable — the reason is surfaced,
+no anonymous path is invented. No owner-surface café billing.
+**Done when:** an open order can be selected, bill requested, amount shown,
+and paid from reception; the paid order leaves the open list; the bill maths
+equal the invoice to the paisa; a walk-in refusal is shown verbatim.
+**Status:** complete — `lib/services/cafe-billing.ts` + `cafe-bill-view.ts`,
+actions `listOpenCafeOrdersAction`/`requestCafeBillAction` (`payments.record`),
+panels on `/reception/cafe` refactored to Request bill → amount due → Collect
+payment. Invoice↔bill equality and audit of `order.bill` pinned by tests.
+Deferred: wallet settlement (K-05 follow-on) and order void UI.
 
 ## U — UI closure (target-design gaps)
 
@@ -1971,6 +1996,51 @@ budget check passes, and no photo-upload affordance exists anywhere.
 **Lane:** UI
 **Build:** Responsive shell over the existing `(owner)` layout: sidebar + top bar at `lg` (≥1024px) matching the owner target design (search, location switcher, notifications affordance deferred), the existing four-item bottom nav preserved below `lg`. Coach and reception bundles must remain free of owner components (route groups already enforce this). Ops stays desktop-only (mobile best-effort, not a gate — decision 2026-09-18).
 **Done when:** every owner route renders at both 1280×900 and 390×844 from the same layout, the bundle-budget check passes, and coach/reception route bundles contain no owner code.
+
+**Batch status (2026-09-18, third Release 1 batch):**
+
+- **M-01** complete — `activity_types` + nullable `facilities.activity_type_key`
+  with a seated backfill (pool→swimming, court→tennis, turf→team_sport,
+  studio→fitness; unknown kinds stay NULL).
+- **M-02** deferred — the `facilities→activities` rename + `resources` table
+  still needs its own migration pass (M-01 added the type link only).
+- **M-03** complete — generic `skill_frameworks`/`skill_nodes`/`assessments`,
+  additive; the swim preset's `skill_levels`/`skills` are untouched, and the
+  preset→generic data migration is a follow-up.
+- **M-04** complete — platform `modules` + tenant `tenant_modules`, contract
+  test resolves every declared preset/config/feature key (and fails on a
+  known-bad key).
+- **M-05** complete — `applyModule` idempotent, `upgradeModule` explicit and
+  audited, non-additive upgrades refused once non-sample data exists.
+- **M-06** complete — `per_session | term | drop_in` added to
+  `plan_shapes`/`membership_plans`; existing kinds untouched.
+- **U-01** complete — inline-SVG analytics on `/owner/reports` (no chart
+  dependency); the target arc is omitted (no target in the schema).
+- **U-02** complete — `/owner/fees` hub; discounts deliberately absent.
+- **U-03** complete except **Progress**: Payments/Notes/Documents tabs, with
+  `member_notes` + audit. Progress waits for M-03/V-10 wiring; Documents is an
+  honest empty state until C-07.
+- **U-04** complete — week/month schedule grid on `/owner/schedule`.
+- **U-05** complete — permission-scoped member/enquiry/invoice search in the
+  owner shell; no cross-entity index in R1.
+- **U-06** complete — announcements + in-app `notifications` with audience
+  fan-out (all/batch/parents) and audit; WhatsApp remains the C-40a mock.
+  R1 families on the zero-JS link resolve to no user row and receive nothing
+  in-app (documented).
+- **U-07** complete — locations CRUD + business hours in the config registry;
+  single-location tenants see no switcher.
+- **U-08** complete (scoped) — reception "Today's check-ins" over existing
+  sessions/attendance, interactive because the receptionist template already
+  grants `attendance.mark`. **Staff attendance UI deferred** (needs V-24
+  shifts).
+- **U-09** complete on staff board, coach members list and reception
+  check-ins (stable id seeds, `boring-avatars`). Owner member surfaces are not
+  swapped yet — another workstream owns those files; ops has no users list.
+- **U-10** complete — `OwnerShell`: sidebar ≥1024px, bottom nav below; all
+  routes within the 150 KB budget.
+- **K-05 / K-08** complete — see their status notes above. Deferred:
+  wallet-settles-café, order void UI, M-02, U-03 Progress, U-08 staff
+  attendance.
 
 ## Release 1.1 — fast-follow (not in the gate)
 

@@ -138,9 +138,12 @@ const WHITELIST = new Set([
   // primary signal; the colour is supportive.
   "app/(platform)/ops/features/feature-catalogue.tsx",
 
-  // reception/page.tsx — same lane strip as the coach-side
-  // today view (DESIGN.md §3: water/warn/good fill).
-  "app/(reception)/reception/page.tsx",
+  // reception-check-ins.tsx — U-08 moved the reception day's lane
+  // strip and attendance marks out of reception/page.tsx into this
+  // panel. `good`/`warn` mark check-in progress and attendance
+  // state (DESIGN.md §1.1); the time badge tones come from the
+  // shared ATTENDANCE_MARK_TONE map.
+  "components/reception-check-ins.tsx",
 
   // platform/tenants/[tenantId]/page.tsx — tenant detail with
   // StatusPill; the StatusPill is the legitimate money/lifecycle
@@ -164,6 +167,23 @@ const WHITELIST = new Set([
   // paid). Both files exist only to settle a counter payment.
   "components/cafe-order-screen.tsx",
   "components/cafe-payment-panel.tsx",
+
+  // U-01/U-02/U-04 — owner analytics, fees hub and schedule grid.
+  // reports/analytics-cards.tsx: money/attendance analytics (good =
+  // active, warn = paused/under-filled, late = lapsed/overdue).
+  // owner/fees/page.tsx + fees/fees-invoice-list.tsx: money states
+  // (late = overdue, good = settled). owner-schedule-grid.tsx: the
+  // batch capacity lane strip (warn when under-filled), the same
+  // attendance-meaning reuse the coach registers already carry.
+  "components/reports/analytics-cards.tsx",
+  "app/(owner)/owner/fees/page.tsx",
+  "components/fees/fees-invoice-list.tsx",
+  "components/owner-schedule-grid.tsx",
+  // cafe-open-orders.tsx — the K-08 reception billing surface
+  // (open-order list). `warn-soft` marks the walk-in billing
+  // limitation — the same money/needs-attention state as the K-07
+  // order screen's note.
+  "components/cafe-open-orders.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

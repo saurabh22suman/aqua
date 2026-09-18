@@ -253,6 +253,32 @@ const ALLOWLIST = new Set([
   "tests/tier1/cafe-orders.test.ts",
   "tests/tier1/cafe-payments.test.ts",
   "tests/tier1/cafe-reconciliation.test.ts",
+  // M-01..M-06 — module kernel. Same fixture-setup pattern as the K
+  // entries above: the privileged pool seeds tenants/locations/users
+  // (tables under FORCE RLS), then every app operation goes through
+  // withTenant()/the services; never request-path code. The M-01
+  // backfill test lives under tests/migrations/ (directory-covered).
+  "tests/tier1/activity-types.test.ts",
+  "tests/tier1/skill-framework.test.ts",
+  "tests/tier1/module-registry.test.ts",
+  "tests/tier1/module-versioning.test.ts",
+  "tests/tier1/pricing-models.test.ts",
+  // U-03/U-06/U-07 — owner member notes, announcements and locations.
+  // Same fixture-setup pattern as the entries above: the privileged
+  // pool seeds tenants/locations/users/persons/members/memberships
+  // (tables under FORCE RLS); every app operation under test goes
+  // through withTenant()/the services; never request-path code.
+  "tests/tier1/member-notes.test.ts",
+  "tests/tier1/announcements.test.ts",
+  "tests/tier1/owner-locations.test.ts",
+  // K-05 — member wallet ledger: same fixture-setup pattern (privileged
+  // pool seeds tenants/locations/members, then every service call and
+  // the RLS/grant probes go through withTenant()/app_user).
+  "tests/tier1/wallet-ledger.test.ts",
+  // K-08 — reception café billing flow: same fixture-setup pattern as
+  // the K-01…K-06 entries above (privileged pool for tenants/members/
+  // menu; orders, billing and payments through the services).
+  "tests/tier1/cafe-billing-flow.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

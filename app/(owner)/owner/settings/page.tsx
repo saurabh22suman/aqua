@@ -1,20 +1,19 @@
 import Link from "next/link";
-import { BellRing, CalendarOff, CreditCard, Dumbbell, LogOut, ChevronRight, Languages, ListChecks, Palette, QrCode, SlidersHorizontal, Users, Utensils } from "lucide-react";
+import { BellRing, CalendarOff, CreditCard, Dumbbell, LogOut, ChevronRight, Languages, ListChecks, MapPin, Megaphone, Palette, QrCode, SlidersHorizontal, Users, Utensils } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { listAdminLocationsAction } from "@/lib/actions/locations";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 
 // F-23 — settings surface. Branding (Phase 2.9), Terminology
 // (Phase 2.10), Staff (Phase 3.5) and the onboarding checklist
-// (Phase 2.8) live here. Locations / business hours / holidays
-// editors are NOT on this page today — those tables exist (per the
-// audit: locations + tenant_holidays) but the owner-side editors
-// are their own future tasks. The subtitle below says only what's
-// actually reachable from this list; the follow-up tasks can grow
-// it back.
+// (Phase 2.8) live here. U-07 adds the locations + business-hours
+// editor; the label stays singular for a single-site tenant so the
+// concept of multiple locations never appears until one exists.
+// U-06's announcements entry point lives here too (in-app only).
 //
 // K2 — Account section at the foot of the page. The bottom nav's
 // 4th slot is Settings (admin-y), not a "Me" tab, so the identity
@@ -25,6 +24,12 @@ export default async function Page() {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);
+  // U-07 — a single-location tenant never sees the concept of multiple
+  // sites: the label stays singular until a second location exists.
+  // The page itself is still reachable, because adding that second
+  // location is the only way the concept ever becomes real.
+  const locations = await listAdminLocationsAction();
+  const multiLocation = locations.length > 1;
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -51,6 +56,42 @@ export default async function Page() {
       </Link>
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Academy</h2>
+      <Link
+        href="/owner/settings/locations"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+        data-testid="settings-locations"
+      >
+        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
+          <MapPin size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">
+            {multiLocation ? "Locations" : "Academy location"}
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            {multiLocation
+              ? "Every site, its address and its business hours."
+              : "Address and business hours for your academy."}
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+      <Link
+        href="/owner/announcements"
+        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+        data-testid="settings-announcements"
+      >
+        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
+          <Megaphone size={16} strokeWidth={2} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Announcements</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Message staff, a batch or every guardian in-app.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
       <Link
         href="/owner/settings/branding"
         className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"

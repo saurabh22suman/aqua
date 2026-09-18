@@ -400,6 +400,10 @@ export type RosterRow = {
   name: string;
   code: string;
   status: "present" | "absent" | "late" | null;
+  // U-08 — the checked-in time the reception panel renders. Null when
+  // the member has no mark for this session yet. Optional so existing
+  // register fixtures (which never cared about the time) stay valid.
+  markedAt?: string | null;
   pct: number | null;
   // C-14 done-when: "a trial appears on the coach's register flagged
   // as a trial." A trial IS a member (status 'trial', bookTrial in
@@ -461,6 +465,7 @@ export async function getRosterForSession(
         code: members.memberCode,
         memberStatus: members.status,
         status: attendance.status,
+        markedAt: attendance.markedAt,
         presentCount: sql<number>`(
           select count(*)::int from ${attendance} a
           where a.tenant_id = ${ctx.tenantId}
@@ -500,6 +505,7 @@ export async function getRosterForSession(
         name: r.name,
         code: r.code,
         status: (r.status as RosterRow["status"]) ?? null,
+        markedAt: r.markedAt ? r.markedAt.toISOString() : null,
         pct:
           r.totalCount > 0 ? Math.round((r.presentCount / r.totalCount) * 100) : null,
         isTrial: r.memberStatus === "trial",

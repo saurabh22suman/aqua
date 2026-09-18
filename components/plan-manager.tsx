@@ -32,7 +32,8 @@ function kindLabel(plan: {
   durationDays: number | null;
   sessions: number | null;
 }): string {
-  if (plan.kind === "duration") return `${plan.durationDays} days`;
+  if (plan.kind === "duration" || plan.kind === "term")
+    return `${plan.durationDays} days`;
   if (plan.kind === "sessions") return `${plan.sessions} classes`;
   return "one-time";
 }
@@ -462,11 +463,14 @@ function CustomPlanForm({
             className={inputClass}
           >
             <option value="duration">Duration (days)</option>
+            <option value="term">Term (days)</option>
             <option value="sessions">Class pack</option>
             <option value="one_time">One-time</option>
+            <option value="per_session">Pay-as-you-go (invoice)</option>
+            <option value="drop_in">Drop-in (invoice)</option>
           </select>
         </label>
-        {kind === "duration" ? (
+        {kind === "duration" || kind === "term" ? (
           <label className="block">
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Days
@@ -517,7 +521,9 @@ function CustomPlanForm({
               name,
               kind,
               amountPaise: amountPaise === null ? 0 : Number(amountPaise),
-              ...(kind === "duration" ? { durationDays: Number(durationDays) } : {}),
+              ...(kind === "duration" || kind === "term"
+                ? { durationDays: Number(durationDays) }
+                : {}),
               ...(kind === "sessions" ? { sessions: Number(sessions) } : {}),
             });
           }}

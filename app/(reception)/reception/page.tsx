@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getTodayAction } from "@/lib/actions/coach";
+import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { requireReception } from "@/lib/auth/surface-guard";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { formatTimeIST } from "@/lib/time/tz";
+import { hasPermission } from "@/lib/auth/permission";
 
 export default async function ReceptionTodayPage() {
-  await requireReception();
+  const ctx = await requireReception();
   const { sessions } = await getTodayAction();
+  // U-08 — the receptionist role carries attendance.mark
+  // (lib/services/roles.ts), so the panel is interactive. If a future
+  // role reaches this surface without it, the panel degrades to
+  // read-only rather than offering a tap that would fail.
+  const canMark = hasPermission(ctx, "attendance.mark");
 
   return (
     <main className="px-5 pt-10">
@@ -41,44 +46,7 @@ export default async function ReceptionTodayPage() {
         <ChevronRight size={18} className="text-ink-3 flex-none" />
       </Link>
 
-      {sessions.length === 0 ? (
-        <EmptyState
-          title="No sessions today"
-          body="Sessions are generated four weeks ahead for each batch."
-        />
-      ) : (
-        <ul className="mt-6 space-y-4">
-          {sessions.map((s) => {
-            const pct = s.total > 0 ? Math.round((s.marked / s.total) * 100) : 0;
-            const fill = s.marked === 0 ? "bg-water" : pct < 50 ? "bg-warn" : "bg-good";
-            return (
-              <li key={s.id}>
-                <div className="bg-paper rounded-card border border-line p-4">
-                  <div className="flex justify-between items-baseline mb-2">
-                    <span className="text-[15px] font-display font-semibold">
-                      {formatTimeIST(s.startsAt)} {s.batchName}
-                    </span>
-                    <span className="text-[13px] text-ink-3">
-                      {s.total === 0 ? "No one enrolled" : `${s.marked} / ${s.total}`}
-                    </span>
-                  </div>
-                  {s.total > 0 ? (
-                    <div className="h-1.5 rounded-pill bg-deck overflow-hidden">
-                      <div
-                        className={`h-full rounded-pill ${fill}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  ) : null}
-                  <p className="mt-2.5 text-[12px] text-ink-3">
-                    Coach will mark attendance.
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <ReceptionCheckIns sessions={sessions} canMark={canMark} />
     </main>
   );
 }
