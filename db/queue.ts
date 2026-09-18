@@ -8,6 +8,8 @@ import { scheduleSubscriptionsExpire } from "@/lib/jobs/subscriptions-expire-sch
 import { scheduleInvoicesGenerate } from "@/lib/jobs/invoices-generate-schedule";
 import { scheduleReportsRollup } from "@/lib/jobs/reports-rollup-schedule";
 import { scheduleEventsRollup } from "@/lib/jobs/events-rollup-schedule";
+import { scheduleActivityExport } from "@/lib/jobs/activity-export-schedule";
+import { scheduleAuditCheckpoint } from "@/lib/jobs/audit-checkpoint-schedule";
 
 // pg-boss needs a role-aware connection. db/client.ts's pool already runs
 // `set role app_user` on every connection (its onConnect hook) — routing
@@ -79,7 +81,9 @@ export async function registerAbsenceAlertsSchedule(
 // best-effort call: same contract as the two above, but one pg-boss
 // start per tenant creation instead of three. E-06's events.rollup
 // (03:15, after reports.rollup's 03:00) rides the same registration,
-// keeping the one-start-per-tenant contract.
+// keeping the one-start-per-tenant contract, and R1 adds the next two
+// links in the same nightly chain: activity.export at 03:30 and
+// audit.checkpoint at 04:00.
 export async function registerBillingSchedules(
   tenantId: string,
   timezone: string,
@@ -91,6 +95,8 @@ export async function registerBillingSchedules(
     await scheduleInvoicesGenerate(boss, tenantId, timezone);
     await scheduleReportsRollup(boss, tenantId, timezone);
     await scheduleEventsRollup(boss, tenantId, timezone);
+    await scheduleActivityExport(boss, tenantId, timezone);
+    await scheduleAuditCheckpoint(boss, tenantId, timezone);
   } finally {
     await boss.stop({ graceful: false, timeout: 5000 });
   }

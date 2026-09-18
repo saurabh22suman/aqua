@@ -227,6 +227,19 @@ const ALLOWLIST = new Set([
   // seed partitioned activity_events rows, the job itself under
   // withTenant).
   "tests/tier1/events-rollup-job.test.ts",
+  // E-03 — audit tamper evidence: same fixture-setup pattern (privileged
+  // pool to insert/tamper audit_log rows around the append-only trigger,
+  // the job and verifier on the app path).
+  "tests/tier1/audit-tamper-evidence.test.ts",
+  // E-06 — activity export: same fixture-setup pattern (privileged pool
+  // seeds partitioned activity_events rows, the job runs under
+  // withTenant against a fake object store).
+  "tests/tier1/activity-export-job.test.ts",
+  // E-06 — retention is the operator-only path that DROPs partitions:
+  // it reads MIGRATION_DATABASE_URL to decide whether the privileged
+  // pool is available at all (never for request-path code), and refuses
+  // to DROP without it. Not scheduled, not imported by the app.
+  "scripts/retention-activity-events.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
