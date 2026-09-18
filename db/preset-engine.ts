@@ -19,6 +19,7 @@ import { tenantFeatures } from "./schema/tenant-features";
 import { sql as drizzleSql, sql } from "drizzle-orm";
 import { getActivePreset } from "./platform-presets";
 import { generateSessions } from "@/lib/jobs/session-generator";
+import { bridgePresetLadder } from "@/lib/services/skill-ladder-bridge";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // Phase 2.2a — applyPreset engine. Architecture §7.4.
@@ -480,6 +481,13 @@ export async function applyPreset(
           });
       }
     }
+
+    // 4e-bis. V-09 — mirror the ladder just seeded into the generic
+    // framework (M-03) so a tenant created after the bridge migration
+    // deployed still has an assessable ladder. Idempotent; the SQL
+    // half lives in 20260918142000_v10_framework_bridge.sql. See
+    // lib/services/skill-ladder-bridge.ts.
+    await bridgePresetLadder(tx, tenantId, presetKey);
 
     // 4f. Plan shapes. amount_paise stays null (architecture
     // §7.2). The wizard (2.6) makes the field required before

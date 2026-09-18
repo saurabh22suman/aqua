@@ -1,17 +1,23 @@
 import Link from "next/link";
 
-// U-03 — the member 360 tabs. Payments / Notes / Documents are real
-// tabs; the Progress tab is deliberately absent (M-03/V-10 are other
-// workstreams — faking an empty progress surface would read as a
-// feature that exists).
+// U-03 — the member 360 tabs. Payments / Progress / Notes / Documents
+// are real tabs. Progress was deliberately absent while M-03/V-10 were
+// other workstreams; V-11 wires it to the generic framework's
+// assessments.
 //
 // Plain links with `?tab=`, so every tab is a server render.
 
-export type MemberTab = "overview" | "payments" | "notes" | "documents";
+export type MemberTab =
+  | "overview"
+  | "payments"
+  | "progress"
+  | "notes"
+  | "documents";
 
 const TABS: Array<{ key: MemberTab; label: string }> = [
   { key: "overview", label: "Overview" },
   { key: "payments", label: "Payments" },
+  { key: "progress", label: "Progress" },
   { key: "notes", label: "Notes" },
   { key: "documents", label: "Documents" },
 ];

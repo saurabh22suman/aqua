@@ -24,23 +24,30 @@ import { MemberDetailTabs, type MemberTab } from "@/components/member-detail/mem
 import { MemberProfileSections } from "@/components/member-detail/member-profile-sections";
 import { MemberNotesPanel } from "@/components/member-detail/member-notes-panel";
 import { MemberDocumentsPanel } from "@/components/member-detail/member-documents-panel";
+import { MemberProgressPanel } from "@/components/member-detail/member-progress-panel";
+import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { requireOwner } from "@/lib/auth/surface-guard";
-import { hasPermission } from "@/lib/auth/permission";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 
-const TAB_KEYS = new Set<MemberTab>(["overview", "payments", "notes", "documents"]);
+const TAB_KEYS = new Set<MemberTab>([
+  "overview",
+  "payments",
+  "progress",
+  "notes",
+  "documents",
+]);
 
 function resolveTab(value: string | undefined): MemberTab {
   return TAB_KEYS.has(value as MemberTab) ? (value as MemberTab) : "overview";
 }
 
-// U-03 — the member 360 with Overview / Payments / Notes / Documents
-// tabs. Payments reuses the C-32/C-33 invoice panel; Notes is the new
-// audited member_notes surface; Documents states honestly that C-07
-// (photo/document uploads) is unbuilt. The Progress tab is
-// deliberately absent (M-03/V-10 are other workstreams) rather than
-// rendered as a stub.
+// U-03/V-11 — the member 360 with Overview / Payments / Progress /
+// Notes / Documents tabs. Payments reuses the C-32/C-33 invoice panel;
+// Progress renders the generic framework's assessments (V-11); Notes
+// is the audited member_notes surface; Documents states honestly that
+// C-07 (photo/document uploads) is unbuilt.
 
 export default async function MemberDetailPage({
   params,
@@ -65,6 +72,15 @@ export default async function MemberDetailPage({
       listLocationsAction(),
     ]);
   if (!member) notFound();
+
+  // V-11 — only fetched when the Progress tab is actually open, and
+  // only when the swim.levels module is on; the panel renders the
+  // honest empty state otherwise.
+  const progressEnabled = hasFeature(ctx, "swim.levels");
+  const progress =
+    tab === "progress" && progressEnabled
+      ? await getMemberProgressAction(member.memberId)
+      : null;
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -218,6 +234,17 @@ export default async function MemberDetailPage({
           memberId={member.memberId}
           canWrite={hasPermission(ctx, "invoices.write")}
           canRecord={hasPermission(ctx, "payments.record")}
+        />
+      ) : null}
+
+      {tab === "progress" ? (
+        <MemberProgressPanel
+          progress={progress}
+          emptyAction={
+            progressEnabled
+              ? { label: "Set up the ladder", href: "/owner/settings/skills" }
+              : undefined
+          }
         />
       ) : null}
 
