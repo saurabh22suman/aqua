@@ -105,11 +105,11 @@ export const planShapes = pgTable(
     unique("plan_shapes_id_tenant_key").on(t.id, t.tenantId),
     check(
       "plan_shapes_kind_check",
-      sql`${t.kind} in ('duration', 'sessions')`,
+      sql`${t.kind} in ('duration', 'sessions', 'term', 'per_session', 'drop_in')`,
     ),
     check(
       "plan_shapes_kind_payload_check",
-      sql`(${t.kind} = 'duration' and ${t.durationDays} is not null and ${t.sessions} is null) or (${t.kind} = 'sessions' and ${t.sessions} is not null and ${t.durationDays} is null)`,
+      sql`(${t.kind} in ('duration', 'term') and ${t.durationDays} is not null and ${t.sessions} is null) or (${t.kind} = 'sessions' and ${t.sessions} is not null and ${t.durationDays} is null) or (${t.kind} in ('per_session', 'drop_in') and ${t.durationDays} is null and ${t.sessions} is null)`,
     ),
   ],
 );
@@ -131,6 +131,10 @@ export const facilities = pgTable(
     locationId: uuid("location_id").notNull(),
     name: text("name").notNull(),
     kind: text("kind").notNull(),
+    // M-01 — nullable link to the platform activity_type catalogue.
+    // Null means "not classified" (field, counter, table, or a row
+    // created before the backfill); never a required field.
+    activityTypeKey: text("activity_type_key"),
     capacity: integer("capacity").notNull(),
     isSample: boolean("is_sample").notNull().default(false),
     ...softDelete,
@@ -139,6 +143,10 @@ export const facilities = pgTable(
   (t) => [
     unique("facilities_id_tenant_key").on(t.id, t.tenantId),
     index("facilities_tenant_location_idx").on(t.tenantId, t.locationId),
+    index("facilities_tenant_activity_type_idx").on(
+      t.tenantId,
+      t.activityTypeKey,
+    ),
     uniqueIndex("facilities_tenant_location_name_live_uidx")
       .on(t.tenantId, t.locationId, sql`lower(${t.name})`)
       .where(sql`deleted_at is null`),

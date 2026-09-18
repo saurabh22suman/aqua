@@ -59,7 +59,11 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
         listPlansAction(),
       ]);
       setSubscriptions(rows);
-      setPlans(planRows.filter((plan) => plan.kind !== "one_time"));
+      setPlans(
+        planRows.filter((plan) =>
+          ["duration", "term", "sessions"].includes(plan.kind),
+        ),
+      );
       setPlanId((current) => current || planRows[0]?.id || "");
       setLoadError(false);
     } catch {

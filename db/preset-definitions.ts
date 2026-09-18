@@ -69,7 +69,10 @@ const terminologySchema = z.object(
 
 const dashedTime = /^\d{2}:\d{2}$/; // ISO-8601 local time as HH:MM
 
-const planShapeBase = z.object({
+// Strict: a payload-free shape (per_session / drop_in) must reject a
+// stray `sessions` key rather than silently stripping it, or a typo in
+// a preset definition could turn a drop-in into a 1-session pack.
+const planShapeBase = z.strictObject({
   name: z.string().trim().min(1).max(120),
   kind: z.enum(["duration", "sessions"]),
 });
@@ -80,15 +83,38 @@ const durationPlanShape = planShapeBase.extend({
   amountPaise: z.null(),
 });
 
+// M-06 — a fixed term is duration-shaped (it has durationDays); the
+// distinguishing label is what the tenant sells ("Autumn term").
+const termPlanShape = planShapeBase.extend({
+  kind: z.literal("term"),
+  durationDays: z.number().int().positive(),
+  amountPaise: z.null(),
+});
+
 const sessionsPlanShape = planShapeBase.extend({
   kind: z.literal("sessions"),
   sessions: z.number().int().positive(),
   amountPaise: z.null(),
 });
 
+// M-06 — pay-as-you-go shapes carry no duration/sessions payload: they
+// are billed per session/visit through invoices (C-32).
+const perSessionPlanShape = planShapeBase.extend({
+  kind: z.literal("per_session"),
+  amountPaise: z.null(),
+});
+
+const dropInPlanShape = planShapeBase.extend({
+  kind: z.literal("drop_in"),
+  amountPaise: z.null(),
+});
+
 export const planShapeSchema = z.discriminatedUnion("kind", [
   durationPlanShape,
+  termPlanShape,
   sessionsPlanShape,
+  perSessionPlanShape,
+  dropInPlanShape,
 ]);
 
 export const skillRubricSchema = z.object({
