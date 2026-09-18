@@ -13,6 +13,7 @@ import {
 } from "@/lib/services/terminology";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
 import { resolveTerm, DEFAULT_TERMS, LOCALES, TERM_KEYS, type TerminologyState } from "@/lib/terminology/keys";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Phase 2.10 — terminology service tests (TDD; the
 // implementation arrives in the same PR).
@@ -61,12 +62,12 @@ beforeEach(async () => {
   await admin.query("update tenants set terminology = '{}'::jsonb where id = $1", [tenantId]);
   // E-02 — each case counts audit rows; wipe the tenant's trail so
   // the counts are per-case, not cumulative.
-  await admin.query("delete from audit_log where tenant_id = $1", [tenantId]);
+  await deleteAuditRowsForTenant(admin, tenantId);
 });
 
 afterAll(async () => {
   if (tenantId) {
-    await admin.query("delete from audit_log where tenant_id = $1", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.query(

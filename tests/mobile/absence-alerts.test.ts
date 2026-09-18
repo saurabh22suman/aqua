@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { asTenantId, asUserId } from "@/lib/ids";
 import { addDays, todayInZone } from "@/lib/time/tz";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // R.8 (docs/five-day-work-guide.md, V-20) — absence alerts.
 // Owner decisions 2026-09-13: threshold configurable (default 50%),
@@ -121,7 +122,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (admin) {
-    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from absence_alerts where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from attendance where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from sessions where tenant_id = $1::uuid", [tenantId]);

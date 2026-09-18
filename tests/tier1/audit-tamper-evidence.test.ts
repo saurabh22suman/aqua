@@ -15,6 +15,7 @@ import {
 } from "@/lib/audit/checkpoint";
 import { runAuditCheckpointJob } from "@/lib/jobs/audit-checkpoint-job";
 import { AUDIT_CHECKPOINT_QUEUE } from "@/lib/jobs/audit-checkpoint-schedule";
+import { deleteAuditRows } from "../helpers/audit-log-cleanup";
 import { FakeObjectStore } from "../helpers/fake-object-store";
 
 // E-03 — audit tamper evidence.
@@ -85,9 +86,9 @@ async function insertAuditRow(
   return rows[0]!.id;
 }
 
-// The guard blocks DELETE for everyone, so fixture cleanup has to step
-// around it the same way the tamper simulation does. Red runs (before
-// the migration exists) have no trigger to disable.
+// The tamper simulation needs the trigger disabled for an UPDATE (the
+// shared cleanup helper only handles DELETE). Red runs (before the
+// migration exists) have no trigger to disable.
 async function withoutMutationGuard(fn: () => Promise<void>): Promise<void> {
   const { rows } = await admin.query(
     "select 1 from pg_trigger where tgname = 'audit_log_no_mutate'",
@@ -130,15 +131,11 @@ function auditRow(
 
 afterAll(async () => {
   if (tenantIds.length > 0) {
-    await withoutMutationGuard(async () => {
-      await admin.query("delete from audit_log where tenant_id = any($1::uuid[])", [
-        tenantIds,
-      ]);
-      await admin.query(
-        "delete from platform_audit_log where tenant_id = any($1::uuid[]) and action = 'audit.checkpoint'",
-        [tenantIds],
-      );
-    });
+    await deleteAuditRows(admin, "tenant_id = any($1::uuid[])", [tenantIds]);
+    await admin.query(
+      "delete from platform_audit_log where tenant_id = any($1::uuid[]) and action = 'audit.checkpoint'",
+      [tenantIds],
+    );
     await admin.query("delete from tenants where id = any($1::uuid[])", [tenantIds]);
   }
   await admin.end();

@@ -11,6 +11,7 @@ import { applyPreset } from "@/db/preset-engine";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, asUserId, type UserId, type TenantId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // D3 — "the seed doing something the production path does not" has
 // shown up four times now (enrolMember, seedRoleTemplates, membership
@@ -60,7 +61,7 @@ afterAll(async () => {
     await admin.query("delete from platform_audit_log where tenant_id = $1", [id]);
     // E-02 — membership activation audits the invited user; drop the
     // tenant's trail before userIdsToClean deletes that user.
-    await admin.query("delete from audit_log where tenant_id = $1", [id]);
+    await deleteAuditRowsForTenant(admin, id);
     await admin.query(
       "delete from pgboss.schedule where name = 'sessions.generate' and key = $1",
       [id],

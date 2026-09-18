@@ -15,6 +15,7 @@ import { staff as staffTable } from "@/db/schema/staff";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { programs, batches } from "@/db/schema/programs";
 import { listCoaches } from "@/lib/services/programs";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // PR C — invite paths must produce persons + staff rows so the
 // membership has an attached identity. Two paths exercise the same
@@ -75,7 +76,7 @@ afterAll(async () => {
     await admin.query("delete from locations where tenant_id = $1::uuid", [tenantId]);
     // E-02 — invite + activation audit rows reference the invited
     // user (activation actor); drop them before the user delete.
-    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from users where phone = $1", [phone]);
     await admin.query("delete from tenants where id = $1::uuid", [tenantId]);
   }

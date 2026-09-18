@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { auditLog } from "@/db/schema/audit";
 import { asTenantId, type TenantId } from "@/lib/ids";
+import { deleteAuditRows } from "../helpers/audit-log-cleanup";
 
 // H-03 — audit_log is rebuilt as a monthly RANGE-partitioned table by
 // created_at, with a static horizon. Written before
@@ -73,10 +74,7 @@ async function rejectionMessage(promise: Promise<unknown>): Promise<string> {
 
 afterAll(async () => {
   if (tenantIds.length > 0) {
-    await admin.query(
-      "delete from audit_log where tenant_id = any($1::uuid[])",
-      [tenantIds],
-    );
+    await deleteAuditRows(admin, "tenant_id = any($1::uuid[])", [tenantIds]);
   }
   await admin.end();
 });

@@ -24,6 +24,7 @@ import { issueLoginLink } from "@/lib/services/invite-link";
 import { hasCredentialByPhone } from "@/lib/services/credentials";
 import { POST } from "@/app/api/login-link/redeem/route";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
@@ -84,7 +85,7 @@ afterAll(async () => {
     await admin.query("delete from tenants where id = $1", [tenantId]);
     // E-02 — redeem writes membership.activate rows whose actor is
     // the invited user; drop the trail before the users below.
-    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
   }
   for (const suffix of ["01", "02", "03", "04"]) {
     const p = phone(suffix);

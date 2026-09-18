@@ -25,6 +25,7 @@ import {
 } from "@/lib/services/invite-link";
 import { signParentLinkToken } from "@/lib/services/parent-link";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Staff magic-link login: single-use, membership-bound invite and
 // re-login links (architecture §6.1). Pure token properties need no
@@ -150,7 +151,7 @@ describe("invite-link issue/preview/redeem (database)", () => {
       await admin.query("delete from tenants where id = $1", [tenantId]);
       // E-02 — redeem writes membership.activate rows whose actor is
       // the invited user; drop the trail before the users below.
-      await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+      await deleteAuditRowsForTenant(admin, tenantId);
     }
     for (const suffix of ["01", "02", "03", "04", "05", "06"]) {
       const p = phone(suffix);
