@@ -27,6 +27,7 @@ import {
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
   schedulePlatformMetricsSnapshot,
 } from "@/lib/jobs/platform-metrics-snapshot-schedule";
+import { ACTIVITY_INGEST_QUEUE } from "@/lib/jobs/activity-ingest-job";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -42,6 +43,7 @@ const QUEUES = [
   INVOICES_GENERATE_QUEUE,
   REPORTS_ROLLUP_QUEUE,
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
+  ACTIVITY_INGEST_QUEUE,
 ];
 
 type ScheduleFn = (

@@ -5,6 +5,11 @@ import { runSubscriptionsExpireJob } from "@/lib/jobs/subscriptions-expire-job";
 import { runInvoicesGenerateJob } from "@/lib/jobs/invoices-generate-job";
 import { runReportsRollupJob } from "@/lib/jobs/reports-rollup-job";
 import { runPlatformMetricsSnapshotJob } from "@/lib/jobs/platform-metrics-snapshot-job";
+import {
+  ACTIVITY_INGEST_QUEUE,
+  runActivityIngestJob,
+  type ActivityIngestJobData,
+} from "@/lib/jobs/activity-ingest-job";
 import { SESSIONS_GENERATE_QUEUE } from "@/lib/jobs/sessions-generate-schedule";
 import { ABSENCE_ALERTS_QUEUE } from "@/lib/jobs/absence-alerts-schedule";
 import { SUBSCRIPTIONS_EXPIRE_QUEUE } from "@/lib/jobs/subscriptions-expire-schedule";
@@ -77,8 +82,24 @@ async function main(): Promise<void> {
     await runPlatformMetricsSnapshotJob();
   });
 
+  // E-05 — activity.ingest is tenant-scoped via job data (same rule as
+  // HANDLERS) but carries a per-job `events` payload, so it registers
+  // its own work call rather than being forced into HANDLERS' shape.
+  // No per-tenant schedule exists for it: it is an event consumer, not
+  // a cron (see lib/jobs/activity-ingest-job.ts).
+  await boss.work<ActivityIngestJobData>(
+    ACTIVITY_INGEST_QUEUE,
+    async ([job]) => {
+      await runActivityIngestJob(asTenantId(job.data.tenantId), job.data.events);
+    },
+  );
+
   console.log(
-    `[worker] started — listening on ${[...HANDLERS.map((h) => h.queue), PLATFORM_METRICS_SNAPSHOT_QUEUE].join(", ")}`,
+    `[worker] started — listening on ${[
+      ...HANDLERS.map((h) => h.queue),
+      PLATFORM_METRICS_SNAPSHOT_QUEUE,
+      ACTIVITY_INGEST_QUEUE,
+    ].join(", ")}`,
   );
 }
 
