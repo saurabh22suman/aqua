@@ -1,11 +1,20 @@
 import { getAttendanceReportAction, getEnquiryFunnelAction, getRetentionViewAction, getCoachLoadAction } from "@/lib/actions/owner-reports";
+import { getOperationalAnalyticsAction, getMoneyAnalyticsAction } from "@/lib/actions/owner-analytics";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
+import { getTerminologyAction } from "@/lib/actions/terminology";
+import { resolveTerm } from "@/lib/terminology/keys";
 import { formatDateIST } from "@/lib/time/tz";
 import { AttendanceReportCard } from "@/components/reports/attendance-report-card";
 import { EnquiryFunnelCard } from "@/components/reports/enquiry-funnel-card";
 import { RetentionCard } from "@/components/reports/retention-card";
 import { CoachLoadCard } from "@/components/reports/coach-load-card";
+import {
+  AttendanceTrendCard,
+  CollectionsExpensesCard,
+  MemberMixCard,
+  PlanRevenueCard,
+} from "@/components/reports/analytics-cards";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import Link from "next/link";
 
@@ -26,12 +35,19 @@ export default async function ReportsPage({
     return defaultMonthPeriod(timezone);
   })();
 
-  const [attendance, enquiry, retention, coachLoad] = await Promise.all([
-    getAttendanceReportAction(period),
-    getEnquiryFunnelAction(period),
-    getRetentionViewAction(),
-    getCoachLoadAction(period),
-  ]);
+  const [attendance, enquiry, retention, coachLoad, operational, money, terminology] =
+    await Promise.all([
+      getAttendanceReportAction(period),
+      getEnquiryFunnelAction(period),
+      getRetentionViewAction(),
+      getCoachLoadAction(period),
+      // U-01 — the analytics series. Operational and financial are
+      // separate actions because they carry different permission keys;
+      // an owner holds both.
+      getOperationalAnalyticsAction(period),
+      getMoneyAnalyticsAction(period),
+      getTerminologyAction(),
+    ]);
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -57,8 +73,30 @@ export default async function ReportsPage({
         <span className="text-[13px] text-ink-3">→</span>
       </Link>
 
+      <Link
+        href="/owner/fees"
+        className="mt-2 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
+      >
+        <span>
+          <span className="block text-[14px] font-medium text-ink">
+            Fees &amp; payments
+          </span>
+          <span className="block text-[12px] text-ink-3">
+            Dues, transactions, invoices and plans in one hub.
+          </span>
+        </span>
+        <span className="text-[13px] text-ink-3">→</span>
+      </Link>
+
       <div className="mt-6 space-y-3">
         <AttendanceReportCard rows={attendance} period={period} />
+        <AttendanceTrendCard points={operational.attendanceTrend} />
+        <CollectionsExpensesCard series={money.collections} />
+        <PlanRevenueCard rows={money.planRevenue} />
+        <MemberMixCard
+          slices={operational.memberMix}
+          memberLabel={resolveTerm(terminology, "member", "other")}
+        />
         <EnquiryFunnelCard rows={enquiry} />
         <RetentionCard row={retention} />
         <CoachLoadCard rows={coachLoad} />

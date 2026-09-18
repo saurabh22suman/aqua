@@ -77,6 +77,73 @@ export const CONFIG_KEYS = {
     description:
       "When on, staff see only the locations they are attached to. An access control inside one academy, not tenant isolation.",
   },
+  // U-07 — business hours. Stored on the config registry so the
+  // location editor, the ops console and (later) public surfaces read
+  // one source. Resolution order: platform default -> tenant ->
+  // location; the editor writes location scope. An empty `days` array
+  // is the honest "not configured yet" default — never invented hours.
+  "operations.business_hours": {
+    valueSchema: z.object({
+      days: z
+        .array(
+          z
+            .object({
+              day: z.enum([
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+              ]),
+              closed: z.boolean(),
+              open: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+              close: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+            })
+            .refine((value) => value.closed || value.close > value.open, {
+              message: "Closing time must be after opening time.",
+              path: ["close"],
+            }),
+        )
+        .max(7),
+    }),
+    jsonSchema: {
+      type: "object",
+      required: ["days"],
+      properties: {
+        days: {
+          type: "array",
+          maxItems: 7,
+          items: {
+            type: "object",
+            required: ["day", "closed", "open", "close"],
+            properties: {
+              day: {
+                enum: [
+                  "monday",
+                  "tuesday",
+                  "wednesday",
+                  "thursday",
+                  "friday",
+                  "saturday",
+                  "sunday",
+                ],
+              },
+              closed: { type: "boolean" },
+              open: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
+              close: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" },
+            },
+          },
+        },
+      },
+    },
+    defaultValue: { days: [] },
+    visibility: "owner_edit",
+    risk: "safe",
+    description:
+      "Opening and closing times per day for a location. Empty means not configured yet.",
+  },
   // Registered now, still stored in tenants.offline_sync_enabled: a
   // human-owned tier-1 test pins that column (platform-tenants-detail),
   // so the storage migration lands when that test is updated. Reads and

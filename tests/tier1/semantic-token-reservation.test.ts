@@ -164,6 +164,18 @@ const WHITELIST = new Set([
   // paid). Both files exist only to settle a counter payment.
   "components/cafe-order-screen.tsx",
   "components/cafe-payment-panel.tsx",
+
+  // U-01/U-02/U-04 — owner analytics, fees hub and schedule grid.
+  // reports/analytics-cards.tsx: money/attendance analytics (good =
+  // active, warn = paused/under-filled, late = lapsed/overdue).
+  // owner/fees/page.tsx + fees/fees-invoice-list.tsx: money states
+  // (late = overdue, good = settled). owner-schedule-grid.tsx: the
+  // batch capacity lane strip (warn when under-filled), the same
+  // attendance-meaning reuse the coach registers already carry.
+  "components/reports/analytics-cards.tsx",
+  "app/(owner)/owner/fees/page.tsx",
+  "components/fees/fees-invoice-list.tsx",
+  "components/owner-schedule-grid.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

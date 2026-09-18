@@ -41,3 +41,5 @@ export * from "./makeup-credits";
 export * from "./tenant-holidays";
 export * from "./invite-link-uses";
 export * from "./activity-events";
+export * from "./member-notes";
+export * from "./announcements";

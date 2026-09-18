@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { UserCog } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
@@ -61,6 +62,22 @@ export default async function SessionsPage() {
         someone is unavailable. The change is recorded so the register
         reads who actually ran the session.
       </p>
+
+      <Link
+        href="/owner/schedule"
+        className="mt-4 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
+      >
+        <span>
+          <span className="block text-[14px] font-medium text-ink">
+            Schedule grid
+          </span>
+          <span className="block text-[12px] text-ink-3">
+            Week or month view with each batch&apos;s capacity lane and a
+            location filter.
+          </span>
+        </span>
+        <span className="text-[13px] text-ink-3">→</span>
+      </Link>
 
       <UpcomingSessionsList
         initialSessions={upcoming}
