@@ -166,11 +166,18 @@ describe("E-03 — audit_log append-only guard", () => {
     ).rejects.toThrow(/audit_log is append-only/);
   });
 
-  it("is created on the plain table, not by naming a partition", async () => {
+  it("is created on the parent table, not by naming a partition", async () => {
+    // H-03 partitions audit_log, and PostgreSQL clones a row trigger
+    // from a partitioned parent onto every partition (37 rows once
+    // H-03 lands). The contract this test pins is narrower and still
+    // exact: the trigger is attached to `audit_log` itself — created
+    // by naming the parent, never a partition — so every future
+    // partition inherits it automatically.
     const { rows } = await admin.query<{ tgrelid: string }>(
       `select tgrelid::regclass::text as tgrelid
          from pg_trigger
-        where tgname = 'audit_log_no_mutate'`,
+        where tgname = 'audit_log_no_mutate'
+          and tgrelid = 'audit_log'::regclass`,
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]!.tgrelid).toBe("audit_log");

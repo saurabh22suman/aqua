@@ -21,6 +21,8 @@ const otherLoc = uuidv7();
 const actor = asUserId(uuidv7());
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
+const otherPersonId = uuidv7();
+const otherMemberId = asMemberId(uuidv7());
 
 const ctx = { tenantId: tenant, userId: actor, requestId: uuidv7() };
 const otherCtx = { tenantId: otherTenant, userId: actor };
@@ -80,6 +82,14 @@ beforeAll(async () => {
     "insert into members (id, tenant_id, person_id, location_id, member_code, status) values ($1, $2, $3, $4, $5, 'active')",
     [memberId, tenant, personId, loc, `CAFE-${RUN}`],
   );
+  await admin.query(
+    "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Bill Of Supply Member')",
+    [otherPersonId, otherTenant],
+  );
+  await admin.query(
+    "insert into members (id, tenant_id, person_id, location_id, member_code, status) values ($1, $2, $3, $4, $5, 'active')",
+    [otherMemberId, otherTenant, otherPersonId, otherLoc, `CAFE-B-${RUN}`],
+  );
 
   const category = await menu.createMenuCategory(ctx, {
     locationId: loc,
@@ -137,6 +147,66 @@ describe("K-02 order capture", () => {
     expect(Number(line.tax_paise)).toBe(10_000);
 
     expect(await auditCount(tenant, "order.create")).toBe(1);
+  });
+
+  it("charges no tax for a tenant without a GSTIN and keeps the invoice equal to the order", async () => {
+    // otherTenant has gstin = null → bill of supply. An unregistered
+    // supplier cannot collect GST, so the tax must be zeroed at order
+    // creation (where the snapshot is born) — otherwise the order
+    // carries tax the invoice spine would have to either honour
+    // (collecting GST without a GSTIN) or drop (breaking the paisa
+    // equality between order and invoice).
+    const category = await menu.createMenuCategory(otherCtx, {
+      locationId: otherLoc,
+      name: "Drinks",
+      sortOrder: 1,
+    });
+    expect(category.ok).toBe(true);
+    if (!category.ok) return;
+
+    const item = await menu.createMenuItem(otherCtx, {
+      categoryId: category.id,
+      name: "Lemonade",
+      pricePaise: ITEM_PRICE,
+      taxRateBp: ITEM_RATE_BP,
+      sacCode: ITEM_SAC,
+    });
+    expect(item.ok).toBe(true);
+    if (!item.ok) return;
+
+    const order = await orders.createOrder(otherCtx, {
+      locationId: otherLoc,
+      memberId: otherMemberId,
+      lines: [{ itemId: item.id, qty: 1 }],
+    });
+    expect(order.ok).toBe(true);
+    if (!order.ok) return;
+    expect(order.totalPaise).toBe(ITEM_PRICE);
+
+    const { rows: lineRows } = await admin.query<{
+      tax_rate_bp: number;
+      tax_paise: string;
+    }>("select tax_rate_bp, tax_paise::text from order_lines where order_id = $1", [
+      order.orderId,
+    ]);
+    expect(lineRows[0]!.tax_rate_bp).toBe(0);
+    expect(Number(lineRows[0]!.tax_paise)).toBe(0);
+
+    const final = await orders.finalizeOrder(otherCtx, order.orderId);
+    expect(final.ok).toBe(true);
+    if (!final.ok) return;
+
+    const { rows: invRows } = await admin.query<{
+      subtotal_paise: string;
+      tax_paise: string;
+      total_paise: string;
+    }>(
+      "select subtotal_paise::text, tax_paise::text, total_paise::text from invoices where id = $1",
+      [final.invoiceId],
+    );
+    expect(Number(invRows[0]!.subtotal_paise)).toBe(ITEM_PRICE);
+    expect(Number(invRows[0]!.tax_paise)).toBe(0);
+    expect(Number(invRows[0]!.total_paise)).toBe(ITEM_PRICE);
   });
 
   it("refuses an inactive or unknown item", async () => {

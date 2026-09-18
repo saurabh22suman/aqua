@@ -112,12 +112,12 @@ export async function issueInvoiceInTx(
   for (const line of input.lines) {
     // An explicit snapshot (the café path) is trusted as-is: the
     // order is the operational record of what was sold and at what
-    // rate, and the invoice must match it to the paisa. Otherwise the
-    // membership path resolves the tenant's GST config as before. An
-    // unregistered supplier cannot collect GST: bill of supply, no
-    // tax, rate snapshotted as zero so the document is
-    // self-consistent — that rule only applies to config-resolved
-    // rates, not to an issued order's stored snapshots.
+    // rate, and the invoice must match it to the paisa. The
+    // bill-of-supply rule (no GSTIN ⇒ no tax) is applied where the
+    // café snapshot is created (lib/services/orders.ts), so a
+    // snapshot from an unregistered tenant already carries rate zero
+    // and the two documents never disagree. Otherwise the membership
+    // path resolves the tenant's GST config as before.
     let rateBp = 0;
     let lineSacCode = sacCode;
     if (line.taxRateBp !== undefined && line.taxRateBp !== null) {

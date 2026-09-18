@@ -2,7 +2,9 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { orders, orderLines } from "@/db/schema/orders";
 import { menuItems } from "@/db/schema/menu";
+import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
+import { gstDocumentKind } from "@/lib/gst";
 import {
   locationVisible,
   resolveLocationAccess,
@@ -74,18 +76,33 @@ export async function createOrder(
       };
     }
 
+    // K-03/GST — an unregistered supplier cannot collect GST, and the
+    // café invoice must equal the counter order to the paisa. The
+    // document kind is therefore resolved here, where the snapshot is
+    // born: a bill-of-supply tenant snapshots a zero rate/tax, so
+    // finalizeOrder's trusted-snapshot path produces a tax-free
+    // invoice that matches the order exactly. (Zeroing at invoice time
+    // instead would silently break the order↔invoice equality the
+    // café payment rules depend on.)
+    const [tenantRow] = await tx
+      .select({ gstin: tenants.gstin })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const registered = gstDocumentKind(tenantRow?.gstin ?? null) === "tax_invoice";
+
     const lines = input.lines.map((line) => {
       const item = byId.get(line.itemId)!;
       const linePaise = Number(BigInt(item.pricePaise) * BigInt(line.qty));
+      const rateBp = registered ? item.taxRateBp : 0;
       return {
         itemId: item.id,
         itemName: item.name,
         qty: line.qty,
         unitPricePaise: Number(item.pricePaise),
-        taxRateBp: item.taxRateBp,
+        taxRateBp: rateBp,
         sacCode: item.sacCode,
         linePaise,
-        taxPaise: computeTax(linePaise, item.taxRateBp),
+        taxPaise: computeTax(linePaise, rateBp),
       };
     });
     const totalPaise = lines.reduce(
