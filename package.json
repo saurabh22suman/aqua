@@ -34,6 +34,7 @@
     "check:ops-actions": "tsx scripts/check-ops-actions.ts",
     "check:platform-leads": "tsx scripts/check-platform-leads-imports.ts",
     "check:location-scope": "tsx scripts/check-location-scope.ts",
+    "check:tenant-conventions": "tsx scripts/check-tenant-conventions.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "dependencies": {

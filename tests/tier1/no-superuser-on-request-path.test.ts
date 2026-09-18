@@ -207,6 +207,13 @@ const ALLOWLIST = new Set([
   // Ops-console-improvements entries above; mechanical closure
   // extension for the new file.
   "tests/platform-metrics-snapshot-scope.test.ts",
+  // H-01/H-02 — schema-audit tests that read pg_indexes/pg_policies
+  // through the privileged pool against the migrated database. Same
+  // fixture-setup pattern as the other tier1 tests above (never the
+  // app's own request path); mechanical closure extension for the two
+  // new files.
+  "tests/tier1/hardening-indexes.test.ts",
+  "tests/tier1/rls-policy-shape.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
