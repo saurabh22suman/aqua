@@ -2101,3 +2101,16 @@ carries attendance and money actions, and the parent surface carries none. The
 parent token link still serves zero client JavaScript. No payment gateway code
 exists in the tree. `main` is green and every migration carried the
 `human-approved-merge` label.
+
+**As-built (2026-09-18).** Shipped: H-01–H-04 · E-01, E-02, E-03, E-05, E-06
+(E-04 parked until pay exists) · K-01–K-08 (wallet K-05 shipped service-side;
+wallet-settles-café deferred) · M-01, M-03–M-06 (M-02 rename deferred;
+resources already exist as `facility_sub_units`) · U-01–U-10 (U-03 Progress
+wired in Phase 3A; U-08 staff-attendance half deferred to V-24; owner avatar
+swap pending) · V-01–V-04, V-08–V-11 (Phase 3A). **Remaining before this gate
+can run:** Phase 3B (V-23–V-34 staff attendance/pay, V-35–V-37
+revenue/profitability), the messaging send path C-40–C-43 (blocked on the
+BSP/WhatsApp decision), V-05–V-07 to complete bookings, and the reference
+month itself. **Open decisions:** anonymous/walk-in billing, wallet credit
+limit, parent expansion, price-rule CRUD UI, slot grid driven by business
+hours.
