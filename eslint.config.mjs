@@ -8,7 +8,17 @@ const compat = new FlatCompat({
 
 const config = [
   {
-    ignores: [".next/**", "node_modules/**", "next-env.d.ts", "db/drizzle/**"],
+    ignores: [
+      ".next/**",
+      "node_modules/**",
+      "next-env.d.ts",
+      "db/drizzle/**",
+      // Local agent worktrees (git-ignored) are full repo copies with
+      // their own generated files; linting them double-counts every
+      // finding and flags their generated next-env.d.ts. CI never has
+      // this directory; excluding it keeps `pnpm lint` truthful locally.
+      ".claude/**",
+    ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {

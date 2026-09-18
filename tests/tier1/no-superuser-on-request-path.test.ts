@@ -223,6 +223,10 @@ const ALLOWLIST = new Set([
   // for tenants, runActivityIngestJob/withTenant for everything the app
   // would do, admin reads for partition/ACL introspection).
   "tests/tier1/activity-events.test.ts",
+  // E-06 — events rollup: same fixture-setup pattern (privileged pool to
+  // seed partitioned activity_events rows, the job itself under
+  // withTenant).
+  "tests/tier1/events-rollup-job.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
@@ -235,7 +239,15 @@ function filesReferencingMigrationUrl(): string[] {
     .split("\n")
     .filter(Boolean)
     .map((f) => f.replace(/^\.\//, ""))
-    .filter((f) => !f.startsWith("node_modules/") && !f.startsWith(".next/"))
+    .filter(
+      (f) =>
+        !f.startsWith("node_modules/") &&
+        !f.startsWith(".next/") &&
+        // Local agent worktrees are git-ignored full repo copies; every
+        // finding in them is a duplicate of one in the real tree. CI
+        // never has this directory.
+        !f.startsWith(".claude/"),
+    )
     .sort();
 }
 
