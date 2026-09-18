@@ -1586,13 +1586,16 @@ months ahead for `audit_log` and `activity_events`, and alerts on failure.
 **Done when:** a test inserting a row in month+3 succeeds; a month with no
 partition fails loudly, never silently; the dual-write phase produces zero row
 count drift.
-**Status:** deferred to a dedicated PR (2026-09-18) — the migration pattern
-changed: runtime partition DDL is not available (`app_user` has no CREATE;
-`MIGRATION_DATABASE_URL` is migrations-only by design), so the target mechanism
-is a static horizon created in migrations + a loud failure beyond it, as proven
-in E-05's migration, not a pg-boss DDL job. Rebuilding a live, append-only
-`audit_log` (expand/contract + backfill + grants/RLS/trigger re-application) is
-a solitary migration that deserves its own review, not the tail of this batch.
+**Status:** complete — `20260918090000_h03_audit_log_partitioning.sql` rebuilds
+`audit_log` as monthly range partitions via one-transaction
+expand/backfill/drop/swap, `PRIMARY KEY (id, created_at)`, partitions from the
+oldest existing row (fallback 2026-01) through **2028-12**, **no default
+partition** (a 2029 insert fails loudly), RLS forced on the parent *and every
+partition*, and grants restored INSERT+SELECT only. The mechanism is the
+static-horizon-per-migration model E-05 proved, not a pg-boss DDL job —
+`app_user` has no CREATE and `MIGRATION_DATABASE_URL` is migrations-only. New
+partitions are added by future migrations; a privileged runtime DDL path
+remains a deliberate non-goal.
 
 ### H-04 · Request correlation
 **Lane:** services
@@ -1663,11 +1666,18 @@ latest partition is detected via the checkpoint; the nightly job is idempotent
 across retries.
 **Never:** claim this is a per-row hash chain; if an enterprise tenant ever
 requires one, that is a new task, not an extension of this one.
-**Status:** deferred to Release 1.1 — the plan requires R2 (no object-store
-integration exists yet; receipts and payment QRs still live in Postgres) and a
-checkpoint signing key/secret decision. Building the digest half without an
-external anchor would be security theatre, so nothing shipped. Blocked on:
-R2 wiring + `AUDIT_CHECKPOINT_SECRET` approval.
+**Status:** complete — `20260918095000_e03_audit_guard.sql` adds the blocking
+`BEFORE UPDATE OR DELETE` trigger (created on the parent; partitions inherit
+the clone). `lib/audit/checkpoint.ts` computes a canonical per-tenant-day
+digest (recursive key ordering, every column included) and HMAC-SHA256 signs
+it with `AUDIT_CHECKPOINT_SECRET`; `audit.checkpoint` (04:00 tenant-local)
+stores the manifest via the R2 object store at
+`audit-checkpoints/<tenant>/<date>.json` and anchors `{date,rowCount,digest}`
+in `platform_audit_log` — the always-available anchor used when R2 is not
+configured. `scripts/verify-audit-checkpoint.ts` recomputes and exits non-zero
+on the first divergent row. Test-only escape hatch for suite cleanups:
+`tests/helpers/audit-log-cleanup.ts`. **Not verified live against real R2**
+(no credentials); the signing/HTTP path is typechecked, not network-tested.
 
 ### E-04 · Sensitive-read auditing
 **Lane:** services
@@ -1713,14 +1723,18 @@ closed partitions to R2 as Parquet (one file per tenant-day), then drops raw
 partitions older than the configured window (default 180 days).
 **Done when:** a dropped partition's numbers remain queryable from rollups;
 the export re-imports in DuckDB; the job is idempotent across retries.
-**Status:** partial — the rollup half is complete:
-`20260918080000_e06_daily_rollups_events.sql` adds `event_counts jsonb` +
-`events_total` to `daily_rollups`; `events.rollup` (03:15 tenant-local) folds
-the day's events and its upsert updates only the event columns, never
-`reports.rollup`'s counters. **Deferred:** the R2/Parquet export and the
-retention partition drop — no R2 integration exists, and DROP is DDL the
-runtime role does not have. Retention stays a migration/manual ops step until
-H-03's privileged path lands.
+**Status:** complete, one recorded deviation — rollup
+(`20260918080000_e06_daily_rollups_events.sql`, `events.rollup` 03:15
+tenant-local, upsert touches only event columns) and export
+(`activity.export` 03:30, gzipped **NDJSON** at
+`activity-events/<tenant>/<date>.ndjson.gz` via the R2 object store —
+deliberately NDJSON, not Parquet: a Parquet writer is a dependency this
+workstream would not add, and DuckDB reads NDJSON with `read_json_auto`, which
+preserves the re-import intent). Retention is the operator-only
+`scripts/retention-activity-events.ts` (`--i-understand`, default 180 days,
+refuses without a privileged URL and, unless overridden, without an export
+object per tenant-day) — never scheduled. Live R2 export unverified without
+credentials.
 
 ## M — Module kernel (multi-sport)
 
@@ -1786,6 +1800,9 @@ correctly through C-30/C-32.
 owner/admin write, coach never; every mutation audited (E-01/E-02 shapes).
 **Done when:** a category with three items renders on reception and a coach
 cannot read or write it.
+**Status:** complete — `20260918100000_k01_menu.sql`; tenant-leading indexes,
+case-insensitive unique per location, RLS forced; every mutation audited via
+`writeAudit`. K-07 ships the owner management screen.
 
 ### K-02 · Order capture
 **Lane:** schema + UI
@@ -1795,6 +1812,13 @@ invoice-line pattern); void requires a reason and is audited. No offline mode
 in Release 1 — `counter_client_id` is reserved for the Phase 5 POS.
 **Done when:** a walk-in order and a member order both record in one screen;
 a voided order keeps its lines for audit.
+**Status:** complete — `20260918101000_k02_orders.sql`; price/tax/SAC
+snapshotted per line at order time. **Known limitation (decision needed):**
+`invoices.member_id` is NOT NULL, so a walk-in order cannot be billed until a
+member is attached; the plan's "walk-in" scope is therefore "record a walk-in,
+bill only against a member" in R1. Anonymous billing needs either nullable
+invoice/payment member columns or a per-tenant walk-in member — a money-path
+decision, not a code gap.
 
 ### K-03 · Café ↔ invoice bridge
 **Lane:** services
@@ -1805,6 +1829,12 @@ legal document; the order remains the operational record. Gapless FY numbering
 **Done when:** a café bill carries a GST invoice number from the same FY series
 and appears in receipts; voiding the invoice is blocked while the order is
 unpaid.
+**Status:** complete — `20260918102000_k03_invoice_source.sql` adds
+`invoices.source (membership|cafe|other)`; finalize creates exactly one invoice
+through the existing spine and links it 1:1. **GST:** the bill-of-supply rule
+is applied where the café snapshot is created — an unregistered tenant
+snapshots rate 0, so order and invoice agree to the paisa (see the fix in
+`lib/services/orders.ts`).
 
 ### K-04 · Café payments
 **Lane:** schema + services
@@ -1815,6 +1845,10 @@ payments are refused for café in Release 1; refunds are void + new order, never
 row edits.
 **Done when:** a counter payment settles an order invoice; overpayment and
 partial payment are both refused; `method='card'` requires a reference.
+**Status:** complete — `20260918103000_k04_payment_methods.sql` widens
+`payments.method` to cash|upi|bank_transfer|card|other (card = terminal
+reference, never an integration) and the action-level enum matches. Café bills
+settle in full by design (refund = void + new order).
 
 ### K-06 · Café reconciliation
 **Lane:** reports
@@ -1823,6 +1857,10 @@ daily cash count by method; `daily_rollups` gains `cafe_paise` and
 `cafe_orders`.
 **Done when:** a day with ten café orders reconciles to the paisa and shows in
 the owner report alongside membership collections.
+**Status:** complete — `20260918104000_k06_cafe_rollups.sql` adds
+`cafe_paise`/`cafe_orders` to `daily_rollups`; the daily collections view and
+the rollup job share one definition (captured payments against
+`invoices.source='cafe'`; orders = distinct settled café invoices).
 
 ### K-07 · Café surface
 **Lane:** UI
@@ -1831,6 +1869,11 @@ the owner report alongside membership collections.
 permissions ride on the receptionist's existing grants.
 **Done when:** an order-to-receipt flow completes without leaving the tab; the
 coach role sees nothing café.
+**Status:** complete — `/reception/cafe` (CTA from reception Today) and
+`/owner/settings/menu`; walk-in bill is disabled with the server's reason shown
+verbatim, partial-payment refusals render inline, receipt is in-page. No cafe
+nav item added — the reception bottom nav stays four items. No order-list/void
+UI yet (`voidOrderAction` exists; a placed walk-in has no screen to void it).
 
 ### K-05 · Member wallet ledger — **fast-follow, not in R1**
 **Lane:** schema + services
