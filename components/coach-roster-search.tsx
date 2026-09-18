@@ -3,6 +3,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { PersonAvatar } from "@/components/avatar";
 import type { CoachRosterRow } from "@/lib/services/coach-schedule";
 
 // Inline client-side filter on top of the coach's roster. Search is
@@ -53,10 +54,13 @@ export function CoachRosterSearch({ roster }: { roster: CoachRosterRow[] }) {
             <li key={m.memberId}>
               <Link
                 href={`/coach/members/${m.memberId}`}
-                className="flex items-baseline justify-between gap-3 px-3.5 py-3 transition-colors duration-150 active:bg-deck"
+                className="flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 active:bg-deck"
                 data-testid="coach-roster-row"
               >
-                <div className="min-w-0">
+                {/* U-09 — deterministic avatar seeded by the stable
+                    member id (never the display name). */}
+                <PersonAvatar seed={m.memberId} size={36} className="flex-none" />
+                <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-medium truncate">
                     {m.name}
                     {m.isMinor ? (

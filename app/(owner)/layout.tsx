@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
-import { BottomNav } from "@/components/bottom-nav";
-import { FacilitySwitcher } from "@/components/facility-switcher";
+import { OwnerShell } from "@/components/owner-shell";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { listLocations } from "@/lib/services/people";
@@ -33,11 +32,12 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   // W1-6 — the switcher renders itself away for single-facility
   // tenants, so this query is the only cost a small academy pays.
   const locations = await listLocations(ctx);
+  // U-10 — responsive shell: sidebar + top bar (with global search,
+  // U-05) at lg, the existing four-item bottom nav below it. The
+  // item list is unchanged: TENANT_SURFACE_NAV.owner.
   return (
-    <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
-      <FacilitySwitcher locations={locations} />
+    <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={locations}>
       {children}
-      <BottomNav items={TENANT_SURFACE_NAV.owner} />
-    </div>
+    </OwnerShell>
   );
 }

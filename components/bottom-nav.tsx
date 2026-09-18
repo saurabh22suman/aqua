@@ -22,7 +22,9 @@ import {
 // client component, so the layouts pass strings and the client
 // looks them up. Adding a nav item means adding the icon import
 // here AND a name entry; missing-from-map fails fast in dev.
-const ICONS: Record<string, LucideIcon> = {
+// Exported for the owner desktop sidebar (U-10), which shares the
+// same registry so the two owner navs can never drift.
+export const ICONS: Record<string, LucideIcon> = {
   "building-2": Building2,
   "calendar-days": CalendarDays,
   "clipboard-list": ClipboardList,
@@ -70,8 +72,9 @@ export type BottomNavProps = {
 // `exact` only lights on its own route, so /owner/enquiries lights
 // nothing rather than incorrectly lighting "Home". /login,
 // /platform/login and other paths outside the nav surface render no
-// active item.
-function findActiveHref(pathname: string, items: NavItem[]): string | null {
+// active item. Exported for the owner desktop sidebar (U-10) so both
+// owner navs resolve the active item identically.
+export function findActiveHref(pathname: string, items: NavItem[]): string | null {
   let best: { href: string; exact: boolean } | null = null;
   for (const item of items) {
     const exact = pathname === item.href;
