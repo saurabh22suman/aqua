@@ -34,9 +34,12 @@ const ROUTES = [
   "app/(owner)/owner/members/loading.tsx",
   "app/(owner)/owner/reports/loading.tsx",
   "app/(owner)/owner/settings/menu/loading.tsx",
+  "app/(owner)/owner/settings/skills/loading.tsx",
   "app/(coach)/coach/loading.tsx",
   "app/(coach)/coach/register/[sessionId]/loading.tsx",
+  "app/(coach)/coach/members/[memberId]/assess/loading.tsx",
   "app/(reception)/reception/cafe/loading.tsx",
+  "app/(reception)/reception/bookings/loading.tsx",
 ] as const;
 
 // Matches a `<Skeleton w=` opening tag. Used as the "real skeleton

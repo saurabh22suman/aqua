@@ -184,6 +184,17 @@ const WHITELIST = new Set([
   // limitation — the same money/needs-attention state as the K-07
   // order screen's note.
   "components/cafe-open-orders.tsx",
+
+  // V-04 — the reception booking counter's money surface.
+  // booking-bill-panel + booking-day-list: `good` marks the paid /
+  // settled state (DESIGN.md §1.1: good = paid). booking-form +
+  // booking-screen: `warn-soft` marks the server's refusal and the
+  // walk-in billing limitation — the same money/needs-attention
+  // state as the K-07/K-08 café notes.
+  "components/booking-bill-panel.tsx",
+  "components/booking-day-list.tsx",
+  "components/booking-form.tsx",
+  "components/booking-screen.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

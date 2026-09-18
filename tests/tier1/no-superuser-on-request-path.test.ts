@@ -260,6 +260,13 @@ const ALLOWLIST = new Set([
   // backfill test lives under tests/migrations/ (directory-covered).
   "tests/tier1/activity-types.test.ts",
   "tests/tier1/skill-framework.test.ts",
+  // V-09/V-10 — skill ladder bridge/editor + register assessments. Same
+  // fixture-setup pattern as the M entries above: the privileged pool
+  // seeds tenants/users/skill_levels (tables under FORCE RLS), then every
+  // app operation goes through withTenant()/the services; never
+  // request-path code.
+  "tests/tier1/skill-ladder.test.ts",
+  "tests/tier1/assessments.test.ts",
   "tests/tier1/module-registry.test.ts",
   "tests/tier1/module-versioning.test.ts",
   "tests/tier1/pricing-models.test.ts",
@@ -279,6 +286,14 @@ const ALLOWLIST = new Set([
   // the K-01…K-06 entries above (privileged pool for tenants/members/
   // menu; orders, billing and payments through the services).
   "tests/tier1/cafe-billing-flow.test.ts",
+  // V-02..V-04, V-08 — facility bookings, pricing, staff flow and
+  // utilisation: same fixture-setup pattern as the K entries above
+  // (privileged pool for tenants/locations/facilities/members; every
+  // service call under test goes through withTenant()/the services).
+  "tests/tier1/bookings-overlap.test.ts",
+  "tests/tier1/bookings-pricing.test.ts",
+  "tests/tier1/bookings-staff-flow.test.ts",
+  "tests/tier1/utilisation.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

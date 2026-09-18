@@ -838,16 +838,36 @@ of the `message_log` written by C-40a.
 **Build:** `btree_gist` exclusion constraint on facility, sub-unit and time range for held and confirmed bookings.
 **Done when:** fifty concurrent identical booking attempts produce exactly one success.
 **Never:** check-then-insert in application code.
+**Status:** complete — `20260918140000_v02_bookings.sql` creates `bookings`
+with `EXCLUDE USING gist (tenant_id =, facility_id =, coalesce(sub_unit_id, 0-uuid) =,
+tstzrange(starts_at, ends_at, '[)') &&) WHERE status in ('held','confirmed')`.
+The fifty-concurrent test fails when the constraint is dropped (50 successes)
+and passes with it (exactly one) — the database is the guarantee. Adjacent
+slots (`end == next start`) both succeed; cancel frees the slot.
 
 ### V-03 · Slots and pricing
 **Depends:** V-02
 **Build:** Slot templates, peak and off-peak pricing, advance-booking window.
 **Done when:** peak pricing applies correctly by time of day.
+**Status:** complete — `20260918141000_v03_booking_pricing.sql` adds
+`booking_price_rules` (days-of-week, time window, priority) plus the
+`bookings.advance_window_days` config key (default 30). The resolver picks the
+most specific active rule (priority, then narrowest window) and the booking
+snapshots its `price_paise`. No price-rule CRUD UI in this pass — rules are
+seeded/edited via SQL or a future settings screen.
 
 ### V-04 · Staff booking
 **Depends:** V-03
 **Build:** Front-desk booking for a member or a named walk-in, with payment.
 **Done when:** a walk-in is booked and paid in under a minute.
+**Status:** complete, scoped — `/reception/bookings` (entry from reception
+Today) books a facility/sub-unit slot with the V-03 price. A **member**
+booking bills through the existing invoice spine (`source='other'`,
+`invoice-issue` gained an optional trusted per-line `taxPaise` snapshot so an
+inclusive booking price bills to the paisa) and settles at the counter. A
+**walk-in** booking records the name but is not payable in R1 — the same
+member-attachment rule as café (flagged decision, not a code gap). Cancel is
+audited.
 
 ### V-05 · Public booking page
 **Depends:** V-04, C-35
@@ -868,6 +888,11 @@ of the `message_log` written by C-40a.
 **Depends:** V-05
 **Build:** Facility utilisation by hour, day and week.
 **Done when:** the report identifies the emptiest recurring slot.
+**Status:** complete — `lib/services/utilisation.ts` computes utilisation by
+hour/day/week per facility over `confirmed`+`completed` bookings and names the
+emptiest recurring (day-of-week, hour) bucket from the last four weeks; a card
+renders it on `/owner/reports`. Business hours unset ⇒ an honest `null`, not a
+fabricated percentage.
 
 ## Swimming
 
@@ -875,16 +900,31 @@ of the `message_log` written by C-40a.
 **Depends:** C-48
 **Build:** `skill_levels`, `skills`, rubric JSON.
 **Done when:** the preset's swimming ladder is present and editable.
+**Status:** complete — `20260918142000_v10_framework_bridge.sql` idempotently
+seeds `skill_frameworks`/`skill_nodes` from every existing
+`skill_levels`/`skills` ladder (stable name-independent ids; `applyPreset`
+runs the same bridge in-transaction so future tenants get ladders too), and
+`/owner/settings/skills` edits level/node names and rubric with audit. The
+preset tables stay intact and read-only to the bridge.
 
 ### V-10 · Assessments
 **Depends:** V-09
 **Build:** `assessments` with band 1–4, assessor and timestamp. Coach entry from the session view.
 **Done when:** a coach assesses three swimmers from the register in under a minute.
+**Status:** complete — the register row links to a per-member assessment board
+(one tap per node band 1–4); bands enforced at the service, every assessment
+audits, `levels.assess` required. Manual pass: three swimmers assessed in
+three taps.
 
 ### V-11 · Progress view
 **Depends:** V-10
 **Build:** Progress pips per DESIGN.md, history over time, visible on the parent page.
 **Done when:** a parent sees the progress trend without an account.
+**Status:** complete except the parent half — progress pips (band → pip state,
+`water`/`deck` tokens) with history render on the coach member page and the
+owner member 360 **Progress tab** (the U-03 tab landed here). The **parent
+surface is deliberately untouched** (owner decision 2026-09-18: parent stays
+the zero-JS token link); `git diff` confirms zero files under `app/p/**`.
 
 ### V-12 · Lane allocation
 **Depends:** V-01, C-18

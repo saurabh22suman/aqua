@@ -37,12 +37,18 @@ vi.mock("@/lib/actions/invite-link", () => ({
 vi.mock("@/components/link-qr", () => ({ LinkQr: () => null }));
 
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireOwner: async () => ({}),
+  // V-09 — the owner settings page reads ctx.features to decide
+  // whether the skill-ladder tile renders, so the fake ctx carries
+  // empty sets.
+  requireOwner: async () => ({ features: new Set(), permissions: new Set() }),
   requireReception: async () => ({}),
   requireCoach: async () => ({}),
 }));
 vi.mock("@/lib/auth/context", () => ({
-  requireDefaultCtx: async () => ({}),
+  requireDefaultCtx: async () => ({
+    features: new Set(),
+    permissions: new Set(),
+  }),
 }));
 vi.mock("@/lib/auth/permission", () => ({
   requirePermission: () => {},
