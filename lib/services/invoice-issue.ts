@@ -168,26 +168,28 @@ export async function issueInvoiceInTx(
     })),
   );
 
-  // System-issued renewals have no user actor; audit_log.actor_id is
-  // NOT NULL, and jobs writing tenant audit rows is the standing F-15
-  // gap (see the PR note). User-issued invoices always audit.
-  if (actorId) {
-    await tx.insert(auditLog).values({
-      tenantId,
-      actorId,
-      action: "invoice.issue",
-      entityType: "invoice",
-      entityId: invoice.id,
-      after: {
-        invoiceNumber: allocated.invoiceNumber,
-        documentKind,
-        subtotalPaise,
-        taxPaise,
-        totalPaise,
-        subscriptionId: input.subscriptionId ?? null,
-      },
-    });
-  }
+  // E-01 — both paths audit in the same transaction as the insert.
+  // A user-issued invoice carries the actor; a system-issued renewal
+  // (the invoices.generate job) carries actor_type='system' with no
+  // actor_id, which the old NOT NULL column made impossible (F-15
+  // job gap).
+  await tx.insert(auditLog).values({
+    tenantId,
+    actorType: actorId ? "user" : "system",
+    actorId: actorId ?? null,
+    source: actorId ? "web" : "job",
+    action: "invoice.issue",
+    entityType: "invoice",
+    entityId: invoice.id,
+    after: {
+      invoiceNumber: allocated.invoiceNumber,
+      documentKind,
+      subtotalPaise,
+      taxPaise,
+      totalPaise,
+      subscriptionId: input.subscriptionId ?? null,
+    },
+  });
 
   return {
     ok: true,

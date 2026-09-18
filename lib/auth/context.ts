@@ -25,6 +25,10 @@ export type Ctx = {
   // cheap reads used by UI gating. See lib/auth/permission.ts.
     permissions: Set<string>;
   features: Set<string>;
+  // H-04 — middleware.ts's per-request correlation id, forwarded as
+  // the `x-request-id` request header. Optional: jobs and tests build
+  // contexts without a request, and audit rows accept NULL.
+  requestId?: string;
 };
 
 // M3: every lib/services/*.ts file independently redeclared this as
@@ -35,7 +39,8 @@ export type Ctx = {
 // parameter accepted any string, unbranded, no matter how carefully
 // the schema columns were typed. One shared type instead of eight
 // independently-drifting copies.
-export type ActionCtx = Pick<Ctx, "tenantId"> & Partial<Pick<Ctx, "userId">>;
+export type ActionCtx = Pick<Ctx, "tenantId"> &
+  Partial<Pick<Ctx, "userId" | "requestId">>;
 
 export class NotFoundError extends Error {
   constructor() {
@@ -73,7 +78,7 @@ export const requireCtx = cache(async (slug: string): Promise<Ctx> => {
   ) {
     throw new NotFoundError();
   }
-  return ctx;
+  return { ...ctx, requestId: h.get("x-request-id") ?? undefined };
 });
 
 export async function requireDefaultCtx(): Promise<Ctx> {
@@ -124,6 +129,7 @@ export async function requireDefaultCtx(): Promise<Ctx> {
     locationIds,
     permissions,
     features,
+    requestId: h.get("x-request-id") ?? undefined,
   };
 }
 
