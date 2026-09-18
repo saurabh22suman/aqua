@@ -628,6 +628,12 @@ Each is contrast-tested against the surfaces and guaranteed not to collide with 
 
 **Testing cost is the reason for the constraint.** Every theme is a theme to QA forever — contrast on every control, focus rings, status pills, charts, PDFs, the parent page. Six accents is a testable matrix. Infinite accents is not, for a two-person team at this ARPU.
 
+### 5.18 Tenant health signals
+
+The platform control plane groups every tenant into one of three bands: `healthy`, `attention`, or `at_risk`. The operator's home screen surfaces the worst-off tenants first, not a count — what an operator acts on, not what they aggregate.
+
+The signals and the threshold values live in **`db/tenant-health.ts`** (the constants `NO_ACTIVITY_ATTENTION_DAYS`, `OVERDUE_AT_RISK_DAYS`, `TRIAL_ATTENTION_DAYS`, `FAILED_MESSAGE_ATTENTION_THRESHOLD`, `PENDING_REQUEST_ATTENTION_DAYS`). The values are **not restated here** on purpose — a duplicated number drifts from the code, then the code and the doc disagree and nobody notices until the band fires wrong. The doc names the constants; the code carries the values. `tests/tenant-health.test.ts` pins every constant so a change is a deliberate behaviour change, not an accidental edit.
+
 ---
 
 ## 6. Non-functional requirements

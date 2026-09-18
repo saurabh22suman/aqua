@@ -79,7 +79,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             placeholder="Priya Iyer"
             autoComplete="name"
             required
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </label>
         <label className="block">
@@ -95,7 +95,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             inputMode="tel"
             autoComplete="tel"
             required
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </label>
         <label className="block">
@@ -106,7 +106,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             name="staffType"
             value={staffType}
             onChange={(e) => setStaffType(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">— No, owner-only —</option>
             <option value="coach">Yes — also a coach (so they can be assigned to a batch)</option>

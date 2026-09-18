@@ -33,6 +33,14 @@
   --accent: #FF7A18;
   --accent-soft: #FFEEE1;
   --accent-ink: #B84E00;
+  /* WCAG 1.4.11 — focus indicator ≥3:1 vs every control surface.
+   * Paper #FFFFFF: 5.09:1. Deck #EDF0EC: 4.43:1. Mango --accent
+   * itself fails on both (2.61 / 2.27) and is reserved for primary
+   * actions and active nav state per §1.2. The check that holds this
+   * value to the threshold is scripts/check-focus-contrast.ts
+   * (pnpm check:focus-contrast) — keep this hex literal so the
+   * script can parse a real value, not a CSS expression. */
+  --focus-ring: #B84E00;
 }
 
 html {

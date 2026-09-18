@@ -65,6 +65,20 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Real Chromium binary for tests/a11y/ops-focus-rendered.test.ts
+      # (PR #176) and the scripts/e2e-*.ts drivers below. `pnpm install`
+      # only installs the `playwright` package, not the browsers; this
+      # step pulls both the full Chromium and chrome-headless-shell —
+      # Playwright 1.49+ defaults chromium.launch({ headless: true }) to
+      # chrome-headless-shell, which is the path every launch() in this
+      # repo takes today. --with-deps also installs the OS libraries
+      # Chromium needs on a bare runner image (libnss3, libxss1, etc. via
+      # apt); the e2e scripts need this too, so the cost is shared. Move
+      # this step BEFORE `pnpm test` (was previously only before the
+      # scripts/e2e-*.ts section) so the render-based focus test in
+      # tests/a11y/ has the binary when its beforeAll runs.
+      - run: pnpm exec playwright install --with-deps chromium chromium-headless-shell
+
       - run: pnpm typecheck
 
       - run: pnpm lint
@@ -80,6 +94,14 @@ jobs:
       # lands on stale numbers). The script is a pure git-diff check,
       # no DB needed; runs in well under a second.
       - run: pnpm check:runbook-sync
+
+      # Item 3 (PR #176 follow-up) — --focus-ring must meet WCAG 1.4.11
+      # (≥3:1) against every control surface. Parses app/globals.css for
+      # the literal hex (refuses CSS expressions so a colour-mix(...)
+      # migration can't silently disable the check), computes the
+      # WCAG contrast ratio, fails the build on any value below
+      # threshold. Pure source parse, runs in <1s.
+      - run: pnpm check:focus-contrast
 
       # F5: every script referenced in package.json must point to a
       # file that exists. The E1 follow-up landed a "passing"
@@ -162,12 +184,6 @@ jobs:
       # above) — the small duplicate build cost buys a script that's
       # correct standalone regardless of step order.
       - run: pnpm exec tsx scripts/check-font-budget.ts
-
-      # scripts/e2e-offline.ts needs a real Chromium binary — `pnpm install`
-      # only installs the `playwright` package, not the browser itself.
-      # --with-deps also installs the OS libraries Chromium needs on a bare
-      # runner image.
-      - run: pnpm exec playwright install --with-deps chromium
 
       # The offline fixture (scripts/lib/offline-fixture.ts) reuses the
       # demo-academy tenant and coach login user `pnpm seed` creates —
