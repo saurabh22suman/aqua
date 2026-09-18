@@ -61,6 +61,8 @@ export async function getDailyCollectionAction(
       totalPaise: 0,
       paymentCount: 0,
       cashPaise: 0,
+      cafePaise: 0,
+      cafeOrders: 0,
       byMethod: [],
       byStaff: [],
       cashCount: null,

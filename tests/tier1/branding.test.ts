@@ -10,6 +10,7 @@ import {
   ACCENT_KEYS,
 } from "@/lib/services/branding";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Phase 2.9 — branding service tests (TDD; the implementation
 // arrives in the same PR).
@@ -51,7 +52,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (tenantId) {
-    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.query(

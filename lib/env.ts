@@ -78,6 +78,23 @@ const envSchema = z
       emptyAsUndefined,
       z.enum(["mock", "cloud", "disabled"]).optional(),
     ),
+    // E-03/E-06 — Cloudflare R2 (S3-compatible) object store. All four
+    // are optional and the store is enabled exactly when all four are
+    // set (lib/storage/object-store.ts::isObjectStoreEnabled): a partial
+    // set leaves it disabled and putObject fails loudly, rather than
+    // silently writing somewhere unexpected. Never logged.
+    R2_ACCOUNT_ID: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    R2_ACCESS_KEY_ID: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    R2_SECRET_ACCESS_KEY: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    R2_BUCKET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    // E-03 — HMAC-SHA256 key for the daily audit checkpoint digest.
+    // Optional at parse time so the app boots without it; the checkpoint
+    // job and verifier demand it at entry (requireCheckpointSecret), so
+    // an unsigned checkpoint can never be written or silently accepted.
+    AUDIT_CHECKPOINT_SECRET: z.preprocess(
+      emptyAsUndefined,
+      z.string().min(1).optional(),
+    ),
   })
   .superRefine((val, ctx) => {
     // `next build` forces NODE_ENV=production for the child process that
@@ -191,6 +208,11 @@ export type ParsedEnv = {
   OPS_EMAIL?: string;
   OPS_PASSWORD?: string;
   WHATSAPP_PROVIDER?: "mock" | "cloud" | "disabled";
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET?: string;
+  AUDIT_CHECKPOINT_SECRET?: string;
   NODE_ENV: "development" | "test" | "production";
   DEMO_MODE: boolean;
 };
@@ -219,6 +241,11 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
     OPS_EMAIL: parsed.data.OPS_EMAIL,
     OPS_PASSWORD: parsed.data.OPS_PASSWORD,
     WHATSAPP_PROVIDER: parsed.data.WHATSAPP_PROVIDER,
+    R2_ACCOUNT_ID: parsed.data.R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID: parsed.data.R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY: parsed.data.R2_SECRET_ACCESS_KEY,
+    R2_BUCKET: parsed.data.R2_BUCKET,
+    AUDIT_CHECKPOINT_SECRET: parsed.data.AUDIT_CHECKPOINT_SECRET,
     NODE_ENV: parsed.data.NODE_ENV,
     DEMO_MODE: parsed.data.DEMO_MODE,
   };

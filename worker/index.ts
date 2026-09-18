@@ -5,6 +5,8 @@ import { runSubscriptionsExpireJob } from "@/lib/jobs/subscriptions-expire-job";
 import { runInvoicesGenerateJob } from "@/lib/jobs/invoices-generate-job";
 import { runReportsRollupJob } from "@/lib/jobs/reports-rollup-job";
 import { runEventsRollupJob } from "@/lib/jobs/events-rollup-job";
+import { runActivityExportJob } from "@/lib/jobs/activity-export-job";
+import { runAuditCheckpointJob } from "@/lib/jobs/audit-checkpoint-job";
 import { runPlatformMetricsSnapshotJob } from "@/lib/jobs/platform-metrics-snapshot-job";
 import {
   ACTIVITY_INGEST_QUEUE,
@@ -17,6 +19,8 @@ import { SUBSCRIPTIONS_EXPIRE_QUEUE } from "@/lib/jobs/subscriptions-expire-sche
 import { INVOICES_GENERATE_QUEUE } from "@/lib/jobs/invoices-generate-schedule";
 import { REPORTS_ROLLUP_QUEUE } from "@/lib/jobs/reports-rollup-schedule";
 import { EVENTS_ROLLUP_QUEUE } from "@/lib/jobs/events-rollup-schedule";
+import { ACTIVITY_EXPORT_QUEUE } from "@/lib/jobs/activity-export-schedule";
+import { AUDIT_CHECKPOINT_QUEUE } from "@/lib/jobs/audit-checkpoint-schedule";
 import { PLATFORM_METRICS_SNAPSHOT_QUEUE } from "@/lib/jobs/platform-metrics-snapshot-schedule";
 import { asTenantId, type TenantId } from "@/lib/ids";
 
@@ -40,7 +44,8 @@ import { asTenantId, type TenantId } from "@/lib/ids";
 // PR3 (ops console improvements) — platform.metrics-snapshot is the
 // one cross-tenant job in this process. Every other job in HANDLERS
 // (sessions.generate, absence.alerts, subscriptions.expire,
-// invoices.generate, reports.rollup, events.rollup) is per-tenant: the worker
+// invoices.generate, reports.rollup, events.rollup, activity.export,
+// audit.checkpoint) is per-tenant: the worker
 // receives a `tenantId` per job from pg-boss and the job opens a
 // `withTenant()` transaction. The snapshot carries no tenantId —
 // it writes one row per day to `platform_metrics_daily`, an
@@ -67,6 +72,8 @@ const HANDLERS: ReadonlyArray<{
   { queue: INVOICES_GENERATE_QUEUE, run: runInvoicesGenerateJob },
   { queue: REPORTS_ROLLUP_QUEUE, run: runReportsRollupJob },
   { queue: EVENTS_ROLLUP_QUEUE, run: runEventsRollupJob },
+  { queue: ACTIVITY_EXPORT_QUEUE, run: runActivityExportJob },
+  { queue: AUDIT_CHECKPOINT_QUEUE, run: runAuditCheckpointJob },
 ];
 
 async function main(): Promise<void> {

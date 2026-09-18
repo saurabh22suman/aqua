@@ -26,6 +26,7 @@ import {
   type TenantId,
   type UserId,
 } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Phase 3.6 — staff invitations. TDD; the action + UI land in
 // the same PR, but service-layer invariants are what tests pin
@@ -97,7 +98,7 @@ afterAll(async () => {
     // E-02 — audit_log rows are insert-only for app_user, so the
     // cleanup runs on the privileged pool before the actor/target
     // users are deleted (audit_log.actor_id FKs to users(id)).
-    await admin.query("delete from audit_log where tenant_id = $1", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     // Cleanup is scoped to this run's RUN_NUM. The previous pattern
     // was '+91987%', which matched users from any test file's previous
     // run that happened to use the same prefix -- their tenant_membership

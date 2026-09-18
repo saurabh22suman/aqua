@@ -5,6 +5,7 @@ import { env } from "@/lib/env";
 import { inviteOwner } from "@/db/tenant-invite";
 import { activateInvitedMemberships } from "@/db/membership-activation";
 import { asUserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // D1 — proves invited -> active actually happens, and only for the
 // membership the caller was invited to. Mirrors
@@ -54,7 +55,7 @@ async function seedTenantWithOwnerRole(label: string): Promise<string> {
 async function cleanupTenant(id: string): Promise<void> {
   // E-02 — audit rows carry the tenant id but no FK to tenants;
   // drop them so each run's trail does not outlive its fixtures.
-  await admin.query("delete from audit_log where tenant_id = $1::uuid", [id]);
+  await deleteAuditRowsForTenant(admin, id);
   await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [id]);
   await admin.query("delete from roles where tenant_id = $1::uuid", [id]);
   await admin.query("delete from persons where tenant_id = $1::uuid", [id]);

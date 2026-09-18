@@ -6,6 +6,7 @@ import {
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { asTenantId, asUserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Wave 2 (docs/role-surfaces-plan.md) — schema + service behaviour for
 // members.joined_on, batches.location_id and member_facility_optins,
@@ -101,7 +102,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (admin) {
-    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from attendance where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from sessions where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from batches where tenant_id = $1::uuid", [tenantId]);

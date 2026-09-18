@@ -4,6 +4,7 @@ import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import { runSubscriptionsExpireJob } from "@/lib/jobs/subscriptions-expire-job";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // E-01 — audit actor model. Resolves the F-14 blocker (a job has no
 // user actor, audit_log.actor_id was NOT NULL) and the F-15 job gap
@@ -69,7 +70,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+  await deleteAuditRowsForTenant(admin, tenantId);
   await admin.query("delete from subscriptions where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from membership_plans where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from members where tenant_id = $1::uuid", [tenantId]);

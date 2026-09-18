@@ -8,6 +8,7 @@ import { persons, locations, programs, staff, members, batches } from "@/db/sche
 import { sessions, enrolments } from "@/db/schema/scheduling";
 import { substituteCoach } from "@/lib/services/coach-substitution";
 import { asTenantId, asUserId, asStaffId, asPersonId, type TenantId, type UserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
@@ -102,7 +103,7 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
-    await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query(
       "delete from users where id in ($1::uuid, $2::uuid)",
       [coachAUserId, coachBUserId],
@@ -120,7 +121,7 @@ beforeEach(async () => {
   await withTenant(tenantId, async (tx) => {
     await tx.delete(sessions).where(eq(sessions.tenantId, tenantId));
   });
-  await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+  await deleteAuditRowsForTenant(admin, tenantId);
   // Use a future date 5 days out — generated sessions need to be
   // dated such that the test stays stable.
   const future = new Date();

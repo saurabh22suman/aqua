@@ -6,6 +6,7 @@ import { env } from "@/lib/env";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 function findMatchingClose(text: string, openParenIndex: number): string {
   // Walk forward from an opening paren, return the substring up
@@ -79,7 +80,7 @@ afterAll(async () => {
   // and the member id, so the order is: audit_log → consents →
   // members → staff → tenant_memberships → persons → roles →
   // locations → users → tenants.
-  await admin.query("delete from audit_log where tenant_id = $1::uuid", [tenantId]);
+  await deleteAuditRowsForTenant(admin, tenantId);
   await admin.query("delete from consents where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from members where id = $1::uuid", [memberId]);
   await admin.query("delete from staff where id = $1::uuid", [ownerStaffId]);

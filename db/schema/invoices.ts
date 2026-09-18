@@ -47,6 +47,12 @@ export const invoices = pgTable(
     totalPaise: bigint("total_paise", { mode: "bigint" }).notNull(),
     paidPaise: bigint("paid_paise", { mode: "bigint" }).notNull().default(0n),
     status: text("status").notNull().default("issued"),
+    // K-03 — the invoice's origin. 'membership' is the original
+    // (subscription/renewal) path; 'cafe' is a billed counter order;
+    // 'other' is the escape hatch for one-off documents. The café
+    // payment rule (K-04) keys off this value, so it is a closed set,
+    // not free text.
+    source: text("source").notNull().default("membership").$type<InvoiceSource>(),
     gstin: text("gstin"),
     notes: text("notes"),
     ...auditColumns,
@@ -55,6 +61,10 @@ export const invoices = pgTable(
     check(
       "invoices_status_check",
       sql`${t.status} in ('draft', 'issued', 'partial', 'paid', 'void')`,
+    ),
+    check(
+      "invoices_source_check",
+      sql`${t.source} in ('membership', 'cafe', 'other')`,
     ),
     check(
       "invoices_number_check",
@@ -143,3 +153,4 @@ export const invoiceLineItems = pgTable(
 export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InvoiceStatus = "draft" | "issued" | "partial" | "paid" | "void";
+export type InvoiceSource = "membership" | "cafe" | "other";

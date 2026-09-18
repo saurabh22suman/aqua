@@ -37,12 +37,26 @@ export const issueInvoiceInputSchema = z.object({
   issuedOn: dateSchema,
   dueOn: dateSchema,
   notes: z.string().trim().max(500).nullish(),
+  // K-03 — where this document came from. Defaults to the original
+  // membership path so existing callers are untouched; café orders
+  // pass 'cafe' (lib/services/orders.ts).
+  source: z.enum(["membership", "cafe", "other"]).default("membership"),
   lines: z
     .array(
       z.object({
         description: z.string().trim().min(1).max(300),
         amountPaise: z.number().int().positive(),
         activityId: z.string().uuid().nullish(),
+        // K-03 — optional per-line snapshots. The café path supplies
+        // the order's snapshotted SAC and GST rate so the issued
+        // document matches the operational record to the paisa; the
+        // membership path leaves them unset and resolves the tenant
+        // config as before.
+        sacCode: z
+          .string()
+          .regex(/^\d{4,8}$/, "The SAC code must be 4-8 digits.")
+          .nullish(),
+        taxRateBp: z.number().int().min(0).max(10000).nullish(),
       }),
     )
     .min(1, "An invoice needs at least one line."),
@@ -96,10 +110,20 @@ export async function issueInvoiceInTx(
   }> = [];
 
   for (const line of input.lines) {
-    // An unregistered supplier cannot collect GST: bill of supply, no
-    // tax, rate snapshotted as zero so the document is self-consistent.
+    // An explicit snapshot (the café path) is trusted as-is: the
+    // order is the operational record of what was sold and at what
+    // rate, and the invoice must match it to the paisa. The
+    // bill-of-supply rule (no GSTIN ⇒ no tax) is applied where the
+    // café snapshot is created (lib/services/orders.ts), so a
+    // snapshot from an unregistered tenant already carries rate zero
+    // and the two documents never disagree. Otherwise the membership
+    // path resolves the tenant's GST config as before.
     let rateBp = 0;
-    if (documentKind === "tax_invoice") {
+    let lineSacCode = sacCode;
+    if (line.taxRateBp !== undefined && line.taxRateBp !== null) {
+      rateBp = line.taxRateBp;
+      lineSacCode = line.sacCode ?? sacCode;
+    } else if (documentKind === "tax_invoice") {
       const resolved = await resolveConfigInTx<number>(
         tx,
         tenantId,
@@ -113,7 +137,7 @@ export async function issueInvoiceInTx(
     }
     lines.push({
       description: line.description,
-      sacCode,
+      sacCode: lineSacCode,
       amountPaise: line.amountPaise,
       taxRateBp: rateBp,
       taxPaise: computeTax(line.amountPaise, rateBp),
@@ -148,6 +172,7 @@ export async function issueInvoiceInTx(
       taxPaise: BigInt(taxPaise),
       totalPaise: BigInt(totalPaise),
       status: "issued",
+      source: input.source,
       gstin,
       notes: input.notes ?? null,
       createdBy: actorId,
@@ -184,6 +209,7 @@ export async function issueInvoiceInTx(
     after: {
       invoiceNumber: allocated.invoiceNumber,
       documentKind,
+      source: input.source,
       subtotalPaise,
       taxPaise,
       totalPaise,

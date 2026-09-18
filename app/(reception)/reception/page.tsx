@@ -27,6 +27,20 @@ export default async function ReceptionTodayPage() {
         <ChevronRight size={18} className="text-ink-3 flex-none" />
       </Link>
 
+      <Link
+        href="/reception/cafe"
+        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+        data-testid="cafe-link"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Café</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Take a counter order and settle it.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+
       {sessions.length === 0 ? (
         <EmptyState
           title="No sessions today"

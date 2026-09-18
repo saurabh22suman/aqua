@@ -28,6 +28,14 @@ import {
   scheduleEventsRollup,
 } from "@/lib/jobs/events-rollup-schedule";
 import {
+  ACTIVITY_EXPORT_QUEUE,
+  scheduleActivityExport,
+} from "@/lib/jobs/activity-export-schedule";
+import {
+  AUDIT_CHECKPOINT_QUEUE,
+  scheduleAuditCheckpoint,
+} from "@/lib/jobs/audit-checkpoint-schedule";
+import {
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
   schedulePlatformMetricsSnapshot,
 } from "@/lib/jobs/platform-metrics-snapshot-schedule";
@@ -47,6 +55,8 @@ const QUEUES = [
   INVOICES_GENERATE_QUEUE,
   REPORTS_ROLLUP_QUEUE,
   EVENTS_ROLLUP_QUEUE,
+  ACTIVITY_EXPORT_QUEUE,
+  AUDIT_CHECKPOINT_QUEUE,
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
   ACTIVITY_INGEST_QUEUE,
 ];
@@ -179,6 +189,8 @@ async function main(): Promise<void> {
   await syncPerTenantSchedules(boss, INVOICES_GENERATE_QUEUE, tenants, scheduleInvoicesGenerate);
   await syncPerTenantSchedules(boss, REPORTS_ROLLUP_QUEUE, tenants, scheduleReportsRollup);
   await syncPerTenantSchedules(boss, EVENTS_ROLLUP_QUEUE, tenants, scheduleEventsRollup);
+  await syncPerTenantSchedules(boss, ACTIVITY_EXPORT_QUEUE, tenants, scheduleActivityExport);
+  await syncPerTenantSchedules(boss, AUDIT_CHECKPOINT_QUEUE, tenants, scheduleAuditCheckpoint);
   // Single global schedule, not per-tenant — see worker/index.ts for
   // why this one job carries no tenantId at all.
   await schedulePlatformMetricsSnapshot(boss);

@@ -4,6 +4,7 @@ import {
   inet,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -16,9 +17,14 @@ import type { TenantId, UserId } from "@/lib/ids";
 //
 // bigserial — not uuid — because this table grows fastest and is
 // queried least (architecture.md §8.1 carve-out for time-partitioned,
-// append-only tables never targeted by foreign keys). Partitioning by
-// month is the H-03 target shape; the applied table is still a plain
-// table until that migration lands.
+// append-only tables never targeted by foreign keys). The applied
+// table is RANGE PARTITIONED BY (created_at) with monthly partitions,
+// static horizon through 2028-12, no default partition — H-03,
+// db/migrations/20260918090000_h03_audit_log_partitioning.sql.
+// The primary key is composite (id, created_at) because PostgreSQL
+// requires every unique index on a partitioned table to include the
+// partition key; partitioning lives in the migration, and this
+// declaration must stay in lockstep with it.
 //
 // tenant_id intentionally has no foreign key here: the applied
 // migration (20260907000000_audit_log.sql) never created one, and the
@@ -56,7 +62,7 @@ export type AuditSource = (typeof AUDIT_SOURCES)[number];
 export const auditLog = pgTable(
   "audit_log",
   {
-    id: bigserial("id", { mode: "bigint" }).primaryKey(),
+    id: bigserial("id", { mode: "bigint" }),
     tenantId: uuid("tenant_id").notNull().$type<TenantId>(),
     actorType: text("actor_type").notNull().default("user").$type<AuditActorType>(),
     actorId: uuid("actor_id")
@@ -75,6 +81,8 @@ export const auditLog = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
+    // Must include created_at — the partition key (see the note above).
+    primaryKey({ columns: [t.id, t.createdAt] }),
     index("audit_log_tenant_id_created_at_idx").on(t.tenantId, t.createdAt.desc()),
     index("audit_log_tenant_id_entity_idx").on(t.tenantId, t.entityType, t.entityId),
     index("audit_log_tenant_action_created_idx").on(
