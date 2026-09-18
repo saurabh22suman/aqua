@@ -39,6 +39,12 @@ export const dailyRollups = pgTable(
     invoicesTotalPaise: bigint("invoices_total_paise", { mode: "bigint" })
       .notNull()
       .default(0n),
+    // K-06 — café collections, counted separately from the membership
+    // totals above. Same definition as the live daily collection
+    // report: captured payments settled against invoices whose
+    // source = 'cafe'; cafe_orders counts the distinct such invoices.
+    cafePaise: bigint("cafe_paise", { mode: "bigint" }).notNull().default(0n),
+    cafeOrders: integer("cafe_orders").notNull().default(0),
     eventCounts: jsonb("event_counts")
       .$type<Record<string, number>>()
       .notNull()
@@ -60,6 +66,8 @@ export const dailyRollups = pgTable(
       "daily_rollups_invoices_total_check",
       sql`${t.invoicesTotalPaise} >= 0`,
     ),
+    check("daily_rollups_cafe_paise_check", sql`${t.cafePaise} >= 0`),
+    check("daily_rollups_cafe_orders_check", sql`${t.cafeOrders} >= 0`),
     check("daily_rollups_events_total_check", sql`${t.eventsTotal} >= 0`),
   ],
 );

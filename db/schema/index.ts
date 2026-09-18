@@ -26,6 +26,8 @@ export * from "./membership-plans";
 export * from "./subscriptions";
 export * from "./invoice-numbering";
 export * from "./invoices";
+export * from "./menu";
+export * from "./orders";
 export * from "./payments";
 export * from "./receipts";
 export * from "./cash-counts";

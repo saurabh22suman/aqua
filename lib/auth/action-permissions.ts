@@ -196,6 +196,22 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // would want — owner/admin-only, same gate as an over-₹2,000 close.
   reopenCashCountAction: "settings.manage",
   listCashCountHistoryAction: "reports.financial",
+
+  // K-01 — café menu. Reception reads the menu for the counter
+  // (settings.read); owner/admin manage it (settings.manage).
+  listMenuAction: "settings.read",
+  createMenuCategoryAction: "settings.manage",
+  updateMenuCategoryAction: "settings.manage",
+  archiveMenuCategoryAction: "settings.manage",
+  createMenuItemAction: "settings.manage",
+  updateMenuItemAction: "settings.manage",
+  archiveMenuItemAction: "settings.manage",
+
+  // K-02/K-03 — counter orders and the invoice bridge. Counter work
+  // rides payments.record, the same permission that settles the bill.
+  createOrderAction: "payments.record",
+  finalizeOrderAction: "payments.record",
+  voidOrderAction: "payments.record",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.

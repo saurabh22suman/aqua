@@ -245,6 +245,14 @@ const ALLOWLIST = new Set([
   // pool is available at all (never for request-path code), and refuses
   // to DROP without it. Not scheduled, not imported by the app.
   "scripts/retention-activity-events.ts",
+  // K-01/K-02/K-03/K-04/K-06 — café module. Same fixture-setup pattern
+  // as the entries above: the privileged pool seeds tenants/locations/
+  // users (tables under FORCE RLS), then every app operation goes
+  // through withTenant()/the services; never request-path code.
+  "tests/tier1/cafe-menu.test.ts",
+  "tests/tier1/cafe-orders.test.ts",
+  "tests/tier1/cafe-payments.test.ts",
+  "tests/tier1/cafe-reconciliation.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

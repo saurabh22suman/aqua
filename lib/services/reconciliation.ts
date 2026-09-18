@@ -2,6 +2,7 @@ import { and, eq, gte, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { payments } from "@/db/schema/payments";
+import { invoices } from "@/db/schema/invoices";
 import { cashCounts } from "@/db/schema/cash-counts";
 import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
@@ -60,6 +61,13 @@ export type DailyCollection = {
   totalPaise: number;
   paymentCount: number;
   cashPaise: number;
+  // K-06 — café collections counted separately, not a parallel
+  // report: captured payments settled against invoices with
+  // source = 'cafe'; cafeOrders counts the distinct such invoices
+  // settled that day. Same definition the nightly rollup writes to
+  // daily_rollups.cafe_paise / cafe_orders.
+  cafePaise: number;
+  cafeOrders: number;
   byMethod: CollectionGroup[];
   byStaff: CollectionGroup[];
   cashCount: CashCountRow | null;
@@ -78,6 +86,8 @@ const methodLabels: Record<string, string> = {
   cash: "Cash",
   upi: "UPI",
   bank_transfer: "Bank transfer",
+  card: "Card",
+  other: "Other",
 };
 
 // Fix A's exact thresholds — do not adjust. X: a variance above this
@@ -102,6 +112,8 @@ export async function getDailyCollection(
       totalPaise: 0,
       paymentCount: 0,
       cashPaise: 0,
+      cafePaise: 0,
+      cafeOrders: 0,
       byMethod: [],
       byStaff: [],
       cashCount: null,
@@ -117,6 +129,8 @@ export async function getDailyCollection(
         totalPaise: 0,
         paymentCount: 0,
         cashPaise: 0,
+        cafePaise: 0,
+        cafeOrders: 0,
         byMethod: [],
         byStaff: [],
         cashCount: null,
@@ -149,22 +163,37 @@ export async function getDailyCollection(
       .select({
         amountPaise: payments.amountPaise,
         method: payments.method,
+        invoiceId: payments.invoiceId,
+        invoiceSource: invoices.source,
         receivedBy: payments.receivedBy,
         receiverName: userNameFor(payments.tenantId, payments.receivedBy),
         receiverRole: userRoleNameFor(payments.tenantId, payments.receivedBy),
       })
       .from(payments)
+      .leftJoin(
+        invoices,
+        and(
+          eq(invoices.id, payments.invoiceId),
+          eq(invoices.tenantId, ctx.tenantId),
+        ),
+      )
       .where(and(...conditions));
 
     const byMethod = new Map<string, CollectionGroup>();
     const byStaff = new Map<string, CollectionGroup>();
+    const cafeInvoices = new Set<string>();
     let totalPaise = 0;
     let cashPaise = 0;
+    let cafePaise = 0;
 
     for (const row of rows) {
       const amount = Number(row.amountPaise);
       totalPaise += amount;
       if (row.method === "cash") cashPaise += amount;
+      if (row.invoiceSource === "cafe") {
+        cafePaise += amount;
+        if (row.invoiceId) cafeInvoices.add(row.invoiceId);
+      }
 
       const method = byMethod.get(row.method) ?? {
         key: row.method,
@@ -234,6 +263,8 @@ export async function getDailyCollection(
       totalPaise,
       paymentCount: rows.length,
       cashPaise,
+      cafePaise,
+      cafeOrders: cafeInvoices.size,
       byMethod: [...byMethod.values()].sort((a, b) => b.totalPaise - a.totalPaise),
       byStaff: [...byStaff.values()].sort((a, b) => b.totalPaise - a.totalPaise),
       cashCount,
