@@ -56,6 +56,11 @@ vi.mock("@/lib/services/staff", () => ({
 vi.mock("@/lib/actions/tenant-auth", () => ({
   logoutTenantAction: vi.fn(),
 }));
+// U-07 — the settings page now reads the location list to decide
+// between the singular and plural heading.
+vi.mock("@/lib/actions/locations", () => ({
+  listAdminLocationsAction: async () => [],
+}));
 
 import { EnquiriesBoard } from "@/components/enquiries-board";
 import { InvitationsBoard } from "@/components/invitations-board";

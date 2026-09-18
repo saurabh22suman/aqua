@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CalendarCheck, Pencil, ShieldCheck, Users } from "lucide-react";
+import { Pencil } from "lucide-react";
 import {
   getMemberDetailAction,
   getMemberIdCardContextAction,
@@ -18,37 +18,49 @@ import { MakeupCreditsPanel } from "@/components/makeup-credits-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
-import { resolveTerm } from "@/lib/terminology/keys";
-import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
-import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
+import { MemberDetailTabs, type MemberTab } from "@/components/member-detail/member-detail-tabs";
+import { MemberProfileSections } from "@/components/member-detail/member-profile-sections";
+import { MemberNotesPanel } from "@/components/member-detail/member-notes-panel";
+import { MemberDocumentsPanel } from "@/components/member-detail/member-documents-panel";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 
+const TAB_KEYS = new Set<MemberTab>(["overview", "payments", "notes", "documents"]);
+
+function resolveTab(value: string | undefined): MemberTab {
+  return TAB_KEYS.has(value as MemberTab) ? (value as MemberTab) : "overview";
+}
+
+// U-03 — the member 360 with Overview / Payments / Notes / Documents
+// tabs. Payments reuses the C-32/C-33 invoice panel; Notes is the new
+// audited member_notes surface; Documents states honestly that C-07
+// (photo/document uploads) is unbuilt. The Progress tab is
+// deliberately absent (M-03/V-10 are other workstreams) rather than
+// rendered as a stub.
+
 export default async function MemberDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ memberId: string }>;
+  searchParams?: Promise<{ tab?: string }>;
 }) {
   const ctx = await requireOwner();
   const { memberId } = await params;
   requireUuidParam(memberId);
+  const sp = searchParams ? await searchParams : {};
+  const tab = resolveTab(sp.tab);
+
   const [member, attendanceHistory, cardCtx, terminology, optedFacilities, locations] =
     await Promise.all([
       getMemberDetailAction(memberId),
       getMemberAttendanceHistoryAction(memberId),
       getMemberIdCardContextAction(),
-      // The id-card's eyebrow renders the closed-key `member`
-      // singular form via resolveTerm (L3 audit). The page already
-      // fetched the other three; adding terminology here keeps the
-      // card self-consistent without a second round trip on its
-      // own — and only the page that mounts the card pays the cost.
       getTerminologyAction(),
-      // Wave 2 — the facility opt-ins panel: home facility comes from
-      // the member row, opted facilities + the add picker come here.
       listOptedFacilitiesAction(memberId),
       listLocationsAction(),
     ]);
@@ -94,189 +106,129 @@ export default async function MemberDetailPage({
         </div>
         <Link
           href={`/owner/members/${member.memberId}/edit`}
-          className="flex items-center gap-1.5 rounded-ctl border border-line px-3 py-2 text-[13px]"
+          className="flex min-h-[44px] items-center gap-1.5 rounded-ctl border border-line px-3 text-[13px]"
         >
           <Pencil size={14} />
           Edit
         </Link>
       </div>
 
-      <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-        <p className="text-[12px] text-ink-3">Status</p>
-        <p className="mt-0.5 font-display text-[16px] font-semibold">
-          {MEMBER_STATUS_LABELS[member.status]}
-        </p>
-        <MemberStatusPanel memberId={member.memberId} status={member.status} />
-      </div>
+      <MemberDetailTabs memberId={member.memberId} active={tab} />
 
-      <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
-
-      <MemberSubscriptionPanel memberId={member.memberId} />
-
-      <MemberInvoicesPanel
-        memberId={member.memberId}
-        canWrite={hasPermission(ctx, "invoices.write")}
-        canRecord={hasPermission(ctx, "payments.record")}
-      />
-
-      <MemberFacilitiesPanel
-        memberId={member.memberId}
-        home={{ id: member.locationId, name: member.locationName }}
-        opted={optedFacilities}
-        locations={locations}
-      />
-
-      <MakeupCreditsPanel memberId={member.memberId} />
-
-      <ParentLinkPanel
-        memberId={member.memberId}
-        memberName={member.fullName}
-        primaryGuardianName={
-          Array.isArray(member.guardians) && member.guardians.length > 0
-            ? member.guardians[0]!.fullName
-            : null
-        }
-      />
-
-      <dl className="mt-4 rounded-card border border-line bg-paper p-3.5 space-y-2 text-[13px]">
-        <div className="flex justify-between">
-          <dt className="text-ink-3">Phone</dt>
-          <dd>
-            <InlineEditField
-              value={member.phone ?? ""}
-              field="phone"
-              memberId={member.memberId}
-              type="text"
-              snapshot={member}
-              placeholder="Add phone"
-              formatAs="phone"
-            />
-          </dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-ink-3">Date of birth</dt>
-          <dd>
-            <InlineEditField
-              value={member.dateOfBirth ?? ""}
-              field="dateOfBirth"
-              memberId={member.memberId}
-              type="date"
-              snapshot={member}
-            />
-          </dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-ink-3">Gender</dt>
-          <dd>
-            <InlineEditField
-              value={member.gender ?? ""}
-              field="gender"
-              memberId={member.memberId}
-              type="select"
-              options={[
-                { value: "male", label: "Male" },
-                { value: "female", label: "Female" },
-                { value: "other", label: "Other" },
-              ]}
-              snapshot={member}
-              valueClassName="capitalize"
-              placeholder="Not recorded"
-            />
-          </dd>
-        </div>
-        <div>
-          <dt className="text-ink-3">Medical notes</dt>
-          <dd className="mt-0.5">
-            <InlineEditField
-              value={member.medicalNotes ?? ""}
-              field="medicalNotes"
-              memberId={member.memberId}
-              type="textarea"
-              snapshot={member}
-              placeholder="Add medical notes"
-            />
-          </dd>
-        </div>
-      </dl>
-
-      {member.isMinor ? (
-        <section className="mt-4">
-          <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-            <Users size={15} className="text-ink-3" />
-            Guardians
-          </h2>
-          {member.guardians.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">
-              No {resolveTerm(terminology, "guardian", 1)} on file.
+      {tab === "overview" ? (
+        <>
+          <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
+            <p className="text-[12px] text-ink-3">Status</p>
+            <p className="mt-0.5 font-display text-[16px] font-semibold">
+              {MEMBER_STATUS_LABELS[member.status]}
             </p>
-          ) : (
-            <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
-              {member.guardians.map((g) => (
-                <li key={g.personId} className="px-3.5 py-2.5 text-[13px]">
-                  <span className="font-medium">{g.fullName}</span>
-                  <span className="text-ink-3"> — {g.relationship}</span>
-                  {g.phone ? (
-                    <span className="text-ink-3"> · {formatPhoneIN(g.phone)}</span>
-                  ) : null}
-                  {g.isPrimary ? <span className="ml-1.5 text-[11px] text-water">primary</span> : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+            <MemberStatusPanel memberId={member.memberId} status={member.status} />
+          </div>
+
+          <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
+          <MemberSubscriptionPanel memberId={member.memberId} />
+          <MemberFacilitiesPanel
+            memberId={member.memberId}
+            home={{ id: member.locationId, name: member.locationName }}
+            opted={optedFacilities}
+            locations={locations}
+          />
+          <MakeupCreditsPanel memberId={member.memberId} />
+          <ParentLinkPanel
+            memberId={member.memberId}
+            memberName={member.fullName}
+            primaryGuardianName={
+              Array.isArray(member.guardians) && member.guardians.length > 0
+                ? member.guardians[0]!.fullName
+                : null
+            }
+          />
+
+          <dl className="mt-4 space-y-2 rounded-card border border-line bg-paper p-3.5 text-[13px]">
+            <div className="flex justify-between">
+              <dt className="text-ink-3">Phone</dt>
+              <dd>
+                <InlineEditField
+                  value={member.phone ?? ""}
+                  field="phone"
+                  memberId={member.memberId}
+                  type="text"
+                  snapshot={member}
+                  placeholder="Add phone"
+                  formatAs="phone"
+                />
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-ink-3">Date of birth</dt>
+              <dd>
+                <InlineEditField
+                  value={member.dateOfBirth ?? ""}
+                  field="dateOfBirth"
+                  memberId={member.memberId}
+                  type="date"
+                  snapshot={member}
+                />
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-ink-3">Gender</dt>
+              <dd>
+                <InlineEditField
+                  value={member.gender ?? ""}
+                  field="gender"
+                  memberId={member.memberId}
+                  type="select"
+                  options={[
+                    { value: "male", label: "Male" },
+                    { value: "female", label: "Female" },
+                    { value: "other", label: "Other" },
+                  ]}
+                  snapshot={member}
+                  valueClassName="capitalize"
+                  placeholder="Not recorded"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-ink-3">Medical notes</dt>
+              <dd className="mt-0.5">
+                <InlineEditField
+                  value={member.medicalNotes ?? ""}
+                  field="medicalNotes"
+                  memberId={member.memberId}
+                  type="textarea"
+                  snapshot={member}
+                  placeholder="Add medical notes"
+                />
+              </dd>
+            </div>
+          </dl>
+
+          <MemberProfileSections
+            member={member}
+            attendanceHistory={attendanceHistory}
+            terminology={terminology}
+          />
+        </>
       ) : null}
 
-      <section className="mt-4">
-        <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-          <ShieldCheck size={15} className="text-ink-3" />
-          Consent
-        </h2>
-        {member.consents.length === 0 ? (
-          <p className="mt-2 text-[13px] text-ink-3">No consent on file.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
-            {member.consents.map((c, i) => (
-              <li key={i} className="px-3.5 py-2.5 text-[13px]">
-                <span className="capitalize font-medium">{c.purpose}</span>
-                <span className="text-ink-3">
-                  {" "}
-                  — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"},
-                  granted by {c.granterName || "self"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {member.statusHistory.length > 0 ? (
-        <section className="mt-4">
-          <h2 className="font-display text-[14px] font-semibold">Status history</h2>
-          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
-            {member.statusHistory.map((h, i) => (
-              <li key={i} className="px-3.5 py-2.5 text-[13px]">
-                <span className="font-medium">
-                  {MEMBER_STATUS_LABELS[h.fromStatus as keyof typeof MEMBER_STATUS_LABELS] ?? h.fromStatus} →{" "}
-                  {MEMBER_STATUS_LABELS[h.toStatus as keyof typeof MEMBER_STATUS_LABELS] ?? h.toStatus}
-                </span>
-                <span className="text-ink-3"> — {h.reason ?? "no reason given"}</span>
-                <p className="text-[11px] text-ink-3">{formatDateIST(h.changedAt)}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="mt-4">
-        <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-          <CalendarCheck size={15} className="text-ink-3" />
-          Attendance
-        </h2>
-        <MemberAttendanceGrid
-          rows={attendanceHistory.rows}
-          today={attendanceHistory.today}
+      {tab === "payments" ? (
+        <MemberInvoicesPanel
+          memberId={member.memberId}
+          canWrite={hasPermission(ctx, "invoices.write")}
+          canRecord={hasPermission(ctx, "payments.record")}
         />
-      </section>
+      ) : null}
+
+      {tab === "notes" ? (
+        <MemberNotesPanel
+          memberId={member.memberId}
+          canWrite={hasPermission(ctx, "members.write")}
+        />
+      ) : null}
+
+      {tab === "documents" ? <MemberDocumentsPanel /> : null}
     </main>
   );
 }

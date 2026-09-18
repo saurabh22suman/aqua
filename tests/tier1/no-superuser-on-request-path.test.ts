@@ -253,6 +253,14 @@ const ALLOWLIST = new Set([
   "tests/tier1/cafe-orders.test.ts",
   "tests/tier1/cafe-payments.test.ts",
   "tests/tier1/cafe-reconciliation.test.ts",
+  // U-03/U-06/U-07 — owner member notes, announcements and locations.
+  // Same fixture-setup pattern as the entries above: the privileged
+  // pool seeds tenants/locations/users/persons/members/memberships
+  // (tables under FORCE RLS); every app operation under test goes
+  // through withTenant()/the services; never request-path code.
+  "tests/tier1/member-notes.test.ts",
+  "tests/tier1/announcements.test.ts",
+  "tests/tier1/owner-locations.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

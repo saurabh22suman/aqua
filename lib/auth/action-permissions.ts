@@ -212,6 +212,43 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   createOrderAction: "payments.record",
   finalizeOrderAction: "payments.record",
   voidOrderAction: "payments.record",
+
+  // U-01 — owner analytics on /owner/reports. Operational series
+  // (attendance trend, member mix) and financial series (collections,
+  // plan revenue) carry the same split as the existing report actions.
+  getOperationalAnalyticsAction: "reports.operational",
+  getMoneyAnalyticsAction: "reports.financial",
+
+  // U-02 — Fees & Payments hub. The overview and transaction ledger
+  // are accountant-grade; dues/invoice reads ride invoices.read so
+  // the desk roles that collect see what they can act on.
+  getFeesOverviewAction: "reports.financial",
+  listHubInvoicesAction: "invoices.read",
+  listHubTransactionsAction: "payments.read",
+
+  // U-03 — member notes. Staff-internal: read with the member,
+  // author with members.write.
+  listMemberNotesAction: "members.read",
+  createMemberNoteAction: "members.write",
+  updateMemberNoteAction: "members.write",
+  deleteMemberNoteAction: "members.write",
+
+  // U-04 — owner schedule grid (read-only).
+  getScheduleGridAction: "attendance.read",
+
+  // U-06 — announcements and in-app notifications. Composing needs
+  // messaging.send; reading one's own inbox is a member-level read.
+  sendAnnouncementAction: "messaging.send",
+  listAnnouncementsAction: "members.read",
+  listMyNotificationsAction: "members.read",
+  markNotificationReadAction: "members.read",
+
+  // U-07 — locations and business hours.
+  listAdminLocationsAction: "settings.read",
+  createLocationAction: "settings.manage",
+  updateLocationAction: "settings.manage",
+  getBusinessHoursAction: "settings.read",
+  setBusinessHoursAction: "settings.manage",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.
