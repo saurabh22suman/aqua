@@ -431,11 +431,21 @@ A receptionist who can mark staff attendance must not be able to see what the he
 
 ### 5.12 Café and commerce
 
+> **Amendment — 2026-09-18.** Café moves out of Phase 5 and into **Release 1**
+> as a module on the existing billing spine (implementation-plan K-series).
+> Release 1 covers: menu catalogue, online counter order entry, counter
+> payments (cash / UPI QR / card-terminal reference), GST invoicing through
+> the existing invoice spine, and café reconciliation. It does **not** cover
+> offline POS, thermal printing, hardware, inventory, recipes, tables or
+> modifiers — those stay Phase 5. The member wallet ledger (tabs, advances,
+> package credits) is a fast-follow after Release 1; Release 1 takes counter
+> payments only. **No payment gateway is integrated** (see §7.3).
+
 **Member account charging is in MVP scope (Phase 2). Full café POS is not, and stays Phase 5.**
 
 A parent's child buys something at the café; staff charge it to the member account; it appears as a line item on the member's next invoice. One screen, a charges table, an invoice line. It reuses the billing infrastructure (C-28 money primitives, C-32 invoices) rather than standing up a parallel system — this is a billing feature that happens to originate at a café counter, not a commerce module.
 
-Full POS — menu, modifiers, inventory, tables, thermal printing, shift-end cash reconciliation — stays Phase 5, deliberately. Reasons:
+Full POS — modifiers, inventory, tables, thermal printing, shift-end cash reconciliation — stays Phase 5, deliberately (the menu catalogue and online counter entry move to Release 1 per the amendment above). Reasons:
 
 1. **Offline-first is mandatory there and higher-stakes than attendance.** A dropped attendance mark is invisible until someone checks; a dropped café order loses money with a customer standing at the counter waiting for their change. That is a harder offline problem than the one this session just spent a full TDD cycle closing for attendance, not an easier one.
 2. **It requires hardware integration** — thermal printers, cash drawers, possibly card readers — which member charging does not.
@@ -444,10 +454,13 @@ Full POS — menu, modifiers, inventory, tables, thermal printing, shift-end cas
 | Capability | Phase |
 |---|---|
 | **Charge to member account — staff find member, add a charge, it lands on the next invoice** | **P2** |
-| Menu and product catalogue | P5 |
+| Menu and product catalogue | **R1** |
+| POS order entry, online counter only | **R1** |
+| Direct payment — cash / UPI QR / card-terminal reference | **R1** |
+| Café reconciliation in the daily collections report | **R1** |
 | POS order entry, **offline-capable** | P5 |
 | Table and counter management | P5 |
-| Payment against member account or direct | P5 |
+| Payment against member account (wallet ledger) | Fast-follow after R1 |
 | Inventory with stock levels and thresholds | P5 |
 | Daily sales and expense reporting | P5 |
 | Kitchen display / thermal printing | L |
@@ -724,6 +737,11 @@ Every tenant is a data fiduciary; we are a processor. The data processing agreem
 > The mandate analysis is retained only for the case where a
 > recurring-debit flow is ever wanted.
 
+> **2026-09-18 — confirmed for Release 1.** No gateway ships. Membership and
+> café payments are counter-recorded; `card` is a recorded payment method
+> with a terminal reference captured as the payment `reference`, not an
+> integration. The mandate analysis remains retained only.
+
 - No card data ever touches our systems — Razorpay hosted flows only
 - Settlement reconciliation reporting
 - Refund policy surfaced to the payer before payment
@@ -868,7 +886,7 @@ Deliberately placed **before** café. Tenants two through ten matter more to the
 ### Phase 5 — Commerce and operations depth
 **6–8 weeks**
 
-**Scope:** café menu, offline-capable POS, table management, inventory with thresholds, payment against member accounts, expenses, staff shifts and leave, checklists, campaigns, discount codes, accounting export.
+**Scope:** offline-capable POS, table management, inventory with thresholds, payment against member accounts (wallet ledger fast-follows Release 1), expenses, staff shifts and leave, checklists, campaigns, discount codes, accounting export. **Café menu, online counter order entry and counter payments shipped in Release 1 (K-series, 2026-09-18).**
 
 **Note:** offline-first POS is a genuinely different engineering problem — local persistence, sync conflict resolution, and eventually hardware. Do not treat it as another CRUD module.
 
@@ -896,7 +914,7 @@ The value here comes from the data model, not the model. It is not a moat on its
 | Onboarding friction — migrating from registers and Excel | High | High | Importer as a first-class feature in Phase 2, not a script. Onboarding presets (§5.16) so a new tenant starts with a working configuration rather than an empty product |
 | WhatsApp cost overrun | Medium | Medium | Utility templates only, per-tenant metering from Phase 2, quota enforcement in Phase 4 |
 | Scope creep into no-code platform | **High** | High | §9 exists specifically to prevent this. Re-read it before each phase |
-| Café becoming a second product | Medium | High | Deferred to Phase 5, deliberately behind multi-tenant readiness |
+| Café becoming a second product | Medium | High | Release 1 scope is deliberately thin (menu, online counter orders, counter payments, reconciliation); offline POS and depth stay Phase 5 behind multi-tenant readiness |
 | Price war to the bottom | Medium | Medium | Compete on zero payment commission and collections outcomes, not headline price |
 | Single reference customer distorts the product | Medium | Medium | Get tenant two from a different sport before Phase 4 ends |
 | DPDP non-compliance | Low | High | Built into Phase 2, not retrofitted |

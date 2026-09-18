@@ -817,6 +817,7 @@ of the `message_log` written by C-40a.
 
 ### C-48 · Phase 2 gate
 **Depends:** C-01 … C-47
+**Amended (2026-09-18):** folded into the Release 1 gate (R1-01). The reference month now also covers the café module and the H/E hardening; the original verification below still applies in full.
 **Verify:** the reference business completes one full month — enquiries through collected fees — without the register. Offline attendance survives a real poolside session. No duplicate receipts.
 
 ---
@@ -1406,7 +1407,7 @@ Deliberately left at epic level. Decompose only after Phase 3 ships, because rea
 | Phase | Epics |
 |---|---|
 | **4 — Multi-tenant readiness** (5–6 wks) | Control plane UI · self-service onboarding wizard on the preset engine · remaining preset definitions · usage quota enforcement · our own subscription billing · support impersonation · custom fields · Hindi and Bengali · six-accent picker · referrals · waitlists · notification centre · scheduled reports · certificates |
-| **5 — Commerce and depth** (6–8 wks) | Café menu · offline-first POS · table management · inventory · member account billing · expenses · shift swaps · overtime · checklists · campaigns · discount codes · accounting export |
+| **5 — Commerce and depth** (6–8 wks) | Offline-first POS · table management · inventory · member account billing (fast-follow after Release 1) · expenses · shift swaps · overtime · checklists · campaigns · discount codes · accounting export. **Café menu, online counter order entry and counter payments moved to Release 1 (K-series, 2026-09-18).** |
 | **6 — Intelligence** (ongoing) | Churn scoring · renewal likelihood · natural-language querying over tenant data · recommended actions in context |
 
 ---
@@ -1445,6 +1446,8 @@ F-01…04  Schema ──► F-05…08  ISOLATION GATE ◄── blocking
 **Critical path:** F-05 → F-08 → C-19 → C-20 → C-22 → V-30. Everything downstream of C-20 depends on substitution recording the coach who actually took the session.
 
 **Ops spine (O-01…O-11):** O-01 → {O-02, O-03, O-04, O-08}; O-04 → {O-06, O-07, O-08}; O-09 → O-10; O-05 feeds O-06, O-09, O-10 and O-11. O-11 is blocked on C-40–C-45.
+
+**Release 1 extensions (H/E/M/K/U, 2026-09-18):** H → E-01/E-02/E-04; E-05 → E-06; M-01 → {M-03, M-04}; M-04 → M-05; K-01 → K-02 → K-03 → {K-04, K-06, K-07}; U-08 depends on V-21/V-24. K runs parallel to the V-series; U closes target-design gaps; R1-01 gates all of it. The café module may not start before H-01/H-02 and E-01 land on `main` — it inherits their schema conventions.
 
 ---
 
@@ -1507,3 +1510,364 @@ the Never list — no invented values. Backend contract is B6–B8.
 **Depends:** S1
 **Status:** complete — signed single-purpose 7-day tokens (`lib/services/parent-link.ts`), `/p/[token]` zero-JS server-rendered (route handler, no client JS), child's next session + attendance this month (`lib/services/parent-view.ts`), `no-store`/`noindex`/`no-referrer`, and a zero-JS contract test (`pnpm e2e:parent-link-zero-js`). Fees and progress remain out (C-32 / V-10–V-11).
 **Never:** serve children's data behind an unguessable-but-unmanaged URL. (The signed token is the managed URL; revocation/denylist is still open on C-44.)
+
+---
+
+# Release 1 extensions — multi-sport, café, events, UI closure
+
+**Scope decision — 2026-09-18.** Café moves out of Phase 5 into Release 1 as a
+module on the existing billing spine. Expanded parent surfaces stay **out**: the
+parent experience remains the `/p/[token]` zero-JS link (S5). **No payment
+gateway** is integrated — every payment in this release is counter-recorded
+(cash, UPI reference, card-terminal reference, other). The member wallet ledger
+(`account_entries`, K-05) is a **fast-follow**, not part of the R1 gate.
+`boring-avatars` (MIT, local npm package, no external service) is an approved
+new dependency for U-09.
+
+**Series:** H hardening · E events/audit · M module kernel · K café · U UI
+closure. H, E and the M schema seams land first; K runs beside the Phase 3
+V-series; U closes the target-design gaps. Every `db/migrations/**` change
+carries the `human-approved-merge` label per the standing rules and the
+self-merge suspension (F1).
+
+## H — Hardening
+
+### H-01 · Index hardening
+**Lane:** schema
+**Build:** Add the missing tenant-leading indexes identified in the 2026-09-18
+schema audit: `attendance(tenant_id, member_id, marked_at desc)`;
+`tenant_memberships(user_id)` partial live+active; `ba_session(user_id)`,
+`ba_account(user_id)`, `ba_verification(identifier)`; `programs(tenant_id)`;
+`batches(program_id)`, `batches(coach_id)`; `sessions(coach_id)`;
+`enrolments(batch_id)`; `members(person_id)`; `staff(user_id)`;
+`guardianships(guardian_id)`; `payments(tenant_id, location_id, received_at)`;
+`message_log(provider_message_id)` and `message_log(tenant_id, status,
+created_at)`; `platform_audit_log(action)`. One migration; `concurrently` where
+the table is live.
+**Done when:** EXPLAIN on the member, tenant-resolution, reconciliation and
+webhook-dedupe hot paths shows index scans, not sequential scans.
+
+### H-02 · Convention convergence
+**Lane:** schema + CI
+**Build:** One RLS policy shape across all tenant tables (the
+`nullif(current_setting(...), '')::uuid` form standardised in
+`0004_policy_nullif_hardening.sql`); resolve the Drizzle↔SQL divergences
+(`audit_log.tenant_id` FK exists in `db/schema/audit.ts` but not in the applied
+migration); `db/schema/index.ts` re-exports every schema file. Add a CI scan
+that fails any new tenant table whose indexes do not lead with `tenant_id`
+(documented exemptions: GiST exclusion constraints, platform tables) and any
+new id column defaulting to v4.
+**Done when:** the scan fails on a known-bad fixture and passes on `main`; no
+tenant table carries a raw `tenant_id::text = current_setting(...)` policy.
+
+### H-03 · Partition infrastructure
+**Lane:** schema + jobs
+**Build:** Rebuild `audit_log` as `PARTITION BY RANGE (created_at)`, monthly,
+via expand/contract (new partitioned table with `PRIMARY KEY (id, created_at)`,
+dual-write in the same transaction, backfill, rename swap) — the applied
+migration deliberately deferred this and it cannot be retrofitted cheaply once
+coverage lands. A global `maintenance.partitions` pg-boss job keeps three
+months ahead for `audit_log` and `activity_events`, and alerts on failure.
+**Done when:** a test inserting a row in month+3 succeeds; a month with no
+partition fails loudly, never silently; the dual-write phase produces zero row
+count drift.
+
+### H-04 · Request correlation
+**Lane:** services
+**Build:** `middleware.ts` generates a `request_id` (UUIDv7) per request; it
+flows through `Ctx` into every `audit_log` row and every `activity_events` row;
+structured log lines carry `tenant_id` + `request_id`.
+**Done when:** one action's audit row and its activity event share the same
+`request_id`, and the value survives jobs (enqueued with the job data).
+
+## E — Events and audit
+
+### E-01 · Audit actor model
+**Lane:** schema + services
+**Build:** `audit_log` gains `actor_type`
+(`user | staff | system | job | platform | support`), `actor_id` becomes
+nullable, plus `impersonator_id`, `source` (`web | job | ops | api`), and
+`changed_fields text[]` (computed for updates; the cheap alternative to GIN on
+`before`/`after`). Backfill existing rows to `actor_type = 'user'`. System jobs
+write `actor_type = 'system'`. This resolves the F-14 blocker (membership
+activation could not write because `platform_audit_log.actor_id` FKs to
+`platform_users`) and the jobs gap that made `subscriptions.expire` and
+`invoices.generate` unauditable.
+**Done when:** `subscriptions.expire` writes one audit row with no user actor;
+a job run with no actor passes the schema; the F-14 `TODO` in
+`db/membership-activation.ts` is gone.
+
+### E-02 · Audit coverage closure
+**Lane:** services
+**Build:** Replace the six `TODO(tenant-audit-log)` sites (branding,
+terminology, coach substitution, staff invitations ×3) and the membership
+activation gap. Add a coverage test that asserts each of these service
+mutations writes exactly one `audit_log` row in the same transaction.
+**Done when:** removing any one audit write flips the coverage test red; the
+list of `TODO(tenant-audit-log)` occurrences is empty.
+
+### E-03 · Tamper evidence — daily signed checkpoint
+**Lane:** schema + jobs
+**Build:** A `BEFORE UPDATE OR DELETE` trigger on `audit_log` raising an
+exception; a nightly job computes a per-tenant digest of the day's rows
+(ordered, canonical), signs it, and stores it in R2 and `platform_audit_log`;
+a verifier script recomputes a day from the DB and compares against the
+checkpoint. This is deliberately **not** a per-row hash chain — the checkpoint
+catches the realistic tamper and truncation cases without serialising writes.
+**Done when:** a hand-edited row is detected by the verifier; dropping the
+latest partition is detected via the checkpoint; the nightly job is idempotent
+across retries.
+**Never:** claim this is a per-row hash chain; if an enterprise tenant ever
+requires one, that is a new task, not an extension of this one.
+
+### E-04 · Sensitive-read auditing
+**Lane:** services
+**Build:** Pay-data reads write `action = 'staff.pay.read'` (V-33) with actor,
+entity, `request_id`; denials write `staff.pay.read.denied`.
+**Done when:** an owner viewing pay produces one audit row; a denied coach
+produces one denial row and no data.
+
+### E-05 · activity_events
+**Lane:** schema + services
+**Build:** A monthly-partitioned `activity_events` table with the agreed
+envelope: `event_id` UUIDv7, `tenant_id`, `occurred_at` (client/business clock)
+vs `received_at` (server clock), `actor_id`/`actor_kind`, `session_id`,
+`request_id`, `event_name` (registry-enforced snake_case), `entity_type`/
+`entity_id`, `properties jsonb` (schema-validated, no PII), `context jsonb`
+(route, platform, app version), `source`. Unique
+`(tenant_id, client_event_id)` for idempotent delivery. Ingest through a
+pg-boss batch consumer, never inside a business transaction. No writes from
+`/p/[token]` or any parent/student surface — enforced by a source-scan test.
+**Done when:** register marking emits `session.attendance_marked` events; a
+duplicate delivery inserts exactly one row; the parent surface emits zero.
+
+### E-06 · Event rollups and export
+**Lane:** jobs
+**Build:** Nightly job folds `activity_events` into `daily_rollups`
+extensions (`events_count` per name for the owner/ops dashboards) and exports
+closed partitions to R2 as Parquet (one file per tenant-day), then drops raw
+partitions older than the configured window (default 180 days).
+**Done when:** a dropped partition's numbers remain queryable from rollups;
+the export re-imports in DuckDB; the job is idempotent across retries.
+
+## M — Module kernel (multi-sport)
+
+### M-01 · Activity type catalog
+**Lane:** schema + platform
+**Build:** Platform `activity_types` (key, name, `capabilities jsonb`:
+`bookable | attendance | progress | resource_based | pos`) seeded with
+swimming, tennis, fitness, team-sport and café; tenant activities link to a
+type. Capabilities gate UI, never data integrity.
+**Done when:** one tenant runs two activities of different types and the UI
+groups, labels and bills them correctly without code branches on the key.
+
+### M-02 · facilities → activities + resources
+**Lane:** schema + services
+**Build:** Expand/contract rename of `facilities` → `activities` (compatibility
+view first, drop one release later); normalise `facility_sub_units` into a real
+`resources` table (lanes, courts, tables) with the same tenant isolation, ahead
+of V-01/V-02. Keep a jsonb capacity hint for display only.
+**Done when:** existing presets apply unchanged; `/owner/settings/activities`
+reads the new tables; V-02's exclusion constraint can reference a resource id.
+
+### M-03 · Generic skill framework
+**Lane:** schema + services
+**Build:** `skill_frameworks` / `skill_nodes` / `assessments` keyed by
+`activity_type` (`rubric jsonb` per node), replacing the swim-shaped
+`skill_levels`/`skills`; the swimming preset seeds the existing ladder into the
+generic shape; the `progress` capability gates the UI. A module whose progress
+is not a node ladder (gym PRs) uses a class-table extension, not nullable
+columns on the core.
+**Done when:** swimming progress renders from the generic tables; a second
+activity type defines its own framework with no kernel change.
+
+### M-04 · Module registry and contract
+**Lane:** platform + CI
+**Build:** Platform `modules` + tenant `tenant_modules` (key, version,
+enabled_at); each module declares its presets, config keys, feature keys,
+capability flags and surfaces. A contract test applies every registered module
+to a scratch tenant and asserts its declarations resolve.
+**Done when:** the contract test fails when a module's preset references an
+unregistered config or feature key.
+
+### M-05 · Module versioning
+**Lane:** platform + services
+**Build:** Copy-on-apply, versioned modules with idempotent re-apply, exactly
+like presets; apply is refused once non-sample data exists unless the version
+is declared additive; upgrade writes a `platform_audit_log` row.
+**Done when:** re-applying a module twice changes no rows; upgrading a version
+is an explicit, audited action.
+
+### M-06 · Pricing model extension
+**Lane:** schema + services
+**Build:** `plan_shapes` and `membership_plans` support `per_session | term |
+drop_in` alongside `duration | sessions | one_time`; existing plans untouched.
+**Done when:** a drop-in and a term plan coexist per activity and bill
+correctly through C-30/C-32.
+
+## K — Café module
+
+### K-01 · Menu catalog
+**Lane:** schema + UI
+**Build:** `menu_categories` / `menu_items` (`price_paise`, `tax_rate_bp`,
+`sac_code`, veg flag, active, location-scoped); owner and reception read,
+owner/admin write, coach never; every mutation audited (E-01/E-02 shapes).
+**Done when:** a category with three items renders on reception and a coach
+cannot read or write it.
+
+### K-02 · Order capture
+**Lane:** schema + UI
+**Build:** `orders` / `order_lines` with counter entry, optional member,
+`served_by`, idempotency key; unit price and tax snapshotted per line (the
+invoice-line pattern); void requires a reason and is audited. No offline mode
+in Release 1 — `counter_client_id` is reserved for the Phase 5 POS.
+**Done when:** a walk-in order and a member order both record in one screen;
+a voided order keeps its lines for audit.
+
+### K-03 · Café ↔ invoice bridge
+**Lane:** services
+**Build:** `invoices.source` (`membership | cafe | other`); finalising an order
+creates one invoice with line items and links 1:1. The invoice remains the
+legal document; the order remains the operational record. Gapless FY numbering
+(C-31) is reused unchanged.
+**Done when:** a café bill carries a GST invoice number from the same FY series
+and appears in receipts; voiding the invoice is blocked while the order is
+unpaid.
+
+### K-04 · Café payments
+**Lane:** schema + services
+**Build:** Counter payments settle café invoices through the existing payments
+path; extend `payments.method` CHECK with `card` and `other` (card = terminal
+reference, no gateway; no card data ever touches our systems). Partial
+payments are refused for café in Release 1; refunds are void + new order, never
+row edits.
+**Done when:** a counter payment settles an order invoice; overpayment and
+partial payment are both refused; `method='card'` requires a reference.
+
+### K-06 · Café reconciliation
+**Lane:** reports
+**Build:** Café collections merge into `/owner/reports/collections` and the
+daily cash count by method; `daily_rollups` gains `cafe_paise` and
+`cafe_orders`.
+**Done when:** a day with ten café orders reconciles to the paisa and shows in
+the owner report alongside membership collections.
+
+### K-07 · Café surface
+**Lane:** UI
+**Build:** Reception Café tab at 390×844: menu grid, cart, member lookup, pay
+(cash / UPI QR / card reference). Owner sees a café revenue card. No new role —
+permissions ride on the receptionist's existing grants.
+**Done when:** an order-to-receipt flow completes without leaving the tab; the
+coach role sees nothing café.
+
+### K-05 · Member wallet ledger — **fast-follow, not in R1**
+**Lane:** schema + services
+**Status:** deferred 2026-09-18. Append-only `account_entries` (direction,
+amount_paise, `balance_after`, source, idempotency) for tabs, advances and
+package credits. Release 1 café takes counter payments only; this lands
+immediately after R1-01 with balance re-derivation tests.
+
+## U — UI closure (target-design gaps)
+
+### U-01 · Owner analytics and charts
+**Lane:** UI
+**Build:** Attendance trend, collections vs expenses, plan-wise revenue and
+member mix per the target design, rendered as inline SVG against DESIGN.md
+tokens — **no charting dependency** (bundle budget is 150 KB/route). The
+"collections vs target" arc is **decision needed**: no target exists in the
+schema; either add a tiny `revenue_targets` table or drop the arc.
+**Done when:** the page renders with real data and an honest empty state, and
+the route stays within budget.
+
+### U-02 · Fees & Payments hub
+**Lane:** UI
+**Build:** Owner Overview / Transactions / Dues / Invoices tabs over the
+existing C-29…C-39 services; "Plans & Discounts" shows plans only — discounts
+are Phase 5 and must not appear as a stub.
+**Done when:** a pending invoice is collectible from the hub and appears in
+transactions after payment.
+
+### U-03 · Member detail tabs
+**Lane:** UI
+**Build:** Payments / Progress / Notes / Documents tabs on member 360. Notes
+uses a `member_notes` table (new, audited); Documents depends on C-07;
+Progress depends on M-03/V-10. Status tab mapping **decision needed**:
+Inactive = `paused + lapsed`, Archived = `left`; no new statuses without a
+schema decision.
+**Done when:** the four tabs render real data or an honest empty state, and
+status labelling matches the mapped set exactly.
+
+### U-04 · Schedule calendar grid
+**Lane:** UI
+**Build:** Week/month grid over C-17/C-19 with capacity lanes per batch,
+per-location filter, add-session entry point.
+**Done when:** a full week renders at 390×844 without horizontal scroll and
+matches the sessions list to the row.
+
+### U-05 · Global search
+**Lane:** UI + read services
+**Build:** One search box finding members, enquiries and payments (read-only,
+permission-scoped, tenant-scoped); no cross-entity index in R1 — LIKE over the
+existing indexes.
+**Done when:** a member search from the owner header lands on the member page;
+a coach search never returns another coach's roster.
+
+### U-06 · Announcements and in-app notifications
+**Lane:** schema + UI
+**Build:** Announcement composer (audience: all members / batch / parents only;
+channel: in-app now, WhatsApp remains the C-40a mock) plus a per-user in-app
+notification list. **Decision needed:** a `notifications` table vs deriving
+from `message_log`; do not build the table until decided. Scheduled send rides
+C-47.
+**Done when:** an announcement appears for the selected audience in-app; no
+WhatsApp send is attempted outside the mock.
+
+### U-07 · Settings — locations and business hours
+**Lane:** UI + services
+**Build:** Locations editor and business-hours editor on the existing O-01
+hierarchy and config registry; single-location tenants never see a switcher
+(ops-platform-design §"skeleton").
+**Done when:** a second location is creatable, appears in the header switcher,
+and the first location still renders without a switcher.
+
+### U-08 · Reception check-ins and staff attendance UI
+**Lane:** UI (depends V-21, V-24)
+**Build:** Today's check-in list with checked-in times against sessions
+(V-21's schema), session check-in view with "mark all", and staff attendance
+marking (V-24) for the reception surface.
+**Done when:** a full day's check-ins and staff attendance are markable from
+reception at 390×844.
+
+### U-09 · boring-avatars and visual pass
+**Lane:** UI + dependency
+**Build:** Approved new dependency: `boring-avatars` (MIT, ~20 KB, local SVG
+generation — the hosted service is not used). One wrapper
+`components/avatar.tsx`; deterministic seed is the stable `person_id` (never
+the display name, which changes); palette uses tenant accent + semantic tokens
+from DESIGN.md, not the library default; `marble` default variant, `beam`
+later. Used in staff boards, member lists/detail, ops users. **No photo
+uploads** — C-07 remains out and children's photos are DPDP-sensitive.
+`TenantMark` stays branded initials. Verify RSC compatibility; if the wrapper
+must be a client component, it is excluded from the parent surface.
+**Done when:** avatars render identically on server and client, the bundle
+budget check passes, and no photo-upload affordance exists anywhere.
+
+## Release 1.1 — fast-follow (not in the gate)
+
+| Item | Why deferred |
+|---|---|
+| K-05 wallet ledger | Needs balance re-derivation and reconciliation tests; R1 café works with counter payments |
+| Parent expansion (progress, fees, announcements) | Parent stays the S5 token link this release |
+| Per-row hash chain (E-03 upgrade) | Daily signed checkpoint covers R1; enterprise demand only |
+| CDC/logical-replication pipeline (on top of E-06) | R2 Parquet export is sufficient at current volume |
+| Discount codes, offline POS, inventory, tables | Phase 5 per `project-scope.md` |
+
+### R1-01 · Release 1 gate
+**Depends:** H-01 … U-09 (K-05 excluded)
+**Verify:** the reference business runs sports **and** café for one full month
+without the register. Café cash count matches the system figure daily. F-15
+audit coverage is closed and the coverage test is green. `activity_events`
+carries attendance and money actions, and the parent surface carries none. The
+parent token link still serves zero client JavaScript. No payment gateway code
+exists in the tree. `main` is green and every migration carried the
+`human-approved-merge` label.
