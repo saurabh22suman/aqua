@@ -260,6 +260,13 @@ const ALLOWLIST = new Set([
   // backfill test lives under tests/migrations/ (directory-covered).
   "tests/tier1/activity-types.test.ts",
   "tests/tier1/skill-framework.test.ts",
+  // V-09/V-10 — skill ladder bridge/editor + register assessments. Same
+  // fixture-setup pattern as the M entries above: the privileged pool
+  // seeds tenants/users/skill_levels (tables under FORCE RLS), then every
+  // app operation goes through withTenant()/the services; never
+  // request-path code.
+  "tests/tier1/skill-ladder.test.ts",
+  "tests/tier1/assessments.test.ts",
   "tests/tier1/module-registry.test.ts",
   "tests/tier1/module-versioning.test.ts",
   "tests/tier1/pricing-models.test.ts",

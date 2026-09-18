@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Check, Clock, X } from "lucide-react";
 import type { RosterRow } from "@/lib/actions/coach";
 import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register";
@@ -267,7 +268,17 @@ export function RegisterBoard({
             className="border-b border-line py-2 last:border-0"
           >
             <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0">
+              {/* V-10 — the row's tap-to-assess entry. The name block
+                  is a real link so a coach reaches the one-tap band
+                  board in one tap from the register; the "Assess ›"
+                  hint keeps it discoverable without adding a fourth
+                  target to the 132px toggle cluster. */}
+              <Link
+                href={`/coach/members/${r.memberId}/assess?sessionId=${sessionId}`}
+                className="flex-1 min-w-0 min-h-11 flex flex-col justify-center"
+                aria-label={`Assess ${r.name}`}
+                data-testid={`assess-${r.memberId}`}
+              >
                 <p className="text-[14px] font-medium truncate flex items-center gap-1.5">
                   {r.name}
                   {r.isTrial ? (
@@ -278,8 +289,9 @@ export function RegisterBoard({
                 </p>
                 <p className="text-[12px] text-ink-3">
                   {r.pct === null ? "—" : `${r.pct}% this month`}
+                  <span className="text-water"> · Assess ›</span>
                 </p>
-              </div>
+              </Link>
 
               {/* Un-carded on purpose (U1): full-width buttons per row
                   cost 2-3x the vertical space, against the

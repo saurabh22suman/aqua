@@ -2,9 +2,11 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// U-03 — member 360 tabs. Payments / Notes / Documents are present;
-// Progress is deliberately absent. Notes render an honest empty state
-// and a create form for writers; Documents states C-07 is unbuilt.
+// U-03/V-11 — member 360 tabs. Overview / Payments / Progress / Notes
+// / Documents. V-11 wires Progress to the generic framework (the tab
+// was deliberately absent while M-03/V-10 were other workstreams).
+// Notes render an honest empty state and a create form for writers;
+// Documents states C-07 is unbuilt.
 
 const listMemberNotesAction = vi.fn();
 vi.mock("@/lib/actions/member-notes", () => ({
@@ -37,13 +39,24 @@ afterEach(() => {
 });
 
 describe("U-03 member tabs", () => {
-  it("renders Overview / Payments / Notes / Documents and omits Progress", () => {
+  it("renders Overview / Payments / Progress / Notes / Documents", () => {
     render(<MemberDetailTabs memberId="m1" active="notes" />);
     const labels = Array.from(document.querySelectorAll("a")).map(
       (a) => a.textContent,
     );
-    expect(labels).toEqual(["Overview", "Payments", "Notes", "Documents"]);
-    expect(document.body.textContent).not.toMatch(/progress/i);
+    expect(labels).toEqual([
+      "Overview",
+      "Payments",
+      "Progress",
+      "Notes",
+      "Documents",
+    ]);
+    const progress = Array.from(document.querySelectorAll("a")).find(
+      (a) => a.textContent === "Progress",
+    );
+    expect(progress?.getAttribute("href")).toBe(
+      "/owner/members/m1?tab=progress",
+    );
     const notes = Array.from(document.querySelectorAll("a")).find(
       (a) => a.textContent === "Notes",
     );

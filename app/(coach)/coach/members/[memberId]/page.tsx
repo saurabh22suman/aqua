@@ -1,10 +1,14 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
+import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { listMemberAlertsAction } from "@/lib/actions/absence-alerts";
 import { AbsenceAlertsList } from "@/components/absence-alerts-list";
 import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
+import { MemberProgressPanel } from "@/components/member-detail/member-progress-panel";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { formatPhoneIN } from "@/lib/phone";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
@@ -21,15 +25,23 @@ export default async function CoachMemberDetailPage({
 }: {
   params: Promise<{ memberId: string }>;
 }) {
-  await requireCoach();
+  const ctx = await requireCoach();
   const { memberId } = await params;
   requireUuidParam(memberId);
-  const [m, alerts] = await Promise.all([
+  // V-11 — progress is a staff-side view gated on the swim.levels
+  // module; a tenant without it just doesn't render the section.
+  const ladderEnabled =
+    hasFeature(ctx, "swim.levels") && hasPermission(ctx, "levels.read");
+  const [m, alerts, progress] = await Promise.all([
     getCoachMemberDetailAction(memberId),
     // R.8 — read-only attendance alerts for this member.
     listMemberAlertsAction(memberId),
+    ladderEnabled
+      ? getMemberProgressAction(memberId)
+      : Promise.resolve(null),
   ]);
   if (!m) notFound();
+  const canAssess = ladderEnabled && hasPermission(ctx, "levels.assess");
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -110,6 +122,23 @@ export default async function CoachMemberDetailPage({
           registerBasePath="/coach/register"
         />
       </section>
+
+      {ladderEnabled ? (
+        <section className="mt-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-[14px] font-semibold">Progress</h2>
+            {canAssess ? (
+              <Link
+                href={`/coach/members/${m.memberId}/assess`}
+                className="inline-flex min-h-[44px] items-center rounded-pill bg-[var(--accent)] px-4 text-[13px] font-semibold text-paper"
+              >
+                Record assessment
+              </Link>
+            ) : null}
+          </div>
+          <MemberProgressPanel progress={progress} />
+        </section>
+      ) : null}
     </main>
   );
 }

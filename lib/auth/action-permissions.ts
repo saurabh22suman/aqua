@@ -261,6 +261,19 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // alongside the capture and settlement actions above.
   listOpenCafeOrdersAction: "payments.record",
   requestCafeBillAction: "payments.record",
+
+  // V-09 — skill ladder editor. Reading the ladder is the same
+  // levels.read the coach progress view uses; editing is a settings
+  // change (owner/admin carry settings.manage).
+  listSkillLaddersAction: "levels.read",
+  updateSkillLevelAction: "settings.manage",
+  updateSkillNodeAction: "settings.manage",
+
+  // V-10 — assessments from the register. The progress view reads with
+  // levels.read; recording a band is the assess gesture the coach role
+  // carries.
+  getMemberProgressAction: "levels.read",
+  recordAssessmentAction: "levels.assess",
 };
 
 // Pre-auth actions do not consult Ctx — they have no permission key.
