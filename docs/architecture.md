@@ -62,12 +62,13 @@ Load is sharply bimodal — 6–9 AM and 5–9 PM. Design for burst, not sustain
 | Data access | Drizzle ORM | SQL-first, so Postgres RLS integrates naturally via session variables. Prisma supports RLS but has historically been weaker there — and RLS is the one thing that cannot be got wrong here |
 | Auth | Better Auth, self-hosted | **Never per-MAU pricing** — parents and students are users |
 | Jobs | pg-boss on the same Postgres | One fewer service; Redis only when measurement demands it |
-| Payments | Razorpay | Payment links, then UPI e-mandate in Phase 3 |
+| Payments | Counter-recorded: cash, UPI QR, card-terminal reference. **No PSP integration** | Confirmed 2026-09-18: no gateway, no card data. The Razorpay/i-mandate analysis is retained only for a future recurring-debit flow |
 | Messaging | WhatsApp Cloud API via a BSP, behind our own interface | Swap to direct Cloud API later without a rewrite |
 | Storage | Cloudflare R2 | S3-compatible, no egress fees |
 | Hosting | Container platform (Railway / Render / Fly) or Hetzner + Coolify | Long-running workers, cron and predictable cost |
 | Errors | Sentry | |
-| Analytics | PostHog — **staff surfaces only** | Never on parent or student pages, per DPDP |
+| Analytics | PostHog — **staff surfaces only** | Never on parent or student pages, per DPDP. In-product events also land in `activity_events` (§8.11) |
+| Avatars | `boring-avatars` (MIT), local npm package | Deterministic SVG from the stable `person_id`; no storage, no photos, ~20 KB. Approved 2026-09-18 (U-09); the hosted service is not used |
 
 ### 3.1 Deliberately rejected
 
@@ -667,7 +668,7 @@ A snapshot test per surface catches the common regression, which is a new page s
 
 Applied without exception:
 
-- Primary keys are UUID v7 (time-ordered, index-friendly). Carve-out: time-partitioned, append-only tables that are never targeted by foreign keys may use `bigserial`; `audit_log` is currently the only such table (§8.10). Tenants read that table under its own policy, so index quality still matters
+- Primary keys are UUID v7 (time-ordered, index-friendly). Carve-out: time-partitioned, append-only tables that are never targeted by foreign keys may use `bigserial`; `audit_log` and `activity_events` are the only such tables (§8.10–8.11). Tenants read `audit_log` under its own policy, so index quality still matters. Several MVP-era migrations used `DEFAULT gen_random_uuid()` (v4) instead of the app-side `uuidv7()`; H-02 normalises new tables and audits the existing defaults rather than silently accepting the drift
 - Every business table carries `tenant_id uuid not null`
 - Money is `bigint` in **paise**. Never float, never numeric-for-money
 - Timestamps are `timestamptz`, stored UTC, rendered IST
@@ -1336,6 +1337,44 @@ create policy tenant_isolation on audit_log
 
 Rows with NULL `tenant_id` are platform actions; they are invisible to tenant-scoped requests, and platform reads go through the privileged role. Deliberately **not** allowlisted for F-08a: this table records who looked at pay data, and an allowlist would let any future unscoped query path read it across all tenants. Tenants read their own trail through the normal accessor — which is why index quality matters here despite the bigserial carve-out (§8.1).
 
+**Release 1 target shape (E-01/E-03/H-03, 2026-09-18).** The applied table is still the pre-release shape. It gains `actor_type` (`user | staff | system | job | platform | support`), a **nullable** `actor_id` (jobs and system actions have no user actor — this is the F-14 blocker and the reason system jobs are currently unauditable), `impersonator_id`, `source` (`web | job | ops | api`), and `changed_fields text[]` computed for updates — the cheap filter alternative to a GIN index on `before`/`after`. Existing rows backfill `actor_type = 'user'`. It is rebuilt as monthly range partitions via expand/contract with `PRIMARY KEY (id, created_at)`, gains a `BEFORE UPDATE OR DELETE` guard trigger, and a nightly per-tenant **signed digest checkpoint** written to R2 and `platform_audit_log`. It is deliberately **not** a per-row hash chain; that upgrade is a separate task if an enterprise tenant ever requires it.
+
+### 8.11 Activity events
+
+`activity_events` is the product/operational event stream. It is separate from `audit_log` because the semantics differ: audit is compliance (never deleted, joins to domain state, can contain sensitive before/after), events are analytics (safe to lose, roll up and drop by partition, no PII). The two join by `request_id` and `entity_id` when reconstructing "what did the user see and what changed".
+
+```sql
+create table activity_events (
+  id              uuid not null,          -- UUID v7
+  tenant_id       uuid not null,
+  occurred_at     timestamptz not null,   -- business/client clock
+  received_at     timestamptz not null default now(),
+  actor_id        uuid,
+  actor_kind      text,
+  session_id      text,
+  request_id      uuid,
+  event_name      text not null,          -- registry-enforced snake_case
+  entity_type     text,
+  entity_id       uuid,
+  properties      jsonb not null default '{}',
+  context         jsonb not null default '{}',
+  source          text not null,          -- web | job | ops | api
+  client_event_id text not null
+) partition by range (occurred_at);
+
+create unique index on activity_events (tenant_id, client_event_id);
+create index on activity_events (tenant_id, occurred_at desc);
+create index on activity_events (tenant_id, event_name, occurred_at desc);
+```
+
+Rules: ingest asynchronously (pg-boss batch), never inside a business transaction; every `event_name` is in a versioned registry (TS union + zod) validated at the boundary; `properties` and `context` carry no PII; **no writes from `/p/[token]` or any parent/student surface**, enforced by a source scan; a nightly job rolls events into `daily_rollups`, exports closed partitions to R2 as Parquet, then drops raw partitions past the configured window (default 180 days). PostHog, if used at all, consumes staff-surface events only.
+
+### 8.12 Module kernel (multi-sport and café)
+
+The kernel — people, scheduling, attendance, money, consent, audit/events — is sport-agnostic. A vertical (swimming, tennis, fitness, team sport) and a non-sport module (café) are **modules**: preset data, config/feature keys, an optional class-table extension, and a capability declaration. The module contract is: `registerPreset`, scheduling model, attendance model, progress model, pricing model, owned config/feature keys, surfaces. Capabilities are `bookable | attendance | progress | resource_based | pos` and gate UI, never data integrity. A new sport ships as module registration plus preset data — no kernel `ALTER`, no runtime branching on the module key (the rule already enforced for `preset_key`).
+
+Structural rules: module-specific entities use 1:1 extension tables keyed by the kernel row (class table inheritance) — never a polymorphic `(entity_type, entity_id)` pair without foreign keys; long-tail tenant-defined fields are JSONB behind a definitions registry, never EAV. The café module (K-series) is the first proof: `menu_items`, `orders`, `order_lines` hang off the kernel and the existing invoice spine, with the invoice remaining the legal document and the order the operational record.
+
 ---
 
 ## 9. Background jobs
@@ -1729,9 +1768,11 @@ Non-negotiable rules for generated code:
 |---|---|
 | Errors | Sentry, with tenant id and user id as tags |
 | Structured logs | JSON to stdout, shipped by the platform |
-| Product analytics | PostHog, **staff surfaces only** |
+| Product analytics | PostHog, **staff surfaces only**; in-product events in `activity_events` (§8.11) |
 | Uptime | External synthetic check on a health endpoint |
-| Business audit | `audit_log` table |
+| Business audit | `audit_log` table (partitioned, actor-typed per §8.10) |
+| Audit integrity | Per-tenant daily signed digest checkpoint, stored in R2 and `platform_audit_log` (E-03) |
+| Correlation | `request_id` on every audit row, event row and log line (H-04) |
 
 **Alerts that page:** webhook processing failure, job dead-letter, payment reconciliation mismatch, error rate above 1%, database connections above 80%.
 
