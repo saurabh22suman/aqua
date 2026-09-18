@@ -126,6 +126,145 @@ export const PRESETS: ReadonlyArray<{
   },
 ];
 
+// M-01 — the platform activity-type catalogue. Migration
+// 20260918120000_m01_activity_types.sql inserts the same rows (the
+// production deploy path never runs this seed script); keeping the
+// constants here is what makes the parity test able to compare both
+// copies. Capabilities gate UI, never data integrity.
+export const ACTIVITY_TYPES: ReadonlyArray<{
+  key: string;
+  name: string;
+  capabilities: {
+    bookable: boolean;
+    attendance: boolean;
+    progress: boolean;
+    resource_based: boolean;
+    pos: boolean;
+  };
+  sortOrder: number;
+  status: "active" | "deprecated";
+}> = [
+  {
+    key: "swimming",
+    name: "Swimming",
+    capabilities: {
+      bookable: true,
+      attendance: true,
+      progress: true,
+      resource_based: true,
+      pos: false,
+    },
+    sortOrder: 1,
+    status: "active",
+  },
+  {
+    key: "tennis",
+    name: "Tennis",
+    capabilities: {
+      bookable: true,
+      attendance: true,
+      progress: true,
+      resource_based: true,
+      pos: false,
+    },
+    sortOrder: 2,
+    status: "active",
+  },
+  {
+    key: "fitness",
+    name: "Fitness",
+    capabilities: {
+      bookable: true,
+      attendance: true,
+      progress: true,
+      resource_based: false,
+      pos: false,
+    },
+    sortOrder: 3,
+    status: "active",
+  },
+  {
+    key: "team_sport",
+    name: "Team sport",
+    capabilities: {
+      bookable: false,
+      attendance: true,
+      progress: true,
+      resource_based: true,
+      pos: false,
+    },
+    sortOrder: 4,
+    status: "active",
+  },
+  {
+    key: "cafe",
+    name: "Café",
+    capabilities: {
+      bookable: false,
+      attendance: false,
+      progress: false,
+      resource_based: false,
+      pos: true,
+    },
+    sortOrder: 5,
+    status: "active",
+  },
+];
+
+// M-04 — the module registry seed. Migration
+// 20260918122000_m04_module_registry.sql inserts the same rows for the
+// deploy path; every declared preset/config/feature key here is
+// resolved by the M-04 contract test against the real registry tables.
+export const MODULES: ReadonlyArray<{
+  key: string;
+  name: string;
+  version: number;
+  status: "ga" | "beta" | "internal" | "retired";
+  capabilities: {
+    bookable: boolean;
+    attendance: boolean;
+    progress: boolean;
+    resource_based: boolean;
+    pos: boolean;
+  };
+  presetKeys: string[];
+  configKeys: string[];
+  featureKeys: string[];
+}> = [
+  {
+    key: "swimming",
+    name: "Swimming",
+    version: 1,
+    status: "ga",
+    capabilities: {
+      bookable: true,
+      attendance: true,
+      progress: true,
+      resource_based: true,
+      pos: false,
+    },
+    presetKeys: ["swimming"],
+    configKeys: ["billing.gst_rate_bp"],
+    featureKeys: ["members", "attendance", "pool.booking", "swim.levels"],
+  },
+  {
+    key: "cafe",
+    name: "Café",
+    version: 1,
+    status: "beta",
+    capabilities: {
+      bookable: false,
+      attendance: false,
+      progress: false,
+      resource_based: false,
+      pos: true,
+    },
+    presetKeys: [],
+    configKeys: ["billing.gst_rate_bp", "billing.sac_code"],
+    featureKeys: ["cafe.pos"],
+  },
+];
+
 // Exported so scripts/build-catalogue-migration.ts (which produces
 // db/migrations/<timestamp>_reference_catalogue.sql) and any future
 // catalogue-parity test can read the same array the seed uses.
@@ -265,6 +404,60 @@ export async function seedPlatformCatalogue(
     }
 
     await seedPermissions(connectionString);
+
+    // M-01 — re-assert the activity-type catalogue. The migration
+    // seeds the same rows so `pnpm db:deploy` alone is correct; this
+    // upsert keeps a local/dev seed from drifting after an edit to
+    // ACTIVITY_TYPES (names and capability flags are code).
+    for (const activityType of ACTIVITY_TYPES) {
+      await client.query(
+        `insert into activity_types (key, name, capabilities, sort_order, status)
+         values ($1, $2, $3::jsonb, $4, $5)
+         on conflict (key) do update
+           set name = excluded.name,
+               capabilities = excluded.capabilities,
+               sort_order = excluded.sort_order,
+               status = excluded.status,
+               updated_at = now()`,
+        [
+          activityType.key,
+          activityType.name,
+          JSON.stringify(activityType.capabilities),
+          activityType.sortOrder,
+          activityType.status,
+        ],
+      );
+    }
+
+    // M-04 — re-assert the module registry. Same rationale as
+    // ACTIVITY_TYPES above: the migration is the deploy path, this
+    // upsert is the dev/test source of truth.
+    for (const mod of MODULES) {
+      await client.query(
+        `insert into modules
+           (key, name, version, status, capabilities, preset_keys, config_keys, feature_keys)
+         values ($1, $2, $3, $4, $5::jsonb, $6::text[], $7::text[], $8::text[])
+         on conflict (key) do update
+           set name = excluded.name,
+               version = excluded.version,
+               status = excluded.status,
+               capabilities = excluded.capabilities,
+               preset_keys = excluded.preset_keys,
+               config_keys = excluded.config_keys,
+               feature_keys = excluded.feature_keys,
+               updated_at = now()`,
+        [
+          mod.key,
+          mod.name,
+          mod.version,
+          mod.status,
+          JSON.stringify(mod.capabilities),
+          mod.presetKeys,
+          mod.configKeys,
+          mod.featureKeys,
+        ],
+      );
+    }
 
     // price_paise stays NULL: the pricing-model decision (scope §2.5) is
     // deliberately not encoded here. Never seed a price.

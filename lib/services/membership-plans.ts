@@ -41,7 +41,7 @@ export type PlanRow = {
 export type PlanTemplateRow = {
   shapeId: string;
   name: string;
-  kind: "duration" | "sessions";
+  kind: "duration" | "sessions" | "term" | "per_session" | "drop_in";
   durationDays: number | null;
   sessions: number | null;
 };
@@ -66,20 +66,37 @@ export const createPlanInput = z
     locationId: z.string().uuid(),
     activityId: z.string().uuid().optional(),
     name: nameSchema,
-    kind: z.enum(["duration", "sessions", "one_time"]),
+    // M-06 — term is duration-shaped; per_session and drop_in are
+    // payload-free and billed through invoices (C-32).
+    kind: z.enum([
+      "duration",
+      "term",
+      "sessions",
+      "one_time",
+      "per_session",
+      "drop_in",
+    ]),
     durationDays: z.number().int().min(1).max(3650).optional(),
     sessions: z.number().int().min(1).max(10000).optional(),
     amountPaise: amountSchema,
   })
   .superRefine((value, ctx) => {
-    if (value.kind === "duration" && value.durationDays === undefined) {
-      ctx.addIssue({ path: ["durationDays"], code: "custom", message: "A duration plan needs its number of days." });
+    if (
+      (value.kind === "duration" || value.kind === "term") &&
+      value.durationDays === undefined
+    ) {
+      ctx.addIssue({ path: ["durationDays"], code: "custom", message: "A duration or term plan needs its number of days." });
     }
     if (value.kind === "sessions" && value.sessions === undefined) {
       ctx.addIssue({ path: ["sessions"], code: "custom", message: "A session pack needs its session count." });
     }
-    if (value.kind === "one_time" && (value.durationDays !== undefined || value.sessions !== undefined)) {
-      ctx.addIssue({ path: ["kind"], code: "custom", message: "A one-time plan has neither duration nor sessions." });
+    if (
+      (value.kind === "one_time" ||
+        value.kind === "per_session" ||
+        value.kind === "drop_in") &&
+      (value.durationDays !== undefined || value.sessions !== undefined)
+    ) {
+      ctx.addIssue({ path: ["kind"], code: "custom", message: "A one-time, per-session or drop-in plan has neither duration nor sessions." });
     }
   });
 
@@ -156,7 +173,7 @@ export async function listPlanTemplates(
     return shapes.map((shape) => ({
       shapeId: shape.id,
       name: shape.name,
-      kind: shape.kind as "duration" | "sessions",
+      kind: shape.kind as PlanTemplateRow["kind"],
       durationDays: shape.durationDays,
       sessions: shape.sessions,
     }));
@@ -288,7 +305,9 @@ export async function createPlan(
         name: parsed.data.name,
         kind: parsed.data.kind,
         durationDays:
-          parsed.data.kind === "duration" ? parsed.data.durationDays! : null,
+          parsed.data.kind === "duration" || parsed.data.kind === "term"
+            ? parsed.data.durationDays!
+            : null,
         sessions:
           parsed.data.kind === "sessions" ? parsed.data.sessions! : null,
         amountPaise: BigInt(parsed.data.amountPaise),

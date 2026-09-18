@@ -9,6 +9,14 @@ export const PLATFORM_TABLES = [
   "plan_features",
   "presets",
   "permissions",
+  // M-01 — the platform activity-type catalogue (swimming, tennis,
+  // fitness, team sport, café). Closed, code-seeded, read-only to the
+  // app role; tenant `facilities` reference its keys.
+  "activity_types",
+  // M-04 — the platform module registry. Same shape: closed and
+  // code-seeded; the per-tenant ENABLED state lives in
+  // `tenant_modules`, which is tenant-isolated and NOT exempt.
+  "modules",
   // O-04 — the configuration key catalogue. Platform-owned, seeded from
   // code (db/config-definitions.ts); the per-tenant VALUES live in
   // config_values, which is tenant-isolated and NOT exempt.

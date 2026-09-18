@@ -1,3 +1,4 @@
+export * from "./activity-types";
 export * from "./tenants";
 export * from "./config";
 export * from "./payment-qrs";
@@ -14,10 +15,12 @@ export * from "./consent";
 export * from "./programs";
 export * from "./scheduling";
 export * from "./platform";
+export * from "./modules";
 export * from "./platform-users";
 export * from "./platform-leads";
 export * from "./tenant-features";
 export * from "./preset-engine";
+export * from "./skill-framework";
 export * from "./roles";
 export * from "./enquiries";
 export * from "./audit";

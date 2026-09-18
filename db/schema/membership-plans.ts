@@ -46,11 +46,11 @@ export const membershipPlans = pgTable(
   (t) => [
     check(
       "membership_plans_kind_check",
-      sql`${t.kind} in ('duration', 'sessions', 'one_time')`,
+      sql`${t.kind} in ('duration', 'sessions', 'one_time', 'term', 'per_session', 'drop_in')`,
     ),
     check(
       "membership_plans_kind_payload_check",
-      sql`(${t.kind} = 'duration' and ${t.durationDays} is not null and ${t.durationDays} > 0 and ${t.sessions} is null) or (${t.kind} = 'sessions' and ${t.sessions} is not null and ${t.sessions} > 0 and ${t.durationDays} is null) or (${t.kind} = 'one_time' and ${t.durationDays} is null and ${t.sessions} is null)`,
+      sql`(${t.kind} in ('duration', 'term') and ${t.durationDays} is not null and ${t.durationDays} > 0 and ${t.sessions} is null) or (${t.kind} = 'sessions' and ${t.sessions} is not null and ${t.sessions} > 0 and ${t.durationDays} is null) or (${t.kind} in ('one_time', 'per_session', 'drop_in') and ${t.durationDays} is null and ${t.sessions} is null)`,
     ),
     check("membership_plans_amount_check", sql`${t.amountPaise} > 0`),
     check(
@@ -87,4 +87,23 @@ export const membershipPlans = pgTable(
 
 export type MembershipPlan = typeof membershipPlans.$inferSelect;
 export type NewMembershipPlan = typeof membershipPlans.$inferInsert;
-export type MembershipPlanKind = "duration" | "sessions" | "one_time";
+export type MembershipPlanKind =
+  | "duration"
+  | "term"
+  | "sessions"
+  | "one_time"
+  | "per_session"
+  | "drop_in";
+
+// The kinds sold through subscriptions (C-30); the rest are billed
+// through invoices (C-32). One exported answer so the service and the
+// UI never disagree about which picker a plan belongs in.
+export const SUBSCRIPTION_PLAN_KINDS: ReadonlySet<MembershipPlanKind> = new Set([
+  "duration",
+  "term",
+  "sessions",
+]);
+
+export function isSubscriptionPlanKind(kind: string): boolean {
+  return SUBSCRIPTION_PLAN_KINDS.has(kind as MembershipPlanKind);
+}

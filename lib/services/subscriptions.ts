@@ -2,7 +2,10 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { subscriptions } from "@/db/schema/subscriptions";
-import { membershipPlans } from "@/db/schema/membership-plans";
+import {
+  isSubscriptionPlanKind,
+  membershipPlans,
+} from "@/db/schema/membership-plans";
 import { members } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { facilities } from "@/db/schema/preset-engine";
@@ -194,10 +197,12 @@ export async function createSubscription(
       .limit(1);
     const plan = planRows[0];
     if (!plan) return { ok: false, error: "Plan not found or not active." };
-    if (plan.kind === "one_time") {
+    // M-06 — one_time, per_session and drop_in are invoice-only; only
+    // duration / term / sessions are sold as subscriptions.
+    if (!isSubscriptionPlanKind(plan.kind)) {
       return {
         ok: false,
-        error: "One-time plans are sold through invoices, not subscriptions.",
+        error: "This plan is sold through invoices, not subscriptions.",
       };
     }
     // O-08 — the plan's facility must be in the caller's scope too.
@@ -215,7 +220,7 @@ export async function createSubscription(
     let endsOn: string;
     if (parsed.data.endsOn) {
       endsOn = parsed.data.endsOn;
-    } else if (plan.kind === "duration") {
+    } else if (plan.kind === "duration" || plan.kind === "term") {
       endsOn = addDays(startsOn, (plan.durationDays ?? 30) - 1);
     } else {
       endsOn = addDays(startsOn, SESSION_PACK_VALIDITY_DAYS - 1);
