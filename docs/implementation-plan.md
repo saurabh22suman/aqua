@@ -1522,7 +1522,8 @@ gateway** is integrated — every payment in this release is counter-recorded
 (cash, UPI reference, card-terminal reference, other). The member wallet ledger
 (`account_entries`, K-05) is a **fast-follow**, not part of the R1 gate.
 `boring-avatars` (MIT, local npm package, no external service) is an approved
-new dependency for U-09.
+new dependency for U-09. Owner ships web + mobile (U-10); ops is web-only with
+mobile best-effort; coach/reception mobile-only.
 
 **Series:** H hardening · E events/audit · M module kernel · K café · U UI
 closure. H, E and the M schema seams land first; K runs beside the Phase 3
@@ -1852,6 +1853,11 @@ must be a client component, it is excluded from the parent surface.
 **Done when:** avatars render identically on server and client, the bundle
 budget check passes, and no photo-upload affordance exists anywhere.
 
+### U-10 · Owner desktop shell
+**Lane:** UI
+**Build:** Responsive shell over the existing `(owner)` layout: sidebar + top bar at `lg` (≥1024px) matching the owner target design (search, location switcher, notifications affordance deferred), the existing four-item bottom nav preserved below `lg`. Coach and reception bundles must remain free of owner components (route groups already enforce this). Ops stays desktop-only (mobile best-effort, not a gate — decision 2026-09-18).
+**Done when:** every owner route renders at both 1280×900 and 390×844 from the same layout, the bundle-budget check passes, and coach/reception route bundles contain no owner code.
+
 ## Release 1.1 — fast-follow (not in the gate)
 
 | Item | Why deferred |
@@ -1863,7 +1869,7 @@ budget check passes, and no photo-upload affordance exists anywhere.
 | Discount codes, offline POS, inventory, tables | Phase 5 per `project-scope.md` |
 
 ### R1-01 · Release 1 gate
-**Depends:** H-01 … U-09 (K-05 excluded)
+**Depends:** H-01 … U-10 (K-05 excluded)
 **Verify:** the reference business runs sports **and** café for one full month
 without the register. Café cash count matches the system figure daily. F-15
 audit coverage is closed and the coverage test is green. `activity_events`

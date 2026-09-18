@@ -180,7 +180,8 @@ boxShadow: {
 - Inputs at **16px** font size — anything smaller triggers iOS zoom-on-focus.
 - Bottom nav: **exactly four items**. There is no "More" tab. If a fifth thing seems necessary, something else is wrong.
 - Role layouts are separate route groups, not conditional rendering. A worker's bundle must not contain owner components.
-- **`/ops` is desktop-first, with a supported mobile console (Sep 2026 amendment).** Operators still work from laptops: the sidebar, data tables and console type remain the primary experience. But the console must be operable from a phone — the mobile UX audit found no nav and no sign-out there. The mobile console gets the same four-item bottom nav rule as the tenant surfaces (Overview, Tenants, Feature catalogue, Presets), table→card lists where tables would clip, sign-out reachable from the mobile header, and the 44px target rule on nav and cards. Inputs at 16px bind the mobile console's list filters; the rest of `/ops` forms stay desktop-first for now.
+- **`/ops` is desktop-only (decision 2026-09-18; supersedes the Sep 2026 mobile-console amendment).** Operators work from laptops at **1280×900**: the sidebar, data tables and console type remain the primary experience. Mobile is not a supported target — no mobile console requirement, no mobile test gate; mobile rendering is best-effort only. Inputs at 16px still bind the console's list filters.
+- **Owner is the only dual-surface role (decision 2026-09-18).** At `lg` (≥1024px) the owner gets a desktop shell — sidebar + top bar, with the target design's search, location switcher and notifications affordance deferred; below that breakpoint the existing four-item bottom nav is preserved. Coach and reception remain mobile-only (390×844); the parent stays the zero-JS token link.
 - **No dark mode.** Users are outdoors in daylight. High-contrast light wins.
 
 ---
