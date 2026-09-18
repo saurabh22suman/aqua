@@ -17,7 +17,9 @@ const MIGRATED_FILES = [
   "app/(coach)/coach/page.tsx",
   "app/(coach)/coach/schedule/page.tsx",
   "app/(coach)/coach/register/[sessionId]/page.tsx",
-  "app/(reception)/reception/page.tsx",
+  // U-08 — the reception day's time rendering moved from the page into
+  // the check-ins panel; the guard follows the surface.
+  "components/reception-check-ins.tsx",
   "app/(reception)/reception/members/[memberId]/page.tsx",
   "app/(owner)/owner/members/[memberId]/page.tsx",
   "app/p/[token]/route.ts",

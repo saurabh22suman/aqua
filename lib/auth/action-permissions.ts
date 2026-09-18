@@ -122,6 +122,12 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getCoachLoadAction: "reports.operational",
   attendanceReportCsvAction: "reports.operational",
 
+  // U-05 — global search. `members.read` is the coarse gate the whole
+  // search surface rides on (the box lives in the owner shell); the
+  // per-kind checks (enquiries.read, invoices.read) happen inside
+  // lib/services/global-search.ts against ctx.permissions.
+  globalSearchAction: "members.read",
+
   // Owner dashboard
   getOwnerDashboardAction: "reports.operational",
   getOnboardingChecklistAction: "members.read",

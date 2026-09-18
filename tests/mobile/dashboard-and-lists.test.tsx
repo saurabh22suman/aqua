@@ -37,7 +37,9 @@ vi.mock("@/lib/actions/terminology", () => ({
 }));
 vi.mock("@/lib/auth/surface-guard", () => ({
   requireCoach: async () => ({}),
-  requireReception: async () => ({}),
+  // U-08 — the reception page reads ctx.permissions to decide whether
+  // the check-ins panel offers the one-tap mark.
+  requireReception: async () => ({ permissions: new Set(["attendance.mark"]) }),
 }));
 
 const homeAction = vi.hoisted(() => ({

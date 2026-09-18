@@ -138,9 +138,12 @@ const WHITELIST = new Set([
   // primary signal; the colour is supportive.
   "app/(platform)/ops/features/feature-catalogue.tsx",
 
-  // reception/page.tsx — same lane strip as the coach-side
-  // today view (DESIGN.md §3: water/warn/good fill).
-  "app/(reception)/reception/page.tsx",
+  // reception-check-ins.tsx — U-08 moved the reception day's lane
+  // strip and attendance marks out of reception/page.tsx into this
+  // panel. `good`/`warn` mark check-in progress and attendance
+  // state (DESIGN.md §1.1); the time badge tones come from the
+  // shared ATTENDANCE_MARK_TONE map.
+  "components/reception-check-ins.tsx",
 
   // platform/tenants/[tenantId]/page.tsx — tenant detail with
   // StatusPill; the StatusPill is the legitimate money/lifecycle

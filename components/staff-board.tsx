@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Briefcase, ChevronRight } from "lucide-react";
+import { PersonAvatar } from "@/components/avatar";
 import type { StaffRow } from "@/lib/services/staff";
 import { titleCase } from "@/lib/terminology/keys";
 
@@ -38,22 +39,16 @@ export function StaffBoard({ rows }: { rows: StaffRow[] }) {
   return (
     <ul data-testid="staff-list">
       {rows.map((r) => {
-        const initials =
-          r.fullName
-            .split(/\s+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((w) => w[0]!.toUpperCase())
-            .join("") || "?";
         return (
           <li key={r.id} className="bg-paper border border-line rounded-ctl mb-2 last:mb-0">
             <Link
               href={`/owner/staff/${r.id}`}
               className="flex items-center gap-3 px-3.5 py-3"
             >
-              <div className="h-9 w-9 rounded-[11px] bg-water-soft text-water grid place-items-center font-display text-[13px] font-semibold flex-none">
-                {initials}
-              </div>
+              {/* U-09 — deterministic avatar seeded by the stable
+                  person id, never the display name. Decorative here:
+                  the name sits right next to it. */}
+              <PersonAvatar seed={r.personId} size={36} className="flex-none" />
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-medium leading-tight truncate">{r.fullName}</p>
                 <p className="mt-0.5 text-[12px] text-ink-3 truncate">
