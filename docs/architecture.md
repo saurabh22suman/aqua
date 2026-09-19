@@ -64,7 +64,7 @@ Load is sharply bimodal — 6–9 AM and 5–9 PM. Design for burst, not sustain
 | Jobs | pg-boss on the same Postgres | One fewer service; Redis only when measurement demands it |
 | Payments | Counter-recorded: cash, UPI QR, card-terminal reference. **No PSP integration** | Confirmed 2026-09-18: no gateway, no card data. The Razorpay/i-mandate analysis is retained only for a future recurring-debit flow |
 | Messaging | WhatsApp Cloud API via a BSP, behind our own interface | Swap to direct Cloud API later without a rewrite |
-| Storage | Cloudflare R2 | S3-compatible, no egress fees |
+| Storage | Cloudflare R2 | S3-compatible, no egress fees. Live use: audit checkpoints (E-03) and activity-event NDJSON archive + retention (E-06). Receipts and payment QRs still live in Postgres |
 | Hosting | Container platform (Railway / Render / Fly) or Hetzner + Coolify | Long-running workers, cron and predictable cost |
 | Errors | Sentry | |
 | Analytics | PostHog — **staff surfaces only** | Never on parent or student pages, per DPDP. In-product events also land in `activity_events` (§8.11) |
@@ -1065,6 +1065,8 @@ alter table bookings add constraint no_overlap
 
 An exclusion constraint is race-proof under concurrency in a way that a check-then-insert never is.
 
+**As-built (2026-09-18).** `facilities` and `facility_sub_units` (preset-engine) already serve as activities and resources; the physical rename to `activities`/`resources` remains deferred (M-02) because it buys naming, not behaviour. The `bookings` table lands in `20260918140000_v02_bookings.sql` with the exclusion constraint exactly as designed — tenant, facility, `coalesce(sub_unit_id, 0-uuid)` and `tstzrange(starts_at, ends_at, '[)')`, restricted to `held`/`confirmed` — plus `booking_price_rules` and the `bookings.advance_window_days` config key. The fifty-concurrent test is the proof: dropping the constraint lets all fifty succeed, which is why the guarantee lives in the database and never in application code.
+
 ### 8.8 Swimming vertical (Phase 3)
 
 ```sql
@@ -1107,6 +1109,8 @@ create table facility_logs (
   logged_by   uuid references staff(id)
 );
 ```
+
+**As-built (2026-09-18).** The preset ladder (`skill_levels`/`skills`) is bridged into the generic `skill_frameworks`/`skill_nodes` by `20260918142000_v10_framework_bridge.sql` — idempotent, name-independent ids, and `applyPreset` runs the bridge in-transaction so tenants created later get ladders too. Assessments (band 1–4, assessor, timestamp) record against generic nodes; progress pips render on the coach member page and the owner member 360. The parent page deliberately does not show progress (owner decision 2026-09-18: parent stays the zero-JS token link).
 
 ### 8.9 Staff attendance, shifts and pay (Phase 3)
 
@@ -1393,6 +1397,10 @@ pg-boss, on the same database. Transactional job enqueueing is a real benefit: a
 | `attendance.alerts` | Daily 20:00 | Absence streaks and low-attendance alerts |
 | `payouts.draft` | 1st of month, 04:00 | Compute draft staff payouts from sessions, attendance and pay rules. Never auto-pays |
 | `reports.rollup` | Nightly 03:00 | Precompute daily summaries |
+| `events.rollup` | Nightly 03:15 tenant-local | Fold the day's `activity_events` into `daily_rollups.event_counts`/`events_total` (E-06) |
+| `activity.export` | Nightly 03:30 tenant-local | Export the previous day's events as gzipped NDJSON to R2 (E-06) |
+| `audit.checkpoint` | Nightly 04:00 tenant-local | HMAC-signed per-tenant-day audit digest to R2 + `platform_audit_log` anchor (E-03) |
+| `activity.ingest` | Continuous (queue) | Batched, idempotent `activity_events` ingest; registered at deploy, no cron (E-05) |
 | `usage.meter` | Hourly | Per-tenant message and storage counters |
 | `webhooks.process` | Continuous | Payment webhook consumption |
 | `webhooks.purge` | Nightly 03:15 | Delete processed webhook events older than 90 days |
