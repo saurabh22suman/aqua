@@ -92,7 +92,10 @@ function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid attendance input.";
 }
 
-async function ownStaffId(tx: TenantTx, ctx: ActionCtx): Promise<StaffId | null> {
+export async function ownStaffIdInTx(
+  tx: TenantTx,
+  ctx: ActionCtx,
+): Promise<StaffId | null> {
   if (!ctx.userId) return null;
   const [row] = await tx
     .select({ id: staff.id })
@@ -122,7 +125,7 @@ export async function checkIn(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
-    const staffId = await ownStaffId(tx, ctx);
+    const staffId = await ownStaffIdInTx(tx, ctx);
     if (!staffId) {
       return { ok: false, error: "Your login is not linked to a staff record." };
     }
@@ -220,7 +223,7 @@ export async function checkIn(
 
 export async function checkOut(ctx: ActionCtx): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const staffId = await ownStaffId(tx, ctx);
+    const staffId = await ownStaffIdInTx(tx, ctx);
     if (!staffId) {
       return { ok: false, error: "Your login is not linked to a staff record." };
     }
@@ -280,7 +283,7 @@ export async function correctAttendance(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
-    const marker = await ownStaffId(tx, ctx);
+    const marker = await ownStaffIdInTx(tx, ctx);
     if (!marker) {
       return { ok: false, error: "Your login is not linked to a staff record." };
     }
@@ -495,7 +498,7 @@ export async function getMyAttendance(
   if (!parsed.success) return null;
 
   return withTenant(ctx.tenantId, async (tx) => {
-    const staffId = await ownStaffId(tx, ctx);
+    const staffId = await ownStaffIdInTx(tx, ctx);
     if (!staffId) return null;
     const [row] = await tx
       .select()
