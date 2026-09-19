@@ -141,6 +141,16 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   resendInvitationAction: "staff.invite",
   issueLoginLinkAction: "staff.invite",
 
+  // V-23 — shifts and the weekly roster. Building/publishing rides
+  // staff.roster; the caller's own published shifts ride staff.self.
+  listShiftTemplatesAction: "staff.roster",
+  createShiftTemplateAction: "staff.roster",
+  createShiftAction: "staff.roster",
+  deleteShiftAction: "staff.roster",
+  listRosterWeekAction: "staff.roster",
+  publishRosterAction: "staff.roster",
+  listMyShiftsAction: "staff.self",
+
   // Tenant settings / config
   updateBrandingAction: "settings.manage",
   updateTermOverrideAction: "settings.manage",

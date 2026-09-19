@@ -328,6 +328,7 @@ export const PERMISSIONS: ReadonlyArray<{
   { key: "staff.invite", module: "staff", description: "Invite a staff member to the tenant" },
   { key: "staff.attendance", module: "staff", description: "Mark staff attendance" },
   { key: "staff.roster", module: "staff", description: "View and edit the staff roster" },
+  { key: "staff.self", module: "staff", description: "View own roster, mark own attendance and request own leave" },
   { key: "staff.pay.read", module: "staff", description: "View staff pay and earnings" },
   { key: "staff.pay.write", module: "staff", description: "Set staff pay rates and record payouts" },
   { key: "reports.operational", module: "reports", description: "View attendance and utilisation reports" },

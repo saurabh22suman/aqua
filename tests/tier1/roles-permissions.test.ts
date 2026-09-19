@@ -42,6 +42,7 @@ const ALL_PERMISSION_KEYS = [
   "staff.invite",
   "staff.attendance",
   "staff.roster",
+  "staff.self",
   "staff.pay.read",
   "staff.pay.write",
   "reports.operational",
@@ -70,6 +71,7 @@ const ROLE_MATRIX: Record<string, string[]> = {
     "reports.financial",
     "reports.operational",
     "staff.pay.read",
+    "staff.self",
     "members.read",
     "settings.read",
   ].sort(),
@@ -85,6 +87,7 @@ const ROLE_MATRIX: Record<string, string[]> = {
     "bookings.read",
     "bookings.write",
     "staff.attendance",
+    "staff.self",
     "messaging.send",
     "programs.read",
     "settings.read",
@@ -96,8 +99,9 @@ const ROLE_MATRIX: Record<string, string[]> = {
     "programs.read",
     "levels.read",
     "levels.assess",
+    "staff.self",
   ].sort(),
-  worker: ["staff.roster"],
+  worker: ["staff.roster", "staff.self"],
 };
 
 const TEMPLATE_KEYS = Object.keys(ROLE_MATRIX).sort();

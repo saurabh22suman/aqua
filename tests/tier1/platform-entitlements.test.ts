@@ -57,6 +57,7 @@ const ALL_PERMISSION_KEYS = [
   "staff.invite",
   "staff.attendance",
   "staff.roster",
+  "staff.self",
   "staff.pay.read",
   "staff.pay.write",
   "reports.operational",

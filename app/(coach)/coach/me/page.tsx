@@ -4,6 +4,7 @@ import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
+import { MyShiftsCard } from "@/components/my-shifts-card";
 
 // K2 — coach's account surface. Minimum the K2 brief asks for: the
 // user's name and phone, plus a sign-out button. The bottom nav's
@@ -34,6 +35,8 @@ export default async function CoachMePage() {
           {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
+
+      <MyShiftsCard />
 
       <form action={logoutTenantAction} className="mt-6">
         <button

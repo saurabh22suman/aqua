@@ -61,6 +61,10 @@ describe("tenant audit call sites (E-02)", () => {
     { file: "lib/services/staff-invitations.ts", action: '"staff.invitation.resend"' },
     { file: "db/membership-activation.ts", action: '"membership.activate"' },
     { file: "lib/services/invite-link.ts", action: '"membership.activate"' },
+    { file: "lib/services/shifts.ts", action: '"shift_template.create"' },
+    { file: "lib/services/shifts.ts", action: '"shift.create"' },
+    { file: "lib/services/shifts.ts", action: '"shift.delete"' },
+    { file: "lib/services/shifts.ts", action: '"shift.publish"' },
   ];
 
   it("every site calls writeAudit with a named action", () => {
