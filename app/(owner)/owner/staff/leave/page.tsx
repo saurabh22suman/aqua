@@ -6,6 +6,7 @@ import {
 } from "@/lib/actions/leave";
 import { BackLink } from "@/components/ui/BackLink";
 import { LeaveTypesEditor } from "@/components/leave-types-editor";
+import { LeaveDecisionControls } from "@/components/leave-decision-controls";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { formatDateIST } from "@/lib/time/tz";
 
@@ -46,20 +47,31 @@ export default async function StaffLeavePage() {
         ) : (
           <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
             {requests.map((request) => (
-              <li key={request.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium">{request.staffName}</p>
-                  <p className="mt-0.5 text-[12px] text-ink-3">
-                    {request.leaveTypeName} · {request.days} day
-                    {request.days === 1 ? "" : "s"} ·{" "}
-                    {formatDateIST(`${request.fromDate}T12:00:00Z`)} –{" "}
-                    {formatDateIST(`${request.toDate}T12:00:00Z`)}
-                    {request.reason ? ` · ${request.reason}` : ""}
-                  </p>
+              <li key={request.id} className="px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-medium">{request.staffName}</p>
+                    <p className="mt-0.5 text-[12px] text-ink-3">
+                      {request.leaveTypeName} · {request.days} day
+                      {request.days === 1 ? "" : "s"} ·{" "}
+                      {formatDateIST(`${request.fromDate}T12:00:00Z`)} –{" "}
+                      {formatDateIST(`${request.toDate}T12:00:00Z`)}
+                      {request.reason ? ` · ${request.reason}` : ""}
+                    </p>
+                    {request.decisionNote ? (
+                      <p className="mt-0.5 text-[12px] text-ink-2">
+                        Note: {request.decisionNote}
+                      </p>
+                    ) : null}
+                  </div>
+                  {request.status === "pending" ? (
+                    <LeaveDecisionControls requestId={request.id} />
+                  ) : (
+                    <StatusBadge tone={STATUS_TONE[request.status] ?? "neutral"}>
+                      {request.status}
+                    </StatusBadge>
+                  )}
                 </div>
-                <StatusBadge tone={STATUS_TONE[request.status] ?? "neutral"}>
-                  {request.status}
-                </StatusBadge>
               </li>
             ))}
           </ul>

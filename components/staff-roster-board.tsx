@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { DateField } from "@/components/ui/DateField";
 import {
   createShiftAction,
-  createShiftTemplateAction,
   deleteShiftAction,
   publishRosterAction,
 } from "@/lib/actions/shifts";
+import { ShiftTemplateEditor } from "@/components/shift-template-editor";
 import type { RosterShiftRow, ShiftTemplateRow } from "@/lib/services/shifts";
 import type { StaffRow } from "@/lib/services/staff";
 import { addDays, formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
@@ -22,16 +22,6 @@ import { addDays, formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
 //
 // Day cells stack vertically at 390px (no horizontal scroll), matching
 // the owner schedule grid. Touch targets stay at the 44px floor.
-
-const WEEKDAYS = [
-  { value: 1, label: "Mon" },
-  { value: 2, label: "Tue" },
-  { value: 3, label: "Wed" },
-  { value: 4, label: "Thu" },
-  { value: 5, label: "Fri" },
-  { value: 6, label: "Sat" },
-  { value: 0, label: "Sun" },
-];
 
 const STATUS_LABEL: Record<string, string> = {
   rostered: "Rostered",
@@ -65,11 +55,6 @@ export function StaffRosterBoard({
   const [endTime, setEndTime] = useState("10:00");
   const [templateId, setTemplateId] = useState("");
   const [locationId, setLocationId] = useState(defaultLocationId ?? "");
-
-  const [tplName, setTplName] = useState("");
-  const [tplStart, setTplStart] = useState("06:00");
-  const [tplEnd, setTplEnd] = useState("10:00");
-  const [tplDays, setTplDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     startTransition(async () => {
@@ -278,89 +263,7 @@ export function StaffRosterBoard({
         })}
       </div>
 
-      <details className="mt-6 rounded-card border border-line bg-paper p-4">
-        <summary className="min-h-11 cursor-pointer text-[14px] font-medium">
-          Shift templates ({templates.length})
-        </summary>
-        <div className="mt-3 grid gap-3">
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-ink-3">Name</span>
-            <input
-              value={tplName}
-              onChange={(e) => setTplName(e.target.value)}
-              placeholder="Morning shift"
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block min-w-0">
-              <span className="mb-1 block text-[11px] text-ink-3">Start</span>
-              <input
-                type="time"
-                value={tplStart}
-                onChange={(e) => setTplStart(e.target.value)}
-                className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-              />
-            </label>
-            <label className="block min-w-0">
-              <span className="mb-1 block text-[11px] text-ink-3">End</span>
-              <input
-                type="time"
-                value={tplEnd}
-                onChange={(e) => setTplEnd(e.target.value)}
-                className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-              />
-            </label>
-          </div>
-          <fieldset>
-            <legend className="mb-1 text-[11px] text-ink-3">Days</legend>
-            <div className="flex flex-wrap gap-2">
-              {WEEKDAYS.map((d) => {
-                const active = tplDays.includes(d.value);
-                return (
-                  <button
-                    key={d.value}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() =>
-                      setTplDays((prev) =>
-                        active
-                          ? prev.filter((v) => v !== d.value)
-                          : [...prev, d.value],
-                      )
-                    }
-                    className={`min-h-11 min-w-11 rounded-ctl border px-3 text-[13px] ${
-                      active
-                        ? "border-ink-2 bg-deck font-semibold text-ink"
-                        : "border-line bg-paper text-ink-3"
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-          <Button
-            variant="secondary"
-            size="md"
-            disabled={pending || !tplName.trim() || !locationId || tplDays.length === 0}
-            onClick={() =>
-              run(() =>
-                createShiftTemplateAction({
-                  locationId,
-                  name: tplName,
-                  startTime: tplStart,
-                  endTime: tplEnd,
-                  daysOfWeek: tplDays,
-                }),
-              )
-            }
-          >
-            Save template
-          </Button>
-        </div>
-      </details>
+      <ShiftTemplateEditor templates={templates} locationId={locationId} />
     </div>
   );
 }

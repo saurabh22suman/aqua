@@ -169,6 +169,9 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   createLeaveTypeAction: "staff.roster",
   updateLeaveTypeAction: "staff.roster",
   listLeaveRequestsAction: "staff.roster",
+  listUncoveredSessionsAction: "staff.roster",
+  approveLeaveRequestAction: "staff.roster",
+  rejectLeaveRequestAction: "staff.roster",
 
   // Tenant settings / config
   updateBrandingAction: "settings.manage",

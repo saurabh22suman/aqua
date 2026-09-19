@@ -2,10 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { staffAttendance } from "@/db/schema/staff-attendance";
-import {
-  ownStaffIdInTx,
-  type MyAttendanceRow,
-} from "@/lib/services/staff-attendance";
+import { ownStaffIdInTx } from "@/lib/services/staff-self";
+import type { MyAttendanceRow } from "@/lib/services/staff-attendance-list";
 import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
 import { verifyPremisesQrToken } from "@/lib/services/premises-qr";
 import { todayInZone } from "@/lib/time/tz";
