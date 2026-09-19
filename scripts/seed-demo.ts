@@ -7,6 +7,7 @@ import { roles } from "../db/schema/roles";
 import { generateSessions } from "../lib/jobs/session-generator";
 import { createMember } from "../lib/services/register";
 import { seedRoleTemplates } from "../lib/services/roles";
+import { seedDefaultLeaveTypes } from "../lib/services/leave";
 import { seedDemoCredentials, DEMO_PIN } from "./lib/demo-credentials";
 import { applyPreset } from "../db/preset-engine";
 import {
@@ -1098,6 +1099,7 @@ function isMinorDateOfBirth(dob: string, timezone: string): boolean {
 async function ensureKicksFootballTenant(actor: UserId): Promise<void> {
   const tenantId = await ensureTenant(DEMO_FOOTBALL_TENANT, "multi-sport", actor);
   await seedRoleTemplates(tenantId);
+  await seedDefaultLeaveTypes(tenantId);
   const locationId = await ensureLocation(
     tenantId,
     DEMO_FOOTBALL_TENANT.firstLocation.name,
@@ -1412,6 +1414,8 @@ async function main() {
   console.log(`tenant ${DEMO_TENANT.slug} → ${tenantId}`);
   await seedRoleTemplates(tenantId);
   console.log("role templates seeded → owner, admin, receptionist, coach, accountant, worker");
+
+  await seedDefaultLeaveTypes(tenantId);
 
   await withTenant(tenantId, async (tx) => {
     await tx

@@ -68,12 +68,20 @@ export default async function StaffRosterPage({
         ready — staff see their shifts on the Me tab.
       </p>
 
-      <Link
-        href="/owner/staff/check-in-qr"
-        className="mt-3 inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
-      >
-        Premises check-in QR →
-      </Link>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link
+          href="/owner/staff/check-in-qr"
+          className="inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+        >
+          Premises check-in QR →
+        </Link>
+        <Link
+          href="/owner/staff/leave"
+          className="inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+        >
+          Leave requests →
+        </Link>
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link

@@ -68,6 +68,10 @@ describe("tenant audit call sites (E-02)", () => {
     { file: "lib/services/staff-attendance.ts", action: '"staff.attendance.check_in"' },
     { file: "lib/services/staff-attendance.ts", action: '"staff.attendance.check_out"' },
     { file: "lib/services/staff-attendance.ts", action: '"staff.attendance.correct"' },
+    { file: "lib/services/leave.ts", action: '"leave_type.create"' },
+    { file: "lib/services/leave.ts", action: '"leave_type.update"' },
+    { file: "lib/services/leave.ts", action: '"leave.request"' },
+    { file: "lib/services/leave.ts", action: '"leave.cancel"' },
   ];
 
   it("every site calls writeAudit with a named action", () => {

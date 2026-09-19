@@ -160,6 +160,16 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   correctStaffAttendanceAction: "staff.attendance",
   listStaffAttendanceDayAction: "staff.attendance",
 
+  // V-26 — leave. Own requests/cancellations and the type picker ride
+  // staff.self; managing types and the request queue is staff.roster.
+  listLeaveTypesAction: "staff.self",
+  requestLeaveAction: "staff.self",
+  cancelLeaveRequestAction: "staff.self",
+  listMyLeaveAction: "staff.self",
+  createLeaveTypeAction: "staff.roster",
+  updateLeaveTypeAction: "staff.roster",
+  listLeaveRequestsAction: "staff.roster",
+
   // Tenant settings / config
   updateBrandingAction: "settings.manage",
   updateTermOverrideAction: "settings.manage",

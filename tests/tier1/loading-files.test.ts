@@ -36,6 +36,7 @@ const ROUTES = [
   "app/(owner)/owner/settings/menu/loading.tsx",
   "app/(owner)/owner/settings/skills/loading.tsx",
   "app/(owner)/owner/staff/roster/loading.tsx",
+  "app/(owner)/owner/staff/leave/loading.tsx",
   "app/(coach)/coach/loading.tsx",
   "app/(coach)/coach/register/[sessionId]/loading.tsx",
   "app/(coach)/coach/members/[memberId]/assess/loading.tsx",

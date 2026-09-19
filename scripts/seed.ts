@@ -10,6 +10,7 @@ import { sessions as sessionsTable } from "@/db/schema/scheduling";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { createMember, countAttendanceForSession, enrolMember, markAttendance } from "@/lib/services/register";
 import { seedRoleTemplates } from "@/lib/services/roles";
+import { seedDefaultLeaveTypes } from "@/lib/services/leave";
 import { defaultPlanId, seedPlatformCatalogue } from "@/db/seed-platform";
 import { asTenantId, asUserId, asStaffId, type TenantId, type UserId, type StaffId } from "@/lib/ids";
 
@@ -44,6 +45,9 @@ async function main() {
 
   await seedRoleTemplates(tenantId);
   console.log("role templates seeded → owner, admin, receptionist, coach, accountant, worker");
+
+  await seedDefaultLeaveTypes(tenantId);
+  console.log("leave types seeded → casual, sick, unpaid");
 
   // Moved ahead of batch creation (was after session generation): a
   // batch needs the coach's staff id to assign coachId at insert time,
