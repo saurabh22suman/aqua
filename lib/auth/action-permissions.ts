@@ -151,6 +151,15 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   publishRosterAction: "staff.roster",
   listMyShiftsAction: "staff.self",
 
+  // V-24 — staff attendance. Self check-in/out is staff.self (the
+  // service resolves the caller's own staff row); marking or
+  // correcting another staff member is staff.attendance.
+  selfCheckInAction: "staff.self",
+  selfCheckOutAction: "staff.self",
+  getMyAttendanceAction: "staff.self",
+  correctStaffAttendanceAction: "staff.attendance",
+  listStaffAttendanceDayAction: "staff.attendance",
+
   // Tenant settings / config
   updateBrandingAction: "settings.manage",
   updateTermOverrideAction: "settings.manage",

@@ -6,6 +6,7 @@ import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 import { MyShiftsCard } from "@/components/my-shifts-card";
+import { MyAttendanceCard } from "@/components/my-attendance-card";
 
 // K2 — reception's account surface. Mirrors /coach/me: name, phone,
 // sign-out. Reception's bottom nav had three tabs (Today / Add
@@ -31,6 +32,7 @@ export default async function ReceptionMePage() {
       </section>
 
       <MyShiftsCard />
+      <MyAttendanceCard />
 
       <form action={logoutTenantAction} className="mt-6">
         <button

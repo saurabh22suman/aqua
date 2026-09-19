@@ -1,18 +1,18 @@
 import { and, asc, between, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { withTenant, type TenantTx } from "@/db/tenant";
+import { withTenant } from "@/db/tenant";
 import { shiftTemplates, shifts } from "@/db/schema/shifts";
 import { staff } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
-import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
 import {
   locationPredicate,
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
 import { addDays, zonedWallTimeToInstant } from "@/lib/time/tz";
-import { asStaffId, asTenantId, type StaffId } from "@/lib/ids";
+import { asStaffId, type StaffId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // V-23 — shift templates and the weekly roster (architecture.md §8.9).
@@ -108,15 +108,6 @@ function firstIssue(error: z.ZodError): string {
 function normalizeWall(value: string): string {
   const [hours = "0", minutes = "0"] = value.split(":");
   return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
-}
-
-async function tenantTimezone(tx: TenantTx, tenantId: string): Promise<string> {
-  const [row] = await tx
-    .select({ timezone: tenants.timezone })
-    .from(tenants)
-    .where(eq(tenants.id, asTenantId(tenantId)))
-    .limit(1);
-  return row?.timezone ?? "Asia/Kolkata";
 }
 
 export async function createShiftTemplate(
@@ -230,7 +221,7 @@ export async function createShift(ctx: ActionCtx, raw: unknown): Promise<ShiftRe
       .limit(1);
     if (!member) return { ok: false, error: "Staff member not found." };
 
-    const timezone = await tenantTimezone(tx, ctx.tenantId);
+    const timezone = await tenantTimezoneInTx(tx, ctx.tenantId);
     const startAt = zonedWallTimeToInstant(
       input.shiftDate,
       normalizeWall(input.startTime),

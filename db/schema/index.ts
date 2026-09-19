@@ -46,3 +46,4 @@ export * from "./activity-events";
 export * from "./member-notes";
 export * from "./announcements";
 export * from "./shifts";
+export * from "./staff-attendance";
