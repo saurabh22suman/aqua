@@ -1005,26 +1005,69 @@ the zero-JS token link); `git diff` confirms zero files under `app/p/**`.
 **Depends:** C-04
 **Build:** `shift_templates` and `shifts`, weekly roster builder, publication to staff.
 **Done when:** a published roster is visible to each staff member.
+**Status:** complete, scoped — `shift_templates` + `shifts` (migration
+`20260919222556_v23_shifts`), owner builder at `/owner/staff/roster`
+(add/delete a shift, templates, publish week), and published shifts on
+the Me tab of `/coach/me` and `/reception/me` through the new
+`staff.self` permission. `published_at` is the gate: drafts are
+invisible to the staff member until the week is published. Workers
+have no self-service surface yet (V-50 owns the worker view); owner's
+staff-page delete only removes the row (audited).
 
 ### V-24 · Staff attendance
 **Depends:** V-23
 **Build:** `staff_attendance` with self check-in and check-out, late minutes against shift, audited manual correction.
 **Done when:** a manual correction records who made it and why.
+**Status:** complete — `staff_attendance` (migration
+`20260919223554_v24_staff_attendance`, one row per staff per day); self
+check-in/out resolves the caller's own staff row, late minutes are
+measured against the day's first shift and stored; a manual correction
+requires a reason and records `marked_by` plus before/after in
+`audit_log`. Reception `Today` gains the staff-attendance board U-08
+deferred (reason panel, quick reasons); Me tab gains today's state and
+check-in/out. Self-service is `staff.self`; correcting someone else is
+`staff.attendance` (reception). A caller without a staff row is
+refused — the fix is the owner adding the staff record (C-04), and the
+demo seed now attaches one to the receptionist login.
 
 ### V-25 · QR staff check-in
 **Depends:** V-24
 **Build:** Premises QR check-in, optional geofence.
 **Done when:** a coach checks in by scan in under five seconds.
+**Status:** complete except geofence (deferred — the task calls it
+optional). `/owner/staff/check-in-qr` renders a printable QR for a
+signed 180-day token; the staff member's phone camera opens
+`/check-in/<token>` and one tap records a `self_qr` check-in through
+the V-24 service. No new dependency. The resolver refuses a poster
+minted for another tenant. Known limitation: a public static QR can be
+photographed and used off-premises until the geofence or a rotating
+in-app code lands.
 
 ### V-26 · Leave
 **Depends:** V-23
 **Build:** `leave_types` with quotas, `leave_requests` with balances.
 **Done when:** balances decrement correctly and unpaid leave is distinguished.
+**Status:** complete — `leave_types` + `leave_requests` (migration
+`20260919224658_v26_leave`); casual/sick/unpaid seed for existing
+tenants in the migration and inside tenant provisioning. Balances are
+per calendar year (stated assumption): `available = quota − approved −
+pending`, so pending requests cannot overdraw. Unpaid leave is
+`is_paid = false` for V-30's deduction later. Request/cancel is
+`staff.self`; types and the request queue are `staff.roster` at
+`/owner/staff/leave`; the Me tab shows balances, request form and own
+requests.
 
 ### V-27 · Leave approval
 **Depends:** V-26, C-20
 **Build:** Approval flow, roster update, **flagging batches left uncovered**.
 **Done when:** approving leave surfaces uncovered sessions before the day arrives.
+**Status:** complete — Review loads the sessions the staff member
+coaches inside the leave range (substitution rewrites
+`sessions.coach_id`, so a covered session drops off), then Approve/
+Reject records the decision and its note. Approval moves rostered
+shifts in the range to `leave` in the same transaction; rejection
+leaves the roster untouched. Owners/admins without a staff row can
+decide — `decided_by` stays null and `audit_log.actor_id` carries who.
 
 ### V-28 · Pay rules
 **Depends:** C-04, C-28
