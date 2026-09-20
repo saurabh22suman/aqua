@@ -1,30 +1,35 @@
 import { Clock } from "lucide-react";
-import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
-import { formatTimeIST, todayInZone } from "@/lib/time/tz";
+import { formatTimeIST } from "@/lib/time/tz";
 import { StaffCheckInControls } from "@/components/staff-check-in-controls";
+import type { MyAttendanceRow } from "@/lib/services/staff-attendance";
 
 // V-24 — the staff member's own attendance on the Me tab: today's
-// state plus check-in/out. Reads through getMyAttendanceAction
-// (staff.self), so the card can only ever show the caller's own row.
+// state plus check-in/out. The page reads through
+// getMyAttendanceAction (staff.self) and passes the row in, so the
+// card can only ever show the caller's own attendance. A pure
+// component, so page tests can render it without a data layer.
 
-export async function MyAttendanceCard() {
-  const today = todayInZone("Asia/Kolkata");
-  const row = await getMyAttendanceAction({ date: today });
-
-  const checkedIn = Boolean(row?.checkedInAt);
-  const checkedOut = Boolean(row?.checkedOutAt);
+export function MyAttendanceCard({
+  attendance,
+}: {
+  attendance: MyAttendanceRow | null;
+}) {
+  const checkedIn = Boolean(attendance?.checkedInAt);
+  const checkedOut = Boolean(attendance?.checkedOutAt);
 
   let summary = "Not checked in yet.";
-  if (checkedIn && row?.checkedInAt) {
-    summary = `Checked in ${formatTimeIST(row.checkedInAt)}`;
-    if (row.lateMinutes > 0) summary += ` · ${row.lateMinutes} min late`;
-    if (checkedOut && row.checkedOutAt) {
-      summary += ` · out ${formatTimeIST(row.checkedOutAt)}`;
+  if (checkedIn && attendance?.checkedInAt) {
+    summary = `Checked in ${formatTimeIST(attendance.checkedInAt)}`;
+    if (attendance.lateMinutes > 0) {
+      summary += ` · ${attendance.lateMinutes} min late`;
     }
-  } else if (row && !checkedIn) {
+    if (checkedOut && attendance.checkedOutAt) {
+      summary += ` · out ${formatTimeIST(attendance.checkedOutAt)}`;
+    }
+  } else if (attendance && !checkedIn) {
     summary =
-      row.note ??
-      `Marked ${row.status.replace("_", " ")} for today.`;
+      attendance.note ??
+      `Marked ${attendance.status.replace("_", " ")} for today.`;
   }
 
   return (

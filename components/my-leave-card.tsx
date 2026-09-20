@@ -1,16 +1,19 @@
 import { Palmtree } from "lucide-react";
-import {
-  listLeaveTypesAction,
-  listMyLeaveAction,
-} from "@/lib/actions/leave";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { CancelLeaveButton } from "@/components/cancel-leave-button";
 import { LeaveRequestForm } from "@/components/leave-request-form";
-import { formatDateIST, todayInZone } from "@/lib/time/tz";
+import { formatDateIST } from "@/lib/time/tz";
+import type {
+  LeaveBalanceRow,
+  LeaveRequestRow,
+  LeaveTypeRow,
+} from "@/lib/services/leave";
 
 // V-26 — the staff member's leave card on the Me tab: balances, a
-// request form, and their own requests. Reads through staff.self
-// actions; the service returns only the caller's rows.
+// request form, and their own requests. The page reads through
+// staff.self actions (listLeaveTypesAction, listMyLeaveAction) and
+// passes the rows in; the service returns only the caller's rows. A
+// pure component, so page tests can render it without a data layer.
 
 const STATUS_TONE: Record<string, StatusTone> = {
   pending: "warn",
@@ -26,13 +29,15 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-export async function MyLeaveCard() {
-  const year = Number(todayInZone("Asia/Kolkata").slice(0, 4));
-  const [types, mine] = await Promise.all([
-    listLeaveTypesAction(),
-    listMyLeaveAction({ year }),
-  ]);
-
+export function MyLeaveCard({
+  types,
+  balances,
+  requests,
+}: {
+  types: LeaveTypeRow[];
+  balances: LeaveBalanceRow[];
+  requests: LeaveRequestRow[];
+}) {
   return (
     <section className="mt-5 rounded-card border border-line bg-paper p-4">
       <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
@@ -41,7 +46,7 @@ export async function MyLeaveCard() {
       </h2>
 
       <ul className="mt-2 divide-y divide-line">
-        {mine.balances.map((balance) => (
+        {balances.map((balance) => (
           <li
             key={balance.leaveTypeId}
             className="flex items-baseline justify-between gap-3 py-2.5"
@@ -67,9 +72,9 @@ export async function MyLeaveCard() {
         <LeaveRequestForm types={types} />
       </details>
 
-      {mine.requests.length > 0 ? (
+      {requests.length > 0 ? (
         <ul className="mt-3 border-t border-line pt-1">
-          {mine.requests.map((request) => (
+          {requests.map((request) => (
             <li
               key={request.id}
               className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0"

@@ -67,6 +67,24 @@ vi.mock("@/lib/actions/tenant-auth", () => ({
 vi.mock("@/lib/actions/locations", () => ({
   listAdminLocationsAction: async () => [],
 }));
+// V-23..V-26 — the Me pages now load their self-service cards through
+// these actions; empty results keep the sweep focused on the identity
+// block's phone formatting.
+vi.mock("@/lib/actions/shifts", () => ({
+  listMyShiftsAction: async () => [],
+}));
+vi.mock("@/lib/actions/staff-attendance", () => ({
+  getMyAttendanceAction: async () => null,
+}));
+vi.mock("@/lib/actions/leave", () => ({
+  listLeaveTypesAction: async () => [],
+  listMyLeaveAction: async () => ({ balances: [], requests: [] }),
+}));
+// The self-service cards' buttons are client islands that refresh the
+// route after a write.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+}));
 
 import { EnquiriesBoard } from "@/components/enquiries-board";
 import { InvitationsBoard } from "@/components/invitations-board";

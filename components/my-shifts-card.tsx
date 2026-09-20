@@ -1,25 +1,17 @@
 import { CalendarDays } from "lucide-react";
-import { listMyShiftsAction } from "@/lib/actions/shifts";
 import {
-  addDays,
   formatTimeIST,
   formatWeekdayDateIST,
-  todayInZone,
 } from "@/lib/time/tz";
+import type { MyShiftRow } from "@/lib/services/shifts";
 
-// V-23 — the staff member's own published roster, on the Me tab.
-// Reads through listMyShiftsAction (staff.self); the service returns
-// only the caller's own shifts and only published ones, so this card
-// can never surface a colleague's draft. Canonical display zone is
-// Asia/Kolkata, matching the other coach/reception surfaces.
+// V-23 — the staff member's own published roster, on the Me tab. The
+// page reads through listMyShiftsAction (staff.self) and passes the
+// rows in; the service returns only the caller's own published shifts,
+// so this card can never surface a colleague's draft. A pure
+// component, so page tests can render it without a data layer.
 
-export async function MyShiftsCard() {
-  const today = todayInZone("Asia/Kolkata");
-  const shifts = await listMyShiftsAction({
-    fromDate: today,
-    toDate: addDays(today, 13),
-  });
-
+export function MyShiftsCard({ shifts }: { shifts: MyShiftRow[] }) {
   return (
     <section className="mt-5 rounded-card border border-line bg-paper p-4">
       <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
