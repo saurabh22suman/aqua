@@ -212,6 +212,35 @@ picks) and the "different accent per tenant" detail.
 - Reports at `/owner/reports` — live, with attendance by batch and
   CSV export.
 
+### Staff self-service (V-23–V-27)
+
+The demo seeds now include the Phase 3B staff surfaces, so a
+walkthrough can cover rostering, attendance and leave:
+
+- **Owner → Staff → Roster** (`/owner/staff/roster`) — add a shift
+  from a template (or custom times), then **Publish this week**.
+  Drafts are invisible to the staff member until the week is
+  published; the seed no longer pre-publishes anything, so the
+  operator can show the gate.
+- **Owner → Staff → Roster → Premises check-in QR** — a printable
+  signed QR; scanning it opens `/check-in/<token>` on the phone.
+  Geofence is deferred, so the poster works off-premises — don't
+  claim otherwise.
+- **Coach / Receptionist → Me** — the self-service cards: published
+  shifts (next two weeks), today's attendance with check-in/out, and
+  leave balances + request form. Leave types (casual/sick/unpaid)
+  are seeded per tenant by `seed-demo`.
+- **Receptionist → Today → Staff attendance** — the day's staff with
+  present/absent; marking someone else is a manual correction and
+  asks for a reason, which lands in `staff_attendance.note` with
+  `marked_by` and in `audit_log`. The seed attaches staff rows to
+  the receptionist and coach logins, so this path records a real
+  corrector rather than refusing.
+- **Owner → Staff → Leave requests** (`/owner/staff/leave`) —
+  Review loads the sessions the coach leads inside the leave range
+  before deciding; Approve moves the rostered shifts in the range to
+  `leave`, Reject leaves the roster untouched.
+
 ## What is NOT built — say this up front
 
 So the operator doesn't notice a missing screen mid-demo:
@@ -229,10 +258,15 @@ So the operator doesn't notice a missing screen mid-demo:
    follow-ups; book-trial and convert-to-member actions exist but
    are only reachable from the enquiry detail's buttons, not a
    dedicated flow.
-5. **`/coach/me`** is a stub (profile page not built).
+5. **`/coach/me` has no profile editor.** It shows the signed-in
+   person plus the Phase 3B self-service cards (shifts, attendance,
+   leave); editing name/phone is not built.
 6. **`/owner/staff/[staffId]` is read-only.** Staff directory lists,
    details, and creates work; edit lands with the next staff
    invitation cycle.
+7. **No pay surfaces yet.** Shift and leave data are ready for
+   V-28–V-34 (pay rules, payout runs, payslips), but nothing pays
+   anyone in this release.
 
 ## Starting the demo
 
