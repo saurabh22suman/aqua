@@ -141,6 +141,38 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   resendInvitationAction: "staff.invite",
   issueLoginLinkAction: "staff.invite",
 
+  // V-23 — shifts and the weekly roster. Building/publishing rides
+  // staff.roster; the caller's own published shifts ride staff.self.
+  listShiftTemplatesAction: "staff.roster",
+  createShiftTemplateAction: "staff.roster",
+  createShiftAction: "staff.roster",
+  deleteShiftAction: "staff.roster",
+  listRosterWeekAction: "staff.roster",
+  publishRosterAction: "staff.roster",
+  listMyShiftsAction: "staff.self",
+
+  // V-24 — staff attendance. Self check-in/out is staff.self (the
+  // service resolves the caller's own staff row); marking or
+  // correcting another staff member is staff.attendance.
+  selfCheckInAction: "staff.self",
+  selfCheckOutAction: "staff.self",
+  getMyAttendanceAction: "staff.self",
+  correctStaffAttendanceAction: "staff.attendance",
+  listStaffAttendanceDayAction: "staff.attendance",
+
+  // V-26 — leave. Own requests/cancellations and the type picker ride
+  // staff.self; managing types and the request queue is staff.roster.
+  listLeaveTypesAction: "staff.self",
+  requestLeaveAction: "staff.self",
+  cancelLeaveRequestAction: "staff.self",
+  listMyLeaveAction: "staff.self",
+  createLeaveTypeAction: "staff.roster",
+  updateLeaveTypeAction: "staff.roster",
+  listLeaveRequestsAction: "staff.roster",
+  listUncoveredSessionsAction: "staff.roster",
+  approveLeaveRequestAction: "staff.roster",
+  rejectLeaveRequestAction: "staff.roster",
+
   // Tenant settings / config
   updateBrandingAction: "settings.manage",
   updateTermOverrideAction: "settings.manage",

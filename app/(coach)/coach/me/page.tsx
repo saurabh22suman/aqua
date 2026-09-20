@@ -4,6 +4,16 @@ import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
+import { listMyShiftsAction } from "@/lib/actions/shifts";
+import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
+import {
+  listLeaveTypesAction,
+  listMyLeaveAction,
+} from "@/lib/actions/leave";
+import { MyShiftsCard } from "@/components/my-shifts-card";
+import { MyAttendanceCard } from "@/components/my-attendance-card";
+import { MyLeaveCard } from "@/components/my-leave-card";
+import { addDays, todayInZone } from "@/lib/time/tz";
 
 // K2 — coach's account surface. Minimum the K2 brief asks for: the
 // user's name and phone, plus a sign-out button. The bottom nav's
@@ -22,6 +32,17 @@ export default async function CoachMePage() {
   const ctx = await requireDefaultCtx();
   const identity = await getCurrentStaffIdentity(ctx);
 
+  // V-23..V-26 — the self-service cards. Every read is staff.self and
+  // returns only the caller's own rows; the pages pass them in so the
+  // cards stay pure.
+  const today = todayInZone("Asia/Kolkata");
+  const [shifts, attendance, leaveTypes, myLeave] = await Promise.all([
+    listMyShiftsAction({ fromDate: today, toDate: addDays(today, 13) }),
+    getMyAttendanceAction({ date: today }),
+    listLeaveTypesAction(),
+    listMyLeaveAction({ year: Number(today.slice(0, 4)) }),
+  ]);
+
   return (
     <main className="px-5 pt-6 pb-8">
       <h1 className="font-display text-[19px] font-semibold">Me</h1>
@@ -34,6 +55,14 @@ export default async function CoachMePage() {
           {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
+
+      <MyShiftsCard shifts={shifts} />
+      <MyAttendanceCard attendance={attendance} />
+      <MyLeaveCard
+        types={leaveTypes}
+        balances={myLeave.balances}
+        requests={myLeave.requests}
+      />
 
       <form action={logoutTenantAction} className="mt-6">
         <button

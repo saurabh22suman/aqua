@@ -5,6 +5,16 @@ import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
+import { listMyShiftsAction } from "@/lib/actions/shifts";
+import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
+import {
+  listLeaveTypesAction,
+  listMyLeaveAction,
+} from "@/lib/actions/leave";
+import { MyShiftsCard } from "@/components/my-shifts-card";
+import { MyAttendanceCard } from "@/components/my-attendance-card";
+import { MyLeaveCard } from "@/components/my-leave-card";
+import { addDays, todayInZone } from "@/lib/time/tz";
 
 // K2 — reception's account surface. Mirrors /coach/me: name, phone,
 // sign-out. Reception's bottom nav had three tabs (Today / Add
@@ -15,6 +25,16 @@ export default async function ReceptionMePage() {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
   const identity = await getCurrentStaffIdentity(ctx);
+
+  // V-23..V-26 — same self-service cards as /coach/me; every read is
+  // staff.self and returns only the caller's own rows.
+  const today = todayInZone("Asia/Kolkata");
+  const [shifts, attendance, leaveTypes, myLeave] = await Promise.all([
+    listMyShiftsAction({ fromDate: today, toDate: addDays(today, 13) }),
+    getMyAttendanceAction({ date: today }),
+    listLeaveTypesAction(),
+    listMyLeaveAction({ year: Number(today.slice(0, 4)) }),
+  ]);
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -28,6 +48,14 @@ export default async function ReceptionMePage() {
           {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
+
+      <MyShiftsCard shifts={shifts} />
+      <MyAttendanceCard attendance={attendance} />
+      <MyLeaveCard
+        types={leaveTypes}
+        balances={myLeave.balances}
+        requests={myLeave.requests}
+      />
 
       <form action={logoutTenantAction} className="mt-6">
         <button

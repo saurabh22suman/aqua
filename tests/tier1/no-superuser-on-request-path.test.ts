@@ -294,6 +294,15 @@ const ALLOWLIST = new Set([
   "tests/tier1/bookings-pricing.test.ts",
   "tests/tier1/bookings-staff-flow.test.ts",
   "tests/tier1/utilisation.test.ts",
+  // V-23..V-27 — shifts, staff attendance, premises check-in and
+  // leave: same fixture-setup pattern as the V-02 entries above
+  // (privileged pool for tenants/locations/users/persons/staff; every
+  // service call under test goes through withTenant()/the services).
+  "tests/tier1/shifts.test.ts",
+  "tests/tier1/staff-attendance.test.ts",
+  "tests/tier1/premises-check-in.test.ts",
+  "tests/tier1/leave.test.ts",
+  "tests/tier1/leave-approval.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

@@ -49,6 +49,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
       "reports.financial",
       "reports.operational",
       "staff.pay.read",
+      "staff.self",
       "members.read",
       "settings.read",
     ],
@@ -73,6 +74,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
       "bookings.read",
       "bookings.write",
       "staff.attendance",
+      "staff.self",
       "messaging.send",
       "programs.read",
       "settings.read",
@@ -95,6 +97,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
       "programs.read",
       "levels.read",
       "levels.assess",
+      "staff.self",
     ],
   },
   {
@@ -103,7 +106,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
     homePath: "/parent",
     homeOrdinal: 3,
     // scope §195: a worker sees a task list and nothing else.
-    permissions: ["staff.roster"],
+    permissions: ["staff.roster", "staff.self"],
   },
 ];
 

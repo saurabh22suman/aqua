@@ -61,6 +61,19 @@ describe("tenant audit call sites (E-02)", () => {
     { file: "lib/services/staff-invitations.ts", action: '"staff.invitation.resend"' },
     { file: "db/membership-activation.ts", action: '"membership.activate"' },
     { file: "lib/services/invite-link.ts", action: '"membership.activate"' },
+    { file: "lib/services/shift-templates.ts", action: '"shift_template.create"' },
+    { file: "lib/services/shifts.ts", action: '"shift.create"' },
+    { file: "lib/services/shifts.ts", action: '"shift.delete"' },
+    { file: "lib/services/roster.ts", action: '"shift.publish"' },
+    { file: "lib/services/staff-attendance.ts", action: '"staff.attendance.check_in"' },
+    { file: "lib/services/staff-attendance.ts", action: '"staff.attendance.check_out"' },
+    { file: "lib/services/staff-attendance-correction.ts", action: '"staff.attendance.correct"' },
+    { file: "lib/services/leave-types.ts", action: '"leave_type.create"' },
+    { file: "lib/services/leave-types.ts", action: '"leave_type.update"' },
+    { file: "lib/services/leave.ts", action: '"leave.request"' },
+    { file: "lib/services/leave.ts", action: '"leave.cancel"' },
+    { file: "lib/services/leave-approval.ts", action: '"leave.approve"' },
+    { file: "lib/services/leave-approval.ts", action: '"leave.reject"' },
   ];
 
   it("every site calls writeAudit with a named action", () => {

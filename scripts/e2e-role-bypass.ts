@@ -510,17 +510,30 @@ const TEST_CASES: TestCase[] = [
 // (and the attack's "no leak" result would be a false negative).
 // Report it separately so a reviewer can distinguish a real
 // positive-control failure from a missing-data assertion bug.
-const POSITIVE_PROTECTED_TOKENS = ["Demo Academy", "Morning Squad", "Synthetic Member"];
+// 2026-09-20: "Demo Coach" added because the V-24 staff-attendance
+// board on /reception renders the tenant's staff rows on every day,
+// including Sundays. The empty-state marker below only exists in the
+// plain-GET serialisation (the empty state lives inside the client
+// component, and RSC payloads reference client components instead of
+// rendering them), so without a server-rendered tenant token the
+// receptionist→/reception (RSC) positive control was broken every
+// Sunday — a harness bug, never a leak.
+const POSITIVE_PROTECTED_TOKENS = [
+  "Demo Academy",
+  "Morning Squad",
+  "Synthetic Member",
+  "Demo Coach",
+];
 function looksLikeRenderedPage(body: string): boolean {
   return POSITIVE_PROTECTED_TOKENS.some((tok) => body.includes(tok));
 }
 // The seeded batches run Mon–Sat, so on a Sunday the receptionist's
-// Today page is a legitimate authorized empty state with no seeded
+// Today page is a legitimate authorized empty state with no session
 // token in it. The empty-state marker still proves the request shape
 // reached an authorized render (an unauthenticated request redirects,
-// a wrong role 404s), so reception controls may accept it. Both
-// serialisations are checked: HTML attribute form for plain GETs and
-// the JSON tree form for RSC payloads.
+// a wrong role 404s), so reception controls may accept it. The marker
+// is checked in both serialisations: HTML attribute form for plain
+// GETs and the JSON tree form for RSC payloads where it can appear.
 const AUTHORIZED_EMPTY_MARKERS = [
   'data-testid="empty-state"',
   '"data-testid":"empty-state"',

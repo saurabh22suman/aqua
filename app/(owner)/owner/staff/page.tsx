@@ -14,6 +14,12 @@ export default async function StaffListPage() {
         <h1 className="font-display text-[19px] font-semibold">Staff</h1>
         <div className="flex gap-2">
           <Link
+            href="/owner/staff/roster"
+            className="rounded-pill px-4 py-2 text-[13px] font-semibold text-ink-2 bg-deck"
+          >
+            Roster
+          </Link>
+          <Link
             href="/owner/staff/invitations"
             className="rounded-pill px-4 py-2 text-[13px] font-semibold text-ink-2 bg-deck"
           >
