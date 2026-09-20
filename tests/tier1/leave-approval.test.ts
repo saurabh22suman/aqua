@@ -223,4 +223,56 @@ describe("V-27 leave approval", () => {
     expect(rows[0]!.decision_note).toBe("Peak week");
     expect(await auditCount("leave.reject")).toBe(1);
   });
+
+  it("lets an owner without a staff record decide — the audit carries who", async () => {
+    // Owners and admins are users with memberships, not always staff
+    // rows. The decision must still work: decided_at is recorded,
+    // decided_by stays null, and audit_log.actor_id names the user.
+    const noStaffUser = asUserId(uuidv7());
+    await admin.query("insert into users (id, phone) values ($1, $2)", [
+      noStaffUser,
+      `+9189${String(Date.now()).slice(-8)}`,
+    ]);
+    const noStaffCtx = {
+      tenantId: tenant,
+      userId: noStaffUser,
+      requestId: uuidv7(),
+    };
+
+    await leave.seedDefaultLeaveTypes(tenant);
+    const types = await leave.listLeaveTypes(ownerCtx);
+    const casual = types.find((t) => t.name === "Casual")!;
+    const requested = await leave.requestLeave(coachCtx, {
+      leaveTypeId: casual.id,
+      fromDate: `${YEAR}-08-10`,
+      toDate: `${YEAR}-08-11`,
+    });
+    expect(requested.ok).toBe(true);
+    if (!requested.ok) return;
+
+    const approved = await approval.approveLeaveRequest(noStaffCtx, {
+      requestId: requested.requestId,
+      note: "Owner approved",
+    });
+    expect(approved.ok).toBe(true);
+
+    const { rows } = await admin.query<{
+      status: string;
+      decided_by: string | null;
+      decided_at: string | null;
+    }>(
+      "select status, decided_by, decided_at from leave_requests where id = $1",
+      [requested.requestId],
+    );
+    expect(rows[0]!.status).toBe("approved");
+    expect(rows[0]!.decided_by).toBeNull();
+    expect(rows[0]!.decided_at).not.toBeNull();
+
+    const audit = await admin.query<{ actor_id: string }>(
+      `select actor_id from audit_log
+        where tenant_id = $1 and action = 'leave.approve' and entity_id = $2`,
+      [tenant, requested.requestId],
+    );
+    expect(audit.rows[0]!.actor_id).toBe(noStaffUser);
+  });
 });

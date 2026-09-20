@@ -67,24 +67,25 @@ async function main() {
   // before any batch can reference them.
   let coachStaffId: StaffId | undefined;
   if (coachUserId) {
-    coachStaffId = await withTenant(tenantId, async (tx) => {
-      const existingStaff = await tx
-        .select({ id: staff.id })
-        .from(staff)
-        .where(and(eq(staff.tenantId, tenantId), eq(staff.userId, coachUserId)))
-        .limit(1);
-      if (existingStaff.length > 0) return asStaffId(existingStaff[0].id);
+    coachStaffId = await ensureDemoStaff(tenantId, coachUserId, "Demo Coach", "coach");
+  }
 
-      const [person] = await tx
-        .insert(persons)
-        .values({ tenantId, fullName: "Demo Coach" })
-        .returning({ id: persons.id });
-      const [staffRow] = await tx
-        .insert(staff)
-        .values({ tenantId, personId: person.id, userId: coachUserId, staffType: "coach" })
-        .returning({ id: staff.id });
-      return asStaffId(staffRow.id);
-    });
+  // V-24: the receptionist login also needs a staff row. Manual staff
+  // attendance records who corrected it (`marked_by` is a staff FK),
+  // and the demo walkthrough has the receptionist mark a correction.
+  const receptionUser = await adminPool.query<{ id: string }>(
+    "select id from users where phone = '+919000000005'",
+  );
+  const receptionUserId = receptionUser.rows[0]?.id
+    ? asUserId(receptionUser.rows[0].id)
+    : undefined;
+  if (receptionUserId) {
+    await ensureDemoStaff(
+      tenantId,
+      receptionUserId,
+      "Demo Receptionist",
+      "receptionist",
+    );
   }
 
   let mainLocationId = "";
@@ -351,5 +352,41 @@ async function ensureLoginUsers(tenantId: TenantId) {
 
   console.log(`login users ready → ${LOGIN_USERS.map((u) => `${u.phone}=${u.role}`).join(", ")}`);
   console.log(`demo PIN for every login user → ${DEMO_PIN}`);
+}
+
+// V-23..V-26 — attaches a person + staff row to a demo login, so the
+// staff self-service surfaces (roster, check-in, leave) and the
+// receptionist's manual-correction path have the staff record they
+// resolve `ctx.userId` against. Idempotent by (tenant, user).
+async function ensureDemoStaff(
+  tenantId: TenantId,
+  userId: UserId,
+  fullName: string,
+  staffType: "coach" | "receptionist",
+): Promise<StaffId> {
+  return withTenant(tenantId, async (tx) => {
+    const existing = await tx
+      .select({ id: staff.id })
+      .from(staff)
+      .where(
+        and(
+          eq(staff.tenantId, tenantId),
+          eq(staff.userId, userId),
+          isNull(staff.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (existing.length > 0) return asStaffId(existing[0]!.id);
+
+    const [person] = await tx
+      .insert(persons)
+      .values({ tenantId, fullName })
+      .returning({ id: persons.id });
+    const [staffRow] = await tx
+      .insert(staff)
+      .values({ tenantId, personId: person!.id, userId, staffType })
+      .returning({ id: staff.id });
+    return asStaffId(staffRow!.id);
+  });
 }
 

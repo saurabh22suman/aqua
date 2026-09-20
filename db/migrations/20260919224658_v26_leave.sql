@@ -12,8 +12,11 @@
 --     reads it to deduct unpaid days.
 --   * `days` is numeric(4,1) (architecture sketch) so half days fit
 --     later; this pass writes whole days.
---   * `decided_by`/`decided_at` are set together or not at all; a
---     rejected/approved request keeps its decider for the audit trail.
+--   * `decided_by`/`decided_at`: a decider requires a timestamp, but a
+--     timestamp does not require a staff decider — owners and admins
+--     are users with memberships, not always staff rows, and they must
+--     be able to approve. When `decided_by` is null the audit row's
+--     actor_id carries who decided.
 --   * `platform_admin_write` on leave_types exists for one path:
 --     tenant provisioning seeds the casual/sick/unpaid defaults inside
 --     the same platform-admin transaction that creates the tenant
@@ -64,7 +67,7 @@ create table leave_requests (
   constraint leave_requests_reason_check
     check (reason is null or char_length(reason) <= 500),
   constraint leave_requests_decision_check
-    check ((decided_by is null) = (decided_at is null)),
+    check (decided_by is null or decided_at is not null),
   constraint leave_requests_staff_tenant_fkey
     foreign key (staff_id, tenant_id) references staff (id, tenant_id),
   constraint leave_requests_decided_by_tenant_fkey

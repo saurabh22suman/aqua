@@ -48,7 +48,7 @@ export default async function StaffLeavePage() {
           <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
             {requests.map((request) => (
               <li key={request.id} className="px-4 py-3">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-[14px] font-medium">{request.staffName}</p>
                     <p className="mt-0.5 text-[12px] text-ink-3">

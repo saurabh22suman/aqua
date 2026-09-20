@@ -83,7 +83,7 @@ export const leaveRequests = pgTable(
     ),
     check(
       "leave_requests_decision_check",
-      sql`(${t.decidedBy} is null) = (${t.decidedAt} is null)`,
+      sql`${t.decidedBy} is null or ${t.decidedAt} is not null`,
     ),
     foreignKey({
       name: "leave_requests_staff_tenant_fkey",

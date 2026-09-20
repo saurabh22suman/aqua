@@ -178,10 +178,11 @@ async function decide(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // An owner/admin is a user with a membership, not necessarily a
+    // staff row. When the decider has no staff record, `decided_by`
+    // stays null and the audit row's actor_id carries who decided;
+    // `decided_at` is always recorded.
     const decider = await ownStaffIdInTx(tx, ctx);
-    if (!decider) {
-      return { ok: false, error: "Your login is not linked to a staff record." };
-    }
 
     const [request] = await tx
       .select()
