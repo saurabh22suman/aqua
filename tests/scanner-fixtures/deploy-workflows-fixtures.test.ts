@@ -65,7 +65,7 @@ jobs:
       - run: curl -fsS https://prod.example/api/health
 `;
 
-function files(overrides: Partial<Record<string, string>> = {}): WorkflowFile[] {
+function files(overrides: Record<string, string> = {}): WorkflowFile[] {
   const base: Record<string, string> = {
     "publish.yml": GOOD_PUBLISH,
     "deploy-dev.yml": GOOD_DEV,
