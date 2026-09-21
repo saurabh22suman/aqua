@@ -103,7 +103,7 @@ export function MemberImportForm() {
               setFileName(file.name);
               void check(file);
             }}
-            className="mt-1.5 block w-full text-[13px] text-ink-2"
+            className="mt-1.5 block w-full text-[16px] text-ink-2"
           />
         </label>
         <p className="mt-1.5 text-[12px] text-ink-3">

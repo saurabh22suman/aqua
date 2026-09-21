@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { v7 as uuidv7 } from "uuid";
 import {
   bigint,
   check,
@@ -23,7 +24,7 @@ import type { TenantId, UserId } from "@/lib/ids";
 export const paymentReversals = pgTable(
   "payment_reversals",
   {
-    id: uuid("id").primaryKey().$defaultFn(() => sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
     tenantId: uuid("tenant_id")
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" })

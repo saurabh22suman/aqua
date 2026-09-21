@@ -1,6 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { locations } from "@/db/schema/locations";
+import {
+  locationPredicate,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import { members, persons } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { isMinor } from "@/lib/time/tz";
@@ -51,15 +55,19 @@ export async function previewMemberImport(
   }
 
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
       .from(tenants)
       .where(eq(tenants.id, ctx.tenantId));
 
+    const locationConditions = [eq(locations.tenantId, ctx.tenantId)];
+    const predicate = locationPredicate(locations.id, access);
+    if (predicate) locationConditions.push(predicate);
     const locationRows = await tx
       .select({ id: locations.id, name: locations.name })
       .from(locations)
-      .where(eq(locations.tenantId, ctx.tenantId));
+      .where(and(...locationConditions));
     const byName = new Map(
       locationRows.map((row) => [row.name.trim().toLowerCase(), row.id]),
     );

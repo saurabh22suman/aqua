@@ -6,7 +6,7 @@
 -- matches the service's 3-300 character rule.
 
 create table payment_reversals (
-  id uuid primary key default gen_random_uuid(),
+  id uuid primary key,
   tenant_id uuid not null references tenants (id) on delete cascade,
   payment_id uuid not null,
   amount_paise bigint not null,
