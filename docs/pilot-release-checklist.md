@@ -48,10 +48,10 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation complete on `feat/pilot-pr1-stability-deploy` (C1–C12 verified). Pre-merge gate running. |
-| **Current task** | PR1 pre-merge gate (typecheck, lint, full test, build, scanners, workflow validation, migration review). |
-| **Next task** | Push and open the PR into `main` after the pre-merge gate; human merges. Post-merge checks follow the merge. |
-| **Known blockers** | None. |
+| **Current status** | PR1 pre-merge gate passed on `feat/pilot-pr1-stability-deploy` (full suite green under CI conditions; migrations await the human `human-approved-merge` label). Pushing and opening the PR. |
+| **Current task** | Open PR1 into `main`; human reviews/merges. |
+| **Next task** | After the human merges PR1: post-merge checks (image publication, Dev auto-deploy, health + worker heartbeat, immutable-tag verification), then PR2-C1. |
+| **Known blockers** | PR1 cannot merge until a human applies `human-approved-merge` (two migrations) and approves; the agent token cannot apply the label. |
 
 ### Session log
 
@@ -71,6 +71,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C10 fixed (compose secrets required + db restart + scanner) | PR1-C10 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C11 added (backup script, retention, restore drill executed) | PR1-C11 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C12 added (publish, dev auto-deploy, gated prod workflows) | PR1-C12 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 pre-merge gate passed; deviation recorded (dev-DB-only migration-test failure, baseline-reproduced); entitlements/preset-scan tests aligned with C6/C7 | PR1 gate (pre-merge) |
 
 ---
 
@@ -380,16 +381,30 @@ no fabricated metric on the health surface.
 
 ### Pre-merge (blocks opening the PR for review)
 
-- [ ] Full gate green: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
-- [ ] Scanners green (migrations, location scope, ops actions, tenant conventions,
-  bundle, fonts, focus contrast, scripts exist, compose secrets).
-- [ ] Workflow validation: `publish.yml`, `deploy-dev.yml` and `deploy-prod.yml`
-  lint/parse; prod workflow confirmed dispatch-only with immutable-SHA input and
-  `production` environment approval.
-- [ ] Migration review: both migrations carry `human-approved-merge` and a
-  reviewer sign-off.
+- [x] Full gate green: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
+  Run 2026-09-21 against a fresh scratch Postgres set up exactly like CI
+  (`bootstrapRoles` → `runMigrations` → `seedPlatformCatalogue` →
+  `db/deploy.ts`): `295 files passed, 2328 tests passed, 1 skipped` (the live-R2
+  round-trip, which skips without credentials); typecheck/lint/build clean.
+- [x] Scanners green (migrations 97 files, location scope, ops actions, tenant
+  conventions, bundle 87 routes, fonts, focus contrast, scripts exist, compose
+  secrets, deploy workflows, runbook sync).
+- [x] Workflow validation: `publish.yml`, `deploy-dev.yml` and `deploy-prod.yml`
+  lint/parse via `pnpm check:deploy-workflows`; prod workflow confirmed
+  dispatch-only with immutable-SHA input, `environment: production` and the
+  `PILOT_RELEASE_GATE` block.
+- [ ] Migration review: both migrations (`20260921110252_messaging_feature_status.sql`,
+  `20260921110643_worker_heartbeats.sql`) need the `human-approved-merge` label
+  and a reviewer sign-off at PR time — the agent token cannot apply the label.
 - [ ] PR opened into `main` (agent may push/open after this pre-merge gate; the
   agent never merges its own PR).
+
+**Deviation (pre-existing, not introduced here):**
+`tests/migrations/invite-persons-staff-backfill.test.ts` fails on the local
+**dev** database (7 tests, `staff_person_id_tenant_id_fkey`) but the identical
+failure reproduces on baseline `d483ec7` in an isolated worktree, and the file
+passes 7/7 on a fresh database. It is dev-DB state, not PR1 code; CI (fresh
+Postgres) is green. Not fixed here — out of scope.
 
 ### Post-merge (completed by the human merge + agent verification before PR2)
 
