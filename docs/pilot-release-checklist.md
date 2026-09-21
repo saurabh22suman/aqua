@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C5 verified and committed. |
-| **Current task** | PR1-C6 (Ops tenant creation applies the chosen preset). |
-| **Next task** | PR1-C7 (Ops catalogue: messaging is not GA; post-pilot doc). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C6 verified and committed. |
+| **Current task** | PR1-C7 (Ops catalogue: messaging is not GA; post-pilot doc). |
+| **Next task** | PR1-C8 (Worker heartbeat, graceful shutdown, worker-aware health). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -64,6 +64,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C3 fixed (duplicate invoice friendly error + repeat-submit guard) | PR1-C3 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C4 fixed (café cart GST parity with issued bill) | PR1-C4 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C5 fixed (reception booking tile/route hidden) | PR1-C5 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C6 fixed (preset applied on tenant creation + warnings surfaced) | PR1-C6 |
 
 ---
 
@@ -195,7 +196,7 @@ no fabricated metric on the health surface.
   `/reception/bookings` renders "We couldn't find that page" with no booking
   screen (Playwright, localhost:3000); commit `5723a2d`.
 
-### [ ] PR1-C6 — Ops tenant creation applies the chosen preset
+### [x] PR1-C6 — Ops tenant creation applies the chosen preset
 - **Depends:** none.
 - **Files:** `db/platform-tenant-create.ts`, `lib/actions/platform-tenants.ts`,
   `app/(platform)/ops/tenants/new/new-tenant-form.tsx`,
@@ -208,7 +209,21 @@ no fabricated metric on the health surface.
 - **Acceptance:** no tenant creatable without a preset or an explicit, retryable
   warning; retry uses applyPreset idempotency; no partial tenant is silently left.
 - **Migration/rollback:** none (platform-side code only).
-- **Evidence:** _pending_
+- **Evidence:** red first — the four new tests failed (no preset fields on the
+  result; lead conversion silent). After: `pnpm exec vitest run
+  tests/tier1/platform-tenants-create.test.ts
+  tests/tier1/platform-tenants-create-action.test.ts
+  tests/platform-lead-conversion.test.ts tests/tier1/tenant-creation-parity.test.ts`
+  — 24 passed (apply + binding + audit, unknown preset → retryable warning +
+  `tenant.preset_apply_failed` audit, omitted preset → warning, action path
+  records `preset_key`); `pnpm typecheck` clean; `pnpm lint` clean on the
+  touched files. Fixed a latent scope bug found by the new failure-path test:
+  the raw platform-audit insert was returning the Drizzle thenable unawaited,
+  so it ran outside `withPlatform` and was swallowed by the dev scope guard;
+  both warning paths now `await` inside the scope. Live ops UI check skipped:
+  the dev database currently has no enrolled platform operator, so
+  `pnpm platform:code` cannot mint a TOTP; the action + service tests cover
+  the surface. Commit `883168f`.
 
 ### [ ] PR1-C7 — Ops catalogue: messaging is not GA (mock-only in pilot)
 - **Depends:** none.
