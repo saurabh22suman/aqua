@@ -312,6 +312,11 @@ const ALLOWLIST = new Set([
   // to clean the test worker's heartbeat row; recordWorkerHeartbeat and
   // getWorkerHealth run through withPlatform on app_user.
   "tests/tier1/worker-heartbeat.test.ts",
+  // PR1-C11 — the backup CLI reads MIGRATION_DATABASE_URL to run
+  // pg_dump as the privileged role. Operator-only, never scheduled,
+  // never imported by the app (the no-superuser test's own header
+  // documents this exact class).
+  "scripts/db-backup.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
