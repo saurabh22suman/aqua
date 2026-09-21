@@ -1,4 +1,8 @@
 import { createAppScopedBoss } from "@/db/queue";
+import { recordWorkerHeartbeat } from "@/db/worker-heartbeats";
+import { createShutdownHandler } from "@/lib/jobs/worker-shutdown";
+import { WORKER_HEARTBEAT_INTERVAL_MS } from "@/lib/health/worker-heartbeat";
+import os from "node:os";
 import { runSessionsGenerateJob } from "@/lib/jobs/sessions-generate-job";
 import { runAbsenceAlertsJob } from "@/lib/jobs/absence-alerts-job";
 import { runSubscriptionsExpireJob } from "@/lib/jobs/subscriptions-expire-job";
@@ -81,7 +85,6 @@ async function main(): Promise<void> {
   boss.on("error", (err: Error) => console.error("[worker] pg-boss error:", err));
 
   await boss.start();
-
   for (const handler of HANDLERS) {
     await boss.work<{ tenantId: string }>(handler.queue, async ([job]) => {
       await handler.run(asTenantId(job.data.tenantId));
@@ -111,6 +114,28 @@ async function main(): Promise<void> {
       ACTIVITY_INGEST_QUEUE,
     ].join(", ")}`,
   );
+
+  // PR1-C8 — liveness. The first beat lands before the worker can be
+  // declared ready; /api/health turns a stale beat into 503, so a
+  // worker that dies (or never started, in production) fails the
+  // deploy gate. SIGTERM/SIGINT drain in-flight jobs, clear the
+  // interval and exit 0.
+  const workerId = `${os.hostname()}-${process.pid}`;
+  await recordWorkerHeartbeat(workerId);
+  const heartbeat = setInterval(() => {
+    void recordWorkerHeartbeat(workerId).catch((err) => {
+      console.error("[worker] heartbeat failed:", err);
+    });
+  }, WORKER_HEARTBEAT_INTERVAL_MS);
+  heartbeat.unref();
+
+  const shutdown = createShutdownHandler({
+    stop: () => boss.stop({ graceful: true, timeout: 30_000 }),
+    clearHeartbeat: () => clearInterval(heartbeat),
+    exit: (code) => process.exit(code),
+  });
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch((err) => {

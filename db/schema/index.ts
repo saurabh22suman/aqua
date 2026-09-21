@@ -38,6 +38,7 @@ export * from "./receipts";
 export * from "./cash-counts";
 export * from "./daily-rollups";
 export * from "./platform-metrics";
+export * from "./worker-heartbeats";
 export * from "./waitlist-entries";
 export * from "./makeup-credits";
 export * from "./tenant-holidays";
