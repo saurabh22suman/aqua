@@ -23,6 +23,9 @@ export type OnboardingItem = {
   title: string;
   detail: string;
   cta: { label: string; href: string };
+  // PR2-C7 — an alternative way to finish the step (today: importing
+  // an existing register instead of adding members one by one).
+  secondaryCta?: { label: string; href: string };
   complete: boolean;
 };
 
@@ -43,12 +46,14 @@ const ITEMS: ReadonlyArray<{
   title: string;
   detail: string;
   cta: { label: string; href: string };
+  secondaryCta?: { label: string; href: string };
 }> = [
   {
     key: "add_members",
     title: "Add your first member",
     detail: "The register and history both start with members.",
     cta: { label: "Add a member", href: "/owner/members/new" },
+    secondaryCta: { label: "Import a CSV", href: "/owner/members/import" },
   },
   {
     key: "create_batch",
