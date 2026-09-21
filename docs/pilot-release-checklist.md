@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1 and PR1-C2 verified and committed. |
-| **Current task** | PR1-C3 (Duplicate invoice raise: friendly error and no repeat submit). |
-| **Next task** | PR1-C4 (Café cart quote = issued bill). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C3 verified and committed. |
+| **Current task** | PR1-C4 (Café cart quote = issued bill). |
+| **Next task** | PR1-C5 (Booking: hide tile and route until priced). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -61,6 +61,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | none | Revision 2: no `develop`, main→Dev auto-deploy, dispatch-only gated prod, reception cash/UPI recording, parent read-only money preserved, Cloud adapter removed | — |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 started; PR1-C1 fixed (timezone binding + settled report cards) | PR1-C1 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C2 fixed (`/check-in` apex allowlist + boundary probes) | PR1-C2 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C3 fixed (duplicate invoice friendly error + repeat-submit guard) | PR1-C3 |
 
 ---
 
@@ -127,7 +128,7 @@ no fabricated metric on the health surface.
   tests/tier1/premises-check-in.test.ts` — 4 passed; live dev server curl
   apex 200 / ops 404; commit `412940a`.
 
-### [ ] PR1-C3 — Duplicate invoice raise: friendly error and no repeat submit
+### [x] PR1-C3 — Duplicate invoice raise: friendly error and no repeat submit
 - **Depends:** none.
 - **Files:** `lib/services/invoice-issue.ts`, `lib/services/invoice-mutations.ts`,
   `lib/actions/invoices.ts`, `components/member-detail/member-invoices-panel.tsx`
@@ -139,7 +140,15 @@ no fabricated metric on the health surface.
 - **Acceptance:** no raw PG error reaches the client; exactly one live invoice per
   subscription/due date; a repeat click cannot produce a second invoice.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — both new `tests/billing-invoices.test.ts` cases threw
+  raw `23505 ... invoices_subscription_due_live_uidx`. After the pre-check +
+  outside-transaction backstop: `pnpm exec vitest run tests/billing-invoices.test.ts`
+  — 10 passed (duplicate friendly error, concurrent raises → exactly one live row);
+  `pnpm exec vitest run tests/mobile/member-invoices-panel.test.tsx` — 2 passed;
+  `pnpm typecheck` clean; live `/owner/members/<id>?tab=payments` shows
+  "Raise invoice" disabled with "An invoice for today already exists" for a
+  subscription holding today's live invoice (Playwright, localhost:3000);
+  commit `9f90579`.
 
 ### [ ] PR1-C4 — Café cart quote = issued bill
 - **Depends:** none.
