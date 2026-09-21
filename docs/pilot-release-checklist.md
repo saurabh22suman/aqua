@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C11 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
-| **Current task** | PR1-C12 (CI publish, main→Dev auto-deploy, gated production deploy). |
-| **Next task** | PR1 pre-merge gate, then push and open the PR (no merge). |
+| **Current status** | PR1 implementation complete on `feat/pilot-pr1-stability-deploy` (C1–C12 verified). Pre-merge gate running. |
+| **Current task** | PR1 pre-merge gate (typecheck, lint, full test, build, scanners, workflow validation, migration review). |
+| **Next task** | Push and open the PR into `main` after the pre-merge gate; human merges. Post-merge checks follow the merge. |
 | **Known blockers** | None. |
 
 ### Session log
@@ -70,6 +70,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C9 fixed (advisory lock serialises migrations) | PR1-C9 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C10 fixed (compose secrets required + db restart + scanner) | PR1-C10 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C11 added (backup script, retention, restore drill executed) | PR1-C11 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C12 added (publish, dev auto-deploy, gated prod workflows) | PR1-C12 |
 
 ---
 
@@ -345,7 +346,7 @@ no fabricated metric on the health surface.
   Runbook in `docs/deployment.md` §Backups; `pnpm check:runbook-sync` green;
   commit `91de602`.
 
-### [ ] PR1-C12 — CI publish, main→Dev auto-deploy, gated production deploy
+### [x] PR1-C12 — CI publish, main→Dev auto-deploy, gated production deploy
 - **Depends:** PR1-C8 (health semantics), PR1-C10.
 - **Files:** new `.github/workflows/publish.yml`, `deploy-dev.yml`, `deploy-prod.yml`,
   `.github/workflows/ci.yml`, `docs/deployment.md`. No `develop` branch.
@@ -360,7 +361,20 @@ no fabricated metric on the health surface.
   it blocked until the complete PR3 release gate passes; rollback is redeploying
   the prior immutable tag.
 - **Migration/rollback:** none (workflows).
-- **Evidence:** _pending_
+- **Evidence:** red first — the fixture suite failed without the scan lib and
+  the workflows. After: `pnpm exec vitest run
+  tests/scanner-fixtures/deploy-workflows-fixtures.test.ts` — 9 passed
+  (including the real `publish.yml`/`deploy-dev.yml`/`deploy-prod.yml`);
+  `pnpm check:deploy-workflows` passes; `check-scripts-exist` closure green
+  (new `check:deploy-workflows` wired into CI); mutable-ref dry run:
+  `main` refused, `sha-abc1234` accepted. `publish.yml` triggers on a
+  successful `CI` run on `main`, tags `sha-<12-char>`, pushes once;
+  `deploy-dev.yml` triggers on `publish` completion, deploys that exact tag
+  (no `docker build`), verifies `docker inspect` and gates on `/api/health`;
+  `deploy-prod.yml` is `workflow_dispatch`-only, requires an immutable
+  `image_tag`, runs behind `environment: production` and fails until
+  `PILOT_RELEASE_GATE=passed` (PR3 gate). Documented in
+  `docs/deployment.md` §9. Commits `e0b05cc`, `3bc1a96`.
 
 ## PR1 gate
 
