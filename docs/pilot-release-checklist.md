@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C2 done. |
-| **Current task** | PR2-C3 (Reception cash/UPI payment recording). |
-| **Next task** | PR2-C4 (Tenant-side owner PIN reset). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C3 done. |
+| **Current task** | PR2-C4 (Tenant-side owner PIN reset). |
+| **Next task** | PR2-C5 (CSV import parser/validator/dry-run). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -78,6 +78,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | main → feat/pilot-pr2-workflow-import | PR1 merged as `2cdde8c`; image `sha-2cdde8c8883c` published; Dev deployment checks deferred by owner until after PR3 (Dokploy/Traefik, no Caddy, VPS untouched); production still blocked | PR1 post-merge (partial) |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C1 added (academy profile + audited GSTIN fix) | PR2-C1 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C2 added (receptionist invoices.write + backfill migration) | PR2-C2 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C3 added (reception cash/UPI recording; permission audit found no gap) | PR2-C3 |
 
 ---
 
@@ -545,7 +546,7 @@ coach fee visibility on the register.
   the C3 duplicate hint ("An invoice for today already exists"); commit
   `af85dc9`. **Migration needs `human-approved-merge` before merge.**
 
-### [ ] PR2-C3 — Reception: cash/UPI payment recording on open invoices
+### [x] PR2-C3 — Reception: cash/UPI payment recording on open invoices
 - **Depends:** PR1 merged (rides existing `payments.record`; aligns with C8/C9
   ledger display).
 - **Files:** `components/collect-payment.tsx` (recording UI, or split into
@@ -572,7 +573,22 @@ coach fee visibility on the register.
   found, additive grant migration with `human-approved-merge`).
 - **Migration/rollback:** none expected; if an audit-found grant is needed,
   additive and rollback = corrective delete.
-- **Evidence:** _pending_
+- **Evidence:** permission audit first — the receptionist template already
+  holds `payments.record`, `invoices.read` and `invoices.write` (the last from
+  PR2-C2), so **no permission was added and no migration rides this task**.
+  Red first on the UI suite (component absent); the tier1 suite passed
+  immediately, which is the audit result. After: `pnpm exec vitest run
+  tests/tier1/reception-payments.test.ts
+  tests/mobile/reception-payment-record.test.tsx` — 10 passed (cash partial +
+  audit row with actor, UPI reference required, cash-with-reference refused,
+  duplicate UTR refused with a friendly message, overpayment refused, full
+  settlement to `paid`, tenant isolation; UI search → invoice → cash/UPI →
+  status and server-refusal states). Live at **390×844** as demo receptionist:
+  searched "Audit", saw the seeded open invoice (₹500 outstanding), recorded
+  ₹200 cash → "Payment recorded. Invoice is now partially paid.", balance
+  refreshed to ₹300; DB showed `status=partial`, `paid_paise=20000`, a
+  `payments` row with `received_by`, and a `payment.record` audit row.
+  Typecheck/lint clean. Commits `b481ea4`, `ca5f539`.
 
 ### [ ] PR2-C4 — Tenant-side owner PIN reset
 - **Depends:** none beyond PR1.
