@@ -21,12 +21,14 @@
 //        - /reception       404
 //        - /parent          404
 //        - /p/anything      404
+//        - /check-in/…      404 (premises QR is a tenant surface)
 //
 //   2. From apex (<base>):
 //        - /ops/login       404
 //        - /ops/            404
 //        - /login           200 (or 307 to login)
 //        - /api/health      200
+//        - /check-in/…      200 (signed-out sign-in-first state)
 //
 // 404 is the contract — anything else means the boundary is open.
 // The middleware returns plain-text "not found" with status 404
@@ -89,6 +91,7 @@ const PROBES: Probe[] = [
   { path: "/reception",       host: `ops.localhost:${PORT}`, expect: 404, note: "/reception NOT reachable on ops" },
   { path: "/parent",          host: `ops.localhost:${PORT}`, expect: 404, note: "/parent NOT reachable on ops" },
   { path: "/p/anything",      host: `ops.localhost:${PORT}`, expect: 404, note: "parent magic-link NOT reachable on ops" },
+  { path: "/check-in/anything", host: `ops.localhost:${PORT}`, expect: 404, note: "premises check-in NOT reachable on ops" },
   { path: "/api/health",      host: `ops.localhost:${PORT}`, expect: 200, note: "health reachable on ops (Traefik / Dokploy check)" },
   // 2026-09-11 auth feature: the phone+PIN and set-PIN routes are
   // apex-only. On ops they must 404 (never reach the tenant auth
@@ -103,6 +106,7 @@ const PROBES: Probe[] = [
   { path: "/api/health",      host: `localhost:${PORT}`,     expect: 200, note: "health reachable on apex" },
   { path: "/api/login/pin",       host: `localhost:${PORT}`, expect: 405, note: "PIN login reachable on apex (POST-only -> 405 on GET)" },
   { path: "/api/account/set-pin", host: `localhost:${PORT}`, expect: 405, note: "set-PIN reachable on apex (POST-only -> 405 on GET)" },
+  { path: "/check-in/anything",   host: `localhost:${PORT}`, expect: 200, note: "premises check-in reachable on apex (signed-out sign-in-first state)" },
 ];
 
 async function waitForServer(proc: ChildProcess): Promise<void> {
