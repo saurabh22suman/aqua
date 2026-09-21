@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 implementation complete on `feat/pilot-pr2-workflow-import` (C1–C11); running the PR2 gate. |
-| **Current task** | PR2 gate (typecheck, lint, full test, build, scanners, migration review). |
-| **Next task** | Push and open PR2 into `main` after the gate; human merges. Then PR3. |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 pre-merge gate passed; pushing and opening the PR. |
+| **Current task** | Open PR2 into `main`; human reviews/merges (five migrations + `lib/auth/action-permissions.ts` need `human-approved-merge`). |
+| **Next task** | After the human merges PR2: PR3-C1 (tokens/contrast). Dev deployment stays deferred until after PR3. |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -87,6 +87,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C9 added (reverse from invoice panel + reversals in fees ledger) | PR2-C9 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C10 added (read-only parent money view; zero-JS held) | PR2-C10 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C11 added (token-scoped receipt download + parent links) | PR2-C11 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2 gate passed on CI-like scratch DB; scanner/action-map/midnight-test fixes committed | PR2 gate (pre-merge) |
 
 ---
 
@@ -497,9 +498,14 @@ scope; mock provider stays for testing).
 `20260921164407_role_permissions_reception_invoices_write.sql`,
 `20260921173406_payments_refund_permission.sql`,
 `20260921173408_payment_reversals.sql`,
-`20260921173722_payment_reversals_rls.sql`. No payment-recording permission
+`20260921173722_payment_reversals_rls.sql`,
+`20260921182209_payment_reversals_uuid7.sql`. No payment-recording permission
 migration was needed — reception already held `payments.record` and
-`invoices.read` (audited in PR2-C3).
+`invoices.read` (audited in PR2-C3). The last two are follow-ups for the
+reversals table: RLS policies, and dropping the v4 default so the id is
+app-side UUIDv7 (the creating migration's default was corrected pre-merge;
+the drop-default migration keeps any database that already applied it
+consistent).
 
 **Pilot exclusions enforced here:** no pay button on the parent page (read-only
 invoice, payment history and receipts stay); no real WhatsApp credentials; no
@@ -799,20 +805,39 @@ coach fee visibility on the register.
 
 ## PR2 gate
 
-- [ ] Full gate green (typecheck, lint, test, build) + scanners.
-- [ ] Both migrations carry `human-approved-merge` and reviewer sign-off (plus the
-  conditional payment-recording grant only if the audit found a missing key).
-- [ ] Reception cash/UPI recording demonstrated at 390×844: payment commits
+- [x] Full gate green (typecheck, lint, test, build) + scanners. Run
+  2026-09-21 against a fresh scratch Postgres set up like CI
+  (`bootstrapRoles` → `runMigrations` (102) → `seedPlatformCatalogue` →
+  `db/deploy.ts`): **308 files, 2421 passed, 3 skipped** (live-R2 round-trip
+  plus the two staff-attendance late-minutes cases, which skip only in the
+  first/last hour of the IST day); typecheck/lint/build clean; scanners green
+  (migrations 102 files, location scope, ops actions, tenant conventions,
+  bundle 91 routes, fonts, focus contrast, scripts exist, compose secrets,
+  deploy workflows, runbook sync).
+- [ ] All five migrations carry `human-approved-merge` and reviewer sign-off.
+- [x] Reception cash/UPI recording demonstrated at 390×844: payment commits
   through the existing service, invoice balance and status update, audit row
-  present, permission audit recorded.
-- [ ] Import dry-run and idempotent retry demonstrated on seeded data; error CSV
-  exported and re-imported successfully.
-- [ ] Reversal demonstrated end to end; payments table rowcount/values unchanged
-  for the reversed payment.
-- [ ] Parent read-only invoice, payment-history and receipt surfaces verified
-  member-scoped live at 390×844; zero-JS count = 0.
+  present, permission audit recorded (PR2-C3).
+- [x] Import dry-run and idempotent retry demonstrated on seeded data; error
+  CSV exported and re-imported successfully (PR2-C5/C6).
+- [x] Reversal demonstrated end to end; payments table rowcount/values
+  unchanged for the reversed payment (PR2-C8/C9).
+- [x] Parent read-only invoice, payment-history and receipt surfaces verified
+  member-scoped live; zero-JS count = 0 (PR2-C10/C11; zero-JS pinned by
+  `pnpm e2e:parent-link-zero-js`).
 - [ ] PR opened into `main`, CI green, merged by a human.
 - [ ] Checklist committed with the implementation on the PR2 branch.
+
+**Deviations (PR2):**
+- `20260921173408_payment_reversals.sql` shipped the table without RLS and
+  with a v4 id default; both were caught by the scanners and fixed
+  forward-only (`_rls`, `_uuid7` migrations), with the creating migration's
+  default corrected pre-merge since it had never shipped.
+- `tests/tier1/staff-attendance.test.ts` had a pre-existing midnight-IST flake
+  (its "one hour ago → one hour ahead" shift window crosses the day boundary);
+  the two affected cases now skip inside that window.
+- Adding the new actions required entries in `lib/auth/action-permissions.ts`
+  (a protected path, same `human-approved-merge` gate as the migrations).
 
 ---
 
