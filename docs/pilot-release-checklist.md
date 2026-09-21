@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C3 verified and committed. |
-| **Current task** | PR1-C4 (Café cart quote = issued bill). |
-| **Next task** | PR1-C5 (Booking: hide tile and route until priced). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C4 verified and committed. |
+| **Current task** | PR1-C5 (Booking: hide tile and route until priced). |
+| **Next task** | PR1-C6 (Ops tenant creation applies the chosen preset). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -62,6 +62,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 started; PR1-C1 fixed (timezone binding + settled report cards) | PR1-C1 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C2 fixed (`/check-in` apex allowlist + boundary probes) | PR1-C2 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C3 fixed (duplicate invoice friendly error + repeat-submit guard) | PR1-C3 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C4 fixed (café cart GST parity with issued bill) | PR1-C4 |
 
 ---
 
@@ -150,7 +151,7 @@ no fabricated metric on the health surface.
   subscription holding today's live invoice (Playwright, localhost:3000);
   commit `9f90579`.
 
-### [ ] PR1-C4 — Café cart quote = issued bill
+### [x] PR1-C4 — Café cart quote = issued bill
 - **Depends:** none.
 - **Files:** `lib/services/orders-core.ts`, `lib/services/orders-billing.ts`,
   `lib/services/cafe-billing.ts`, `components/cafe-cart.tsx`,
@@ -163,7 +164,16 @@ no fabricated metric on the health surface.
 - **Acceptance:** cart total equals issued total in both tenant states; zero-GST
   line labelled honestly.
 - **Migration/rollback:** none. Do not edit `lib/money/**` without escalation.
-- **Evidence:** _pending_
+- **Evidence:** red first — `tests/mobile/cafe-cart.test.tsx` showed GST ₹1.00 /
+  ₹21.00 for a no-GSTIN tenant, and the new parity assertion in
+  `tests/tier1/cafe-orders.test.ts` failed against the order total. After the
+  fix: `pnpm exec vitest run tests/mobile/cafe-cart.test.tsx
+  tests/tier1/cafe-orders.test.ts tests/tier1/cafe-billing-flow.test.ts` —
+  17 passed; `pnpm exec vitest run tests/mobile/cafe-order-screen.test.tsx` —
+  8 passed; `pnpm typecheck` clean; live `/reception/cafe` as demo receptionist
+  shows cart total ₹20.00 (2000 paise) and "Bill of supply — no GSTIN on file"
+  for the ₹20 item that previously previewed ₹21 (Playwright, localhost:3000);
+  commit `f7b4faa`.
 
 ### [ ] PR1-C5 — Booking: hide tile and route until priced
 - **Depends:** none.
