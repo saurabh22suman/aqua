@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1 verified and committed. |
-| **Current task** | PR1-C2 (`/check-in` through production middleware). |
-| **Next task** | PR1-C3 (Duplicate invoice raise: friendly error and no repeat submit). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1 and PR1-C2 verified and committed. |
+| **Current task** | PR1-C3 (Duplicate invoice raise: friendly error and no repeat submit). |
+| **Next task** | PR1-C4 (Café cart quote = issued bill). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -60,6 +60,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | none | Checklist authored from the final 3-PR plan | — |
 | 2026-09-21 | none | Revision 2: no `develop`, main→Dev auto-deploy, dispatch-only gated prod, reception cash/UPI recording, parent read-only money preserved, Cloud adapter removed | — |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 started; PR1-C1 fixed (timezone binding + settled report cards) | PR1-C1 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C2 fixed (`/check-in` apex allowlist + boundary probes) | PR1-C2 |
 
 ---
 
@@ -109,7 +110,7 @@ no fabricated metric on the health surface.
   live `/owner/reports` 200 with all nine cards as demo owner (Playwright,
   localhost:3000); commit `94b1ef8`.
 
-### [ ] PR1-C2 — `/check-in/<token>` through production middleware
+### [x] PR1-C2 — `/check-in/<token>` through production middleware
 - **Depends:** none (independent of C1).
 - **Files:** `middleware.ts`, `scripts/e2e-host-boundary.ts`.
 - **Red test:** host-boundary probe for apex `/check-in/anything` currently
@@ -119,7 +120,12 @@ no fabricated metric on the health surface.
 - **Acceptance:** apex serves the route (200 signed-in / redirect signed-out);
   ops host still 404s it; host boundary otherwise unchanged.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — extended `scripts/e2e-host-boundary.ts` failed
+  `localhost/check-in/anything → 404 (expected 200)`. After adding
+  `/check-in/` to the apex allowlist: `pnpm e2e:host-boundary` all probes
+  green (apex 200, ops 404); `pnpm exec vitest run
+  tests/tier1/premises-check-in.test.ts` — 4 passed; live dev server curl
+  apex 200 / ops 404; commit `412940a`.
 
 ### [ ] PR1-C3 — Duplicate invoice raise: friendly error and no repeat submit
 - **Depends:** none.
