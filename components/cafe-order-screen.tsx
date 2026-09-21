@@ -43,11 +43,13 @@ export function CafeOrderScreen({
   items,
   locations,
   terminology,
+  taxRegistered,
 }: {
   categories: MenuCategoryRow[];
   items: MenuItemRow[];
   locations: LocationOption[];
   terminology: TerminologyState;
+  taxRegistered: boolean;
 }) {
   const menuLocations = useMemo(() => {
     const ids: string[] = [];
@@ -226,7 +228,12 @@ export function CafeOrderScreen({
             onAdd={(itemId) => changeQty(itemId, 1)}
           />
 
-          <CafeCart lines={lines} placed={placed} onQty={changeQty} />
+          <CafeCart
+            lines={lines}
+            placed={placed}
+            onQty={changeQty}
+            taxRegistered={taxRegistered}
+          />
 
           {!locked ? (
             <CafeMemberPicker

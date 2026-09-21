@@ -19,12 +19,14 @@ export function CafeCart({
   lines,
   placed,
   onQty,
+  taxRegistered,
 }: {
   lines: CartLine[];
   placed: PlacedOrder | null;
   onQty: (itemId: string, delta: number) => void;
+  taxRegistered: boolean;
 }) {
-  const totals = cartTotals(lines);
+  const totals = cartTotals(lines, taxRegistered);
   const locked = placed !== null;
 
   return (
@@ -40,7 +42,7 @@ export function CafeCart({
       ) : (
         <div className="mt-2 divide-y divide-line">
           {lines.map(({ item, qty }) => {
-            const computed = lineTotal(item, qty);
+            const computed = lineTotal(item, qty, taxRegistered);
             return (
               <div key={item.id} className="flex items-center gap-2 py-2">
                 <div className="min-w-0 flex-1">
@@ -101,6 +103,11 @@ export function CafeCart({
           <span>Total</span>
           <span>{formatINR(totals.total)}</span>
         </div>
+        {!taxRegistered ? (
+          <p className="text-[11px] text-ink-3">
+            Bill of supply — no GSTIN on file, so no GST is charged.
+          </p>
+        ) : null}
       </div>
 
       {placed ? (

@@ -105,6 +105,7 @@ function renderScreen(
       items={items}
       locations={LOCATIONS}
       terminology={TERMINOLOGY}
+      taxRegistered
     />,
   );
 }

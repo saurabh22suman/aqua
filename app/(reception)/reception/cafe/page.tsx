@@ -40,6 +40,7 @@ export default async function ReceptionCafePage() {
           items={menu.items}
           locations={locations}
           terminology={terminology}
+          taxRegistered={menu.taxRegistered}
         />
       </div>
     </main>
