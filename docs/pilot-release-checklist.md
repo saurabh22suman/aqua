@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C7 done. |
-| **Current task** | PR2-C8 (Payment reversals table/service/audit + migration). |
-| **Next task** | PR2-C9 (Payment reversals UI + fees ledger). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C8 done. |
+| **Current task** | PR2-C9 (Payment reversals UI + fees ledger). |
+| **Next task** | PR2-C10 (Parent money view, read-only). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -83,6 +83,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C5 added (CSV import parser/validator/dry-run/template) | PR2-C5 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C6 added (CSV import commit/consent/idempotent retry) | PR2-C6 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C7 added (import entries on members list + onboarding) | PR2-C7 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C8 added (payment reversals ledger + payments.refund + 3 migrations; RLS follow-up) | PR2-C8 |
 
 ---
 
@@ -490,11 +491,12 @@ flags on the coach register, and any WhatsApp Cloud adapter (removed from pilot
 scope; mock provider stays for testing).
 
 **Migrations in this PR (forward-only, human-approved-merge):**
-`<ts>_role_permissions_reception_invoices_write.sql`,
-`<ts>_payment_reversals.sql` (+ `payments.refund` grant backfill). No payment-
-recording permission migration is expected — reception already holds
-`payments.record` and `invoices.read`; if PR2-C3's audit finds a genuinely missing
-key, one additive grant migration rides this PR.
+`20260921164407_role_permissions_reception_invoices_write.sql`,
+`20260921173406_payments_refund_permission.sql`,
+`20260921173408_payment_reversals.sql`,
+`20260921173722_payment_reversals_rls.sql`. No payment-recording permission
+migration was needed — reception already held `payments.record` and
+`invoices.read` (audited in PR2-C3).
 
 **Pilot exclusions enforced here:** no pay button on the parent page (read-only
 invoice, payment history and receipts stay); no real WhatsApp credentials; no
@@ -690,7 +692,7 @@ coach fee visibility on the register.
   deliberately hidden once the step is complete (demo tenant has 41 members),
   so that path is pinned by the component test. Commit `d93333e`.
 
-### [ ] PR2-C8 — Payment reversals: table, service, audit
+### [x] PR2-C8 — Payment reversals: table, service, audit
 - **Depends:** PR2-C2 (role model), PR1-C3 (invoice logic).
 - **Files:** new `db/migrations/<ts>_payment_reversals.sql`, new
   `db/schema/payment-reversals.ts`, `db/schema/index.ts`, new
@@ -706,7 +708,23 @@ coach fee visibility on the register.
   nothing edits an existing payment.
 - **Migration/rollback:** additive table and grant; rollback = revoke grant and
   leave rows inert. Needs `human-approved-merge`.
-- **Evidence:** _pending_
+- **Evidence:** red first — the service/action modules were missing and the
+  roles matrix lacked `payments.refund`. After: `pnpm exec vitest run
+  tests/tier1/payment-reversals.test.ts
+  tests/tier1/payment-reversals-action.test.ts
+  tests/tier1/roles-permissions.test.ts tests/tier1/role-gating-matrix.test.ts`
+  — 77 passed (partial reversal recomputes the invoice and leaves the payment
+  row byte-identical; over-reversal refused with the remaining amount; reason
+  length enforced; cross-tenant refused; concurrent full-remainder reversals
+  serialise to exactly one winner; audit `payment.reverse`; action parse-first
+  + `payments.refund`; owner/admin/accountant hold it, receptionist/coach do
+  not). `tests/db/catalogue-parity.test.ts` and `tests/tier1/isolation.test.ts`
+  green. **Deviation:** `20260921173408_payment_reversals.sql` shipped the
+  table without RLS; the isolation catch-all caught it, and
+  `20260921173722_payment_reversals_rls.sql` adds the policies forward-only
+  (the applied migration was not edited). All four PR2 migrations applied to
+  dev (101/101); `pnpm check:migrations` green; typecheck/lint clean. Commit
+  `3112ee7`.
 
 ### [ ] PR2-C9 — Payment reversals: UI + fees ledger display
 - **Depends:** PR2-C8.
