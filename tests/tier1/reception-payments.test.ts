@@ -2,7 +2,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
-import { asMemberId, asTenantId, asUserId, type TenantId } from "@/lib/ids";
+import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { recordPayment } from "@/lib/services/payments";
 import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
