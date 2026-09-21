@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C10 done. |
-| **Current task** | PR2-C11 (Token-scoped receipt download). |
-| **Next task** | PR2 gate (full verification, push, open PR — no merge). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 implementation complete on `feat/pilot-pr2-workflow-import` (C1–C11); running the PR2 gate. |
+| **Current task** | PR2 gate (typecheck, lint, full test, build, scanners, migration review). |
+| **Next task** | Push and open PR2 into `main` after the gate; human merges. Then PR3. |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -86,6 +86,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C8 added (payment reversals ledger + payments.refund + 3 migrations; RLS follow-up) | PR2-C8 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C9 added (reverse from invoice panel + reversals in fees ledger) | PR2-C9 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C10 added (read-only parent money view; zero-JS held) | PR2-C10 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C11 added (token-scoped receipt download + parent links) | PR2-C11 |
 
 ---
 
@@ -773,7 +774,7 @@ coach fee visibility on the register.
   `pnpm e2e:parent-link-zero-js` green ("zero <script> tags in production
   build (invalid + valid tokens, both 0)"). Commit `75acf36`.
 
-### [ ] PR2-C11 — Token-scoped receipt download
+### [x] PR2-C11 — Token-scoped receipt download
 - **Depends:** PR2-C10.
 - **Files:** new `app/p/[token]/receipt/[paymentId]/route.ts`,
   `lib/services/receipts.ts` (member-scoped extract),
@@ -784,7 +785,17 @@ coach fee visibility on the register.
 - **Acceptance:** member-scoped authorization only; no cross-child or cross-tenant
   leak; zero-JS link page unaffected.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** `pnpm exec vitest run tests/tier1/parent-money.test.ts
+  tests/tier1/parent-receipt-route.test.ts` — 11 passed (PDF generated for the
+  token's own payment and audited `actor_type=system`, `source=api`,
+  `via=parent_link`; stored copy returned on the second read with exactly one
+  `receipts` row; sibling's payment refused; cross-tenant refused; forged id
+  refused; route 404s an invalid token without calling the service, serves
+  `application/pdf` for a valid one, and 404s a foreign payment). The staff
+  `getOrCreateReceipt` path is a shared helper refactor — its existing tests
+  stay green. Live: parent page contains the token-scoped receipt link
+  (zero `<script>` tags), the link returns `200 application/pdf` starting
+  `%PDF-`, and a forged token 404s. Commit `5c86a6f`.
 
 ## PR2 gate
 
