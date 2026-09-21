@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 implementation started on `feat/pilot-pr2-workflow-import`. |
-| **Current task** | PR2-C1 (Academy profile settings). |
-| **Next task** | PR2-C2 (Reception `invoices.write` role + backfill migration). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1 done. |
+| **Current task** | PR2-C2 (Reception `invoices.write` role + backfill migration). |
+| **Next task** | PR2-C3 (Reception cash/UPI payment recording). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -76,6 +76,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 pre-merge gate passed; deviation recorded (dev-DB-only migration-test failure, baseline-reproduced); entitlements/preset-scan tests aligned with C6/C7 | PR1 gate (pre-merge) |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 opened as #188; e2e role-bypass readiness fixed for the worker-aware health gate; CI green | PR1 (open, awaiting human merge) |
 | 2026-09-21 | main → feat/pilot-pr2-workflow-import | PR1 merged as `2cdde8c`; image `sha-2cdde8c8883c` published; Dev deployment checks deferred by owner until after PR3 (Dokploy/Traefik, no Caddy, VPS untouched); production still blocked | PR1 post-merge (partial) |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C1 added (academy profile + audited GSTIN fix) | PR2-C1 |
 
 ---
 
@@ -495,7 +496,7 @@ coach fee visibility on the register.
 
 ## Commits
 
-### [ ] PR2-C1 — Academy profile settings (name, currency, timezone, GSTIN)
+### [x] PR2-C1 — Academy profile settings (name, currency, timezone, GSTIN)
 - **Depends:** PR1 merged.
 - **Files:** new `lib/services/tenant-profile.ts`, new
   `lib/actions/tenant-profile.ts`, new
@@ -507,7 +508,17 @@ coach fee visibility on the register.
 - **Acceptance:** typo'd GSTIN fixable in UI; existing invoices unchanged; invalid
   format rejected with a field error.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — both new suites failed on missing
+  `lib/services/tenant-profile`/form. After: `pnpm exec vitest run
+  tests/tier1/tenant-profile.test.ts tests/mobile/academy-profile-form.test.tsx`
+  — 11 passed (valid/invalid GSTIN, case normalisation, clear-to-null,
+  audit row with `changed_fields`, issued-invoice snapshot untouched,
+  tenant isolation, no-actor refusal, form error/success states);
+  `pnpm typecheck`/`pnpm lint` clean; live as demo owner at
+  `/owner/settings/academy`: invalid GSTIN → "GSTIN format is invalid.",
+  valid `27abcde1234f1z5` → Saved and DB normalised to `27ABCDE1234F1Z5`
+  with a `tenant.profile.update` audit row, then cleared back to null to
+  preserve the demo bill-of-supply state; commit `affa947`.
 
 ### [ ] PR2-C2 — Reception can issue invoices (role + tenant backfill)
 - **Depends:** PR2-C1 (no); can follow immediately.
