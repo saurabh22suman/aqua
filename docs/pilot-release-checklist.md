@@ -37,10 +37,12 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 8. **Every PR gate** includes `pnpm typecheck && pnpm lint && pnpm test &&
    pnpm build` plus the applicable scanners. Do not merge on partial gates.
 9. **Deployment split:** every green `main` CI run publishes one immutable image
-   and auto-deploys that exact tag to the Dev VPS. Production is
-   `workflow_dispatch` only, takes an immutable SHA/tag, requires GitHub
-   `production` environment approval, and stays blocked until the complete PR3
-   release gate below passes.
+   and (once the owner lifts the deferral below) auto-deploys that exact tag to
+   the Dev VPS. Production is `workflow_dispatch` only, takes an immutable
+   SHA/tag, requires GitHub `production` environment approval, and stays blocked
+   until the complete PR3 release gate below passes. **Owner decision
+   2026-09-21: all Dev VPS and Dokploy deployment work is deferred until after
+   PR3 merges — see the post-PR3 deployment note below.**
 
 ---
 
@@ -48,10 +50,10 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 complete and open as PR #188 with green CI; awaiting the human merge. Post-merge checks pending. |
-| **Current task** | None — human review/merge of PR #188. |
-| **Next task** | After the human merges PR1: run the post-merge checks (main image publication, automatic Dev deploy, health + worker heartbeat, immutable-tag verification), then start PR2-C1. |
-| **Known blockers** | None. PR #188 is labeled `human-approved-merge` and CI-green; the agent will not merge it. |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 implementation started on `feat/pilot-pr2-workflow-import`. |
+| **Current task** | PR2-C1 (Academy profile settings). |
+| **Next task** | PR2-C2 (Reception `invoices.write` role + backfill migration). |
+| **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
 
@@ -73,6 +75,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C12 added (publish, dev auto-deploy, gated prod workflows) | PR1-C12 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 pre-merge gate passed; deviation recorded (dev-DB-only migration-test failure, baseline-reproduced); entitlements/preset-scan tests aligned with C6/C7 | PR1 gate (pre-merge) |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 opened as #188; e2e role-bypass readiness fixed for the worker-aware health gate; CI green | PR1 (open, awaiting human merge) |
+| 2026-09-21 | main → feat/pilot-pr2-workflow-import | PR1 merged as `2cdde8c`; image `sha-2cdde8c8883c` published; Dev deployment checks deferred by owner until after PR3 (Dokploy/Traefik, no Caddy, VPS untouched); production still blocked | PR1 post-merge (partial) |
 
 ---
 
@@ -397,13 +400,14 @@ no fabricated metric on the health surface.
   lint/parse via `pnpm check:deploy-workflows`; prod workflow confirmed
   dispatch-only with immutable-SHA input, `environment: production` and the
   `PILOT_RELEASE_GATE` block.
-- [ ] Migration review: both migrations (`20260921110252_messaging_feature_status.sql`,
-  `20260921110643_worker_heartbeats.sql`) need the `human-approved-merge` label
-  and a reviewer sign-off at PR time — the agent token cannot apply the label.
+- [x] Migration review: both migrations (`20260921110252_messaging_feature_status.sql`,
+  `20260921110643_worker_heartbeats.sql`) carried the `human-approved-merge`
+  label applied by the human reviewer; PR #188 merged as `2cdde8c`.
 - [x] PR opened into `main`: https://github.com/saurabh22suman/aqua/pull/188
   (agent pushed/opened; the agent never merges its own PR). CI green on the PR
   (run `35605422341`, 14m22s); `agent-protected-paths` green with the
-  human-applied `human-approved-merge` label. **Not merged by the agent.**
+  human-applied `human-approved-merge` label. **Merged by the human as
+  `2cdde8c`.**
 
 **Deviation (pre-existing, not introduced here):**
 `tests/migrations/invite-persons-staff-backfill.test.ts` fails on the local
@@ -414,12 +418,51 @@ Postgres) is green. Not fixed here — out of scope.
 
 ### Post-merge (completed by the human merge + agent verification before PR2)
 
-- [ ] Green `main` CI publishes the immutable image; the run's tag is recorded.
+- [x] Green `main` CI publishes the immutable image; the run's tag is recorded.
+  Main CI `35613166851` (16m40s) → `publish` `35615037173` (3m38s) →
+  `ghcr.io/saurabh22suman/aqua:sha-2cdde8c8883c`.
 - [ ] Automatic Dev VPS deployment of that exact tag; migrate → web → worker.
-- [ ] Post-deploy health 200 and worker heartbeat visible.
+  **Deferred by owner until after PR3.** First attempt (`deploy-dev`
+  `35615461356`) failed in 8s because the `development` environment has no
+  Dev secrets; the owner then deferred all Dev VPS/Dokploy work to post-PR3.
+  Not a blocker for PR2.
+- [ ] Post-deploy health 200 and worker heartbeat visible. **Deferred by owner
+  until after PR3.**
 - [ ] Deployed image tag equals the published tag (immutable-tag verification).
-- [ ] Production workflow remains untouched and never triggered.
-- [ ] One restore drill completed from a real backup (before any pilot money).
+  **Deferred by owner until after PR3.**
+- [x] Production workflow remains untouched and never triggered
+  (`deploy-prod` has never run; `PILOT_RELEASE_GATE` unset; no `production`
+  environment exists).
+- [x] One restore drill completed from a real backup (before any pilot money) —
+  executed in PR1-C11 (real `pg_dump` → throwaway Postgres, zero errors).
+
+### Post-PR3 deployment note (owner decision 2026-09-21)
+
+All Dev VPS and Dokploy deployment work is deferred until after PR3 merges.
+Until then:
+
+- **Do not install Caddy.** The Dev VPS already runs **Dokploy with its bundled
+  Traefik** reverse proxy; Traefik terminates TLS and routes to the app.
+- **Do not modify the VPS.** No package installs, no compose/env changes, no
+  container restarts on the Dev VPS during PR2/PR3.
+- **Do not run `deploy-dev` or `deploy-prod`** (no dispatch, no re-run).
+  `deploy-dev` remains implemented and CI-validated but idle.
+- **Port 3000 must not be publicly exposed.** `docker-compose.prod.yml`
+  publishes `3000:3000`; when deployment resumes, Traefik must reach the app
+  over the internal network (or a loopback bind) and the host firewall must
+  keep 3000 closed to the internet.
+- **`deploy.sh` and the compose override must not remain untracked VPS-only
+  assets.** They currently exist only as provisioning guidance; before
+  deployment resumes they belong in the repo (tracked, reviewed, versioned)
+  rather than hand-maintained on the VPS.
+- **The GitHub/Dokploy deployment approach must be finalized before
+  deployment**: environment secrets (`DEV_*`), whether deploy runs through
+  Dokploy's API/webhook or SSH, the compose override shape, and the
+  health/tag verification path all need one explicit decision recorded here
+  before any run.
+
+Production remains fully blocked regardless (`PILOT_RELEASE_GATE` unset; no
+`production` environment; `deploy-prod` never triggered).
 
 ---
 
