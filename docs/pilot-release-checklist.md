@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C9 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
-| **Current task** | PR1-C10 (Compose secrets fail-fast + db restart policy). |
-| **Next task** | PR1-C11 (Backup script, retention, restore runbook). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C10 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
+| **Current task** | PR1-C11 (Backup script, retention, restore runbook). |
+| **Next task** | PR1-C12 (CI publish, main→Dev auto-deploy, gated production deploy). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -68,6 +68,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C7 fixed (messaging non-GA + post-pilot doc + migration) | PR1-C7 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C8 added (worker heartbeat, drain, health gate) | PR1-C8 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C9 fixed (advisory lock serialises migrations) | PR1-C9 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C10 fixed (compose secrets required + db restart + scanner) | PR1-C10 |
 
 ---
 
@@ -299,7 +300,7 @@ no fabricated metric on the health surface.
   `tests/tier1/messaging-feature-status.test.ts` (uses `startIsolatedDb` →
   `runMigrations`) still green; `pnpm typecheck` clean; commit `50b055b`.
 
-### [ ] PR1-C10 — Compose secrets fail-fast + db restart policy
+### [x] PR1-C10 — Compose secrets fail-fast + db restart policy
 - **Depends:** none.
 - **Files:** `docker-compose.prod.yml`, new `scripts/check-compose-secrets.ts`,
   `package.json`, `.github/workflows/ci.yml` (scanner step).
@@ -308,7 +309,14 @@ no fabricated metric on the health surface.
 - **Acceptance:** compose refuses to start without every required secret; CI fails
   any reintroduced fallback; db restarts with the host/compose.
 - **Migration/rollback:** deploy-path change; revert the compose file to roll back.
-- **Evidence:** _pending_
+- **Evidence:** red first — `tests/scanner-fixtures/compose-secrets-fixtures.test.ts`
+  failed on the real compose (fallback defaults, missing db restart). After:
+  scanner + fixture + `check-scripts-exist` closure — 15 passed;
+  `pnpm check:compose-secrets` passes; `docker compose -f
+  docker-compose.prod.yml config` fails with "required variable
+  POSTGRES_PASSWORD is missing a value" and succeeds when the five secrets
+  are exported; `db` now carries `restart: unless-stopped`; CI gained the
+  `pnpm check:compose-secrets` step; commit `6d37488`.
 
 ### [ ] PR1-C11 — Backup script + retention + restore runbook
 - **Depends:** PR1-C10 (secret handling).
