@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C10 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
-| **Current task** | PR1-C11 (Backup script, retention, restore runbook). |
-| **Next task** | PR1-C12 (CI publish, main→Dev auto-deploy, gated production deploy). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C11 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
+| **Current task** | PR1-C12 (CI publish, main→Dev auto-deploy, gated production deploy). |
+| **Next task** | PR1 pre-merge gate, then push and open the PR (no merge). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -69,6 +69,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C8 added (worker heartbeat, drain, health gate) | PR1-C8 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C9 fixed (advisory lock serialises migrations) | PR1-C9 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C10 fixed (compose secrets required + db restart + scanner) | PR1-C10 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C11 added (backup script, retention, restore drill executed) | PR1-C11 |
 
 ---
 
@@ -318,7 +319,7 @@ no fabricated metric on the health surface.
   are exported; `db` now carries `restart: unless-stopped`; CI gained the
   `pnpm check:compose-secrets` step; commit `6d37488`.
 
-### [ ] PR1-C11 — Backup script + retention + restore runbook
+### [x] PR1-C11 — Backup script + retention + restore runbook
 - **Depends:** PR1-C10 (secret handling).
 - **Files:** new `scripts/db-backup.ts`, `package.json`, `docs/deployment.md`.
 - **Red test:** no backup script exists.
@@ -328,7 +329,21 @@ no fabricated metric on the health surface.
   only older keys; restore drill documented and executed once before money is
   collected.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** `pnpm exec vitest run tests/db/db-backup.test.ts
+  tests/tier1/no-superuser-on-request-path.test.ts
+  tests/tier1/activity-export-job.test.ts
+  tests/tier1/audit-tamper-evidence.test.ts` — 24 passed, 1 skipped (live R2
+  round-trip skips without credentials); key naming, retention and
+  empty/non-archive rejection unit-tested. Live: `docker exec aqua-db pg_dump`
+  produced a 768,970-byte archive → `pnpm db:backup --from-file … --dry-run`
+  named `db-backups/20260921T112037Z.dump`; `/dev/null` was refused with
+  "Backup dump is empty". **Restore drill executed**: throwaway
+  `postgres:16` container, roles bootstrapped first, then
+  `pg_restore --no-owner --no-privileges` — zero errors, 9 tenants,
+  54 members, 162 policies (restoring before bootstrap produces 53
+  `role "app_user" does not exist` errors; runbook now orders it correctly).
+  Runbook in `docs/deployment.md` §Backups; `pnpm check:runbook-sync` green;
+  commit `91de602`.
 
 ### [ ] PR1-C12 — CI publish, main→Dev auto-deploy, gated production deploy
 - **Depends:** PR1-C8 (health semantics), PR1-C10.
