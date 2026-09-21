@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C9 done. |
-| **Current task** | PR2-C10 (Parent money view, read-only). |
-| **Next task** | PR2-C11 (Token-scoped receipt download). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C10 done. |
+| **Current task** | PR2-C11 (Token-scoped receipt download). |
+| **Next task** | PR2 gate (full verification, push, open PR — no merge). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -85,6 +85,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C7 added (import entries on members list + onboarding) | PR2-C7 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C8 added (payment reversals ledger + payments.refund + 3 migrations; RLS follow-up) | PR2-C8 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C9 added (reverse from invoice panel + reversals in fees ledger) | PR2-C9 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C10 added (read-only parent money view; zero-JS held) | PR2-C10 |
 
 ---
 
@@ -751,7 +752,7 @@ coach fee visibility on the register.
   pages, so the receptionist never sees the action. Typecheck/lint clean.
   Commit `c16e312`.
 
-### [ ] PR2-C10 — Parent money view (member-scoped read-only)
+### [x] PR2-C10 — Parent money view (member-scoped read-only)
 - **Depends:** PR2-C8 for refund display (optional).
 - **Files:** `lib/services/parent-view.ts`, `app/p/[token]/route.ts`,
   `tests/tier1/parent-money.test.ts`.
@@ -761,7 +762,16 @@ coach fee visibility on the register.
   history, in a read-only surface; zero-JS preserved
   (`scripts/e2e-parent-link-zero-js.ts` still 0 scripts).
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the four new tier1 assertions failed. After:
+  `pnpm exec vitest run tests/tier1/parent-money.test.ts
+  tests/tier1/no-superuser-on-request-path.test.ts` — 6 passed (child's
+  outstanding invoice with real amounts, settled invoice excluded, payment
+  history scoped to the child, sibling/other-tenant invoice numbers and
+  amounts absent, fees shape is read-only `{outstanding, payments}`). Live:
+  minted a parent token for the demo child and fetched `/p/<token>` —
+  200 with the Fees section and payment history, **zero `<script>` tags**;
+  `pnpm e2e:parent-link-zero-js` green ("zero <script> tags in production
+  build (invalid + valid tokens, both 0)"). Commit `75acf36`.
 
 ### [ ] PR2-C11 — Token-scoped receipt download
 - **Depends:** PR2-C10.
