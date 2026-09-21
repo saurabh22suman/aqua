@@ -28,6 +28,10 @@ import {
   issueOwnerResetLinkForPhone,
 } from "@/lib/services/invite-link-issue";
 import {
+  issueTenantOwnerResetLink,
+  listOwnerMemberships,
+} from "@/lib/services/owner-reset";
+import {
   previewLoginLink,
   redeemLoginLink,
 } from "@/lib/services/invite-link";
@@ -35,6 +39,7 @@ import { signInviteLinkToken } from "@/lib/services/invite-link-token";
 import { RESET_LINK_TTL_SECONDS } from "@/lib/services/invite-link-token";
 import { pinLogin, setCredential } from "@/lib/services/credentials";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
@@ -44,6 +49,7 @@ const phone = (suffix: string) => `+91989${RUN_NUM}${suffix}`;
 
 let tenantId: TenantId = asTenantId("");
 let ownerMembershipId = "";
+let ownerUserId: UserId = asUserId("");
 let coachMembershipId = "";
 let invitedOwnerMembershipId = "";
 
@@ -86,12 +92,19 @@ beforeAll(async () => {
   };
 
   ownerMembershipId = (await mkMembership("owner", phone("01"), "active")).membershipId;
+  ownerUserId = (
+    await admin.query<{ user_id: string }>(
+      "select user_id from tenant_memberships where id = $1::uuid",
+      [ownerMembershipId],
+    )
+  ).rows[0]!.user_id as UserId;
   coachMembershipId = (await mkMembership("coach", phone("02"), "active")).membershipId;
   invitedOwnerMembershipId = (await mkMembership("owner", phone("03"), "invited")).membershipId;
 });
 
 afterAll(async () => {
   if (tenantId) {
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from invite_link_uses where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
     await admin.query("delete from roles where tenant_id = $1", [tenantId]);
@@ -253,5 +266,53 @@ describe("preview and redeem of a reset link", () => {
     expect(first.kind).toBe("ok");
     const second = await redeemLoginLink(issued.token, { pin: "999999" });
     expect(second).toMatchObject({ kind: "error", code: "used" });
+  });
+});
+
+describe("PR2-C4 — tenant-side co-owner reset", () => {
+  it("lists the tenant's active owners with their phone", async () => {
+    const owners = await listOwnerMemberships(tenantId);
+    expect(owners.map((o) => o.membershipId)).toEqual([ownerMembershipId]);
+    expect(owners[0]!.phone).toBe(phone("01"));
+  });
+
+  it("mints a reset link for the owner and writes a tenant audit row", async () => {
+    const result = await issueTenantOwnerResetLink(
+      { tenantId, userId: ownerUserId },
+      ownerMembershipId,
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.purpose).toBe("reset");
+
+    const audit = await admin.query<{ action: string; actor_id: string; entity_id: string }>(
+      "select action, actor_id, entity_id from audit_log where tenant_id = $1::uuid and action = 'owner.reset_link_issued' order by created_at desc limit 1",
+      [tenantId],
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]!.actor_id).toBe(ownerUserId);
+    expect(audit.rows[0]!.entity_id).toBe(ownerMembershipId);
+  });
+
+  it("refuses a non-owner target and writes no audit row", async () => {
+    const result = await issueTenantOwnerResetLink(
+      { tenantId, userId: ownerUserId },
+      coachMembershipId,
+    );
+    expect(result).toMatchObject({ kind: "error", code: "not_owner" });
+    const audit = await admin.query(
+      "select 1 from audit_log where tenant_id = $1::uuid and action = 'owner.reset_link_issued' and entity_id = $2",
+      [tenantId, coachMembershipId],
+    );
+    expect(audit.rows).toHaveLength(0);
+  });
+
+  it("cannot target another tenant's membership", async () => {
+    const otherTenant = asTenantId(uuidv7());
+    const result = await issueTenantOwnerResetLink(
+      { tenantId: otherTenant, userId: ownerUserId },
+      ownerMembershipId,
+    );
+    expect(result).toMatchObject({ kind: "error", code: "membership_not_found" });
   });
 });

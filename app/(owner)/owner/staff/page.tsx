@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { listStaffAction } from "@/lib/actions/staff";
+import { listOwnerMembershipsAction } from "@/lib/actions/tenant-owner-reset";
 import { StaffBoard } from "@/components/staff-board";
+import { OwnerResetLinks } from "@/components/owner-reset-links";
 import { requireOwner } from "@/lib/auth/surface-guard";
 
 // Phase 3.5 — staff directory. List page reachable from
 // Settings > Academy. Invitations surface links from here.
+// PR2-C4 — owner access recovery lives at the foot of the page.
 export default async function StaffListPage() {
   await requireOwner();
-  const rows = await listStaffAction({});
+  const [rows, owners] = await Promise.all([
+    listStaffAction({}),
+    listOwnerMembershipsAction(),
+  ]);
   return (
     <main className="px-5 pt-6 pb-8">
       <div className="flex items-center justify-between gap-3 pb-4">
@@ -41,6 +47,8 @@ export default async function StaffListPage() {
       <div className="mt-5">
         <StaffBoard rows={rows} />
       </div>
+
+      {owners.length > 0 ? <OwnerResetLinks owners={owners} /> : null}
     </main>
   );
 }
