@@ -6,16 +6,10 @@ import { withPlatform, withPlatformAdmin } from "./scope";
 import { tenants } from "./schema/tenants";
 import { locations } from "./schema/locations";
 import { plans } from "./schema/platform";
-import { platformAuditLog } from "./schema/platform-users";
 import { recordOpsAudit } from "./ops-action";
-import {
-  registerAbsenceAlertsSchedule,
-  registerBillingSchedules,
-  registerSessionsGenerateSchedule,
-} from "./queue";
+import { finishTenantProvisioning } from "./platform-tenant-provision";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { seedDefaultLeaveTypes } from "@/lib/services/leave";
-import { applyPreset } from "./preset-engine";
 import { GSTIN_RE } from "@/lib/gst";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 
@@ -283,104 +277,18 @@ export async function createTenant(
 
     if (result.kind !== "ok") return result;
 
-    // PR1-C6 — the preset applies outside the tenant/location/audit
-    // transaction: the tenant already exists and is usable regardless,
-    // and applyPreset opens its own transaction (it is idempotent by
-    // contract). A failure is never silent: the result carries a
-    // retryable warning and a platform audit row names the tenant.
-    let presetApplied = false;
-    let presetWarning: string | null = null;
-    const auditPresetFailure = async (message: string) => {
-      await withPlatform(async () => {
-        await db.insert(platformAuditLog).values({
-          actorId: ctx.actorId,
-          tenantId: result.tenantId,
-          action: "tenant.preset_apply_failed",
-          targetType: "tenant",
-          targetId: result.tenantId,
-          detail: { presetKey: input.presetKey ?? null, message },
-        });
-      }).catch((auditErr) => {
-        console.error(
-          `createTenant: failed to write preset-failure audit row for tenant ${result.tenantId}`,
-          auditErr,
-        );
-      });
-    };
+    // PR1-C6/C8 — preset application and schedule registration live in
+    // db/platform-tenant-provision.ts: the tenant already exists and is
+    // usable regardless, so failures surface as retryable warnings +
+    // platform audit rows rather than a rollback.
+    const provisioning = await finishTenantProvisioning({
+      tenantId: result.tenantId,
+      timezone: input.timezone,
+      presetKey: input.presetKey,
+      actorId: ctx.actorId,
+    });
 
-    if (input.presetKey) {
-      try {
-        const presetResult = await applyPreset(result.tenantId, input.presetKey, {
-          actorId: ctx.actorId,
-        });
-        if (presetResult.kind === "ok") {
-          presetApplied = true;
-        } else {
-          presetWarning = `The tenant was created, but preset "${input.presetKey}" was not applied (${presetResult.kind}). Apply it from the preset catalogue — re-applying is idempotent.`;
-          await auditPresetFailure(presetResult.kind);
-        }
-      } catch (err) {
-        presetWarning = `The tenant was created, but preset "${input.presetKey}" failed to apply. Apply it from the preset catalogue — re-applying is idempotent.`;
-        await auditPresetFailure(
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    } else {
-      presetWarning =
-        "No preset was applied. Apply one from the preset catalogue before adding real data.";
-    }
-
-    // D2 — outside the transaction: pg-boss is a separate connection,
-    // not part of the tenant/location/audit atomicity above, and the
-    // tenant already exists by this point regardless of what happens
-    // here. Best-effort: db/deploy.ts's syncSessionGenerateSchedules
-    // reconciles any tenant that's missing a schedule on the next
-    // deploy, so a transient scheduler outage here doesn't need to
-    // fail tenant creation for an operator who already has a real
-    // tenant row. But "best-effort" must not mean "silent" — a
-    // swallowed failure here is the exact bug D2 fixes, one layer
-    // down. error-level log carries the tenant id for grepping, and
-    // a platform_audit_log row makes it visible without a new
-    // surface: the tenant detail page's "Recent activity" list
-    // (app/(platform)/platform/tenants/[tenantId]/page.tsx) already
-    // renders platform_audit_log by tenant, and it's the page the
-    // operator lands on immediately after creating the tenant.
-    try {
-      await registerSessionsGenerateSchedule(result.tenantId, input.timezone);
-      // R.8 — absence alerts run daily alongside session generation.
-      await registerAbsenceAlertsSchedule(result.tenantId, input.timezone);
-      // C-47 — the nightly billing jobs (expire / generate / rollup).
-      await registerBillingSchedules(result.tenantId, input.timezone);
-    } catch (err) {
-      console.error(
-        `createTenant: failed to register schedules for tenant ${result.tenantId}`,
-        err,
-      );
-      await withPlatform(async () => {
-        await db.insert(platformAuditLog).values({
-          actorId: ctx.actorId,
-          tenantId: result.tenantId,
-          action: "tenant.schedule_registration_failed",
-          targetType: "tenant",
-          targetId: result.tenantId,
-          detail: {
-            message: err instanceof Error ? err.message : String(err),
-          },
-        });
-      }).catch((auditErr) => {
-        console.error(
-          `createTenant: failed to write schedule-registration-failure audit row for tenant ${result.tenantId}`,
-          auditErr,
-        );
-      });
-    }
-
-    return {
-      ...result,
-      presetKey: input.presetKey ?? null,
-      presetApplied,
-      presetWarning,
-    };
+    return { ...result, ...provisioning };
   } catch (err) {
     // Postgres SQLSTATE 23505 = unique_violation. tenants.slug is
     // the only unique constraint that depends on operator input;
