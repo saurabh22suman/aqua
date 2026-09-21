@@ -48,10 +48,10 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | Checklist revised (revision 2) per conditional-approval corrections; PR1 implementation not started. |
-| **Current task** | None — re-review gate. |
-| **Next task** | PR1-C1 (Reports timezone binding + report-page resilience). |
-| **Known blockers** | None technical. Process blocker: explicit human re-approval of this revised checklist before PR1 begins. |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1 verified and committed. |
+| **Current task** | PR1-C2 (`/check-in` through production middleware). |
+| **Next task** | PR1-C3 (Duplicate invoice raise: friendly error and no repeat submit). |
+| **Known blockers** | None. |
 
 ### Session log
 
@@ -59,6 +59,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 |---|---|---|---|
 | 2026-09-21 | none | Checklist authored from the final 3-PR plan | — |
 | 2026-09-21 | none | Revision 2: no `develop`, main→Dev auto-deploy, dispatch-only gated prod, reception cash/UPI recording, parent read-only money preserved, Cloud adapter removed | — |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 started; PR1-C1 fixed (timezone binding + settled report cards) | PR1-C1 |
 
 ---
 
@@ -86,7 +87,7 @@ no fabricated metric on the health surface.
 
 ## Commits
 
-### [ ] PR1-C1 — Reports: timezone binding + settled card loading
+### [x] PR1-C1 — Reports: timezone binding + settled card loading
 - **Depends:** none.
 - **Files:** `lib/services/owner-analytics.ts`, `lib/actions/owner-analytics.ts`,
   `app/(owner)/owner/reports/page.tsx`, new `tests/tier1/owner-analytics.test.ts`.
@@ -99,7 +100,14 @@ no fabricated metric on the health surface.
   failure no longer blanks the page; tenant isolation and IST month boundaries
   verified against real Postgres.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — `tests/tier1/owner-analytics.test.ts` failed with
+  Postgres `42803` on the old GROUP BY. After the derived-table fix:
+  `pnpm exec vitest run tests/tier1/owner-analytics.test.ts
+  tests/mobile/owner-reports-page.test.tsx` — 4 passed;
+  `pnpm exec vitest run tests/tier1/owner-reports.test.ts
+  tests/mobile/owner-analytics.test.tsx` — 15 passed; `pnpm typecheck` clean;
+  live `/owner/reports` 200 with all nine cards as demo owner (Playwright,
+  localhost:3000); commit `94b1ef8`.
 
 ### [ ] PR1-C2 — `/check-in/<token>` through production middleware
 - **Depends:** none (independent of C1).
@@ -254,18 +262,27 @@ no fabricated metric on the health surface.
 
 ## PR1 gate
 
+### Pre-merge (blocks opening the PR for review)
+
 - [ ] Full gate green: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
 - [ ] Scanners green (migrations, location scope, ops actions, tenant conventions,
   bundle, fonts, focus contrast, scripts exist, compose secrets).
-- [ ] Both migrations carry `human-approved-merge` and a reviewer sign-off.
-- [ ] Dev auto-deploy verified from a green `main` run: migrate → web → worker,
-  health 200, worker heartbeat visible, deployed tag equals the published tag.
-- [ ] Production workflow confirmed dispatch-only, immutable-SHA input,
-  `production` environment approval, and documented as blocked until the PR3
-  release gate.
+- [ ] Workflow validation: `publish.yml`, `deploy-dev.yml` and `deploy-prod.yml`
+  lint/parse; prod workflow confirmed dispatch-only with immutable-SHA input and
+  `production` environment approval.
+- [ ] Migration review: both migrations carry `human-approved-merge` and a
+  reviewer sign-off.
+- [ ] PR opened into `main` (agent may push/open after this pre-merge gate; the
+  agent never merges its own PR).
+
+### Post-merge (completed by the human merge + agent verification before PR2)
+
+- [ ] Green `main` CI publishes the immutable image; the run's tag is recorded.
+- [ ] Automatic Dev VPS deployment of that exact tag; migrate → web → worker.
+- [ ] Post-deploy health 200 and worker heartbeat visible.
+- [ ] Deployed image tag equals the published tag (immutable-tag verification).
+- [ ] Production workflow remains untouched and never triggered.
 - [ ] One restore drill completed from a real backup (before any pilot money).
-- [ ] PR opened into `main`, CI green on the PR, merged by a human.
-- [ ] Checklist committed with the implementation on the PR1 branch.
 
 ---
 
@@ -370,7 +387,7 @@ coach fee visibility on the register.
 - **Evidence:** _pending_
 
 ### [ ] PR2-C5 — CSV import: parser, validator, dry-run, row errors
-- **Depends:** PR2-C4.
+- **Depends:** PR1 merged.
 - **Files:** new `lib/services/member-import.ts`, new `lib/actions/member-import.ts`,
   new `components/member-import-*`, template route
   `app/(owner)/owner/members/import/template.csv/route.ts`, new
@@ -609,8 +626,8 @@ money and reception cash/UPI recording remain fully working.
   links remain intact; `scripts/e2e-parent-link-zero-js.ts` still 0 scripts.
 - **Acceptance:** zero-JS preserved; runway from real subscription dates; summary
   counts match marked attendance; **PR2 read-only invoice, payment-history and
-  receipt UI preserved byte-for-content**; no Pay Now / online payment control
-  added; no payment/progress fabrication.
+  receipt UI content and authorization behaviour preserved**; no Pay Now /
+  online payment control added; no payment/progress fabrication.
 - **Migration/rollback:** none.
 - **Evidence:** _pending_
 
