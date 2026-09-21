@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C8 done. |
-| **Current task** | PR2-C9 (Payment reversals UI + fees ledger). |
-| **Next task** | PR2-C10 (Parent money view, read-only). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C9 done. |
+| **Current task** | PR2-C10 (Parent money view, read-only). |
+| **Next task** | PR2-C11 (Token-scoped receipt download). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -84,6 +84,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C6 added (CSV import commit/consent/idempotent retry) | PR2-C6 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C7 added (import entries on members list + onboarding) | PR2-C7 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C8 added (payment reversals ledger + payments.refund + 3 migrations; RLS follow-up) | PR2-C8 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C9 added (reverse from invoice panel + reversals in fees ledger) | PR2-C9 |
 
 ---
 
@@ -726,7 +727,7 @@ coach fee visibility on the register.
   dev (101/101); `pnpm check:migrations` green; typecheck/lint clean. Commit
   `3112ee7`.
 
-### [ ] PR2-C9 — Payment reversals: UI + fees ledger display
+### [x] PR2-C9 — Payment reversals: UI + fees ledger display
 - **Depends:** PR2-C8.
 - **Files:** `components/member-detail/invoice-expanded.tsx`,
   `app/(owner)/owner/fees/page.tsx`, mobile render test.
@@ -736,7 +737,19 @@ coach fee visibility on the register.
 - **Acceptance:** owner/admin/accountant can reverse; reason required; the ledger
   reconciles to the underlying rows.
 - **Migration/rollback:** none (UI only).
-- **Evidence:** _pending_
+- **Evidence:** red first — the invoice-reverse suite and the ledger
+  reconciliation test failed. After: `pnpm exec vitest run
+  tests/mobile/invoice-reverse.test.tsx tests/tier1/payment-reversals.test.ts
+  tests/mobile/owner-fees-hub.test.tsx tests/mobile/member-invoices-panel.test.tsx`
+  — 15 passed (reverse with reason, reason required client-side, existing
+  reversals shown, action hidden without `payments.refund`; ledger rows net to
+  `collectedPaise`). Live as demo owner: reversed ₹100 of the seeded counter
+  payment from the invoice panel (row shows "₹100.00 reversed · Live check
+  duplicate"), and the fees ledger shows the negative reversal row plus
+  "3 payments recorded at the counter, net of ₹100.00 reversed (1)" on the
+  overview. `canRefund` is computed from `payments.refund` on both member
+  pages, so the receptionist never sees the action. Typecheck/lint clean.
+  Commit `c16e312`.
 
 ### [ ] PR2-C10 — Parent money view (member-scoped read-only)
 - **Depends:** PR2-C8 for refund display (optional).
