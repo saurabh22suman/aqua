@@ -136,6 +136,12 @@ jobs:
       # tests/scanner-fixtures/tenant-conventions-fixtures.test.ts.
       - run: pnpm check:tenant-conventions
 
+      # PR1-C10: required compose secrets must use ${VAR:?} (no
+      # fallback defaults) and the db service must carry a restart
+      # policy. Fixture proof in
+      # tests/scanner-fixtures/compose-secrets-fixtures.test.ts.
+      - run: pnpm check:compose-secrets
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
