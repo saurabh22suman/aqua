@@ -1,17 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { previewMemberImportAction } from "@/lib/actions/member-import";
+import {
+  commitMemberImportAction,
+  previewMemberImportAction,
+} from "@/lib/actions/member-import";
 import { memberImportErrorsCsv } from "@/lib/services/member-import-csv";
-import type { MemberImportPreview } from "@/lib/services/member-import";
+import type {
+  MemberImportCommitResult,
+  MemberImportPreview,
+} from "@/lib/services/member-import";
 
 // PR2-C5 — the import screen's dry run. Pick the CSV, see exactly
 // what would land and what was rejected (row number, field, reason),
-// download the rejected rows. Nothing is written from here.
+// download the rejected rows.
+// PR2-C6 — the commit step: the checked rows import through
+// createMember; matched rows are skipped and a retry is safe.
 
 export function MemberImportForm() {
   const [fileName, setFileName] = useState<string | null>(null);
+  const [csvText, setCsvText] = useState<string | null>(null);
   const [preview, setPreview] = useState<MemberImportPreview | null>(null);
+  const [committed, setCommitted] = useState<MemberImportCommitResult | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -19,8 +31,10 @@ export function MemberImportForm() {
     setBusy(true);
     setError(null);
     setPreview(null);
+    setCommitted(null);
     try {
       const csv = await file.text();
+      setCsvText(csv);
       const result = await previewMemberImportAction({ csv });
       if (!result.ok) {
         setError(result.error);
@@ -34,9 +48,34 @@ export function MemberImportForm() {
     }
   }
 
+  function commit() {
+    if (!csvText) return;
+    setBusy(true);
+    setError(null);
+    void (async () => {
+      try {
+        const result = await commitMemberImportAction({ csv: csvText });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setCommitted(result.result);
+        setPreview(null);
+      } catch {
+        setError("The import could not be completed. Try again.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }
+
+  const errorRows = committed
+    ? committed.errors
+    : (preview?.errors ?? []);
+
   function downloadErrors() {
-    if (!preview || preview.errors.length === 0) return;
-    const blob = new Blob([memberImportErrorsCsv(preview.errors)], {
+    if (errorRows.length === 0) return;
+    const blob = new Blob([memberImportErrorsCsv(errorRows)], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -108,6 +147,21 @@ export function MemberImportForm() {
                 .
               </p>
 
+              {preview.rows.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={commit}
+                  disabled={busy}
+                  className="mt-3 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+                >
+                  {busy
+                    ? "Importing…"
+                    : `Import ${preview.rows.length} member${
+                        preview.rows.length === 1 ? "" : "s"
+                      }`}
+                </button>
+              ) : null}
+
               {preview.errors.length > 0 ? (
                 <>
                   <ul className="mt-3 space-y-1.5">
@@ -137,6 +191,46 @@ export function MemberImportForm() {
               ) : null}
             </>
           )}
+        </section>
+      ) : null}
+
+      {committed ? (
+        <section
+          role="status"
+          className="rounded-card border border-line bg-paper p-4"
+        >
+          <p className="text-[13px] text-ink">
+            Imported {committed.imported} member
+            {committed.imported === 1 ? "" : "s"}
+            {committed.skipped > 0
+              ? ` · ${committed.skipped} already existed and ${
+                  committed.skipped === 1 ? "was" : "were"
+                } skipped`
+              : ""}
+            .
+          </p>
+          {errorRows.length > 0 ? (
+            <>
+              <ul className="mt-3 space-y-1.5">
+                {errorRows.slice(0, 20).map((rowError) => (
+                  <li
+                    key={`${rowError.rowNumber}-${rowError.field}`}
+                    className="text-[12.5px] text-ink-2"
+                  >
+                    <span className="font-mono">row {rowError.rowNumber}</span> ·
+                    {" "}{rowError.field} — {rowError.reason}
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={downloadErrors}
+                className="mt-3 rounded-pill border border-line px-3.5 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink"
+              >
+                Download error rows (CSV)
+              </button>
+            </>
+          ) : null}
         </section>
       ) : null}
     </div>

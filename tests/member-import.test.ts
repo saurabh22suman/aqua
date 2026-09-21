@@ -10,7 +10,7 @@ import {
   parseImportDate,
   parseMemberImportRows,
 } from "@/lib/services/member-import-csv";
-import { previewMemberImport } from "@/lib/services/member-import";
+import { previewMemberImport, commitMemberImport } from "@/lib/services/member-import";
 
 // PR2-C5 — CSV import parser, validator and dry-run. Pure parsing
 // rules first (quotes, commas, newlines, ambiguous dates, real
@@ -21,23 +21,43 @@ import { previewMemberImport } from "@/lib/services/member-import";
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const tenantId = asTenantId(uuidv7());
+const tenantBId = asTenantId(uuidv7());
 const locationId = uuidv7();
+const locationBId = uuidv7();
+
+async function memberCount(tenant: string): Promise<number> {
+  const { rows } = await admin.query<{ n: string }>(
+    "select count(*)::text as n from members where tenant_id = $1",
+    [tenant],
+  );
+  return Number(rows[0]!.n);
+}
 
 beforeAll(async () => {
   await admin.query(
-    "insert into tenants (id, slug, name, status, timezone) values ($1, $2, 'Import Test', 'active', 'Asia/Kolkata')",
-    [tenantId, `import-${RUN}`],
+    `insert into tenants (id, slug, name, status, timezone) values
+       ($1, $2, 'Import Test', 'active', 'Asia/Kolkata'),
+       ($3, $4, 'Import Test B', 'active', 'Asia/Kolkata')`,
+    [tenantId, `import-${RUN}`, tenantBId, `import-b-${RUN}`],
   );
   await admin.query(
-    "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Worli', true)",
-    [locationId, tenantId],
+    `insert into locations (id, tenant_id, name, is_primary) values
+       ($1, $2, 'Worli', true),
+       ($3, $4, 'Worli', true)`,
+    [locationId, tenantId, locationBId, tenantBId],
   );
 });
 
 afterAll(async () => {
-  await admin.query("delete from members where tenant_id = $1", [tenantId]);
-  await admin.query("delete from locations where tenant_id = $1", [tenantId]);
-  await admin.query("delete from tenants where id = $1", [tenantId]);
+  for (const tenant of [tenantId, tenantBId]) {
+    await admin.query("delete from consents where tenant_id = $1", [tenant]);
+    await admin.query("delete from guardianships where tenant_id = $1", [tenant]);
+    await admin.query("delete from member_status_transitions where tenant_id = $1", [tenant]);
+    await admin.query("delete from members where tenant_id = $1", [tenant]);
+    await admin.query("delete from persons where tenant_id = $1", [tenant]);
+    await admin.query("delete from locations where tenant_id = $1", [tenant]);
+    await admin.query("delete from tenants where id = $1", [tenant]);
+  }
   await admin.end();
 });
 
@@ -185,5 +205,92 @@ describe("previewMemberImport (dry run)", () => {
       field: "guardian_name",
     });
     expect(preview.errors[0]!.reason).toMatch(/guardian/i);
+  });
+});
+
+describe("commitMemberImport", () => {
+  const CSV = [
+    "full_name,date_of_birth,location,phone,guardian_name,guardian_phone,member_code",
+    "Import Adult,1990-05-05,Worli,+919811100001,,,IMP-ADULT-1",
+    "Import Child,2015-05-05,Worli,,Ravi Rao,+919811100002,",
+  ].join("\n");
+
+  it("imports valid rows through createMember with import consent evidence", async () => {
+    const before = await memberCount(tenantId);
+    const result = await commitMemberImport({ tenantId }, CSV);
+    expect(result.imported).toBe(2);
+    expect(result.skipped).toBe(0);
+    expect(result.errors).toEqual([]);
+    expect(await memberCount(tenantId)).toBe(before + 2);
+
+    const codes = await admin.query<{ member_code: string }>(
+      "select member_code from members where tenant_id = $1 and member_code in ('IMP-ADULT-1') or (tenant_id = $1 and member_code like 'MEM-%')",
+      [tenantId],
+    );
+    expect(codes.rows.map((r) => r.member_code)).toContain("IMP-ADULT-1");
+    expect(codes.rows.some((r) => r.member_code.startsWith("MEM-"))).toBe(true);
+
+    const consents = await admin.query<{ purpose: string; channel: string }>(
+      `select c.purpose, c.evidence->>'channel' as channel
+         from consents c
+         join members m on m.person_id = c.person_id and m.tenant_id = c.tenant_id
+        where m.tenant_id = $1 and m.member_code = 'IMP-ADULT-1'`,
+      [tenantId],
+    );
+    expect(consents.rows).toEqual([{ purpose: "processing", channel: "import" }]);
+
+    const child = await admin.query<{ n: string }>(
+      `select count(*)::text as n from guardianships g
+         join members m on m.person_id = g.minor_id and m.tenant_id = g.tenant_id
+        where m.tenant_id = $1 and m.member_code like 'MEM-%'`,
+      [tenantId],
+    );
+    expect(Number(child.rows[0]!.n)).toBe(1);
+  });
+
+  it("is idempotent: a second run skips every matched row and creates nothing", async () => {
+    const before = await memberCount(tenantId);
+    const result = await commitMemberImport({ tenantId }, CSV);
+    expect(result.imported).toBe(0);
+    expect(result.skipped).toBe(2);
+    expect(await memberCount(tenantId)).toBe(before);
+  });
+
+  it("never overwrites an existing member matched by code", async () => {
+    const csv = [
+      "full_name,date_of_birth,location,member_code",
+      "Different Name,1980-01-01,Worli,IMP-ADULT-1",
+    ].join("\n");
+    const result = await commitMemberImport({ tenantId }, csv);
+    expect(result.imported).toBe(0);
+    expect(result.skipped).toBe(1);
+
+    const person = await admin.query<{ full_name: string }>(
+      `select p.full_name from persons p
+         join members m on m.person_id = p.id
+        where m.tenant_id = $1 and m.member_code = 'IMP-ADULT-1'`,
+      [tenantId],
+    );
+    expect(person.rows[0]!.full_name).toBe("Import Adult");
+  });
+
+  it("returns preview errors and imports nothing when a row is invalid", async () => {
+    const csv = [
+      "full_name,date_of_birth,location,guardian_name,guardian_phone",
+      "No Guardian Child,2015-01-01,Worli,,",
+    ].join("\n");
+    const before = await memberCount(tenantId);
+    const result = await commitMemberImport({ tenantId }, csv);
+    expect(result.imported).toBe(0);
+    expect(result.errors[0]).toMatchObject({ rowNumber: 2, field: "guardian_name" });
+    expect(await memberCount(tenantId)).toBe(before);
+  });
+
+  it("keeps tenants isolated", async () => {
+    const beforeA = await memberCount(tenantId);
+    const result = await commitMemberImport({ tenantId: tenantBId }, CSV);
+    expect(result.imported).toBe(2);
+    expect(await memberCount(tenantBId)).toBe(2);
+    expect(await memberCount(tenantId)).toBe(beforeA);
   });
 });
