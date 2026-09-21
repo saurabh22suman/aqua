@@ -1,0 +1,52 @@
+name: publish
+
+# PR1-C12 — one immutable image per green main CI run.
+#
+# Trigger: the CI workflow completes successfully on main. The image
+# is tagged `sha-<first 12 of the commit>` and pushed to GHCR; there
+# is no `latest` and no rebuild downstream — deploy-dev and deploy-prod
+# pull this exact tag. Rollback is redeploying an older tag.
+#
+# workflow_dispatch exists for re-publishing after a registry incident;
+# it publishes the checked-out main SHA, still under the immutable tag.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-main
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Compute the immutable tag
+        id: meta
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "tag=sha-${SHA:0:12}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push exactly one image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker build -t "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}" .
+          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"
+          echo "published ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}"

@@ -342,12 +342,43 @@ The default backup command is
 > test row counts. This is the **Restore drill — Path A**
 > task you registered in step 2.
 
-### 9. Set up auto-deploy (later)
+### 9. Auto-deploy — Dev automatic, production gated
 
-Optional. Once the image-build CI lands (Future work), every push
-to `main` produces a new image, and Dokploy's webhook can deploy
-it automatically. For now, after a code change: rebuild the
-image locally, push to GHCR, click Deploy on each Application.
+Two workflows, three files (PR1-C12):
+
+- **`publish.yml`** — on a green `CI` run on `main`, builds exactly
+  one image and pushes it as `ghcr.io/<repo>:sha-<12-char commit>`.
+  No `latest`, no rebuild downstream. `pnpm check:deploy-workflows`
+  enforces these rules in CI.
+- **`deploy-dev.yml`** — on a successful `publish`, computes the same
+  tag from the publish run's commit, SSHes to the Dev VPS, pulls and
+  starts that tag (the remote `deploy.sh` uses `IMAGE`/`TAG`), verifies
+  `docker inspect aqua-web` matches the tag, then gates on
+  `/api/health` (24 × 5s). A failed health check fails the run — the
+  deploy is not "green" until the worker heartbeat is fresh too.
+- **`deploy-prod.yml`** — `workflow_dispatch` only. A human passes the
+  immutable `sha-<short>` tag; anything else (a branch name, `latest`)
+  is refused. It runs behind the GitHub **production** environment
+  approval and refuses to start until the repository variable
+  `PILOT_RELEASE_GATE=passed` is set — which happens only after the
+  complete PR3 release gate in `docs/pilot-release-checklist.md` is
+  checked. **Never trigger it before that.**
+
+GitHub setup:
+- Environments: `development` (Dev secrets) and `production` (Prod
+  secrets + required reviewers).
+- Per environment: `*_SSH_KEY`, `*_HOST`, `*_USER`, `*_APP_DIR`,
+  `*_HEALTH_URL` (`DEV_*` / `PROD_*`).
+- Repository variable `PILOT_RELEASE_GATE` (unset until PR3).
+- Each VPS app dir carries `deploy.sh`: docker login GHCR with
+  `REGISTRY_USER`/`REGISTRY_TOKEN`, then
+  `IMAGE=$IMAGE TAG=$TAG docker compose -f docker-compose.prod.yml up -d`.
+
+Rollback: dispatch `deploy-prod.yml` (or re-run `deploy-dev.yml`) with
+an older tag; the health gate decides whether it stands.
+
+The older Dokploy-webhook auto-deploy idea is superseded by this
+immutable-tag flow; do not wire both.
 
 ### 10. The platform login warm-up
 

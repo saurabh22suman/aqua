@@ -142,6 +142,12 @@ jobs:
       # tests/scanner-fixtures/compose-secrets-fixtures.test.ts.
       - run: pnpm check:compose-secrets
 
+      # PR1-C12: publish/deploy-dev/deploy-prod rules — immutable tag,
+      # no rebuild downstream, production dispatch-only behind the
+      # production environment and PILOT_RELEASE_GATE. Fixture proof in
+      # tests/scanner-fixtures/deploy-workflows-fixtures.test.ts.
+      - run: pnpm check:deploy-workflows
+
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
