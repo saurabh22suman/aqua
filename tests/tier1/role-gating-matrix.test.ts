@@ -95,6 +95,9 @@ const ACTION_PERM_MATRIX: Array<{
   { role: "owner", permissionKey: "attendance.mark", featureOn: true, expect: "allow" },
   { role: "admin", permissionKey: "members.write", featureOn: true, expect: "allow" },
   { role: "receptionist", permissionKey: "members.write", featureOn: true, expect: "allow" },
+  // PR2-C2 — the counter raises invoices too; the receptionist role
+  // gains invoices.write (a counter workflow, not a management one).
+  { role: "receptionist", permissionKey: "invoices.write", featureOn: true, expect: "allow" },
   { role: "coach", permissionKey: "attendance.mark", featureOn: true, expect: "allow" },
   // Audit findings — the deny rows:
   { role: "coach", permissionKey: "members.write", featureOn: true, expect: "deny-role-grant-missing" },

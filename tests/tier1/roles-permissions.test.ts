@@ -83,6 +83,7 @@ const ROLE_MATRIX: Record<string, string[]> = {
     "enquiries.read",
     "enquiries.write",
     "invoices.read",
+    "invoices.write",
     "payments.record",
     "bookings.read",
     "bookings.write",
