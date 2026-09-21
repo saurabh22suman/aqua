@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C6 verified and committed. |
-| **Current task** | PR1-C7 (Ops catalogue: messaging is not GA; post-pilot doc). |
-| **Next task** | PR1-C8 (Worker heartbeat, graceful shutdown, worker-aware health). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C7 verified and committed (C7 migration pending human-approved-merge at PR time). |
+| **Current task** | PR1-C8 (Worker heartbeat, graceful shutdown, worker-aware health). |
+| **Next task** | PR1-C9 (Migration advisory lock). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -65,6 +65,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C4 fixed (café cart GST parity with issued bill) | PR1-C4 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C5 fixed (reception booking tile/route hidden) | PR1-C5 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C6 fixed (preset applied on tenant creation + warnings surfaced) | PR1-C6 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C7 fixed (messaging non-GA + post-pilot doc + migration) | PR1-C7 |
 
 ---
 
@@ -225,7 +226,7 @@ no fabricated metric on the health surface.
   `pnpm platform:code` cannot mint a TOTP; the action + service tests cover
   the surface. Commit `883168f`.
 
-### [ ] PR1-C7 — Ops catalogue: messaging is not GA (mock-only in pilot)
+### [x] PR1-C7 — Ops catalogue: messaging is not GA (mock-only in pilot)
 - **Depends:** none.
 - **Files:** `db/seed-platform.ts`, new
   `db/migrations/<ts>_messaging_feature_status.sql`, new
@@ -239,7 +240,16 @@ no fabricated metric on the health surface.
   credentials, webhook, template approval, rollout — as explicitly post-pilot.
 - **Migration/rollback:** data-only update; rollback = corrective update. Needs
   `human-approved-merge`.
-- **Evidence:** _pending_
+- **Evidence:** red first — `tests/tier1/messaging-feature-status.test.ts` read
+  `'ga'` after migrations alone and from the seed catalogue. After:
+  `pnpm exec vitest run tests/tier1/messaging-feature-status.test.ts
+  tests/db/catalogue-parity.test.ts` — 11 passed; `pnpm check:migrations` —
+  96 files, naming check passed; `pnpm db:migrate` applied
+  `20260921110252_messaging_feature_status.sql` to the dev database and
+  `features.messaging.status = 'internal'`; `docs/messaging-post-pilot.md`
+  documents credentials, webhook, templates, consent and rollout as post-pilot;
+  commit `c1ffca6`. **Migration needs `human-approved-merge` before this PR can
+  merge.**
 
 ### [ ] PR1-C8 — Worker heartbeat, graceful shutdown, worker-aware health
 - **Depends:** none.
