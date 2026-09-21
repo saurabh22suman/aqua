@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1 done. |
-| **Current task** | PR2-C2 (Reception `invoices.write` role + backfill migration). |
-| **Next task** | PR2-C3 (Reception cash/UPI payment recording). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C2 done. |
+| **Current task** | PR2-C3 (Reception cash/UPI payment recording). |
+| **Next task** | PR2-C4 (Tenant-side owner PIN reset). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -77,6 +77,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 opened as #188; e2e role-bypass readiness fixed for the worker-aware health gate; CI green | PR1 (open, awaiting human merge) |
 | 2026-09-21 | main → feat/pilot-pr2-workflow-import | PR1 merged as `2cdde8c`; image `sha-2cdde8c8883c` published; Dev deployment checks deferred by owner until after PR3 (Dokploy/Traefik, no Caddy, VPS untouched); production still blocked | PR1 post-merge (partial) |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C1 added (academy profile + audited GSTIN fix) | PR2-C1 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C2 added (receptionist invoices.write + backfill migration) | PR2-C2 |
 
 ---
 
@@ -520,7 +521,7 @@ coach fee visibility on the register.
   with a `tenant.profile.update` audit row, then cleared back to null to
   preserve the demo bill-of-supply state; commit `affa947`.
 
-### [ ] PR2-C2 — Reception can issue invoices (role + tenant backfill)
+### [x] PR2-C2 — Reception can issue invoices (role + tenant backfill)
 - **Depends:** PR2-C1 (no); can follow immediately.
 - **Files:** `lib/services/roles.ts`, new
   `db/migrations/<ts>_role_permissions_reception_invoices_write.sql`,
@@ -533,7 +534,16 @@ coach fee visibility on the register.
   workflow; re-running the migration is a no-op; no other permission changes.
 - **Migration/rollback:** additive grant; rollback = corrective delete. Needs
   `human-approved-merge`.
-- **Evidence:** _pending_
+- **Evidence:** red first — the role matrix, the seed-templates matrix and all
+  four migration tests failed. After: `pnpm exec vitest run
+  tests/tier1/roles-permissions.test.ts tests/tier1/role-gating-matrix.test.ts
+  tests/migrations/role-permissions-reception-invoices-write-backfill.test.ts`
+  — 72 passed (grant present, every other role/grant unchanged, idempotent,
+  renamed role untouched); migration `20260921164407_...` applied to dev
+  (98/98); `pnpm check:migrations` green; typecheck/lint clean; live as demo
+  receptionist on the member page: the "Raise an invoice" section renders with
+  the C3 duplicate hint ("An invoice for today already exists"); commit
+  `af85dc9`. **Migration needs `human-approved-merge` before merge.**
 
 ### [ ] PR2-C3 — Reception: cash/UPI payment recording on open invoices
 - **Depends:** PR1 merged (rides existing `payments.record`; aligns with C8/C9
