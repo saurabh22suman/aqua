@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C4 verified and committed. |
-| **Current task** | PR1-C5 (Booking: hide tile and route until priced). |
-| **Next task** | PR1-C6 (Ops tenant creation applies the chosen preset). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C5 verified and committed. |
+| **Current task** | PR1-C6 (Ops tenant creation applies the chosen preset). |
+| **Next task** | PR1-C7 (Ops catalogue: messaging is not GA; post-pilot doc). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -63,6 +63,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C2 fixed (`/check-in` apex allowlist + boundary probes) | PR1-C2 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C3 fixed (duplicate invoice friendly error + repeat-submit guard) | PR1-C3 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C4 fixed (café cart GST parity with issued bill) | PR1-C4 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C5 fixed (reception booking tile/route hidden) | PR1-C5 |
 
 ---
 
@@ -175,7 +176,7 @@ no fabricated metric on the health surface.
   for the ₹20 item that previously previewed ₹21 (Playwright, localhost:3000);
   commit `f7b4faa`.
 
-### [ ] PR1-C5 — Booking: hide tile and route until priced
+### [x] PR1-C5 — Booking: hide tile and route until priced
 - **Depends:** none.
 - **Files:** `app/(reception)/reception/page.tsx` (tile),
   `app/(reception)/reception/bookings/page.tsx` (guard/hide).
@@ -186,7 +187,13 @@ no fabricated metric on the health surface.
 - **Acceptance:** no reception path reaches a dead-end booking screen; the
   price-rule admin UI is explicitly deferred to post-pilot.
 - **Migration/rollback:** none. PR3 must not re-add the tile.
-- **Evidence:** _pending_
+- **Evidence:** red first — the new Today-page assertion found the bookings
+  href, and the route test resolved instead of refusing. After: `pnpm exec
+  vitest run tests/mobile/reception-today-page.test.tsx
+  tests/tier1/reception-bookings-hidden.test.ts` — 4 passed; `pnpm typecheck`
+  clean; live `/reception` as demo receptionist has no bookings tile/href and
+  `/reception/bookings` renders "We couldn't find that page" with no booking
+  screen (Playwright, localhost:3000); commit `5723a2d`.
 
 ### [ ] PR1-C6 — Ops tenant creation applies the chosen preset
 - **Depends:** none.
