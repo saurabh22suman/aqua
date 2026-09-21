@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C3 done. |
-| **Current task** | PR2-C4 (Tenant-side owner PIN reset). |
-| **Next task** | PR2-C5 (CSV import parser/validator/dry-run). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C4 done. |
+| **Current task** | PR2-C5 (CSV import parser/validator/dry-run/row errors). |
+| **Next task** | PR2-C6 (CSV import commit/consent/idempotent retry). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -79,6 +79,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C1 added (academy profile + audited GSTIN fix) | PR2-C1 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C2 added (receptionist invoices.write + backfill migration) | PR2-C2 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C3 added (reception cash/UPI recording; permission audit found no gap) | PR2-C3 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C4 added (co-owner reset links on /owner/staff + audit) | PR2-C4 |
 
 ---
 
@@ -590,7 +591,7 @@ coach fee visibility on the register.
   `payments` row with `received_by`, and a `payment.record` audit row.
   Typecheck/lint clean. Commits `b481ea4`, `ca5f539`.
 
-### [ ] PR2-C4 — Tenant-side owner PIN reset
+### [x] PR2-C4 — Tenant-side owner PIN reset
 - **Depends:** none beyond PR1.
 - **Files:** new `lib/actions/tenant-owner-reset.ts`,
   `app/(owner)/owner/staff/page.tsx` (or `[staffId]`), `components/login-form.tsx`
@@ -601,7 +602,19 @@ coach fee visibility on the register.
 - **Acceptance:** a co-owner can recover a locked-out owner without platform ops;
   reset remains owner-only and revokes other sessions.
 - **Migration/rollback:** none. Do not modify `lib/auth/**`.
-- **Evidence:** _pending_
+- **Evidence:** red first — both suites failed on missing
+  `lib/services/owner-reset` and `lib/actions/tenant-owner-reset`. After:
+  `pnpm exec vitest run tests/auth/owner-reset-link.test.ts
+  tests/auth/tenant-owner-reset-action.test.ts tests/auth/login-form.test.tsx`
+  — 23 passed (active owners listed with phone, owner-only target enforced,
+  `not_active` for invited owners, audit row `owner.reset_link_issued` with
+  actor + entity, no audit on refusal, cross-tenant target refused,
+  action parse-first + `staff.invite` + service forwarding). Live as demo
+  owner on `/owner/staff`: "Owner access" section rendered and "Create reset
+  link" produced a `/login/link/…` URL; DB showed the
+  `owner.reset_link_issued` audit row for `+919000000001`. Redeem semantics
+  (PIN overwrite + other-session revocation) were already pinned by the
+  existing reset-link tests. Commit `fbd7925`.
 
 ### [ ] PR2-C5 — CSV import: parser, validator, dry-run, row errors
 - **Depends:** PR1 merged.
