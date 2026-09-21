@@ -6,6 +6,11 @@ import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { recordPayment } from "@/lib/services/payments";
 import { reversePayment } from "@/lib/services/payment-reversals";
+import {
+  getFeesOverview,
+  listHubTransactions,
+} from "@/lib/services/fees-hub";
+import { addDays, todayInZone } from "@/lib/time/tz";
 import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // PR2-C8 — payment reversals. A reversal is a NEW row; the original
@@ -229,5 +234,39 @@ describe("reversePayment", () => {
     expect([first.ok, second.ok].filter(Boolean)).toHaveLength(1);
     expect(await reversedTotal()).toBe(100000);
     expect(await invoiceRow()).toEqual({ status: "issued", paidPaise: 0 });
+  });
+
+  it("reconciles the fees ledger: reversals net out of collections", async () => {
+    // Re-record a payment so there is something to reverse in-window.
+    const again = await recordPayment(ctx, {
+      invoiceId,
+      amountPaise: 50000,
+      method: "cash",
+    });
+    if (!again.ok) throw new Error("setup payment failed");
+    const reversal = await reversePayment(ctx, {
+      paymentId: again.id,
+      amountPaise: 20000,
+      reason: "Part refunded in cash",
+    });
+    expect(reversal.ok).toBe(true);
+
+    const today = todayInZone("Asia/Kolkata");
+    const period = { from: today, to: addDays(today, 1) };
+    const overview = await getFeesOverview(ctx, period);
+    // Every reversal in this file happened today: 40000 + 60000 + 20000.
+    expect(overview.reversedPaise).toBe(120000);
+    expect(overview.reversalCount).toBe(3);
+    // 100000 + 50000 recorded, minus 120000 reversed.
+    expect(overview.collectedPaise).toBe(30000);
+
+    const rows = await listHubTransactions(ctx, period);
+    const reversalRow = rows.find((row) => row.kind === "reversal");
+    expect(reversalRow).toMatchObject({
+      amountPaise: -20000,
+      reason: "Part refunded in cash",
+    });
+    const ledgerTotal = rows.reduce((sum, row) => sum + row.amountPaise, 0);
+    expect(ledgerTotal).toBe(overview.collectedPaise);
   });
 });

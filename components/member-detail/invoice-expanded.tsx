@@ -9,6 +9,11 @@ import {
   listInvoicePaymentsAction,
   recordPaymentAction,
 } from "@/lib/actions/payments";
+import {
+  listPaymentReversalsAction,
+  reversePaymentAction,
+} from "@/lib/actions/payment-reversals";
+import type { PaymentReversalRow } from "@/lib/services/payment-reversals";
 import type { InvoiceDetail } from "@/lib/services/invoices";
 import type { PaymentRow } from "@/lib/services/payments";
 import { formatINR } from "@/lib/money/format";
@@ -40,11 +45,13 @@ export function InvoiceExpanded({
   invoiceId,
   canWrite,
   canRecord,
+  canRefund,
   onChanged,
 }: {
   invoiceId: string;
   canWrite: boolean;
   canRecord: boolean;
+  canRefund: boolean;
   onChanged: () => void;
 }) {
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
@@ -57,6 +64,12 @@ export function InvoiceExpanded({
   const [reference, setReference] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [showVoid, setShowVoid] = useState(false);
+  // PR2-C9 — reversals per payment, plus the open reverse form.
+  const [reversals, setReversals] = useState<Record<string, PaymentReversalRow[]>>({});
+  const [reverseFor, setReverseFor] = useState<string | null>(null);
+  const [reverseAmount, setReverseAmount] = useState("");
+  const [reverseReason, setReverseReason] = useState("");
+  const [reverseError, setReverseError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +79,13 @@ export function InvoiceExpanded({
       ]);
       setDetail(invoice);
       setPayments(pays);
+      const reversalLists = await Promise.all(
+        pays.map(async (payment) => [
+          payment.id,
+          await listPaymentReversalsAction(payment.id),
+        ] as const),
+      );
+      setReversals(Object.fromEntries(reversalLists));
       setAmount(
         invoice && invoice.outstandingPaise > 0
           ? String(invoice.outstandingPaise / 100)
@@ -167,29 +187,146 @@ export function InvoiceExpanded({
 
       {payments.length > 0 ? (
         <ul className="mt-2 space-y-1">
-          {payments.map((payment) => (
-            <li
-              key={payment.id}
-              className="flex flex-wrap items-baseline justify-between gap-2 rounded-ctl border border-line px-2 py-1.5 text-[12px]"
-            >
-              <span className="text-ink">
-                {formatINR(payment.amountPaise)} · {methodLabel(payment.method)}
-                <span className="ml-2 text-ink-3">
-                  {formatDateIST(payment.receivedAt)}
-                  {payment.reference ? ` · ${payment.reference}` : ""}
-                  {payment.receivedByName ? ` · ${payment.receivedByName}` : ""}
-                </span>
-              </span>
-              <a
-                href={`/api/receipts/${payment.id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:text-ink"
+          {payments.map((payment) => {
+            const paymentReversals = reversals[payment.id] ?? [];
+            const reversedPaise = paymentReversals.reduce(
+              (sum, row) => sum + row.amountPaise,
+              0,
+            );
+            const remainingPaise = payment.amountPaise - reversedPaise;
+            return (
+              <li
+                key={payment.id}
+                className="rounded-ctl border border-line px-2 py-1.5 text-[12px]"
               >
-                Receipt
-              </a>
-            </li>
-          ))}
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-ink">
+                    {formatINR(payment.amountPaise)} ·{" "}
+                    {methodLabel(payment.method)}
+                    <span className="ml-2 text-ink-3">
+                      {formatDateIST(payment.receivedAt)}
+                      {payment.reference ? ` · ${payment.reference}` : ""}
+                      {payment.receivedByName
+                        ? ` · ${payment.receivedByName}`
+                        : ""}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <a
+                      href={`/api/receipts/${payment.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:text-ink"
+                    >
+                      Receipt
+                    </a>
+                    {canRefund && remainingPaise > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReverseFor(
+                            reverseFor === payment.id ? null : payment.id,
+                          );
+                          setReverseAmount(String(remainingPaise / 100));
+                          setReverseReason("");
+                          setReverseError(null);
+                        }}
+                        className="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:text-ink"
+                      >
+                        Reverse
+                      </button>
+                    ) : null}
+                  </span>
+                </div>
+
+                {reversedPaise > 0 ? (
+                  <p className="mt-0.5 text-[11.5px] text-ink-3">
+                    {formatINR(reversedPaise)} reversed
+                  </p>
+                ) : null}
+                {paymentReversals.length > 0 ? (
+                  <ul className="mt-1 space-y-0.5">
+                    {paymentReversals.map((row) => (
+                      <li key={row.id} className="text-[11.5px] text-ink-3">
+                        −{formatINR(row.amountPaise)} · {row.reason} ·{" "}
+                        {formatDateIST(row.reversedAt)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {canRefund && reverseFor === payment.id ? (
+                  <div className="mt-1.5 rounded-ctl border border-line p-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-0.5 block text-[11px] text-ink-3">
+                          Amount (₹)
+                        </span>
+                        <input
+                          inputMode="decimal"
+                          value={reverseAmount}
+                          onChange={(e) => setReverseAmount(e.target.value)}
+                          className={inputClass}
+                          data-testid="reverse-amount"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-0.5 block text-[11px] text-ink-3">
+                          Reason
+                        </span>
+                        <input
+                          value={reverseReason}
+                          onChange={(e) => setReverseReason(e.target.value)}
+                          className={inputClass}
+                          data-testid="reverse-reason"
+                        />
+                      </label>
+                    </div>
+                    {reverseError ? (
+                      <p role="alert" className="mt-1 text-[11.5px] text-ink-2">
+                        {reverseError}
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        const paise = parseRupeesToPaise(reverseAmount);
+                        if (paise === null || paise <= 0n) {
+                          setReverseError("Enter an amount like 2500 or 2500.50.");
+                          return;
+                        }
+                        if (reverseReason.trim().length < 3) {
+                          setReverseError("Give a reason (3-300 characters).");
+                          return;
+                        }
+                        setBusy(true);
+                        setReverseError(null);
+                        void (async () => {
+                          const result = await reversePaymentAction({
+                            paymentId: payment.id,
+                            amountPaise: Number(paise),
+                            reason: reverseReason.trim(),
+                          });
+                          if (!result.ok) {
+                            setReverseError(result.error);
+                          } else {
+                            setReverseFor(null);
+                            await load();
+                            onChanged();
+                          }
+                          setBusy(false);
+                        })();
+                      }}
+                      className="mt-1.5 rounded-pill px-3.5 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+                    >
+                      Confirm reversal
+                    </button>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 

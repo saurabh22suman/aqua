@@ -243,6 +243,7 @@ export default async function MemberDetailPage({
           memberId={member.memberId}
           canWrite={hasPermission(ctx, "invoices.write")}
           canRecord={hasPermission(ctx, "payments.record")}
+          canRefund={hasPermission(ctx, "payments.refund")}
           timezone={timezone}
         />
       ) : null}

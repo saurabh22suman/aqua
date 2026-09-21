@@ -2,6 +2,7 @@ import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { payments } from "@/db/schema/payments";
+import { paymentReversals } from "@/db/schema/payment-reversals";
 import { invoices, type InvoiceStatus, type InvoiceSource } from "@/db/schema/invoices";
 import { members, persons } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
@@ -26,6 +27,8 @@ export type FeesOverview = {
   to: string | null;
   collectedPaise: number;
   paymentCount: number;
+  reversedPaise: number;
+  reversalCount: number;
   outstandingPaise: number;
   dueInvoiceCount: number;
   overduePaise: number;
@@ -59,6 +62,10 @@ export type HubTransactionRow = {
   memberName: string | null;
   locationName: string;
   receivedByName: string | null;
+  // PR2-C9 — reversals appear as their own negative rows so the
+  // ledger nets to collectedPaise.
+  kind: "payment" | "reversal";
+  reason: string | null;
 };
 
 export const feesInvoiceFilterInput = z.object({
@@ -121,6 +128,24 @@ export async function getFeesOverview(
       .from(invoices)
       .where(and(...dueConditions));
 
+    const reversalConditions = [
+      eq(paymentReversals.tenantId, ctx.tenantId),
+      gte(paymentReversals.createdAt, fromUtc),
+      lt(paymentReversals.createdAt, endUtc),
+    ];
+    if (payPredicate) {
+      reversalConditions.push(
+        sql`${paymentReversals.paymentId} in (select id from payments where tenant_id = ${ctx.tenantId} and ${payPredicate})`,
+      );
+    }
+    const [reversed] = await tx
+      .select({
+        paise: sql<string>`coalesce(sum(${paymentReversals.amountPaise}), 0)::text`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(paymentReversals)
+      .where(and(...reversalConditions));
+
     const [overdue] = await tx
       .select({
         paise: sql<string>`coalesce(sum(${invoices.totalPaise} - ${invoices.paidPaise}), 0)::text`,
@@ -132,8 +157,13 @@ export async function getFeesOverview(
     return {
       from: period.from,
       to: period.to,
-      collectedPaise: Number(collected?.paise ?? "0"),
+      // Net of reversals: the ledger's negative rows are subtracted
+      // here so the headline reconciles with the transaction list.
+      collectedPaise:
+        Number(collected?.paise ?? "0") - Number(reversed?.paise ?? "0"),
       paymentCount: Number(collected?.count ?? 0),
+      reversedPaise: Number(reversed?.paise ?? "0"),
+      reversalCount: Number(reversed?.count ?? 0),
       outstandingPaise: Number(outstanding?.paise ?? "0"),
       dueInvoiceCount: Number(outstanding?.count ?? 0),
       overduePaise: Number(overdue?.paise ?? "0"),
@@ -259,17 +289,81 @@ export async function listHubTransactions(
       .orderBy(desc(payments.receivedAt))
       .limit(200);
 
-    return rows.map((r) => ({
-      id: r.id,
-      receivedAt: r.receivedAt.toISOString(),
-      amountPaise: Number(r.amountPaise),
-      method: r.method as PaymentMethod,
-      reference: r.reference,
-      invoiceNumber: r.invoiceNumber,
-      memberId: r.memberId,
-      memberName: r.memberName,
-      locationName: r.locationName,
-      receivedByName: userLabel(r.receiverName, r.receiverRole),
-    }));
+    // PR2-C9 — reversal rows, joined back to the payment for location
+    // scoping and display context. Negative amount so the list nets.
+    const reversalConditions = [
+      eq(paymentReversals.tenantId, ctx.tenantId),
+      gte(paymentReversals.createdAt, fromUtc),
+      lt(paymentReversals.createdAt, endUtc),
+    ];
+    if (predicate) reversalConditions.push(predicate);
+    const reversalRows = await tx
+      .select({
+        id: paymentReversals.id,
+        reversedAt: paymentReversals.createdAt,
+        amountPaise: paymentReversals.amountPaise,
+        reason: paymentReversals.reason,
+        method: payments.method,
+        invoiceNumber: invoices.invoiceNumber,
+        memberId: payments.memberId,
+        memberName: persons.fullName,
+        locationName: locations.name,
+        receiverName: userNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
+        receiverRole: userRoleNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
+      })
+      .from(paymentReversals)
+      .innerJoin(
+        payments,
+        and(
+          eq(payments.id, paymentReversals.paymentId),
+          eq(payments.tenantId, paymentReversals.tenantId),
+        ),
+      )
+      .leftJoin(
+        invoices,
+        and(eq(invoices.id, payments.invoiceId), eq(invoices.tenantId, ctx.tenantId)),
+      )
+      .leftJoin(
+        members,
+        and(eq(members.id, payments.memberId), eq(members.tenantId, ctx.tenantId)),
+      )
+      .leftJoin(persons, eq(persons.id, members.personId))
+      .innerJoin(locations, eq(locations.id, payments.locationId))
+      .where(and(...reversalConditions))
+      .orderBy(desc(paymentReversals.createdAt))
+      .limit(200);
+
+    const combined: HubTransactionRow[] = [
+      ...rows.map((r) => ({
+        id: r.id,
+        receivedAt: r.receivedAt.toISOString(),
+        amountPaise: Number(r.amountPaise),
+        method: r.method as PaymentMethod,
+        reference: r.reference,
+        invoiceNumber: r.invoiceNumber,
+        memberId: r.memberId,
+        memberName: r.memberName,
+        locationName: r.locationName,
+        receivedByName: userLabel(r.receiverName, r.receiverRole),
+        kind: "payment" as const,
+        reason: null,
+      })),
+      ...reversalRows.map((r) => ({
+        id: r.id,
+        receivedAt: r.reversedAt.toISOString(),
+        amountPaise: -Number(r.amountPaise),
+        method: r.method as PaymentMethod,
+        reference: null,
+        invoiceNumber: r.invoiceNumber,
+        memberId: r.memberId,
+        memberName: r.memberName,
+        locationName: r.locationName,
+        receivedByName: userLabel(r.receiverName, r.receiverRole),
+        kind: "reversal" as const,
+        reason: r.reason,
+      })),
+    ].sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
+
+    return combined.slice(0, 200);
   });
 }

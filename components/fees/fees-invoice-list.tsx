@@ -20,11 +20,13 @@ export function FeesInvoiceList({
   filter,
   canWrite,
   canRecord,
+  canRefund,
 }: {
   initial: HubInvoiceRow[];
   filter: "dues" | "all";
   canWrite: boolean;
   canRecord: boolean;
+  canRefund: boolean;
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<HubInvoiceRow[]>(initial);
@@ -105,6 +107,7 @@ export function FeesInvoiceList({
                 invoiceId={invoice.id}
                 canWrite={canWrite}
                 canRecord={canRecord}
+                canRefund={canRefund}
                 onChanged={() => {
                   void load();
                   router.refresh();

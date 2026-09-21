@@ -83,6 +83,9 @@ export default async function FeesPage({
             <p className="text-[12px] text-ink-3">
               {overview.paymentCount} payment
               {overview.paymentCount === 1 ? "" : "s"} recorded at the counter
+              {overview.reversedPaise > 0
+                ? `, net of ${formatINR(overview.reversedPaise)} reversed (${overview.reversalCount})`
+                : ""}
             </p>
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -154,13 +157,30 @@ export default async function FeesPage({
                         {t.invoiceNumber ?? "—"}
                       </td>
                       <td className="py-1.5 text-ink-2">
-                        {methodLabel(t.method)}
-                        {t.reference ? (
-                          <span className="ml-1 text-ink-3">{t.reference}</span>
-                        ) : null}
+                        {t.kind === "reversal" ? (
+                          <span>
+                            Reversal
+                            {t.reason ? (
+                              <span className="ml-1 text-ink-3">{t.reason}</span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <>
+                            {methodLabel(t.method)}
+                            {t.reference ? (
+                              <span className="ml-1 text-ink-3">{t.reference}</span>
+                            ) : null}
+                          </>
+                        )}
                       </td>
-                      <td className="py-1.5 text-right font-mono text-ink">
-                        {formatINR(t.amountPaise)}
+                      <td
+                        className={`py-1.5 text-right font-mono ${
+                          t.amountPaise < 0 ? "text-late" : "text-ink"
+                        }`}
+                      >
+                        {t.amountPaise < 0
+                          ? `−${formatINR(Math.abs(t.amountPaise))}`
+                          : formatINR(t.amountPaise)}
                       </td>
                     </tr>
                   ))}
@@ -183,6 +203,7 @@ export default async function FeesPage({
             filter="dues"
             canWrite={hasPermission(ctx, "invoices.write")}
             canRecord={hasPermission(ctx, "payments.record")}
+            canRefund={hasPermission(ctx, "payments.refund")}
           />
         </section>
       ) : null}
@@ -198,6 +219,7 @@ export default async function FeesPage({
             filter="all"
             canWrite={hasPermission(ctx, "invoices.write")}
             canRecord={hasPermission(ctx, "payments.record")}
+            canRefund={hasPermission(ctx, "payments.refund")}
           />
         </section>
       ) : null}
