@@ -303,6 +303,20 @@ const ALLOWLIST = new Set([
   "tests/tier1/premises-check-in.test.ts",
   "tests/tier1/leave.test.ts",
   "tests/tier1/leave-approval.test.ts",
+  // U-01/PR1-C1 — money analytics day grouping: same fixture-setup
+  // pattern (privileged pool seeds tenant/location/member/plan/
+  // subscription/invoice/payment rows; the analytics read under test
+  // goes through withTenant()).
+  "tests/tier1/owner-analytics.test.ts",
+  // PR1-C8 — worker heartbeat storage: the privileged pool is used only
+  // to clean the test worker's heartbeat row; recordWorkerHeartbeat and
+  // getWorkerHealth run through withPlatform on app_user.
+  "tests/tier1/worker-heartbeat.test.ts",
+  // PR1-C11 — the backup CLI reads MIGRATION_DATABASE_URL to run
+  // pg_dump as the privileged role. Operator-only, never scheduled,
+  // never imported by the app (the no-superuser test's own header
+  // documents this exact class).
+  "scripts/db-backup.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

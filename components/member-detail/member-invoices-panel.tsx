@@ -10,7 +10,7 @@ import { listMemberSubscriptionsAction } from "@/lib/actions/subscriptions";
 import type { InvoiceRow } from "@/lib/services/invoices";
 import type { SubscriptionRow } from "@/lib/services/subscriptions";
 import { formatINR } from "@/lib/money/format";
-import { formatDateIST } from "@/lib/time/tz";
+import { formatDateIST, todayInZone } from "@/lib/time/tz";
 import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
 import { SUBSCRIPTIONS_CHANGED_EVENT } from "@/components/member-subscription-panel";
 
@@ -23,10 +23,12 @@ export function MemberInvoicesPanel({
   memberId,
   canWrite,
   canRecord,
+  timezone,
 }: {
   memberId: string;
   canWrite: boolean;
   canRecord: boolean;
+  timezone: string;
 }) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
@@ -65,6 +67,18 @@ export function MemberInvoicesPanel({
     return () =>
       window.removeEventListener(SUBSCRIPTIONS_CHANGED_EVENT, onChanged);
   }, [load]);
+
+  // The service raises today's invoice by default, so a live row for
+  // this subscription and today's tenant-local date means the button
+  // would only reproduce the duplicate the service now refuses.
+  const today = todayInZone(timezone);
+  const raisedToday =
+    invoices?.some(
+      (invoice) =>
+        invoice.subscriptionId === subscriptionId &&
+        invoice.status !== "void" &&
+        invoice.dueOn === today,
+    ) ?? false;
 
   if (failed) {
     return (
@@ -169,7 +183,7 @@ export function MemberInvoicesPanel({
             </div>
             <button
               type="button"
-              disabled={busy || !subscriptionId}
+              disabled={busy || !subscriptionId || raisedToday}
               onClick={() => {
                 setBusy(true);
                 setMessage(null);
@@ -192,6 +206,11 @@ export function MemberInvoicesPanel({
             >
               {busy ? "Saving…" : "Raise invoice"}
             </button>
+            {raisedToday ? (
+              <p className="mt-1.5 text-[12px] text-ink-3">
+                An invoice for today already exists — collect against it above.
+              </p>
+            ) : null}
           </div>
         )
       ) : null}

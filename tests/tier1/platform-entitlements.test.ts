@@ -139,15 +139,22 @@ describe("platform catalogue and plan-baseline entitlements", () => {
          order by feature_key`,
       )
     ).rows.map((r) => r.feature_key);
-    expect(planned).toEqual(await gaFeatureKeys());
+    // PR1-C7 — messaging is catalogued 'internal' (mock provider only,
+    // no Cloud adapter) but the standard plan still carries it: the
+    // status is a maturity label, not an entitlement gate. The plan
+    // baseline is therefore the GA set plus that one intentional
+    // exception, and nothing else.
+    const expectedBaseline = [...(await gaFeatureKeys()), "messaging"].sort();
+    expect(planned).toEqual(expectedBaseline);
 
-    const nonGaPlanned = await admin.query(
+    const nonGaPlanned = await admin.query<{ key: string }>(
       `select f.key from features f
        join plan_features pf on pf.feature_key = f.key
        where f.status <> 'ga'
-         and pf.plan_id = (select id from plans where key = 'standard')`,
+         and pf.plan_id = (select id from plans where key = 'standard')
+       order by f.key`,
     );
-    expect(nonGaPlanned.rows).toHaveLength(0);
+    expect(nonGaPlanned.rows.map((r) => r.key)).toEqual(["messaging"]);
   });
 
   it("a tenant on the standard plan resolves features through the plan baseline alone", async () => {
@@ -163,7 +170,9 @@ describe("platform catalogue and plan-baseline entitlements", () => {
     );
 
     const resolved = await resolveTenantFeatureKeys(tenantId);
-    expect(resolved).toEqual(await gaFeatureKeys());
+    // Same intentional exception as above: the standard plan carries
+    // messaging (internal, mock-only) alongside the GA catalogue.
+    expect(resolved).toEqual([...(await gaFeatureKeys()), "messaging"].sort());
   });
 
   it("the pricing decision lands with data changes only — zero schema edits", async () => {

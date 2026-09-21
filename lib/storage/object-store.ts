@@ -23,6 +23,10 @@ export interface ObjectStore {
   putObject(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   /** Returns null when the object does not exist (HTTP 404). */
   getObject(key: string): Promise<Uint8Array | null>;
+  /** PR1-C11 — every key under the prefix, for backup retention. */
+  listObjects(prefix: string): Promise<string[]>;
+  /** PR1-C11 — deletes one key; a missing key is not an error. */
+  deleteObject(key: string): Promise<void>;
 }
 
 // Thrown by disabledObjectStore().putObject(). Distinct type so a
@@ -107,7 +111,54 @@ export function r2ObjectStore(): ObjectStore {
       }
       return new Uint8Array(await response.arrayBuffer());
     },
+
+    async listObjects(prefix) {
+      const keys: string[] = [];
+      let token: string | undefined;
+      do {
+        const params = new URLSearchParams({ "list-type": "2", prefix });
+        if (token) params.set("continuation-token", token);
+        const response = await client.fetch(
+          `${endpoint}/${bucket}?${params.toString()}`,
+          { method: "GET" },
+        );
+        if (!response.ok) {
+          throw new Error(
+            `R2 listObjects failed (HTTP ${response.status}) for prefix "${prefix}"`,
+          );
+        }
+        const xml = await response.text();
+        for (const match of xml.matchAll(/<Key>([^<]*)<\/Key>/g)) {
+          keys.push(decodeXmlEntities(match[1]!));
+        }
+        const next = /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/.exec(
+          xml,
+        );
+        token = /<IsTruncated>true<\/IsTruncated>/.test(xml)
+          ? next?.[1]
+          : undefined;
+      } while (token);
+      return keys;
+    },
+
+    async deleteObject(key) {
+      const response = await client.fetch(urlFor(key), { method: "DELETE" });
+      if (!response.ok && response.status !== 404) {
+        throw new Error(
+          `R2 deleteObject failed (HTTP ${response.status}) for object "${key}"`,
+        );
+      }
+    },
   };
+}
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
 export function disabledObjectStore(): ObjectStore {
@@ -119,6 +170,14 @@ export function disabledObjectStore(): ObjectStore {
     },
     async getObject() {
       return null;
+    },
+    async listObjects() {
+      return [];
+    },
+    async deleteObject(key) {
+      throw new ObjectStoreDisabledError(
+        `Object store is disabled — cannot delete object "${key}".`,
+      );
     },
   };
 }

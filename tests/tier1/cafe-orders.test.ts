@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { asMemberId, asTenantId, asUserId, type TenantId } from "@/lib/ids";
+import { cartTotals } from "@/components/cafe-order-shared";
 
 // K-02/K-03 — counter order capture and the café → invoice bridge.
 // Written before the k02/k03 migrations and lib/services/orders.ts
@@ -207,6 +208,16 @@ describe("K-02 order capture", () => {
     expect(Number(invRows[0]!.subtotal_paise)).toBe(ITEM_PRICE);
     expect(Number(invRows[0]!.tax_paise)).toBe(0);
     expect(Number(invRows[0]!.total_paise)).toBe(ITEM_PRICE);
+
+    // The counter cart must preview the same document: with the
+    // registration flag false, its tax is zero and its total equals
+    // the order/invoice total.
+    const items = await menu.listMenuItems(otherCtx, { locationId: otherLoc });
+    const cartItem = items.find((row) => row.id === item.id);
+    expect(cartItem).toBeDefined();
+    const cart = cartTotals([{ item: cartItem!, qty: 1 }], false);
+    expect(cart.tax).toBe(0);
+    expect(cart.total).toBe(order.totalPaise);
   });
 
   it("refuses an inactive or unknown item", async () => {

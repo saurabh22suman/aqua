@@ -66,7 +66,18 @@ afterAll(async () => {
   for (const r of rows.rows) {
     // roles.tenant_id -> tenants(id) has no ON DELETE clause — C1
     // (createTenant now seeds role templates) means the tenant row
-    // can't be deleted until its roles are gone first.
+    // can't be deleted until its roles are gone first. PR1-C6's
+    // preset application also leaves preset-engine rows behind.
+    await admin.query("delete from batches where tenant_id = $1", [r.id]);
+    await admin.query("delete from programs where tenant_id = $1", [r.id]);
+    await admin.query("delete from facility_sub_units where tenant_id = $1", [r.id]);
+    await admin.query("delete from facilities where tenant_id = $1", [r.id]);
+    await admin.query("delete from skills where tenant_id = $1", [r.id]);
+    await admin.query("delete from skill_levels where tenant_id = $1", [r.id]);
+    await admin.query("delete from plan_shapes where tenant_id = $1", [r.id]);
+    await admin.query("delete from message_templates where tenant_id = $1", [r.id]);
+    await admin.query("delete from location_presets where tenant_id = $1", [r.id]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [r.id]);
     await admin.query(
       "delete from role_permissions where tenant_id = $1",
       [r.id],
@@ -163,6 +174,7 @@ const happyInput: CreateTenantFormInput = {
   currency: "INR",
   locationName: "Main",
   locationIsPrimary: true,
+  presetKey: "start-from-scratch",
 };
 
 // H1 — actions take FormData; build it from the typed input shape.
@@ -176,6 +188,7 @@ function fd(input: CreateTenantFormInput): FormData {
   if (input.gstin) f.set("gstin", input.gstin);
   f.set("locationName", input.locationName);
   if (input.locationIsPrimary) f.set("locationIsPrimary", "on");
+  f.set("presetKey", input.presetKey);
   return f;
 }
 
@@ -213,11 +226,12 @@ describe("createTenantAction", () => {
     }
     expect(captured).toMatch(/^\/ops\/tenants\/[0-9a-f-]+$/);
 
-    const tenants = await admin.query<{ slug: string }>(
-      "select slug from tenants where slug = $1",
+    const tenants = await admin.query<{ slug: string; preset_key: string | null }>(
+      "select slug, preset_key from tenants where slug = $1",
       [slug],
     );
     expect(tenants.rows[0]?.slug).toBe(slug);
+    expect(tenants.rows[0]?.preset_key).toBe("start-from-scratch");
 
     cookieJar.delete("platform_session");
   });

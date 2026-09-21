@@ -41,6 +41,11 @@ const APEX_ALLOWLIST = [
   "/reception",
   "/parent",
   "/p/",
+  // V-25 — the premises QR the staff scan. It is a tenant surface
+  // (the scan can come from any staff phone) and authorises via the
+  // session + staff.self inside the page, not via the host; the
+  // middleware only lets it reach the app.
+  "/check-in/",
   "/api/auth/",
   // Staff magic-link redeem (app/api/login-link/redeem). Pre-auth
   // by definition -- the token IS the credential -- same as /login

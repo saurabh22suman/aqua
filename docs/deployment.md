@@ -342,12 +342,43 @@ The default backup command is
 > test row counts. This is the **Restore drill — Path A**
 > task you registered in step 2.
 
-### 9. Set up auto-deploy (later)
+### 9. Auto-deploy — Dev automatic, production gated
 
-Optional. Once the image-build CI lands (Future work), every push
-to `main` produces a new image, and Dokploy's webhook can deploy
-it automatically. For now, after a code change: rebuild the
-image locally, push to GHCR, click Deploy on each Application.
+Two workflows, three files (PR1-C12):
+
+- **`publish.yml`** — on a green `CI` run on `main`, builds exactly
+  one image and pushes it as `ghcr.io/<repo>:sha-<12-char commit>`.
+  No `latest`, no rebuild downstream. `pnpm check:deploy-workflows`
+  enforces these rules in CI.
+- **`deploy-dev.yml`** — on a successful `publish`, computes the same
+  tag from the publish run's commit, SSHes to the Dev VPS, pulls and
+  starts that tag (the remote `deploy.sh` uses `IMAGE`/`TAG`), verifies
+  `docker inspect aqua-web` matches the tag, then gates on
+  `/api/health` (24 × 5s). A failed health check fails the run — the
+  deploy is not "green" until the worker heartbeat is fresh too.
+- **`deploy-prod.yml`** — `workflow_dispatch` only. A human passes the
+  immutable `sha-<short>` tag; anything else (a branch name, `latest`)
+  is refused. It runs behind the GitHub **production** environment
+  approval and refuses to start until the repository variable
+  `PILOT_RELEASE_GATE=passed` is set — which happens only after the
+  complete PR3 release gate in `docs/pilot-release-checklist.md` is
+  checked. **Never trigger it before that.**
+
+GitHub setup:
+- Environments: `development` (Dev secrets) and `production` (Prod
+  secrets + required reviewers).
+- Per environment: `*_SSH_KEY`, `*_HOST`, `*_USER`, `*_APP_DIR`,
+  `*_HEALTH_URL` (`DEV_*` / `PROD_*`).
+- Repository variable `PILOT_RELEASE_GATE` (unset until PR3).
+- Each VPS app dir carries `deploy.sh`: docker login GHCR with
+  `REGISTRY_USER`/`REGISTRY_TOKEN`, then
+  `IMAGE=$IMAGE TAG=$TAG docker compose -f docker-compose.prod.yml up -d`.
+
+Rollback: dispatch `deploy-prod.yml` (or re-run `deploy-dev.yml`) with
+an older tag; the health gate decides whether it stands.
+
+The older Dokploy-webhook auto-deploy idea is superseded by this
+immutable-tag flow; do not wire both.
 
 ### 10. The platform login warm-up
 
@@ -440,6 +471,47 @@ Default backup command
 The custom-format dump includes schema and data, compressed with
 gzip; restores via `pg_restore -d <db> <dump>.fc`.
 
+### Script-driven backups (`pnpm db:backup`)
+
+The repo ships a second, provider-independent path used by the
+VPS deploy workflow and by hand. It dumps custom-format, refuses
+an empty/non-archive dump, uploads to R2 under `db-backups/` and
+prunes older backups beyond `--retain` (default 7).
+
+```bash
+# On a host with the PostgreSQL 16 client:
+pnpm db:backup --retain 7
+# Without pg_dump on the host (uses the database container's client):
+docker exec aqua-db pg_dump --format=custom --no-owner --no-privileges \
+  -U aqua aqua > /tmp/aqua.dump
+pnpm db:backup --from-file /tmp/aqua.dump --retain 7
+```
+
+Requires `MIGRATION_DATABASE_URL` (privileged connection, CLI
+only) and all four `R2_*` variables. A run that cannot upload
+exits non-zero rather than silently no-op-ing. Suggested cadence:
+nightly via cron/systemd timer on the database host, plus one
+manual run before any risky migration.
+
+**Restore from a script-driven backup** (the drill below is the
+same sequence):
+
+```bash
+docker run -d --name restore-target -e POSTGRES_PASSWORD=test -p 5433:5432 postgres:16
+# wait for healthy
+docker exec restore-target createdb -U postgres aqua
+# roles first — policies and grants in the dump reference app_user/app_login
+pnpm exec tsx -e "import('./db/bootstrap-roles').then(m => m.bootstrapRoles('postgresql://postgres:test@localhost:5433/aqua', 'restore-pw'))"
+aws s3 cp s3://<bucket>/db-backups/<latest>.dump /tmp/backup.dump
+pg_restore -h localhost -p 5433 -U postgres -d aqua --no-owner --no-privileges /tmp/backup.dump
+psql -h localhost -p 5433 -U postgres -d aqua -c "select count(*) from tenants; select count(*) from members;"
+```
+
+Bootstrap roles **before** `pg_restore`; restoring first produces
+53 `role "app_user" does not exist` errors on `CREATE POLICY`
+(the data still lands, but the policies don't). A clean run has
+zero errors.
+
 ### Restore drill — Path A (local Docker, fastest)
 
 Restoring on top of a live production database is unsafe. Test
@@ -503,6 +575,15 @@ gates zero-downtime deploys AND the automatic rollback —
 Dokploy considers a deploy successful only when the new
 container is healthy. A wrong healthcheck string that always
 passes (or always fails) silently breaks both.
+
+`/api/health` also requires a fresh worker heartbeat (PR1-C8):
+web returns 503 when the worker has not beaten for 45s, and in
+production a worker that never started is a 503 too. Start the
+worker alongside web (the compose file already does) and keep
+the retry budget (5 × 10s) longer than the 15s heartbeat
+interval; a web-only deploy that never starts the worker will
+now fail its health check instead of silently missing every
+nightly job.
 
 ## Rollback
 
@@ -648,17 +729,19 @@ the migrate step, not for the web/worker.
 ## Reference — local Docker verification
 
 `docker-compose.prod.yml` is both the local verification setup and
-the Dokploy Compose deployment. Every secret is `${VAR:-fallback}`:
-locally the fallbacks (or the repo-root `.env`, which Compose
-auto-loads) apply with zero setup; on Dokploy set the real values
-as environment variables — Compose deployments do not inherit them
-automatically, so each service references them explicitly. The
-compose file never carries real secrets (`.env` is git-ignored).
+the Dokploy Compose deployment. Every secret is required
+(`${VAR:?}`) — `POSTGRES_PASSWORD`, `APP_LOGIN_PASSWORD`,
+`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PARENT_LINK_SECRET`.
+Export them or put them in the repo-root `.env` (Compose
+auto-loads it) before `docker compose up`; a missing one refuses
+the start instead of falling back to a placeholder.
+`pnpm check:compose-secrets` enforces this in CI. The compose file
+never carries real secrets (`.env` is git-ignored).
 
 ```bash
 docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml ps    # all three healthy
-curl -s http://localhost:3000/api/health        # {"status":"ok"}
+curl -s http://localhost:3000/api/health        # {"status":"ok","worker":"healthy"}
 docker compose -f docker-compose.prod.yml logs --tail=20 worker
 # [worker] started — listening on sessions.generate
 docker compose -f docker-compose.prod.yml down -v

@@ -33,6 +33,11 @@ export const PLATFORM_TABLES = [
   "platform_users",
   "platform_sessions",
   "platform_audit_log",
+  // PR1-C8 — worker liveness. Infrastructure, not tenant data: one row
+  // per worker process, written by the worker and read by /api/health
+  // to fail the deploy gate when the worker dies. Same class as
+  // platform_audit_log (no tenant_id, no per-tenant visibility).
+  "worker_heartbeats",
   // O-09 — sales leads hold real names and phone numbers and sit
   // outside RLS like users. Direct imports are restricted by
   // scripts/check-platform-leads-imports.ts.

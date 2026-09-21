@@ -20,6 +20,7 @@
     "db:migrate": "tsx db/migrate.ts",
     "db:reset": "tsx db/reset.ts",
     "db:deploy": "tsx db/deploy.ts",
+    "db:backup": "tsx scripts/db-backup.ts",
     "db:new-migration": "tsx scripts/new-migration.ts",
     "check:migrations": "tsx scripts/check-migration-naming.ts",
     "worker": "tsx worker/index.ts",
@@ -35,6 +36,8 @@
     "check:platform-leads": "tsx scripts/check-platform-leads-imports.ts",
     "check:location-scope": "tsx scripts/check-location-scope.ts",
     "check:tenant-conventions": "tsx scripts/check-tenant-conventions.ts",
+    "check:compose-secrets": "tsx scripts/check-compose-secrets.ts",
+    "check:deploy-workflows": "tsx scripts/check-deploy-workflows.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
   "dependencies": {

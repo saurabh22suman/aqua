@@ -16,6 +16,7 @@ import {
   type MenuItemRow,
   type MenuMutationResult,
 } from "@/lib/services/menu";
+import { isGstRegistered } from "@/lib/services/tax";
 
 // K-01 — menu actions. Reads ride settings.read (reception has it so
 // the counter can render the menu), writes need settings.manage
@@ -62,18 +63,24 @@ const archiveInput = z.object({
 export type MenuView = {
   categories: MenuCategoryRow[];
   items: MenuItemRow[];
+  // The counter preview needs this to quote the same document the
+  // billing path will issue (PR1-C4).
+  taxRegistered: boolean;
 };
 
 export async function listMenuAction(raw: unknown): Promise<MenuView> {
   const parsed = listInput.safeParse(raw);
-  if (!parsed.success) return { categories: [], items: [] };
+  if (!parsed.success) {
+    return { categories: [], items: [], taxRegistered: false };
+  }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.read");
-  const [categories, items] = await Promise.all([
+  const [categories, items, taxRegistered] = await Promise.all([
     listMenuCategories(ctx, parsed.data),
     listMenuItems(ctx, parsed.data),
+    isGstRegistered(ctx.tenantId),
   ]);
-  return { categories, items };
+  return { categories, items, taxRegistered };
 }
 
 export async function createMenuCategoryAction(

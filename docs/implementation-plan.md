@@ -1598,6 +1598,14 @@ the Never list — no invented values. Backend contract is B6–B8.
 
 # Release 1 extensions — multi-sport, café, events, UI closure
 
+**UI follow-up (2026-09-21):** the U-series records functional delivery, not
+visual parity with the target boards. The user selected UI redesign as the
+next workstream after PR #187. Follow
+[`ui-redesign-implementation-plan.md`](ui-redesign-implementation-plan.md),
+starting at UR-01 and continuing in order. It is the execution companion for
+target fidelity and runtime/UI defects; this document remains the product
+scope/dependency register. Payroll V-28 onward is still pending.
+
 **Scope decision — 2026-09-18.** Café moves out of Phase 5 into Release 1 as a
 module on the existing billing spine. Expanded parent surfaces stay **out**: the
 parent experience remains the `/p/[token]` zero-JS link (S5). **No payment
@@ -2100,8 +2108,8 @@ budget check passes, and no photo-upload affordance exists anywhere.
 - **U-01** complete — inline-SVG analytics on `/owner/reports` (no chart
   dependency); the target arc is omitted (no target in the schema).
 - **U-02** complete — `/owner/fees` hub; discounts deliberately absent.
-- **U-03** complete except **Progress**: Payments/Notes/Documents tabs, with
-  `member_notes` + audit. Progress waits for M-03/V-10 wiring; Documents is an
+- **U-03** Payments/Notes/Documents tabs shipped with `member_notes` + audit.
+  **Update 2026-09-21:** Progress was wired in Phase 3A; Documents remains an
   honest empty state until C-07.
 - **U-04** complete — week/month schedule grid on `/owner/schedule`.
 - **U-05** complete — permission-scoped member/enquiry/invoice search in the
@@ -2114,16 +2122,16 @@ budget check passes, and no photo-upload affordance exists anywhere.
   single-location tenants see no switcher.
 - **U-08** complete (scoped) — reception "Today's check-ins" over existing
   sessions/attendance, interactive because the receptionist template already
-  grants `attendance.mark`. **Staff attendance UI deferred** (needs V-24
-  shifts).
+  grants `attendance.mark`. **Update 2026-09-21:** V-24 in PR #187 delivered
+  the staff-attendance board, including required reasons and quick reasons.
 - **U-09** complete on staff board, coach members list and reception
   check-ins (stable id seeds, `boring-avatars`). Owner member surfaces are not
   swapped yet — another workstream owns those files; ops has no users list.
 - **U-10** complete — `OwnerShell`: sidebar ≥1024px, bottom nav below; all
   routes within the 150 KB budget.
 - **K-05 / K-08** complete — see their status notes above. Deferred:
-  wallet-settles-café, order void UI, M-02, U-03 Progress, U-08 staff
-  attendance.
+  wallet-settles-café, order void UI, M-02. U-03 Progress was wired in Phase
+  3A; U-08 staff attendance shipped in PR #187. Visual parity remains open.
 
 ## Release 1.1 — fast-follow (not in the gate)
 
@@ -2149,10 +2157,11 @@ exists in the tree. `main` is green and every migration carried the
 (E-04 parked until pay exists) · K-01–K-08 (wallet K-05 shipped service-side;
 wallet-settles-café deferred) · M-01, M-03–M-06 (M-02 rename deferred;
 resources already exist as `facility_sub_units`) · U-01–U-10 (U-03 Progress
-wired in Phase 3A; U-08 staff-attendance half deferred to V-24; owner avatar
-swap pending) · V-01–V-04, V-08–V-11 (Phase 3A). **Remaining before this gate
-can run:** Phase 3B (V-23–V-34 staff attendance/pay, V-35–V-37
-revenue/profitability), the messaging send path C-40–C-43 (blocked on the
+wired in Phase 3A; U-08 staff attendance delivered by V-24; owner avatar
+swap pending) · V-01–V-04, V-08–V-11 (Phase 3A). **Update 2026-09-21:**
+V-23–V-27 shipped in PR #187; runtime/UI gaps follow the UR redesign plan.
+**Remaining before this gate can run:** V-28–V-34 staff pay, V-35–V-37
+revenue/profitability, the messaging send path C-40–C-43 (blocked on the
 BSP/WhatsApp decision), V-05–V-07 to complete bookings, and the reference
 month itself. **Open decisions:** anonymous/walk-in billing, wallet credit
 limit, parent expansion, price-rule CRUD UI, slot grid driven by business

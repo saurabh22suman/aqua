@@ -183,6 +183,11 @@ export function LeadActions({
                   >
                     Open tenant
                   </a>
+                  {convertResult.presetWarning ? (
+                    <span className="mt-1 block text-ink-2">
+                      {convertResult.presetWarning}
+                    </span>
+                  ) : null}
                 </>
               ) : (
                 convertResult.message

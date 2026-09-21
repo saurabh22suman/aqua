@@ -1,7 +1,6 @@
 import { withPlatformAdmin } from "./scope";
 import { locations } from "./schema/locations";
 import { createTenant } from "./platform-tenant-create";
-import { applyPreset } from "./preset-engine";
 import { getLead, transitionLead, type LeadQualification } from "./platform-leads";
 import { recordOpsAudit } from "./ops-action";
 import type { TenantId, UserId } from "@/lib/ids";
@@ -54,6 +53,7 @@ export type ConvertLeadResult =
       tenantId: string;
       preset: string;
       presetApplied: boolean;
+      presetWarning: string | null;
       locationsCreated: number;
     }
   | {
@@ -93,6 +93,7 @@ export async function convertLead(
       gstin: input.gstin,
       locationName: input.locationName ?? lead.city ?? "Main Location",
       locationIsPrimary: true,
+      presetKey: selectedPreset,
     },
     { actorId: ctx.actorId },
   );
@@ -104,9 +105,10 @@ export async function convertLead(
     };
   }
 
-  const presetResult = await applyPreset(created.tenantId, selectedPreset, {
-    actorId: ctx.actorId,
-  });
+  const presetResult = {
+    applied: created.presetApplied,
+    warning: created.presetWarning,
+  };
 
   // The qualification's location count (data-driven extra sites).
   const qualificationLocations =
@@ -166,7 +168,8 @@ export async function convertLead(
     kind: "ok",
     tenantId: created.tenantId,
     preset: selectedPreset,
-    presetApplied: presetResult.kind === "ok",
+    presetApplied: presetResult.applied,
+    presetWarning: presetResult.warning,
     locationsCreated: 1 + extraLocations,
   };
 }

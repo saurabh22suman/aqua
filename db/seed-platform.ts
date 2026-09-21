@@ -282,7 +282,11 @@ export const FEATURES: ReadonlyArray<{
   { key: "staff", name: "Staff", category: "staff", status: "ga" },
   { key: "reports", name: "Reports", category: "insight", status: "ga" },
   { key: "settings", name: "Settings and configuration", category: "platform", status: "ga" },
-  { key: "messaging", name: "WhatsApp and email", category: "comms", status: "ga" },
+  // PR1-C7 — the pilot's messaging provider is the mock. 'ga' claimed
+  // a customer-facing feature that does not exist; 'internal' matches
+  // what ships. The real WhatsApp Cloud path is documented post-pilot
+  // in docs/messaging-post-pilot.md.
+  { key: "messaging", name: "WhatsApp and email", category: "comms", status: "internal" },
   // Facility booking is one feature key per primary facility type.
   // pool.booking is GA today (it was added with F-01); the other three
   // are forward-looking — Phase 3 (project-scope §5.7) builds the

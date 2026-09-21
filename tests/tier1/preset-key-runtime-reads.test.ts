@@ -89,6 +89,18 @@ const ALLOWED_READERS = new Set<string[]>([
   ["app", "(platform)", "ops", "presets", "preset-card.tsx"],
   ["app", "(platform)", "ops", "presets", "[key]", "page.tsx"],
   ["app", "(platform)", "ops", "presets", "[key]", "preset-detail-form.tsx"],
+  // PR1-C6 — tenant creation now carries an explicit preset choice.
+  // These files are all operator surface: the ops create form/action,
+  // the create + conversion services and the post-commit provisioning
+  // helper that applies the preset and reports its result. None of
+  // them branch tenant-runtime behaviour on the key; the value flows
+  // from the form to the engine.
+  ["app", "(platform)", "ops", "tenants", "new", "page.tsx"],
+  ["app", "(platform)", "ops", "tenants", "new", "new-tenant-form.tsx"],
+  ["lib", "actions", "platform-tenants.ts"],
+  ["db", "platform-tenant-create.ts"],
+  ["db", "platform-tenant-provision.ts"],
+  ["db", "platform-lead-conversion.ts"],
   // Tests read preset key state freely; the rule is about
   // production-runtime code.
   ["tests"],

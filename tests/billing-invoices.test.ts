@@ -268,6 +268,36 @@ describe("C-32 invoice issue", () => {
     const crossTenant = await reads.getInvoice(ctxB, listForGst[0]!.id);
     expect(crossTenant).toBeNull();
   });
+
+  it("refuses a duplicate live invoice for the same subscription and due date with a friendly error", async () => {
+    const second = await mutations.createInvoiceForSubscription(ctxNoGst, {
+      subscriptionId: subNoGst,
+    });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.error).toMatch(/already/i);
+    expect(second.error).not.toMatch(/23505|duplicate key|_uidx/);
+
+    const list = await reads.listMemberInvoices(ctxNoGst, memberN);
+    expect(list.filter((i) => i.status !== "void")).toHaveLength(1);
+  });
+
+  it("serialises concurrent raises so exactly one live invoice exists", async () => {
+    const results = await Promise.all([
+      mutations.createInvoiceForSubscription(ctxGst, { subscriptionId: subAll }),
+      mutations.createInvoiceForSubscription(ctxGst, { subscriptionId: subAll }),
+    ]);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    for (const result of results) {
+      if (!result.ok) {
+        expect(result.error).not.toMatch(/23505|duplicate key|_uidx/);
+      }
+    }
+    const list = await reads.listMemberInvoices(ctxGst, member1);
+    expect(
+      list.filter((i) => i.subscriptionId === subAll && i.status !== "void"),
+    ).toHaveLength(1);
+  });
 });
 
 describe("C-39 receipts", () => {

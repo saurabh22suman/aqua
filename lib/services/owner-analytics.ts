@@ -130,15 +130,27 @@ export async function getMoneyAnalytics(
       lt(payments.receivedAt, endUtc),
     );
 
-    const byDayRows = await tx
+    // The tenant-local day is computed in a derived table so the
+    // timezone parameter is bound exactly once. Binding it again in
+    // GROUP BY/ORDER BY made Postgres see a different parameter than
+    // the SELECT expression and reject the query with 42803.
+    const paymentDays = tx
       .select({
-        date: sql<string>`(${payments.receivedAt} at time zone ${timezone})::date::text`,
-        paise: sql<string>`coalesce(sum(${payments.amountPaise}), 0)::text`,
+        day: sql`(${payments.receivedAt} at time zone ${timezone})::date`.as("day"),
+        paise: payments.amountPaise,
       })
       .from(payments)
       .where(paymentWindow)
-      .groupBy(sql`(${payments.receivedAt} at time zone ${timezone})::date`)
-      .orderBy(sql`(${payments.receivedAt} at time zone ${timezone})::date`);
+      .as("payment_days");
+
+    const byDayRows = await tx
+      .select({
+        date: sql<string>`${paymentDays.day}::text`,
+        paise: sql<string>`coalesce(sum(${paymentDays.paise}), 0)::text`,
+      })
+      .from(paymentDays)
+      .groupBy(paymentDays.day)
+      .orderBy(paymentDays.day);
 
     const planRows = await tx
       .select({

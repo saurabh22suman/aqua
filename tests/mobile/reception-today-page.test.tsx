@@ -70,4 +70,16 @@ describe("ReceptionTodayPage — no coach link, check-ins panel present (F5, U-0
       "/reception/cafe",
     );
   });
+
+  it("offers no bookings path while booking pricing has no UI (PR1-C5)", async () => {
+    getTodayAction.mockResolvedValue({ sessions: SESSIONS });
+
+    render(await ReceptionTodayPage());
+
+    const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(hrefs.some((h) => h?.startsWith("/reception/bookings"))).toBe(false);
+    expect(document.body.textContent).not.toMatch(/Reserve a lane or court/i);
+  });
 });

@@ -16,6 +16,7 @@ import {
   MemberMixCard,
   PlanRevenueCard,
 } from "@/components/reports/analytics-cards";
+import { ReportCardError } from "@/components/reports/report-card-error";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import Link from "next/link";
 
@@ -44,8 +45,7 @@ export default async function ReportsPage({
     utilisation,
     operational,
     money,
-    terminology,
-  ] = await Promise.all([
+  ] = await Promise.allSettled([
     getAttendanceReportAction(period),
     getEnquiryFunnelAction(period),
     getRetentionViewAction(),
@@ -57,8 +57,16 @@ export default async function ReportsPage({
     // an owner holds both.
     getOperationalAnalyticsAction(period),
     getMoneyAnalyticsAction(period),
-    getTerminologyAction(),
-  ]);
+  ] as const);
+  const terminology = await getTerminologyAction();
+
+  const attendanceRows = settled(attendance, "Attendance by batch");
+  const enquiryRows = settled(enquiry, "Enquiry funnel");
+  const retentionRow = settled(retention, "Retention");
+  const coachLoadRows = settled(coachLoad, "Coach load");
+  const utilisationReport = settled(utilisation, "Facility utilisation");
+  const operationalData = settled(operational, "Attendance and member mix");
+  const moneyData = settled(money, "Collections and plan revenue");
 
   return (
     <main className="px-5 pt-6 pb-8">
@@ -100,19 +108,61 @@ export default async function ReportsPage({
       </Link>
 
       <div className="mt-6 space-y-3">
-        <AttendanceReportCard rows={attendance} period={period} />
-        <AttendanceTrendCard points={operational.attendanceTrend} />
-        <CollectionsExpensesCard series={money.collections} />
-        <PlanRevenueCard rows={money.planRevenue} />
-        <MemberMixCard
-          slices={operational.memberMix}
-          memberLabel={resolveTerm(terminology, "member", "other")}
-        />
-        <EnquiryFunnelCard rows={enquiry} />
-        <RetentionCard row={retention} />
-        <CoachLoadCard rows={coachLoad} />
-        <UtilisationCard report={utilisation} />
+        {attendanceRows ? (
+          <AttendanceReportCard rows={attendanceRows} period={period} />
+        ) : (
+          <ReportCardError title="Attendance by batch" />
+        )}
+        {operationalData ? (
+          <AttendanceTrendCard points={operationalData.attendanceTrend} />
+        ) : (
+          <ReportCardError title="Attendance trend" />
+        )}
+        {moneyData ? (
+          <CollectionsExpensesCard series={moneyData.collections} />
+        ) : (
+          <ReportCardError title="Collections vs expenses" />
+        )}
+        {moneyData ? (
+          <PlanRevenueCard rows={moneyData.planRevenue} />
+        ) : (
+          <ReportCardError title="Revenue by plan" />
+        )}
+        {operationalData ? (
+          <MemberMixCard
+            slices={operationalData.memberMix}
+            memberLabel={resolveTerm(terminology, "member", "other")}
+          />
+        ) : (
+          <ReportCardError title="Members by status" />
+        )}
+        {enquiryRows ? (
+          <EnquiryFunnelCard rows={enquiryRows} />
+        ) : (
+          <ReportCardError title="Enquiry funnel" />
+        )}
+        {retentionRow ? (
+          <RetentionCard row={retentionRow} />
+        ) : (
+          <ReportCardError title="Retention" />
+        )}
+        {coachLoadRows ? (
+          <CoachLoadCard rows={coachLoadRows} />
+        ) : (
+          <ReportCardError title="Coach load" />
+        )}
+        {utilisationReport ? (
+          <UtilisationCard report={utilisationReport} />
+        ) : (
+          <ReportCardError title="Facility utilisation" />
+        )}
       </div>
     </main>
   );
+}
+
+function settled<T>(result: PromiseSettledResult<T>, title: string): T | null {
+  if (result.status === "fulfilled") return result.value;
+  console.error(`[owner/reports] ${title} failed to load`, result.reason);
+  return null;
 }

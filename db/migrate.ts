@@ -4,6 +4,14 @@ import { Client } from "pg";
 
 const MIGRATIONS_DIR = join(process.cwd(), "db", "migrations");
 
+// PR1-C9 — one fixed session-level advisory lock serialises every
+// runner (deploy script, CI, a human, two containers racing on a
+// fresh database). Without it, concurrent runners race the
+// `create table if not exists _migrations` (pg_type duplicate key)
+// and the _migrations primary key, and can half-apply a migration.
+// The value is arbitrary and stable: "aqua" as hex.
+const MIGRATION_LOCK_KEY = 0x61717561;
+
 export async function runMigrations(
   connectionString: string,
   options: { upToExclusive?: string } = {},
@@ -12,6 +20,8 @@ export async function runMigrations(
   await client.connect();
 
   try {
+    await client.query("select pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
+
     await client.query(`
       create table if not exists _migrations (
         name       text primary key,
@@ -79,6 +89,9 @@ export async function runMigrations(
 
     return ran;
   } finally {
+    await client
+      .query("select pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY])
+      .catch(() => {});
     await client.end();
   }
 }

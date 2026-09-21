@@ -21,4 +21,12 @@ export class FakeObjectStore implements ObjectStore {
     const object = this.objects.get(key);
     return object ? Uint8Array.from(object.bytes) : null;
   }
+
+  async listObjects(prefix: string): Promise<string[]> {
+    return [...this.objects.keys()].filter((key) => key.startsWith(prefix));
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
 }

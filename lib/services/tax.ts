@@ -3,6 +3,8 @@ import { withTenant } from "@/db/tenant";
 import { resolveConfigInTx, type ResolvedConfig } from "@/db/config";
 import { locations } from "@/db/schema/locations";
 import { facilities } from "@/db/schema/preset-engine";
+import { tenants } from "@/db/schema/tenants";
+import { gstDocumentKind } from "@/lib/gst";
 import type { TenantId } from "@/lib/ids";
 
 // The GST rate key and the ops-side read that shows every level of its
@@ -10,6 +12,21 @@ import type { TenantId } from "@/lib/ids";
 // edits these through setPlatformScopedConfigValue (db/config-admin).
 
 export const GST_RATE_KEY = "billing.gst_rate_bp" as const;
+
+// The counter surfaces quote before they write. An unregistered
+// supplier (no GSTIN) issues a bill of supply, so a preview must not
+// show GST the issued document will not carry — see createOrder
+// (lib/services/orders.ts), which zeroes the snapshot for the same
+// reason.
+export async function isGstRegistered(tenantId: TenantId): Promise<boolean> {
+  return withTenant(tenantId, async (tx) => {
+    const [row] = await tx
+      .select({ gstin: tenants.gstin })
+      .from(tenants)
+      .where(eq(tenants.id, tenantId));
+    return gstDocumentKind(row?.gstin ?? null) === "tax_invoice";
+  });
+}
 
 export type TaxScopeRow = {
   scopeType: "tenant" | "location" | "activity";
