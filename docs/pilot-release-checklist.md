@@ -48,10 +48,10 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 pre-merge gate passed on `feat/pilot-pr1-stability-deploy` (full suite green under CI conditions; migrations await the human `human-approved-merge` label). Pushing and opening the PR. |
-| **Current task** | Open PR1 into `main`; human reviews/merges. |
-| **Next task** | After the human merges PR1: post-merge checks (image publication, Dev auto-deploy, health + worker heartbeat, immutable-tag verification), then PR2-C1. |
-| **Known blockers** | PR1 cannot merge until a human applies `human-approved-merge` (two migrations) and approves; the agent token cannot apply the label. |
+| **Current status** | PR1 complete and open as PR #188 with green CI; awaiting the human merge. Post-merge checks pending. |
+| **Current task** | None — human review/merge of PR #188. |
+| **Next task** | After the human merges PR1: run the post-merge checks (main image publication, automatic Dev deploy, health + worker heartbeat, immutable-tag verification), then start PR2-C1. |
+| **Known blockers** | None. PR #188 is labeled `human-approved-merge` and CI-green; the agent will not merge it. |
 
 ### Session log
 
@@ -72,6 +72,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C11 added (backup script, retention, restore drill executed) | PR1-C11 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C12 added (publish, dev auto-deploy, gated prod workflows) | PR1-C12 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 pre-merge gate passed; deviation recorded (dev-DB-only migration-test failure, baseline-reproduced); entitlements/preset-scan tests aligned with C6/C7 | PR1 gate (pre-merge) |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1 opened as #188; e2e role-bypass readiness fixed for the worker-aware health gate; CI green | PR1 (open, awaiting human merge) |
 
 ---
 
@@ -400,7 +401,9 @@ no fabricated metric on the health surface.
   `20260921110643_worker_heartbeats.sql`) need the `human-approved-merge` label
   and a reviewer sign-off at PR time — the agent token cannot apply the label.
 - [x] PR opened into `main`: https://github.com/saurabh22suman/aqua/pull/188
-  (agent pushed/opened; the agent never merges its own PR).
+  (agent pushed/opened; the agent never merges its own PR). CI green on the PR
+  (run `35605422341`, 14m22s); `agent-protected-paths` green with the
+  human-applied `human-approved-merge` label. **Not merged by the agent.**
 
 **Deviation (pre-existing, not introduced here):**
 `tests/migrations/invite-persons-staff-backfill.test.ts` fails on the local
