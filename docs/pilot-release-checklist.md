@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C8 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
-| **Current task** | PR1-C9 (Migration advisory lock). |
-| **Next task** | PR1-C10 (Compose secrets fail-fast + db restart policy). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C9 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
+| **Current task** | PR1-C10 (Compose secrets fail-fast + db restart policy). |
+| **Next task** | PR1-C11 (Backup script, retention, restore runbook). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -67,6 +67,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C6 fixed (preset applied on tenant creation + warnings surfaced) | PR1-C6 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C7 fixed (messaging non-GA + post-pilot doc + migration) | PR1-C7 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C8 added (worker heartbeat, drain, health gate) | PR1-C8 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C9 fixed (advisory lock serialises migrations) | PR1-C9 |
 
 ---
 
@@ -279,7 +280,7 @@ no fabricated metric on the health surface.
   `20260921110643_worker_heartbeats.sql` applied to dev and needs
   `human-approved-merge`. Commit `7307579`.
 
-### [ ] PR1-C9 — Migration advisory lock
+### [x] PR1-C9 — Migration advisory lock
 - **Depends:** none.
 - **Files:** `db/migrate.ts`, new `tests/db/migrate-lock.test.ts`.
 - **Red test:** two concurrent runners both attempt the same file; the second fails
@@ -289,7 +290,14 @@ no fabricated metric on the health surface.
 - **Acceptance:** serialized migrations, no partial application, single-run timing
   unchanged.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — two concurrent `runMigrations` on a fresh
+  Testcontainer raced `create table if not exists _migrations`
+  (`pg_type_typname_nsp_index` duplicate key). After the session advisory
+  lock: `pnpm exec vitest run tests/db/migrate-lock.test.ts` — 1 passed
+  (one runner applies all files, the other no-ops; `_migrations` count equals
+  the file count); `pnpm db:migrate` single run still no-ops cleanly;
+  `tests/tier1/messaging-feature-status.test.ts` (uses `startIsolatedDb` →
+  `runMigrations`) still green; `pnpm typecheck` clean; commit `50b055b`.
 
 ### [ ] PR1-C10 — Compose secrets fail-fast + db restart policy
 - **Depends:** none.
