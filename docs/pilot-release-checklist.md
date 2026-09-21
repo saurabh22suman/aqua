@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C4 done. |
-| **Current task** | PR2-C5 (CSV import parser/validator/dry-run/row errors). |
-| **Next task** | PR2-C6 (CSV import commit/consent/idempotent retry). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C5 done. |
+| **Current task** | PR2-C6 (CSV import commit/consent/idempotent retry). |
+| **Next task** | PR2-C7 (CSV import discoverability + onboarding entry). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -80,6 +80,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C2 added (receptionist invoices.write + backfill migration) | PR2-C2 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C3 added (reception cash/UPI recording; permission audit found no gap) | PR2-C3 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C4 added (co-owner reset links on /owner/staff + audit) | PR2-C4 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C5 added (CSV import parser/validator/dry-run/template) | PR2-C5 |
 
 ---
 
@@ -616,7 +617,7 @@ coach fee visibility on the register.
   (PIN overwrite + other-session revocation) were already pinned by the
   existing reset-link tests. Commit `fbd7925`.
 
-### [ ] PR2-C5 — CSV import: parser, validator, dry-run, row errors
+### [x] PR2-C5 — CSV import: parser, validator, dry-run, row errors
 - **Depends:** PR1 merged.
 - **Files:** new `lib/services/member-import.ts`, new `lib/actions/member-import.ts`,
   new `components/member-import-*`, template route
@@ -628,7 +629,18 @@ coach fee visibility on the register.
 - **Acceptance:** mapping handles missing/extra columns; every rejected row reports
   row number, field and reason; error rows downloadable as CSV.
 - **Migration/rollback:** none in v1.
-- **Evidence:** _pending_
+- **Evidence:** `pnpm exec vitest run tests/member-import.test.ts
+  tests/tier1/no-superuser-on-request-path.test.ts` — 13 passed: RFC4180
+  quotes/commas/embedded newlines with correct row numbers, missing columns
+  reported once, per-row errors (row/field/reason) for blank name, impossible
+  date, missing location, bad phone; ambiguous `03/04/2026` rejected with an
+  explicit reason while `25/12/2026` normalises; error CSV quoting; template
+  headers; dry-run resolves `Worli` to its id, flags unknown locations and a
+  minor without guardian, and writes nothing (member count unchanged).
+  `pnpm typecheck`/`lint` clean. Live as demo owner on
+  `/owner/members/import`: uploaded a two-row CSV → "1 of 2 rows ready",
+  `row 3 · date_of_birth — That date does not exist.`, error-download button
+  present. Commit `4a56bb2`.
 
 ### [ ] PR2-C6 — CSV import: commit, consent, idempotent retry
 - **Depends:** PR2-C5.
