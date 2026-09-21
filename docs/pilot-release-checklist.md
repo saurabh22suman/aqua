@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C5 done. |
-| **Current task** | PR2-C6 (CSV import commit/consent/idempotent retry). |
-| **Next task** | PR2-C7 (CSV import discoverability + onboarding entry). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C6 done. |
+| **Current task** | PR2-C7 (CSV import discoverability + onboarding entry). |
+| **Next task** | PR2-C8 (Payment reversals table/service/audit + migration). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -81,6 +81,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C3 added (reception cash/UPI recording; permission audit found no gap) | PR2-C3 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C4 added (co-owner reset links on /owner/staff + audit) | PR2-C4 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C5 added (CSV import parser/validator/dry-run/template) | PR2-C5 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C6 added (CSV import commit/consent/idempotent retry) | PR2-C6 |
 
 ---
 
@@ -642,7 +643,7 @@ coach fee visibility on the register.
   `row 3 · date_of_birth — That date does not exist.`, error-download button
   present. Commit `4a56bb2`.
 
-### [ ] PR2-C6 — CSV import: commit, consent, idempotent retry
+### [x] PR2-C6 — CSV import: commit, consent, idempotent retry
 - **Depends:** PR2-C5.
 - **Files:** `lib/services/member-import.ts`, `lib/actions/member-import.ts`,
   `tests/tier1/member-import.test.ts`, CSV fixtures.
@@ -655,7 +656,18 @@ coach fee visibility on the register.
   member code then phone+name+DOB; each row commits through `createMember`; retry
   is additive and safe.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — `commitMemberImport is not a function`. After:
+  `pnpm exec vitest run tests/member-import.test.ts` — 16 passed: rows commit
+  through `createMember` (row-supplied code kept, generated `MEM-*` otherwise),
+  processing consent written with `evidence.channel = "import"`, guardian
+  linked for the minor, second run imports 0 / skips 2, a row matched by
+  member code never overwrites the existing person, an invalid row returns its
+  preview error and writes nothing, tenant B's import leaves tenant A
+  untouched. Live as demo owner: imported a two-row CSV → "Imported 2
+  members.", member count 41→43, consent channel `import`, audit
+  `member.import {imported:2, skipped:0}`; re-importing the same file →
+  "Imported 0 members · 2 already existed and were skipped." Commit
+  `f4ddca6`.
 
 ### [ ] PR2-C7 — CSV import: discoverability and onboarding entry
 - **Depends:** PR2-C6.
