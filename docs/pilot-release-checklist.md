@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C6 done. |
-| **Current task** | PR2-C7 (CSV import discoverability + onboarding entry). |
-| **Next task** | PR2-C8 (Payment reversals table/service/audit + migration). |
+| **Current status** | PR1 merged at `2cdde8c`; immutable image `sha-2cdde8c8883c` published. Dev deployment checks deferred by owner until after PR3 (not a blocker). PR2 in progress on `feat/pilot-pr2-workflow-import`: C1–C7 done. |
+| **Current task** | PR2-C8 (Payment reversals table/service/audit + migration). |
+| **Next task** | PR2-C9 (Payment reversals UI + fees ledger). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -82,6 +82,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C4 added (co-owner reset links on /owner/staff + audit) | PR2-C4 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C5 added (CSV import parser/validator/dry-run/template) | PR2-C5 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C6 added (CSV import commit/consent/idempotent retry) | PR2-C6 |
+| 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C7 added (import entries on members list + onboarding) | PR2-C7 |
 
 ---
 
@@ -669,7 +670,7 @@ coach fee visibility on the register.
   "Imported 0 members · 2 already existed and were skipped." Commit
   `f4ddca6`.
 
-### [ ] PR2-C7 — CSV import: discoverability and onboarding entry
+### [x] PR2-C7 — CSV import: discoverability and onboarding entry
 - **Depends:** PR2-C6.
 - **Files:** `app/(owner)/owner/members/page.tsx` (entry),
   `lib/services/onboarding-checklist.ts` (item), mobile render test.
@@ -678,7 +679,16 @@ coach fee visibility on the register.
 - **Acceptance:** import reachable from the members list and the onboarding
   checklist; empty state offers import alongside "add first member".
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — all four new assertions failed. After:
+  `pnpm exec vitest run tests/mobile/onboarding-checklist-view.test.tsx
+  tests/tier1/onboarding-checklist.test.ts tests/mobile/members-import-entry.test.tsx`
+  — 14 passed (members header links to `/owner/members/import`, empty state
+  offers it alongside Add, `add_members` carries the `Import a CSV`
+  secondary CTA, view renders it while the step is incomplete; item counts
+  unchanged at 3). Live as demo owner: `/owner/members` header Import link
+  resolves to `/owner/members/import`. The onboarding secondary link is
+  deliberately hidden once the step is complete (demo tenant has 41 members),
+  so that path is pinned by the component test. Commit `d93333e`.
 
 ### [ ] PR2-C8 — Payment reversals: table, service, audit
 - **Depends:** PR2-C2 (role model), PR1-C3 (invoice logic).
