@@ -1,5 +1,10 @@
 # Role surfaces plan — v1
 
+**Current UI execution:** use
+[`ui-redesign-implementation-plan.md`](ui-redesign-implementation-plan.md)
+for the 2026-09-21 redesign and corrected audit findings. This file retains
+historical role decisions and delivered waves; its “current state” is dated.
+
 **Status:** v1, 2026-09-13. Working plan for role-screen work after the
 2026-09-12 mobile UX audit sweep (PR #137) and the multi-facility
 discussion.

@@ -2,11 +2,46 @@
 
 **The visual system for Aqua. Loaded on every UI task. Non-negotiable.**
 
+## Redesign contract — 2026-09-21
+
+The user requested a detailed redesign against `docs/images/*target*.png`
+because the shipped screens feel bland. Execute
+[`docs/ui-redesign-implementation-plan.md`](docs/ui-redesign-implementation-plan.md)
+one task at a time. Its acceptance criteria are requirements, not claims that
+the corresponding components have shipped.
+
+- The PNG boards guide screen composition, hierarchy, density and workflows.
+  Both owner boards depict **desktop** web apps; owner mobile needs its own
+  responsive treatment. Do not infer fonts, weights or exact spacing from pixels.
+- This document governs tokens, accessibility and interaction constraints;
+  the implementation plan and project scope govern available features/data.
+  The older HTML reference below remains useful, but its example money and
+  messaging actions are not proof that their underlying features exist.
+- Match the targets' useful structure: compact identity headers, meaningful
+  summaries, clear primary actions, contextual tabs, readable rows, desktop
+  tables, appropriate charts, and explicit state changes. Decoration is not
+  a substitute for those elements. Record any deliberate target deviation.
+- Mango is the **default**, not a universal requirement. Use the tenant's
+  approved runtime accent, including marine where configured. Changing the
+  system palette or adding decorative colour needs a recorded decision.
+- Use the existing local SVG avatar for people, seeded by stable identity;
+  `TenantMark` is academy branding, not a person's avatar. R1 has no photo
+  upload. This is a product decision, not a claim that DPDP bans all photos.
+- Check populated, unselected, selected, empty, loading, error, disabled and
+  permission-limited states. Preserve Late and offline save/retry behaviour;
+  do not add a cosmetic Save button to an auto-saving register.
+- Token compliance alone is insufficient. Normal text (including meaningful
+  labels and placeholders) needs 4.5:1 contrast, large text 3:1; applicable
+  non-text controls/focus indicators need 3:1. Existing `ink-3` and white-on-
+  mango combinations need remediation under UR-03; do not certify them just
+  because they are tokens. Test native date fields in both en-IN and en-US;
+  setting `lang` alone does not guarantee their displayed date format.
+
 This file encodes the tokens — colour, type, spacing, radii, shadow.
-`docs/sports-club-ui-direction.html` is the canonical **layout**
-reference — hierarchy, density, what leads a screen, how an attention
-item reads, the lane strip and its three reuses. **Read both before
-building any new screen.** Tokens alone don't tell you that one thing
+For redesign composition, use the relevant PNG board and UR task acceptance
+criteria. `docs/sports-club-ui-direction.html` is the earlier **pattern**
+reference for hierarchy, attention items and the lane strip's three reuses.
+**Read these before building a screen.** Tokens alone don't tell you that one thing
 per screen should dominate, or that an attention item states a reason
 and not just a count — that's composition, and it lives in the HTML
 file, not here. A screen that uses the right tokens in the wrong
@@ -280,7 +315,7 @@ Every list has one. Every empty state has a verb CTA. The first screen a new aca
 | Metric | Limit |
 |---|---|
 | First-load JS, gzipped | **150 KB** — build fails above |
-| Fonts | 45 KB |
+| Fonts | 60 KB (latin subset, woff2; see §1.3) |
 | LCP, 4G mid-tier Android | 2.5s |
 | Lighthouse mobile | > 90 |
 
