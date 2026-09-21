@@ -312,6 +312,26 @@ const ALLOWLIST = new Set([
   // to clean the test worker's heartbeat row; recordWorkerHeartbeat and
   // getWorkerHealth run through withPlatform on app_user.
   "tests/tier1/worker-heartbeat.test.ts",
+  // PR2-C5/C6 — member CSV import: the privileged pool seeds the
+  // tenant/locations/members fixtures; preview and commit run through
+  // withTenant()/createMember on app_user.
+  "tests/member-import.test.ts",
+  // PR2-C1 — academy profile: the privileged pool seeds the tenants and
+  // the issued-invoice fixture; the service read/update runs under
+  // withTenant() on app_user.
+  "tests/tier1/tenant-profile.test.ts",
+  // PR2-C3 — reception payments: the privileged pool seeds the
+  // tenant/member/invoice fixtures; recordPayment runs under
+  // withTenant() on app_user.
+  "tests/tier1/reception-payments.test.ts",
+  // PR2-C8 — payment reversals: the privileged pool seeds the
+  // tenant/member/invoice/payment fixtures; reversePayment runs under
+  // withTenant() on app_user.
+  "tests/tier1/payment-reversals.test.ts",
+  // PR2-C10 — parent money view: the privileged pool seeds two
+  // tenants, members, invoices and payments; getParentViewData runs
+  // under withTenant() on app_user.
+  "tests/tier1/parent-money.test.ts",
   // PR1-C11 — the backup CLI reads MIGRATION_DATABASE_URL to run
   // pg_dump as the privileged role. Operator-only, never scheduled,
   // never imported by the app (the no-superuser test's own header

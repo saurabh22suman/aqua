@@ -73,7 +73,7 @@ describe("U-02 dues list", () => {
   it("renders a collectible pending invoice with member, number and outstanding amount", async () => {
     listHubInvoicesAction.mockResolvedValue([DUE]);
     const { findByText } = render(
-      <FeesInvoiceList initial={[DUE]} filter="dues" canWrite canRecord />,
+      <FeesInvoiceList initial={[DUE]} filter="dues" canWrite canRecord canRefund />,
     );
     expect(await findByText("Ananya Sharma")).toBeTruthy();
     expect(document.body.textContent).toContain("2026-0001");
@@ -84,7 +84,7 @@ describe("U-02 dues list", () => {
   it("says so when nothing is outstanding", () => {
     listHubInvoicesAction.mockResolvedValue([]);
     render(
-      <FeesInvoiceList initial={[]} filter="dues" canWrite canRecord={false} />,
+      <FeesInvoiceList initial={[]} filter="dues" canWrite canRecord={false} canRefund={false} />,
     );
     expect(document.body.textContent).toMatch(/nothing outstanding/i);
   });

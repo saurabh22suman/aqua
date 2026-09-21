@@ -93,6 +93,7 @@ describe("MemberInvoicesPanel duplicate guard (PR1-C3)", () => {
         memberId="member-1"
         canWrite
         canRecord
+        canRefund
         timezone={TZ}
       />,
     );
@@ -115,6 +116,7 @@ describe("MemberInvoicesPanel duplicate guard (PR1-C3)", () => {
         memberId="member-1"
         canWrite
         canRecord
+        canRefund
         timezone={TZ}
       />,
     );

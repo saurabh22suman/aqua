@@ -52,6 +52,7 @@ const ALL_PERMISSION_KEYS = [
   "invoices.write",
   "payments.read",
   "payments.record",
+  "payments.refund",
   "staff.read",
   "staff.write",
   "staff.invite",

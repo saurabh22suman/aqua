@@ -23,11 +23,13 @@ export function MemberInvoicesPanel({
   memberId,
   canWrite,
   canRecord,
+  canRefund,
   timezone,
 }: {
   memberId: string;
   canWrite: boolean;
   canRecord: boolean;
+  canRefund: boolean;
   timezone: string;
 }) {
   const router = useRouter();
@@ -144,6 +146,7 @@ export function MemberInvoicesPanel({
                   invoiceId={invoice.id}
                   canWrite={canWrite}
                   canRecord={canRecord}
+                  canRefund={canRefund}
                   onChanged={() => {
                     void load();
                     router.refresh();

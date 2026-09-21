@@ -5,6 +5,7 @@ import {
   parentAlertLine,
   type ParentViewAbsenceAlert,
 } from "@/lib/services/parent-view";
+import { formatINR } from "@/lib/money/format";
 import { getBranding } from "@/lib/services/branding";
 import { getTerminology } from "@/lib/services/terminology";
 import { asTenantId } from "@/lib/ids";
@@ -152,6 +153,23 @@ function renderParentView(args: {
   // R.8 — optional so older callers/tests keep compiling; the route
   // passes the latest alert when one exists.
   absenceAlert?: ParentViewAbsenceAlert | null;
+  // PR2-C10 — read-only money for this child.
+  fees?: {
+    outstanding: Array<{
+      invoiceNumber: string;
+      dueOn: string;
+      outstandingPaise: number;
+    }>;
+    payments: Array<{
+      id: string;
+      receivedAt: string;
+      amountPaise: number;
+      method: string;
+      invoiceNumber: string | null;
+    }>;
+  };
+  // PR2-C11 — base path for token-scoped receipt links.
+  receiptBase?: string;
   displayName: string;
   clubInitials: string;
   accentBg: string;
@@ -227,6 +245,46 @@ function renderParentView(args: {
           return `<ul style="list-style:none;padding:0;margin:20px 0 0;border-top:1px solid rgba(15,31,28,.08);">${items}</ul>`;
         })();
 
+  const methodText = (method: string): string =>
+    method === "cash"
+      ? "Cash"
+      : method === "upi"
+        ? "UPI"
+        : method === "card"
+          ? "Card"
+          : method === "bank_transfer"
+            ? "Bank transfer"
+            : "Other";
+
+  const outstandingItems = (args.fees?.outstanding ?? [])
+    .map(
+      (invoice) => `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
+<span style="color:#0F1F1C;font-weight:500;">${esc(formatINR(invoice.outstandingPaise))} due</span>
+<span style="color:#7B918D;">${esc(invoice.invoiceNumber)} &middot; due ${esc(DAY_FMT.format(new Date(`${invoice.dueOn}T00:00:00`)))}</span>
+</li>`,
+    )
+    .join("");
+
+  const paymentItems = (args.fees?.payments ?? [])
+    .map((payment) => {
+      const receiptLink = args.receiptBase
+        ? ` <a href="${esc(args.receiptBase)}/${esc(payment.id)}" style="color:#0D3B36;text-decoration:underline;">Receipt</a>`
+        : "";
+      return `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
+<span style="color:#0F1F1C;font-weight:500;">${esc(formatINR(payment.amountPaise))}</span>
+<span style="color:#7B918D;">${esc(methodText(payment.method))} &middot; ${esc(DAY_FMT.format(new Date(payment.receivedAt)))}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}${receiptLink}</span>
+</li>`;
+    })
+    .join("");
+
+  const feesHtml =
+    outstandingItems.length === 0 && paymentItems.length === 0
+      ? `<p style="font-size:13px;color:#3C534F;margin:0;">No fees due, and no payments recorded yet.</p>`
+      : `<p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#7B918D;margin:0;">Outstanding</p>
+${outstandingItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin:8px 0 0;">Nothing due right now.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${outstandingItems}</ul>`}
+<p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#7B918D;margin:20px 0 0;">Payment history</p>
+${paymentItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin:8px 0 0;">No payments recorded yet.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${paymentItems}</ul>`}`;
+
   const body = `<main style="max-width:560px;margin:0 auto;padding:0 16px 56px;font-family:'Instrument Sans',system-ui,sans-serif;color:#0F1F1C;background-color:#EDF0EC;min-height:100vh;">
 <header style="padding:32px 0 24px;display:flex;align-items:center;gap:16px;">
 <svg viewBox="0 0 100 100" width="56" height="56" role="img" aria-label="${displayName} mark">
@@ -255,6 +313,11 @@ ${nextSessionHtml}
 ${attendanceHtml}
 ${alertHtml}
 ${recentListHtml}
+</section>
+
+<section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">Fees</p>
+${feesHtml}
 </section>
 
 <footer style="padding:16px 0 0;text-align:center;font-size:11px;color:#7B918D;">
@@ -368,6 +431,8 @@ export async function GET(
         recent: data.attendance.recent,
       },
       absenceAlert: data.absenceAlert,
+      fees: data.fees,
+      receiptBase: `/p/${token}/receipt`,
       displayName,
       clubInitials,
       accentBg,

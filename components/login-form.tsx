@@ -78,7 +78,8 @@ export function LoginForm() {
       <h1 className="font-display text-[22px] font-semibold text-marine">Sign in</h1>
       <p className="mt-2 text-[14px] text-ink-2">
         Use your mobile number and the PIN you set when you joined. No code arrives by
-        SMS — if you have never set a PIN, ask your club for a login link.
+        SMS — if you have never set a PIN, ask your club for a login link or a
+        PIN reset.
       </p>
 
       <label className="mt-8 block">

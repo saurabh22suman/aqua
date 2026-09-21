@@ -30,6 +30,8 @@ export async function getFeesOverviewAction(raw: unknown): Promise<FeesOverview>
       to: null,
       collectedPaise: 0,
       paymentCount: 0,
+      reversedPaise: 0,
+      reversalCount: 0,
       outstandingPaise: 0,
       dueInvoiceCount: 0,
       overduePaise: 0,

@@ -78,6 +78,7 @@ export default async function ReceptionMemberDetailPage({
         memberId={member.memberId}
         canWrite={hasPermission(ctx, "invoices.write")}
         canRecord={hasPermission(ctx, "payments.record")}
+        canRefund={hasPermission(ctx, "payments.refund")}
         timezone={timezone}
       />
 

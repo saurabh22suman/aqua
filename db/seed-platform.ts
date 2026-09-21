@@ -327,6 +327,7 @@ export const PERMISSIONS: ReadonlyArray<{
   { key: "invoices.write", module: "billing", description: "Raise and edit invoices" },
   { key: "payments.read", module: "billing", description: "View payments" },
   { key: "payments.record", module: "billing", description: "Record a payment against an invoice" },
+  { key: "payments.refund", module: "billing", description: "Reverse a recorded payment" },
   { key: "staff.read", module: "staff", description: "View staff records" },
   { key: "staff.write", module: "staff", description: "Create and edit staff records" },
   { key: "staff.invite", module: "staff", description: "Invite a staff member to the tenant" },

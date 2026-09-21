@@ -4,6 +4,8 @@ import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
 import { absenceAlerts } from "@/db/schema/absence-alerts";
 import { members, persons } from "@/db/schema/people";
+import { invoices } from "@/db/schema/invoices";
+import { payments } from "@/db/schema/payments";
 import { asMemberId, type TenantId } from "@/lib/ids";
 
 // C-45 — parent-page view service. Used by `/p/[token]` ONLY.
@@ -45,6 +47,24 @@ export type ParentViewAbsenceAlert = {
   calendarWeek: string;
 };
 
+export type ParentViewInvoice = {
+  id: string;
+  invoiceNumber: string;
+  dueOn: string;
+  totalPaise: number;
+  paidPaise: number;
+  outstandingPaise: number;
+  status: string;
+};
+
+export type ParentViewPayment = {
+  id: string;
+  receivedAt: string;
+  amountPaise: number;
+  method: string;
+  invoiceNumber: string | null;
+};
+
 export type ParentViewData = {
   child: {
     id: string;
@@ -58,6 +78,13 @@ export type ParentViewData = {
   // Placeholder for R.16 progress data. Reserved here so the route
   // shape is stable; populated once the assessments schema lands.
   progress: null;
+  // PR2-C10 — read-only money for this child only: outstanding
+  // invoices and recent payments. No mutation affordance exists on
+  // this surface (no Pay Now — pilot exclusion).
+  fees: {
+    outstanding: ParentViewInvoice[];
+    payments: ParentViewPayment[];
+  };
 };
 
 // R.8 — the one-line parent-facing copy, kept here so the route and
@@ -199,6 +226,53 @@ export async function getParentViewData(args: {
       .orderBy(desc(absenceAlerts.createdAt))
       .limit(1);
 
+    const outstandingRows = await tx
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        dueOn: invoices.dueOn,
+        totalPaise: invoices.totalPaise,
+        paidPaise: invoices.paidPaise,
+        status: invoices.status,
+      })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, args.tenantId),
+          eq(invoices.memberId, asMemberId(args.personId)),
+          sql`${invoices.status} in ('issued', 'partial')`,
+          sql`${invoices.totalPaise} > ${invoices.paidPaise}`,
+        ),
+      )
+      .orderBy(asc(invoices.dueOn))
+      .limit(10);
+
+    const paymentRows = await tx
+      .select({
+        id: payments.id,
+        receivedAt: payments.receivedAt,
+        amountPaise: payments.amountPaise,
+        method: payments.method,
+        invoiceNumber: invoices.invoiceNumber,
+      })
+      .from(payments)
+      .leftJoin(
+        invoices,
+        and(
+          eq(invoices.id, payments.invoiceId),
+          eq(invoices.tenantId, args.tenantId),
+        ),
+      )
+      .where(
+        and(
+          eq(payments.tenantId, args.tenantId),
+          eq(payments.memberId, asMemberId(args.personId)),
+          eq(payments.status, "captured"),
+        ),
+      )
+      .orderBy(desc(payments.receivedAt))
+      .limit(MAX_RECENT);
+
     return {
       child: {
         id: child.id,
@@ -237,6 +311,24 @@ export async function getParentViewData(args: {
           }
         : null,
       progress: null,
+      fees: {
+        outstanding: outstandingRows.map((row) => ({
+          id: row.id,
+          invoiceNumber: row.invoiceNumber,
+          dueOn: row.dueOn,
+          totalPaise: Number(row.totalPaise),
+          paidPaise: Number(row.paidPaise),
+          outstandingPaise: Number(row.totalPaise) - Number(row.paidPaise),
+          status: row.status,
+        })),
+        payments: paymentRows.map((row) => ({
+          id: row.id,
+          receivedAt: row.receivedAt.toISOString(),
+          amountPaise: Number(row.amountPaise),
+          method: row.method,
+          invoiceNumber: row.invoiceNumber ?? null,
+        })),
+      },
     };
   });
 }

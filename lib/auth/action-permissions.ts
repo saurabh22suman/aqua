@@ -180,6 +180,19 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getTenantTimezoneAction: "members.read",
   getTerminologyAction: "members.read",
   getBrandingAction: "members.read",
+  // PR2-C1 — academy profile: reads are staff-visible, writes are
+  // management-only (same shape as branding).
+  getTenantProfileAction: "settings.read",
+  updateTenantProfileAction: "settings.manage",
+  // PR2-C4 — owner recovery: listing owners is a management read;
+  // minting the reset link needs staff.invite (owner/admin), and the
+  // service still enforces an active-owner target.
+  listOwnerMembershipsAction: "settings.read",
+  issueTenantOwnerResetLinkAction: "staff.invite",
+  // PR2-C5/C6 — member CSV import: preview and commit are member
+  // management.
+  previewMemberImportAction: "members.write",
+  commitMemberImportAction: "members.write",
 
   // O-07 — registry-rendered owner settings + change requests.
   listOwnerVisibleConfigAction: "settings.read",
@@ -228,6 +241,10 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   voidInvoiceAction: "invoices.write",
   listInvoicePaymentsAction: "invoices.read",
   recordPaymentAction: "payments.record",
+  // PR2-C8 — reversals are a separate duty: recording is counter work
+  // (payments.record), reversing is management (payments.refund).
+  reversePaymentAction: "payments.refund",
+  listPaymentReversalsAction: "payments.read",
   getDailyCollectionAction: "reports.financial",
   confirmCashCountAction: "payments.record",
   // Reopening a closed count is the escape hatch a dishonest recount

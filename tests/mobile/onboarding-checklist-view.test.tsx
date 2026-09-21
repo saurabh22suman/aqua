@@ -54,6 +54,19 @@ const PARTIAL: OnboardingChecklist = {
   totalCount: 3,
 };
 
+const WITH_IMPORT: OnboardingChecklist = {
+  items: [
+    {
+      ...item("add_members", false),
+      secondaryCta: { label: "Import a CSV", href: "/owner/members/import" },
+    },
+    item("create_batch", false),
+    item("assign_coach", false),
+  ],
+  completedCount: 0,
+  totalCount: 3,
+};
+
 afterEach(cleanup);
 
 describe("OnboardingChecklistView (F27)", () => {
@@ -66,6 +79,12 @@ describe("OnboardingChecklistView (F27)", () => {
     render(<OnboardingChecklistView data={ALL_DONE} />);
     expect(screen.getByText("Completed")).toBeTruthy();
     expect(screen.queryByText("What's left")).toBeNull();
+  });
+
+  it("renders a secondary CTA (import) next to the primary one", () => {
+    render(<OnboardingChecklistView data={WITH_IMPORT} />);
+    const link = screen.getByText("Import a CSV").closest("a");
+    expect(link?.getAttribute("href")).toBe("/owner/members/import");
   });
 
   it("keeps 'What's left' while work remains and shows incomplete details", () => {

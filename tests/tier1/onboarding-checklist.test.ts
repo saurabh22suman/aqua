@@ -180,6 +180,15 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
     }
   });
 
+  it("offers the CSV import as a secondary CTA on the add-members step (PR2-C7)", async () => {
+    const data = await getOnboardingChecklist({ tenantId });
+    const item = data.items.find((i) => i.key === "add_members");
+    expect(item?.secondaryCta).toEqual({
+      label: "Import a CSV",
+      href: "/owner/members/import",
+    });
+  });
+
   it("re-reads after a deletion so the checklist reflects reality, not a cached snapshot", async () => {
     // Re-use the fully-populated tenant, then soft-delete the test
     // member, then verify add_members flips back to incomplete. This
