@@ -64,7 +64,18 @@ afterAll(async () => {
   for (const r of rows.rows) {
     // roles.tenant_id -> tenants(id) has no ON DELETE clause (NO
     // ACTION) — once createTenant seeds role templates, the tenant
-    // row can't be deleted until its roles are gone first.
+    // row can't be deleted until its roles are gone first. A tenant
+    // created with a preset also carries preset-engine rows.
+    await admin.query("delete from batches where tenant_id = $1", [r.id]);
+    await admin.query("delete from programs where tenant_id = $1", [r.id]);
+    await admin.query("delete from facility_sub_units where tenant_id = $1", [r.id]);
+    await admin.query("delete from facilities where tenant_id = $1", [r.id]);
+    await admin.query("delete from skills where tenant_id = $1", [r.id]);
+    await admin.query("delete from skill_levels where tenant_id = $1", [r.id]);
+    await admin.query("delete from plan_shapes where tenant_id = $1", [r.id]);
+    await admin.query("delete from message_templates where tenant_id = $1", [r.id]);
+    await admin.query("delete from location_presets where tenant_id = $1", [r.id]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [r.id]);
     await admin.query(
       "delete from role_permissions where tenant_id = $1",
       [r.id],
@@ -486,5 +497,83 @@ describe("createTenant", () => {
         [tenantId],
       );
     }
+  });
+});
+
+describe("createTenant — preset application (PR1-C6)", () => {
+  it("applies the selected preset and records the binding", async () => {
+    const slug = uniqueSlug("preset-ok");
+    const result = await createTenant(
+      { ...baseInput(slug), presetKey: "start-from-scratch" },
+      { actorId },
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.presetKey).toBe("start-from-scratch");
+    expect(result.presetApplied).toBe(true);
+    expect(result.presetWarning).toBeNull();
+
+    const tenant = await admin.query<{
+      preset_key: string | null;
+      preset_version: number | null;
+      preset_applied_at: Date | null;
+    }>(
+      "select preset_key, preset_version, preset_applied_at from tenants where id = $1",
+      [result.tenantId],
+    );
+    expect(tenant.rows[0]?.preset_key).toBe("start-from-scratch");
+    expect(tenant.rows[0]?.preset_version).toBe(1);
+    expect(tenant.rows[0]?.preset_applied_at).not.toBeNull();
+
+    const binding = await admin.query<{ preset_key: string }>(
+      `select lp.preset_key
+         from location_presets lp
+         join locations l on l.id = lp.location_id
+        where l.tenant_id = $1 and l.is_primary`,
+      [result.tenantId],
+    );
+    expect(binding.rows).toEqual([{ preset_key: "start-from-scratch" }]);
+
+    const audit = await admin.query<{ action: string }>(
+      "select action from platform_audit_log where tenant_id = $1",
+      [result.tenantId],
+    );
+    expect(audit.rows.map((r) => r.action)).toContain("tenant.preset.apply");
+  });
+
+  it("keeps the tenant and returns a retryable warning when the preset is unknown", async () => {
+    const slug = uniqueSlug("preset-bad");
+    const result = await createTenant(
+      { ...baseInput(slug), presetKey: "no-such-preset" },
+      { actorId },
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.presetApplied).toBe(false);
+    expect(result.presetWarning).toMatch(/preset/i);
+
+    const tenant = await admin.query<{ preset_key: string | null }>(
+      "select preset_key from tenants where id = $1",
+      [result.tenantId],
+    );
+    expect(tenant.rows[0]?.preset_key).toBeNull();
+
+    const audit = await admin.query<{ action: string }>(
+      "select action from platform_audit_log where tenant_id = $1",
+      [result.tenantId],
+    );
+    expect(audit.rows.map((r) => r.action)).toContain(
+      "tenant.preset_apply_failed",
+    );
+  });
+
+  it("warns instead of silently leaving preset_key null when no preset is chosen", async () => {
+    const slug = uniqueSlug("preset-none");
+    const result = await createTenant(baseInput(slug), { actorId });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.presetKey).toBeNull();
+    expect(result.presetApplied).toBe(false);
+    expect(result.presetWarning).toMatch(/no preset/i);
   });
 });

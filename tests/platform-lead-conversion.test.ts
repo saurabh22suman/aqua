@@ -151,4 +151,36 @@ describe("lead → tenant conversion", () => {
     expect(again.kind).toBe("error");
     if (again.kind === "error") expect(again.code).toBe("already_converted");
   });
+
+  it("surfaces an unapplied preset instead of reporting silent success", async () => {
+    const created = await leads.createLead(
+      {
+        businessName: "Bad Preset Club",
+        contactName: "Nisha Rao",
+        phone: `+9197${String(Date.now()).slice(-8)}`,
+        city: "Nashik",
+        source: "referral",
+        qualification: { sport: "swimming" },
+      },
+      { actorId },
+    );
+    expect(created.kind).toBe("ok");
+    if (created.kind !== "ok") return;
+
+    const result = await convertLead(
+      created.leadId,
+      { slug: `badpreset-${RUN}`, preset: "no-such-preset" },
+      { actorId },
+    );
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    expect(result.presetApplied).toBe(false);
+    expect(result.presetWarning).toMatch(/preset/i);
+
+    const tenant = await admin.query<{ preset_key: string | null }>(
+      "select preset_key from tenants where id = $1",
+      [result.tenantId],
+    );
+    expect(tenant.rows[0]?.preset_key).toBeNull();
+  });
 });

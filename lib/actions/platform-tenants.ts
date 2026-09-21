@@ -44,6 +44,9 @@ const createFormInputSchema = z.object({
   gstin: z.string().optional(),
   locationName: z.string(),
   locationIsPrimary: z.boolean(),
+  // PR1-C6 — the ops form requires an explicit preset choice; the
+  // service still validates the key against the catalogue.
+  presetKey: z.string().trim().min(1, "Choose a preset."),
 });
 
 export type CreateTenantFormInput = z.input<typeof createFormInputSchema>;
@@ -63,6 +66,7 @@ export async function createTenantAction(
     gstin: String(formData.get("gstin") ?? "").trim() || undefined,
     locationName: String(formData.get("locationName") ?? "").trim(),
     locationIsPrimary: formData.get("locationIsPrimary") === "on",
+    presetKey: String(formData.get("presetKey") ?? "").trim(),
   });
   if (!surface.success) {
     return {

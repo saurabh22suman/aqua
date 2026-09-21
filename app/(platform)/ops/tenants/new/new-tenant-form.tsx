@@ -13,6 +13,7 @@ import {
 // GSTIN, locationName) never appear as query-string values.
 
 type Plan = { key: string; name: string; isDefault: boolean };
+type Preset = { key: string; name: string; description: string };
 
 export function NewTenantForm({
   defaultTimezone,
@@ -20,12 +21,16 @@ export function NewTenantForm({
   defaultLocationName,
   plans,
   defaultPlanKey,
+  presets,
+  defaultPresetKey,
 }: {
   defaultTimezone: string;
   defaultCurrency: string;
   defaultLocationName: string;
   plans: ReadonlyArray<Plan>;
   defaultPlanKey: string;
+  presets: ReadonlyArray<Preset>;
+  defaultPresetKey: string;
 }) {
   const [state, formAction, isPending] = useActionState(createTenantAction, {
     kind: "error",
@@ -89,6 +94,21 @@ export function NewTenantForm({
           autoComplete="off"
           maxLength={15}
           hint="15-character GSTIN. Optional for non-India tenants."
+        />
+      </Section>
+
+      <Section
+        title="Onboarding preset"
+        subtitle="Seeds the tenant's programs, batches and levels. Applying is idempotent, so a failed apply can be retried from the preset catalogue."
+      >
+        <SelectField
+          label="Preset"
+          name="presetKey"
+          defaultValue={defaultPresetKey}
+          options={presets.map((p) => ({
+            value: p.key,
+            label: `${p.name} (${p.key})`,
+          }))}
         />
       </Section>
 

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listActivePlans } from "@/db/platform-tenant-create";
+import { listPresets } from "@/db/platform-presets";
 import { NewTenantForm } from "./new-tenant-form";
 
 // Phase 1.5 — create-tenant page. Sits under /ops/tenants/new;
@@ -15,6 +16,13 @@ export default async function NewTenantPage() {
 
   const plans = await listActivePlans();
   const defaultPlan = plans.find((p) => p.isDefault) ?? plans[0];
+  // PR1-C6 — an explicit preset choice. Without one the tenant is
+  // created with preset_key null and no sample data, which used to
+  // happen silently. The service still tolerates a missing preset
+  // (and warns); this form does not.
+  const presets = (await listPresets()).filter((p) => p.status === "active");
+  const defaultPreset =
+    presets.find((p) => p.key === "start-from-scratch") ?? presets[0];
 
   return (
     <div className="max-w-3xl">
@@ -36,6 +44,12 @@ export default async function NewTenantPage() {
         defaultLocationName="Main"
         plans={plans}
         defaultPlanKey={defaultPlan?.key ?? "standard"}
+        presets={presets.map((p) => ({
+          key: p.key,
+          name: p.name,
+          description: p.description,
+        }))}
+        defaultPresetKey={defaultPreset?.key ?? ""}
       />
     </div>
   );

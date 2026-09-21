@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { getSampleDataState } from "@/db/sample-data-state";
@@ -71,6 +72,28 @@ export default async function PlatformTenantDetailPage({
           />
         </div>
       </section>
+
+      {detail.presetKey === null ? (
+        <section className="mt-8">
+          <SectionHeader
+            title="No preset applied"
+            subtitle="This tenant has no onboarding preset, so its programs, batches and levels were not seeded."
+          />
+          <div className="rounded-card bg-paper border border-line px-4 py-3">
+            <p className="text-[13px] text-ink-2">
+              Apply one from the{" "}
+              <Link
+                href="/ops/presets"
+                className="text-[var(--accent)] underline underline-offset-2"
+              >
+                preset catalogue
+              </Link>{" "}
+              before adding real data. Applying is idempotent, so retrying
+              after a failed attempt is safe.
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="Members" value={detail.memberCount} />
