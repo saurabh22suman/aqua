@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { invoices } from "@/db/schema/invoices";
@@ -11,6 +11,7 @@ import {
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import { isUniqueViolation } from "@/lib/pg-errors";
 import { todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -43,73 +44,106 @@ export async function createInvoiceForSubscription(
     return { ok: false, error: "Invalid invoice request." };
   }
 
-  return withTenant(ctx.tenantId, async (tx) => {
-    const access = await resolveLocationAccess(tx, ctx);
-    const rows = await tx
-      .select({
-        subscription: subscriptions,
-        planName: membershipPlans.name,
-        planAmountPaise: membershipPlans.amountPaise,
-      })
-      .from(subscriptions)
-      .innerJoin(
-        membershipPlans,
-        and(
-          eq(membershipPlans.id, subscriptions.planId),
-          eq(membershipPlans.tenantId, ctx.tenantId),
-        ),
-      )
-      .where(
-        and(
-          eq(subscriptions.id, parsed.data.subscriptionId),
-          eq(subscriptions.tenantId, ctx.tenantId),
-        ),
-      )
-      .limit(1);
-    const row = rows[0];
-    if (!row) return { ok: false, error: "Subscription not found." };
-    if (!locationVisible(access, row.subscription.locationId)) {
-      return { ok: false, error: "Subscription not found." };
-    }
-    if (row.subscription.status !== "active") {
+  try {
+    return await withTenant(ctx.tenantId, async (tx) => {
+      const access = await resolveLocationAccess(tx, ctx);
+      const rows = await tx
+        .select({
+          subscription: subscriptions,
+          planName: membershipPlans.name,
+          planAmountPaise: membershipPlans.amountPaise,
+        })
+        .from(subscriptions)
+        .innerJoin(
+          membershipPlans,
+          and(
+            eq(membershipPlans.id, subscriptions.planId),
+            eq(membershipPlans.tenantId, ctx.tenantId),
+          ),
+        )
+        .where(
+          and(
+            eq(subscriptions.id, parsed.data.subscriptionId),
+            eq(subscriptions.tenantId, ctx.tenantId),
+          ),
+        )
+        .limit(1);
+      const row = rows[0];
+      if (!row) return { ok: false, error: "Subscription not found." };
+      if (!locationVisible(access, row.subscription.locationId)) {
+        return { ok: false, error: "Subscription not found." };
+      }
+      if (row.subscription.status !== "active") {
+        return {
+          ok: false,
+          error: "Only an active subscription can be invoiced.",
+        };
+      }
+
+      const [tenantRow] = await tx
+        .select({ timezone: tenants.timezone })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId));
+      const issuedOn = todayInZone(tenantRow?.timezone ?? "Asia/Kolkata");
+      const dueOn = parsed.data.dueOn ?? issuedOn;
+
+      const existing = await tx
+        .select({ invoiceNumber: invoices.invoiceNumber })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.tenantId, ctx.tenantId),
+            eq(invoices.subscriptionId, row.subscription.id),
+            eq(invoices.dueOn, dueOn),
+            ne(invoices.status, "void"),
+          ),
+        )
+        .limit(1);
+      if (existing[0]) {
+        return {
+          ok: false,
+          error: `An invoice for this due date is already live (${existing[0].invoiceNumber}).`,
+        };
+      }
+
+      const result = await issueInvoiceInTx(
+        tx,
+        {
+          tenantId: ctx.tenantId,
+          memberId: row.subscription.memberId,
+          locationId: row.subscription.locationId,
+          subscriptionId: row.subscription.id,
+          issuedOn,
+          dueOn,
+          lines: [
+            {
+              description: row.planName,
+              amountPaise: Number(row.planAmountPaise),
+              activityId: row.subscription.activityId,
+            },
+          ],
+        },
+        ctx.userId ?? null,
+      );
+      if (!result.ok) return { ok: false, error: result.error };
+      return {
+        ok: true,
+        id: result.invoiceId,
+        invoiceNumber: result.invoiceNumber,
+      };
+    });
+  } catch (err) {
+    // The pre-check loses to a concurrent raise (double click, two
+    // tabs). The unique index aborts the transaction; translate its
+    // 23505 into the same friendly message instead of leaking it.
+    if (isUniqueViolation(err)) {
       return {
         ok: false,
-        error: "Only an active subscription can be invoiced.",
+        error: "An invoice for this due date was just raised. Refresh to see it.",
       };
     }
-
-    const [tenantRow] = await tx
-      .select({ timezone: tenants.timezone })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId));
-    const issuedOn = todayInZone(tenantRow?.timezone ?? "Asia/Kolkata");
-
-    const result = await issueInvoiceInTx(
-      tx,
-      {
-        tenantId: ctx.tenantId,
-        memberId: row.subscription.memberId,
-        locationId: row.subscription.locationId,
-        subscriptionId: row.subscription.id,
-        issuedOn,
-        dueOn: parsed.data.dueOn ?? issuedOn,
-        lines: [
-          {
-            description: row.planName,
-            amountPaise: Number(row.planAmountPaise),
-            activityId: row.subscription.activityId,
-          },
-        ],
-      },
-      ctx.userId ?? null,
-    );
-    if (!result.ok) return { ok: false, error: result.error };
-    return {
-      ok: true,
-      id: result.invoiceId,
-      invoiceNumber: result.invoiceNumber,
-    };
-  });
+    throw err;
+  }
 }
 
 export async function voidInvoice(

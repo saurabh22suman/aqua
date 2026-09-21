@@ -8,6 +8,7 @@ import {
 } from "@/lib/actions/people";
 import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { listOptedFacilitiesAction } from "@/lib/actions/facility-optins";
 import { MemberStatusPanel } from "@/components/member-status-panel";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
@@ -62,15 +63,23 @@ export default async function MemberDetailPage({
   const sp = searchParams ? await searchParams : {};
   const tab = resolveTab(sp.tab);
 
-  const [member, attendanceHistory, cardCtx, terminology, optedFacilities, locations] =
-    await Promise.all([
-      getMemberDetailAction(memberId),
-      getMemberAttendanceHistoryAction(memberId),
-      getMemberIdCardContextAction(),
-      getTerminologyAction(),
-      listOptedFacilitiesAction(memberId),
-      listLocationsAction(),
-    ]);
+  const [
+    member,
+    attendanceHistory,
+    cardCtx,
+    terminology,
+    optedFacilities,
+    locations,
+    timezone,
+  ] = await Promise.all([
+    getMemberDetailAction(memberId),
+    getMemberAttendanceHistoryAction(memberId),
+    getMemberIdCardContextAction(),
+    getTerminologyAction(),
+    listOptedFacilitiesAction(memberId),
+    listLocationsAction(),
+    getTenantTimezoneAction(),
+  ]);
   if (!member) notFound();
 
   // V-11 — only fetched when the Progress tab is actually open, and
@@ -234,6 +243,7 @@ export default async function MemberDetailPage({
           memberId={member.memberId}
           canWrite={hasPermission(ctx, "invoices.write")}
           canRecord={hasPermission(ctx, "payments.record")}
+          timezone={timezone}
         />
       ) : null}
 

@@ -5,6 +5,7 @@ import {
   getMemberIdCardContextAction,
 } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberSubscriptionPanel } from "@/components/member-subscription-panel";
 import { MemberInvoicesPanel } from "@/components/member-detail/member-invoices-panel";
@@ -33,7 +34,7 @@ export default async function ReceptionMemberDetailPage({
   const ctx = await requireReception();
   const { memberId } = await params;
   requireUuidParam(memberId);
-  const [member, cardCtx, terminology] = await Promise.all([
+  const [member, cardCtx, terminology, timezone] = await Promise.all([
     getMemberDetailAction(memberId),
     getMemberIdCardContextAction(),
     // The id-card's eyebrow renders the closed-key `member`
@@ -42,6 +43,7 @@ export default async function ReceptionMemberDetailPage({
     // the same terminology fetch that the owner-side page uses
     // pays the cost here too.
     getTerminologyAction(),
+    getTenantTimezoneAction(),
   ]);
   if (!member) notFound();
 
@@ -76,6 +78,7 @@ export default async function ReceptionMemberDetailPage({
         memberId={member.memberId}
         canWrite={hasPermission(ctx, "invoices.write")}
         canRecord={hasPermission(ctx, "payments.record")}
+        timezone={timezone}
       />
 
       {member.isMinor ? (
