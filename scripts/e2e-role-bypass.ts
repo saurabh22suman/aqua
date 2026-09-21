@@ -134,15 +134,28 @@ async function startIsolatedDb() {
 }
 
 // ----- build & start -----
-async function buildAndStart(env: NodeJS.ProcessEnv): Promise<ChildProcess> {
+async function buildAndStart(
+  env: NodeJS.ProcessEnv,
+  admin: Pool,
+): Promise<ChildProcess> {
   console.log("building production bundle…");
   execFileSync("pnpm", ["next", "build"], {
     stdio: "inherit",
     env: { ...env, NODE_ENV: "production" },
   });
+  // PR1-C8 — /api/health requires a fresh worker heartbeat in
+  // production, and this e2e starts the web process only. Record the
+  // beat after the build so it is fresh when the readiness probe runs
+  // (a beat written before a 90s build would already be stale). The
+  // worker-liveness rules themselves are covered by
+  // tests/tier1/worker-heartbeat.test.ts and tests/tier1/health-route.test.ts.
+  await admin.query(
+    "insert into worker_heartbeats (worker_id, last_seen_at) values ($1, now()) on conflict (worker_id) do update set last_seen_at = now()",
+    ["e2e-role-bypass"],
+  );
   console.log(`starting next start on ${BASE}…`);
   const server = spawn("pnpm", ["next", "start", "-p", String(PORT)], {
-    stdio: "ignore",
+    stdio: ["ignore", "inherit", "inherit"],
     detached: true,
     env,
   });
@@ -609,7 +622,7 @@ async function main(): Promise<void> {
     const memberId = memberRow.rows[0]!.id;
 
     // --- resolve action hashes from the production manifest ---
-    server = await buildAndStart(env);
+    server = await buildAndStart(env, iso.admin);
     const manifest = readManifest();
     const actionHashes = {
       getOwnerDashboardAction: findActionHash(manifest, "lib/actions/dashboard.ts", "getOwnerDashboardAction"),

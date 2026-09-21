@@ -386,6 +386,9 @@ no fabricated metric on the health surface.
   (`bootstrapRoles` → `runMigrations` → `seedPlatformCatalogue` →
   `db/deploy.ts`): `295 files passed, 2328 tests passed, 1 skipped` (the live-R2
   round-trip, which skips without credentials); typecheck/lint/build clean.
+  `pnpm e2e:role-bypass` 25/25 after its readiness probe records a fresh
+  worker heartbeat post-build (PR1-C8 made production `/api/health` 503
+  without one).
 - [x] Scanners green (migrations 97 files, location scope, ops actions, tenant
   conventions, bundle 87 routes, fonts, focus contrast, scripts exist, compose
   secrets, deploy workflows, runbook sync).
