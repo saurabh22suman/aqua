@@ -4,6 +4,8 @@ import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
 import { asMemberId, asTenantId } from "@/lib/ids";
 import { getParentViewData } from "@/lib/services/parent-view";
+import { getReceiptForMember } from "@/lib/services/receipts";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // PR2-C10 — the parent link shows money, read-only and scoped to the
 // one child the token names: outstanding invoices and payment
@@ -104,12 +106,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   for (const tenant of [tenantA, tenantB]) {
+    await admin.query("delete from receipts where tenant_id = $1", [tenant]);
     await admin.query("delete from payments where tenant_id = $1", [tenant]);
     await admin.query("delete from invoices where tenant_id = $1", [tenant]);
     await admin.query("delete from members where tenant_id = $1", [tenant]);
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
     await admin.query("delete from membership_plans where tenant_id = $1", [tenant]);
     await admin.query("delete from locations where tenant_id = $1", [tenant]);
+    await deleteAuditRowsForTenant(admin, tenant);
     await admin.query("delete from tenants where id = $1", [tenant]);
   }
   await admin.end();
@@ -166,5 +170,70 @@ describe("parent money view (PR2-C10)", () => {
   it("is read-only: the shape carries no mutation affordance", async () => {
     const data = await loadChildA();
     expect(Object.keys(data!.fees).sort()).toEqual(["outstanding", "payments"]);
+  });
+});
+
+describe("token-scoped receipt download (PR2-C11)", () => {
+  async function paymentIdForChildA(): Promise<string> {
+    const { rows } = await admin.query<{ id: string }>(
+      "select id from payments where tenant_id = $1 and member_id = $2 and status = 'captured' limit 1",
+      [tenantA, childA],
+    );
+    return rows[0]!.id;
+  }
+
+  it("generates a PDF for the token's own payment and audits the parent path", async () => {
+    const paymentId = await paymentIdForChildA();
+    const result = await getReceiptForMember(tenantA, childA, paymentId);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.pdf.subarray(0, 5).toString()).toBe("%PDF-");
+
+    const audit = await admin.query<{
+      actor_type: string;
+      source: string;
+      after: { via?: string };
+    }>(
+      "select actor_type, source, after from audit_log where tenant_id = $1 and action = 'receipt.generate' order by created_at desc limit 1",
+      [tenantA],
+    );
+    expect(audit.rows[0]).toMatchObject({
+      actor_type: "system",
+      source: "api",
+    });
+    expect(audit.rows[0]!.after.via).toBe("parent_link");
+  });
+
+  it("serves the stored copy on a second read (one receipt row)", async () => {
+    const paymentId = await paymentIdForChildA();
+    const first = await getReceiptForMember(tenantA, childA, paymentId);
+    const second = await getReceiptForMember(tenantA, childA, paymentId);
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(Buffer.compare(first.pdf, second.pdf)).toBe(0);
+
+    const { rows } = await admin.query<{ n: string }>(
+      "select count(*)::text as n from receipts where tenant_id = $1 and payment_id = $2",
+      [tenantA, paymentId],
+    );
+    expect(Number(rows[0]!.n)).toBe(1);
+  });
+
+  it("refuses a sibling's payment and another tenant's payment", async () => {
+    const paymentId = await paymentIdForChildA();
+    const siblingAttempt = await getReceiptForMember(
+      tenantA,
+      sibling,
+      paymentId,
+    );
+    expect(siblingAttempt.ok).toBe(false);
+
+    const crossTenant = await getReceiptForMember(tenantB, childA, paymentId);
+    expect(crossTenant.ok).toBe(false);
+  });
+
+  it("refuses a forged payment id", async () => {
+    const result = await getReceiptForMember(tenantA, childA, uuidv7());
+    expect(result.ok).toBe(false);
   });
 });

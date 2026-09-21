@@ -161,12 +161,15 @@ function renderParentView(args: {
       outstandingPaise: number;
     }>;
     payments: Array<{
+      id: string;
       receivedAt: string;
       amountPaise: number;
       method: string;
       invoiceNumber: string | null;
     }>;
   };
+  // PR2-C11 — base path for token-scoped receipt links.
+  receiptBase?: string;
   displayName: string;
   clubInitials: string;
   accentBg: string;
@@ -263,12 +266,15 @@ function renderParentView(args: {
     .join("");
 
   const paymentItems = (args.fees?.payments ?? [])
-    .map(
-      (payment) => `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
+    .map((payment) => {
+      const receiptLink = args.receiptBase
+        ? ` <a href="${esc(args.receiptBase)}/${esc(payment.id)}" style="color:#0D3B36;text-decoration:underline;">Receipt</a>`
+        : "";
+      return `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
 <span style="color:#0F1F1C;font-weight:500;">${esc(formatINR(payment.amountPaise))}</span>
-<span style="color:#7B918D;">${esc(methodText(payment.method))} &middot; ${esc(DAY_FMT.format(new Date(payment.receivedAt)))}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}</span>
-</li>`,
-    )
+<span style="color:#7B918D;">${esc(methodText(payment.method))} &middot; ${esc(DAY_FMT.format(new Date(payment.receivedAt)))}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}${receiptLink}</span>
+</li>`;
+    })
     .join("");
 
   const feesHtml =
@@ -426,6 +432,7 @@ export async function GET(
       },
       absenceAlert: data.absenceAlert,
       fees: data.fees,
+      receiptBase: `/p/${token}/receipt`,
       displayName,
       clubInitials,
       accentBg,
