@@ -48,9 +48,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C7 verified and committed (C7 migration pending human-approved-merge at PR time). |
-| **Current task** | PR1-C8 (Worker heartbeat, graceful shutdown, worker-aware health). |
-| **Next task** | PR1-C9 (Migration advisory lock). |
+| **Current status** | PR1 implementation in progress on `feat/pilot-pr1-stability-deploy`. PR1-C1–C8 verified and committed (C7/C8 migrations pending human-approved-merge at PR time). |
+| **Current task** | PR1-C9 (Migration advisory lock). |
+| **Next task** | PR1-C10 (Compose secrets fail-fast + db restart policy). |
 | **Known blockers** | None. |
 
 ### Session log
@@ -66,6 +66,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C5 fixed (reception booking tile/route hidden) | PR1-C5 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C6 fixed (preset applied on tenant creation + warnings surfaced) | PR1-C6 |
 | 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C7 fixed (messaging non-GA + post-pilot doc + migration) | PR1-C7 |
+| 2026-09-21 | feat/pilot-pr1-stability-deploy | PR1-C8 added (worker heartbeat, drain, health gate) | PR1-C8 |
 
 ---
 
@@ -251,7 +252,7 @@ no fabricated metric on the health surface.
   commit `c1ffca6`. **Migration needs `human-approved-merge` before this PR can
   merge.**
 
-### [ ] PR1-C8 — Worker heartbeat, graceful shutdown, worker-aware health
+### [x] PR1-C8 — Worker heartbeat, graceful shutdown, worker-aware health
 - **Depends:** none.
 - **Files:** `worker/index.ts`, `db/queue.ts`, `app/api/health/route.ts`, new
   `db/migrations/<ts>_worker_heartbeats.sql`, new
@@ -263,7 +264,20 @@ no fabricated metric on the health surface.
   green; SIGTERM drains in-flight jobs; migration precedes web/worker.
 - **Migration/rollback:** additive table; app rollback ignores it. Needs
   `human-approved-merge`.
-- **Evidence:** _pending_
+- **Evidence:** red first — the heartbeat/shutdown modules did not exist and the
+  route still returned 200 for a stale worker. After: `pnpm exec vitest run
+  tests/tier1/worker-heartbeat.test.ts tests/tier1/worker-shutdown.test.ts
+  tests/tier1/health-route.test.ts` — 12 passed;
+  `tests/tier1/no-superuser-on-request-path.test.ts`,
+  `tests/tier1/isolation.test.ts` green (heartbeat table allowlisted; test
+  allowlist extended for this file and PR1-C1's test); `pnpm typecheck` clean.
+  Live: started `pnpm worker` → heartbeat row present and
+  `/api/health` `{"status":"ok","worker":"healthy"}`; backdated the row →
+  503 `{"status":"error","worker":"stale"}`; `SIGTERM` → log
+  `[worker] SIGTERM received — draining in-flight jobs`, process exited 0;
+  row removed → dev 200 `{"worker":"absent"}`. Migration
+  `20260921110643_worker_heartbeats.sql` applied to dev and needs
+  `human-approved-merge`. Commit `7307579`.
 
 ### [ ] PR1-C9 — Migration advisory lock
 - **Depends:** none.
