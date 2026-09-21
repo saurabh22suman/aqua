@@ -396,8 +396,8 @@ no fabricated metric on the health surface.
 - [ ] Migration review: both migrations (`20260921110252_messaging_feature_status.sql`,
   `20260921110643_worker_heartbeats.sql`) need the `human-approved-merge` label
   and a reviewer sign-off at PR time — the agent token cannot apply the label.
-- [ ] PR opened into `main` (agent may push/open after this pre-merge gate; the
-  agent never merges its own PR).
+- [x] PR opened into `main`: https://github.com/saurabh22suman/aqua/pull/188
+  (agent pushed/opened; the agent never merges its own PR).
 
 **Deviation (pre-existing, not introduced here):**
 `tests/migrations/invite-persons-staff-backfill.test.ts` fails on the local
