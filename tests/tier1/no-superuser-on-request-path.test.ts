@@ -324,6 +324,10 @@ const ALLOWLIST = new Set([
   // tenant/member/invoice fixtures; recordPayment runs under
   // withTenant() on app_user.
   "tests/tier1/reception-payments.test.ts",
+  // PR2-C8 — payment reversals: the privileged pool seeds the
+  // tenant/member/invoice/payment fixtures; reversePayment runs under
+  // withTenant() on app_user.
+  "tests/tier1/payment-reversals.test.ts",
   // PR1-C11 — the backup CLI reads MIGRATION_DATABASE_URL to run
   // pg_dump as the privileged role. Operator-only, never scheduled,
   // never imported by the app (the no-superuser test's own header

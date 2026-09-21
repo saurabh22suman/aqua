@@ -46,6 +46,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
       "invoices.write",
       "payments.read",
       "payments.record",
+      "payments.refund",
       "reports.financial",
       "reports.operational",
       "staff.pay.read",
