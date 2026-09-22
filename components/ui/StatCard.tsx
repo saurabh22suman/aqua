@@ -22,7 +22,7 @@ export function StatCard({
   const inner = (
     <>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[12px] font-medium text-ink-3">{label}</p>
+        <p className="text-[13px] font-medium text-ink-3">{label}</p>
         {delta ? (
           <span
             className={`text-[11.5px] font-medium ${
