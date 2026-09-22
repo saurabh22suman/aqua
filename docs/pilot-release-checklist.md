@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1 done. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C2 (shared primitives and chart extraction). |
-| **Next task** | PR3-C3 (owner nav/dashboard/attention rows). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C2 done and committed. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C3 (owner nav, dashboard band and attention rows). |
+| **Next task** | PR3-C4 (owner members table + member workspace). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -91,6 +91,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2 opened as #189; CI green; awaiting human label + merge | PR2 (open, awaiting human merge) |
 | 2026-09-21 | main → feat/pilot-pr3-ui-refresh | PR2 merged as `290cbfd`; PR3 started | PR2 (merged) |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C1 added (AA tokens + call-site sweep, KPI utility, tone maps) | PR3-C1 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C2 added (shared primitives + chart extraction, all wired) | PR3-C2 |
 
 ---
 
@@ -899,7 +900,7 @@ money and reception cash/UPI recording remain fully working.
   value. Live: computed Sign in button `rgb(184, 78, 0)` on white (5.09:1) and
   muted text `rgb(91, 111, 107)` (#5B6F6B) on the dev server. Commit `e07051d`.
 
-### [ ] PR3-C2 — Shared primitives and chart extraction
+### [x] PR3-C2 — Shared primitives and chart extraction
 - **Depends:** PR3-C1.
 - **Files:** new `components/ui/StatCard.tsx`, `DataTable.tsx`,
   `SegmentedTabs.tsx`, `SectionHeader.tsx`, `LaneStrip.tsx`, `RunwayStrip.tsx`,
@@ -910,7 +911,23 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** primitives used by at least one real screen each; no dead
   components (the `Row`/`FieldError` precedent).
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the primitives did not exist. After:
+  `pnpm exec vitest run tests/mobile/ui-primitives.test.tsx
+  tests/mobile/kpi-label-size.test.ts` — 18 passed (link/inert behaviour,
+  tones, clamping, days-left arithmetic, table + row click + empty state,
+  chart re-export), and `pnpm exec vitest run tests/mobile tests/a11y
+  tests/tier1/owner-dashboard.test.ts` — 331 passed. Shipped
+  `components/ui/{ProgressBar,LaneStrip,StatCard,SectionHeader,AttentionRow,
+  CountChip,RunwayStrip,SegmentedTabs,StickyActionBar,DataTable}.tsx` and
+  `components/charts/` (analytics-charts moved, re-exported from
+  `components/charts`; reports cards import the new surface). Every primitive
+  is wired to a real screen: LaneStrip/StatCard/SectionHeader/AttentionRow/
+  CountChip on the owner dashboard, ProgressBar through LaneStrip and
+  RunwayStrip, RunwayStrip on the subscription panel, DataTable for the fees
+  transactions, SegmentedTabs for the fees tabs, StickyActionBar for the
+  member-import commit. The F36 KPI-label guard moved with the labels into
+  `StatCard` (13px label, three StatCards on the dashboard). Commits
+  `ff03ba0`, and the follow-up `kpi-label-size` fix.
 
 ### [ ] PR3-C3 — Owner: nav, dashboard band and attention rows
 - **Depends:** PR3-C2.
