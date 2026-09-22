@@ -46,7 +46,7 @@ describe("owner member list phone display", () => {
 
   it("formats a 10-digit local number", () => {
     render(<MembersBoard initialMembers={[member("9876500001")]} />);
-    expect(screen.getByText(/\+91 98765 00001/)).toBeTruthy();
+    expect(screen.getAllByText(/\+91 98765 00001/).length).toBeGreaterThan(0);
   });
 });
 
