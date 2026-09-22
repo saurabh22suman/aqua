@@ -1,5 +1,10 @@
 import Link from "next/link";
-import { AlertTriangle, CalendarRange, ChevronRight, ClipboardList, Clock, ListChecks, Users } from "lucide-react";
+import { AlertTriangle, CalendarRange, ClipboardList, Clock, ListChecks, Users } from "lucide-react";
+import { AttentionRow } from "@/components/ui/AttentionRow";
+import { CountChip } from "@/components/ui/CountChip";
+import { LaneStrip } from "@/components/ui/LaneStrip";
+import { SectionHeader } from "@/components/ui/SectionHeader";
+import { StatCard } from "@/components/ui/StatCard";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import { TenantMark } from "@/components/branding/tenant-mark";
@@ -105,20 +110,12 @@ export function OwnerDashboard({
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <div className="rounded-ctl bg-deck px-2.5 py-3">
-          <p className="font-display text-[17px] font-semibold tracking-tight">{data.activeMemberCount}</p>
-          <p className="mt-0.5 text-[13px] text-ink-3">Active {membersOther}</p>
-        </div>
-        <div className="rounded-ctl bg-deck px-2.5 py-3">
-          <p className="font-display text-[17px] font-semibold tracking-tight">
-            {data.attendanceThisWeekPct === null ? "—" : `${data.attendanceThisWeekPct}%`}
-          </p>
-          <p className="mt-0.5 text-[13px] text-ink-3">Attendance this week</p>
-        </div>
-        <div className="rounded-ctl bg-deck px-2.5 py-3">
-          <p className="font-display text-[17px] font-semibold tracking-tight">{data.activeBatchCount}</p>
-          <p className="mt-0.5 text-[13px] text-ink-3">{titleCase(batchesOther)} running</p>
-        </div>
+        <StatCard label={`Active ${membersOther}`} value={data.activeMemberCount} />
+        <StatCard
+          label="Attendance this week"
+          value={data.attendanceThisWeekPct === null ? "—" : `${data.attendanceThisWeekPct}%`}
+        />
+        <StatCard label={`${titleCase(batchesOther)} running`} value={data.activeBatchCount} />
       </div>
 
       {/* W1-4 (docs/role-surfaces-plan.md): resolves the deferred F26
@@ -175,54 +172,38 @@ export function OwnerDashboard({
         </section>
       ) : null}
 
-      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Needs you today</h2>
+      <SectionHeader
+        className="mt-7 mb-2.5"
+        title="Needs you today"
+        trailing={
+          data.needsAttention.length > 0 ? (
+            <CountChip count={data.needsAttention.length} tone="warn" />
+          ) : undefined
+        }
+      />
       {data.needsAttention.length === 0 ? (
         <div className="rounded-ctl border border-line bg-paper px-4 py-6 text-center">
           <p className="text-[13px] text-ink-3">Nothing needs attention right now.</p>
         </div>
       ) : (
         <ul>
-          {data.needsAttention.map((item, i) => {
-            const linked = Boolean(item.href);
-            const row = (
-              <>
-                <div className="h-9 w-9 rounded-[11px] bg-warn-soft text-warn grid place-items-center flex-none">
-                  <AlertTriangle size={16} strokeWidth={2} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[14px] font-medium leading-tight">{item.title}</p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 leading-tight truncate">{item.detail}</p>
-                </div>
-                {/* P1-5 (mobile UX audit): the chevron is the only
-                    affordance cue on mobile. An inert row must not
-                    advertise itself as tappable — same card shape, no
-                    chevron, spacer keeps the text column aligned. */}
-                {linked ? (
-                  <ChevronRight size={18} className="ml-auto text-ink-3 flex-none" />
-                ) : (
-                  <span className="ml-auto h-[18px] w-[18px] flex-none" aria-hidden="true" />
-                )}
-              </>
-            );
-            const className = "flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 py-3 mb-2";
-            return item.href ? (
-              <li key={i}>
-                <Link href={item.href} className={className}>
-                  {row}
-                </Link>
-              </li>
-            ) : (
-              <li key={i} className={className}>
-                {row}
-              </li>
-            );
-          })}
+          {data.needsAttention.map((item, i) => (
+            <li key={i} className="mb-2">
+              <AttentionRow
+                icon={<AlertTriangle size={16} strokeWidth={2} />}
+                title={item.title}
+                detail={item.detail}
+                href={item.href ?? undefined}
+              />
+            </li>
+          ))}
         </ul>
       )}
 
-      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">
-        Today&apos;s {resolveTerm(terminology, "facility", "other")}
-      </h2>
+      <SectionHeader
+        className="mt-7 mb-2.5"
+        title={`Today's ${resolveTerm(terminology, "facility", "other")}`}
+      />
       {data.todaysLanes.length === 0 ? (
         <div className="rounded-ctl border border-line bg-paper px-4 py-6 text-center">
           <p className="text-[13px] font-medium">No {sessionsOther} today</p>
@@ -231,35 +212,32 @@ export function OwnerDashboard({
           </p>
         </div>
       ) : (
-        data.todaysLanes.map((lane) => {
-          const fillPct = lane.capacity > 0 ? Math.min(100, Math.round((lane.enrolled / lane.capacity) * 100)) : 0;
-          // water normally, warn under half full — DESIGN.md's lane
-          // strip rule ("water normally, warn when under-filled, late
-          // when a problem"); no "problem" state is detectable from
-          // today's schema (an overbooked batch can't happen, C-18
-          // enforces capacity at enrolment), so only the first two apply.
-          const fillColor = fillPct < 50 ? "bg-warn" : "bg-water";
-          return (
-            <div key={lane.batchId} className="bg-paper border border-line rounded-card px-4 py-3.5 mb-2.5" data-testid="owner-lane">
-              <div className="flex justify-between items-baseline mb-2.5">
-                <div>
-                  <div className="font-display text-[15px] font-semibold flex items-center gap-1.5">
-                    <Clock size={13} className="text-ink-3" />
-                    {formatWallTime12h(lane.startTime)} {lane.batchName}
-                  </div>
-                  <div className="text-[12.5px] text-ink-3 mt-0.5">{lane.programName}</div>
-                </div>
-                <div className="font-display text-[15px] font-semibold">
-                  {lane.enrolled}
-                  <span className="text-ink-3 font-normal">/{lane.capacity}</span>
-                </div>
-              </div>
-              <div className="h-1.5 rounded-pill bg-deck overflow-hidden">
-                <div className={`h-full rounded-pill ${fillColor}`} style={{ width: `${fillPct}%` }} />
-              </div>
-            </div>
-          );
-        })
+        <div className="space-y-2.5">
+          {data.todaysLanes.map((lane) => {
+            const fillPct =
+              lane.capacity > 0
+                ? Math.min(100, Math.round((lane.enrolled / lane.capacity) * 100))
+                : 0;
+            // water normally, warn under half full — DESIGN.md's lane
+            // strip rule ("water normally, warn when under-filled, late
+            // when a problem"); no "problem" state is detectable from
+            // today's schema (an overbooked batch can't happen, C-18
+            // enforces capacity at enrolment), so only the first two apply.
+            return (
+              <LaneStrip
+                key={lane.batchId}
+                time={formatWallTime12h(lane.startTime)}
+                title={lane.batchName}
+                subtitle={lane.programName}
+                started={lane.capacity}
+                ended={lane.enrolled}
+                tone={fillPct < 50 ? "warn" : "water"}
+                icon={<Clock size={13} className="text-ink-3" />}
+                testId="owner-lane"
+              />
+            );
+          })}
+        </div>
       )}
     </main>
   );

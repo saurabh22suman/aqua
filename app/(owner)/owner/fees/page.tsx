@@ -17,6 +17,7 @@ import { methodLabel } from "@/lib/services/payments";
 import { BackLink } from "@/components/ui/BackLink";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
+import { DataTable } from "@/components/ui/DataTable";
 
 // U-02 — the Fees & Payments hub: Overview / Transactions / Dues /
 // Invoices / Plans over the existing C-29…C-39 services. Tabs are
@@ -128,66 +129,70 @@ export default async function FeesPage({
           <h2 className="font-display text-[15px] font-semibold">
             Transactions
           </h2>
-          {transactions.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">
-              No counter payments in this period.
-            </p>
-          ) : (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">
-                    <th className="py-1 font-medium">Received</th>
-                    <th className="py-1 font-medium">{memberLabel}</th>
-                    <th className="py-1 font-medium">Invoice</th>
-                    <th className="py-1 font-medium">Method</th>
-                    <th className="py-1 text-right font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((t) => (
-                    <tr key={t.id} className="border-t border-line">
-                      <td className="py-1.5 text-ink-3">
-                        {formatDateTimeIST(t.receivedAt)}
-                      </td>
-                      <td className="py-1.5 text-ink">
-                        {t.memberName ?? "—"}
-                      </td>
-                      <td className="py-1.5 font-mono text-ink-3">
-                        {t.invoiceNumber ?? "—"}
-                      </td>
-                      <td className="py-1.5 text-ink-2">
-                        {t.kind === "reversal" ? (
-                          <span>
-                            Reversal
-                            {t.reason ? (
-                              <span className="ml-1 text-ink-3">{t.reason}</span>
-                            ) : null}
-                          </span>
-                        ) : (
-                          <>
-                            {methodLabel(t.method)}
-                            {t.reference ? (
-                              <span className="ml-1 text-ink-3">{t.reference}</span>
-                            ) : null}
-                          </>
-                        )}
-                      </td>
-                      <td
-                        className={`py-1.5 text-right font-mono ${
-                          t.amountPaise < 0 ? "text-late" : "text-ink"
-                        }`}
-                      >
-                        {t.amountPaise < 0
-                          ? `−${formatINR(Math.abs(t.amountPaise))}`
-                          : formatINR(t.amountPaise)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <div className="mt-2">
+            <DataTable
+              columns={[
+                {
+                  key: "received",
+                  label: "Received",
+                  render: (t) => (
+                    <span className="text-ink-3">{formatDateTimeIST(t.receivedAt)}</span>
+                  ),
+                },
+                {
+                  key: "member",
+                  label: memberLabel,
+                  render: (t) => <span className="text-ink">{t.memberName ?? "—"}</span>,
+                },
+                {
+                  key: "invoice",
+                  label: "Invoice",
+                  render: (t) => (
+                    <span className="font-mono text-ink-3">{t.invoiceNumber ?? "—"}</span>
+                  ),
+                },
+                {
+                  key: "method",
+                  label: "Method",
+                  render: (t) =>
+                    t.kind === "reversal" ? (
+                      <span className="text-ink-2">
+                        Reversal
+                        {t.reason ? <span className="ml-1 text-ink-3">{t.reason}</span> : null}
+                      </span>
+                    ) : (
+                      <span className="text-ink-2">
+                        {methodLabel(t.method)}
+                        {t.reference ? (
+                          <span className="ml-1 text-ink-3">{t.reference}</span>
+                        ) : null}
+                      </span>
+                    ),
+                },
+                {
+                  key: "amount",
+                  label: "Amount",
+                  align: "right",
+                  render: (t) => (
+                    <span
+                      className={`font-mono ${t.amountPaise < 0 ? "text-late" : "text-ink"}`}
+                    >
+                      {t.amountPaise < 0
+                        ? `−${formatINR(Math.abs(t.amountPaise))}`
+                        : formatINR(t.amountPaise)}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={transactions}
+              rowKey={(t) => t.id}
+              empty={
+                <p className="text-[13px] text-ink-3">
+                  No counter payments in this period.
+                </p>
+              }
+            />
+          </div>
         </section>
       ) : null}
 

@@ -13,6 +13,8 @@ import { listPlansAction } from "@/lib/actions/membership-plans";
 import type { SubscriptionRow } from "@/lib/services/subscriptions";
 import type { PlanRow } from "@/lib/services/membership-plans";
 import { formatINR } from "@/lib/money/format";
+import { RunwayStrip } from "@/components/ui/RunwayStrip";
+import { formatDateIST } from "@/lib/time/tz";
 
 // C-30 — a member's plans over time. Start a subscription from an
 // active plan, pause/resume (pause extends the end date by the paused
@@ -36,6 +38,16 @@ function kindLabel(kind: string): string {
   if (kind === "duration") return "duration";
   if (kind === "sessions") return "session pack";
   return "one-time";
+}
+
+
+// PR3-C2 — runway arithmetic from real dates only (UTC day count).
+function daysBetween(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = fromIso.split("-").map(Number);
+  const [ty, tm, td] = toIso.split("-").map(Number);
+  return Math.round(
+    (Date.UTC(ty!, tm! - 1, td!) - Date.UTC(fy!, fm! - 1, fd!)) / 86_400_000,
+  );
 }
 
 export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
@@ -152,6 +164,26 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                   ? ` · paused from ${subscription.pausedFrom}`
                   : ""}
               </p>
+              {subscription.status === "active" || subscription.status === "paused" ? (
+                <div className="mt-2">
+                  <RunwayStrip
+                    label={`${subscription.planName} runway`}
+                    startLabel={formatDateIST(subscription.startsOn)}
+                    endLabel={formatDateIST(subscription.endsOn)}
+                    usedDays={Math.max(
+                      0,
+                      Math.min(
+                        daysBetween(subscription.startsOn, subscription.endsOn) + 1,
+                        daysBetween(subscription.startsOn, new Date().toISOString().slice(0, 10)) + 1,
+                      ),
+                    )}
+                    totalDays={Math.max(
+                      1,
+                      daysBetween(subscription.startsOn, subscription.endsOn) + 1,
+                    )}
+                  />
+                </div>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 {subscription.status === "active" ? (
                   <button
