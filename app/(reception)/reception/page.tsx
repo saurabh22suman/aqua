@@ -4,6 +4,7 @@ import { getTodayAction } from "@/lib/actions/coach";
 import { listStaffAttendanceDayAction } from "@/lib/actions/staff-attendance";
 import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
+import { CountChip } from "@/components/ui/CountChip";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { todayInZone } from "@/lib/time/tz";
@@ -27,7 +28,13 @@ export default async function ReceptionTodayPage() {
 
   return (
     <main className="px-5 pt-10">
-      <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
+      <div className="flex items-center gap-2.5">
+        <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
+        <CountChip
+          count={sessions.length}
+          label={sessions.length === 1 ? "session" : "sessions"}
+        />
+      </div>
 
       <Link
         href="/reception/collect-payment"
@@ -38,6 +45,20 @@ export default async function ReceptionTodayPage() {
           <p className="text-[14px] font-medium leading-tight">Collect payment</p>
           <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
             Show a club payment QR with the amount.
+          </p>
+        </div>
+        <ChevronRight size={18} className="text-ink-3 flex-none" />
+      </Link>
+
+      <Link
+        href="/reception/members"
+        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+        data-testid="member-search-link"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium leading-tight">Find a member</p>
+          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+            Search by name, phone or member code.
           </p>
         </div>
         <ChevronRight size={18} className="text-ink-3 flex-none" />
