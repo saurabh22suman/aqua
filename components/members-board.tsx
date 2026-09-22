@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
-import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 
@@ -100,7 +100,7 @@ export function MembersBoard({
         data-testid="members-table-head"
         className="mt-4 hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 border-b border-line pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
       >
-        <span>Member</span>
+        <span>{titleCase(resolveTerm(terminology, "member", 1))}</span>
         <span>Phone</span>
         <span>Joined</span>
         <span className="text-right">Status</span>

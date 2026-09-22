@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { getTodayAction } from "@/lib/actions/coach";
+import { getTerminologyAction } from "@/lib/actions/terminology";
+import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { listStaffAttendanceDayAction } from "@/lib/actions/staff-attendance";
 import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
@@ -11,7 +13,10 @@ import { todayInZone } from "@/lib/time/tz";
 
 export default async function ReceptionTodayPage() {
   const ctx = await requireReception();
-  const { sessions } = await getTodayAction();
+  const [{ sessions }, terminology] = await Promise.all([
+    getTodayAction(),
+    getTerminologyAction(),
+  ]);
   // U-08 — the receptionist role carries attendance.mark
   // (lib/services/roles.ts), so the panel is interactive. If a future
   // role reaches this surface without it, the panel degrades to
@@ -56,7 +61,9 @@ export default async function ReceptionTodayPage() {
         data-testid="member-search-link"
       >
         <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">Find a member</p>
+          <p className="text-[14px] font-medium leading-tight">
+            Find a {titleCase(resolveTerm(terminology, "member", 1)).toLowerCase()}
+          </p>
           <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
             Search by name, phone or member code.
           </p>
