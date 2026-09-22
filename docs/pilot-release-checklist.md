@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C4 done and committed. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C5 (fees, reports and schedule composition). |
-| **Next task** | PR3-C6 (coach Today/register/member detail). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C7 done and committed. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C8 (parent polish, runway, attendance summary). |
+| **Next task** | PR3-C9 (ops overview/tenants/detail ordering). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -94,6 +94,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C2 added (shared primitives + chart extraction, all wired) | PR3-C2 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C3 added (Fees in owner nav/home, every attention row links) | PR3-C3 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C4 added (members desktop columns; runway already on subscriptions) | PR3-C4 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C5 added (fees KPI band, seven-column desktop week) | PR3-C5 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C6 added (register count chips, truthful autosave copy) | PR3-C6 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C7 added (reception search route, Today chip, payment lock) | PR3-C7 |
 
 ---
 
@@ -978,7 +981,7 @@ money and reception cash/UPI recording remain fully working.
   are not built because no service exposes them today. Commit `e0f6c4a`-series
   (see session log).
 
-### [ ] PR3-C5 — Owner: fees, reports and schedule composition
+### [x] PR3-C5 — Owner: fees, reports and schedule composition
 - **Depends:** PR3-C4.
 - **Files:** `app/(owner)/owner/fees/page.tsx`, `components/fees/*`,
   `app/(owner)/owner/reports/page.tsx`, `components/reports/*`,
@@ -989,9 +992,17 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** period totals reconcile to rows; no expenses/targets invented;
   both viewports pass.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the fees overview had no KPI band and the week
+  schedule was a single stacked day list at 1280px. After: the fees overview
+  renders a 30px `kpi` collected figure plus `StatCard`s for outstanding and
+  overdue (with the real "net of reversals" note), the transactions section
+  uses `SectionHeader`, and `OwnerScheduleGrid` lays the seven days out in a
+  `md:grid-cols-7` week while staying stacked on phones.
+  `pnpm exec vitest run tests/mobile/owner-schedule-grid.test.tsx
+  tests/mobile/owner-fees-hub.test.tsx` and the mobile/a11y sweep pass (337).
+  No expense/target data is invented. Commit `1b746c4` plus follow-ups.
 
-### [ ] PR3-C6 — Coach: Today, register and member detail
+### [x] PR3-C6 — Coach: Today, register and member detail
 - **Depends:** PR3-C2.
 - **Files:** `app/(coach)/coach/page.tsx`, `components/register-board.tsx`,
   `app/(coach)/coach/members/[memberId]/page.tsx`, mobile tests.
@@ -1001,9 +1012,16 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** register stays one-handed and autosaving; count chips match the
   header; copy is truthful; no cosmetic Save button added.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the register had no count chips and the idle
+  server-backed copy still read "Saved on this phone" (untrue when the
+  offline queue is off). After: the register header shows `CountChip`s for
+  marked and left that add up to the roster size, and the truthful idle copy
+  reads "Saved automatically as you mark" while the offline branch keeps its
+  honest "Saved on this phone" wording (covered by the existing sync-copy
+  test). `pnpm exec vitest run tests/mobile/sync-copy.test.tsx` — 4 passed;
+  mobile/a11y sweep 337 passed; 44px targets unchanged. Commit `125a5a5`.
 
-### [ ] PR3-C7 — Reception: Today, member search, check-ins, payment screen
+### [x] PR3-C7 — Reception: Today, member search, check-ins, payment screen
 - **Depends:** PR3-C2, PR1-C5 (booking hidden), PR2-C3 (payment recording).
 - **Files:** `app/(reception)/reception/page.tsx`, new member-search route,
   `components/reception-check-ins.tsx`, `components/collect-payment.tsx`,
@@ -1017,7 +1035,14 @@ money and reception cash/UPI recording remain fully working.
   screen **still records** cash/UPI through the PR2 services (restyle only — no
   display-only QR, no behavior change); booking tile stays absent; 44px targets.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — Today had no session-count chip and no member
+  search entry, and `?q=` had no route. After: `pnpm exec vitest run
+  tests/mobile/reception-pr3.test.tsx` — 4 passed: Today shows the session
+  chip and the "Find a member" tile, `/reception/members?q=` searches by
+  name/phone/code through `listMembersAction` and links into the member page
+  (with an honest no-match state), the payment screen still carries the
+  recording form through the unchanged PR2 action, and no bookings path
+  renders. Commit `f3a9c7e`-series (see session log).
 
 ### [ ] PR3-C8 — Parent: polish, runway, attendance summary
 - **Depends:** PR2-C10/C11 (money data and receipts), PR3-C1.
