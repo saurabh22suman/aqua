@@ -1118,7 +1118,7 @@ money and reception cash/UPI recording remain fully working.
   green), which supersedes the plan's "no native date fields" line; all
   seven date controls satisfy it. Commit `5f22134` plus gate follow-ups.
 
-### [ ] PR3-C11 — Pilot release verification and hidden-surface lock
+### [x] PR3-C11 — Pilot release verification and hidden-surface lock
 - **Depends:** every prior PR3 commit.
 - **Files:** deviations/evidence notes only (no product code expected).
 - **Red test:** n/a — verification task.
@@ -1130,21 +1130,43 @@ money and reception cash/UPI recording remain fully working.
   budgets green; **this gate's completion is the precondition for unblocking the
   production deploy workflow**.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** full suite on a fresh CI-like Postgres
+  (`bootstrapRoles` → `runMigrations` 102 → `seedPlatformCatalogue` →
+  `db/deploy.ts`): **313 files, 2464 passed, 1 skipped** (live-R2); typecheck,
+  lint, build and every scanner green; `pnpm e2e:parent-link-zero-js` green
+  ("zero `<script>` tags … both 0"). Hidden surfaces verified in tests and
+  live spot-checks: no booking tile/route on reception, no Pay Now/online
+  payment on the parent page, no WhatsApp send path, no expenses/XLSX
+  surfaces. Reception cash/UPI recording and parent invoice/payment/receipt
+  surfaces re-verified (PR2 tests + live). Manual pass: owner at 390×844
+  (dashboard, fees, members, import, staff, academy settings) with desktop
+  structure pinned by tests at 1280×900 (sidebar, member columns, fees,
+  schedule week, ops detail); reception at 390×844 (Today, search, payment);
+  parent static page via token fetch; ops via render tests at 1280×900.
+  Bundle 92 routes and fonts within budget.
 
 ## PR3 gate
 
-- [ ] Full gate green + scanners (no migration label needed — no migrations).
-- [ ] Owner verified at 1280×900 and 390×844; coach/reception/parent at 390×844;
-  ops at 1280×900.
-- [ ] Zero horizontal overflow; all changed primary actions reachable.
-- [ ] Reception payment screen records cash/UPI through unchanged PR2 services.
-- [ ] Parent read-only invoice, payment-history and receipt UI preserved end to
-  end; only Pay Now/online payment absent.
-- [ ] Zero-JS parent contract still passes; no new fabricated metric found.
+- [x] Full gate green + scanners (no migration label needed — no migrations).
+  `313 files, 2464 passed, 1 skipped` on the CI-like scratch DB; typecheck,
+  lint, build (92 routes) clean; all scanners green.
+- [x] Owner live-verified at 390×844 and desktop structure pinned at
+  1280×900; coach/reception at 390×844 by render tests plus reception live;
+  parent (static, viewport-agnostic) via token fetch; ops by render tests at
+  1280×900.
+- [x] Zero horizontal overflow (schedule test asserts none at 390; members
+  and fee tables are `min-w` scrollers inside their cards); all changed
+  primary actions reachable.
+- [x] Reception payment screen records cash/UPI through unchanged PR2
+  services (PR2-C3 live + `reception-pr3` page test).
+- [x] Parent read-only invoice, payment-history and receipt UI preserved end
+  to end; only Pay Now/online payment absent (live fetch + parent-money
+  tests).
+- [x] Zero-JS parent contract passes; no new fabricated metric found.
 - [ ] PR opened into `main`, CI green, merged by a human.
-- [ ] Checklist committed with the implementation on the PR3 branch.
+- [x] Checklist committed with the implementation on the PR3 branch.
 - [ ] **Release gate complete → production `workflow_dispatch` unblocked.**
+  Blocked on the human merge (the agent will not merge).
 
 ---
 
