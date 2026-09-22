@@ -275,4 +275,12 @@ describe("getOwnerDashboard", () => {
     expect(data.todaysLanes).toEqual([]);
     await admin.query("delete from tenants where id = $1", [freshTenantId]);
   });
+
+  it("links every needsAttention item to where the owner can act (PR3-C3)", async () => {
+    const data = await getOwnerDashboard({ tenantId });
+    expect(data.needsAttention.length).toBeGreaterThan(0);
+    for (const item of data.needsAttention) {
+      expect(item.href, `${item.title}: ${item.detail}`).toBeTruthy();
+    }
+  });
 });

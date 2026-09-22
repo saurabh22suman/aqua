@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CalendarRange, ClipboardList, Clock, ListChecks, Users } from "lucide-react";
+import { AlertTriangle, CalendarRange, ClipboardList, Clock, ListChecks, Receipt, Users } from "lucide-react";
 import { AttentionRow } from "@/components/ui/AttentionRow";
 import { CountChip } from "@/components/ui/CountChip";
 import { LaneStrip } from "@/components/ui/LaneStrip";
@@ -125,6 +125,7 @@ export function OwnerDashboard({
           here, where the owner already starts their day. */}
       <div className="mt-3 grid grid-cols-2 gap-2">
         {[
+          { href: "/owner/fees", label: "Fees & payments", icon: Receipt },
           { href: "/owner/enquiries", label: "Enquiries", icon: ClipboardList },
           { href: "/owner/programs", label: "Programs & sessions", icon: CalendarRange },
           { href: "/owner/staff", label: "Staff", icon: Users },
