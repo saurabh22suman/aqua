@@ -7,6 +7,7 @@ import type { RosterRow } from "@/lib/actions/coach";
 import { useOfflineRegister, type Mark } from "@/lib/hooks/use-offline-register";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { CountChip } from "@/components/ui/CountChip";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
@@ -155,11 +156,15 @@ export function RegisterBoard({
             {rows.length === 0 ? (
               <p className="text-[13px] text-ink-2">No one enrolled</p>
             ) : (
-              <p className="text-[13px] text-ink-2">
+              <p className="flex items-center gap-2 text-[13px] text-ink-2">
                 <span className="font-display font-semibold text-[15px] text-water">
                   {markedCount}
                 </span>{" "}
                 of {rows.length} marked
+                <CountChip count={markedCount} label="marked" />
+                {unmarked.length > 0 ? (
+                  <CountChip count={unmarked.length} label="left" tone="warn" />
+                ) : null}
               </p>
             )}
             <p
@@ -210,7 +215,7 @@ export function RegisterBoard({
               ) : savedAtLabel ? (
                 `Saved at ${savedAtLabel}`
               ) : (
-                "Saved on this phone"
+                "Saved automatically as you mark"
               )}
             </p>
           </div>
