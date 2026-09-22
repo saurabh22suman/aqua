@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C7 done and committed. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C8 (parent polish, runway, attendance summary). |
-| **Next task** | PR3-C9 (ops overview/tenants/detail ordering). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 implementation complete on `feat/pilot-pr3-ui-refresh` (C1–C10); C11 verification and the PR3 gate are running. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C11 (pilot release verification) + PR3 gate. |
+| **Next task** | Push and open PR3 into `main` after the gate; human review/merge. Production stays blocked. |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -97,6 +97,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C5 added (fees KPI band, seven-column desktop week) | PR3-C5 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C6 added (register count chips, truthful autosave copy) | PR3-C6 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C7 added (reception search route, Today chip, payment lock) | PR3-C7 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C8 added (parent runway + month summary, zero-JS held) | PR3-C8 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C9 added (ops detail pin; freshness/pagination already enforced) | PR3-C9 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C10 added (type floor, 44px row actions, human edit labels) | PR3-C10 |
 
 ---
 
@@ -978,8 +981,7 @@ money and reception cash/UPI recording remain fully working.
   member tabs each keep real data or an honest empty state. Deviation: the
   desktop table is CSS-grid, not `DataTable`, to keep a single DOM (no
   duplicate links for a11y/tests); pagination and an upcoming-sessions block
-  are not built because no service exposes them today. Commit `e0f6c4a`-series
-  (see session log).
+  are not built because no service exposes them today. Commit `5488080`.
 
 ### [x] PR3-C5 — Owner: fees, reports and schedule composition
 - **Depends:** PR3-C4.
@@ -1042,9 +1044,9 @@ money and reception cash/UPI recording remain fully working.
   name/phone/code through `listMembersAction` and links into the member page
   (with an honest no-match state), the payment screen still carries the
   recording form through the unchanged PR2 action, and no bookings path
-  renders. Commit `f3a9c7e`-series (see session log).
+  renders. Commit `f3a9c7e`-series (C7 commit listed in the session log).
 
-### [ ] PR3-C8 — Parent: polish, runway, attendance summary
+### [x] PR3-C8 — Parent: polish, runway, attendance summary
 - **Depends:** PR2-C10/C11 (money data and receipts), PR3-C1.
 - **Files:** `app/p/[token]/route.ts` (markup only).
 - **Red test:** no runway strip or month summary; page otherwise unchanged.
@@ -1055,9 +1057,18 @@ money and reception cash/UPI recording remain fully working.
   receipt UI content and authorization behaviour preserved**; no Pay Now /
   online payment control added; no payment/progress fabrication.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the parent page had no runway and no
+  per-status month summary. After: `pnpm exec vitest run
+  tests/tier1/parent-money.test.ts` — 10 passed (runway computed from the
+  active subscription's real dates, month marks split present/late/absent
+  with honest zeros when unmarked, money fields untouched). Live: minted a
+  parent token and fetched `/p/<token>` — 200 with a "Plan" section
+  ("Monthly — 27 of 30 days left"), the Fees section and payment history
+  unchanged, and **zero `<script>` tags**; `pnpm e2e:parent-link-zero-js`
+  re-run green. Money content and authorization are the PR2 surfaces,
+  untouched. Commit `e0f6c4a` (parent runway commit; see session log).
 
-### [ ] PR3-C9 — Ops: overview, tenants, detail ordering
+### [x] PR3-C9 — Ops: overview, tenants, detail ordering
 - **Depends:** PR3-C2, PR1-C6/C7.
 - **Files:** `app/(platform)/layout.tsx`, `app/(platform)/ops/page.tsx`,
   `app/(platform)/ops/tenants/page.tsx`,
@@ -1069,9 +1080,17 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** metrics freshness stated honestly; preset-less tenants flagged;
   invite owner visible for new tenants.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** the three acceptance facts already hold in product code
+  (the overview states "Last refreshed … IST" or "No metrics snapshot yet —
+  the platform.metrics-snapshot job runs nightly"; the tenant detail flags
+  "No preset applied" with a catalogue link; the Owner invite form sits on
+  the page). Pinned by the new `tests/ops-tenant-detail-pr3.test.tsx`
+  (preset-less tenant → warning + invite form) and the existing
+  `tests/ops-overview-dashboard.test.tsx` / `tests/ops-tenants-filters-pagination.test.tsx`
+  (freshness honesty, list filters/pagination). `pnpm exec vitest run
+  tests/ops-tenant-detail-pr3.test.tsx` — 1 passed.
 
-### [ ] PR3-C10 — Accessibility and copy sweep
+### [x] PR3-C10 — Accessibility and copy sweep
 - **Depends:** PR3-C3..C9.
 - **Files:** `components/member-detail/inline-edit-field.tsx`,
   `components/member-enrolment-panel.tsx`,
@@ -1087,7 +1106,17 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** controls ≥44px on tenant surfaces; readable labels; no sub-11px
   text; no native date fields in user-facing forms; copy matches behaviour.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** `pnpm exec vitest run tests/mobile/a11y-copy-sweep.test.tsx`
+  — 3 passed, and the mobile/a11y sweep — 335 passed. Swept: the last
+  sub-11px classes (attendance grid 9px, schedule 10px) to 11px; the
+  subscription Pause/Resume/Cancel and invoice View actions to a 44px floor
+  (`min-h-11`); the inline-edit affordance now reads "Edit name" / "Edit
+  phone number" / "Edit date of birth" / "Edit medical notes" instead of
+  raw field names (dependent tests updated). **Deviation:** native
+  `type="date"` inputs are kept — the repo's enforced F17 contract is
+  `lang="en-IN"` + dd/mm/yyyy hint (`tests/mobile/date-input-guard.test.ts`,
+  green), which supersedes the plan's "no native date fields" line; all
+  seven date controls satisfy it. Commit `5f22134` plus gate follow-ups.
 
 ### [ ] PR3-C11 — Pilot release verification and hidden-surface lock
 - **Depends:** every prior PR3 commit.
