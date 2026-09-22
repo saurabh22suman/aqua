@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C2 done and committed. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C3 (owner nav, dashboard band and attention rows). |
-| **Next task** | PR3-C4 (owner members table + member workspace). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C3 done and committed. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C4 (owner members table + member workspace). |
+| **Next task** | PR3-C5 (fees, reports and schedule composition). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -92,6 +92,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | main → feat/pilot-pr3-ui-refresh | PR2 merged as `290cbfd`; PR3 started | PR2 (merged) |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C1 added (AA tokens + call-site sweep, KPI utility, tone maps) | PR3-C1 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C2 added (shared primitives + chart extraction, all wired) | PR3-C2 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C3 added (Fees in owner nav/home, every attention row links) | PR3-C3 |
 
 ---
 
@@ -929,7 +930,7 @@ money and reception cash/UPI recording remain fully working.
   `StatCard` (13px label, three StatCards on the dashboard). Commits
   `ff03ba0`, and the follow-up `kpi-label-size` fix.
 
-### [ ] PR3-C3 — Owner: nav, dashboard band and attention rows
+### [x] PR3-C3 — Owner: nav, dashboard band and attention rows
 - **Depends:** PR3-C2.
 - **Files:** `components/owner-shell.tsx`, `components/owner-side-nav.tsx`,
   `lib/nav.ts`, `components/owner-dashboard.tsx`, `lib/services/dashboard.ts`,
@@ -941,7 +942,16 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** Fees reachable from owner nav/home; every attention row links;
   KPI values trace to DB and deltas are real or absent (no fabrication).
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — four assertions failed (attention hrefs, Fees
+  quick-link, sidebar Fees, chevron parity). After: `pnpm exec vitest run
+  tests/tier1/owner-dashboard.test.ts tests/mobile/owner-shell.test.tsx
+  tests/mobile/dashboard-and-lists.test.tsx` — 26 passed. Every
+  `needsAttention` item now has an href (register-not-started →
+  `/owner/reports`, cash-count review → `/owner/reports/collections`); the
+  owner home quick actions include Fees; `OWNER_SIDEBAR_EXTRA_NAV` adds Fees
+  to the desktop sidebar only, keeping the mobile bottom nav at four items
+  (asserted). KPI band and StatCards from C2 carry the dashboard figures with
+  the `kpi` type. Commit `21dd689`.
 
 ### [ ] PR3-C4 — Owner: members table + member workspace
 - **Depends:** PR3-C3, PR2-C7 (import entry).
