@@ -71,6 +71,13 @@ beforeAll(async () => {
   await seedMember(tenantA, personSibling, sibling, locA, `PMS-${RUN}`, uuidv7());
   await seedMember(tenantB, personB, childB, locB, `PMB-${RUN}`, planB);
 
+  // Child A: an active subscription so the runway is real.
+  await admin.query(
+    `insert into subscriptions (id, tenant_id, member_id, plan_id, location_id, starts_on, ends_on, status)
+     values ($1, $2, $3, $4, $5, '2026-09-01', '2026-09-30', 'active')`,
+    [uuidv7(), tenantA, childA, planA, locA],
+  );
+
   // Child A: one open invoice (paid 500 of 2500) and one settled.
   await admin.query(
     `insert into invoices (id, tenant_id, location_id, member_id, invoice_number, financial_year, issued_on, due_on, subtotal_paise, tax_paise, total_paise, paid_paise, status)
@@ -109,6 +116,7 @@ afterAll(async () => {
     await admin.query("delete from receipts where tenant_id = $1", [tenant]);
     await admin.query("delete from payments where tenant_id = $1", [tenant]);
     await admin.query("delete from invoices where tenant_id = $1", [tenant]);
+    await admin.query("delete from subscriptions where tenant_id = $1", [tenant]);
     await admin.query("delete from members where tenant_id = $1", [tenant]);
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
     await admin.query("delete from membership_plans where tenant_id = $1", [tenant]);
@@ -170,6 +178,26 @@ describe("parent money view (PR2-C10)", () => {
   it("is read-only: the shape carries no mutation affordance", async () => {
     const data = await loadChildA();
     expect(Object.keys(data!.fees).sort()).toEqual(["outstanding", "payments"]);
+  });
+
+  it("computes the plan runway from the active subscription dates (PR3-C8)", async () => {
+    const data = await loadChildA();
+    expect(data!.runway).toEqual({
+      planName: "Monthly",
+      startsOn: "2026-09-01",
+      endsOn: "2026-09-30",
+      usedDays: 21,
+      totalDays: 30,
+    });
+  });
+
+  it("splits the month's attendance by status (PR3-C8)", async () => {
+    const data = await loadChildA();
+    // No marks seeded for the child; the summary is honest zeros, not
+    // fabricated figures.
+    expect(data!.attendance.present).toBe(0);
+    expect(data!.attendance.late).toBe(0);
+    expect(data!.attendance.absent).toBe(0);
   });
 });
 
