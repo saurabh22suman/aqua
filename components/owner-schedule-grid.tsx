@@ -164,7 +164,7 @@ export function OwnerScheduleGrid({
           </Link>
         </div>
       ) : (
-        <div className="mt-4 space-y-4">
+        <div className="mt-4 space-y-4 md:grid md:grid-cols-7 md:gap-3 md:space-y-0">
           {days.map((day) => {
             const daySessions = byDay.get(day) ?? [];
             return (
