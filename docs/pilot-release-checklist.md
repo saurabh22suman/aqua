@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 implementation complete on `feat/pilot-pr3-ui-refresh` (C1–C10); C11 verification and the PR3 gate are running. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C11 (pilot release verification) + PR3 gate. |
-| **Next task** | Push and open PR3 into `main` after the gate; human review/merge. Production stays blocked. |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 complete and open as PR #190 with green CI; awaiting the human `human-approved-merge` label and merge. Dev deployment deferred by owner until after PR3. |
+| **Current task** | None — human review/merge of PR #190. |
+| **Next task** | After the human merges PR3: complete the release gate (mark the PR3 gate done in this checklist on the merged commit), then resume the deferred Dev VPS/Dokploy work per the post-PR3 deployment note; only then set `PILOT_RELEASE_GATE=passed`. |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -100,6 +100,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C8 added (parent runway + month summary, zero-JS held) | PR3-C8 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C9 added (ops detail pin; freshness/pagination already enforced) | PR3-C9 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C10 added (type floor, 44px row actions, human edit labels) | PR3-C10 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3 full gate + zero-JS green; opened as #190 with green CI | PR3-C11 (pre-merge) |
 
 ---
 
@@ -1163,7 +1164,10 @@ money and reception cash/UPI recording remain fully working.
   to end; only Pay Now/online payment absent (live fetch + parent-money
   tests).
 - [x] Zero-JS parent contract passes; no new fabricated metric found.
-- [ ] PR opened into `main`, CI green, merged by a human.
+- [x] PR opened into `main`: https://github.com/saurabh22suman/aqua/pull/190
+  (agent pushed/opened; the agent never merges). CI green on the PR (run
+  `35784258466`, 16m4s). `agent-protected-paths` awaits the human
+  `human-approved-merge` label. Not merged.
 - [x] Checklist committed with the implementation on the PR3 branch.
 - [ ] **Release gate complete → production `workflow_dispatch` unblocked.**
   Blocked on the human merge (the agent will not merge).
