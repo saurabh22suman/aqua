@@ -276,7 +276,7 @@ describe("empty inline fields look editable (P2-8, P2-9)", () => {
         placeholder="Add medical notes"
       />,
     );
-    const button = screen.getByLabelText("Edit medicalNotes");
+    const button = screen.getByLabelText("Edit medical notes");
     expect(button.className).toContain("opacity-100");
     expect(button.className).not.toContain("opacity-0");
   });

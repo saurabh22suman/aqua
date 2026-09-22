@@ -111,7 +111,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
         <button
           type="button"
           onClick={() => void load()}
-          className="mt-2 rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2"
+          className="mt-2 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
         >
           Retry
         </button>
@@ -192,7 +192,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                     onClick={() =>
                       run(() => pauseSubscriptionAction({ id: subscription.id }))
                     }
-                    className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Pause
                   </button>
@@ -204,7 +204,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                     onClick={() =>
                       run(() => resumeSubscriptionAction({ id: subscription.id }))
                     }
-                    className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Resume
                   </button>
@@ -220,7 +220,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                         cancelSubscriptionAction({ id: subscription.id }),
                       );
                     }}
-                    className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Cancel
                   </button>

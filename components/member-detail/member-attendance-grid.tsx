@@ -110,7 +110,7 @@ export function MemberAttendanceGrid({
               onClick={() => setSelected(isSelected ? null : day.date)}
               className={`flex aspect-square flex-col items-center justify-center rounded-ctl ${CELL_STYLE[day.status]} ${border}`}
             >
-              <span className="text-[9px] uppercase opacity-70">
+              <span className="text-[11px] uppercase opacity-80">
                 {weekdayShort(day.date)}
               </span>
               <span className="text-[13px] font-medium tabular-nums">

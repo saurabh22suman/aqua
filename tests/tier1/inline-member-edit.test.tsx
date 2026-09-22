@@ -75,7 +75,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue("Arjun Mehta");
     expectInDocument(input);
     expect(input.tagName).toBe("INPUT");
@@ -92,7 +92,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue(
       "Arjun Mehta",
     ) as HTMLInputElement;
@@ -118,7 +118,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue(
       "Arjun Mehta",
     ) as HTMLInputElement;
@@ -141,7 +141,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue(
       "Arjun Mehta",
     ) as HTMLInputElement;
@@ -172,7 +172,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue(
       "Arjun Mehta",
     ) as HTMLInputElement;
@@ -197,7 +197,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit dateOfBirth/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit date of birth/i }));
     // 2026-09-13 UI/UX audit §7.3: the DOB editor is now the masked
     // dd/mm/yyyy field, so the displayed form of 2015-01-01 is
     // 01/01/2015 and the user types day-first. The action still
@@ -245,7 +245,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue(
       "Arjun Mehta",
     ) as HTMLInputElement;
@@ -267,7 +267,7 @@ describe("InlineEditField", () => {
         snapshot={SNAPSHOT}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /edit fullName/i }));
+    fireEvent.click(screen.getByRole("button", { name: /edit name/i }));
     const input = screen.getByDisplayValue(
       "Arjun Mehta",
     ) as HTMLInputElement;

@@ -130,7 +130,7 @@ export function OwnerScheduleGrid({
                             {Number(cell.date.slice(8, 10))}
                           </span>
                           {cell.count > 0 ? (
-                            <span className="text-[10px] tabular-nums text-water">
+                            <span className="text-[11px] tabular-nums text-water">
                               {cell.count}
                             </span>
                           ) : null}
