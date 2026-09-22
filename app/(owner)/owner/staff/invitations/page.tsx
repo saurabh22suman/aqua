@@ -17,7 +17,7 @@ export default async function StaffInvitationsPage() {
         <h1 className="font-display text-[19px] font-semibold">Invitations</h1>
         <Link
           href="/owner/staff/invitations/new"
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)]"
+          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)]"
         >
           Invite staff
         </Link>

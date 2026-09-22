@@ -112,7 +112,7 @@ export default async function StaffRosterPage({
             <select
               name="location"
               defaultValue={locationId ?? ""}
-              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none"
+              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
             >
               <option value="">All locations</option>
               {locations.map((l) => (
@@ -124,7 +124,7 @@ export default async function StaffRosterPage({
           </label>
           <button
             type="submit"
-            className="min-h-[44px] rounded-pill bg-[var(--accent)] px-4 text-[13px] font-semibold text-paper"
+            className="min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
           >
             Apply
           </button>

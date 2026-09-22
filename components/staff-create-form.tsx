@@ -158,7 +158,7 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
           type="button"
           onClick={submit}
           disabled={pending}
-          className="flex-1 rounded-pill py-4 text-[14.5px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center justify-center gap-2"
+          className="flex-1 rounded-pill py-4 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)] disabled:opacity-70 flex items-center justify-center gap-2"
           data-testid="staff-save"
         >
           {pending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}

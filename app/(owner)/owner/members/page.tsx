@@ -41,7 +41,7 @@ export default async function MembersPage({
           </Link>
           <Link
             href="/owner/members/new"
-            className="flex items-center gap-1.5 rounded-ctl bg-[var(--accent)] px-3.5 py-2 text-[13px] font-medium text-white"
+            className="flex items-center gap-1.5 rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white"
           >
             <Plus size={16} strokeWidth={2.4} />
             Add
@@ -54,7 +54,7 @@ export default async function MembersPage({
           one, or{" "}
           <Link
             href="/owner/members/import"
-            className="text-[var(--accent)] underline underline-offset-2"
+            className="text-[var(--accent-ink)] underline underline-offset-2"
           >
             import your existing register
           </Link>

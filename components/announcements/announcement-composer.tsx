@@ -10,7 +10,7 @@ import { sendAnnouncementAction } from "@/lib/actions/announcements";
 // believing a WhatsApp message went out.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function AnnouncementComposer({
   batches,
@@ -148,7 +148,7 @@ export function AnnouncementComposer({
             setBusy(false);
           })();
         }}
-        className="mt-3 min-h-[44px] rounded-pill bg-[var(--accent)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+        className="mt-3 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
       >
         {busy ? "Sending…" : "Send in-app"}
       </button>

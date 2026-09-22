@@ -21,7 +21,7 @@ import type { LocationOption } from "@/lib/services/people";
 // never mutates without the action returning ok.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
   const router = useRouter();
@@ -209,7 +209,7 @@ function CategoryCard({
       )}
 
       <details className="mt-3">
-        <summary className="cursor-pointer text-[13px] text-[var(--accent)] underline underline-offset-2">
+        <summary className="cursor-pointer text-[13px] text-[var(--accent-ink)] underline underline-offset-2">
           Add item
         </summary>
         <AddItemForm categoryId={category.id} />

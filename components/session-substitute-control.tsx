@@ -132,7 +132,7 @@ export function SessionSubstituteControl({
           type="button"
           onClick={submit}
           disabled={busy || !picked}
-          className="flex-1 rounded-ctl bg-[var(--accent)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+          className="flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           data-testid={`substitute-submit-${sessionId}`}
         >
           {busy ? "Saving…" : "Confirm substitution"}

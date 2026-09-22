@@ -128,7 +128,7 @@ export function NewTenantForm({
             type="checkbox"
             name="locationIsPrimary"
             defaultChecked
-            className="h-5 w-5 rounded border border-line text-[var(--accent)] focus:ring-[var(--accent)]"
+            className="h-5 w-5 rounded border border-line text-[var(--accent-ink)] focus:ring-[var(--accent-strong)]"
           />
           <span className="text-[14px] text-ink-2">
             This is the primary location
@@ -149,7 +149,7 @@ export function NewTenantForm({
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-pill px-6 py-3 text-[14px] font-semibold text-white bg-[var(--accent)] transition-colors duration-150 disabled:opacity-60"
+          className="rounded-pill px-6 py-3 text-[14px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
         >
           {isPending ? "Creating…" : "Create tenant"}
         </button>
@@ -220,7 +220,7 @@ function Field({
         autoComplete={autoComplete}
         pattern={pattern}
         maxLength={maxLength}
-        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       />
       {hint ? (
         <span className="mt-1 block text-[12px] text-ink-3">{hint}</span>
@@ -246,7 +246,7 @@ function SelectField({
       <select
         name={name}
         defaultValue={defaultValue}
-        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>

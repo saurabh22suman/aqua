@@ -239,7 +239,7 @@ export function MemberEnrolmentPanel({
                         type="button"
                         onClick={() => moveToBatch(e.batchId)}
                         disabled={busy || !transferTarget}
-                        className="rounded-ctl bg-[var(--accent)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
+                        className="rounded-ctl bg-[var(--accent-strong)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
                       >
                         {busy ? "Moving…" : "Move"}
                       </button>

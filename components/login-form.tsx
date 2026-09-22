@@ -126,7 +126,7 @@ export function LoginForm() {
       <button
         onClick={submit}
         disabled={!canSubmit}
-        className="mt-6 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent)] transition-colors duration-150 disabled:opacity-40"
+        className="mt-6 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-40"
       >
         {busy ? "One moment…" : "Sign in"}
       </button>

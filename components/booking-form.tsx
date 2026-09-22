@@ -214,7 +214,7 @@ export function BookingForm({
               onClick={() => setMode(option)}
               className={`min-h-[44px] rounded-ctl border px-3 py-2 text-[13px] ${
                 mode === option
-                  ? "border-[var(--accent)] bg-paper font-medium text-ink"
+                  ? "border-[var(--accent-strong)] bg-paper font-medium text-ink"
                   : "border-line bg-paper text-ink-2"
               }`}
               data-testid={`booking-mode-${option}`}

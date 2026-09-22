@@ -32,7 +32,7 @@ export function EmptyState({ icon, title, body, action }: EmptyStateProps) {
       {action?.href ? (
         <Link
           href={action.href}
-          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent)] transition-colors duration-150"
+          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150"
         >
           {action.label}
         </Link>
@@ -40,7 +40,7 @@ export function EmptyState({ icon, title, body, action }: EmptyStateProps) {
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-5 rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent)] transition-colors duration-150"
+          className="mt-5 rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150"
         >
           {action.label}
         </button>

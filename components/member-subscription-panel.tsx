@@ -24,7 +24,7 @@ import { formatINR } from "@/lib/money/format";
 export const SUBSCRIPTIONS_CHANGED_EVENT = "aqua:subscriptions-changed";
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function statusTone(status: SubscriptionRow["status"]): string {
   if (status === "active") return "bg-marine/10 text-marine";
@@ -273,7 +273,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                 }),
               )
             }
-            className="mt-2 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+            className="mt-2 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Saving…" : "Start subscription"}
           </button>

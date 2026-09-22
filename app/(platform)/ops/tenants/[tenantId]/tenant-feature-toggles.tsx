@@ -29,7 +29,7 @@ const SOURCE_LABEL: Record<FeatureSource, string> = {
 // readers see the same story.
 const SOURCE_TONE: Record<FeatureSource, string> = {
   plan: "bg-deck text-ink-2",
-  tenant_override: "bg-paper border border-[var(--accent)] text-ink",
+  tenant_override: "bg-paper border border-[var(--accent-strong)] text-ink",
   denied: "bg-ink-2/15 text-ink-2 line-through",
 };
 
@@ -203,7 +203,7 @@ function TenantFeatureEditRow({
             }
           }}
           disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
+          className="rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
         >
           Force on
         </button>

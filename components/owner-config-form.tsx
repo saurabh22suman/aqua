@@ -29,7 +29,7 @@ type OwnerItem = {
 };
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function valueType(item: OwnerItem): string {
   const type = item.jsonSchema["type"];
@@ -157,7 +157,7 @@ export function OwnerConfigForm({ items }: { items: OwnerItem[] }) {
                 type="button"
                 disabled={pending && pendingKey === item.key}
                 onClick={() => save(item)}
-                className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+                className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
               >
                 {pending && pendingKey === item.key ? "Saving…" : "Save"}
               </button>
@@ -176,7 +176,7 @@ export function OwnerConfigForm({ items }: { items: OwnerItem[] }) {
                 · changed by the platform
               </p>
               <details className="mt-2">
-                <summary className="cursor-pointer text-[12px] text-[var(--accent)] underline underline-offset-2">
+                <summary className="cursor-pointer text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
                   Request change
                 </summary>
                 <div className="mt-2 space-y-2">

@@ -112,7 +112,7 @@ export function ActivityFilterBar({
           type="button"
           onClick={apply}
           disabled={pending}
-          className="rounded-pill px-4 py-3 min-h-[44px] text-[13px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-70 flex items-center gap-1.5"
+          className="rounded-pill px-4 py-3 min-h-[44px] text-[13px] font-semibold text-paper bg-[var(--accent-strong)] disabled:opacity-70 flex items-center gap-1.5"
         >
           {pending ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
           Apply

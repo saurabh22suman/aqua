@@ -79,7 +79,7 @@ export function OwnerScheduleGrid({
             <select
               name="location"
               defaultValue={locationId ?? ""}
-              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none"
+              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
             >
               <option value="">All locations</option>
               {locations.map((l) => (
@@ -91,7 +91,7 @@ export function OwnerScheduleGrid({
           </label>
           <button
             type="submit"
-            className="min-h-[44px] rounded-pill bg-[var(--accent)] px-4 text-[13px] font-semibold text-paper"
+            className="min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
           >
             Apply
           </button>
@@ -158,7 +158,7 @@ export function OwnerScheduleGrid({
           </p>
           <Link
             href="/owner/programs"
-            className="mt-3 inline-flex min-h-[44px] items-center rounded-pill bg-[var(--accent)] px-5 text-[13px] font-semibold text-paper"
+            className="mt-3 inline-flex min-h-[44px] items-center rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper"
           >
             Manage batches
           </Link>

@@ -152,7 +152,7 @@ export function MemberImportForm() {
                   type="button"
                   onClick={commit}
                   disabled={busy}
-                  className="mt-3 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+                  className="mt-3 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
                 >
                   {busy
                     ? "Importing…"

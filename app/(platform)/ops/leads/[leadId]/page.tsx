@@ -88,7 +88,7 @@ export default async function LeadDetailPage({
             Tenant:{" "}
             <Link
               href={`/ops/tenants/${lead.convertedTenantId}`}
-              className="text-[var(--accent)] underline underline-offset-2"
+              className="text-[var(--accent-ink)] underline underline-offset-2"
             >
               {lead.convertedTenantId}
             </Link>

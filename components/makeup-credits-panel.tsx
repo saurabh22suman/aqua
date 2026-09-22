@@ -143,7 +143,7 @@ export function MakeupCreditsPanel({ memberId }: { memberId: string }) {
                   )
                 }
                 disabled={busy || !sourcePick}
-                className="rounded-ctl bg-[var(--accent)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
+                className="rounded-ctl bg-[var(--accent-strong)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
               >
                 {busy ? "Saving…" : "Grant credit"}
               </button>

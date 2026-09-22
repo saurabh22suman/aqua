@@ -20,7 +20,7 @@ export default async function MemberImportPage() {
       <p className="mt-3 text-[13px]">
         <Link
           href="/owner/members/import/template.csv"
-          className="text-[var(--accent)] underline underline-offset-2"
+          className="text-[var(--accent-ink)] underline underline-offset-2"
         >
           Download the CSV template
         </Link>

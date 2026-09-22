@@ -225,7 +225,7 @@ export function InlineEditField({
   }
 
   const baseInputClass =
-    "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent)]";
+    "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent-strong)]";
 
   // P2-8/P2-9: empty fields style the placeholder as editable and keep
   // the pencil visible (no hover on a phone). Dates read in the

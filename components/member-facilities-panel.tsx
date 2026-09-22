@@ -107,7 +107,7 @@ export function MemberFacilitiesPanel({
             type="button"
             onClick={() => run(() => addMemberFacilityAction({ memberId, locationId: pick }))}
             disabled={busy || !pick}
-            className="flex-none rounded-ctl bg-[var(--accent)] px-4 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
+            className="flex-none rounded-ctl bg-[var(--accent-strong)] px-4 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
           >
             Add
           </button>

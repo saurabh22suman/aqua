@@ -12,7 +12,7 @@ import type { LeadMutationResult } from "@/db/platform-leads";
 // O-10 — lifecycle + conversion island on the lead detail page.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 export function LeadActions({
   leadId,
@@ -161,7 +161,7 @@ export function LeadActions({
             <button
               type="submit"
               disabled={pending}
-              className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+              className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
             >
               {pending ? "Provisioning…" : "Provision trial tenant"}
             </button>
@@ -179,7 +179,7 @@ export function LeadActions({
                   {convertResult.locationsCreated === 1 ? "" : "s"}.{" "}
                   <a
                     href={`/ops/tenants/${convertResult.tenantId}`}
-                    className="text-[var(--accent)] underline underline-offset-2"
+                    className="text-[var(--accent-ink)] underline underline-offset-2"
                   >
                     Open tenant
                   </a>

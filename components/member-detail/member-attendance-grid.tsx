@@ -95,7 +95,7 @@ export function MemberAttendanceGrid({
         {days.map((day) => {
           const isSelected = selected === day.date;
           const border = day.isToday
-            ? "border-2 border-[var(--accent)]"
+            ? "border-2 border-[var(--accent-strong)]"
             : isSelected
               ? "border-2 border-ink-3"
               : "border border-transparent";

@@ -92,7 +92,7 @@ export function SetPinForm() {
         type="button"
         onClick={submit}
         disabled={busy}
-        className="mt-5 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent)] disabled:opacity-40"
+        className="mt-5 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent-strong)] disabled:opacity-40"
       >
         {busy ? "Saving…" : "Save PIN"}
       </button>

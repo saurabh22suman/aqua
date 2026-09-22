@@ -34,7 +34,7 @@ export function TenantTabNav({ tenantId }: { tenantId: string }) {
             aria-current={active ? "page" : undefined}
             className={`shrink-0 px-3 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors duration-150 ${
               active
-                ? "border-[var(--accent)] text-ink"
+                ? "border-[var(--accent-strong)] text-ink"
                 : "border-transparent text-ink-3 hover:text-ink"
             }`}
           >

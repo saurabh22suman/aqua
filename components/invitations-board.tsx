@@ -54,7 +54,7 @@ export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
         </p>
         <Link
           href="/owner/staff/invitations/new"
-          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent)]"
+          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)]"
         >
           Invite your first staff member
         </Link>

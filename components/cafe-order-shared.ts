@@ -45,7 +45,7 @@ export const REFERENCE_LABEL: Record<Exclude<PaymentMethod, "cash">, string> =
   };
 
 export const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function lineTotal(
   item: MenuItemRow,

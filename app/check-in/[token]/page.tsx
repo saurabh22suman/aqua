@@ -42,7 +42,7 @@ export default async function PremisesCheckInPage({
         </p>
         <Link
           href="/login"
-          className="mt-5 inline-flex min-h-12 items-center justify-center rounded-pill bg-[var(--accent)] px-5 text-[14px] font-semibold text-paper"
+          className="mt-5 inline-flex min-h-12 items-center justify-center rounded-pill bg-[var(--accent-strong)] px-5 text-[14px] font-semibold text-paper"
         >
           Sign in
         </Link>

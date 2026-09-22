@@ -175,7 +175,7 @@ export default async function PlatformTenantsPage({
         </div>
         <Link
           href="/ops/tenants/new"
-          className="rounded-pill py-2.5 px-5 text-[14px] font-semibold text-white bg-[var(--accent)] transition-colors duration-150"
+          className="rounded-pill py-2.5 px-5 text-[14px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150"
         >
           New tenant
         </Link>
@@ -191,7 +191,7 @@ export default async function PlatformTenantsPage({
             name="search"
             defaultValue={params.search ?? ""}
             placeholder="name or slug"
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </label>
         <label className="block">
@@ -201,7 +201,7 @@ export default async function PlatformTenantsPage({
           <select
             name="status"
             defaultValue={params.status ?? ""}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">All</option>
             <option value="trial">Trial</option>
@@ -217,7 +217,7 @@ export default async function PlatformTenantsPage({
           <select
             name="planId"
             defaultValue={params.planId ?? ""}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">All</option>
             {plans.map((p) => (
@@ -234,7 +234,7 @@ export default async function PlatformTenantsPage({
           <select
             name="presetKey"
             defaultValue={params.presetKey ?? ""}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">All</option>
             {presets.map((p) => (
@@ -251,7 +251,7 @@ export default async function PlatformTenantsPage({
           <select
             name="health"
             defaultValue={params.health ?? ""}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">All</option>
             <option value="healthy">Healthy</option>
@@ -266,7 +266,7 @@ export default async function PlatformTenantsPage({
           <select
             name="trial"
             defaultValue={params.trial ?? ""}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">All</option>
             <option value="expiring_soon">Expiring soon</option>
@@ -300,7 +300,7 @@ export default async function PlatformTenantsPage({
               : "Create the first tenant from the control plane. "}
             <Link
               href="/ops/tenants/new"
-              className="text-[var(--accent)] underline underline-offset-2"
+              className="text-[var(--accent-ink)] underline underline-offset-2"
             >
               add a tenant
             </Link>

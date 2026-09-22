@@ -79,7 +79,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             placeholder="Priya Iyer"
             autoComplete="name"
             required
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </label>
         <label className="block">
@@ -95,7 +95,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             inputMode="tel"
             autoComplete="tel"
             required
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </label>
         <label className="block">
@@ -106,7 +106,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             name="staffType"
             value={staffType}
             onChange={(e) => setStaffType(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">— No, owner-only —</option>
             <option value="coach">Yes — also a coach (so they can be assigned to a batch)</option>
@@ -120,7 +120,7 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
+          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
         >
           {isPending ? "Inviting…" : "Invite owner"}
         </button>
@@ -197,7 +197,7 @@ function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: str
           type="button"
           onClick={() => mint(() => issueOwnerLoginLinkAction({ tenantId, phone }), setLink)}
           disabled={pending || phone.trim().length === 0}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           data-testid="owner-login-link-issue"
         >
           {pending ? "Minting…" : "Get login link"}

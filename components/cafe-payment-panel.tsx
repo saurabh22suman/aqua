@@ -97,7 +97,7 @@ export function CafePaymentPanel({
               }}
               className={`min-h-[44px] rounded-ctl border px-3 py-2 text-left ${
                 method === option.value
-                  ? "border-[var(--accent)] bg-paper"
+                  ? "border-[var(--accent-strong)] bg-paper"
                   : "border-line bg-paper"
               }`}
             >

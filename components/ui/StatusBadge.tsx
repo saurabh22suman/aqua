@@ -85,6 +85,30 @@ export const TENANT_STATUS_TONE: Record<string, StatusTone> = {
   churned: "neutral",
 };
 
+// PR3-C1 — the three remaining runtime lifecycles the redesign shows
+// as pills, so no screen invents its own colours: a class session, a
+// payment, and a subscription ("plan") state.
+export const SESSION_STATUS_TONE: Record<string, StatusTone> = {
+  scheduled: "water",
+  in_progress: "warn",
+  completed: "good",
+  cancelled: "neutral",
+};
+
+export const PAYMENT_STATUS_TONE: Record<string, StatusTone> = {
+  captured: "good",
+  pending: "warn",
+  failed: "late",
+  refunded: "neutral",
+};
+
+export const PLAN_STATUS_TONE: Record<string, StatusTone> = {
+  active: "good",
+  paused: "warn",
+  expired: "late",
+  cancelled: "neutral",
+};
+
 export function StatusBadge({
   tone,
   children,

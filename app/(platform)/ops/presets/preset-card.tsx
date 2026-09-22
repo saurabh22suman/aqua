@@ -61,7 +61,7 @@ export function PresetCard({ entry }: { entry: PresetEntry }) {
         </div>
         <Link
           href={`/ops/presets/${entry.preset.key}`}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 transition-colors duration-150"
+          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 transition-colors duration-150"
         >
           Open preview
         </Link>
