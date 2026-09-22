@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C3 done and committed. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C4 (owner members table + member workspace). |
-| **Next task** | PR3-C5 (fees, reports and schedule composition). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1–C4 done and committed. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C5 (fees, reports and schedule composition). |
+| **Next task** | PR3-C6 (coach Today/register/member detail). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -93,6 +93,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C1 added (AA tokens + call-site sweep, KPI utility, tone maps) | PR3-C1 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C2 added (shared primitives + chart extraction, all wired) | PR3-C2 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C3 added (Fees in owner nav/home, every attention row links) | PR3-C3 |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C4 added (members desktop columns; runway already on subscriptions) | PR3-C4 |
 
 ---
 
@@ -953,7 +954,7 @@ money and reception cash/UPI recording remain fully working.
   (asserted). KPI band and StatCards from C2 carry the dashboard figures with
   the `kpi` type. Commit `21dd689`.
 
-### [ ] PR3-C4 — Owner: members table + member workspace
+### [x] PR3-C4 — Owner: members table + member workspace
 - **Depends:** PR3-C3, PR2-C7 (import entry).
 - **Files:** `components/members-board.tsx`,
   `app/(owner)/owner/members/[memberId]/page.tsx`, `components/member-detail/*`.
@@ -964,7 +965,18 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** desktop scans and compares; mobile remains focused; every tab has
   real data or an honest state.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the desktop column header and grid row did not
+  exist (the roster rendered a stretched single-column card list at 1280px).
+  After: `pnpm exec vitest run tests/mobile/role-surfaces-wave1.test.tsx` —
+  5 passed: the roster now renders a column header (Member / Phone / Joined /
+  Status) and each row shares the same `md:grid` template, while the phone
+  keeps the one-column row (joined date and phone inline on mobile only). Plan
+  runway already renders on the member's subscription panel (PR3-C2); the
+  member tabs each keep real data or an honest empty state. Deviation: the
+  desktop table is CSS-grid, not `DataTable`, to keep a single DOM (no
+  duplicate links for a11y/tests); pagination and an upcoming-sessions block
+  are not built because no service exposes them today. Commit `e0f6c4a`-series
+  (see session log).
 
 ### [ ] PR3-C5 — Owner: fees, reports and schedule composition
 - **Depends:** PR3-C4.
