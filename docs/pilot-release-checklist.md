@@ -50,9 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 implementation started on `feat/pilot-pr3-ui-refresh`. Dev deployment deferred by owner until after PR3. |
-| **Current task** | PR3-C1 (tokens: accent-strong, ink-3 contrast, KPI type, tone maps). |
-| **Next task** | PR3-C2 (shared primitives and chart extraction). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 in progress on `feat/pilot-pr3-ui-refresh`: C1 done. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C2 (shared primitives and chart extraction). |
+| **Next task** | PR3-C3 (owner nav/dashboard/attention rows). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -90,6 +90,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2 gate passed on CI-like scratch DB; scanner/action-map/midnight-test fixes committed | PR2 gate (pre-merge) |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2 opened as #189; CI green; awaiting human label + merge | PR2 (open, awaiting human merge) |
 | 2026-09-21 | main → feat/pilot-pr3-ui-refresh | PR2 merged as `290cbfd`; PR3 started | PR2 (merged) |
+| 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C1 added (AA tokens + call-site sweep, KPI utility, tone maps) | PR3-C1 |
 
 ---
 
@@ -870,7 +871,7 @@ money and reception cash/UPI recording remain fully working.
 
 ## Commits
 
-### [ ] PR3-C1 — Tokens: accent-strong, ink-3 contrast, KPI type, tone maps
+### [x] PR3-C1 — Tokens: accent-strong, ink-3 contrast, KPI type, tone maps
 - **Depends:** PR2 merged.
 - **Files:** `app/globals.css`, `components/ui/StatusBadge.tsx`,
   `components/ui/Button.tsx`, `tests/tier1/semantic-token-reservation.test.ts`.
@@ -881,7 +882,22 @@ money and reception cash/UPI recording remain fully working.
 - **Acceptance:** normal text ≥4.5:1, controls/focus ≥3:1; no new hues; `--accent`
   still absent from status styles.
 - **Migration/rollback:** none.
-- **Evidence:** _pending_
+- **Evidence:** red first — the new `tests/tier1/contrast-tokens.test.ts` failed 8
+  ways (no `--accent-strong`; ink-3 2.91:1; all three status foregrounds below
+  4.5:1 on their soft surfaces; no tone maps; Button still on `--accent`).
+  After: `pnpm exec vitest run tests/tier1/contrast-tokens.test.ts
+  tests/tier1/semantic-token-reservation.test.ts
+  tests/tier1/hardcoded-brand-color.test.ts tests/mobile tests/a11y` — 322
+  passed; `pnpm check:focus-contrast` green. Tokens: `--accent-strong #B84E00`
+  (5.09:1 with white), `--color-ink-3 #5B6F6B` (4.65 deck / 5.34 paper),
+  good/warn/late darkened to 4.7/5.4/5.3 on their soft surfaces; `@utility kpi`
+  added; `SESSION_STATUS_TONE`/`PAYMENT_STATUS_TONE`/`PLAN_STATUS_TONE` added to
+  `StatusBadge`; `Button` primary uses `--accent-strong`. Call-site sweep in the
+  same commit: 85 files moved `bg-[var(--accent)]` → `--accent-strong` (every
+  occurrence paired white text), 22 `text-[var(--accent)]` → `--accent-ink`,
+  and the selected/focus borders + the one `accent-` control to the strong
+  value. Live: computed Sign in button `rgb(184, 78, 0)` on white (5.09:1) and
+  muted text `rgb(91, 111, 107)` (#5B6F6B) on the dev server. Commit `e07051d`.
 
 ### [ ] PR3-C2 — Shared primitives and chart extraction
 - **Depends:** PR3-C1.
