@@ -50,10 +50,9 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`. PR2 complete and open as PR #189 with green CI; awaiting the human `human-approved-merge` label and merge. Dev deployment deferred by owner until after PR3. |
-| **Current task** | None — human review/merge of PR #189. |
-| **Next task** | After the human merges PR2: PR3-C1 (tokens/contrast). |
-| **Known blockers** | PR #189 cannot merge until a human applies `human-approved-merge` (five migrations + `lib/auth/action-permissions.ts`); the agent will not merge it. Production remains blocked. |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 implementation started on `feat/pilot-pr3-ui-refresh`. Dev deployment deferred by owner until after PR3. |
+| **Current task** | PR3-C1 (tokens: accent-strong, ink-3 contrast, KPI type, tone maps). |
+| **Next task** | PR3-C2 (shared primitives and chart extraction). |
 | **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
 
 ### Session log
@@ -90,6 +89,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2-C11 added (token-scoped receipt download + parent links) | PR2-C11 |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2 gate passed on CI-like scratch DB; scanner/action-map/midnight-test fixes committed | PR2 gate (pre-merge) |
 | 2026-09-21 | feat/pilot-pr2-workflow-import | PR2 opened as #189; CI green; awaiting human label + merge | PR2 (open, awaiting human merge) |
+| 2026-09-21 | main → feat/pilot-pr3-ui-refresh | PR2 merged as `290cbfd`; PR3 started | PR2 (merged) |
 
 ---
 
@@ -816,7 +816,8 @@ coach fee visibility on the register.
   (migrations 102 files, location scope, ops actions, tenant conventions,
   bundle 91 routes, fonts, focus contrast, scripts exist, compose secrets,
   deploy workflows, runbook sync).
-- [ ] All five migrations carry `human-approved-merge` and reviewer sign-off.
+- [x] All five migrations carried the `human-approved-merge` label (plus
+  `lib/auth/action-permissions.ts`); PR #189 merged by the human as `290cbfd`.
 - [x] Reception cash/UPI recording demonstrated at 390×844: payment commits
   through the existing service, invoice balance and status update, audit row
   present, permission audit recorded (PR2-C3).
@@ -829,9 +830,7 @@ coach fee visibility on the register.
   `pnpm e2e:parent-link-zero-js`).
 - [x] PR opened into `main`: https://github.com/saurabh22suman/aqua/pull/189
   (agent pushed/opened; the agent never merges its own PR). CI green on the PR
-  (run `35640931187`, 16m54s). `agent-protected-paths` requires the human
-  `human-approved-merge` label (migrations + `lib/auth/action-permissions.ts`);
-  the agent token cannot apply it.
+  (run `35640931187`, 16m54s). **Merged by the human as `290cbfd`.**
 - [x] Checklist committed with the implementation on the PR2 branch.
 
 **Deviations (PR2):**
