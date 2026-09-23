@@ -86,7 +86,7 @@ describe("no hardcoded brand-accent color classes (bg-mango and friends)", () =>
         .join("\n");
       throw new Error(
         `Hardcoded brand-accent color class(es) found:\n${formatted}\n\n` +
-          `The accent is a runtime value (DESIGN.md §1.2) — use bg-[var(--accent)], ` +
+          `The accent is a runtime value (DESIGN.md §1.2) — use bg-[var(--accent-strong)] for white-text surfaces (bg-[var(--accent)] only where the accent is decorative), ` +
           `never a literal accent name as a Tailwind class. (marine is exempt: it's ` +
           `also a fixed structural token, DESIGN.md:50.)`,
       );

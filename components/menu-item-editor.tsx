@@ -191,7 +191,7 @@ export function MenuItemEditor({ item }: { item: MenuItemRow }) {
       </div>
 
       <details className="mt-1">
-        <summary className="cursor-pointer text-[12px] text-[var(--accent)] underline underline-offset-2">
+        <summary className="cursor-pointer text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
           Edit
         </summary>
         <form onSubmit={save} className="mt-2 space-y-3">

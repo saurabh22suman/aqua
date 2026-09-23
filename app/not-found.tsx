@@ -25,7 +25,7 @@ export default function NotFound() {
         </p>
         <Link
           href="/login"
-          className="mt-6 inline-flex items-center justify-center rounded-pill min-h-[44px] px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent)] transition-colors duration-150"
+          className="mt-6 inline-flex items-center justify-center rounded-pill min-h-[44px] px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150"
         >
           Go to sign in
         </Link>

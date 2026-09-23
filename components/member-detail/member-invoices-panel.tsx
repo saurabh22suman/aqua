@@ -89,7 +89,7 @@ export function MemberInvoicesPanel({
         <button
           type="button"
           onClick={() => void load()}
-          className="mt-2 rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2"
+          className="mt-2 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
         >
           Retry
         </button>
@@ -137,7 +137,7 @@ export function MemberInvoicesPanel({
                 onClick={() =>
                   setExpandedId(expandedId === invoice.id ? null : invoice.id)
                 }
-                className="mt-1.5 rounded-pill border border-line px-2.5 py-0.5 text-[11px] text-ink-2 hover:text-ink"
+                className="mt-1.5 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink"
               >
                 {expandedId === invoice.id ? "Hide" : "View"}
               </button>
@@ -174,7 +174,7 @@ export function MemberInvoicesPanel({
                 <select
                   value={subscriptionId}
                   onChange={(e) => setSubscriptionId(e.target.value)}
-                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none"
+                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
                 >
                   {subscriptions.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -205,7 +205,7 @@ export function MemberInvoicesPanel({
                   setBusy(false);
                 })();
               }}
-              className="mt-2 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+              className="mt-2 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
             >
               {busy ? "Saving…" : "Raise invoice"}
             </button>

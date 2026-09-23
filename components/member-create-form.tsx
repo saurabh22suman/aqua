@@ -337,7 +337,7 @@ export function MemberCreateForm({
           type="checkbox"
           checked={consentGiven}
           onChange={(e) => setConsentGiven(e.target.checked)}
-          className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent)]"
+          className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent-strong)]"
           data-testid="consent-checkbox"
         />
         <span className="text-[12.5px] text-ink-2">
@@ -374,7 +374,7 @@ export function MemberCreateForm({
           type="button"
           onClick={submit}
           disabled={busy}
-          className="w-full rounded-ctl bg-[var(--accent)] py-3 min-h-[48px] text-[15px] font-semibold text-white disabled:opacity-50"
+          className="w-full rounded-ctl bg-[var(--accent-strong)] py-3 min-h-[48px] text-[15px] font-semibold text-white disabled:opacity-50"
           data-testid="submit-member"
         >
           {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}

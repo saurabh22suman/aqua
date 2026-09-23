@@ -28,7 +28,7 @@ export function StaffBoard({ rows }: { rows: StaffRow[] }) {
         </p>
         <Link
           href="/owner/staff/new"
-          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent)]"
+          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)]"
         >
           Add your first staff member
         </Link>

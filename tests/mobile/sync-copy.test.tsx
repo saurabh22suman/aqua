@@ -99,4 +99,24 @@ describe("register sync label (F31)", () => {
       screen.getByTestId("sync-state").getAttribute("data-sync-state"),
     ).toBe("offline");
   });
+
+describe("register header count chips (PR3-C6)", () => {
+  it("shows marked/left chips that add up to the roster size", () => {
+    render(
+      <RegisterBoard
+        sessionId="s1"
+        rows={[
+          { memberId: "m1", name: "Asha", code: "A1", status: null, pct: 0, isTrial: false },
+          { memberId: "m2", name: "Bela", code: "B2", status: null, pct: 0, isTrial: false },
+        ]}
+        offlineSyncEnabled={false}
+      />,
+    );
+    const chips = screen.getAllByTestId("count-chip");
+    expect(chips.length).toBeGreaterThanOrEqual(2);
+    const text = chips.map((c) => c.textContent).join(" ");
+    expect(text).toContain("0 marked");
+    expect(text).toContain("2 left");
+  });
+});
 });

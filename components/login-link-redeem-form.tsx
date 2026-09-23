@@ -144,7 +144,7 @@ export function LoginLinkRedeemForm({
         type="button"
         onClick={() => (setPinMode ? onSetPin() : redeem({ token }))}
         disabled={busy}
-        className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent)] disabled:opacity-50"
+        className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)] disabled:opacity-50"
         data-testid="login-link-accept"
       >
         {busy ? (

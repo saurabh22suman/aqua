@@ -117,7 +117,7 @@ export function OnboardingChecklistView({ data }: { data: OnboardingChecklist })
               {!item.complete && item.secondaryCta ? (
                 <Link
                   href={item.secondaryCta.href}
-                  className="mt-1 block px-3.5 text-[12.5px] font-medium text-[var(--accent)] underline underline-offset-2"
+                  className="mt-1 block px-3.5 text-[12.5px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
                 >
                   {item.secondaryCta.label}
                 </Link>

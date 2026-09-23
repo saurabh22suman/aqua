@@ -125,7 +125,7 @@ export default async function EffectiveConfigurationPage({
           each role can reach. Read-only — no member data on this page.{" "}
           <Link
             href={`/ops/tenants/${view.tenant.id}/tax`}
-            className="text-[var(--accent)] underline underline-offset-2"
+            className="text-[var(--accent-ink)] underline underline-offset-2"
           >
             GST rates live on their own page
           </Link>
@@ -165,7 +165,7 @@ export default async function EffectiveConfigurationPage({
                     className={`text-[11px] font-medium underline underline-offset-2 ${
                       selectedConfigKey === config.key
                         ? "text-marine"
-                        : "text-[var(--accent)]"
+                        : "text-[var(--accent-ink)]"
                     }`}
                   >
                     Why this value?

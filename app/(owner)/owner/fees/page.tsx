@@ -17,6 +17,9 @@ import { methodLabel } from "@/lib/services/payments";
 import { BackLink } from "@/components/ui/BackLink";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
+import { DataTable } from "@/components/ui/DataTable";
+import { StatCard } from "@/components/ui/StatCard";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 
 // U-02 — the Fees & Payments hub: Overview / Transactions / Dues /
 // Invoices / Plans over the existing C-29…C-39 services. Tabs are
@@ -76,11 +79,11 @@ export default async function FeesPage({
       {tab === "overview" ? (
         <section className="mt-4 space-y-3">
           <div className="rounded-card border border-line bg-paper p-4">
-            <p className="text-[12px] text-ink-3">Collected this period</p>
-            <p className="mt-1 font-display text-[26px] font-semibold tabular-nums">
+            <p className="text-[12px] font-medium text-ink-3">Collected this period</p>
+            <p className="kpi mt-1 text-[30px] font-semibold">
               {formatINR(overview.collectedPaise)}
             </p>
-            <p className="text-[12px] text-ink-3">
+            <p className="mt-1 text-[12.5px] text-ink-3">
               {overview.paymentCount} payment
               {overview.paymentCount === 1 ? "" : "s"} recorded at the counter
               {overview.reversedPaise > 0
@@ -88,106 +91,99 @@ export default async function FeesPage({
                 : ""}
             </p>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="rounded-card border border-line bg-paper p-4">
-              <p className="text-[12px] text-ink-3">Outstanding</p>
-              <p className="mt-1 font-display text-[19px] font-semibold tabular-nums">
-                {formatINR(overview.outstandingPaise)}
-              </p>
-              <p className="text-[12px] text-ink-3">
-                {overview.dueInvoiceCount} invoice
-                {overview.dueInvoiceCount === 1 ? "" : "s"} with a balance
-              </p>
-              <Link
-                href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}`}
-                className="mt-2 inline-block text-[13px] text-water"
-              >
-                Work the dues →
-              </Link>
-            </div>
-            <div className="rounded-card border border-line bg-paper p-4">
-              <p className="text-[12px] text-ink-3">Overdue</p>
-              <p
-                className={`mt-1 font-display text-[19px] font-semibold tabular-nums ${
-                  overview.overduePaise > 0 ? "text-late" : "text-ink"
-                }`}
-              >
-                {formatINR(overview.overduePaise)}
-              </p>
-              <p className="text-[12px] text-ink-3">
-                {overview.overdueInvoiceCount} past the due date · today{" "}
-                {formatDateIST(overview.today)}
-              </p>
-            </div>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              label="Outstanding"
+              value={formatINR(overview.outstandingPaise)}
+              hint={`${overview.dueInvoiceCount} invoice${
+                overview.dueInvoiceCount === 1 ? "" : "s"
+              } with a balance`}
+              href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}`}
+              tone="paper"
+            />
+            <StatCard
+              label="Overdue"
+              value={
+                <span className={overview.overduePaise > 0 ? "text-late" : undefined}>
+                  {formatINR(overview.overduePaise)}
+                </span>
+              }
+              hint={`${overview.overdueInvoiceCount} past the due date · today ${formatDateIST(
+                overview.today,
+              )}`}
+              tone="paper"
+            />
           </div>
         </section>
       ) : null}
 
       {tab === "transactions" ? (
         <section className="mt-4 rounded-card border border-line bg-paper p-4">
-          <h2 className="font-display text-[15px] font-semibold">
-            Transactions
-          </h2>
-          {transactions.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">
-              No counter payments in this period.
-            </p>
-          ) : (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full min-w-[520px] text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">
-                    <th className="py-1 font-medium">Received</th>
-                    <th className="py-1 font-medium">{memberLabel}</th>
-                    <th className="py-1 font-medium">Invoice</th>
-                    <th className="py-1 font-medium">Method</th>
-                    <th className="py-1 text-right font-medium">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((t) => (
-                    <tr key={t.id} className="border-t border-line">
-                      <td className="py-1.5 text-ink-3">
-                        {formatDateTimeIST(t.receivedAt)}
-                      </td>
-                      <td className="py-1.5 text-ink">
-                        {t.memberName ?? "—"}
-                      </td>
-                      <td className="py-1.5 font-mono text-ink-3">
-                        {t.invoiceNumber ?? "—"}
-                      </td>
-                      <td className="py-1.5 text-ink-2">
-                        {t.kind === "reversal" ? (
-                          <span>
-                            Reversal
-                            {t.reason ? (
-                              <span className="ml-1 text-ink-3">{t.reason}</span>
-                            ) : null}
-                          </span>
-                        ) : (
-                          <>
-                            {methodLabel(t.method)}
-                            {t.reference ? (
-                              <span className="ml-1 text-ink-3">{t.reference}</span>
-                            ) : null}
-                          </>
-                        )}
-                      </td>
-                      <td
-                        className={`py-1.5 text-right font-mono ${
-                          t.amountPaise < 0 ? "text-late" : "text-ink"
-                        }`}
-                      >
-                        {t.amountPaise < 0
-                          ? `−${formatINR(Math.abs(t.amountPaise))}`
-                          : formatINR(t.amountPaise)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <SectionHeader title="Transactions" />
+          <div className="mt-2">
+            <DataTable
+              columns={[
+                {
+                  key: "received",
+                  label: "Received",
+                  render: (t) => (
+                    <span className="text-ink-3">{formatDateTimeIST(t.receivedAt)}</span>
+                  ),
+                },
+                {
+                  key: "member",
+                  label: memberLabel,
+                  render: (t) => <span className="text-ink">{t.memberName ?? "—"}</span>,
+                },
+                {
+                  key: "invoice",
+                  label: "Invoice",
+                  render: (t) => (
+                    <span className="font-mono text-ink-3">{t.invoiceNumber ?? "—"}</span>
+                  ),
+                },
+                {
+                  key: "method",
+                  label: "Method",
+                  render: (t) =>
+                    t.kind === "reversal" ? (
+                      <span className="text-ink-2">
+                        Reversal
+                        {t.reason ? <span className="ml-1 text-ink-3">{t.reason}</span> : null}
+                      </span>
+                    ) : (
+                      <span className="text-ink-2">
+                        {methodLabel(t.method)}
+                        {t.reference ? (
+                          <span className="ml-1 text-ink-3">{t.reference}</span>
+                        ) : null}
+                      </span>
+                    ),
+                },
+                {
+                  key: "amount",
+                  label: "Amount",
+                  align: "right",
+                  render: (t) => (
+                    <span
+                      className={`font-mono ${t.amountPaise < 0 ? "text-late" : "text-ink"}`}
+                    >
+                      {t.amountPaise < 0
+                        ? `−${formatINR(Math.abs(t.amountPaise))}`
+                        : formatINR(t.amountPaise)}
+                    </span>
+                  ),
+                },
+              ]}
+              rows={transactions}
+              rowKey={(t) => t.id}
+              empty={
+                <p className="text-[13px] text-ink-3">
+                  No counter payments in this period.
+                </p>
+              }
+            />
+          </div>
         </section>
       ) : null}
 

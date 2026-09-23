@@ -33,7 +33,7 @@ export default async function StaffListPage() {
           </Link>
           <Link
             href="/owner/staff/new"
-            className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)]"
+            className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)]"
           >
             Add staff
           </Link>

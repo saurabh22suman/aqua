@@ -168,4 +168,24 @@ describe("U-04 schedule grid", () => {
     );
     expect(document.querySelector('select[name="location"]')).toBeTruthy();
   });
+
+describe("schedule desktop composition (PR3-C5)", () => {
+  it("lays the week out in seven columns at desktop while stacked on phones", () => {
+    const { container } = render(
+      <OwnerScheduleGrid
+        view="week"
+        locations={[]}
+        sessions={[SESSION]}
+        days={WEEK}
+        monthCells={null}
+        prevHref="#"
+        nextHref="#"
+        todayHref="#"
+      />,
+    );
+    const grid = container.querySelector("[class*='md:grid-cols-7']");
+    expect(grid).not.toBeNull();
+    expect(grid!.className).toContain("space-y-4");
+  });
+});
 });

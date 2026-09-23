@@ -69,7 +69,8 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     const sideHrefs = within(sidebar)
       .getAllByRole("link")
       .map((l) => l.getAttribute("href"));
-    expect(sideHrefs).toEqual(expectedHrefs);
+    // PR3-C3 — the sidebar also carries the desktop-only extras (Fees).
+    expect(sideHrefs).toEqual([...expectedHrefs, "/owner/fees"]);
 
     const mobileNav = screen.getByTestId("owner-mobile-nav");
     const mobileHrefs = within(mobileNav)
@@ -96,5 +97,27 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     // One instance, one header: the same sticky header serves the
     // mobile breakpoint and the desktop top bar.
     expect(screen.getAllByTestId("global-search-input")).toHaveLength(1);
+  });
+});
+
+describe("owner nav Fees entry (PR3-C3)", () => {
+  it("keeps the mobile bottom nav at four items and adds Fees to the desktop sidebar only", () => {
+    render(
+      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
+        <p>Page content</p>
+      </OwnerShell>,
+    );
+    const mobileNav = screen.getByTestId("owner-mobile-nav");
+    const mobileLinks = within(mobileNav)
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href"));
+    expect(mobileLinks).toHaveLength(4);
+    expect(mobileLinks).not.toContain("/owner/fees");
+
+    const sidebar = screen.getByTestId("owner-side-nav");
+    const sideLinks = within(sidebar)
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href"));
+    expect(sideLinks).toContain("/owner/fees");
   });
 });

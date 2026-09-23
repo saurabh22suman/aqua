@@ -6,6 +6,8 @@ import { absenceAlerts } from "@/db/schema/absence-alerts";
 import { members, persons } from "@/db/schema/people";
 import { invoices } from "@/db/schema/invoices";
 import { payments } from "@/db/schema/payments";
+import { subscriptions } from "@/db/schema/subscriptions";
+import { membershipPlans } from "@/db/schema/membership-plans";
 import { asMemberId, type TenantId } from "@/lib/ids";
 
 // C-45 — parent-page view service. Used by `/p/[token]` ONLY.
@@ -34,6 +36,10 @@ export type ParentViewAttendance = {
   presentCount: number;
   totalCount: number;
   pct: number | null;
+  // PR3-C8 — the month's marks split by status.
+  present: number;
+  late: number;
+  absent: number;
   recent: Array<{
     sessionDate: string;
     batchName: string;
@@ -65,6 +71,14 @@ export type ParentViewPayment = {
   invoiceNumber: string | null;
 };
 
+export type ParentViewRunway = {
+  planName: string;
+  startsOn: string;
+  endsOn: string;
+  usedDays: number;
+  totalDays: number;
+};
+
 export type ParentViewData = {
   child: {
     id: string;
@@ -78,6 +92,9 @@ export type ParentViewData = {
   // Placeholder for R.16 progress data. Reserved here so the route
   // shape is stable; populated once the assessments schema lands.
   progress: null;
+  // PR3-C8 — the active subscription as a computed runway (real dates
+  // only; used days are today minus the start, clamped).
+  runway: ParentViewRunway | null;
   // PR2-C10 — read-only money for this child only: outstanding
   // invoices and recent payments. No mutation affordance exists on
   // this surface (no Pay Now — pilot exclusion).
@@ -182,9 +199,10 @@ export async function getParentViewData(args: {
       )
       .orderBy(asc(sessions.sessionDate));
 
-    const presentCount = monthRows.filter(
-      (r) => r.status === "present" || r.status === "late",
-    ).length;
+    const presentOnly = monthRows.filter((r) => r.status === "present").length;
+    const lateOnly = monthRows.filter((r) => r.status === "late").length;
+    const absentOnly = monthRows.filter((r) => r.status === "absent").length;
+    const presentCount = presentOnly + lateOnly;
     const totalCount = monthRows.length;
 
     // Recent = last MAX_RECENT rows across the whole history (not
@@ -225,6 +243,56 @@ export async function getParentViewData(args: {
       )
       .orderBy(desc(absenceAlerts.createdAt))
       .limit(1);
+
+    const [subscriptionRow] = await tx
+      .select({
+        planName: membershipPlans.name,
+        startsOn: subscriptions.startsOn,
+        endsOn: subscriptions.endsOn,
+      })
+      .from(subscriptions)
+      .innerJoin(
+        membershipPlans,
+        and(
+          eq(membershipPlans.id, subscriptions.planId),
+          eq(membershipPlans.tenantId, args.tenantId),
+        ),
+      )
+      .where(
+        and(
+          eq(subscriptions.tenantId, args.tenantId),
+          eq(subscriptions.memberId, asMemberId(args.personId)),
+          eq(subscriptions.status, "active"),
+        ),
+      )
+      .orderBy(desc(subscriptions.startsOn))
+      .limit(1);
+
+    const dayDiff = (fromIso: string, toIso: string): number => {
+      const [fy, fm, fd] = fromIso.split("-").map(Number);
+      const [ty, tm, td] = toIso.split("-").map(Number);
+      return Math.round(
+        (Date.UTC(ty!, tm! - 1, td!) - Date.UTC(fy!, fm! - 1, fd!)) / 86_400_000,
+      );
+    };
+    const runway: ParentViewRunway | null = subscriptionRow
+      ? {
+          planName: subscriptionRow.planName,
+          startsOn: subscriptionRow.startsOn,
+          endsOn: subscriptionRow.endsOn,
+          usedDays: Math.max(
+            0,
+            Math.min(
+              dayDiff(subscriptionRow.startsOn, subscriptionRow.endsOn) + 1,
+              dayDiff(subscriptionRow.startsOn, args.today) + 1,
+            ),
+          ),
+          totalDays: Math.max(
+            1,
+            dayDiff(subscriptionRow.startsOn, subscriptionRow.endsOn) + 1,
+          ),
+        }
+      : null;
 
     const outstandingRows = await tx
       .select({
@@ -293,6 +361,9 @@ export async function getParentViewData(args: {
         presentCount,
         totalCount,
         pct: totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : null,
+        present: presentOnly,
+        late: lateOnly,
+        absent: absentOnly,
         recent: recentRows
           .filter(
             (r) => r.status === "present" || r.status === "absent" || r.status === "late",
@@ -311,6 +382,7 @@ export async function getParentViewData(args: {
           }
         : null,
       progress: null,
+      runway,
       fees: {
         outstanding: outstandingRows.map((row) => ({
           id: row.id,

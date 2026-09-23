@@ -17,9 +17,18 @@ export type EmptyStateProps = {
   title: string;
   body?: string;
   action?: EmptyStateAction;
+  // PR3-C2 — a quieter second path (e.g. "Import a CSV" beside
+  // "Add first member") without competing with the verb CTA.
+  secondaryAction?: EmptyStateAction;
 };
 
-export function EmptyState({ icon, title, body, action }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  body,
+  action,
+  secondaryAction,
+}: EmptyStateProps) {
   return (
     <div className="text-center py-12" data-testid="empty-state">
       {icon ? (
@@ -32,7 +41,7 @@ export function EmptyState({ icon, title, body, action }: EmptyStateProps) {
       {action?.href ? (
         <Link
           href={action.href}
-          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent)] transition-colors duration-150"
+          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150"
         >
           {action.label}
         </Link>
@@ -40,10 +49,20 @@ export function EmptyState({ icon, title, body, action }: EmptyStateProps) {
         <button
           type="button"
           onClick={action.onClick}
-          className="mt-5 rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent)] transition-colors duration-150"
+          className="mt-5 rounded-pill px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150"
         >
           {action.label}
         </button>
+      ) : null}
+      {secondaryAction?.href ? (
+        <p className="mt-3">
+          <Link
+            href={secondaryAction.href}
+            className="text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
+          >
+            {secondaryAction.label}
+          </Link>
+        </p>
       ) : null}
     </div>
   );

@@ -27,7 +27,7 @@ type MessageRow = {
 };
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 function ResultLine({ result }: { result: WhatsAppMockResult }) {
   if (result.ok) {
@@ -100,7 +100,7 @@ export function WhatsAppMock({
             <button
               type="submit"
               disabled={sendPending || tenants.length === 0}
-              className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+              className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
             >
               {sendPending ? "Sending…" : "Send mock message"}
             </button>
@@ -135,7 +135,7 @@ export function WhatsAppMock({
             <button
               type="submit"
               disabled={inboundPending || tenants.length === 0}
-              className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+              className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
             >
               {inboundPending ? "Injecting…" : "Inject inbound"}
             </button>

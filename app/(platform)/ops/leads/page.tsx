@@ -39,7 +39,7 @@ export default async function LeadsPage() {
         <h1 className="font-display text-[28px] font-semibold text-marine">Leads</h1>
         <Link
           href="/ops/leads/new"
-          className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90"
+          className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90"
         >
           New lead
         </Link>
@@ -53,7 +53,7 @@ export default async function LeadsPage() {
       {leads.length === 0 ? (
         <p className="mt-6 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
           No leads yet. Capture the next conversation from{" "}
-          <Link href="/ops/leads/new" className="text-[var(--accent)] underline underline-offset-2">
+          <Link href="/ops/leads/new" className="text-[var(--accent-ink)] underline underline-offset-2">
             New lead
           </Link>
           .

@@ -38,12 +38,15 @@ afterEach(cleanup);
 describe("owner member list phone display", () => {
   it("renders E.164 and local numbers as +91 5+5", () => {
     render(<MembersBoard initialMembers={[member("+919812340010")]} />);
-    expect(screen.getByText(/\+91 98123 40010/)).toBeTruthy();
+    // PR3-C4 — the responsive roster renders the phone in both the
+    // phone-only inline line and the desktop column; either is the
+    // formatted value this test pins.
+    expect(screen.getAllByText(/\+91 98123 40010/).length).toBeGreaterThan(0);
   });
 
   it("formats a 10-digit local number", () => {
     render(<MembersBoard initialMembers={[member("9876500001")]} />);
-    expect(screen.getByText(/\+91 98765 00001/)).toBeTruthy();
+    expect(screen.getAllByText(/\+91 98765 00001/).length).toBeGreaterThan(0);
   });
 });
 
@@ -69,9 +72,9 @@ describe("inline edit phone field", () => {
       />,
     );
 
-    expect(screen.getByText("+91 98765 00001")).toBeTruthy();
+    expect(screen.getAllByText(/\+91 98765 00001/).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByLabelText("Edit phone"));
+    fireEvent.click(screen.getByLabelText("Edit phone number"));
     const input = screen.getByLabelText("phone") as HTMLInputElement;
     expect(input.value).toBe("9876500001");
   });

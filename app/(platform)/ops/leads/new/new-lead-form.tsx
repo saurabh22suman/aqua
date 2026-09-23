@@ -12,7 +12,7 @@ import type { LeadMutationResult } from "@/db/platform-leads";
 // onboarding re-entry later.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 export function NewLeadForm() {
   const [state, formAction, isPending] = useActionState(createLeadAction, {
@@ -123,7 +123,7 @@ export function NewLeadForm() {
       {saved ? (
         <p role="status" className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2">
           Lead saved.{" "}
-          <Link href="/ops/leads" className="text-[var(--accent)] underline underline-offset-2">
+          <Link href="/ops/leads" className="text-[var(--accent-ink)] underline underline-offset-2">
             Back to the pipeline
           </Link>
           .
@@ -133,7 +133,7 @@ export function NewLeadForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+        className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
       >
         {isPending ? "Saving…" : "Save lead"}
       </button>

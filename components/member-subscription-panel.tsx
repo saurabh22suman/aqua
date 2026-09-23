@@ -13,6 +13,8 @@ import { listPlansAction } from "@/lib/actions/membership-plans";
 import type { SubscriptionRow } from "@/lib/services/subscriptions";
 import type { PlanRow } from "@/lib/services/membership-plans";
 import { formatINR } from "@/lib/money/format";
+import { RunwayStrip } from "@/components/ui/RunwayStrip";
+import { formatDateIST } from "@/lib/time/tz";
 
 // C-30 — a member's plans over time. Start a subscription from an
 // active plan, pause/resume (pause extends the end date by the paused
@@ -24,7 +26,7 @@ import { formatINR } from "@/lib/money/format";
 export const SUBSCRIPTIONS_CHANGED_EVENT = "aqua:subscriptions-changed";
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function statusTone(status: SubscriptionRow["status"]): string {
   if (status === "active") return "bg-marine/10 text-marine";
@@ -36,6 +38,16 @@ function kindLabel(kind: string): string {
   if (kind === "duration") return "duration";
   if (kind === "sessions") return "session pack";
   return "one-time";
+}
+
+
+// PR3-C2 — runway arithmetic from real dates only (UTC day count).
+function daysBetween(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = fromIso.split("-").map(Number);
+  const [ty, tm, td] = toIso.split("-").map(Number);
+  return Math.round(
+    (Date.UTC(ty!, tm! - 1, td!) - Date.UTC(fy!, fm! - 1, fd!)) / 86_400_000,
+  );
 }
 
 export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
@@ -99,7 +111,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
         <button
           type="button"
           onClick={() => void load()}
-          className="mt-2 rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2"
+          className="mt-2 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
         >
           Retry
         </button>
@@ -152,6 +164,26 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                   ? ` · paused from ${subscription.pausedFrom}`
                   : ""}
               </p>
+              {subscription.status === "active" || subscription.status === "paused" ? (
+                <div className="mt-2">
+                  <RunwayStrip
+                    label={`${subscription.planName} runway`}
+                    startLabel={formatDateIST(subscription.startsOn)}
+                    endLabel={formatDateIST(subscription.endsOn)}
+                    usedDays={Math.max(
+                      0,
+                      Math.min(
+                        daysBetween(subscription.startsOn, subscription.endsOn) + 1,
+                        daysBetween(subscription.startsOn, new Date().toISOString().slice(0, 10)) + 1,
+                      ),
+                    )}
+                    totalDays={Math.max(
+                      1,
+                      daysBetween(subscription.startsOn, subscription.endsOn) + 1,
+                    )}
+                  />
+                </div>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
                 {subscription.status === "active" ? (
                   <button
@@ -160,7 +192,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                     onClick={() =>
                       run(() => pauseSubscriptionAction({ id: subscription.id }))
                     }
-                    className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Pause
                   </button>
@@ -172,7 +204,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                     onClick={() =>
                       run(() => resumeSubscriptionAction({ id: subscription.id }))
                     }
-                    className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Resume
                   </button>
@@ -188,7 +220,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                         cancelSubscriptionAction({ id: subscription.id }),
                       );
                     }}
-                    className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -273,7 +305,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                 }),
               )
             }
-            className="mt-2 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+            className="mt-2 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Saving…" : "Start subscription"}
           </button>

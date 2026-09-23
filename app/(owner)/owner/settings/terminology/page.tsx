@@ -53,7 +53,7 @@ export default async function TerminologySettingsPage({
             aria-current={l === locale ? "page" : undefined}
             className={`min-h-[44px] inline-flex items-center px-4 rounded-pill text-[13px] font-medium ${
               l === locale
-                ? "bg-[var(--accent)] text-paper"
+                ? "bg-[var(--accent-strong)] text-paper"
                 : "bg-deck text-ink-2"
             }`}
           >

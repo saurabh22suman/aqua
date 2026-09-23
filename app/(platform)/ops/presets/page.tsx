@@ -48,7 +48,7 @@ export default async function PresetsPage() {
         Preset catalogue
       </h1>
       <p className="mt-1 text-[14px] text-ink-2">
-        Onboarding presets. The <Link href="/ops/tenants" className="text-[var(--accent)] underline underline-offset-2">tenant list</Link>{" "}
+        Onboarding presets. The <Link href="/ops/tenants" className="text-[var(--accent-ink)] underline underline-offset-2">tenant list</Link>{" "}
         shows the applied state; this page is the picker and the
         preview.
       </p>

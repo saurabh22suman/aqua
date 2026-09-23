@@ -167,7 +167,7 @@ export default async function PlatformHome() {
                     </StatusBadge>
                     <Link
                       href={`/ops/tenants/${item.tenantId}`}
-                      className="text-[12px] font-medium text-[var(--accent)] hover:underline underline-offset-2"
+                      className="text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2"
                     >
                       View
                     </Link>
@@ -186,7 +186,7 @@ export default async function PlatformHome() {
             <div className="mt-3 grid grid-cols-1 gap-2">
               <Link
                 href="/ops/tenants"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent)] transition-colors duration-150"
+                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
               >
                 <p className="text-[13px] font-medium text-ink">Tenants</p>
                 <p className="mt-0.5 text-[12px] text-ink-3">
@@ -195,7 +195,7 @@ export default async function PlatformHome() {
               </Link>
               <Link
                 href="/ops/features"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent)] transition-colors duration-150"
+                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
               >
                 <p className="text-[13px] font-medium text-ink">Feature catalogue</p>
                 <p className="mt-0.5 text-[12px] text-ink-3">
@@ -204,7 +204,7 @@ export default async function PlatformHome() {
               </Link>
               <Link
                 href="/ops/presets"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent)] transition-colors duration-150"
+                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
               >
                 <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
                   <SlidersHorizontal size={13} strokeWidth={2} /> Presets
@@ -215,7 +215,7 @@ export default async function PlatformHome() {
               </Link>
               <Link
                 href="/ops/leads"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent)] transition-colors duration-150"
+                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
               >
                 <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
                   <ClipboardList size={13} strokeWidth={2} /> Leads
@@ -227,7 +227,7 @@ export default async function PlatformHome() {
               {mockMessagingEnabled() ? (
                 <Link
                   href="/ops/whatsapp"
-                  className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent)] transition-colors duration-150"
+                  className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
                 >
                   <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
                     <MessageCircle size={13} strokeWidth={2} /> WhatsApp mock
@@ -247,7 +247,7 @@ export default async function PlatformHome() {
               </h2>
               <Link
                 href="/ops/activity"
-                className="text-[12px] font-medium text-[var(--accent)] hover:underline underline-offset-2 flex items-center gap-1"
+                className="text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2 flex items-center gap-1"
               >
                 <Activity size={12} strokeWidth={2} /> View all
               </Link>

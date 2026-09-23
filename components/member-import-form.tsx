@@ -6,6 +6,7 @@ import {
   previewMemberImportAction,
 } from "@/lib/actions/member-import";
 import { memberImportErrorsCsv } from "@/lib/services/member-import-csv";
+import { StickyActionBar } from "@/components/ui/StickyActionBar";
 import type {
   MemberImportCommitResult,
   MemberImportPreview,
@@ -147,21 +148,6 @@ export function MemberImportForm() {
                 .
               </p>
 
-              {preview.rows.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={commit}
-                  disabled={busy}
-                  className="mt-3 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
-                >
-                  {busy
-                    ? "Importing…"
-                    : `Import ${preview.rows.length} member${
-                        preview.rows.length === 1 ? "" : "s"
-                      }`}
-                </button>
-              ) : null}
-
               {preview.errors.length > 0 ? (
                 <>
                   <ul className="mt-3 space-y-1.5">
@@ -192,6 +178,23 @@ export function MemberImportForm() {
             </>
           )}
         </section>
+      ) : null}
+
+      {preview && preview.rows.length > 0 ? (
+        <StickyActionBar>
+          <button
+            type="button"
+            onClick={commit}
+            disabled={busy}
+            className="w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          >
+            {busy
+              ? "Importing…"
+              : `Import ${preview.rows.length} member${
+                  preview.rows.length === 1 ? "" : "s"
+                }`}
+          </button>
+        </StickyActionBar>
       ) : null}
 
       {committed ? (

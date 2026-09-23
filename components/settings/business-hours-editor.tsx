@@ -26,7 +26,7 @@ type Day = (typeof DAYS)[number] | string;
 type DayHours = { day: string; closed: boolean; open: string; close: string };
 
 const inputClass =
-  "rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function fullWeek(loaded: DayHours[]): DayHours[] {
   return DAYS.map(
@@ -136,7 +136,7 @@ export function BusinessHoursEditor({
               setBusy(false);
             })();
           }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
         >
           {busy ? "Saving…" : "Save hours"}
         </button>

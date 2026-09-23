@@ -5,17 +5,17 @@
   --color-paper: #FFFFFF;
   --color-ink: #0F1F1C;
   --color-ink-2: #3C534F;
-  --color-ink-3: #7B918D;
+  --color-ink-3: #5B6F6B;
   --color-marine: #0D3B36;
   --color-water: #0E7C86;
   --color-water-soft: #E3F1F2;
   --color-line: rgba(15, 31, 28, 0.1);
 
-  --color-good: #2E9E5B;
+  --color-good: #1F7A43;
   --color-good-soft: #E4F4EA;
-  --color-late: #D8453C;
+  --color-late: #B2332B;
   --color-late-soft: #FCE9E7;
-  --color-warn: #B8710A;
+  --color-warn: #8F5400;
   --color-warn-soft: #FDF0DC;
 
   --font-display: "Bricolage Grotesque", system-ui, sans-serif;
@@ -33,6 +33,11 @@
   --accent: #FF7A18;
   --accent-soft: #FFEEE1;
   --accent-ink: #B84E00;
+  /* PR3-C1 — the accessible action surface. White on --accent is
+   * 2.61:1 (the audit's finding); this darker mango in the same hue
+   * family carries white text at 5.09:1, so primary buttons use it
+   * while --accent stays the identity/active-nav colour. */
+  --accent-strong: #B84E00;
   /* WCAG 1.4.11 — focus indicator ≥3:1 vs every control surface.
    * Paper #FFFFFF: 5.09:1. Deck #EDF0EC: 4.43:1. Mango --accent
    * itself fails on both (2.61 / 2.27) and is reserved for primary
@@ -45,6 +50,15 @@
 
 html {
   font-variant-numeric: tabular-nums;
+}
+
+/* PR3-C1 — the KPI figure treatment: display face, tabular figures,
+ * tight tracking. One class so every headline number on every role
+ * surface reads the same. */
+@utility kpi {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 @media (prefers-reduced-motion: reduce) {

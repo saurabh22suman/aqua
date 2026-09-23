@@ -130,7 +130,7 @@ export default async function CoachMemberDetailPage({
             {canAssess ? (
               <Link
                 href={`/coach/members/${m.memberId}/assess`}
-                className="inline-flex min-h-[44px] items-center rounded-pill bg-[var(--accent)] px-4 text-[13px] font-semibold text-paper"
+                className="inline-flex min-h-[44px] items-center rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
               >
                 Record assessment
               </Link>

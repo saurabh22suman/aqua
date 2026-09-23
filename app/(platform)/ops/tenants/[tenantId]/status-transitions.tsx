@@ -188,7 +188,7 @@ export function StatusTransitionControls({
                 required
                 rows={3}
                 placeholder="What triggered this?"
-                className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+                className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               />
               <span className="mt-1 block text-[12px] text-ink-3">
                 Required. Saved on the platform audit log so the timeline

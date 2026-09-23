@@ -9,6 +9,13 @@ import {
 // exactly what a role would see rather than a copy that can drift.
 // The layouts remain the source of the frame; this is the item list.
 
+// PR3-C3 — Fees is reachable from owner Home and the desktop sidebar.
+// The mobile bottom nav stays four items (design contract), so this
+// list is rendered by OwnerSideNav only, never by BottomNav.
+export const OWNER_SIDEBAR_EXTRA_NAV: NavItem[] = [
+  { href: "/owner/fees", label: "Fees", iconName: "receipt" },
+];
+
 export const TENANT_SURFACE_NAV: Record<TenantSurface, NavItem[]> = {
   owner: [
     { href: "/owner", label: "Home", iconName: "layout-dashboard", exact: true },

@@ -102,7 +102,7 @@ export function HolidaysBoard({
           type="button"
           onClick={submit}
           disabled={busy || !name.trim() || !holidayDate}
-          className="w-full rounded-ctl bg-[var(--accent)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+          className="w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
         >
           Add holiday
         </button>

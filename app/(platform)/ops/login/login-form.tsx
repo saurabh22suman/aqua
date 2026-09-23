@@ -49,7 +49,7 @@ export function PlatformLoginForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-pill py-3 text-[15px] font-semibold text-white bg-[var(--accent)] transition-colors duration-150 disabled:opacity-60"
+        className="w-full rounded-pill py-3 text-[15px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
       >
         {isPending ? "Signing in…" : "Continue"}
       </button>
@@ -78,7 +78,7 @@ function Field({
         name={name}
         autoComplete={autoComplete}
         required={required}
-          className="mt-1 w-full rounded-ctl border border-line bg-paper px-4 py-3 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+          className="mt-1 w-full rounded-ctl border border-line bg-paper px-4 py-3 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       />
     </label>
   );

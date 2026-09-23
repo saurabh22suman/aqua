@@ -21,7 +21,7 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--accent)] text-white hover:opacity-90",
+  primary: "bg-[var(--accent-strong)] text-white hover:opacity-90",
   secondary: "border border-line bg-paper text-ink-2 hover:bg-deck",
   ghost: "bg-deck text-ink-2 hover:bg-paper",
   destructive: "bg-late text-white hover:opacity-90",

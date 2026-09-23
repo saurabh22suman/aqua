@@ -84,7 +84,7 @@ export default async function PlatformTenantDetailPage({
               Apply one from the{" "}
               <Link
                 href="/ops/presets"
-                className="text-[var(--accent)] underline underline-offset-2"
+                className="text-[var(--accent-ink)] underline underline-offset-2"
               >
                 preset catalogue
               </Link>{" "}

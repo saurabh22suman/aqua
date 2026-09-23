@@ -14,7 +14,7 @@ import type { TaxScopeRow } from "@/lib/services/tax";
 // and edits the rate at its own scope.
 
 const inputClass =
-  "w-24 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[14px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+  "w-24 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 function scopeLabel(row: TaxScopeRow): string {
   if (row.source.scopeType === "default") return "platform default";
@@ -65,7 +65,7 @@ function RateRow({
               if (rateBp === null) return;
               onRun(row, rateBp);
             }}
-            className="rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+            className="rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {pending ? "Saving…" : "Save"}
           </button>

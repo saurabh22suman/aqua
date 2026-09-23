@@ -20,6 +20,10 @@ vi.mock("@/lib/auth/surface-guard", () => ({
 }));
 
 const getTodayAction = vi.fn();
+vi.mock("@/lib/actions/terminology", () => ({
+  getTerminologyAction: async () => ({ locale: "en", overrides: {} }),
+}));
+
 vi.mock("@/lib/actions/coach", () => ({
   getTodayAction: (...args: unknown[]) => getTodayAction(...args),
   getRosterAction: vi.fn(async () => null),

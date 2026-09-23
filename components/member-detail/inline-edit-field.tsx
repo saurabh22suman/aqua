@@ -42,6 +42,16 @@ export type InlineEditSnapshot = {
   medicalNotes: string | null;
 };
 
+// PR3-C10 — human labels for the edit affordances ("Edit fullName"
+// was the raw field name read out to screen readers).
+const FIELD_LABELS: Record<InlineEditFieldName, string> = {
+  fullName: "name",
+  phone: "phone number",
+  dateOfBirth: "date of birth",
+  gender: "gender",
+  medicalNotes: "medical notes",
+};
+
 export type InlineEditFieldOption = { value: string; label: string };
 
 export type InlineEditFieldProps = {
@@ -225,7 +235,7 @@ export function InlineEditField({
   }
 
   const baseInputClass =
-    "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent)]";
+    "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent-strong)]";
 
   // P2-8/P2-9: empty fields style the placeholder as editable and keep
   // the pencil visible (no hover on a phone). Dates read in the
@@ -309,7 +319,7 @@ export function InlineEditField({
             <button
               type="button"
               onClick={enterEdit}
-              aria-label={`Edit ${field}`}
+              aria-label={`Edit ${FIELD_LABELS[field] ?? field}`}
               className={`flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-ctl text-ink-3 transition-opacity duration-150 hover:bg-deck focus-visible:bg-deck ${isEmpty ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"}`}
             >
               <Pencil size={14} />

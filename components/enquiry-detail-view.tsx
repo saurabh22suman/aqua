@@ -198,7 +198,7 @@ export function EnquiryDetailView({
             type="button"
             onClick={submitBookTrial}
             disabled={busy || !trialValid || !batchId}
-            className="w-full rounded-ctl bg-[var(--accent)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+            className="w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
             data-testid="submit-book-trial"
           >
             {busy ? "Booking…" : "Confirm trial booking"}
@@ -285,7 +285,7 @@ export function EnquiryDetailView({
             type="button"
             onClick={submitFollowUp}
             disabled={busy || !followUpDue}
-            className="rounded-ctl bg-[var(--accent)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+            className="rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
             Add follow-up
           </button>

@@ -95,7 +95,7 @@ export function MemberAttendanceGrid({
         {days.map((day) => {
           const isSelected = selected === day.date;
           const border = day.isToday
-            ? "border-2 border-[var(--accent)]"
+            ? "border-2 border-[var(--accent-strong)]"
             : isSelected
               ? "border-2 border-ink-3"
               : "border border-transparent";
@@ -110,7 +110,7 @@ export function MemberAttendanceGrid({
               onClick={() => setSelected(isSelected ? null : day.date)}
               className={`flex aspect-square flex-col items-center justify-center rounded-ctl ${CELL_STYLE[day.status]} ${border}`}
             >
-              <span className="text-[9px] uppercase opacity-70">
+              <span className="text-[11px] uppercase opacity-80">
                 {weekdayShort(day.date)}
               </span>
               <span className="text-[13px] font-medium tabular-nums">

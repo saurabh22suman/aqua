@@ -79,7 +79,11 @@ const DASHBOARD: OwnerDashboardData = {
   attendanceThisWeekPct: null,
   activeBatchCount: 4,
   needsAttention: [
-    { title: "Register not started", detail: "Junior TTS · 5:00 pm" },
+    {
+      title: "Register not started",
+      detail: "Junior TTS · 5:00 pm",
+      href: "/owner/reports",
+    },
     {
       title: "Follow-up overdue",
       detail: "Aarav's parent",
@@ -120,11 +124,23 @@ describe("owner dashboard affordances (P1-4, P1-5, P1-7)", () => {
     expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy();
   });
 
-  it("shows the chevron only on linked needs-attention rows", () => {
+  it("every needs-attention row is linked, so every row carries the chevron (PR3-C3)", () => {
     render(
       <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
     );
-    expect(document.querySelectorAll(".lucide-chevron-right")).toHaveLength(1);
+    expect(document.querySelectorAll(".lucide-chevron-right")).toHaveLength(
+      DASHBOARD.needsAttention.length,
+    );
+  });
+
+  it("links to Fees from the home quick actions (PR3-C3)", () => {
+    render(
+      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
+    );
+    const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
+      a.getAttribute("href"),
+    );
+    expect(hrefs).toContain("/owner/fees");
   });
 
   it("renders lane times in 12-hour IST format", () => {
@@ -260,7 +276,7 @@ describe("empty inline fields look editable (P2-8, P2-9)", () => {
         placeholder="Add medical notes"
       />,
     );
-    const button = screen.getByLabelText("Edit medicalNotes");
+    const button = screen.getByLabelText("Edit medical notes");
     expect(button.className).toContain("opacity-100");
     expect(button.className).not.toContain("opacity-0");
   });

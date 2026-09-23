@@ -130,4 +130,32 @@ describe("W1-5 member joined date", () => {
     render(<MembersBoard initialMembers={[row]} />);
     expect(document.body.textContent).toContain("Joined 1 Sept 2026");
   });
+
+describe("members desktop columns (PR3-C4)", () => {
+  it("renders a column header and a grid row, keeping the phone row one column", () => {
+    const row = {
+      memberId: "m1",
+      fullName: "Aadhya Sharma",
+      isMinor: true,
+      memberCode: "AWS-010",
+      locationName: "Worli Main",
+      phone: "+919812340010",
+      status: "active",
+      createdAt: "2026-09-01T06:00:00.000Z",
+      joinedOn: "2026-09-01",
+    } as MemberListRow;
+    render(<MembersBoard initialMembers={[row]} />);
+
+    const head = document.querySelector('[data-testid="members-table-head"]');
+    expect(head).not.toBeNull();
+    expect(head!.textContent).toContain("Member");
+    expect(head!.textContent).toContain("Phone");
+    expect(head!.textContent).toContain("Joined");
+    expect(head!.textContent).toContain("Status");
+
+    const link = document.querySelector('[data-testid="members-list"] a');
+    expect(link!.className).toContain("md:grid");
+    expect(document.body.textContent).toContain("+91 98123 40010");
+  });
+});
 });

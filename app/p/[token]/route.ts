@@ -140,10 +140,20 @@ function renderParentView(args: {
     batchName: string;
     coachName: string | null;
   } | null;
+  runway?: {
+    planName: string;
+    startsOn: string;
+    endsOn: string;
+    usedDays: number;
+    totalDays: number;
+  } | null;
   attendance: {
     pct: number | null;
     presentCount: number;
     totalCount: number;
+    present?: number;
+    late?: number;
+    absent?: number;
     recent: Array<{
       sessionDate: string;
       batchName: string;
@@ -285,6 +295,33 @@ ${outstandingItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin
 <p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#7B918D;margin:20px 0 0;">Payment history</p>
 ${paymentItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin:8px 0 0;">No payments recorded yet.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${paymentItems}</ul>`}`;
 
+  const monthSummaryHtml =
+    args.attendance.totalCount === 0
+      ? ""
+      : `<p style="font-size:13px;color:#3C534F;margin:10px 0 0;">Present ${args.attendance.present ?? 0} · Late ${args.attendance.late ?? 0} · Absent ${args.attendance.absent ?? 0} this month</p>`;
+
+  const runwayHtml = args.runway
+    ? (() => {
+        const runway = args.runway;
+        const left = Math.max(0, runway.totalDays - runway.usedDays);
+        const pct = Math.min(
+          100,
+          Math.round((runway.usedDays / Math.max(1, runway.totalDays)) * 100),
+        );
+        const barColor = runway.usedDays / Math.max(1, runway.totalDays) > 0.8 ? "#8F5400" : "#0E7C86";
+        return `<p style="font-size:13px;color:#0F1F1C;margin:0;font-weight:500;">${esc(
+          runway.planName,
+        )} — ${left} of ${runway.totalDays} days left</p>
+<div style="margin-top:10px;height:6px;border-radius:999px;background-color:#EDF0EC;overflow:hidden;">
+<div style="height:100%;width:${pct}%;background-color:${barColor};"></div>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#7B918D;margin-top:6px;">
+<span>${esc(DAY_FMT.format(new Date(`${runway.startsOn}T00:00:00`)))}</span>
+<span>${esc(DAY_FMT.format(new Date(`${runway.endsOn}T00:00:00`)))}</span>
+</div>`;
+      })()
+    : `<p style="font-size:13px;color:#3C534F;margin:0;">No active plan right now.</p>`;
+
   const body = `<main style="max-width:560px;margin:0 auto;padding:0 16px 56px;font-family:'Instrument Sans',system-ui,sans-serif;color:#0F1F1C;background-color:#EDF0EC;min-height:100vh;">
 <header style="padding:32px 0 24px;display:flex;align-items:center;gap:16px;">
 <svg viewBox="0 0 100 100" width="56" height="56" role="img" aria-label="${displayName} mark">
@@ -311,8 +348,14 @@ ${nextSessionHtml}
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
 <p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">This month</p>
 ${attendanceHtml}
+${monthSummaryHtml}
 ${alertHtml}
 ${recentListHtml}
+</section>
+
+<section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">Plan</p>
+${runwayHtml}
 </section>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
@@ -428,8 +471,12 @@ export async function GET(
         pct: data.attendance.pct,
         presentCount: data.attendance.presentCount,
         totalCount: data.attendance.totalCount,
+        present: data.attendance.present,
+        late: data.attendance.late,
+        absent: data.attendance.absent,
         recent: data.attendance.recent,
       },
+      runway: data.runway,
       absenceAlert: data.absenceAlert,
       fees: data.fees,
       receiptBase: `/p/${token}/receipt`,

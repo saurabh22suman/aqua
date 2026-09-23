@@ -26,7 +26,7 @@ import { formatDateIST } from "@/lib/time/tz";
 // form, and void before money arrives.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function statusTone(status: InvoiceDetail["status"]): string {
   if (status === "paid") return "bg-marine/10 text-marine";
@@ -318,7 +318,7 @@ export function InvoiceExpanded({
                           setBusy(false);
                         })();
                       }}
-                      className="mt-1.5 rounded-pill px-3.5 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+                      className="mt-1.5 rounded-pill px-3.5 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
                     >
                       Confirm reversal
                     </button>
@@ -389,7 +389,7 @@ export function InvoiceExpanded({
                 }),
               );
             }}
-            className="mt-2 rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+            className="mt-2 rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Saving…" : "Record payment"}
           </button>

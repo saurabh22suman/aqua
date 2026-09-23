@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 // inputs is the source of truth (no optimistic state).
 
 const INPUT =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent)] focus:outline-none";
+  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 const BAND_LABELS: Array<{ key: string; label: string }> = [
   { key: "1", label: "Band 1" },
   { key: "2", label: "Band 2" },
@@ -59,7 +59,7 @@ function LevelCard({ node }: { node: SkillLadderNodeRow }) {
             setBusy(false);
           })();
         }}
-        className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+        className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
       >
         {busy ? "Saving…" : "Save level"}
       </button>
@@ -137,7 +137,7 @@ function SkillCard({ node }: { node: SkillLadderNodeRow }) {
             setBusy(false);
           })();
         }}
-        className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+        className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
       >
         {busy ? "Saving…" : "Save skill"}
       </button>

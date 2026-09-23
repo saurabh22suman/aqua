@@ -71,6 +71,14 @@ const WHITELIST = new Set([
   // member-status-panel.tsx — member status display surface.
   "components/member-status-panel.tsx",
 
+  // PR3-C2/C3 — the shared state primitives are the sanctioned home of
+  // the good/warn/late tones (same rationale as StatusBadge): every
+  // screen renders these instead of inventing its own colours.
+  "components/ui/AttentionRow.tsx",
+  "components/ui/CountChip.tsx",
+  "components/ui/ProgressBar.tsx",
+  "components/ui/RunwayStrip.tsx",
+  "components/ui/StatCard.tsx",
   // ui/StatusBadge.tsx — the shared status pill primitive extracted in
   // the 2026-09-13 UI/UX audit §7.1 (before it, each list re-declared
   // its own tones). It is the single home of the lifecycle tone maps

@@ -56,7 +56,7 @@ function RequestForm({ request }: { request: ChangeRequestItem }) {
         <input
           name="resolutionNote"
           placeholder="Resolution note (optional)"
-          className="grow min-w-[14rem] rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+          className="grow min-w-[14rem] rounded-ctl border border-line bg-paper px-3 py-1.5 text-[13px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         />
         <label className="flex items-center gap-1.5 text-[12px] text-ink-2">
           <input
@@ -72,7 +72,7 @@ function RequestForm({ request }: { request: ChangeRequestItem }) {
           name="status"
           value="resolved"
           disabled={isPending}
-          className="rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+          className="rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
         >
           Resolve
         </button>

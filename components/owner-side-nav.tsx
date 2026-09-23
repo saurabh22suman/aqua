@@ -7,6 +7,7 @@ import {
   findActiveHref,
   type NavItem,
 } from "@/components/bottom-nav";
+import { OWNER_SIDEBAR_EXTRA_NAV } from "@/lib/nav";
 
 // U-10 — owner desktop sidebar. Same item list and active-state
 // resolution as the mobile BottomNav (both read TENANT_SURFACE_NAV
@@ -15,11 +16,12 @@ import {
 // the same way the bottom nav does.
 export function OwnerSideNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
-  const activeHref = findActiveHref(pathname, items);
+  const allItems = [...items, ...OWNER_SIDEBAR_EXTRA_NAV];
+  const activeHref = findActiveHref(pathname, allItems);
 
   return (
     <ul data-testid="owner-side-nav" className="space-y-1">
-      {items.map((item) => {
+      {allItems.map((item) => {
         const Icon = ICONS[item.iconName];
         const isActive = item.href === activeHref;
         return (

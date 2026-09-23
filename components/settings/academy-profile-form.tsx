@@ -16,7 +16,7 @@ type ProfileState = {
 };
 
 const inputClass =
-  "mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+  "mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
   const [state, setState] = useState<ProfileState>(initial);
@@ -111,7 +111,7 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
           type="button"
           onClick={submit}
           disabled={pending}
-          className="rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent)] hover:opacity-90 disabled:opacity-60"
+          className="rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save"}
         </button>

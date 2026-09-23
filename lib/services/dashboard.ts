@@ -139,6 +139,9 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
       .map((s) => ({
         title: "Register not started",
         detail: `${s.batchName} — session began, nothing marked yet`,
+        // PR3-C3 — every attention row links somewhere the owner can
+        // look; the attendance report shows this batch's marks.
+        href: "/owner/reports",
       }));
 
     // C-13 done-when: "overdue follow-ups surface on the owner
@@ -163,6 +166,9 @@ export async function getOwnerDashboard(ctx: ActionCtx): Promise<OwnerDashboardD
       needsAttention.push({
         title: "Cash count needs review",
         detail: `${c.locationName} — ${c.onDate}: ${formatINR(Math.abs(c.variancePaise))} ${direction}`,
+        // PR3-C3 — the collections report is where the count and its
+        // variance are reconciled.
+        href: "/owner/reports/collections",
       });
     }
 

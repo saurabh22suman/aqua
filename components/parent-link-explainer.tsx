@@ -28,7 +28,7 @@ export function ParentLinkExplainer() {
       </p>
       <Link
         href="/login"
-        className="mt-6 inline-flex items-center justify-center rounded-pill min-h-[44px] px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent)]"
+        className="mt-6 inline-flex items-center justify-center rounded-pill min-h-[44px] px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)]"
       >
         Staff sign in
       </Link>

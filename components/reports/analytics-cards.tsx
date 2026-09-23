@@ -13,7 +13,7 @@ import {
   HorizontalBars,
   LineTrend,
   type DonutSlice,
-} from "./analytics-charts";
+} from "@/components/charts";
 
 // U-01 — the four analytics cards on /owner/reports. Each states what
 // it can honestly say: real data when it exists, a named empty state

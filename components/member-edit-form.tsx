@@ -123,7 +123,7 @@ export function MemberEditForm({
         type="button"
         onClick={submit}
         disabled={busy}
-        className="w-full rounded-ctl bg-[var(--accent)] py-3 text-[14px] font-medium text-white disabled:opacity-50"
+        className="w-full rounded-ctl bg-[var(--accent-strong)] py-3 text-[14px] font-medium text-white disabled:opacity-50"
       >
         {busy ? "Saving…" : "Save changes"}
       </button>

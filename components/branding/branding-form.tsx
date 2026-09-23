@@ -173,7 +173,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
         type="button"
         onClick={submit}
         disabled={pending}
-        className="mt-6 w-full rounded-pill py-4 text-[14.5px] font-semibold text-paper bg-[var(--accent)] transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-70"
+        className="mt-6 w-full rounded-pill py-4 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-70"
         data-testid="branding-save"
       >
         {pending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
