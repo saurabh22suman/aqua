@@ -7,11 +7,14 @@ before.
 
 ## What ships
 
-One Dokploy instance on one VPS, with three Applications (`web`,
-`worker`, `migrate` one-shot) plus one Dokploy-managed Postgres
-database. The migration step runs as a one-shot Application with
-the privileged `MIGRATION_DATABASE_URL` connection — **never**
-from the web/worker containers at boot.
+One Dokploy instance on one VPS. **Dev ships as a single Docker Compose
+service** (`docker-compose.dokploy.yml`: `db`, `migrate`, `web`, exactly
+one `worker`) pulling the immutable GHCR tag; the per-Application layout
+further down is the original plan, retained as reference for the eventual
+production cut (still blocked by the release gate). In both shapes the
+migration step is a one-shot process holding the privileged
+`MIGRATION_DATABASE_URL` connection — **never** from the web/worker
+containers at boot.
 `tests/tier1/no-superuser-on-request-path.test.ts` enforces this
 at the source level: any code path that imports `@/db/client` and
 references `MIGRATION_DATABASE_URL` on the request path fails CI.
@@ -26,6 +29,149 @@ separated from the tenant surface (`<base>`) by `middleware.ts`
 (host-based route gating) and pinned by
 `scripts/e2e-host-boundary.ts` (a CI e2e that hits each surface
 with explicit `Host` headers and asserts the boundary).
+
+## Dev deployment — Dokploy Docker Compose (approved 2026-09-23)
+
+Dev runs as **one Dokploy Docker Compose service** in project
+`aqua-dev`, built from the tracked `docker-compose.dokploy.yml`:
+`db` (postgres:16), `migrate` (one-shot), `web`, and exactly one
+`worker`. The image is the immutable GHCR tag published by
+`publish.yml` (`ghcr.io/saurabh22suman/aqua:sha-<12>`) — nothing is
+built on the VPS. Traefik is the one Dokploy already runs: no Caddy,
+no host port 3000, `web` is reached over `dokploy-network` via
+`expose`.
+
+The SSH `deploy-dev` workflow is **inactive**: its job is gated on the
+repository variable `DEV_DEPLOY_ENABLED == 'true'`, which is unset, so
+every `publish`-completed trigger is skipped instead of failing. Do
+not enable it while this Compose service owns the stack — SSH compose
+and Dokploy compose would double-manage the same containers. Dokploy's
+own Deploy (UI or deploy webhook/API) is the trigger.
+
+### Setup (once)
+
+**1. Pre-flight.** Generate the secrets (§0c), pick the Dev base
+domain, point two DNS A records at the Dev VPS (`<DEV_BASE>` and
+`ops.<DEV_BASE>`), and create a GHCR PAT with `read:packages`. On the
+VPS, `docker login ghcr.io -u <user> --password-stdin` so a compose
+pull works even outside Dokploy's registry path.
+
+**2. Create the service.** Dokploy → Create Project `aqua-dev` →
+Create Service → **Docker Compose**. Source: Git repo
+`saurabh22suman/aqua`, branch `main`, **Compose Path**
+`docker-compose.dokploy.yml`. Never paste a raw compose file — the
+tracked file is the source of truth.
+
+**3. Environment.** Environment tab → add every name from
+`docker-compose.dokploy.env.example` (placeholders only in the repo):
+`AQUA_IMAGE_TAG`, `POSTGRES_PASSWORD`, `APP_LOGIN_PASSWORD`,
+`BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `PARENT_LINK_SECRET`. Rules:
+`APP_LOGIN_PASSWORD` equals the password embedded in the
+`DATABASE_URL` references; `BETTER_AUTH_URL=https://<DEV_BASE>` (the
+apex, not ops); `AQUA_IMAGE_TAG` is `sha-<12>`, never `latest`.
+Dokploy writes these to the `.env` next to the compose file; Compose
+does not inject them into containers automatically, which is why the
+file references each one explicitly with `${VAR:?}`.
+
+**4. Registry.** Settings → Registry → add `ghcr` (Type Docker Hub,
+URL `https://ghcr.io`, username, PAT). Click Test.
+
+**5. Domains.** Compose service → Domains tab → Add Domain → service
+`web`, container port `3000`, hosts `<DEV_BASE>` and `ops.<DEV_BASE>`,
+HTTPS on, Let's Encrypt. Dokploy injects the Traefik labels at deploy
+time. A domain change needs a redeploy (Compose labels, no hot
+reload). No port is published on the host: the domain's container
+port is internal routing only.
+
+**6. Deploy.** Press Deploy. Order is enforced by `depends_on`:
+
+1. `db` healthy (`pg_isready`);
+2. `migrate` runs `db/deploy.ts` and exits 0 — bootstrapRoles →
+   runMigrations (advisory-locked, forward-only) → pg-boss schema,
+   queues and per-tenant schedules → `app_user` grants;
+3. `web` and `worker` start in parallel.
+
+If migrate exits non-zero, web/worker do not start. Fix forward with a
+new migration; never edit an applied one. On any redeploy the stack is
+force-recreated and migrate re-runs — every step is idempotent.
+
+**7. Worker scale stays 1.** Do not add `deploy.replicas`, `scale`, or
+Swarm mode. pg-boss locks each job to a single consumer; two workers
+double-process silently.
+
+### Health verification
+
+- `curl -fsS https://<DEV_BASE>/api/health` → 200
+  `{"status":"ok","worker":"healthy"}`; same on `ops.<DEV_BASE>`
+  (`/api/health` is allowlisted on both hosts).
+- Worker logs `[worker] started — listening on …`; the heartbeat beats
+  every 15s and is stale at 45s (`lib/health/worker-heartbeat.ts`). In
+  production a missing worker is a 503, so the web healthcheck gates
+  the deploy on the worker too.
+- Migrate logs `Roles bootstrapped: app_user (nologin), app_login
+  (login, noinherit).` and `deploy migration complete. N tenant(s)
+  scheduled.`
+- Tag check: `docker inspect --format '{{.Config.Image}}'
+  <web-container>` ends in the `AQUA_IMAGE_TAG` value.
+- Host boundary: the four-curl matrix in §11b below.
+
+### Backups — status: NOT claimed ready
+
+Verified in the `feat/deploy-dokploy-compose` PR (2026-09-23):
+
+- The `postgres:16` container ships `pg_dump`.
+  `docker exec <db-container> pg_dump --format=custom --no-owner
+  --no-privileges -U aqua aqua > /tmp/aqua-dev.dump` produced a valid
+  custom-format archive (PGDMP header, 0.79 MB locally).
+- `pnpm db:backup --from-file /tmp/aqua-dev.dump --dry-run` accepted
+  it and named it `db-backups/<UTC>.dump`.
+
+Gaps, stated plainly:
+
+- The runtime image deliberately does not copy `scripts/` (see the
+  Dockerfile), so `pnpm db:backup` cannot run inside web/worker/migrate
+  containers, and those containers carry no `pg_dump`. A real upload
+  must run from a repo checkout with `R2_*` exported, using
+  `--from-file` on a dump pulled from the VPS.
+- The R2 upload/retention path is **not tested**: the live round-trip
+  in `tests/db/db-backup.test.ts` skips without credentials, and no
+  live Dev backup has been run. Do not treat backups as ready until
+  (1) `R2_*` are set, (2) that test's live case runs, and (3) one real
+  dump is uploaded and restored into a throwaway Postgres (Path A in
+  §Backups).
+- `R2_*` and `AUDIT_CHECKPOINT_SECRET` are not wired into the Compose
+  services yet (parity with `docker-compose.prod.yml`). The worker's
+  scheduled `audit.checkpoint` and `activity.export` jobs need all four
+  `R2_*` plus the secret and fail loudly without them. Decide before
+  relying on those jobs.
+- A tracked host-side backup script + cron/timer is still to be added.
+  Dokploy Volume Backups on `aqua-pgdata-dev` is a secondary snapshot
+  (a live `pgdata` copy; stop the stack for a consistent restore), not
+  a substitute for a logical dump.
+
+### Rollback
+
+Set `AQUA_IMAGE_TAG` back to the previous immutable tag (for example
+`sha-290cbfdf8773`) and Deploy. Compose recreates the stack, migrate
+re-runs idempotently, and the web healthcheck (worker heartbeat
+included) decides whether the rollback stands. The database has no
+down-migrations: take a logical backup before a deploy that carries
+migrations and restore only as a last resort. Never touch
+`deploy-prod` or `PILOT_RELEASE_GATE` for this.
+
+### Local validation
+
+`AQUA_IMAGE_TAG=sha-000000000000 POSTGRES_PASSWORD=… APP_LOGIN_PASSWORD=…
+BETTER_AUTH_SECRET=… BETTER_AUTH_URL=https://ci.invalid
+PARENT_LINK_SECRET=… docker compose -f docker-compose.dokploy.yml config
+--quiet` validates interpolation. CI runs the same with dummy values,
+plus `pnpm check:dokploy-compose` for the invariants (immutable tag, no
+build/latest/ports/replicas, one worker, one-shot migrate, migration
+dependency, persistent volume, network wiring).
+
+> **The per-Application procedure below is superseded for Dev
+> (2026-09-23).** It is retained as reference for the eventual
+> production cut, which remains blocked by the PR3 release gate.
 
 ## First deploy — step-by-step procedure
 
@@ -342,20 +488,25 @@ The default backup command is
 > test row counts. This is the **Restore drill — Path A**
 > task you registered in step 2.
 
-### 9. Auto-deploy — Dev automatic, production gated
+### 9. Auto-deploy — Dev deferred, production gated
 
-Two workflows, three files (PR1-C12):
+Two workflows, three files (PR1-C12), with the Dev flow superseded by
+the Dokploy Compose path above:
 
 - **`publish.yml`** — on a green `CI` run on `main`, builds exactly
   one image and pushes it as `ghcr.io/<repo>:sha-<12-char commit>`.
   No `latest`, no rebuild downstream. `pnpm check:deploy-workflows`
   enforces these rules in CI.
-- **`deploy-dev.yml`** — on a successful `publish`, computes the same
-  tag from the publish run's commit, SSHes to the Dev VPS, pulls and
-  starts that tag (the remote `deploy.sh` uses `IMAGE`/`TAG`), verifies
-  `docker inspect aqua-web` matches the tag, then gates on
-  `/api/health` (24 × 5s). A failed health check fails the run — the
-  deploy is not "green" until the worker heartbeat is fresh too.
+- **`deploy-dev.yml`** — the SSH path. Its job is gated on the
+  repository variable `DEV_DEPLOY_ENABLED == 'true'` (deployment-only
+  PR, 2026-09-23). The variable is unset, so a `publish` completion
+  leaves the run **skipped, not failed**; no `DEV_*` secrets are
+  needed. Do not enable it while the Dokploy Compose service owns the
+  Dev stack (double-management). If it is ever enabled: it computes
+  the tag from the publish run's commit, SSHes to the Dev VPS, pulls
+  and starts that tag (the remote `deploy.sh` uses `IMAGE`/`TAG`),
+  verifies `docker inspect aqua-web` matches the tag, then gates on
+  `/api/health` (24 × 5s).
 - **`deploy-prod.yml`** — `workflow_dispatch` only. A human passes the
   immutable `sha-<short>` tag; anything else (a branch name, `latest`)
   is refused. It runs behind the GitHub **production** environment
@@ -365,20 +516,24 @@ Two workflows, three files (PR1-C12):
   checked. **Never trigger it before that.**
 
 GitHub setup:
-- Environments: `development` (Dev secrets) and `production` (Prod
-  secrets + required reviewers).
+- Environments: `development` (Dev secrets, inert until
+  `DEV_DEPLOY_ENABLED=true`) and `production` (Prod secrets + required
+  reviewers).
 - Per environment: `*_SSH_KEY`, `*_HOST`, `*_USER`, `*_APP_DIR`,
   `*_HEALTH_URL` (`DEV_*` / `PROD_*`).
-- Repository variable `PILOT_RELEASE_GATE` (unset until PR3).
+- Repository variables: `PILOT_RELEASE_GATE` (unset until PR3) and
+  `DEV_DEPLOY_ENABLED` (unset by design).
 - Each VPS app dir carries `deploy.sh`: docker login GHCR with
   `REGISTRY_USER`/`REGISTRY_TOKEN`, then
   `IMAGE=$IMAGE TAG=$TAG docker compose -f docker-compose.prod.yml up -d`.
 
-Rollback: dispatch `deploy-prod.yml` (or re-run `deploy-dev.yml`) with
-an older tag; the health gate decides whether it stands.
+Rollback: Dev — set `AQUA_IMAGE_TAG` back and Deploy the Compose
+service. Production — dispatch `deploy-prod.yml` with an older tag; the
+health gate decides whether it stands.
 
-The older Dokploy-webhook auto-deploy idea is superseded by this
-immutable-tag flow; do not wire both.
+The older Dokploy-webhook auto-deploy idea is superseded by the
+immutable-tag flow; do not wire both. The SSH flow is likewise
+superseded for Dev by the Compose service (above).
 
 ### 10. The platform login warm-up
 

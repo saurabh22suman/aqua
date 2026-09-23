@@ -62,6 +62,14 @@ export function scanDeployWorkflows(files: ReadonlyArray<WorkflowFile>): string[
       "deploy-dev.yml: must trigger on the publish workflow completing.",
     );
   }
+  // deploy-dokploy-compose PR — the guard that keeps deploy-dev skipped
+  // (not failed) while the Dev environment has no SSH secrets and the
+  // Dokploy Compose path is the approved deploy.
+  if (!/vars\.DEV_DEPLOY_ENABLED == 'true'/.test(dev)) {
+    violations.push(
+      "deploy-dev.yml: must be gated on vars.DEV_DEPLOY_ENABLED == 'true' so it is skipped, not failed, while Dev secrets are absent.",
+    );
+  }
   if (!/ssh /.test(dev)) {
     violations.push("deploy-dev.yml: must deploy over SSH.");
   }
