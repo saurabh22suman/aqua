@@ -40,6 +40,7 @@ on:
     types: [completed]
 jobs:
   deploy:
+    if: vars.DEV_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     steps:
       - run: ssh deploy@dev "deploy sha-abc1234"
       - run: docker inspect --format '{{.Config.Image}}' aqua-web
@@ -92,6 +93,18 @@ describe("deploy workflow scan", () => {
     });
     expect(
       scanDeployWorkflows(bad).some((v) => v.includes("latest")),
+    ).toBe(true);
+  });
+
+  it("rejects a deploy-dev without the DEV_DEPLOY_ENABLED guard", () => {
+    const bad = files({
+      "deploy-dev.yml": GOOD_DEV.replace(
+        "    if: vars.DEV_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')\n",
+        "",
+      ),
+    });
+    expect(
+      scanDeployWorkflows(bad).some((v) => v.includes("DEV_DEPLOY_ENABLED")),
     ).toBe(true);
   });
 

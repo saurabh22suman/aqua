@@ -142,6 +142,27 @@ jobs:
       # tests/scanner-fixtures/compose-secrets-fixtures.test.ts.
       - run: pnpm check:compose-secrets
 
+      # Deployment PR: docker-compose.dokploy.yml invariants — immutable
+      # AQUA_IMAGE_TAG only, no build/latest/ports/replicas, exactly one
+      # worker, one-shot migrate, web/worker after successful migration,
+      # persistent named volume, internal + dokploy-network wiring.
+      # Fixture proof in
+      # tests/scanner-fixtures/dokploy-compose-fixtures.test.ts.
+      - run: pnpm check:dokploy-compose
+
+      # The scanner above is a pure source parse; this step proves the
+      # file Compose actually builds from is valid and every ${VAR:?}
+      # resolves. Dummy values only — never real secrets.
+      - name: Validate Dokploy compose interpolation (dummy values)
+        run: |
+          AQUA_IMAGE_TAG=sha-000000000000 \
+          POSTGRES_PASSWORD=ci-dummy-postgres \
+          APP_LOGIN_PASSWORD=ci-dummy-app \
+          BETTER_AUTH_SECRET=ci-dummy-better-auth \
+          BETTER_AUTH_URL=https://ci.invalid \
+          PARENT_LINK_SECRET=ci-dummy-parent-link \
+          docker compose -f docker-compose.dokploy.yml config --quiet
+
       # PR1-C12: publish/deploy-dev/deploy-prod rules — immutable tag,
       # no rebuild downstream, production dispatch-only behind the
       # production environment and PILOT_RELEASE_GATE. Fixture proof in

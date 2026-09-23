@@ -1,0 +1,140 @@
+# Dokploy Docker Compose deployment — one project, four services:
+# db, migrate, web, worker.
+#
+# This is the Dev deployment unit: a single Dokploy "Docker Compose"
+# service deployed on the VPS that already runs Dokploy's bundled
+# Traefik. No Caddy, no per-Application resources, no SSH deploy path
+# (the SSH deploy-dev workflow stays disabled until
+# vars.DEV_DEPLOY_ENABLED is set — see .github/workflows/deploy-dev.yml).
+#
+# Invariants enforced mechanically by `pnpm check:dokploy-compose` and
+# tests/scanner-fixtures/dokploy-compose-fixtures.test.ts:
+#   * immutable image only — ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?},
+#     never :latest, never a build key anywhere;
+#   * no host port mappings at all (web is reached by Traefik over the
+#     internal network via `expose`);
+#   * exactly one worker — pg-boss locks a job to a single consumer, so a
+#     second worker silently double-processes;
+#   * migrate is one-shot (`restart: "no"`) and web/worker start only
+#     after it exits 0;
+#   * the database's data lives in the named volume aqua-pgdata-dev.
+#
+# Dokploy writes UI environment variables to a .env file next to this
+# compose file. Compose does NOT inject them into containers
+# automatically — every value is referenced explicitly below, with
+# `${VAR:?message}` so a missing secret refuses the deploy instead of
+# falling back to a placeholder. Start from
+# docker-compose.dokploy.env.example (placeholders only — never commit
+# real secrets).
+name: aqua-dev
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aqua
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: aqua
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aqua -d aqua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - aqua-pgdata-dev:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  # One-shot. Runs under the privileged `aqua` role: bootstrap roles,
+  # run migrations, ensure the pg-boss schema/queues/schedules, grant
+  # app_user. Exits 0 on success; web and worker wait for that exit.
+  migrate:
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "db/deploy.ts"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  web:
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node", "server.js"]
+    restart: unless-stopped
+    # Traefik reaches this port over dokploy-network; nothing is
+    # published on the host. `ports:` here would expose 3000 publicly.
+    expose:
+      - "3000"
+    environment:
+      # Next standalone binds HOSTNAME when set; without 0.0.0.0 the
+      # container binds its hostname only and the healthcheck below
+      # fails from inside the container.
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      NODE_ENV: production
+      DEMO_MODE: "false"
+      OFFLINE_SYNC_ENABLED: ""
+      WHATSAPP_PROVIDER: disabled
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+      - dokploy-network
+
+  # Exactly one worker. pg-boss uses SELECT ... FOR UPDATE SKIP LOCKED to
+  # lock a job to one consumer; a second replica would race it. Do not
+  # add deploy.replicas, scale, or Swarm mode here.
+  worker:
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "worker/index.ts"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      NODE_ENV: production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+volumes:
+  # Named volume, pinned so Dokploy project naming can never rename it.
+  # This is the database's only persistent state.
+  aqua-pgdata-dev:
+    name: aqua-pgdata-dev
+
+networks:
+  # Application-internal network: db/migrate/worker/web talk here.
+  internal:
+    name: aqua-dev-internal
+  # Dokploy's existing Traefik network. web joins it so the Compose
+  # Domains tab can inject routing labels; db, migrate and worker stay
+  # off it.
+  dokploy-network:
+    external: true

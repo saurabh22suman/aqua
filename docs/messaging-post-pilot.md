@@ -38,6 +38,29 @@ the tree). The ops catalogue marks `messaging` as `internal`, not `ga`.
 8. **Rollout.** One pilot tenant first, with a manual kill switch in the ops
    console; expand only after a week of clean delivery logs.
 
+## Post-pilot backlog — Reusable WhatsApp API Sandbox
+
+**Backlog only.** No code, env, schema or workflow change ships with this
+item. The pilot position is unchanged: the existing mock provider remains
+the only provider for the friend pilot; `WHATSAPP_PROVIDER` stays `mock`
+outside production and `disabled` in production.
+
+- **Future work:** a reusable sandbox that speaks the WhatsApp Cloud API
+  surface — send endpoint, webhook verification, delivery/read status
+  callbacks — so `lib/messaging/cloud-provider.ts` can be exercised
+  end-to-end without Meta credentials and without sending real messages.
+- **Config contract:** the future HTTP adapter must read a configurable
+  `WHATSAPP_API_BASE_URL` (default `https://graph.facebook.com`) so the
+  same adapter targets either the sandbox or Meta production. It joins
+  the planned optional credentials in item 2 above; the app keeps booting
+  without them and fails closed when a send is attempted.
+- **Tests:** the provider contract suite runs against the sandbox when
+  `WHATSAPP_API_BASE_URL` points at it, and skips otherwise — the same
+  credential-gated pattern as the live R2 round-trip. No test ever
+  targets Meta in CI.
+- **Non-goals:** real WhatsApp credentials, inbound production traffic,
+  or any change to the pilot mock.
+
 ## Explicitly out of scope for the pilot
 
 - Any Cloud adapter code.

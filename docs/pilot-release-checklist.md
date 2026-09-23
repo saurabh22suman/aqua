@@ -50,10 +50,10 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 merged at `290cbfd`. PR3 complete and open as PR #190 with green CI; awaiting the human `human-approved-merge` label and merge. Dev deployment deferred by owner until after PR3. |
-| **Current task** | None — human review/merge of PR #190. |
-| **Next task** | After the human merges PR3: complete the release gate (mark the PR3 gate done in this checklist on the merged commit), then resume the deferred Dev VPS/Dokploy work per the post-PR3 deployment note; only then set `PILOT_RELEASE_GATE=passed`. |
-| **Known blockers** | None. Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). |
+| **Current status** | PR1 merged at `2cdde8c`; PR2 at `290cbfd`; PR3 merged at `8857bdd`. `feat/deploy-dokploy-compose` implements the approved Dev Dokploy Compose deployment (tracked compose, deploy-dev guard, CI validation, docs) and is open for human review. Dev deployment itself is not executed yet. |
+| **Current task** | Human review of the deployment-only PR (`feat/deploy-dokploy-compose`). |
+| **Next task** | After that PR merges: execute the Dev deploy per `docs/deployment.md` §Dev deployment, then the R2 live-backup test; only then complete the PR3 release gate and set `PILOT_RELEASE_GATE=passed`. |
+| **Known blockers** | Production fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). Dev deploy not yet executed; R2 credentials absent, so backup upload is unverified — do not treat backups as ready. |
 
 ### Session log
 
@@ -101,6 +101,7 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C9 added (ops detail pin; freshness/pagination already enforced) | PR3-C9 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C10 added (type floor, 44px row actions, human edit labels) | PR3-C10 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3 full gate + zero-JS green; opened as #190 with green CI | PR3-C11 (pre-merge) |
+| 2026-09-23 | feat/deploy-dokploy-compose | Deployment-only PR: tracked `docker-compose.dokploy.yml` (db/migrate/web/one worker, immutable `AQUA_IMAGE_TAG`, no build/latest/ports, internal + dokploy-network), `check:dokploy-compose` scanner + fixtures + `docker compose config` CI step, `deploy-dev` gated on unset `DEV_DEPLOY_ENABLED`, docs + placeholder env example; backup dump path verified locally, R2 upload untested | Dev deploy prep (deployment-only) |
 
 ---
 
@@ -466,25 +467,40 @@ Postgres) is green. Not fixed here — out of scope.
 All Dev VPS and Dokploy deployment work is deferred until after PR3 merges.
 Until then:
 
+**2026-09-23 update — the pending decisions are made and implemented in
+`feat/deploy-dokploy-compose` (open for human review; nothing executed):**
+
+- Dev path is one Dokploy **Docker Compose** service in project `aqua-dev`
+  (`docker-compose.dokploy.yml`: db, migrate, web, one worker), immutable
+  `AQUA_IMAGE_TAG`, existing Traefik, no Caddy, no public 3000.
+- `deploy-dev.yml` is gated on `vars.DEV_DEPLOY_ENABLED == 'true'` (unset):
+  publish-completed runs are **skipped, not failed**; do not enable it while
+  the Compose service owns the stack.
+- CI validates the Compose file (`pnpm check:dokploy-compose` plus
+  `docker compose config` with dummy values).
+- Backup readiness is **not** claimed: the dump path was verified locally
+  (custom-format archive + `db:backup --from-file --dry-run`); the R2 upload
+  and restore are untested without credentials.
+- Production remains fully blocked (`PILOT_RELEASE_GATE` unset; no
+  `production` environment; `deploy-prod` never triggered).
+
+The original constraints still hold:
+
 - **Do not install Caddy.** The Dev VPS already runs **Dokploy with its bundled
   Traefik** reverse proxy; Traefik terminates TLS and routes to the app.
 - **Do not modify the VPS.** No package installs, no compose/env changes, no
   container restarts on the Dev VPS during PR2/PR3.
 - **Do not run `deploy-dev` or `deploy-prod`** (no dispatch, no re-run).
   `deploy-dev` remains implemented and CI-validated but idle.
-- **Port 3000 must not be publicly exposed.** `docker-compose.prod.yml`
-  publishes `3000:3000`; when deployment resumes, Traefik must reach the app
-  over the internal network (or a loopback bind) and the host firewall must
-  keep 3000 closed to the internet.
-- **`deploy.sh` and the compose override must not remain untracked VPS-only
-  assets.** They currently exist only as provisioning guidance; before
-  deployment resumes they belong in the repo (tracked, reviewed, versioned)
-  rather than hand-maintained on the VPS.
-- **The GitHub/Dokploy deployment approach must be finalized before
-  deployment**: environment secrets (`DEV_*`), whether deploy runs through
-  Dokploy's API/webhook or SSH, the compose override shape, and the
-  health/tag verification path all need one explicit decision recorded here
-  before any run.
+- **Port 3000 must not be publicly exposed.** `docker-compose.dokploy.yml`
+  uses `expose` only; Traefik reaches the app over `dokploy-network` and the
+  host firewall keeps 3000 closed to the internet.
+- **The compose override is now tracked** (`docker-compose.dokploy.yml`,
+  `docker-compose.dokploy.env.example`). `deploy.sh` is not needed for the
+  Compose path and must not be added to the VPS.
+- **The GitHub/Dokploy deployment approach is finalized**: Dokploy Compose is
+  the Dev deploy path; the SSH `deploy-dev` job is gated off; production stays
+  on the gated dispatch workflow.
 
 Production remains fully blocked regardless (`PILOT_RELEASE_GATE` unset; no
 `production` environment; `deploy-prod` never triggered).
@@ -1166,11 +1182,14 @@ money and reception cash/UPI recording remain fully working.
 - [x] Zero-JS parent contract passes; no new fabricated metric found.
 - [x] PR opened into `main`: https://github.com/saurabh22suman/aqua/pull/190
   (agent pushed/opened; the agent never merges). CI green on the PR (run
-  `35784258466`, 16m4s). `agent-protected-paths` awaits the human
-  `human-approved-merge` label. Not merged.
+  `35784258466`, 16m4s). `agent-protected-paths` green with the
+  human-applied `human-approved-merge` label. **Merged by the human as
+  `8857bdd`.**
 - [x] Checklist committed with the implementation on the PR3 branch.
 - [ ] **Release gate complete → production `workflow_dispatch` unblocked.**
-  Blocked on the human merge (the agent will not merge).
+  Still blocked: the Dev deploy and the R2 live-backup test must run per the
+  post-PR3 deployment note before this gate can be marked complete. The agent
+  does not mark it.
 
 ---
 

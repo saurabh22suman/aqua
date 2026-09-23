@@ -37,6 +37,7 @@
     "check:location-scope": "tsx scripts/check-location-scope.ts",
     "check:tenant-conventions": "tsx scripts/check-tenant-conventions.ts",
     "check:compose-secrets": "tsx scripts/check-compose-secrets.ts",
+    "check:dokploy-compose": "tsx scripts/check-dokploy-compose.ts",
     "check:deploy-workflows": "tsx scripts/check-deploy-workflows.ts",
     "demo:reset": "tsx scripts/demo-reset.ts"
   },
