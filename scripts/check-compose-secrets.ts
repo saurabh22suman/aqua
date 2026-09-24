@@ -5,7 +5,7 @@ import { scanComposeSecrets } from "./lib/compose-secrets-scan";
 // secret has a fallback default, is missing entirely, or the db
 // service lost its restart policy. Pure source parse, no Docker.
 
-const path = process.argv[2] ?? "docker-compose.prod.yml";
+const path = process.argv[2] ?? "docker-compose.local.yml";
 const violations = scanComposeSecrets(readFileSync(path, "utf8"));
 
 if (violations.length > 0) {

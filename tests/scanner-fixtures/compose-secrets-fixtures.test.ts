@@ -9,9 +9,9 @@ import {
 // PR1-C10 positive controls for the compose-secrets scan. The
 // production scan runs in CI (pnpm check:compose-secrets); this file
 // proves the rule can fail on a known-bad input and stays green on
-// the real docker-compose.prod.yml.
+// the real docker-compose.local.yml.
 
-const REAL_COMPOSE = join(process.cwd(), "docker-compose.prod.yml");
+const REAL_COMPOSE = join(process.cwd(), "docker-compose.local.yml");
 
 function goodCompose(): string {
   const lines = [
@@ -59,7 +59,7 @@ describe("compose secrets scan", () => {
     );
   });
 
-  it("passes the real docker-compose.prod.yml", () => {
+  it("passes the real docker-compose.local.yml", () => {
     expect(scanComposeSecrets(readFileSync(REAL_COMPOSE, "utf8"))).toEqual([]);
   });
 });

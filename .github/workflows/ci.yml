@@ -150,6 +150,8 @@ jobs:
       # tests/scanner-fixtures/dokploy-compose-fixtures.test.ts.
       - run: pnpm check:dokploy-compose
 
+      - run: pnpm check:production-compose
+
       # The scanner above is a pure source parse; this step proves the
       # file Compose actually builds from is valid and every ${VAR:?}
       # resolves. Dummy values only — never real secrets.
@@ -161,11 +163,40 @@ jobs:
           BETTER_AUTH_SECRET=ci-dummy-better-auth \
           BETTER_AUTH_URL=https://ci.invalid \
           PARENT_LINK_SECRET=ci-dummy-parent-link \
+          R2_ACCOUNT_ID=ci-dummy-r2-account \
+          R2_ACCESS_KEY_ID=ci-dummy-r2-access \
+          R2_SECRET_ACCESS_KEY=ci-dummy-r2-secret \
+          R2_BUCKET=ci-dummy-r2-bucket \
+          AUDIT_CHECKPOINT_SECRET=ci-dummy-checkpoint \
           docker compose -f docker-compose.dokploy.yml config --quiet
 
-      # PR1-C12: publish/deploy-dev/deploy-prod rules — immutable tag,
-      # no rebuild downstream, production dispatch-only behind the
-      # production environment and PILOT_RELEASE_GATE. Fixture proof in
+      - name: Validate Production Compose interpolation (dummy values)
+        run: |
+          AQUA_IMAGE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
+          POSTGRES_PASSWORD=ci-dummy-postgres \
+          APP_LOGIN_PASSWORD=ci-dummy-app \
+          BETTER_AUTH_SECRET=ci-dummy-better-auth \
+          BETTER_AUTH_URL=https://ci.invalid \
+          PARENT_LINK_SECRET=ci-dummy-parent-link \
+          R2_ACCOUNT_ID=ci-dummy-r2-account \
+          R2_ACCESS_KEY_ID=ci-dummy-r2-access \
+          R2_SECRET_ACCESS_KEY=ci-dummy-r2-secret \
+          R2_BUCKET=ci-dummy-r2-bucket \
+          AUDIT_CHECKPOINT_SECRET=ci-dummy-checkpoint \
+          docker compose -f docker-compose.production.yml --profile backup config --quiet
+
+      # Runtime-image contract, not a deploy: catches an unavailable
+      # PostgreSQL 16 client or a missing backup script before main
+      # publishes an image. Production never builds on its VPS.
+      - name: Verify runtime image backup tooling (no push/deploy)
+        run: |
+          docker build --quiet -t aqua-ci:${{ github.sha }} .
+          test "$(docker image inspect aqua-ci:${{ github.sha }} --format '{{.Config.User}}')" = aqua
+          docker run --rm --entrypoint sh aqua-ci:${{ github.sha }} -c 'pg_dump --version | grep -q "PostgreSQL) 16." && test -f scripts/db-backup.ts && test -f scripts/lib/db-backup.ts'
+
+      # Publish/approval rules: no SSH or rebuild downstream, Prod
+      # dispatch-only behind environment approval and PILOT_RELEASE_GATE.
+      # Fixture proof in
       # tests/scanner-fixtures/deploy-workflows-fixtures.test.ts.
       - run: pnpm check:deploy-workflows
 
@@ -196,6 +227,14 @@ jobs:
       # deploy guarantees before anything downstream depends on it.
       - name: db:deploy (bootstrap pg-boss schema + queues before tests depend on it)
         run: pnpm db:deploy
+
+      - name: Backup CLI dry-run against disposable CI database (no R2 upload)
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL -e MIGRATION_DATABASE_URL -e APP_LOGIN_PASSWORD \
+            -e BETTER_AUTH_SECRET -e BETTER_AUTH_URL -e PARENT_LINK_SECRET \
+            -e NODE_ENV=production --entrypoint node_modules/.bin/tsx \
+            aqua-ci:${{ github.sha }} scripts/db-backup.ts --dry-run
 
       # pretest seeds the platform catalogue automatically (see T0).
       #

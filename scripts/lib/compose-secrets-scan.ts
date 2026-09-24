@@ -1,4 +1,5 @@
-// PR1-C10 — compose secrets must fail fast. docker-compose.prod.yml
+// PR1-C10 — compose secrets must fail fast. The renamed local-only
+// docker-compose.local.yml
 // used `${VAR:-fallback}` defaults for every secret, so a deploy
 // missing POSTGRES_PASSWORD or BETTER_AUTH_SECRET silently came up
 // with a known placeholder instead of refusing to start. This scan

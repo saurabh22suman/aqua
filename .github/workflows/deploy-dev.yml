@@ -1,100 +1,19 @@
 name: deploy-dev
 
-# PR1-C12 — every successful publish automatically deploys that exact
-# immutable tag to the Dev VPS. No rebuild: the tag is computed from
-# the publish run's commit, the remote deploy script pulls it, and the
-# job verifies the running container image before the health gate.
-#
-# Secrets (environment: development): DEV_SSH_KEY, DEV_HOST, DEV_USER,
-# DEV_APP_DIR, DEV_HEALTH_URL. The remote app dir carries deploy.sh,
-# which logs into GHCR with the passed credentials and runs
-# `docker compose -f docker-compose.prod.yml up -d` with IMAGE/TAG.
-#
-# Durable guard (deploy-dokploy-compose PR): the job runs only when the
-# repository variable DEV_DEPLOY_ENABLED is exactly 'true'. While the
-# variable is unset the run is skipped, not failed — publish stays
-# green, and no Dev secrets need to exist. The variable is deliberately
-# NOT enabled by that PR; Dokploy Compose
-# (docker-compose.dokploy.yml) is the approved Dev deploy path once it
-# is, and this SSH path must not double-manage the same stack.
-
+# The SSH deployment path is retired: Dokploy Compose owns Dev. Keep this
+# workflow so existing publish-completed triggers are visibly skipped while
+# DEV_DEPLOY_ENABLED is unset; setting that legacy variable fails safely
+# instead of bringing up a second stack on the same VPS.
 on:
   workflow_run:
     workflows: [publish]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: Immutable sha-<short> tag published by the publish workflow
-        required: true
-        type: string
-
-concurrency:
-  group: deploy-dev
-  cancel-in-progress: false
 
 jobs:
-  deploy:
-    if: vars.DEV_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
-    environment: development
+  retired-ssh-deploy:
+    if: vars.DEV_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
-    env:
-      IMAGE: ghcr.io/${{ github.repository }}
     steps:
-      - name: Resolve the immutable tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.image_tag }}"
-          else
-            TAG="sha-$(echo '${{ github.event.workflow_run.head_sha }}' | cut -c1-12)"
-          fi
-          case "$TAG" in
-            sha-[0-9a-f]*) ;;
-            *) echo "not an immutable sha tag: $TAG"; exit 1 ;;
-          esac
-          echo "TAG=$TAG" >> "$GITHUB_ENV"
-
-      - name: Install the deploy key
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEV_HOST }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Deploy that exact tag (no rebuild)
-        env:
-          DEPLOY_HOST: ${{ secrets.DEV_HOST }}
-          DEPLOY_USER: ${{ secrets.DEV_USER }}
-          DEPLOY_DIR: ${{ secrets.DEV_APP_DIR }}
-          REGISTRY_USER: ${{ github.actor }}
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_DIR' && IMAGE='$IMAGE' TAG='$TAG' REGISTRY_USER='$REGISTRY_USER' REGISTRY_TOKEN='$REGISTRY_TOKEN' ./deploy.sh"
-
-      - name: Verify the deployed tag is the published tag
-        env:
-          DEPLOY_HOST: ${{ secrets.DEV_HOST }}
-          DEPLOY_USER: ${{ secrets.DEV_USER }}
-        run: |
-          running=$(ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" "docker inspect --format '{{.Config.Image}}' aqua-web")
-          echo "running: $running"
-          case "$running" in
-            *":$TAG") echo "deployed tag matches $TAG" ;;
-            *) echo "deployed image '$running' does not match published tag $TAG"; exit 1 ;;
-          esac
-
-      - name: Health gate (worker heartbeat included)
-        run: |
-          for i in $(seq 1 24); do
-            if curl -fsS "${{ secrets.DEV_HEALTH_URL }}/api/health" | grep -q '"status":"ok"'; then
-              echo "healthy after ${i} attempt(s)"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "health gate failed — the deployed tag is not healthy"
+      - run: |
+          echo "DEV_DEPLOY_ENABLED must remain unset. Deploy Dev via tracked Dokploy Compose (docs/deployment.md)."
           exit 1

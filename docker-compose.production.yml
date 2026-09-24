@@ -1,0 +1,130 @@
+# Production Dokploy Docker Compose deployment. One project on the separate
+# Production VPS: db, one-shot migrate, web, exactly one worker. The backup
+# profile is invoked only by an explicitly installed host timer/operator.
+# Dokploy supplies HTTPS Domains for web on its external dokploy-network;
+# nothing publishes port 3000 on the host. The human resolves the approved
+# published tag to its exact GHCR manifest digest before Production deploy.
+name: aqua-prod
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aqua
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: aqua
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aqua -d aqua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - aqua-pgdata-prod:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  migrate:
+    image: ghcr.io/saurabh22suman/aqua@${AQUA_IMAGE_DIGEST:?set AQUA_IMAGE_DIGEST}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "db/deploy.ts"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  web:
+    image: ghcr.io/saurabh22suman/aqua@${AQUA_IMAGE_DIGEST:?set AQUA_IMAGE_DIGEST}
+    pull_policy: always
+    command: ["node", "server.js"]
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      NODE_ENV: production
+      DEMO_MODE: "false"
+      OFFLINE_SYNC_ENABLED: ""
+      WHATSAPP_PROVIDER: disabled
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+      - dokploy-network
+
+  worker:
+    image: ghcr.io/saurabh22suman/aqua@${AQUA_IMAGE_DIGEST:?set AQUA_IMAGE_DIGEST}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "worker/index.ts"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET}
+      NODE_ENV: production
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+  backup:
+    profiles: [backup]
+    image: ghcr.io/saurabh22suman/aqua@${AQUA_IMAGE_DIGEST:?set AQUA_IMAGE_DIGEST}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "scripts/db-backup.ts", "--retain", "30"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  aqua-pgdata-prod:
+    name: aqua-pgdata-prod
+
+networks:
+  internal:
+    name: aqua-prod-internal
+  dokploy-network:
+    external: true

@@ -39,31 +39,28 @@ on:
     workflows: [publish]
     types: [completed]
 jobs:
-  deploy:
-    if: vars.DEV_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+  retired:
+    if: vars.DEV_DEPLOY_ENABLED == 'true'
     steps:
-      - run: ssh deploy@dev "deploy sha-abc1234"
-      - run: docker inspect --format '{{.Config.Image}}' aqua-web
-      - run: curl -fsS https://dev.example/api/health
+      - run: echo "Dokploy Compose owns Dev"; exit 1
 `;
 
-const GOOD_PROD = `name: deploy-prod
+const GOOD_PROD = `name: deploy-prod-approval
 on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Immutable sha-<short> tag
+        description: Published sha-<12> tag
         required: true
 jobs:
   gate:
-    if: vars.PILOT_RELEASE_GATE != 'passed'
     steps:
-      - run: exit 1
-  deploy:
+      - run: if [ "$PILOT_RELEASE_GATE" != passed ]; then exit 1; fi; [[ "$TAG" =~ ^sha-[0-9a-f]{12}$ ]]
+  approval:
+    needs: gate
     environment: production
     steps:
-      - run: ssh deploy@prod "deploy \${{ inputs.image_tag }}"
-      - run: curl -fsS https://prod.example/api/health
+      - run: echo "This workflow does not deploy. Use Dokploy Compose."
 `;
 
 function files(overrides: Record<string, string> = {}): WorkflowFile[] {
@@ -99,7 +96,7 @@ describe("deploy workflow scan", () => {
   it("rejects a deploy-dev without the DEV_DEPLOY_ENABLED guard", () => {
     const bad = files({
       "deploy-dev.yml": GOOD_DEV.replace(
-        "    if: vars.DEV_DEPLOY_ENABLED == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')\n",
+        "    if: vars.DEV_DEPLOY_ENABLED == 'true'\n",
         "",
       ),
     });
@@ -108,12 +105,12 @@ describe("deploy workflow scan", () => {
     ).toBe(true);
   });
 
-  it("rejects a deploy-dev that rebuilds instead of pulling the published tag", () => {
+  it("rejects an SSH path that would double-manage Dev", () => {
     const bad = files({
-      "deploy-dev.yml": `${GOOD_DEV}      - run: docker build -t aqua .\n`,
+      "deploy-dev.yml": `${GOOD_DEV}      - run: ssh deploy@dev ./deploy.sh\n`,
     });
     expect(
-      scanDeployWorkflows(bad).some((v) => v.includes("docker build")),
+      scanDeployWorkflows(bad).some((v) => v.includes("cannot deploy remotely")),
     ).toBe(true);
   });
 
@@ -152,25 +149,23 @@ describe("deploy workflow scan", () => {
     ).toBe(true);
   });
 
-  it("rejects workflows that lack a health gate", () => {
+  it("rejects a Production SSH deploy or a missing gated approval", () => {
     const bad = files({
-      "deploy-dev.yml": GOOD_DEV.replace(
-        "      - run: curl -fsS https://dev.example/api/health\n",
-        "",
-      ),
+      "deploy-prod.yml": `${GOOD_PROD}      - run: ssh deploy@prod ./deploy.sh\n`,
     });
     expect(
-      scanDeployWorkflows(bad).some((v) => v.includes("/api/health")),
+      scanDeployWorkflows(bad).some((v) => v.includes("cannot deploy remotely")),
     ).toBe(true);
+    expect(scanDeployWorkflows(files({ "deploy-prod.yml": GOOD_PROD.replace("    needs: gate\n", "") }))
+      .some((v) => v.includes("depend on the release gate"))).toBe(true);
   });
 });
 
 describe("isImmutableImageTag", () => {
-  it("accepts sha-<short> and full commit tags", () => {
-    expect(isImmutableImageTag("sha-abc1234")).toBe(true);
-    expect(
-      isImmutableImageTag("sha-0123456789abcdef0123456789abcdef01234567"),
-    ).toBe(true);
+  it("accepts exactly the twelve-character published tag", () => {
+    expect(isImmutableImageTag("sha-abcdef123456")).toBe(true);
+    expect(isImmutableImageTag("sha-abc1234")).toBe(false);
+    expect(isImmutableImageTag("sha-0123456789abcdef0123456789abcdef01234567")).toBe(false);
   });
 
   it("rejects branches, latest and semver-free refs", () => {
