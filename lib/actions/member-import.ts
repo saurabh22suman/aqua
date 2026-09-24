@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { MAX_MEMBER_IMPORT_BYTES } from "@/lib/services/member-import-csv";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import {
@@ -19,7 +20,12 @@ const previewInput = z.object({
   csv: z
     .string()
     .min(1, "The file is empty.")
-    .max(2_000_000, "The file is larger than 2 MB — split it."),
+    .max(MAX_MEMBER_IMPORT_BYTES, "The file is larger than 2 MB — split it."),
+});
+
+const commitInput = previewInput.extend({
+  attested: z.literal(true, { error: "Confirm consent before importing." }),
+  evidenceNote: z.string().trim().max(500).optional(),
 });
 
 export type MemberImportPreviewResult =
@@ -53,7 +59,7 @@ export async function commitMemberImportAction(
   raw: unknown,
 ): Promise<MemberImportCommitActionResult> {
   // (1) parse
-  const parsed = previewInput.safeParse(raw);
+  const parsed = commitInput.safeParse(raw);
   if (!parsed.success) {
     return {
       ok: false,
@@ -64,6 +70,13 @@ export async function commitMemberImportAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.write");
   // (3) service
-  const result = await commitMemberImport(ctx, parsed.data.csv);
-  return { ok: true, result };
+  try {
+    const result = await commitMemberImport(ctx, parsed.data.csv, {
+      attested: parsed.data.attested,
+      evidenceNote: parsed.data.evidenceNote,
+    });
+    return { ok: true, result };
+  } catch {
+    return { ok: false, error: "Import failed. No rows were saved; check member codes and retry." };
+  }
 }

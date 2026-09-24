@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, persons } from "@/db/schema";
 import type { MemberStatus } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
@@ -29,9 +29,7 @@ export type GuardianInput =
 // insert). Minor status is always derived server-side from
 // dateOfBirth via isMinor() -- there is no "isMinor" input field for a
 // caller to supply or spoof.
-export async function createMember(
-  ctx: ActionCtx,
-  input: {
+type CreateMemberInput = {
     fullName: string;
     phone?: string;
     dateOfBirth: string;
@@ -51,9 +49,17 @@ export async function createMember(
     // graph entirely (there is no "from" status on a row that doesn't
     // exist yet).
     initialStatus?: MemberStatus;
-  },
-): Promise<{ ok: true; memberId: MemberId; personId: PersonId } | { ok: false; error: string }> {
-  return withTenant(ctx.tenantId, async (tx) => {
+};
+
+export async function createMember(ctx: ActionCtx, input: CreateMemberInput) {
+  return withTenant(ctx.tenantId, (tx) => createMemberInTx(tx, ctx, input));
+}
+
+// The import path calls this inside its one transaction; ordinary member
+// registration continues to open its own scoped transaction above.
+export async function createMemberInTx(tx: TenantTx, ctx: ActionCtx, input: CreateMemberInput): Promise<
+  { ok: true; memberId: MemberId; personId: PersonId } | { ok: false; error: string }
+> {
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
       .from(tenants)
@@ -162,7 +168,6 @@ export async function createMember(
       .returning({ id: members.id });
 
     return { ok: true, memberId: member.id, personId: subject.id };
-  });
 }
 
 // C-18's own done-when: "enrolling beyond capacity is refused with a

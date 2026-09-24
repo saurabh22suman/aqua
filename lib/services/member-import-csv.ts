@@ -1,4 +1,6 @@
 import { normaliseToE164 } from "@/lib/phone";
+import { parseImportDate } from "@/lib/services/member-import-date";
+export { parseImportDate } from "@/lib/services/member-import-date";
 
 // PR2-C5 — CSV parsing and row validation for member import. Pure
 // functions only: no database, no React. The service
@@ -17,6 +19,15 @@ export const MEMBER_IMPORT_OPTIONAL_COLUMNS = [
   "guardian_phone",
   "member_code",
 ] as const;
+
+// Keep a single upload bounded on the pilot's 4 GB VPS. Count source
+// records, including blank records, before building per-row objects.
+export const MAX_MEMBER_IMPORT_ROWS = 500;
+export const MAX_MEMBER_IMPORT_BYTES = 2_000_000;
+
+export function normalizeImportCsv(text: string): string {
+  return text.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n").normalize("NFC");
+}
 
 export type MemberImportRowError = {
   rowNumber: number;
@@ -40,6 +51,7 @@ export type MemberImportParseResult = {
   rows: ParsedMemberImportRow[];
   errors: MemberImportRowError[];
   missingColumns: string[];
+  fileError?: string;
 };
 
 // RFC 4180-ish: quoted fields may contain commas, newlines and
@@ -47,6 +59,7 @@ export type MemberImportParseResult = {
 // numbers so every error can name the row the operator sees.
 export function parseCsv(text: string): {
   rows: Array<{ rowNumber: number; values: string[] }>;
+  error?: string;
 } {
   const rows: Array<{ rowNumber: number; values: string[] }> = [];
   let values: string[] = [];
@@ -55,6 +68,7 @@ export function parseCsv(text: string): {
   let line = 1;
   let rowStartLine = 1;
   let started = false;
+  let justClosedQuote = false;
 
   const pushField = () => {
     values.push(field);
@@ -76,6 +90,7 @@ export function parseCsv(text: string): {
           i += 1;
         } else {
           inQuotes = false;
+          justClosedQuote = true;
         }
       } else {
         if (char === "\n") line += 1;
@@ -83,73 +98,35 @@ export function parseCsv(text: string): {
       }
       continue;
     }
+    if (justClosedQuote && char !== "," && char !== "\n" && char !== "\r") {
+      return { rows: [], error: `Invalid quote placement on line ${line}.` };
+    }
     if (char === '"') {
+      if (field.length > 0 || justClosedQuote) {
+        return { rows: [], error: `Invalid quote placement on line ${line}.` };
+      }
       inQuotes = true;
       started = true;
     } else if (char === ",") {
       pushField();
       started = true;
+      justClosedQuote = false;
     } else if (char === "\n" || char === "\r") {
       if (char === "\r" && text[i + 1] === "\n") i += 1;
       if (started || field.length > 0 || values.length > 0) pushRow();
       line += 1;
       rowStartLine = line;
       started = false;
+      justClosedQuote = false;
     } else {
       field += char;
       started = true;
     }
   }
+  if (inQuotes) return { rows: [], error: `Unterminated quoted field on line ${rowStartLine}.` };
   if (started || field.length > 0 || values.length > 0) pushRow();
 
   return { rows };
-}
-
-function isRealCalendarDate(year: number, month: number, day: number): boolean {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return (
-    date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day
-  );
-}
-
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DMY_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-
-// Accepts ISO dates, and DD/MM/YYYY only when the day is > 12 (the
-// Indian convention, unambiguous). 03/04/2026 is rejected with an
-// explicit "ambiguous" reason rather than guessed at.
-export function parseImportDate(
-  raw: string,
-): { ok: true; value: string } | { ok: false; reason: string } {
-  const text = raw.trim();
-  const iso = text.match(ISO_DATE);
-  if (iso) {
-    const [, y, m, d] = iso;
-    if (isRealCalendarDate(Number(y), Number(m), Number(d))) {
-      return { ok: true, value: text };
-    }
-    return { ok: false, reason: "That date does not exist." };
-  }
-  const dmy = text.match(DMY_DATE);
-  if (dmy) {
-    const [, d, m, y] = dmy;
-    if (Number(d) <= 12) {
-      return {
-        ok: false,
-        reason: "Ambiguous date — write it as YYYY-MM-DD.",
-      };
-    }
-    if (!isRealCalendarDate(Number(y), Number(m), Number(d))) {
-      return { ok: false, reason: "That date does not exist." };
-    }
-    return {
-      ok: true,
-      value: `${y}-${m!.padStart(2, "0")}-${d!.padStart(2, "0")}`,
-    };
-  }
-  return { ok: false, reason: "Use a YYYY-MM-DD date." };
 }
 
 function parseImportPhone(
@@ -163,7 +140,20 @@ function parseImportPhone(
 }
 
 export function parseMemberImportRows(text: string): MemberImportParseResult {
-  const { rows } = parseCsv(text);
+  if (new TextEncoder().encode(text).length > MAX_MEMBER_IMPORT_BYTES) {
+    return { totalRows: 0, rows: [], errors: [], missingColumns: [], fileError: "The file is larger than 2 MB — split it." };
+  }
+  if (text.includes("\uFFFD") || text.includes("\0")) {
+    return { totalRows: 0, rows: [], errors: [], missingColumns: [], fileError: "The file contains invalid text encoding. Export it as UTF-8 CSV." };
+  }
+  const parsedCsv = parseCsv(normalizeImportCsv(text));
+  if (parsedCsv.error) {
+    return { totalRows: 0, rows: [], errors: [], missingColumns: [], fileError: parsedCsv.error };
+  }
+  const { rows } = parsedCsv;
+  if (rows.length - 1 > MAX_MEMBER_IMPORT_ROWS) {
+    return { totalRows: rows.length - 1, rows: [], errors: [], missingColumns: [], fileError: `Import at most ${MAX_MEMBER_IMPORT_ROWS} rows per file.` };
+  }
   const header = rows[0];
   if (!header) {
     return {
@@ -267,7 +257,8 @@ export function parseMemberImportRows(text: string): MemberImportParseResult {
 }
 
 function csvField(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const safe = /^[\s]*[=+@\-\t\r]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 export function memberImportErrorsCsv(errors: MemberImportRowError[]): string {

@@ -12,6 +12,10 @@ import type {
   MemberImportPreview,
 } from "@/lib/services/member-import";
 
+// The attestation is the operator's fixed declaration, independent of
+// a tenant's member/swimmer vocabulary. Keep the wording stable.
+const IMPORT_ATTESTATION = "I confirm that valid consent has already been obtained for every member in this import and that supporting evidence is retained by the academy.";
+
 // PR2-C5 — the import screen's dry run. Pick the CSV, see exactly
 // what would land and what was rejected (row number, field, reason),
 // download the rejected rows.
@@ -27,12 +31,16 @@ export function MemberImportForm() {
   );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [attested, setAttested] = useState(false);
+  const [evidenceNote, setEvidenceNote] = useState("");
 
   async function check(file: File) {
     setBusy(true);
     setError(null);
     setPreview(null);
     setCommitted(null);
+    setAttested(false);
+    setEvidenceNote("");
     try {
       const csv = await file.text();
       setCsvText(csv);
@@ -55,7 +63,7 @@ export function MemberImportForm() {
     setError(null);
     void (async () => {
       try {
-        const result = await commitMemberImportAction({ csv: csvText });
+        const result = await commitMemberImportAction({ csv: csvText, attested, evidenceNote });
         if (!result.ok) {
           setError(result.error);
           return;
@@ -129,7 +137,9 @@ export function MemberImportForm() {
 
       {preview ? (
         <section className="rounded-card border border-line bg-paper p-4">
-          {preview.missingColumns.length > 0 ? (
+          {preview.fileError ? (
+            <p role="alert" className="text-[13px] text-ink-2">{preview.fileError}</p>
+          ) : preview.missingColumns.length > 0 ? (
             <p role="alert" className="text-[13px] text-ink-2">
               Missing column{preview.missingColumns.length === 1 ? "" : "s"}:{" "}
               <span className="font-mono">
@@ -146,6 +156,9 @@ export function MemberImportForm() {
                   ? ` · ${preview.errors.length} need fixing`
                   : ""}
                 .
+              </p>
+              <p className="mt-2 text-[13px] text-ink-2">
+                Preview makes no changes. Consent is recorded only after you confirm prior consent and import.
               </p>
 
               {preview.errors.length > 0 ? (
@@ -169,7 +182,7 @@ export function MemberImportForm() {
                   <button
                     type="button"
                     onClick={downloadErrors}
-                    className="mt-3 rounded-pill border border-line px-3.5 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink"
+                    className="mt-3 min-h-11 rounded-pill border border-line px-3.5 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink"
                   >
                     Download error rows (CSV)
                   </button>
@@ -182,11 +195,19 @@ export function MemberImportForm() {
 
       {preview && preview.rows.length > 0 ? (
         <StickyActionBar>
+          <label className="mb-3 flex gap-3 text-[13px] text-ink">
+            <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} className="h-11 w-11 shrink-0" />
+            <span>{IMPORT_ATTESTATION}</span>
+          </label>
+          <label className="mb-3 block text-[13px] text-ink-2">
+            Evidence reference (optional)
+            <input type="text" maxLength={500} value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink" />
+          </label>
           <button
             type="button"
             onClick={commit}
-            disabled={busy}
-            className="w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            disabled={busy || !attested}
+            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy
               ? "Importing…"
@@ -228,7 +249,7 @@ export function MemberImportForm() {
               <button
                 type="button"
                 onClick={downloadErrors}
-                className="mt-3 rounded-pill border border-line px-3.5 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink"
+                className="mt-3 min-h-11 rounded-pill border border-line px-3.5 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink"
               >
                 Download error rows (CSV)
               </button>

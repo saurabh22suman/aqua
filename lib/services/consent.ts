@@ -6,6 +6,10 @@ export type ConsentEvidenceInput = {
   channel: string;
   ipAddress?: string;
   userAgent?: string;
+  importId?: string;
+  attestedAt?: string;
+  operatorUserId?: string;
+  evidenceNote?: string;
 };
 
 export type ConsentGrantInput = {
