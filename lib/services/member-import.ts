@@ -1,20 +1,23 @@
-import { and, eq, isNull } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { and, eq, ilike, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { locations } from "@/db/schema/locations";
 import {
   locationPredicate,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
-import { members, persons } from "@/db/schema/people";
+import { members } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { isMinor } from "@/lib/time/tz";
-import { createMember } from "@/lib/services/register";
-import { nextMemberCode } from "@/lib/services/people";
+import { createMemberInTx } from "@/lib/services/register";
+import { findExistingImportMemberId } from "@/lib/services/member-import-match";
 import { writeAudit } from "@/lib/audit/write";
+import { auditLog } from "@/db/schema/audit";
 import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import {
   memberImportErrorsCsv,
   parseMemberImportRows,
+  normalizeImportCsv,
   type MemberImportRowError,
   type ParsedMemberImportRow,
 } from "@/lib/services/member-import-csv";
@@ -36,7 +39,12 @@ export type MemberImportPreview = {
   rows: MemberImportPreviewRow[];
   errors: MemberImportRowError[];
   missingColumns: string[];
+  fileError?: string;
 };
+
+export function memberImportIdentity(tenantId: string, csvText: string): string {
+  return createHash("sha256").update(tenantId).update("\0").update(normalizeImportCsv(csvText)).digest("hex");
+}
 
 export { memberImportErrorsCsv };
 
@@ -45,6 +53,9 @@ export async function previewMemberImport(
   csvText: string,
 ): Promise<MemberImportPreview> {
   const parsed = parseMemberImportRows(csvText);
+  if (parsed.fileError) {
+    return { totalRows: parsed.totalRows, rows: [], errors: [], missingColumns: [], fileError: parsed.fileError };
+  }
   if (parsed.missingColumns.length > 0) {
     return {
       totalRows: parsed.totalRows,
@@ -54,7 +65,14 @@ export async function previewMemberImport(
     };
   }
 
-  return withTenant(ctx.tenantId, async (tx) => {
+  return withTenant(ctx.tenantId, (tx) => previewMemberImportInTx(tx, ctx, parsed));
+}
+
+async function previewMemberImportInTx(
+  tx: TenantTx,
+  ctx: ActionCtx,
+  parsed: ReturnType<typeof parseMemberImportRows>,
+): Promise<MemberImportPreview> {
     const access = await resolveLocationAccess(tx, ctx);
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
@@ -106,7 +124,6 @@ export async function previewMemberImport(
       errors,
       missingColumns: [],
     };
-  });
 }
 
 export type MemberImportCommitResult = {
@@ -117,157 +134,113 @@ export type MemberImportCommitResult = {
   skippedRows: Array<{ rowNumber: number; memberId: string }>;
 };
 
-// A row matches an existing member by member code first (the
-// operator's own identifier), then by phone + name + date of birth.
-// Matching rows are skipped, never overwritten.
-async function findExistingMemberId(
-  ctx: ActionCtx,
-  row: MemberImportPreviewRow,
-): Promise<string | null> {
-  return withTenant(ctx.tenantId, async (tx) => {
-    if (row.memberCode) {
-      const byCode = await tx
-        .select({ id: members.id })
-        .from(members)
-        .where(
-          and(
-            eq(members.tenantId, ctx.tenantId),
-            eq(members.memberCode, row.memberCode),
-            isNull(members.deletedAt),
-          ),
-        )
-        .limit(1);
-      if (byCode[0]) return byCode[0].id;
-    }
-    if (row.phone) {
-      const byPerson = await tx
-        .select({ id: members.id })
-        .from(members)
-        .innerJoin(
-          persons,
-          and(
-            eq(persons.id, members.personId),
-            eq(persons.tenantId, members.tenantId),
-          ),
-        )
-        .where(
-          and(
-            eq(members.tenantId, ctx.tenantId),
-            isNull(members.deletedAt),
-            eq(persons.phone, row.phone),
-            eq(persons.fullName, row.fullName),
-            eq(persons.dateOfBirth, row.dateOfBirth),
-          ),
-        )
-        .limit(1);
-      if (byPerson[0]) return byPerson[0].id;
-    } else {
-      // Guardian-only rows (minors) carry no phone of their own; name +
-      // date of birth is the only stable identity the file offers, and
-      // it keeps a re-import idempotent.
-      const byNameDob = await tx
-        .select({ id: members.id })
-        .from(members)
-        .innerJoin(
-          persons,
-          and(
-            eq(persons.id, members.personId),
-            eq(persons.tenantId, members.tenantId),
-          ),
-        )
-        .where(
-          and(
-            eq(members.tenantId, ctx.tenantId),
-            isNull(members.deletedAt),
-            eq(persons.fullName, row.fullName),
-            eq(persons.dateOfBirth, row.dateOfBirth),
-          ),
-        )
-        .limit(1);
-      if (byNameDob[0]) return byNameDob[0].id;
-    }
-    return null;
-  });
-}
-
 export async function commitMemberImport(
   ctx: ActionCtx,
   csvText: string,
+  attestation?: { attested: true; evidenceNote?: string },
 ): Promise<MemberImportCommitResult> {
-  const preview = await previewMemberImport(ctx, csvText);
-  const errors = [...preview.errors];
-  const importedMembers: MemberImportCommitResult["importedMembers"] = [];
-  const skippedRows: MemberImportCommitResult["skippedRows"] = [];
-
-  for (const row of preview.rows) {
-    const existingId = await findExistingMemberId(ctx, row);
-    if (existingId) {
-      skippedRows.push({ rowNumber: row.rowNumber, memberId: existingId });
-      continue;
+  if (!attestation?.attested || !ctx.userId) {
+    throw new Error("An authenticated operator must confirm prior consent before importing.");
+  }
+  const parsed = parseMemberImportRows(csvText);
+  if (parsed.fileError || parsed.missingColumns.length > 0) {
+    throw new Error(parsed.fileError ?? `Missing columns: ${parsed.missingColumns.join(", ")}`);
+  }
+  const importId = memberImportIdentity(ctx.tenantId, csvText);
+  return withTenant(ctx.tenantId, async (tx) => {
+    // The tenant row is the per-tenant transaction lock. Concurrent uploads
+    // wait here, then observe the previous import's committed audit/result.
+    const [tenant] = await tx.select({ id: tenants.id }).from(tenants)
+      .where(eq(tenants.id, ctx.tenantId)).for("update");
+    if (!tenant) throw new Error("Tenant not found.");
+    const [previous] = await tx.select({ after: auditLog.after }).from(auditLog)
+      .where(and(eq(auditLog.tenantId, ctx.tenantId), eq(auditLog.action, "member.import"),
+        sql`${auditLog.after}->>'importId' = ${importId}`)).limit(1);
+    if (previous) {
+      const last = previous.after as { importedMembers?: MemberImportCommitResult["importedMembers"]; skippedRows?: MemberImportCommitResult["skippedRows"]; rowErrors?: MemberImportRowError[] };
+      const skippedRows = [
+        ...(last.importedMembers ?? []).map((member) => ({ rowNumber: member.rowNumber, memberId: member.memberId })),
+        ...(last.skippedRows ?? []),
+      ];
+      return { imported: 0, skipped: skippedRows.length, errors: last.rowErrors ?? [], importedMembers: [], skippedRows };
     }
+    const preview = await previewMemberImportInTx(tx, ctx, parsed);
+    const attestedAt = new Date().toISOString();
+    const errors = [...preview.errors];
+    const importedMembers: MemberImportCommitResult["importedMembers"] = [];
+    const skippedRows: MemberImportCommitResult["skippedRows"] = [];
+    const [{ n }] = await tx.select({
+      n: sql<number>`coalesce(max(substring(${members.memberCode} from '[0-9]+$')::int), 0)`,
+    }).from(members).where(and(eq(members.tenantId, ctx.tenantId), ilike(members.memberCode, "MEM-%")));
+    let nextCode = n;
+    const reservedCodes = new Set(preview.rows.flatMap((row) => row.memberCode ? [row.memberCode] : []));
 
-    const memberCode = row.memberCode ?? (await nextMemberCode(ctx));
-    const created = await createMember(ctx, {
-      fullName: row.fullName,
-      dateOfBirth: row.dateOfBirth,
-      phone: row.phone ?? undefined,
-      locationId: row.locationId!,
-      memberCode,
-      guardian:
-        row.guardianName && row.guardianPhone
-          ? {
-              fullName: row.guardianName,
-              phone: row.guardianPhone,
-              relationship: "guardian",
-            }
+    for (const row of preview.rows) {
+      const existingId = await findExistingImportMemberId(tx, ctx, row);
+      if (existingId) {
+        skippedRows.push({ rowNumber: row.rowNumber, memberId: existingId });
+        continue;
+      }
+
+      let memberCode = row.memberCode;
+      if (!memberCode) {
+        do { memberCode = `MEM-${String(++nextCode).padStart(4, "0")}`; }
+        while (reservedCodes.has(memberCode));
+      }
+      const created = await createMemberInTx(tx, ctx, {
+        fullName: row.fullName,
+        dateOfBirth: row.dateOfBirth,
+        phone: row.phone ?? undefined,
+        locationId: row.locationId!,
+        memberCode,
+        guardian: row.guardianName && row.guardianPhone
+          ? { fullName: row.guardianName, phone: row.guardianPhone, relationship: "guardian" }
           : undefined,
-      consents: [
-        {
+        consents: [{
           purpose: "processing",
           policyVersion: CURRENT_POLICY_VERSION,
-          evidence: { channel: "import" },
-        },
-      ],
-    });
-    if (!created.ok) {
-      errors.push({
-        rowNumber: row.rowNumber,
-        field: "row",
-        reason: created.error,
+          evidence: {
+            channel: "import_operator_attestation",
+            importId,
+            attestedAt,
+            operatorUserId: ctx.userId,
+            evidenceNote: attestation.evidenceNote,
+          },
+        }],
       });
-      continue;
+      if (!created.ok) throw new Error(`Row ${row.rowNumber}: ${created.error}`);
+      importedMembers.push({ rowNumber: row.rowNumber, memberId: created.memberId, memberCode });
     }
-    importedMembers.push({
-      rowNumber: row.rowNumber,
-      memberId: created.memberId,
-      memberCode,
-    });
-  }
 
-  if (preview.rows.length > 0) {
-    await withTenant(ctx.tenantId, async (tx) => {
-      await writeAudit(tx, {
-        tenantId: ctx.tenantId,
-        actorId: ctx.userId ?? null,
-        requestId: ctx.requestId ?? null,
-        action: "member.import",
-        entityType: "tenant",
-        entityId: ctx.tenantId,
-        after: {
-          imported: importedMembers.length,
-          skipped: skippedRows.length,
-          errors: errors.length,
-        },
-      });
+    // Keep the final outcome and all row writes in the SAME transaction.
+    // An error here rolls back every member, guardian and consent row.
+    errors.sort((a, b) => a.rowNumber - b.rowNumber);
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      actorId: ctx.userId,
+      requestId: ctx.requestId ?? null,
+      action: "member.import",
+      entityType: "tenant",
+      entityId: ctx.tenantId,
+      after: {
+        importId,
+        evidenceChannel: "import_operator_attestation",
+        attestedAt,
+        evidenceNote: attestation.evidenceNote ?? null,
+        imported: importedMembers.length,
+        skipped: skippedRows.length,
+        errors: errors.length,
+        importedMembers,
+        skippedRows,
+        rowErrors: errors,
+      },
     });
-  }
-
-  errors.sort((a, b) => a.rowNumber - b.rowNumber);
-  return {
-    imported: importedMembers.length,
-    skipped: skippedRows.length,
-    errors,
-    importedMembers,
-    skippedRows,
-  };
+    return {
+      imported: importedMembers.length,
+      skipped: skippedRows.length,
+      errors,
+      importedMembers,
+      skippedRows,
+    };
+  });
 }
