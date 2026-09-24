@@ -1,21 +1,19 @@
-# Production compose: local verification AND the Dokploy deployment.
+# Local-only Compose verification file. NOT a Dokploy Dev or Prod
+# deployment source: it builds on-host and publishes port 3000. The
+# tracked release units are docker-compose.dokploy.yml (Dev) and
+# docker-compose.production.yml (Production).
 #
 # Every secret is required: `${VAR:?message}`. Compose refuses to start
 # without all five (POSTGRES_PASSWORD, APP_LOGIN_PASSWORD,
 # BETTER_AUTH_SECRET, BETTER_AUTH_URL, PARENT_LINK_SECRET) — a deploy
 # that forgot one used to come up on a known placeholder instead of
 # failing. `pnpm check:compose-secrets` enforces this in CI.
-# - Local (`docker compose -f docker-compose.prod.yml up --build`):
+# - Local (`docker compose -f docker-compose.local.yml up --build`):
 #   export the five values or put them in the repo-root .env (Compose
 #   auto-loads it). Every password is derived from a single variable,
 #   so whatever the source, all services stay consistent.
-# - Dokploy: Compose deployments do NOT inherit Dokploy environment
-#   variables automatically — each service references them explicitly
-#   below. Set the real values as Dokploy environment variables:
-#     POSTGRES_PASSWORD, APP_LOGIN_PASSWORD, BETTER_AUTH_SECRET,
-#     BETTER_AUTH_URL (https://<base>), PARENT_LINK_SECRET
-#   (Generate per docs/deployment.md step 0c. Passwords must be
-#   URL-safe — they are interpolated raw into connection strings.)
+# Do not select this file in Dokploy. Use docs/deployment.md §Environment
+# and the tracked per-VPS immutable-image Compose files instead.
 #
 # lib/env.ts requires BETTER_AUTH_SECRET, BETTER_AUTH_URL and
 # PARENT_LINK_SECRET in every NODE_ENV=production process (migrate,
@@ -23,16 +21,9 @@
 # APP_LOGIN_PASSWORD disagrees with the DATABASE_URL password, so
 # all three services carry the full set.
 #
-# Explicit project name: without it, Compose defaults to the directory
-# name ("aqua") for BOTH this file and the plain dev docker-compose.yml,
-# and treats them as the same project. Running this file previously
-# reconciled away the dev compose's fixed-named `aqua-db` container
-# (removed and recreated) — no data was lost only because its volume
-# (`aqua_aqua-pgdata`) has a different name than this file's
-# (`aqua-pgdata-prod`), but it was a genuine near-miss. This name keeps
-# the two projects, and their container/network namespaces, from ever
-# overlapping again.
-name: aqua-prod
+# Explicit local-only name and volume cannot collide with the Dev or
+# Production Dokploy projects. Never use this build-on-host file on a VPS.
+name: aqua-local
 
 services:
   db:
@@ -48,7 +39,7 @@ services:
       timeout: 3s
       retries: 10
     volumes:
-      - aqua-pgdata-prod:/var/lib/postgresql/data
+      - aqua-pgdata-local:/var/lib/postgresql/data
 
   # One-shot: bootstrap roles, run migrations, bootstrap pg-boss's schema
   # and per-tenant schedules, grant app_user access to it. Runs under the
@@ -120,4 +111,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  aqua-pgdata-prod:
+  aqua-pgdata-local:

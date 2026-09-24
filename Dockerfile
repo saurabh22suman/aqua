@@ -29,7 +29,10 @@ RUN pnpm build
 FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup -S aqua && adduser -S aqua -G aqua -u 1001
+# The one-shot backup profile uses pg_dump from the same immutable image.
+# No database tools run in the web or worker commands.
+RUN apk add --no-cache postgresql16-client \
+    && addgroup -S aqua && adduser -S aqua -G aqua -u 1001
 
 # Next's self-contained server (web service). Standalone output does not
 # include public/ or .next/static — Next's own docs are explicit that
@@ -38,14 +41,16 @@ COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 
-# Full source + node_modules: needed by the worker and the migration
-# step (db/deploy.ts), which run via tsx directly rather than through
-# Next's bundler — standalone output only traces and bundles what the
-# Next app itself imports, not worker/index.ts.
+# Full service source + node_modules: the worker, migration and one-shot
+# backup run through tsx rather than the Next standalone server. Only the
+# backup CLI and its pure helper are copied from scripts/; reset/seed
+# utilities are deliberately absent from the runtime image.
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/db ./db
 COPY --from=build /app/lib ./lib
 COPY --from=build /app/worker ./worker
+COPY --from=build /app/scripts/db-backup.ts ./scripts/db-backup.ts
+COPY --from=build /app/scripts/lib/db-backup.ts ./scripts/lib/db-backup.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
 

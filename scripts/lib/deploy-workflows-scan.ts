@@ -1,19 +1,20 @@
-// PR1-C12 — pure checks for the deploy workflows. Rules:
+// Pure checks for publish and the human-managed Dokploy workflows. Rules:
 //   * publish.yml publishes one immutable sha-<short> image on a green
 //     main CI run; no `latest`.
-//   * deploy-dev.yml deploys that exact tag over SSH, verifies the
-//     running tag and gates on /api/health; it never rebuilds.
-//   * deploy-prod.yml is workflow_dispatch-only, takes a required
-//     immutable tag, runs behind the GitHub production environment,
-//     is blocked by PILOT_RELEASE_GATE until the PR3 gate passes, and
-//     gates on /api/health.
+//   * deploy-dev.yml cannot bring up an SSH-managed second Dev stack.
+//   * deploy-prod.yml is approval ONLY: exact published tag, release
+//     gate, production environment approval, no remote deployment.
 // The known-bad proof lives in
 // tests/scanner-fixtures/deploy-workflows-fixtures.test.ts; CI runs
 // `pnpm check:deploy-workflows`.
 
 export type WorkflowFile = { path: string; content: string };
 
-const IMMUTABLE_TAG_RE = /^sha-[0-9a-f]{7,40}$/;
+const IMMUTABLE_TAG_RE = /^sha-[0-9a-f]{12}$/;
+
+function activeLines(source: string): string {
+  return source.split("\n").filter((line) => !line.trimStart().startsWith("#")).join("\n");
+}
 
 export function isImmutableImageTag(tag: string): boolean {
   return IMMUTABLE_TAG_RE.test(tag);
@@ -70,21 +71,16 @@ export function scanDeployWorkflows(files: ReadonlyArray<WorkflowFile>): string[
       "deploy-dev.yml: must be gated on vars.DEV_DEPLOY_ENABLED == 'true' so it is skipped, not failed, while Dev secrets are absent.",
     );
   }
-  if (!/ssh /.test(dev)) {
-    violations.push("deploy-dev.yml: must deploy over SSH.");
+  if (!/exit 1/.test(dev) || !/Dokploy Compose/.test(dev)) {
+    violations.push("deploy-dev.yml: activating the retired guard must fail with Dokploy instructions.");
   }
-  if (/docker build/.test(dev)) {
-    violations.push(
-      "deploy-dev.yml: must pull the published tag — docker build would break immutability.",
-    );
-  }
-  if (!/docker inspect/.test(dev)) {
-    violations.push(
-      "deploy-dev.yml: must verify the deployed tag is the published tag.",
-    );
-  }
-  if (!/\/api\/health/.test(dev)) {
-    violations.push("deploy-dev.yml: must gate on /api/health.");
+  for (const name of ["deploy-dev.yml", "deploy-prod.yml"] as const) {
+    const commands = activeLines(byName.get(name) ?? "").split("\n")
+      .filter((line) => /^\s*-\s*run:/.test(line) || /^ {8,}(?:ssh|scp|docker (?:build|compose)|curl)\b/.test(line))
+      .join("\n");
+    if (/\b(?:ssh|scp|docker (?:build|compose)|curl)\b/.test(commands)) {
+      violations.push(`${name}: cannot deploy remotely; Dokploy Compose is human-operated.`);
+    }
   }
 
   const prod = byName.get("deploy-prod.yml") ?? "";
@@ -111,13 +107,14 @@ export function scanDeployWorkflows(files: ReadonlyArray<WorkflowFile>): string[
       "deploy-prod.yml: must be blocked by PILOT_RELEASE_GATE until the PR3 release gate passes.",
     );
   }
-  if (/docker build/.test(prod)) {
-    violations.push(
-      "deploy-prod.yml: must pull the published tag — docker build would break immutability.",
-    );
+  if (!prod.includes("^sha-[0-9a-f]{12}$")) {
+    violations.push("deploy-prod.yml: require an exact published sha-<12 hex> tag.");
   }
-  if (!/\/api\/health/.test(prod)) {
-    violations.push("deploy-prod.yml: must gate on /api/health.");
+  if (!prod.includes("This workflow does not deploy")) {
+    violations.push("deploy-prod.yml: make the manual Dokploy handoff explicit.");
+  }
+  if (!/needs:\s*gate/.test(prod)) {
+    violations.push("deploy-prod.yml: production approval must depend on the release gate.");
   }
 
   return violations;

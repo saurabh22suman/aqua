@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   assertDumpLooksValid,
   backupObjectKey,
-  selectExpiredKeys,
+  uploadBackup,
 } from "./lib/db-backup";
 import {
   getObjectStore,
@@ -70,7 +70,8 @@ async function main(): Promise<void> {
     : runPgDump(requireMigrationUrl("scripts/db-backup.ts"));
   assertDumpLooksValid(bytes);
 
-  const key = backupObjectKey(new Date());
+  const now = new Date();
+  const key = backupObjectKey(now);
   console.log(
     `Dumped ${(bytes.byteLength / 1024 / 1024).toFixed(2)} MB → ${key}`,
   );
@@ -81,17 +82,13 @@ async function main(): Promise<void> {
   }
 
   const store = getObjectStore();
-  await store.putObject(key, bytes, "application/octet-stream");
-  console.log(`Uploaded ${key}`);
-
-  const existing = await store.listObjects("db-backups/");
-  const expired = selectExpiredKeys(existing, retain);
-  for (const oldKey of expired) {
-    await store.deleteObject(oldKey);
+  const result = await uploadBackup(store, bytes, now, retain);
+  console.log(`Uploaded ${result.key}`);
+  for (const oldKey of result.pruned) {
     console.log(`Pruned ${oldKey}`);
   }
   console.log(
-    `Retention: kept ${Math.min(retain, existing.length)} of ${existing.length} backup(s), pruned ${expired.length}.`,
+    `Retention: pruned ${result.pruned.length} older backup(s), kept at least ${retain} most recent.`,
   );
 }
 

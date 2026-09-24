@@ -1,103 +1,53 @@
-name: deploy-prod
+name: deploy-prod-approval
 
-# PR1-C12 — production is manual, immutable and gated.
-#
-#   * workflow_dispatch ONLY: no push, no pull_request, no workflow_run.
-#     A human types the immutable sha-<short> tag that publish.yml
-#     pushed; a branch name or `latest` is refused before anything runs.
-#   * environment: production — GitHub holds the run for the configured
-#     environment approval before any step executes.
-#   * PILOT_RELEASE_GATE: the gate job fails until the repository
-#     variable is set to `passed`, which happens only after the complete
-#     PR3 release gate in docs/pilot-release-checklist.md is checked.
-#     Never trigger production before that.
-#   * Same deploy → verify-tag → health-gate sequence as dev; rollback
-#     is dispatching this workflow again with an older tag.
-#
-# Secrets (environment: production): PROD_SSH_KEY, PROD_HOST, PROD_USER,
-# PROD_APP_DIR, PROD_HEALTH_URL.
-
+# Manual approval of a published image for the tracked Production Dokploy
+# Compose path. This workflow NEVER deploys or contacts a VPS. The human
+# performs the separate Dokploy Compose deploy after the approval; see
+# docs/deployment.md. No SSH script or VPS-only Compose is involved.
 on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "Immutable tag published by publish.yml (sha-<short>)"
+        description: "Published, immutable sha-<12 hex characters> image tag"
         required: true
         type: string
 
+permissions:
+  contents: read
+
 concurrency:
-  group: deploy-prod
+  group: production-approval
   cancel-in-progress: false
 
 jobs:
   gate:
     runs-on: ubuntu-latest
-    steps:
-      - name: PR3 release gate must have passed
-        if: vars.PILOT_RELEASE_GATE != 'passed'
-        run: |
-          echo "Production is blocked until the complete PR3 release gate in docs/pilot-release-checklist.md passes."
-          echo "Set the repository variable PILOT_RELEASE_GATE=passed after that gate is fully checked."
-          exit 1
-
-      - name: Validate the immutable tag
-        run: |
-          TAG="${{ inputs.image_tag }}"
-          case "$TAG" in
-            sha-[0-9a-f]*) ;;
-            *) echo "refusing mutable ref '$TAG' — pass a sha-<short> tag published by publish.yml"; exit 1 ;;
-          esac
-          echo "tag accepted: $TAG"
-
-  deploy:
-    needs: gate
-    environment: production
-    runs-on: ubuntu-latest
     env:
-      IMAGE: ghcr.io/${{ github.repository }}
       TAG: ${{ inputs.image_tag }}
     steps:
-      - name: Install the deploy key
+      - name: Release gate and exact published tag format
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_KEY }}
-          DEPLOY_HOST: ${{ secrets.PROD_HOST }}
+          PILOT_RELEASE_GATE: ${{ vars.PILOT_RELEASE_GATE }}
         run: |
-          mkdir -p ~/.ssh
-          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_deploy
-          chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          if [ "$PILOT_RELEASE_GATE" != passed ]; then
+            echo "Production remains blocked until the complete pilot release gate is verified by the human."
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^sha-[0-9a-f]{12}$ ]]; then
+            echo "Refusing an invalid or mutable image tag. Require sha-<12 lowercase hex>."
+            exit 1
+          fi
+          echo "Tag format accepted: $TAG. Human must verify the published GHCR digest and Dev evidence."
 
-      - name: Deploy that exact tag (no rebuild)
-        env:
-          DEPLOY_HOST: ${{ secrets.PROD_HOST }}
-          DEPLOY_USER: ${{ secrets.PROD_USER }}
-          DEPLOY_DIR: ${{ secrets.PROD_APP_DIR }}
-          REGISTRY_USER: ${{ github.actor }}
-          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  approval:
+    needs: gate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TAG: ${{ inputs.image_tag }}
+    steps:
+      - name: Manual Dokploy Production handoff (no deployment in this job)
         run: |
-          ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_DIR' && IMAGE='$IMAGE' TAG='$TAG' REGISTRY_USER='$REGISTRY_USER' REGISTRY_TOKEN='$REGISTRY_TOKEN' ./deploy.sh"
-
-      - name: Verify the deployed tag is the published tag
-        env:
-          DEPLOY_HOST: ${{ secrets.PROD_HOST }}
-          DEPLOY_USER: ${{ secrets.PROD_USER }}
-        run: |
-          running=$(ssh -i ~/.ssh/id_deploy "$DEPLOY_USER@$DEPLOY_HOST" "docker inspect --format '{{.Config.Image}}' aqua-web")
-          echo "running: $running"
-          case "$running" in
-            *":$TAG") echo "deployed tag matches $TAG" ;;
-            *) echo "deployed image '$running' does not match published tag $TAG"; exit 1 ;;
-          esac
-
-      - name: Health gate (worker heartbeat included)
-        run: |
-          for i in $(seq 1 24); do
-            if curl -fsS "${{ secrets.PROD_HEALTH_URL }}/api/health" | grep -q '"status":"ok"'; then
-              echo "healthy after ${i} attempt(s)"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "health gate failed — the deployed tag is not healthy"
-          exit 1
+          echo "Approval recorded for $TAG. This workflow does not deploy."
+          echo "Human: resolve $TAG to its GHCR manifest digest, verify it matches the Dev-tested image, then set AQUA_IMAGE_DIGEST in the separate Production Dokploy Compose project."
+          echo "Deploy tracked docker-compose.production.yml and check image digest, /api/health, worker, hosts and restore readiness per docs/deployment.md."

@@ -2,7 +2,7 @@ import { scanComposeSecrets } from "./compose-secrets-scan";
 
 // Deployment PR (feat/deploy-dokploy-compose) — mechanical checks for
 // docker-compose.dokploy.yml, the single Dokploy Compose deployment
-// unit (db, migrate, web, exactly one worker).
+// unit (db, migrate, web, exactly one worker, and one dormant backup profile).
 //
 // The rules exist because every one of them is a silent production
 // failure if broken:
@@ -22,11 +22,13 @@ import { scanComposeSecrets } from "./compose-secrets-scan";
 
 export const DOKPLOY_COMPOSE_FILE = "docker-compose.dokploy.yml";
 
-export const REQUIRED_SERVICES = ["db", "migrate", "web", "worker"] as const;
-export const APP_SERVICES = ["migrate", "web", "worker"] as const;
+export const REQUIRED_SERVICES = ["db", "migrate", "web", "worker", "backup"] as const;
+export const APP_SERVICES = ["migrate", "web", "worker", "backup"] as const;
 
 const APP_IMAGE_RE =
   /^ghcr\.io\/saurabh22suman\/aqua:\$\{AQUA_IMAGE_TAG:\?[^}]+\}$/;
+const PRODUCTION_IMAGE_RE =
+  /^ghcr\.io\/saurabh22suman\/aqua@\$\{AQUA_IMAGE_DIGEST:\?[^}]+\}$/;
 
 type ServiceBlock = { name: string; lines: string[] };
 
@@ -100,9 +102,16 @@ function blockSource(block: ServiceBlock): string {
   return block.lines.join("\n");
 }
 
-export function scanDokployCompose(source: string): string[] {
+function scanReleaseCompose(source: string, project: "aqua-dev" | "aqua-prod"): string[] {
   const violations: string[] = [];
   const clean = stripCommentLines(source);
+  const volume = project === "aqua-dev" ? "aqua-pgdata-dev" : "aqua-pgdata-prod";
+  if (!clean.includes(`name: ${project}\n`)) {
+    violations.push(`project: must have explicit name: ${project}.`);
+  }
+  if (!clean.includes(`name: ${project}-internal`)) {
+    violations.push(`networks: internal name must be ${project}-internal.`);
+  }
   const blocks = parseServiceBlocks(clean);
   const names = blocks.map((block) => block.name);
 
@@ -127,13 +136,14 @@ export function scanDokployCompose(source: string): string[] {
   }
 
   const byName = new Map(blocks.map((block) => [block.name, block]));
+  const imagePattern = project === "aqua-dev" ? APP_IMAGE_RE : PRODUCTION_IMAGE_RE;
   for (const name of APP_SERVICES) {
     const block = byName.get(name);
     if (!block) continue;
     const image = blockSource(block).match(/^\s*image:\s*(.+)$/m)?.[1]?.trim();
-    if (!image || !APP_IMAGE_RE.test(image)) {
+    if (!image || !imagePattern.test(image)) {
       violations.push(
-        `${name}: image must be ghcr.io/saurabh22suman/aqua:\${AQUA_IMAGE_TAG:?…} — found ${image ?? "(none)"}.`,
+        `${name}: image must use the required ${project === "aqua-dev" ? "AQUA_IMAGE_TAG" : "AQUA_IMAGE_DIGEST"} GHCR reference — found ${image ?? "(none)"}.`,
       );
     }
   }
@@ -146,6 +156,42 @@ export function scanDokployCompose(source: string): string[] {
     }
     if (!migrateSource.includes("db/deploy.ts")) {
       violations.push("migrate: command must run db/deploy.ts.");
+    }
+  }
+
+  const backup = byName.get("backup");
+  if (backup) {
+    const text = blockSource(backup);
+    if (!/^\s*profiles:\s*\[backup\]\s*$/m.test(text)) {
+      violations.push("backup: must be dormant behind profiles: [backup].");
+    }
+    if (!/^\s*restart:\s*["']?no["']?\s*$/m.test(text) || !text.includes("scripts/db-backup.ts")) {
+      violations.push("backup: must run the tracked db-backup.ts exactly once, restart: no.");
+    }
+    // Match all privileged MIGRATION_*_URL keys so backup cannot lose
+    // its connection and web/worker cannot acquire one under a new name.
+    if (!/^\s+MIGRATION_[A-Z_]+_URL:/m.test(text)) {
+      violations.push("backup: missing privileged migration URL.");
+    }
+    for (const required of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"]) {
+      if (!text.includes(`${required}:`)) violations.push(`backup: missing ${required}.`);
+    }
+  }
+  const worker = byName.get("worker");
+  if (worker) {
+    const text = blockSource(worker);
+    for (const required of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET", "AUDIT_CHECKPOINT_SECRET"]) {
+      if (!text.includes(`${required}:`)) violations.push(`worker: missing ${required}.`);
+    }
+    if (/^\s+MIGRATION_[A-Z_]+_URL:/m.test(text)) violations.push("worker: privileged migration URL is forbidden.");
+  }
+  const web = byName.get("web");
+  if (web && /^\s+MIGRATION_[A-Z_]+_URL:/m.test(blockSource(web))) {
+    violations.push("web: privileged migration URL is forbidden.");
+  }
+  for (const key of ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET", "AUDIT_CHECKPOINT_SECRET"]) {
+    if (!clean.includes(`\${${key}:?`)) {
+      violations.push(`${key}: must use required Compose interpolation (no fallback).`);
     }
   }
 
@@ -167,9 +213,9 @@ export function scanDokployCompose(source: string): string[] {
   const db = byName.get("db");
   if (db) {
     const mounts = stringList(db, "volumes");
-    if (!mounts.some((mount) => mount.startsWith("aqua-pgdata-dev:"))) {
+    if (!mounts.some((mount) => mount.startsWith(`${volume}:`))) {
       violations.push(
-        "db: must mount the named volume aqua-pgdata-dev (persistent database data).",
+        `db: must mount the named volume ${volume} (persistent database data).`,
       );
     }
     for (const mount of mounts) {
@@ -180,12 +226,12 @@ export function scanDokployCompose(source: string): string[] {
       }
     }
   }
-  if (!/^  aqua-pgdata-dev:\s*$/m.test(clean)) {
-    violations.push("volumes: top-level named volume aqua-pgdata-dev is missing.");
+  if (!new RegExp(`^  ${volume}:\\s*$`, "m").test(clean)) {
+    violations.push(`volumes: top-level named volume ${volume} is missing.`);
   }
-  if (!/^\s+name:\s*aqua-pgdata-dev\s*$/m.test(clean)) {
+  if (!new RegExp(`^\\s+name:\\s*${volume}\\s*$`, "m").test(clean)) {
     violations.push(
-      "volumes: aqua-pgdata-dev must pin `name: aqua-pgdata-dev` so project naming cannot rename it.",
+      `volumes: ${volume} must pin its name so project naming cannot rename it.`,
     );
   }
 
@@ -213,4 +259,12 @@ export function scanDokployCompose(source: string): string[] {
   violations.push(...scanComposeSecrets(source));
 
   return violations;
+}
+
+export function scanDokployCompose(source: string): string[] {
+  return scanReleaseCompose(source, "aqua-dev");
+}
+
+export function scanProductionCompose(source: string): string[] {
+  return scanReleaseCompose(source, "aqua-prod");
 }

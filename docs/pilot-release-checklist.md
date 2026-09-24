@@ -50,10 +50,10 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1 merged at `2cdde8c`; PR2 at `290cbfd`; PR3 merged at `8857bdd`. `feat/deploy-dokploy-compose` implements the approved Dev Dokploy Compose deployment (tracked compose, deploy-dev guard, CI validation, docs) and is open as PR #191 for human review. Dev deployment itself is not executed yet. |
-| **Current task** | Human review of PR #191 (`feat/deploy-dokploy-compose`). |
-| **Next task** | After that PR merges: execute the Dev deploy per `docs/deployment.md` §Dev deployment, then the R2 live-backup test; only then complete the PR3 release gate and set `PILOT_RELEASE_GATE=passed`. |
-| **Known blockers** | Production fully blocked (`PILOT_RELEASE_GATE` unset; no `production` environment). Dev deploy not yet executed; R2 credentials absent, so backup upload is unverified — do not treat backups as ready. |
+| **Current status** | PR1–PR3, Dokploy Dev Compose #191 and Pilot Safety #192 merged. Operational Readiness [PR #193](https://github.com/saurabh22suman/aqua/pull/193) is open with PR `ci` and `agent-protected-paths` green; no Dev/Production deployment or R2 live restore is claimed. |
+| **Current task** | Human review/merge of PR #193; source checks are recorded in `docs/pilot-remediation-checklist.md`. |
+| **Next task** | Human verifies actual Dev deployment, offsite R2 upload and isolated restore, role journeys, then separate Production approval before considering any release gate. |
+| **Known blockers** | Production remains blocked (`PILOT_RELEASE_GATE` is not set by this work); Dev deploy and live R2 upload/restore are unverified without human credentials and VPS access. Do not treat backups as ready. |
 
 ### Session log
 
@@ -102,6 +102,8 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3-C10 added (type floor, 44px row actions, human edit labels) | PR3-C10 |
 | 2026-09-21 | feat/pilot-pr3-ui-refresh | PR3 full gate + zero-JS green; opened as #190 with green CI | PR3-C11 (pre-merge) |
 | 2026-09-23 | feat/deploy-dokploy-compose | Deployment-only PR #191: tracked `docker-compose.dokploy.yml` (db/migrate/web/one worker, immutable `AQUA_IMAGE_TAG`, no build/latest/ports, internal + dokploy-network), `check:dokploy-compose` scanner + fixtures + `docker compose config` CI step, `deploy-dev` gated on unset `DEV_DEPLOY_ENABLED`, docs + placeholder env example; backup dump path verified locally, R2 upload untested | Dev deploy prep (deployment-only) |
+| 2026-09-24 | main | PR #191 merged at `c198627`; PR-A Pilot Safety #192 merged at `ed1a1c4` by the human; neither merge proves a live deployment or offsite restore | PR-A merged; PR-B pending |
+| 2026-09-24 | fix/pilot-operational-readiness | PR #193 opened: tracked backup profile/host timer, Production digest-pinned Dokploy Compose and approval-only workflow. Both PR checks green, but R2 live upload/restore and all VPS operations still require a human. | PR-B awaiting human review; release gate unchanged |
 
 ---
 
@@ -464,11 +466,17 @@ Postgres) is green. Not fixed here — out of scope.
 
 ### Post-PR3 deployment note (owner decision 2026-09-21)
 
+**Current operational instructions are in `docs/deployment.md`.** PR-B
+supersedes the historical SSH Production proposal below with a separate
+Production Dokploy Compose project and a dispatch-only approval workflow
+that performs no deployment. None of the checklist's release gates are
+marked complete by that change.
+
 All Dev VPS and Dokploy deployment work is deferred until after PR3 merges.
 Until then:
 
-**2026-09-23 update — the pending decisions are made and implemented in
-`feat/deploy-dokploy-compose` (open for human review; nothing executed):**
+**2026-09-24 update — `feat/deploy-dokploy-compose` was merged as #191;
+the following is the historical Dev decision, not proof of deployment:**
 
 - Dev path is one Dokploy **Docker Compose** service in project `aqua-dev`
   (`docker-compose.dokploy.yml`: db, migrate, web, one worker), immutable
