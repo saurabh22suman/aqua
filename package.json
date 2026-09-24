@@ -12,6 +12,7 @@
     "lint": "eslint . --max-warnings=0",
     "pretest": "tsx db/seed-platform.ts",
     "test": "vitest run",
+    "test:sharded": "tsx scripts/run-test-shards.ts",
     "e2e:parent-link-zero-js": "tsx scripts/e2e-parent-link-zero-js.ts",
     "e2e:platform-form-leak": "tsx scripts/e2e-platform-form-leak.ts",
     "e2e:host-boundary": "tsx scripts/e2e-host-boundary.ts",
