@@ -1,0 +1,11 @@
+[Unit]
+Description=Aqua %i logical PostgreSQL backup to R2
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# A host-local configuration file holds only the tracked checkout paths,
+# never R2 or database secrets. Compose reads its adjacent .env directly.
+EnvironmentFile=/etc/aqua/%i-backup.env
+ExecStart=/bin/sh ${AQUA_BACKUP_SCRIPT} ${AQUA_COMPOSE_FILE}

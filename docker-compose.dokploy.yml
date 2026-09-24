@@ -1,5 +1,5 @@
-# Dokploy Docker Compose deployment — one project, four services:
-# db, migrate, web, worker.
+# Dokploy Compose deployment: four normal services (db, migrate, web,
+# worker) and one manual-only backup profile.
 #
 # This is the Dev deployment unit: a single Dokploy "Docker Compose"
 # service deployed on the VPS that already runs Dokploy's bundled
@@ -13,8 +13,8 @@
 #     never :latest, never a build key anywhere;
 #   * no host port mappings at all (web is reached by Traefik over the
 #     internal network via `expose`);
-#   * exactly one worker — pg-boss locks a job to a single consumer, so a
-#     second worker silently double-processes;
+#   * exactly one worker; duplicate consumers add contention and can
+#     rerun a job after a crash, so handlers must remain idempotent;
 #   * migrate is one-shot (`restart: "no"`) and web/worker start only
 #     after it exits 0;
 #   * the database's data lives in the named volume aqua-pgdata-dev.
@@ -102,8 +102,8 @@ services:
       - internal
       - dokploy-network
 
-  # Exactly one worker. pg-boss uses SELECT ... FOR UPDATE SKIP LOCKED to
-  # lock a job to one consumer; a second replica would race it. Do not
+  # Exactly one worker. pg-boss locks a job to one consumer, but retries
+  # can still redeliver work. Do not
   # add deploy.replicas, scale, or Swarm mode here.
   worker:
     image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
@@ -116,10 +116,42 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
       PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET}
       NODE_ENV: production
     depends_on:
       migrate:
         condition: service_completed_successfully
+    networks:
+      - internal
+
+  # Run only from the tracked host timer or an operator's explicit
+  # `docker compose --profile backup run --rm backup`. Not started by
+  # a normal Dokploy deploy. The privileged URL never reaches web/worker.
+  backup:
+    profiles: [backup]
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "scripts/db-backup.ts", "--retain", "30"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - internal
 

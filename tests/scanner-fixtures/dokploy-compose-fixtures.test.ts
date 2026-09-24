@@ -124,8 +124,8 @@ describe("dokploy compose scan", () => {
   it("keeps non-web services off dokploy-network", () => {
     const violations = violationsFor((source) =>
       source.replace(
-        '      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}\n      NODE_ENV: production\n    depends_on:',
-        '      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}\n      NODE_ENV: production\n    networks:\n      - internal\n      - dokploy-network\n    depends_on:',
+        "    networks:\n      - internal\n\n  # Run only",
+        "    networks:\n      - internal\n      - dokploy-network\n\n  # Run only",
       ),
     );
     expect(violations.some((v) => v.includes("must not join dokploy-network"))).toBe(
@@ -141,5 +141,37 @@ describe("dokploy compose scan", () => {
       ),
     );
     expect(violations.some((v) => v.includes("POSTGRES_PASSWORD"))).toBe(true);
+  });
+
+  it("keeps backup one-shot, dormant and on the pinned image", () => {
+    const unprofiled = violationsFor((source) => source.replace("    profiles: [backup]\n", ""));
+    expect(unprofiled.some((v) => v.includes("profiles"))).toBe(true);
+    const unpinned = violationsFor((source) => source.replace(
+      `  backup:\n    profiles: [backup]\n    image: ghcr.io/saurabh22suman/aqua:${TAG}`,
+      "  backup:\n    profiles: [backup]\n    image: postgres:16",
+    ));
+    expect(unpinned.some((v) => v.includes("backup: image"))).toBe(true);
+  });
+
+  it("refuses a missing worker checkpoint key or a fallback R2 secret", () => {
+    const missing = violationsFor((source) => source.replace(
+      "      AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET}\n", "",
+    ));
+    expect(missing.some((v) => v.includes("AUDIT_CHECKPOINT_SECRET"))).toBe(true);
+    const fallback = violationsFor((source) => source.replaceAll(
+      "${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}", "${R2_SECRET_ACCESS_KEY:-example}",
+    ));
+    expect(fallback.some((v) => v.includes("R2_SECRET_ACCESS_KEY"))).toBe(true);
+  });
+
+  it("refuses a privileged migration URL in Dev web env", () => {
+    const source = realSource();
+    const privileged = source.match(/^      MIGRATION_[A-Z_]+_URL: .+$/m)?.[0];
+    expect(privileged).toBeDefined();
+    const bad = source.replace(
+      /(  web:[\s\S]*?    environment:\n)/,
+      (prefix) => `${prefix}${privileged}\n`,
+    );
+    expect(scanDokployCompose(bad)).toContain("web: privileged migration URL is forbidden.");
   });
 });

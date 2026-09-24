@@ -3,8 +3,10 @@ import {
   assertDumpLooksValid,
   backupObjectKey,
   selectExpiredKeys,
+  uploadBackup,
 } from "@/scripts/lib/db-backup";
 import { isObjectStoreEnabled } from "@/lib/storage/object-store";
+import { FakeObjectStore } from "@/tests/helpers/fake-object-store";
 
 // PR1-C11 — backup key naming, retention selection and dump sanity.
 // The live upload/restore path is exercised only where R2 credentials
@@ -66,6 +68,33 @@ describe("assertDumpLooksValid", () => {
     expect(() =>
       assertDumpLooksValid(new TextEncoder().encode("not a dump")),
     ).toThrow(/PGDMP/);
+  });
+});
+
+describe("backup upload and retention (in-memory store)", () => {
+  it("uploads a validated dump before pruning only older backup keys", async () => {
+    const store = new FakeObjectStore();
+    const dump = new TextEncoder().encode("PGDMPtest archive");
+    for (const day of ["2026-09-21", "2026-09-22"]) {
+      await uploadBackup(store, dump, new Date(`${day}T03:00:00Z`), 30);
+    }
+    store.objects.set("activity-events/keep.ndjson.gz", { bytes: dump, contentType: "application/gzip" });
+    const result = await uploadBackup(store, dump, new Date("2026-09-23T03:00:00Z"), 2);
+    expect(result).toEqual({ key: "db-backups/20260923T030000Z.dump", pruned: ["db-backups/20260921T030000Z.dump"] });
+    expect(await store.getObject(result.key)).toEqual(dump);
+    expect(await store.getObject("db-backups/20260922T030000Z.dump")).toEqual(dump);
+    expect(await store.getObject("activity-events/keep.ndjson.gz")).toEqual(dump);
+  });
+
+  it("refuses invalid dumps and never prunes if the upload fails", async () => {
+    const store = new FakeObjectStore();
+    const older = "db-backups/20260920T030000Z.dump";
+    store.objects.set(older, { bytes: new TextEncoder().encode("PGDMPold"), contentType: "application/octet-stream" });
+    await expect(uploadBackup(store, new Uint8Array(0), new Date("2026-09-23"), 1)).rejects.toThrow(/empty/);
+    expect(store.putCalls).toBe(0);
+    store.putObject = async () => { throw new Error("offline upload"); };
+    await expect(uploadBackup(store, new TextEncoder().encode("PGDMPnew"), new Date("2026-09-23"), 1)).rejects.toThrow(/offline upload/);
+    expect(await store.getObject(older)).not.toBeNull();
   });
 });
 
