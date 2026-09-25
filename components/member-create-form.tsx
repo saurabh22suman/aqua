@@ -175,7 +175,7 @@ export function MemberCreateForm({
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Full name"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
           data-testid="member-full-name"
         />
         <input
@@ -183,7 +183,7 @@ export function MemberCreateForm({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone (optional)"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         />
         <div>
           <label
@@ -216,7 +216,8 @@ export function MemberCreateForm({
         <select
           value={gender}
           onChange={(e) => setGender(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          aria-label="Gender"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         >
           <option value="">Gender (optional)</option>
           <option value="male">Male</option>
@@ -226,7 +227,8 @@ export function MemberCreateForm({
         <select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          aria-label="Location"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         >
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
@@ -239,7 +241,7 @@ export function MemberCreateForm({
           onChange={(e) => setMedicalNotes(e.target.value)}
           placeholder="Medical notes (optional)"
           rows={2}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
         />
       </section>
 
@@ -267,7 +269,7 @@ export function MemberCreateForm({
                 value={guardianQuery}
                 onChange={(e) => runGuardianSearch(e.target.value)}
                 placeholder="Search an existing guardian by name or phone"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="guardian-search"
               />
               {guardianResults.length > 0 ? (
@@ -298,7 +300,7 @@ export function MemberCreateForm({
                 value={guardianName}
                 onChange={(e) => setGuardianName(e.target.value)}
                 placeholder="Guardian full name"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="guardian-new-name"
               />
               <input
@@ -306,7 +308,7 @@ export function MemberCreateForm({
                 value={guardianPhone}
                 onChange={(e) => setGuardianPhone(e.target.value)}
                 placeholder="Guardian phone (optional)"
-                className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
               />
             </>
           )}
@@ -316,7 +318,7 @@ export function MemberCreateForm({
             value={relationship}
             onChange={(e) => setRelationship(e.target.value)}
             placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
             data-testid="guardian-relationship"
           />
 

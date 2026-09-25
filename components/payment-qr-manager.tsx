@@ -19,7 +19,7 @@ import type {
 
 // 16px per DESIGN.md §2: anything smaller triggers iOS zoom-on-focus.
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function AddUpiForm() {
   const [state, formAction, isPending] = useActionState(createPaymentQrAction, {
@@ -53,7 +53,7 @@ function AddUpiForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
         >
           {isPending ? "Saving…" : "Add UPI QR"}
         </button>
@@ -96,7 +96,7 @@ function AddImageForm() {
             name="image"
             accept="image/png,image/jpeg,image/webp"
             required
-            className="block w-full text-[16px] text-ink-2"
+            className="block min-h-11 w-full text-[16px] text-ink-2"
           />
         </label>
       </div>
@@ -104,7 +104,7 @@ function AddImageForm() {
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
         >
           {isPending ? "Saving…" : "Add image QR"}
         </button>
@@ -186,7 +186,7 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
             type="button"
             disabled={pending}
             onClick={toggleActive}
-            className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
           >
             {qr.isActive ? "Deactivate" : "Activate"}
           </button>
@@ -194,7 +194,7 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
             type="button"
             disabled={pending}
             onClick={remove}
-            className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
           >
             Delete
           </button>
@@ -252,7 +252,7 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
           type="button"
           disabled={pending}
           onClick={save}
-          className="mt-3 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          className="mt-3 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save"}
         </button>

@@ -48,6 +48,18 @@
   --focus-ring: #B84E00;
 }
 
+/* Focus fallback for controls that do not opt into the ring with a
+ * utility class (selects, hand-rolled buttons, date fields). The
+ * :where() keeps specificity at 0 so any component-level
+ * `focus-visible:outline-*` utility still wins; scanners and tests
+ * that parse --focus-ring keep working off the literal above. */
+@layer base {
+  :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
 html {
   font-variant-numeric: tabular-nums;
 }

@@ -17,7 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 // inputs is the source of truth (no optimistic state).
 
 const INPUT =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 const BAND_LABELS: Array<{ key: string; label: string }> = [
   { key: "1", label: "Band 1" },
   { key: "2", label: "Band 2" },

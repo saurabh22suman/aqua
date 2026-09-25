@@ -69,7 +69,7 @@ export function MembersBoard({
             refetch({ search: e.target.value });
           }}
           placeholder="Search by name or phone"
-          className="w-full rounded-ctl border border-line bg-paper py-2.5 pl-9 pr-3 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper py-2.5 pl-9 pr-3 text-[16px]"
           data-testid="members-search"
         />
       </div>
@@ -81,7 +81,8 @@ export function MembersBoard({
             setStatus(e.target.value);
             refetch({ status: e.target.value });
           }}
-          className="rounded-ctl border border-line bg-paper px-2.5 py-2 text-[16px]"
+          aria-label="Status"
+          className="min-h-11 rounded-ctl border border-line bg-paper px-2.5 py-2 text-[16px]"
           data-testid="members-status-filter"
         >
           <option value="">All statuses</option>
