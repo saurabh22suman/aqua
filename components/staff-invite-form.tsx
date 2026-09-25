@@ -57,7 +57,7 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="+919876543210"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] font-mono"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] font-mono"
           data-testid="invite-phone"
         />
         <span className="block mt-1 text-[12px] text-ink-3">
@@ -73,7 +73,7 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Rehan Mehta"
           maxLength={200}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
           data-testid="invite-name"
         />
       </label>

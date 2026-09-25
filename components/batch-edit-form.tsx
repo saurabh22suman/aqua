@@ -126,7 +126,8 @@ export function BatchEditForm({
       <select
         value={form.programId}
         onChange={(e) => setForm({ ...form, programId: e.target.value })}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+        aria-label="Program"
+        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         {programs.map((p) => (
           <option key={p.id} value={p.id}>
@@ -139,7 +140,7 @@ export function BatchEditForm({
         value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })}
         placeholder="Batch name"
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid={`edit-batch-name-${batchId}`}
       />
       <div className="flex flex-wrap gap-2">
@@ -148,27 +149,28 @@ export function BatchEditForm({
           min={1}
           value={form.capacity}
           onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-          className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           aria-label="Capacity"
         />
         <input
           type="time"
           value={form.startTime}
           onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <input
           type="time"
           value={form.endTime}
           onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
       {locations.length > 1 ? (
         <select
           value={form.locationId}
           onChange={(e) => setForm({ ...form, locationId: e.target.value })}
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          aria-label="Location"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid={`edit-batch-location-${batchId}`}
         >
           {locations.map((l) => (
@@ -181,7 +183,8 @@ export function BatchEditForm({
       <select
         value={form.coachId}
         onChange={(e) => setForm({ ...form, coachId: e.target.value })}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+        aria-label={resolveTerm(terminology, "coach", 1)}
+        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid={`edit-batch-coach-${batchId}`}
       >
         <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>
@@ -198,7 +201,7 @@ export function BatchEditForm({
             type="button"
             onClick={() => toggleDay(day)}
             aria-pressed={form.days.includes(day)}
-            className={`h-9 flex-1 rounded-ctl border text-[12px] ${
+            className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-ctl border text-[12px] ${
               form.days.includes(day)
                 ? "bg-water-soft border-water text-water"
                 : "bg-deck border-line text-ink-3"
@@ -230,7 +233,7 @@ export function BatchEditForm({
           type="button"
           onClick={save}
           disabled={saving || !form.name.trim() || form.days.length === 0}
-          className="flex-1 rounded-ctl bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+          className="inline-flex min-h-11 items-center justify-center flex-1 rounded-ctl bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
           data-testid={`save-batch-${batchId}`}
         >
           Save batch
@@ -238,7 +241,7 @@ export function BatchEditForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-ctl border border-line px-4 py-2 text-[14px] text-ink-3"
+          className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line px-4 py-2 text-[14px] text-ink-3"
         >
           <X size={16} />
         </button>

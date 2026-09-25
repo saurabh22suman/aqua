@@ -29,7 +29,7 @@ type OwnerItem = {
 };
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function valueType(item: OwnerItem): string {
   const type = item.jsonSchema["type"];
@@ -157,7 +157,7 @@ export function OwnerConfigForm({ items }: { items: OwnerItem[] }) {
                 type="button"
                 disabled={pending && pendingKey === item.key}
                 onClick={() => save(item)}
-                className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
               >
                 {pending && pendingKey === item.key ? "Saving…" : "Save"}
               </button>
@@ -217,7 +217,7 @@ export function OwnerConfigForm({ items }: { items: OwnerItem[] }) {
                       (requestValues[item.key] ?? "").trim().length === 0
                     }
                     onClick={() => requestChange(item)}
-                    className="rounded-pill border border-line px-4 py-1.5 text-[12px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
+                    className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 py-1.5 text-[12px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
                   >
                     Send request
                   </button>

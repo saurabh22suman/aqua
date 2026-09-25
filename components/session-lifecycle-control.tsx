@@ -112,7 +112,7 @@ export function SessionLifecycleControl({
             type="time"
             value={start}
             onChange={(e) => setStart(e.target.value)}
-            className="min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
+            className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
             aria-label="Start time"
             data-testid="reschedule-start"
           />
@@ -120,7 +120,7 @@ export function SessionLifecycleControl({
             type="time"
             value={end}
             onChange={(e) => setEnd(e.target.value)}
-            className="min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
+            className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
             aria-label="End time"
             data-testid="reschedule-end"
           />
@@ -136,7 +136,7 @@ export function SessionLifecycleControl({
             type="button"
             onClick={reschedule}
             disabled={busy || !date || end <= start}
-            className="flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
             {busy ? "Saving…" : "Save new time"}
           </button>
@@ -146,7 +146,7 @@ export function SessionLifecycleControl({
               setMode("idle");
               setError(null);
             }}
-            className="rounded-ctl border border-line bg-paper px-3 py-2 text-[13px] text-ink-3"
+            className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line bg-paper px-3 py-2 text-[13px] text-ink-3"
           >
             Back
           </button>

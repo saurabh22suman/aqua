@@ -260,7 +260,7 @@ export function InlineEditField({
               onChange={handleChange}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
-              aria-label={field}
+              aria-label={FIELD_LABELS[field]}
               className={`${baseInputClass} h-11 pr-7`}
             >
               <option value="">—</option>
@@ -278,7 +278,7 @@ export function InlineEditField({
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              aria-label={field}
+              aria-label={FIELD_LABELS[field]}
               rows={2}
               className={`${baseInputClass} py-2 min-w-[200px]`}
             />
@@ -295,7 +295,7 @@ export function InlineEditField({
               }}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
-              aria-label={field}
+              aria-label={FIELD_LABELS[field]}
               className="h-11 min-w-[140px]"
             />
           ) : (
@@ -307,7 +307,7 @@ export function InlineEditField({
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              aria-label={field}
+              aria-label={FIELD_LABELS[field]}
               className={`${baseInputClass} h-11 min-w-[140px]`}
             />
           )

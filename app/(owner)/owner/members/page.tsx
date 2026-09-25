@@ -33,7 +33,7 @@ export default async function MembersPage({
         <div className="flex items-center gap-2">
           <Link
             href="/owner/members/import"
-            className="flex items-center gap-1.5 rounded-ctl border border-line px-3.5 py-2 text-[13px] font-medium text-ink-2 hover:text-ink"
+            className="flex min-h-11 items-center gap-1.5 rounded-ctl border border-line px-3.5 py-2 text-[13px] font-medium text-ink-2 hover:text-ink"
             data-testid="members-import-link"
           >
             <Upload size={15} strokeWidth={2.2} />
@@ -41,7 +41,7 @@ export default async function MembersPage({
           </Link>
           <Link
             href="/owner/members/new"
-            className="flex items-center gap-1.5 rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white"
+            className="flex min-h-11 items-center gap-1.5 rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white"
           >
             <Plus size={16} strokeWidth={2.4} />
             Add

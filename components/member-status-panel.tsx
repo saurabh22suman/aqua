@@ -58,7 +58,7 @@ export function MemberStatusPanel({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
             data-testid="status-reason"
             autoFocus
           />

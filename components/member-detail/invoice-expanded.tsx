@@ -26,7 +26,7 @@ import { formatDateIST } from "@/lib/time/tz";
 // form, and void before money arrives.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function statusTone(status: InvoiceDetail["status"]): string {
   if (status === "paid") return "bg-marine/10 text-marine";
@@ -216,7 +216,7 @@ export function InvoiceExpanded({
                       href={`/api/receipts/${payment.id}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:text-ink"
+                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-2 text-[11px] text-ink-2 hover:text-ink"
                     >
                       Receipt
                     </a>
@@ -231,7 +231,7 @@ export function InvoiceExpanded({
                           setReverseReason("");
                           setReverseError(null);
                         }}
-                        className="rounded-pill border border-line px-2 py-0.5 text-[11px] text-ink-2 hover:text-ink"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-2 text-[11px] text-ink-2 hover:text-ink"
                       >
                         Reverse
                       </button>
@@ -389,7 +389,7 @@ export function InvoiceExpanded({
                 }),
               );
             }}
-            className="mt-2 rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Saving…" : "Record payment"}
           </button>
@@ -412,7 +412,7 @@ export function InvoiceExpanded({
                 onClick={() =>
                   run(() => voidInvoiceAction({ invoiceId, reason: voidReason }))
                 }
-                className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
               >
                 Confirm void
               </button>
@@ -421,7 +421,7 @@ export function InvoiceExpanded({
             <button
               type="button"
               onClick={() => setShowVoid(true)}
-              className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-3 hover:text-ink"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-3 hover:text-ink"
             >
               Void invoice
             </button>

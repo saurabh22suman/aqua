@@ -17,7 +17,7 @@ import type { MemberListRow } from "@/lib/services/people";
 // shown verbatim.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] focus:outline-none";
 
 function openInvoices(invoices: InvoiceRow[]): InvoiceRow[] {
   return invoices.filter(
@@ -152,7 +152,7 @@ export function PaymentRecordForm() {
               type="button"
               onClick={() => void search()}
               disabled={busy || query.trim().length === 0}
-              className="rounded-pill border border-line px-4 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
             >
               Search
             </button>
@@ -170,7 +170,7 @@ export function PaymentRecordForm() {
                     type="button"
                     onClick={() => void chooseMember(row)}
                     data-testid={`payment-member-${row.memberId}`}
-                    className="w-full rounded-ctl border border-line px-3 py-2 text-left text-[13px] text-ink hover:border-[var(--accent-strong)]"
+                    className="w-full min-h-11 rounded-ctl border border-line px-3 py-2 text-left text-[13px] text-ink hover:border-[var(--accent-strong)]"
                   >
                     {row.fullName}
                     <span className="ml-2 font-mono text-[11.5px] text-ink-3">
@@ -212,7 +212,7 @@ export function PaymentRecordForm() {
                       setMessage(null);
                     }}
                     data-testid={`payment-invoice-${invoice.id}`}
-                    className={`w-full rounded-ctl border px-3 py-2 text-left text-[13px] ${
+                    className={`w-full min-h-11 rounded-ctl border px-3 py-2 text-left text-[13px] ${
                       invoiceId === invoice.id
                         ? "border-[var(--accent-strong)] text-ink"
                         : "border-line text-ink-2 hover:border-[var(--accent-strong)]"
@@ -294,7 +294,7 @@ export function PaymentRecordForm() {
             type="button"
             onClick={submit}
             disabled={busy}
-            className="w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Recording…" : "Record payment"}
           </button>

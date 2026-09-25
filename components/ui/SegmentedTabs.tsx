@@ -23,7 +23,7 @@ export function SegmentedTabs({
             key={tab.key}
             href={tab.href}
             aria-current={isActive ? "page" : undefined}
-            className={`flex-none whitespace-nowrap rounded-pill px-3.5 py-2 text-center text-[12.5px] font-medium transition-colors duration-150 ${
+            className={`flex-none inline-flex min-h-11 items-center justify-center whitespace-nowrap rounded-pill px-3.5 py-2 text-center text-[12.5px] font-medium transition-colors duration-150 ${
               isActive ? "bg-paper text-ink shadow-1" : "text-ink-3 hover:text-ink-2"
             }`}
           >

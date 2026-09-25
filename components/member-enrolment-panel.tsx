@@ -225,7 +225,7 @@ export function MemberEnrolmentPanel({
                       <select
                         value={transferTarget}
                         onChange={(ev) => setTransferTarget(ev.target.value)}
-                        className="min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                        className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                         data-testid="transfer-target"
                         aria-label="Transfer to"
                       >
@@ -270,7 +270,7 @@ export function MemberEnrolmentPanel({
               <select
                 value={effectiveBatchId}
                 onChange={(e) => setSelectedBatchId(e.target.value)}
-                className="w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                className="w-full min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="enrolment-batch-select"
               >
                 {availableBatches.map((b) => (
