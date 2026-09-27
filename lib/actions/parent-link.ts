@@ -8,20 +8,17 @@ import { signParentLinkToken } from "@/lib/services/parent-link";
 import { withTenant } from "@/db/tenant";
 import { auditLog } from "@/db/schema/audit";
 import { staff } from "@/db/schema/staff";
+import { members } from "@/db/schema/people";
+import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
+import { asMemberId } from "@/lib/ids";
 
 // C-45 — issue a parent-page link for a specific member. Owner/admin
 // only — a coach, receptionist, parent, etc. cannot mint these URLs
 // (the surface reveals children's data, the smallest blast radius
 // goes through the most-trusted staff).
 //
-// Sub-PR 2: assertManagement (role-key list) replaced with
-// requirePermission(ctx, "members.write"). The receptionist carries
-// members.write too, so the surface check happens earlier — the
-// (owner) layout gates non-owner roles from reaching this code path
-// at all. requirePermission here is the in-action defense-in-depth
-// for any path that hasn't yet gated at the layout (a future
-// receptionist-facing "issue parent link" flow would have to
-// override this intentionally).
+// A layout is not an action boundary. The owner/admin role gate is
+// repeated here because receptionists also hold members.write.
 //
 // The token itself is signed with PARENT_LINK_SECRET and is valid for
 // 7 days. The action returns the FULL URL (origin + path) so the UI
@@ -48,6 +45,9 @@ export async function issueParentLinkAction(
   const ctx = await requireDefaultCtx();
   try {
     requirePermission(ctx, "members.write");
+    if (ctx.roleKey !== "owner" && ctx.roleKey !== "admin") {
+      return { kind: "error", code: "unauthorized", message: "You cannot issue parent links." };
+    }
   } catch (e) {
     if (e instanceof ForbiddenError) {
       // Surface the same shape the type allows so the UI can render
@@ -57,11 +57,6 @@ export async function issueParentLinkAction(
     }
     throw e;
   }
-
-  const { token, claims } = signParentLinkToken({
-    tenantId: ctx.tenantId,
-    personId: parsed.data.memberId,
-  });
 
   // J4 audit — record who issued, for whom, when, and when the
   // link stops being valid. The token itself is the secret; only
@@ -78,10 +73,22 @@ export async function issueParentLinkAction(
   // denormalised into the JSONB because it's the natural unit
   // "who works here" reads use.
   //
-  // The insert runs inside withTenant() so the row is tenant-
-  // scoped and RLS picks it up. The permission check above has
-  // already verified the caller; we don't recheck here.
-  await withTenant(ctx.tenantId, async (tx) => {
+  // Validate the member and site in the same transaction as issuance's
+  // audit. A UUID from another site or tenant never becomes a live link.
+  return withTenant(ctx.tenantId, async (tx): Promise<IssueParentLinkResult> => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const [member] = await tx.select({ locationId: members.locationId })
+      .from(members)
+      .where(and(eq(members.id, asMemberId(parsed.data.memberId)),
+        eq(members.tenantId, ctx.tenantId), isNull(members.deletedAt)))
+      .limit(1);
+    if (!member || !locationVisible(access, member.locationId)) {
+      return { kind: "error", code: "invalid", message: "Member not found." };
+    }
+    const { token, claims } = signParentLinkToken({
+      tenantId: ctx.tenantId,
+      personId: parsed.data.memberId,
+    });
     const staffRow = await tx
       .select({ id: staff.id })
       .from(staff)
@@ -112,11 +119,10 @@ export async function issueParentLinkAction(
       },
       ip: null,
     });
+    return {
+      kind: "ok",
+      url: `/p/${token}`,
+      expiresAt: new Date(claims.exp * 1000).toISOString(),
+    };
   });
-
-  return {
-    kind: "ok",
-    url: `/p/${token}`,
-    expiresAt: new Date(claims.exp * 1000).toISOString(),
-  };
 }

@@ -14,6 +14,7 @@ import {
   locationPredicate,
   locationVisible,
   resolveLocationAccess,
+  type LocationAwareCtx,
 } from "@/lib/services/location-access";
 import { asPersonId, asMemberId, type MemberId, type PersonId, type UserId } from "@/lib/ids";
 
@@ -177,7 +178,7 @@ export async function createMemberInTx(tx: TenantTx, ctx: ActionCtx, input: Crea
 // (re-enrolling on a new date, matching the existing upsert-by-day
 // semantics below) never counts against capacity a second time.
 export async function enrolMember(
-  ctx: ActionCtx,
+  ctx: LocationAwareCtx,
   input: { memberId: string; batchId: string; enrolledOn?: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -213,6 +214,15 @@ export async function enrolMember(
       return { ok: false, error: "Batch not found." };
     }
 
+    const [member] = await tx.select({ locationId: members.locationId })
+      .from(members)
+      .where(and(eq(members.id, asMemberId(input.memberId)),
+        eq(members.tenantId, ctx.tenantId), isNull(members.deletedAt)))
+      .limit(1);
+    if (!member || !locationVisible(access, member.locationId)) {
+      return { ok: false, error: "Member not found." };
+    }
+
     const alreadyEnrolled = await tx
       .select({ memberId: enrolments.memberId })
       .from(enrolments)
@@ -246,7 +256,7 @@ export async function enrolMember(
 }
 
 export async function markAttendance(
-  ctx: ActionCtx,
+  ctx: LocationAwareCtx & { roleKey?: string },
   input: { sessionId: string; memberId: string; status: "present" | "absent" | "late"; clientId: string },
 ): Promise<void> {
   await withTenant(ctx.tenantId, async (tx) => {
@@ -254,16 +264,21 @@ export async function markAttendance(
     // transaction. A re-mark picks up the session's current value;
     // history is never rewritten by a later batch move.
     const sessionRows = await tx
-      .select({ locationId: sessions.locationId })
+      .select({ locationId: sessions.locationId, batchId: sessions.batchId })
       .from(sessions)
       .where(
         and(
           eq(sessions.tenantId, ctx.tenantId),
           eq(sessions.id, input.sessionId),
+          ...(ctx.roleKey === "coach"
+            ? [eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId))]
+            : []),
         ),
       )
       .limit(1);
-    const sessionLocationId = sessionRows[0]?.locationId ?? null;
+    const session = sessionRows[0];
+    if (!session) throw new NotFoundError();
+    const sessionLocationId = session.locationId;
 
     // O-08 — a scoped caller cannot mark another location's register,
     // even with a known session id.
@@ -272,6 +287,25 @@ export async function markAttendance(
       // Same shape as a missing session: the caller must not learn
       // that another location's register exists.
       throw new NotFoundError();
+    }
+
+    // Match the register's enrolment rule. Historical corrections remain
+    // possible after a batch transfer when this session already has a mark.
+    const [enrolled] = await tx.select({ id: enrolments.id }).from(enrolments)
+      .innerJoin(members, and(eq(members.id, enrolments.memberId),
+        eq(members.tenantId, enrolments.tenantId)))
+      .where(and(eq(enrolments.tenantId, ctx.tenantId),
+        eq(enrolments.batchId, session.batchId),
+        eq(enrolments.memberId, asMemberId(input.memberId)),
+        isNull(members.deletedAt)))
+      .limit(1);
+    if (!enrolled) {
+      const [priorMark] = await tx.select({ id: attendance.id }).from(attendance)
+        .where(and(eq(attendance.tenantId, ctx.tenantId),
+          eq(attendance.sessionId, input.sessionId),
+          eq(attendance.memberId, asMemberId(input.memberId))))
+        .limit(1);
+      if (!priorMark) throw new NotFoundError();
     }
 
     await tx
