@@ -16,7 +16,7 @@ import { formatDateTimeIST } from "@/lib/time/tz";
 // is surfaced, never silently adjusted.
 
 const inputClass =
-  "rounded-ctl border border-line bg-paper px-3 py-2 text-[15px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[15px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function CollectionsReport({
   defaultDate,
@@ -267,7 +267,7 @@ export function CollectionsReport({
                       setBusy(false);
                     })();
                   }}
-                  className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+                  className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
                 >
                   {busy ? "Saving…" : report.cashCount ? "Recount" : "Confirm count"}
                 </button>

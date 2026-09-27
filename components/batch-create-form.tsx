@@ -104,7 +104,8 @@ export function BatchCreateForm({
       <select
         value={programId}
         onChange={(e) => setProgramId(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+        aria-label="Program"
+        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         {programs.map((p) => (
           <option key={p.id} value={p.id}>
@@ -116,7 +117,8 @@ export function BatchCreateForm({
         <select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          aria-label="Location"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="batch-location-picker"
         >
           {locations.map((l) => (
@@ -131,7 +133,7 @@ export function BatchCreateForm({
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Batch name"
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       />
       <div className="flex flex-wrap gap-2">
         <input
@@ -139,26 +141,27 @@ export function BatchCreateForm({
           min={1}
           value={capacity}
           onChange={(e) => setCapacity(e.target.value)}
-          className="w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           aria-label="Capacity"
         />
         <input
           type="time"
           value={startTime}
           onChange={(e) => setStartTime(e.target.value)}
-          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <input
           type="time"
           value={endTime}
           onChange={(e) => setEndTime(e.target.value)}
-          className="min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </div>
       <select
         value={coachId}
         onChange={(e) => setCoachId(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+        aria-label={resolveTerm(terminology, "coach", 1)}
+        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid="batch-coach-picker"
       >
         <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>
@@ -175,7 +178,7 @@ export function BatchCreateForm({
             type="button"
             onClick={() => toggleDay(day)}
             aria-pressed={days.includes(day)}
-            className={`h-9 flex-1 rounded-ctl border text-[12px] ${
+            className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-ctl border text-[12px] ${
               days.includes(day) ? "bg-water-soft border-water text-water" : "bg-deck border-line text-ink-3"
             }`}
           >
@@ -204,7 +207,7 @@ export function BatchCreateForm({
         type="button"
         onClick={submit}
         disabled={busy || !name.trim() || days.length === 0}
-        className="rounded-ctl bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+        className="inline-flex min-h-11 items-center justify-center rounded-ctl bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
       >
         Add batch
       </button>

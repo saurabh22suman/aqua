@@ -95,7 +95,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
             }}
             placeholder="Salt Lake Aquatics"
             maxLength={200}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
             data-testid="branding-display-name"
           />
           <span className="block mt-1 text-[12px] text-ink-3">
@@ -114,7 +114,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
             }}
             placeholder="SLA"
             maxLength={40}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
             data-testid="branding-short-name"
           />
           <span className="block mt-1 text-[12px] text-ink-3">

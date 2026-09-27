@@ -63,7 +63,7 @@ export function OwnerResetLinks({ owners }: { owners: OwnerMembershipRow[] }) {
                 type="button"
                 onClick={() => issue(owner.membershipId)}
                 disabled={busyId === owner.membershipId}
-                className="rounded-pill border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-3 py-1.5 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
               >
                 {busyId === owner.membershipId
                   ? "Creating…"

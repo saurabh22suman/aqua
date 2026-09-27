@@ -155,7 +155,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
           <button
             type="button"
             onClick={onCopy}
-            className="mt-2 rounded-pill px-3 py-2 text-[13px] font-medium bg-paper border border-line text-ink-2 flex items-center gap-1.5"
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-paper border border-line text-ink-2 gap-1.5"
             data-testid={`copy-link-${row.membershipId}`}
           >
             {copied ? <Check size={13} /> : <Copy size={13} />}
@@ -172,7 +172,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
             type="button"
             onClick={onIssueLink}
             disabled={pending}
-            className="rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 flex items-center gap-1.5"
+            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 gap-1.5"
             data-testid={`issue-link-${row.membershipId}`}
           >
             {busy === "link" ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} />}
@@ -184,7 +184,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
             type="button"
             onClick={onRevoke}
             disabled={pending}
-            className="rounded-pill px-3 py-2 text-[13px] font-medium border border-line text-ink-2 disabled:opacity-50 flex items-center gap-1.5"
+            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium border border-line text-ink-2 disabled:opacity-50 gap-1.5"
             data-testid={`revoke-${row.membershipId}`}
           >
             {busy === "revoke" ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}

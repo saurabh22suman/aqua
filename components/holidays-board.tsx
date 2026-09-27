@@ -71,7 +71,7 @@ export function HolidaysBoard({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Holiday name"
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="holiday-name"
         />
         <div>
@@ -102,7 +102,7 @@ export function HolidaysBoard({
           type="button"
           onClick={submit}
           disabled={busy || !name.trim() || !holidayDate}
-          className="w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+          className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
         >
           Add holiday
         </button>

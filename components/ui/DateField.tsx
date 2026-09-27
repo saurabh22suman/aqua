@@ -142,7 +142,7 @@ export function DateField({
         disabled={disabled}
         aria-label={ariaLabel}
         aria-invalid={invalid || undefined}
-        className={`w-full rounded-ctl border px-3 py-2.5 text-[16px] ${
+        className={`w-full min-h-11 rounded-ctl border px-3 py-2.5 text-[16px] ${
           tone === "deck" ? "bg-deck" : "bg-paper"
         } ${invalid ? "border-ink-2" : "border-line"} ${className}`}
         data-testid={testId}

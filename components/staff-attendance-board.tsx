@@ -154,7 +154,7 @@ export function StaffAttendanceBoard({
                         onChange={(e) => setNote(e.target.value)}
                         rows={2}
                         placeholder="Reason (required)"
-                        className="mt-2 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink"
+                        className="mt-2 w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink"
                       />
                       {error ? (
                         <p role="alert" className="mt-1 text-[12.5px] text-ink-2">

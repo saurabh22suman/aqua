@@ -168,7 +168,7 @@ export function AssessmentBoard({
                           maxLength={500}
                           placeholder="Optional note for the next tap"
                           aria-label={`Note for ${node.name}`}
-                          className="mt-1.5 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
+                          className="mt-1.5 w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
                         />
                         {saving === node.id ? (
                           <p className="mt-1 text-[11.5px] text-ink-3">Saving…</p>

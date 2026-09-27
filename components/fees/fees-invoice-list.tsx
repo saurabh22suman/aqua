@@ -97,7 +97,7 @@ export function FeesInvoiceList({
                 onClick={() =>
                   setExpandedId(expandedId === invoice.id ? null : invoice.id)
                 }
-                className="ml-auto rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2 hover:text-ink"
+                className="ml-auto inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2 hover:text-ink"
               >
                 {expandedId === invoice.id ? "Hide" : "Open"}
               </button>

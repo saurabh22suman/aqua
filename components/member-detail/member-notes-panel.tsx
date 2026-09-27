@@ -16,7 +16,7 @@ import { formatDateTimeIST } from "@/lib/time/tz";
 // did not accept.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function MemberNotesPanel({
   memberId,
@@ -154,7 +154,7 @@ export function MemberNotesPanel({
                           setEditingId(note.id);
                           setEditBody(note.body);
                         }}
-                        className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2"
                       >
                         Edit
                       </button>
@@ -164,7 +164,7 @@ export function MemberNotesPanel({
                         onClick={() =>
                           run(() => deleteMemberNoteAction(note.id))
                         }
-                        className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-3"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-3"
                       >
                         Archive
                       </button>

@@ -74,7 +74,7 @@ export function NotificationInbox({ initial }: { initial: NotificationRow[] }) {
                       setBusyId(null);
                     })();
                   }}
-                  className="flex-none rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2"
+                  className="inline-flex min-h-11 flex-none items-center justify-center rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2"
                 >
                   Mark read
                 </button>

@@ -13,7 +13,7 @@ import type { PaymentQrRow } from "@/lib/services/payment-qrs";
 // Nothing here mutates: no create, edit or delete.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function CollectPayment({ qrs }: { qrs: PaymentQrRow[] }) {
   const [selectedId, setSelectedId] = useState(qrs[0]?.id ?? "");

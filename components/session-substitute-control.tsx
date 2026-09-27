@@ -87,7 +87,7 @@ export function SessionSubstituteControl({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-ctl border border-line bg-deck px-3 py-1.5 text-[12px] font-medium text-ink-2 hover:bg-paper"
+          className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line bg-deck px-3 py-1.5 text-[12px] font-medium text-ink-2 hover:bg-paper"
           data-testid={`substitute-open-${sessionId}`}
         >
           Substitute
@@ -106,7 +106,7 @@ export function SessionSubstituteControl({
       <select
         value={picked}
         onChange={(e) => setPicked(e.target.value)}
-        className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
+        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
         data-testid={`substitute-coach-${sessionId}`}
       >
         <option value="">Choose {resolveTerm(terminology, "coach", 1)}…</option>
@@ -132,7 +132,7 @@ export function SessionSubstituteControl({
           type="button"
           onClick={submit}
           disabled={busy || !picked}
-          className="flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+          className="inline-flex min-h-11 items-center justify-center flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           data-testid={`substitute-submit-${sessionId}`}
         >
           {busy ? "Saving…" : "Confirm substitution"}
@@ -144,7 +144,7 @@ export function SessionSubstituteControl({
             setPicked("");
             setError(null);
           }}
-          className="rounded-ctl border border-line bg-paper px-3 py-2 text-[13px] text-ink-3"
+          className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line bg-paper px-3 py-2 text-[13px] text-ink-3"
         >
           Cancel
         </button>

@@ -52,7 +52,7 @@ export function EnquiriesBoard({
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Name"
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="enquiry-capture-name"
         />
         <input
@@ -60,12 +60,13 @@ export function EnquiriesBoard({
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           placeholder="Phone (optional)"
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
         <select
           value={source}
           onChange={(e) => setSource(e.target.value as (typeof SOURCES)[number])}
-          className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          aria-label="Source"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         >
           {SOURCES.map((s) => (
             <option key={s} value={s}>
@@ -77,7 +78,7 @@ export function EnquiriesBoard({
           type="button"
           onClick={submit}
           disabled={busy || !fullName.trim()}
-          className="w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+          className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
           data-testid="enquiry-capture-submit"
         >
           {busy ? "Saving…" : "Capture enquiry"}

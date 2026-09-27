@@ -55,7 +55,7 @@ export function AlertSettingsForm({
           inputMode="numeric"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="w-28 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="min-h-11 w-28 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="alert-threshold"
           aria-label="Attendance alert threshold percent"
         />

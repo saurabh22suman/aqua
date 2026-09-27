@@ -16,7 +16,7 @@ import { BusinessHoursEditor } from "@/components/settings/business-hours-editor
 // second site.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 const KINDS: Array<{ value: "club" | "cafe" | "mixed"; label: string }> = [
   { value: "club", label: "Club / academy" },

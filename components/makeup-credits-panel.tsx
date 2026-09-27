@@ -122,7 +122,7 @@ export function MakeupCreditsPanel({ memberId }: { memberId: string }) {
               <select
                 value={sourcePick}
                 onChange={(e) => setSourcePick(e.target.value)}
-                className="min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="makeup-source"
                 aria-label="Excused absence"
               >
@@ -159,7 +159,7 @@ export function MakeupCreditsPanel({ memberId }: { memberId: string }) {
               <select
                 value={targetPick}
                 onChange={(e) => setTargetPick(e.target.value)}
-                className="min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="makeup-target"
                 aria-label="Makeup session"
               >

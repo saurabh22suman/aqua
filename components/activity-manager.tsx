@@ -21,7 +21,7 @@ import {
 // location (the site). Plans attach to activities next.
 
 const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 type LocationOption = { id: string; name: string; isPrimary?: boolean };
 
@@ -161,7 +161,7 @@ export function ActivityManager({
                     }),
                   )
                 }
-                className="rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
               >
                 {pending && pendingKey === "create" ? "Saving…" : "Add activity"}
               </button>
@@ -240,7 +240,7 @@ function ActivityRowEditor({
             if (!window.confirm(`Delete "${activity.name}"?`)) return;
             onRun(() => deleteActivityAction({ id: activity.id }));
           }}
-          className="rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
         >
           Delete
         </button>
@@ -259,7 +259,7 @@ function ActivityRowEditor({
                 disabled={pending}
                 aria-label={`Remove ${unit.name}`}
                 onClick={() => onRun(() => removeSubUnitAction({ id: unit.id }))}
-                className="text-ink-3 hover:text-ink disabled:opacity-50"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center text-ink-3 hover:text-ink disabled:opacity-50"
               >
                 ×
               </button>
@@ -283,7 +283,7 @@ function ActivityRowEditor({
             setNewSubUnit("");
             onRun(() => addSubUnitAction({ activityId: activity.id, name: value }));
           }}
-          className="rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
         >
           Add
         </button>
@@ -345,7 +345,7 @@ function ActivityRowEditor({
               }),
             )
           }
-          className="mt-3 rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          className="mt-3 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
         >
           {pending ? "Saving…" : "Save"}
         </button>

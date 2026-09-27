@@ -145,7 +145,7 @@ export function EnquiryDetailView({
               type="button"
               onClick={() => moveStage(s)}
               disabled={busy}
-              className="rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] disabled:opacity-50"
             >
               Move to {ENQUIRY_STAGE_LABELS[s]}
             </button>
@@ -154,7 +154,7 @@ export function EnquiryDetailView({
             <button
               type="button"
               onClick={() => setShowBookTrial((v) => !v)}
-              className="rounded-ctl border border-water bg-water-soft px-3 py-1.5 text-[12.5px] text-water"
+              className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-water bg-water-soft px-3 py-1.5 text-[12.5px] text-water"
               data-testid="show-book-trial"
             >
               Book trial
@@ -164,7 +164,7 @@ export function EnquiryDetailView({
             <button
               type="button"
               onClick={() => setShowConvertNoTrial((v) => !v)}
-              className="rounded-ctl border border-good bg-good-soft px-3 py-1.5 text-[12.5px] text-good"
+              className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-good bg-good-soft px-3 py-1.5 text-[12.5px] text-good"
               data-testid="show-convert"
             >
               Convert
@@ -180,7 +180,8 @@ export function EnquiryDetailView({
           <select
             value={batchId}
             onChange={(e) => setBatchId(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="Batch"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           >
             {batches.map((b) => (
               <option key={b.id} value={b.id}>
@@ -198,7 +199,7 @@ export function EnquiryDetailView({
             type="button"
             onClick={submitBookTrial}
             disabled={busy || !trialValid || !batchId}
-            className="w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+            className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
             data-testid="submit-book-trial"
           >
             {busy ? "Booking…" : "Confirm trial booking"}
@@ -216,7 +217,7 @@ export function EnquiryDetailView({
             value={convertReason}
             onChange={(e) => setConvertReason(e.target.value)}
             placeholder="Reason (e.g. paid and enrolled)"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           {!enquiry.memberId ? (
             <EnquiryNewMemberFields
@@ -230,7 +231,7 @@ export function EnquiryDetailView({
             type="button"
             onClick={submitConvert}
             disabled={busy || (!enquiry.memberId && !convertValid)}
-            className="w-full rounded-ctl bg-good py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+            className="min-h-11 w-full rounded-ctl bg-good py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
             data-testid="submit-convert"
           >
             {busy ? "Converting…" : "Confirm conversion"}
@@ -272,20 +273,20 @@ export function EnquiryDetailView({
             placeholder="dd/mm/yyyy, hh:mm"
             value={followUpDue}
             onChange={(e) => setFollowUpDue(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           <input
             type="text"
             value={followUpNote}
             onChange={(e) => setFollowUpNote(e.target.value)}
             placeholder="Note (optional)"
-            className="w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
           <button
             type="button"
             onClick={submitFollowUp}
             disabled={busy || !followUpDue}
-            className="rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
             Add follow-up
           </button>

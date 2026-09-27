@@ -76,6 +76,10 @@ const APEX_ALLOWLIST = [
   // payloads, and the _next/static directory the build emits.
   "/_next/",
   "/favicon",
+  // The App Router metadata icon (app/icon.svg). It is referenced by
+  // the root layout's <link rel="icon">, so the browser requests it on
+  // every surface — including ops — and it must not 404.
+  "/icon.svg",
   // Service worker registration. The offline-attendance-sync
   // feature registers `/sw.js` (see components/sw-registrar.tsx);
   // if the middleware blocks /sw.js the SW never registers and
@@ -98,6 +102,9 @@ const OPS_ALLOWLIST = [
   "/api/health",
   "/_next/",
   "/favicon",
+  // app/icon.svg is linked from the shared root layout, so it is
+  // requested here too; see the APEX_ALLOWLIST comment.
+  "/icon.svg",
 ];
 
 function isAllowed(pathname: string, allowlist: readonly string[]): boolean {

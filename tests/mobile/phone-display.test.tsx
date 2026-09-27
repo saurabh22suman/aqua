@@ -75,7 +75,7 @@ describe("inline edit phone field", () => {
     expect(screen.getAllByText(/\+91 98765 00001/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByLabelText("Edit phone number"));
-    const input = screen.getByLabelText("phone") as HTMLInputElement;
+    const input = screen.getByLabelText("phone number") as HTMLInputElement;
     expect(input.value).toBe("9876500001");
   });
 });
