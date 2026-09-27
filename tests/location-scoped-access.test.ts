@@ -175,6 +175,10 @@ beforeAll(async () => {
        ($2, $4, $6, $8, $9::date, $9::timestamptz + interval '9 hours', $9::timestamptz + interval '10 hours', 'held')`,
     [sessionA, sessionB, tenantId, tenantId, batchA, batchB, locA, locB, DATE],
   );
+  await admin.query(
+    "insert into enrolments (id, tenant_id, member_id, batch_id, enrolled_on) values ($1, $2, $3, $4, '2026-09-01')",
+    [uuidv7(), tenantId, memberA, batchA],
+  );
 }, 240_000);
 
 afterAll(async () => {

@@ -172,10 +172,16 @@ export type PaymentReversalRow = {
 };
 
 export async function listPaymentReversals(
-  ctx: Pick<ActionCtx, "tenantId">,
+  ctx: ActionCtx,
   paymentId: string,
 ): Promise<PaymentReversalRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const [payment] = await tx.select({ locationId: payments.locationId })
+      .from(payments)
+      .where(and(eq(payments.tenantId, ctx.tenantId), eq(payments.id, paymentId)))
+      .limit(1);
+    if (!payment || !locationVisible(access, payment.locationId)) return [];
     const rows = await tx
       .select({
         id: paymentReversals.id,

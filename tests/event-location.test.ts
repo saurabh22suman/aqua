@@ -81,6 +81,10 @@ beforeAll(async () => {
      values ($1, $2, $3, $4, 'active', $5)`,
     [memberId, tenantId, personId, locationId, `o02-${RUN}`],
   );
+  await admin.query(
+    "insert into enrolments (id, tenant_id, member_id, batch_id, enrolled_on) values ($1, $2, $3, $4, '2026-01-01')",
+    [uuidv7(), tenantId, memberId, locatedBatchId],
+  );
 }, 240_000);
 
 afterAll(async () => {
