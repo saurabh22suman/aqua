@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Edit Aaradhya Iyer — Aqua owner UI preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+</head>
+<body data-page="member-edit" data-states="populated,validation,limited">
+<div class="preview-bar" id="preview-bar"></div>
+<div class="shell">
+  <aside class="sidebar" id="shell-sidebar" aria-label="Owner navigation"></aside>
+  <div class="shell-main">
+    <header class="topbar" id="shell-topbar"></header>
+    <header class="mobile-head" id="shell-mobile-head"></header>
+
+    <main class="page">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="/members">Swimmers</a>
+        <img src="/icon.svg?name=chevron-right&size=14&color=%235B6F6B" alt="" aria-hidden="true">
+        <a href="/member">Aaradhya Iyer</a>
+        <img src="/icon.svg?name=chevron-right&size=14&color=%235B6F6B" alt="" aria-hidden="true">
+        <span aria-current="page">Edit</span>
+      </nav>
+
+      <div class="page-head">
+        <div>
+          <h1>Edit Aaradhya Iyer</h1>
+          <p class="meta">AWS-002 · Worli Main</p>
+        </div>
+      </div>
+
+      <div class="failed-box st-limited" style="margin-top:14px">
+        <img src="/icon.svg?name=info&size=18&color=%233C534F" alt="" aria-hidden="true">
+        <div class="fb-text">
+          <p class="fb-title">Read-only access</p>
+          <p class="fb-detail">You can view this swimmer but not change the record.</p>
+        </div>
+      </div>
+
+      <div class="card bounded-sm st-pop st-write" style="margin-top:16px">
+        <form data-preview-form novalidate style="padding:20px">
+          <div class="form-section">
+            <h2 class="section">Personal details</h2>
+            <div class="field-grid two">
+              <div class="field">
+                <label class="field-label" for="edit-name">Full name</label>
+                <input class="input" id="edit-name" name="fullName" value="Aaradhya Iyer" data-required autocomplete="off">
+                <p class="field-error" data-error-for="edit-name">Enter the swimmer's full name.</p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="edit-phone">Phone <span class="quiet-note">(optional)</span></label>
+                <input class="input" id="edit-phone" name="phone" value="+91 98200 04411" inputmode="tel" autocomplete="off">
+              </div>
+              <div class="field">
+                <label class="field-label" for="edit-dob">Date of birth</label>
+                <input class="input" id="edit-dob" name="dob" type="date" value="2016-09-23" data-required>
+                <p class="field-error" data-error-for="edit-dob">Enter the date of birth.</p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="edit-joined">Joined date</label>
+                <input class="input" id="edit-joined" name="joinedOn" type="date" value="2026-10-10" data-required>
+                <p class="field-error" data-error-for="edit-joined">Enter the joined date.</p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="edit-gender">Gender <span class="quiet-note">(optional)</span></label>
+                <select class="input" id="edit-gender" name="gender">
+                  <option value="">Not specified</option>
+                  <option value="female" selected>Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="edit-location">Location</label>
+                <select class="input" id="edit-location" name="locationId">
+                  <option selected>Worli Main</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="edit-medical">Medical notes</label>
+              <textarea class="input" id="edit-medical" name="medicalNotes" placeholder="None recorded"></textarea>
+            </div>
+          </div>
+
+          <p class="quiet-note form-section">Guardian relationships, consent and billing stay on the swimmer's record and in Fees — this form changes identity details only.</p>
+
+          <div class="form-actions form-section">
+            <a class="btn btn-secondary" href="/member">Cancel</a>
+            <button type="submit" class="btn btn-primary">Save changes</button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav" id="shell-bottom-nav" aria-label="Primary"></nav>
+</body>
+</html>

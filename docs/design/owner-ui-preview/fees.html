@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Fees &amp; payments — Aqua owner UI preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+</head>
+<body data-page="fees" data-states="populated,empty,loading,failed,limited,confirm" data-default-tab="dues">
+<div class="preview-bar" id="preview-bar"></div>
+<div class="shell">
+  <aside class="sidebar" id="shell-sidebar" aria-label="Owner navigation"></aside>
+  <div class="shell-main">
+    <header class="topbar" id="shell-topbar"></header>
+    <header class="mobile-head" id="shell-mobile-head"></header>
+
+    <main class="page" data-tabs-scope>
+      <div class="page-head">
+        <div>
+          <h1>Fees &amp; payments</h1>
+          <p class="meta">Worli Main · all plans</p>
+        </div>
+      </div>
+
+      <!-- period vs current balances -->
+      <div class="summary three st-pop" style="margin-top:16px">
+        <div class="summary-item">
+          <p class="k">Net collections · 1–31 Oct</p>
+          <p class="v">₹18,200</p>
+          <p class="s">Payments recorded in this period, net of reversals</p>
+        </div>
+        <div class="summary-item">
+          <p class="k">Outstanding now</p>
+          <p class="v">₹42,800</p>
+          <p class="s">7 invoices with a balance</p>
+        </div>
+        <div class="summary-item tone-late">
+          <p class="k">Overdue now</p>
+          <p class="v">₹12,600</p>
+          <p class="s">4 invoices past the due date</p>
+        </div>
+      </div>
+
+      <div class="summary three st-empty" style="margin-top:16px">
+        <div class="summary-item">
+          <p class="k">Net collections · 1–31 Oct</p>
+          <p class="v">₹0</p>
+          <p class="s">No payments recorded in this period yet</p>
+        </div>
+        <div class="summary-item">
+          <p class="k">Outstanding now</p>
+          <p class="v">₹0</p>
+          <p class="s">Every issued invoice is settled</p>
+        </div>
+        <div class="summary-item">
+          <p class="k">Overdue now</p>
+          <p class="v">₹0</p>
+          <p class="s">Nothing past due</p>
+        </div>
+      </div>
+
+      <div class="summary three st-loading" style="margin-top:16px" aria-hidden="true">
+        <div class="summary-item"><div class="sk sk-line" style="width:55%"></div><div class="sk" style="height:28px;width:45%;margin:8px 0"></div><div class="sk sk-line" style="width:70%"></div></div>
+        <div class="summary-item"><div class="sk sk-line" style="width:50%"></div><div class="sk" style="height:28px;width:40%;margin:8px 0"></div><div class="sk sk-line" style="width:65%"></div></div>
+        <div class="summary-item"><div class="sk sk-line" style="width:50%"></div><div class="sk" style="height:28px;width:40%;margin:8px 0"></div><div class="sk sk-line" style="width:65%"></div></div>
+      </div>
+
+      <div class="st-failed" style="margin-top:16px">
+        <div class="failed-box">
+          <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+          <div class="fb-text">
+            <p class="fb-title">Could not load the fee summaries</p>
+            <p class="fb-detail">The figures are unavailable — this is not a zero balance.</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+        </div>
+      </div>
+
+      <p class="quiet-note st-pop" style="margin-top:10px">Period collections count payments received between 1 and 31 Oct. Outstanding and overdue are current balances, not period figures.</p>
+
+      <div class="failed-box st-limited" style="margin-top:16px">
+        <img src="/icon.svg?name=info&size=18&color=%233C534F" alt="" aria-hidden="true">
+        <div class="fb-text">
+          <p class="fb-title">Read-only access to fees</p>
+          <p class="fb-detail">You can review invoices and payments but not record, reverse or void them.</p>
+        </div>
+      </div>
+
+      <div class="tabs st-pop" role="tablist" aria-label="Fees sections" style="margin-top:16px">
+        <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" data-tab="overview" aria-selected="false">Overview</button>
+        <button class="tab" role="tab" id="tab-transactions" aria-controls="panel-transactions" data-tab="transactions" aria-selected="false">Transactions</button>
+        <button class="tab" role="tab" id="tab-dues" aria-controls="panel-dues" data-tab="dues" aria-selected="true">Dues</button>
+        <button class="tab" role="tab" id="tab-invoices" aria-controls="panel-invoices" data-tab="invoices" aria-selected="false">Invoices</button>
+        <button class="tab" role="tab" id="tab-plans" aria-controls="panel-plans" data-tab="plans" aria-selected="false">Plans</button>
+      </div>
+
+      <!-- Overview -->
+      <section class="tab-panel st-pop" role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" data-panel="overview" hidden style="margin-top:18px">
+        <div class="card">
+          <div class="card-head"><h2 class="section">This month at a glance</h2><span class="pill pill-water">October 2026</span></div>
+          <div class="card-body">
+            <p style="font-size:13.5px">Use the tabs to work the money: <strong>Dues</strong> for invoices with a balance, <strong>Transactions</strong> for the payment ledger (including reversals), and <strong>Invoices</strong> for every document state.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+              <button type="button" class="btn btn-secondary" data-tab-link="dues">Open dues</button>
+              <button type="button" class="btn btn-quiet" data-tab-link="transactions">View transactions</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Transactions -->
+      <section class="tab-panel st-pop" role="tabpanel" id="panel-transactions" aria-labelledby="tab-transactions" data-panel="transactions" hidden style="margin-top:18px">
+        <div class="card">
+          <div class="card-head"><h2 class="section">Payment ledger</h2><span class="meta">13 Oct 2026 · newest first</span></div>
+          <div class="table-wrap desktop-only">
+            <table class="table">
+              <thead><tr><th scope="col">Received</th><th scope="col">Swimmer</th><th scope="col">Invoice</th><th scope="col">Method</th><th scope="col" class="num">Amount</th></tr></thead>
+              <tbody>
+                <tr><td>13 Oct · 4:10 pm</td><td>Rohan Patel</td><td>INV/2026-27/0009</td><td>UPI · 4218 77219</td><td class="num">₹12,000</td></tr>
+                <tr><td>13 Oct · 11:04 am</td><td>Kabir Menon</td><td>INV/2026-27/0010</td><td>Cash</td><td class="num">₹4,200</td></tr>
+                <tr><td>13 Oct · 9:12 am</td><td>Tara Ghosh</td><td>INV/2026-27/0011</td><td>Cash</td><td class="num">₹2,000</td></tr>
+                <tr><td>12 Oct · 5:40 pm</td><td>Ishita Rao</td><td>INV/2026-27/0002</td><td>Cash</td><td class="num">₹1,500</td></tr>
+                <tr><td>12 Oct · 5:42 pm</td><td>Ishita Rao · reversal</td><td>INV/2026-27/0002</td><td>Correction · “entered against wrong invoice”</td><td class="num" style="color:var(--late)">−₹500</td></tr>
+                <tr><td>11 Oct · 6:20 pm</td><td>Ayaan Shaikh</td><td>INV/2026-27/0006</td><td>Bank transfer · UTR 884120</td><td class="num">₹1,200</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="mobile-list mobile-only">
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Rohan Patel</span><span class="num" style="margin-left:auto;font-weight:600">₹12,000</span></div><div class="item-sub">13 Oct · 4:10 pm · UPI · Invoice INV/2026-27/0009</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Kabir Menon</span><span class="num" style="margin-left:auto;font-weight:600">₹4,200</span></div><div class="item-sub">13 Oct · 11:04 am · Cash · Invoice INV/2026-27/0010</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Tara Ghosh</span><span class="num" style="margin-left:auto;font-weight:600">₹2,000</span></div><div class="item-sub">13 Oct · 9:12 am · Cash · Invoice INV/2026-27/0011</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Ishita Rao</span><span class="num" style="margin-left:auto;font-weight:600">₹1,500</span></div><div class="item-sub">12 Oct · 5:40 pm · Cash · Invoice INV/2026-27/0002</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Ishita Rao · reversal</span><span class="num" style="margin-left:auto;font-weight:600;color:var(--late)">−₹500</span></div><div class="item-sub">12 Oct · 5:42 pm · Correction · “entered against wrong invoice”</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Ayaan Shaikh</span><span class="num" style="margin-left:auto;font-weight:600">₹1,200</span></div><div class="item-sub">11 Oct · 6:20 pm · Bank transfer · Invoice INV/2026-27/0006</div></li>
+          </ul>
+          <div class="card-body"><p class="quiet-note">A reversal corrects the ledger — it does not pay money out. Payouts are not part of this release.</p></div>
+        </div>
+      </section>
+
+      <!-- Dues -->
+      <section class="tab-panel st-pop" role="tabpanel" id="panel-dues" aria-labelledby="tab-dues" data-panel="dues" style="margin-top:18px">
+        <div class="card">
+          <div class="card-head"><h2 class="section">Invoices with a balance</h2><span class="meta">Overdue first, then due date</span></div>
+          <div class="table-wrap desktop-only">
+            <table class="table">
+              <thead><tr><th scope="col">Swimmer</th><th scope="col">Invoice</th><th scope="col">Due</th><th scope="col" class="num">Total</th><th scope="col" class="num">Balance</th><th scope="col">State</th><th scope="col" class="num"></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><a class="row-link" href="/member">Ishita Rao</a></td>
+                  <td>INV/2026-27/0002</td><td>05 Oct 2026</td><td class="num">₹4,800</td><td class="num"><strong>₹4,200</strong></td>
+                  <td><span class="pill pill-late">Overdue</span> <span class="pill pill-neutral">Partial</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0002" aria-expanded="false">Open</button></td>
+                </tr>
+                <tr>
+                  <td><a class="row-link" href="/member">Meera Nair</a></td>
+                  <td>INV/2026-27/0003</td><td>07 Oct 2026</td><td class="num">₹3,600</td><td class="num"><strong>₹3,600</strong></td>
+                  <td><span class="pill pill-late">Overdue</span> <span class="pill pill-neutral">Issued</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0003" aria-expanded="false">Open</button></td>
+                </tr>
+                <tr>
+                  <td><a class="row-link" href="/member">Vivaan Joshi</a></td>
+                  <td>INV/2026-27/0004</td><td>08 Oct 2026</td><td class="num">₹3,000</td><td class="num"><strong>₹3,000</strong></td>
+                  <td><span class="pill pill-late">Overdue</span> <span class="pill pill-neutral">Issued</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0004" aria-expanded="false">Open</button></td>
+                </tr>
+                <tr>
+                  <td><a class="row-link" href="/member">Aaradhya Iyer</a></td>
+                  <td>INV/2026-27/0001</td><td>10 Oct 2026</td><td class="num">₹2,800</td><td class="num"><strong>₹1,800</strong></td>
+                  <td><span class="pill pill-late">Overdue</span> <span class="pill pill-neutral">Partial</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0001" aria-expanded="true">Close</button></td>
+                </tr>
+                <tr>
+                  <td><a class="row-link" href="/member">Rohan Patel</a></td>
+                  <td>INV/2026-27/0005</td><td>05 Nov 2026</td><td class="num">₹3,000</td><td class="num"><strong>₹600</strong></td>
+                  <td><span class="pill pill-neutral">Partial</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0005" aria-expanded="false">Open</button></td>
+                </tr>
+                <tr>
+                  <td><a class="row-link" href="/member">Ayaan Shaikh</a></td>
+                  <td>INV/2026-27/0006</td><td>15 Nov 2026</td><td class="num">₹16,000</td><td class="num"><strong>₹14,800</strong></td>
+                  <td><span class="pill pill-neutral">Partial</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0006" aria-expanded="false">Open</button></td>
+                </tr>
+                <tr>
+                  <td><a class="row-link" href="/member">Tara Ghosh</a></td>
+                  <td>INV/2026-27/0008</td><td>20 Nov 2026</td><td class="num">₹14,800</td><td class="num"><strong>₹14,800</strong></td>
+                  <td><span class="pill pill-neutral">Issued</span></td>
+                  <td class="num"><button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0008" aria-expanded="false">Open</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <ul class="mobile-list mobile-only">
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Ishita Rao</span><span class="num" style="margin-left:auto;font-weight:600">₹4,200</span></div>
+              <div class="item-sub">INV/2026-27/0002 · due 05 Oct · total ₹4,800 <span class="pill pill-late">Overdue</span></div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0002" aria-expanded="false" style="margin-top:8px">Open</button>
+            </li>
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Meera Nair</span><span class="num" style="margin-left:auto;font-weight:600">₹3,600</span></div>
+              <div class="item-sub">INV/2026-27/0003 · due 07 Oct <span class="pill pill-late">Overdue</span></div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0003" aria-expanded="false" style="margin-top:8px">Open</button>
+            </li>
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Vivaan Joshi</span><span class="num" style="margin-left:auto;font-weight:600">₹3,000</span></div>
+              <div class="item-sub">INV/2026-27/0004 · due 08 Oct <span class="pill pill-late">Overdue</span></div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0004" aria-expanded="false" style="margin-top:8px">Open</button>
+            </li>
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Aaradhya Iyer</span><span class="num" style="margin-left:auto;font-weight:600">₹1,800</span></div>
+              <div class="item-sub">INV/2026-27/0001 · due 10 Oct · total ₹2,800 <span class="pill pill-late">Overdue</span></div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0001" aria-expanded="true" style="margin-top:8px">Close</button>
+            </li>
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Rohan Patel</span><span class="num" style="margin-left:auto;font-weight:600">₹600</span></div>
+              <div class="item-sub">INV/2026-27/0005 · due 05 Nov · total ₹3,000</div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0005" aria-expanded="false" style="margin-top:8px">Open</button>
+            </li>
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Ayaan Shaikh</span><span class="num" style="margin-left:auto;font-weight:600">₹14,800</span></div>
+              <div class="item-sub">INV/2026-27/0006 · due 15 Nov · total ₹16,000</div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0006" aria-expanded="false" style="margin-top:8px">Open</button>
+            </li>
+            <li style="padding:12px 16px">
+              <div class="item-top"><span class="item-name">Tara Ghosh</span><span class="num" style="margin-left:auto;font-weight:600">₹14,800</span></div>
+              <div class="item-sub">INV/2026-27/0008 · due 20 Nov · total ₹14,800</div>
+              <button type="button" class="btn btn-secondary btn-sm" data-invoice-toggle="i-0008" aria-expanded="false" style="margin-top:8px">Open</button>
+            </li>
+          </ul>
+
+          <!-- expanded invoice: partial (default selected) -->
+          <div class="card-body" style="padding-top:0">
+            <div class="invoice-panel" data-invoice-panel="i-0001">
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0001</span>
+                <span style="margin-left:auto;display:flex;gap:6px">
+                  <span class="pill pill-neutral">Partial</span>
+                  <span class="pill pill-late">Overdue</span>
+                </span>
+              </div>
+              <p class="quiet-note">Issued 01 Oct 2026 · due 10 Oct 2026 · Worli Main · Aaradhya Iyer</p>
+              <table class="invoice-lines" style="margin-top:10px">
+                <thead><tr><th scope="col">Description</th><th scope="col" class="num sac">SAC</th><th scope="col" class="num">Amount</th><th scope="col" class="num">GST</th></tr></thead>
+                <tbody>
+                  <tr><td>Monthly Swim — October 2026</td><td class="num sac">999723</td><td class="num">₹2,372.88</td><td class="num">CGST ₹213.56 + SGST ₹213.56</td></tr>
+                </tbody>
+              </table>
+              <p class="invoice-totals">Taxable ₹2,372.88 + GST ₹427.12 = <strong>₹2,800.00</strong><br>Paid ₹1,000.00 · outstanding <strong>₹1,800.00</strong></p>
+
+              <p class="eyebrow" style="margin-top:12px">Recorded payments</p>
+              <div class="payment-row" style="margin-top:6px">
+                <span class="grow">₹1,000 · Cash · 05 Oct 2026 · received by Rhea D'Souza</span>
+                <button type="button" class="btn btn-secondary btn-sm" data-toast="Preview only — the receipt is not opened.">Receipt</button>
+                <button type="button" class="btn btn-destructive btn-sm st-write" data-toast="Preview only — no reversal was recorded. A reversal corrects the ledger and does not pay money out.">Reverse</button>
+              </div>
+              <p class="action-note">Reversing corrects the ledger entry; it never pays money out. Reversals stay separate from voiding the invoice.</p>
+
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <p style="font-size:12.5px;font-weight:500;color:var(--ink-2)">Record a payment</p>
+                <div class="field-grid two" style="margin-top:8px">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0001-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0001-amount" inputmode="decimal" value="1800.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0001-method">Method</label>
+                    <select class="input" id="pay-0001-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+
+              <p class="action-note">A payment has been recorded on this invoice, so voiding is unavailable — reverse the payment first if the document itself is wrong.</p>
+            </div>
+
+            <!-- expanded invoice: issued, void-eligible -->
+            <div class="invoice-panel" data-invoice-panel="i-0004" hidden>
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0004</span>
+                <span style="margin-left:auto;display:flex;gap:6px">
+                  <span class="pill pill-neutral">Issued</span>
+                  <span class="pill pill-late">Overdue</span>
+                </span>
+              </div>
+              <p class="quiet-note">Issued 03 Oct 2026 · due 08 Oct 2026 · Worli Main · Vivaan Joshi</p>
+              <table class="invoice-lines" style="margin-top:10px">
+                <thead><tr><th scope="col">Description</th><th scope="col" class="num sac">SAC</th><th scope="col" class="num">Amount</th><th scope="col" class="num">GST</th></tr></thead>
+                <tbody>
+                  <tr><td>Term — Sep to Dec 2026</td><td class="num sac">999723</td><td class="num">₹2,542.37</td><td class="num">CGST ₹228.81 + SGST ₹228.82</td></tr>
+                </tbody>
+              </table>
+              <p class="invoice-totals">Taxable ₹2,542.37 + GST ₹457.63 = <strong>₹3,000.00</strong><br>Paid ₹0.00 · outstanding <strong>₹3,000.00</strong></p>
+
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <p style="font-size:12.5px;font-weight:500;color:var(--ink-2)">Record a payment</p>
+                <div class="field-grid two" style="margin-top:8px">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0004-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0004-amount" inputmode="decimal" value="3000.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0004-method">Method</label>
+                    <select class="input" id="pay-0004-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+
+              <div class="st-write" style="margin-top:12px">
+                <button type="button" class="btn btn-destructive btn-sm" data-void-open>Void invoice</button>
+              </div>
+              <div class="confirm-panel" data-void-confirm hidden>
+                <p><strong>Void INV/2026-27/0004?</strong> The invoice will no longer be collectible or appear in dues. No payment has been recorded against it. This cannot be undone.</p>
+                <div class="actions">
+                  <button type="button" class="btn btn-secondary btn-sm" data-void-cancel>Keep invoice</button>
+                  <button type="button" class="btn btn-destructive btn-sm" data-toast="Preview only — no invoice was voided.">Void invoice</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="invoice-panel" data-invoice-panel="i-0002" hidden>
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0002</span>
+                <span style="margin-left:auto;display:flex;gap:6px"><span class="pill pill-neutral">Partial</span><span class="pill pill-late">Overdue</span></span>
+              </div>
+              <p class="quiet-note">Issued 01 Oct 2026 · due 05 Oct 2026 · Worli Main · Ishita Rao</p>
+              <p class="invoice-totals">Taxable ₹4,067.80 + GST ₹732.20 = <strong>₹4,800.00</strong><br>Paid ₹1,500.00 · reversed ₹500.00 · outstanding <strong>₹4,200.00</strong></p>
+              <div class="payment-row" style="margin-top:8px">
+                <span class="grow">₹1,500 · Cash · 12 Oct 2026 · received by Rhea D'Souza <span class="quiet-note">· ₹500 reversed, ledger correction</span></span>
+                <button type="button" class="btn btn-secondary btn-sm" data-toast="Preview only — the receipt is not opened.">Receipt</button>
+              </div>
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <div class="field-grid two">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0002-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0002-amount" inputmode="decimal" value="4200.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0002-method">Method</label>
+                    <select class="input" id="pay-0002-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+            </div>
+
+            <div class="invoice-panel" data-invoice-panel="i-0003" hidden>
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0003</span>
+                <span style="margin-left:auto;display:flex;gap:6px"><span class="pill pill-neutral">Issued</span><span class="pill pill-late">Overdue</span></span>
+              </div>
+              <p class="quiet-note">Issued 02 Oct 2026 · due 07 Oct 2026 · Worli Main · Meera Nair</p>
+              <p class="invoice-totals">Taxable ₹3,050.85 + GST ₹549.15 = <strong>₹3,600.00</strong><br>Paid ₹0.00 · outstanding <strong>₹3,600.00</strong></p>
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <div class="field-grid two">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0003-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0003-amount" inputmode="decimal" value="3600.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0003-method">Method</label>
+                    <select class="input" id="pay-0003-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+              <div class="st-write" style="margin-top:12px">
+                <button type="button" class="btn btn-destructive btn-sm" data-toast="Preview only — the void confirmation pattern is shown on INV/2026-27/0004.">Void invoice</button>
+              </div>
+            </div>
+
+            <div class="invoice-panel" data-invoice-panel="i-0005" hidden>
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0005</span>
+                <span style="margin-left:auto;display:flex;gap:6px"><span class="pill pill-neutral">Partial</span></span>
+              </div>
+              <p class="quiet-note">Issued 04 Oct 2026 · due 05 Nov 2026 · Worli Main · Rohan Patel</p>
+              <p class="invoice-totals">Taxable ₹2,542.37 + GST ₹457.63 = <strong>₹3,000.00</strong><br>Paid ₹2,400.00 · outstanding <strong>₹600.00</strong></p>
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <div class="field-grid two">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0005-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0005-amount" inputmode="decimal" value="600.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0005-method">Method</label>
+                    <select class="input" id="pay-0005-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+            </div>
+
+            <div class="invoice-panel" data-invoice-panel="i-0006" hidden>
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0006</span>
+                <span style="margin-left:auto;display:flex;gap:6px"><span class="pill pill-neutral">Partial</span></span>
+              </div>
+              <p class="quiet-note">Issued 06 Oct 2026 · due 15 Nov 2026 · Worli Main · Ayaan Shaikh</p>
+              <p class="invoice-totals">Taxable ₹13,559.32 + GST ₹2,440.68 = <strong>₹16,000.00</strong><br>Paid ₹1,200.00 · outstanding <strong>₹14,800.00</strong></p>
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <div class="field-grid two">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0006-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0006-amount" inputmode="decimal" value="14800.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0006-method">Method</label>
+                    <select class="input" id="pay-0006-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+            </div>
+
+            <div class="invoice-panel" data-invoice-panel="i-0008" hidden>
+              <div class="item-top" style="margin-bottom:6px">
+                <span style="font-size:12px;font-weight:500;color:var(--ink-2)">Tax invoice · INV/2026-27/0008</span>
+                <span style="margin-left:auto;display:flex;gap:6px"><span class="pill pill-neutral">Issued</span></span>
+              </div>
+              <p class="quiet-note">Issued 12 Oct 2026 · due 20 Nov 2026 · Worli Main · Tara Ghosh</p>
+              <p class="invoice-totals">Taxable ₹12,542.37 + GST ₹2,257.63 = <strong>₹14,800.00</strong><br>Paid ₹0.00 · outstanding <strong>₹14,800.00</strong></p>
+              <div class="st-write" style="background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-ctl);padding:12px;margin-top:12px">
+                <div class="field-grid two">
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0008-amount">Amount (₹)</label>
+                    <input class="input" id="pay-0008-amount" inputmode="decimal" value="14800.00">
+                  </div>
+                  <div class="field" style="margin-bottom:8px">
+                    <label class="field-label" for="pay-0008-method">Method</label>
+                    <select class="input" id="pay-0008-method"><option>Cash</option><option>UPI</option><option>Bank transfer</option></select>
+                  </div>
+                </div>
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no payment was recorded.">Record payment</button>
+              </div>
+              <div class="st-write" style="margin-top:12px">
+                <button type="button" class="btn btn-destructive btn-sm" data-toast="Preview only — the void confirmation pattern is shown on INV/2026-27/0004.">Void invoice</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Invoices -->
+      <section class="tab-panel st-pop" role="tabpanel" id="panel-invoices" aria-labelledby="tab-invoices" data-panel="invoices" hidden style="margin-top:18px">
+        <div class="card">
+          <div class="card-head"><h2 class="section">All invoices</h2><span class="meta">Newest first</span></div>
+          <div class="table-wrap desktop-only">
+            <table class="table">
+              <thead><tr><th scope="col">Invoice</th><th scope="col">Swimmer</th><th scope="col">Issued</th><th scope="col" class="num">Total</th><th scope="col" class="num">Paid</th><th scope="col" class="num">Balance</th><th scope="col">State</th><th scope="col" class="num"></th></tr></thead>
+              <tbody>
+                <tr><td>INV/2026-27/0013</td><td>Rohan Patel</td><td>13 Oct 2026</td><td class="num">₹12,000</td><td class="num">₹0</td><td class="num">—</td><td><span class="pill pill-void">Void</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — void documents keep their audit trail in production.">Open</button></td></tr>
+                <tr><td>INV/2026-27/0011</td><td>Tara Ghosh</td><td>13 Oct 2026</td><td class="num">₹2,000</td><td class="num">₹2,000</td><td class="num">₹0</td><td><span class="pill pill-good">Paid</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — paid documents are viewable in production.">Open</button></td></tr>
+                <tr><td>INV/2026-27/0010</td><td>Kabir Menon</td><td>13 Oct 2026</td><td class="num">₹4,200</td><td class="num">₹4,200</td><td class="num">₹0</td><td><span class="pill pill-good">Paid</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — paid documents are viewable in production.">Open</button></td></tr>
+                <tr><td>INV/2026-27/0009</td><td>Rohan Patel</td><td>13 Oct 2026</td><td class="num">₹12,000</td><td class="num">₹12,000</td><td class="num">₹0</td><td><span class="pill pill-good">Paid</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — paid documents are viewable in production.">Open</button></td></tr>
+                <tr><td>INV/2026-27/0008</td><td>Tara Ghosh</td><td>12 Oct 2026</td><td class="num">₹14,800</td><td class="num">₹0</td><td class="num">₹14,800</td><td><span class="pill pill-neutral">Issued</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-open-invoice="i-0008">Open</button></td></tr>
+                <tr><td>INV/2026-27/0007</td><td>Aaradhya Iyer</td><td>10 Oct 2026</td><td class="num">₹1,000</td><td class="num">₹1,000</td><td class="num">₹0</td><td><span class="pill pill-good">Paid</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — paid documents are viewable in production.">Open</button></td></tr>
+                <tr><td>INV/2026-27/0006</td><td>Ayaan Shaikh</td><td>06 Oct 2026</td><td class="num">₹16,000</td><td class="num">₹1,200</td><td class="num">₹14,800</td><td><span class="pill pill-neutral">Partial</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-open-invoice="i-0006">Open</button></td></tr>
+                <tr><td>INV/2026-27/0004</td><td>Vivaan Joshi</td><td>03 Oct 2026</td><td class="num">₹3,000</td><td class="num">₹0</td><td class="num">₹3,000</td><td><span class="pill pill-late">Overdue</span> <span class="pill pill-neutral">Issued</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-open-invoice="i-0004">Open</button></td></tr>
+                <tr><td>INV/2026-27/0001</td><td>Aaradhya Iyer</td><td>01 Oct 2026</td><td class="num">₹2,800</td><td class="num">₹1,000</td><td class="num">₹1,800</td><td><span class="pill pill-late">Overdue</span> <span class="pill pill-neutral">Partial</span></td><td class="num"><button type="button" class="btn btn-quiet btn-sm" data-open-invoice="i-0001">Open</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card-body"><p class="quiet-note">Void documents are labelled “Void”, never “Settled” — a zero balance on a void invoice is not money received.</p></div>
+        </div>
+      </section>
+
+      <!-- Plans -->
+      <section class="tab-panel st-pop" role="tabpanel" id="panel-plans" aria-labelledby="tab-plans" data-panel="plans" hidden style="margin-top:18px">
+        <div class="card">
+          <div class="card-head">
+            <h2 class="section">Active plans</h2>
+            <button type="button" class="btn btn-secondary btn-sm" data-toast="Preview only — plan management lives in Settings → Plans.">Manage plans</button>
+          </div>
+          <div class="table-wrap desktop-only">
+            <table class="table">
+              <thead><tr><th scope="col">Plan</th><th scope="col">Kind</th><th scope="col">Duration / sessions</th><th scope="col" class="num">Price (GST-exclusive)</th><th scope="col">Activity</th></tr></thead>
+              <tbody>
+                <tr><td>Monthly Swim</td><td>Recurring</td><td>1 month</td><td class="num">₹3,000</td><td>All access</td></tr>
+                <tr><td>Term — Sep to Dec</td><td>Term</td><td>3 months</td><td class="num">₹9,000</td><td>All access</td></tr>
+                <tr><td>12-session pack</td><td>Class pack</td><td>12 sessions</td><td class="num">₹4,800</td><td>Learn to swim</td></tr>
+                <tr><td>Trial class</td><td>One-time</td><td>1 session</td><td class="num">₹300</td><td>Learn to swim</td></tr>
+                <tr><td>Drop-in</td><td>Drop-in</td><td>1 session</td><td class="num">₹400</td><td>All access</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="mobile-list mobile-only">
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Monthly Swim</span><span class="num" style="margin-left:auto;font-weight:600">₹3,000</span></div><div class="item-sub">Recurring · 1 month · all access</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Term — Sep to Dec</span><span class="num" style="margin-left:auto;font-weight:600">₹9,000</span></div><div class="item-sub">Term · 3 months · all access</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">12-session pack</span><span class="num" style="margin-left:auto;font-weight:600">₹4,800</span></div><div class="item-sub">Class pack · 12 sessions · learn to swim</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Trial class</span><span class="num" style="margin-left:auto;font-weight:600">₹300</span></div><div class="item-sub">One-time · 1 session · learn to swim</div></li>
+            <li style="padding:12px 16px"><div class="item-top"><span class="item-name">Drop-in</span><span class="num" style="margin-left:auto;font-weight:600">₹400</span></div><div class="item-sub">Drop-in · 1 session · all access</div></li>
+          </ul>
+          <div class="card-body"><p class="quiet-note">Prices exclude GST. Editing plans stays in Settings → Plans; this tab is the read-only hub view.</p></div>
+        </div>
+      </section>
+
+      <!-- empty dues -->
+      <div class="card st-empty">
+        <div class="empty-state">
+          <h3>Nothing outstanding</h3>
+          <p>Every issued invoice is settled.</p>
+        </div>
+      </div>
+
+      <!-- loading -->
+      <div class="card st-loading" style="margin-top:18px">
+        <div class="card-body" aria-hidden="true">
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+        </div>
+      </div>
+
+      <!-- failed -->
+      <div class="st-failed" style="margin-top:18px">
+        <div class="failed-box">
+          <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+          <div class="fb-text">
+            <p class="fb-title">Could not load this list</p>
+            <p class="fb-detail">No rows are shown — this is a failed read, not an empty ledger.</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav" id="shell-bottom-nav" aria-label="Primary"></nav>
+</body>
+</html>

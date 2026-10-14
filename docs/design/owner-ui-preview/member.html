@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Aaradhya Iyer — Aqua owner UI preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+</head>
+<body data-page="member" data-states="populated,loading,failed,limited">
+<div class="preview-bar" id="preview-bar"></div>
+<div class="shell">
+  <aside class="sidebar" id="shell-sidebar" aria-label="Owner navigation"></aside>
+  <div class="shell-main">
+    <header class="topbar" id="shell-topbar"></header>
+    <header class="mobile-head" id="shell-mobile-head"></header>
+
+    <main class="page" data-tabs-scope>
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="/members">Swimmers</a>
+        <img src="/icon.svg?name=chevron-right&size=14&color=%235B6F6B" alt="" aria-hidden="true">
+        <span aria-current="page">Aaradhya Iyer</span>
+      </nav>
+
+      <div class="record-head st-pop">
+        <img class="avatar" src="/avatar.svg?seed=member-aws-002&size=56" alt="" width="56" height="56" aria-hidden="true">
+        <div class="who">
+          <h1>Aaradhya Iyer</h1>
+          <div class="record-pills">
+            <span class="pill pill-good">Active participation</span>
+            <span class="pill pill-neutral">AWS-002</span>
+            <span class="pill pill-neutral">Worli Main</span>
+            <span class="pill pill-neutral">Minor · DOB 23 Sep 2016</span>
+          </div>
+          <p class="meta" style="margin-top:6px">Joined 10 Oct 2026</p>
+        </div>
+        <div class="record-actions st-write">
+          <a class="btn btn-secondary" href="/member-edit">Edit</a>
+          <button type="button" class="btn btn-quiet" data-toast="Preview only — the printable identity card is shown on request.">Show identity card</button>
+        </div>
+      </div>
+
+      <div class="failed-box st-limited" style="margin-top:14px">
+        <img src="/icon.svg?name=info&size=18&color=%233C534F" alt="" aria-hidden="true">
+        <div class="fb-text">
+          <p class="fb-title">Read-only access</p>
+          <p class="fb-detail">You can view this swimmer but not edit the record. Ask an owner if something needs changing.</p>
+        </div>
+      </div>
+
+      <div class="st-loading" aria-hidden="true" style="margin-top:14px">
+        <div class="sk sk-title" style="width:30%"></div>
+        <div class="sk sk-line" style="width:55%"></div>
+        <div class="card" style="margin-top:16px"><div class="card-body"><div class="sk" style="height:140px"></div></div></div>
+      </div>
+
+      <div class="st-failed" style="margin-top:14px">
+        <div class="failed-box">
+          <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+          <div class="fb-text">
+            <p class="fb-title">Could not load this swimmer</p>
+            <p class="fb-detail">The record is unavailable — nothing is shown rather than a partial profile.</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+        </div>
+      </div>
+
+      <div class="st-pop">
+        <div class="tabs" role="tablist" aria-label="Swimmer record" style="margin-top:16px">
+          <button class="tab" role="tab" id="tab-overview" aria-controls="panel-overview" data-tab="overview" aria-selected="true">Overview</button>
+          <button class="tab" role="tab" id="tab-payments" aria-controls="panel-payments" data-tab="payments" aria-selected="false">Payments</button>
+          <button class="tab" role="tab" id="tab-progress" aria-controls="panel-progress" data-tab="progress" aria-selected="false">Progress</button>
+          <button class="tab" role="tab" id="tab-notes" aria-controls="panel-notes" data-tab="notes" aria-selected="false">Notes</button>
+          <button class="tab" role="tab" id="tab-documents" aria-controls="panel-documents" data-tab="documents" aria-selected="false">Documents</button>
+        </div>
+
+        <!-- Overview -->
+        <section class="tab-panel" role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" data-panel="overview" style="margin-top:18px">
+          <div class="rail-grid">
+            <div class="stack-lg">
+              <article class="card">
+                <div class="card-head">
+                  <h2 class="section">Participation</h2>
+                  <span class="pill pill-good">Active</span>
+                </div>
+                <div class="card-body">
+                  <ul class="def-list">
+                    <li><span class="dt">Current batch</span><span class="dd">Morning Squad · Mon, Wed, Fri 07:00<br><span class="quiet">Coach Aanya Rao · <a class="link" style="min-height:0" href="#" data-toast="Programs is not part of this preview stage.">View batch</a></span></span></li>
+                    <li><span class="dt">Attending since</span><span class="dd">10 Oct 2026</span></li>
+                    <li><span class="dt">Recent attendance</span><span class="dd">91% · 20 of 22 sessions <span class="quiet">(last 30 days)</span></span></li>
+                  </ul>
+                  <div class="att-tiles" aria-label="Last seven sessions: present, present, absent, present, late, present, present">
+                    <span class="att-tile good" title="Present"></span>
+                    <span class="att-tile good" title="Present"></span>
+                    <span class="att-tile late" title="Absent"></span>
+                    <span class="att-tile good" title="Present"></span>
+                    <span class="att-tile warn" title="Late"></span>
+                    <span class="att-tile good" title="Present"></span>
+                    <span class="att-tile good" title="Present"></span>
+                  </div>
+                  <p class="quiet-note" style="margin-top:8px">Last 7 sessions · green present, amber late, red absent</p>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="card-head">
+                  <h2 class="section">Plan &amp; billing</h2>
+                  <span class="pill pill-good">Active</span>
+                </div>
+                <div class="card-body">
+                  <ul class="def-list">
+                    <li><span class="dt">Current plan</span><span class="dd">Monthly Swim · ₹3,000 per month</span></li>
+                    <li><span class="dt">Paid through</span><span class="dd">9 Nov 2026 <span class="quiet">(started 10 Oct 2026)</span></span></li>
+                    <li><span class="dt">Last invoice</span><span class="dd">INV/2026-27/0001 · ₹1,800 outstanding <span class="pill pill-late">Overdue</span></span></li>
+                  </ul>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                    <button type="button" class="btn btn-secondary" data-tab-link="payments">View payments</button>
+                    <a class="btn btn-quiet" href="/fees">Open in Fees</a>
+                  </div>
+                  <p class="quiet-note" style="margin-top:10px">Participation and paid-plan status are separate: a paused plan does not stop batch enrolment, and vice versa.</p>
+                </div>
+              </article>
+            </div>
+
+            <div class="stack">
+              <article class="card">
+                <div class="card-head"><h2 class="section">Contacts &amp; guardians</h2></div>
+                <div class="card-body">
+                  <ul class="def-list stack-rows">
+                    <li><span class="dt">Primary guardian</span><span class="dd">Rahul Iyer · father<br><span class="quiet">+91 98200 01234</span></span></li>
+                    <li><span class="dt">Emergency contact</span><span class="dd">Sunita Iyer · mother<br><span class="quiet">+91 98200 01235</span></span></li>
+                    <li><span class="dt">Swimmer phone</span><span class="dd">+91 98200 04411</span></li>
+                  </ul>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="card-head"><h2 class="section">Consent</h2></div>
+                <div class="card-body">
+                  <ul class="def-list stack-rows">
+                    <li><span class="dt">Processing consent</span><span class="dd"><span class="pill pill-good">Recorded</span> <span class="quiet" style="display:block;margin-top:4px">10 Oct 2026 · required for the academy to hold this child's data</span></span></li>
+                    <li><span class="dt">Communications</span><span class="dd"><span class="pill pill-neutral">Not given</span> <span class="quiet" style="display:block;margin-top:4px">No WhatsApp or email updates to the guardian</span></span></li>
+                  </ul>
+                </div>
+              </article>
+
+              <article class="card">
+                <div class="card-head"><h2 class="section">Notification destinations</h2></div>
+                <div class="card-body">
+                  <p style="font-size:13.5px">WhatsApp · Rahul Iyer (guardian) <span class="quiet-note">· +91 98200 01234</span></p>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <article class="card" style="margin-top:20px">
+            <div class="card-head"><h2 class="section">More</h2></div>
+            <div class="card-body">
+              <ul class="def-list">
+                <li><span class="dt">Makeup credits</span><span class="dd">2 remaining <span class="quiet">· expire 9 Nov 2026</span></span></li>
+                <li><span class="dt">Facility opt-ins</span><span class="dd">Worli Main — main pool</span></li>
+                <li><span class="dt">Parent link</span><span class="dd">Shared with Rahul Iyer · <button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — no link was copied.">Copy link</button></span></li>
+              </ul>
+            </div>
+          </article>
+        </section>
+
+        <!-- Payments -->
+        <section class="tab-panel" role="tabpanel" id="panel-payments" aria-labelledby="tab-payments" data-panel="payments" hidden style="margin-top:18px">
+          <div class="card">
+            <div class="card-head">
+              <h2 class="section">Invoices</h2>
+              <a class="link" href="/fees">Open in Fees →</a>
+            </div>
+            <div class="card-body">
+              <ul class="mobile-list">
+                <li style="padding:12px 0">
+                  <div class="item-top">
+                    <span class="item-name">INV/2026-27/0001</span>
+                    <span class="pill pill-late">Overdue</span>
+                  </div>
+                  <div class="item-sub">Monthly Swim · October 2026 · issued 1 Oct · due 10 Oct</div>
+                  <div class="item-sub num" style="margin-top:4px">₹2,800 total · ₹1,000 paid · <strong>₹1,800 balance</strong></div>
+                </li>
+                <li style="padding:12px 0">
+                  <div class="item-top">
+                    <span class="item-name">INV/2026-27/0007</span>
+                    <span class="pill pill-good">Paid</span>
+                  </div>
+                  <div class="item-sub">Registration fee · issued 10 Oct · paid 10 Oct</div>
+                  <div class="item-sub num" style="margin-top:4px">₹1,000 total · ₹1,000 paid · ₹0 balance</div>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- Progress -->
+        <section class="tab-panel" role="tabpanel" id="panel-progress" aria-labelledby="tab-progress" data-panel="progress" hidden style="margin-top:18px">
+          <div class="card">
+            <div class="card-head">
+              <h2 class="section">Swimming — Beginner framework</h2>
+              <span class="meta">Read-only assessment</span>
+            </div>
+            <div class="card-body">
+              <div class="skill-row">
+                <span class="skill-name">Freestyle</span>
+                <span class="pips" aria-label="Level 3 of 4"><i class="f"></i><i class="f"></i><i class="f"></i><i></i></span>
+                <span class="skill-meta">Level 3 of 4 · assessed 28 Sep</span>
+              </div>
+              <div class="skill-row">
+                <span class="skill-name">Backstroke</span>
+                <span class="pips" aria-label="Level 2 of 4"><i class="f"></i><i class="f"></i><i></i><i></i></span>
+                <span class="skill-meta">Level 2 of 4 · assessed 12 Sep</span>
+              </div>
+              <div class="skill-row">
+                <span class="skill-name">Breathing</span>
+                <span class="pips" aria-label="Level 4 of 4"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></span>
+                <span class="skill-meta">Level 4 of 4 · assessed 28 Sep</span>
+              </div>
+              <p class="quiet-note" style="margin-top:12px">Assessments are recorded by coaches for their batches. Owners read progress; only the designated curriculum lead maintains the framework.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Notes -->
+        <section class="tab-panel" role="tabpanel" id="panel-notes" aria-labelledby="tab-notes" data-panel="notes" hidden style="margin-top:18px">
+          <div class="card">
+            <div class="card-head">
+              <h2 class="section">Internal notes</h2>
+              <span class="pill pill-neutral">Staff internal · never shown on the parent link</span>
+            </div>
+            <div class="card-body">
+              <div class="field">
+                <label class="field-label" for="note-draft">Add a note</label>
+                <textarea class="input" id="note-draft" placeholder="Something the coaching team should know…"></textarea>
+              </div>
+              <div class="form-actions" style="padding-top:0">
+                <button type="button" class="btn btn-primary" data-toast="Preview only — no note was saved.">Add note</button>
+              </div>
+              <hr class="divider">
+              <div class="note-item">
+                <p style="font-size:13.5px">Needs a smaller kickboard next session.</p>
+                <p class="quiet-note" style="margin-top:4px">Aanya Rao · 08 Oct 2026</p>
+              </div>
+              <div class="note-item">
+                <p style="font-size:13.5px">Guardian asked how makeup credits work — explained the 30-day expiry.</p>
+                <p class="quiet-note" style="margin-top:4px">Rhea D'Souza · 05 Oct 2026</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Documents -->
+        <section class="tab-panel" role="tabpanel" id="panel-documents" aria-labelledby="tab-documents" data-panel="documents" hidden style="margin-top:18px">
+          <div class="card">
+            <div class="empty-state">
+              <h3>Document uploads aren't available yet</h3>
+              <p>Medical notes and other record details live in the Overview and Edit screens.</p>
+              <button type="button" class="btn btn-secondary" data-tab-link="overview">Go to Overview</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav" id="shell-bottom-nav" aria-label="Primary"></nav>
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Owner home — Aqua owner UI preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+</head>
+<body data-page="home" data-states="populated,empty,loading,failed">
+<div class="preview-bar" id="preview-bar"></div>
+<div class="shell">
+  <aside class="sidebar" id="shell-sidebar" aria-label="Owner navigation"></aside>
+  <div class="shell-main">
+    <header class="topbar" id="shell-topbar"></header>
+    <header class="mobile-head" id="shell-mobile-head"></header>
+
+    <main class="page">
+      <div class="page-head">
+        <div>
+          <h1>Today</h1>
+          <p class="meta">Tuesday 13 Oct 2026 · Worli Main</p>
+        </div>
+      </div>
+
+      <!-- upper: money + decisions -->
+      <div class="upper-grid" style="margin-top:18px">
+
+        <section aria-label="Money today" class="stack">
+          <article class="money-panel st-pop">
+            <p class="k">Payments recorded today</p>
+            <p class="amount">₹18,200</p>
+            <p class="amount-note">3 payments recorded</p>
+            <div class="money-subs">
+              <a class="money-sub" href="/fees?tab=dues">
+                <span class="k">Outstanding now</span>
+                <span class="v">₹42,800</span>
+                <span class="s">7 invoices with a balance</span>
+              </a>
+              <a class="money-sub overdue" href="/fees?tab=dues">
+                <span class="k">Overdue now</span>
+                <span class="v">₹12,600</span>
+                <span class="s">4 past the due date</span>
+              </a>
+            </div>
+          </article>
+
+          <article class="money-panel st-empty" style="padding:28px 20px">
+            <p class="k">Payments recorded today</p>
+            <p class="amount">₹0</p>
+            <p class="amount-note">No payments recorded today yet</p>
+            <div class="money-subs">
+              <a class="money-sub" href="/fees?tab=dues">
+                <span class="k">Outstanding now</span>
+                <span class="v">₹0</span>
+                <span class="s">Nothing outstanding</span>
+              </a>
+              <div class="money-sub">
+                <span class="k">Overdue now</span>
+                <span class="v">₹0</span>
+                <span class="s">Nothing past due</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="money-panel st-loading" style="padding:20px">
+            <div class="sk" style="height:12px;width:38%;background:rgba(255,255,255,.2)"></div>
+            <div class="sk" style="height:34px;width:46%;margin-top:10px;background:rgba(255,255,255,.2)"></div>
+            <div class="sk" style="height:12px;width:30%;margin-top:10px;background:rgba(255,255,255,.2)"></div>
+            <div class="money-subs">
+              <div class="sk" style="height:74px;background:rgba(255,255,255,.14)"></div>
+              <div class="sk" style="height:74px;background:rgba(255,255,255,.14)"></div>
+            </div>
+          </article>
+
+          <div class="failed-box st-failed">
+            <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+            <div class="fb-text">
+              <p class="fb-title">Could not load today's figures</p>
+              <p class="fb-detail">The amounts are unavailable — this is not a zero balance.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+          </div>
+        </section>
+
+        <section aria-labelledby="attention-title" class="card">
+          <div class="card-head">
+            <h2 class="section" id="attention-title">Needs you today</h2>
+            <span class="pill pill-warn st-pop">3 things</span>
+          </div>
+          <div class="card-body">
+            <ul class="attention st-pop">
+              <li>
+                <a class="att-row" href="/fees?tab=dues">
+                  <span class="att-ico"><img src="/icon.svg?name=triangle-alert&size=17&color=%238F5400" alt="" aria-hidden="true"></span>
+                  <span>
+                    <span class="att-title">4 invoices overdue</span>
+                    <span class="att-detail" style="display:block">₹12,600 past the due date · oldest 18 days</span>
+                  </span>
+                  <span class="att-go"><img src="/icon.svg?name=chevron-right&size=16&color=%235B6F6B" alt="" aria-hidden="true"></span>
+                </a>
+              </li>
+              <li>
+                <a class="att-row" href="#" data-toast="Enquiries is not part of this preview stage.">
+                  <span class="att-ico"><img src="/icon.svg?name=clipboard-list&size=17&color=%238F5400" alt="" aria-hidden="true"></span>
+                  <span>
+                    <span class="att-title">2 enquiry follow-ups overdue</span>
+                    <span class="att-detail" style="display:block">Meera Nair · Vikram Kapoor — due since 11 Oct</span>
+                  </span>
+                  <span class="att-go"><img src="/icon.svg?name=chevron-right&size=16&color=%235B6F6B" alt="" aria-hidden="true"></span>
+                </a>
+              </li>
+              <li>
+                <a class="att-row" href="#" data-toast="Preview only — a read-only register view is proposed; today the owner checks completion in reports.">
+                  <span class="att-ico"><img src="/icon.svg?name=list-checks&size=17&color=%238F5400" alt="" aria-hidden="true"></span>
+                  <span>
+                    <span class="att-title">Morning Masters register not started</span>
+                    <span class="att-detail" style="display:block">08:00 · 2 enrolled · coach Bhaskar Menon</span>
+                  </span>
+                  <span class="att-go"><img src="/icon.svg?name=chevron-right&size=16&color=%235B6F6B" alt="" aria-hidden="true"></span>
+                </a>
+              </li>
+            </ul>
+
+            <div class="st-empty">
+              <div class="empty-state" style="padding:24px 8px">
+                <h3>Nothing needs attention right now.</h3>
+                <p>Overdue fees, follow-ups and unstarted registers will appear here.</p>
+              </div>
+            </div>
+
+            <div class="st-loading" aria-hidden="true">
+              <div class="sk sk-row"></div>
+              <div class="sk sk-row"></div>
+              <div class="sk sk-row"></div>
+            </div>
+
+            <div class="st-failed">
+              <div class="failed-box">
+                <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+                <div class="fb-text">
+                  <p class="fb-title">Could not load today's decisions</p>
+                  <p class="fb-detail">An empty queue has not been confirmed.</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- today's registers + capacity -->
+      <section class="card" style="margin-top:20px" aria-labelledby="registers-title">
+        <div class="card-head">
+          <h2 class="section" id="registers-title">Today's registers</h2>
+          <span class="meta st-pop">3 sessions · 22 enrolled marks</span>
+        </div>
+        <div class="card-body">
+          <div class="register-split st-pop">
+            <div>
+              <p class="kpi registers-pct">91%</p>
+              <p class="meta" style="margin-top:6px">20 of 22 marks recorded across 3 sessions</p>
+              <p class="quiet-note" style="margin-top:10px">Attendance is marked by coaches; reception backs up at the counter.</p>
+            </div>
+            <div>
+              <div class="lane">
+                <div class="lane-head">
+                  <div>
+                    <p class="lane-title">06:00 · Morning Squad</p>
+                    <p class="lane-sub">Coach Aanya Rao · capacity</p>
+                  </div>
+                  <p class="lane-cap">12<span>/12</span></p>
+                </div>
+                <div class="track"><div class="fill" style="width:100%"></div></div>
+                <div class="lane-status"><span class="pill pill-good">Register complete</span><span>12 of 12 marked</span></div>
+              </div>
+              <div class="lane">
+                <div class="lane-head">
+                  <div>
+                    <p class="lane-title">07:00 · Junior TTS</p>
+                    <p class="lane-sub">Coach Bhaskar Menon · capacity</p>
+                  </div>
+                  <p class="lane-cap">8<span>/16</span></p>
+                </div>
+                <div class="track"><div class="fill" style="width:50%"></div></div>
+                <div class="lane-status"><span class="pill pill-water">In progress</span><span>8 of 8 enrolled marked</span></div>
+              </div>
+              <div class="lane">
+                <div class="lane-head">
+                  <div>
+                    <p class="lane-title">08:00 · Morning Masters</p>
+                    <p class="lane-sub">Coach Bhaskar Menon · capacity</p>
+                  </div>
+                  <p class="lane-cap">2<span>/16</span></p>
+                </div>
+                <div class="track"><div class="fill warn" style="width:13%"></div></div>
+                <div class="lane-status">
+                  <span class="pill pill-warn">Register not started</span>
+                  <span>2 enrolled</span>
+                  <a class="link" href="#" data-toast="Preview only — a read-only register view is proposed; today the owner checks completion in reports.">View register</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="st-empty">
+            <div class="empty-state" style="padding:24px 8px">
+              <h3>No sessions today</h3>
+              <p>Nothing is scheduled for Tuesday 13 Oct.</p>
+            </div>
+          </div>
+
+          <div class="st-loading" aria-hidden="true">
+            <div class="sk sk-title"></div>
+            <div class="sk sk-row"></div>
+            <div class="sk sk-row"></div>
+          </div>
+
+          <div class="st-failed">
+            <div class="failed-box">
+              <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+              <div class="fb-text">
+                <p class="fb-title">Could not load today's registers</p>
+                <p class="fb-detail">Register completion is unknown, not zero.</p>
+              </div>
+              <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- authorized shortcuts (mobile-only access path) -->
+      <nav class="quick-grid mobile-only" style="margin-top:12px" aria-label="Owner shortcuts">
+        <a href="/fees"><img src="/icon.svg?name=receipt&size=16&color=%235B6F6B" alt="" aria-hidden="true">Fees &amp; payments</a>
+        <a href="#" data-toast="Enquiries is not part of this preview stage."><img src="/icon.svg?name=clipboard-list&size=16&color=%235B6F6B" alt="" aria-hidden="true">Enquiries</a>
+        <a href="#" data-toast="Programs &amp; sessions is not part of this preview stage."><img src="/icon.svg?name=calendar-days&size=16&color=%235B6F6B" alt="" aria-hidden="true">Programs &amp; sessions</a>
+        <a href="#" data-toast="Staff is not part of this preview stage."><img src="/icon.svg?name=briefcase&size=16&color=%235B6F6B" alt="" aria-hidden="true">Staff</a>
+      </nav>
+
+      <!-- trends -->
+      <section aria-label="Trends" style="margin-top:20px">
+        <div class="two-col st-pop">
+          <article class="card chart-card">
+            <header>
+              <h2 class="section">Attendance</h2>
+              <span class="value">84% present · last 30 days</span>
+            </header>
+            <div id="attendance-chart"></div>
+            <a class="link" href="#" data-toast="Reports is not part of this preview stage.">Open the full attendance report →</a>
+          </article>
+          <article class="card chart-card">
+            <header>
+              <h2 class="section">Collections</h2>
+              <span class="value">₹3,41,400 · last 30 days</span>
+            </header>
+            <div id="collections-chart"></div>
+            <a class="link" href="#" data-toast="Daily collections is not part of this preview stage.">Daily collections report →</a>
+          </article>
+        </div>
+        <div class="card st-loading">
+          <div class="card-body" aria-hidden="true">
+            <div class="sk sk-title"></div>
+            <div class="sk" style="height:120px"></div>
+          </div>
+        </div>
+        <div class="st-failed">
+          <div class="failed-box">
+            <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+            <div class="fb-text">
+              <p class="fb-title">Could not load the trends</p>
+              <p class="fb-detail">No trend is shown rather than an inaccurate one.</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+          </div>
+        </div>
+        <p class="quiet-note st-empty" style="margin-top:10px">No sessions or payments in the last 30 days, so there are no trends to draw.</p>
+      </section>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav" id="shell-bottom-nav" aria-label="Primary"></nav>
+</body>
+</html>

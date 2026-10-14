@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Add swimmer — Aqua owner UI preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+</head>
+<body data-page="member-new" data-states="populated,validation,limited">
+<div class="preview-bar" id="preview-bar"></div>
+<div class="shell">
+  <aside class="sidebar" id="shell-sidebar" aria-label="Owner navigation"></aside>
+  <div class="shell-main">
+    <header class="topbar" id="shell-topbar"></header>
+    <header class="mobile-head" id="shell-mobile-head"></header>
+
+    <main class="page">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href="/members">Swimmers</a>
+        <img src="/icon.svg?name=chevron-right&size=14&color=%235B6F6B" alt="" aria-hidden="true">
+        <span aria-current="page">Add swimmer</span>
+      </nav>
+
+      <div class="page-head">
+        <div>
+          <h1>Add swimmer</h1>
+          <p class="meta">Registration · Worli Main</p>
+        </div>
+      </div>
+
+      <div class="failed-box st-limited" style="margin-top:14px">
+        <img src="/icon.svg?name=info&size=18&color=%233C534F" alt="" aria-hidden="true">
+        <div class="fb-text">
+          <p class="fb-title">You don't have permission to add swimmers</p>
+          <p class="fb-detail">Ask an owner or reception to create this record.</p>
+        </div>
+      </div>
+
+      <div class="card bounded st-pop st-write" style="margin-top:16px">
+        <form data-preview-form novalidate style="padding:20px">
+          <div class="form-section">
+            <h2 class="section">Personal details</h2>
+            <div class="field-grid two">
+              <div class="field">
+                <label class="field-label" for="swimmer-name">Full name</label>
+                <input class="input" id="swimmer-name" name="fullName" data-required autocomplete="off">
+                <p class="field-error" data-error-for="swimmer-name">Enter the swimmer's full name.</p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="swimmer-phone">Phone <span class="quiet-note">(optional)</span></label>
+                <input class="input" id="swimmer-phone" name="phone" inputmode="tel" autocomplete="off">
+              </div>
+              <div class="field">
+                <label class="field-label" for="swimmer-dob">Date of birth</label>
+                <input class="input" id="swimmer-dob" name="dob" type="date" value="2016-09-23" data-required>
+                <p class="field-error" data-error-for="swimmer-dob">Enter the date of birth.</p>
+                <p class="field-hint">Guardian and processing consent are required for minors.</p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="swimmer-joined">Joined date</label>
+                <input class="input" id="swimmer-joined" name="joinedOn" type="date" value="2026-10-13" data-required>
+                <p class="field-error" data-error-for="swimmer-joined">Enter the joined date.</p>
+              </div>
+              <div class="field">
+                <label class="field-label" for="swimmer-gender">Gender <span class="quiet-note">(optional)</span></label>
+                <select class="input" id="swimmer-gender" name="gender">
+                  <option value="">Not specified</option>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field-label" for="swimmer-location">Location</label>
+                <select class="input" id="swimmer-location" name="locationId">
+                  <option>Worli Main</option>
+                </select>
+                <p class="field-hint">Single-site academy; more locations appear here when configured.</p>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="swimmer-medical">Medical notes <span class="quiet-note">(optional)</span></label>
+              <textarea class="input" id="swimmer-medical" name="medicalNotes" placeholder="Allergies, asthma, medication or anything coaches must know"></textarea>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h2 class="section">Guardian</h2>
+            <div class="checkbox-row" role="radiogroup" aria-label="Guardian mode">
+              <label style="display:flex;gap:8px;align-items:center;min-height:44px">
+                <input type="radio" name="guardianMode" value="existing" checked> <span>Existing person</span>
+              </label>
+              <label style="display:flex;gap:8px;align-items:center;min-height:44px;margin-left:12px">
+                <input type="radio" name="guardianMode" value="new"> <span>New guardian</span>
+              </label>
+            </div>
+
+            <div data-guardian-panel="existing">
+              <div class="field">
+                <label class="field-label" for="guardian-search">Find an existing person</label>
+                <input class="input" id="guardian-search" type="search" placeholder="Search by name or phone">
+              </div>
+              <div class="payment-row">
+                <img class="avatar" src="/avatar.svg?seed=person-rahul-iyer&size=36" alt="" width="36" height="36" aria-hidden="true">
+                <span>
+                  <strong>Rahul Iyer</strong> · +91 98200 01234
+                  <span class="quiet-note" style="display:block">Selected guardian · relationship: father</span>
+                </span>
+                <button type="button" class="btn btn-quiet btn-sm" data-toast="Preview only — search results are not wired.">Change</button>
+              </div>
+            </div>
+
+            <div data-guardian-panel="new" hidden>
+              <div class="field-grid two">
+                <div class="field">
+                  <label class="field-label" for="guardian-name">Guardian full name</label>
+                  <input class="input" id="guardian-name" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label class="field-label" for="guardian-phone">Guardian phone</label>
+                  <input class="input" id="guardian-phone" inputmode="tel" autocomplete="off">
+                </div>
+                <div class="field">
+                  <label class="field-label" for="guardian-relation">Relationship</label>
+                  <select class="input" id="guardian-relation">
+                    <option>Father</option>
+                    <option>Mother</option>
+                    <option>Guardian</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h2 class="section">Consent</h2>
+            <p class="section-note">Required for every swimmer under 18. Communications consent is optional and recorded separately.</p>
+            <label class="checkbox-row">
+              <input type="checkbox" id="consent-processing" data-required-check>
+              <span>I confirm the guardian has given consent for the academy to hold and process this child's details for coaching and safety.</span>
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="consent-comms">
+              <span>The guardian agrees to receive WhatsApp or email updates about sessions, fees and announcements.</span>
+            </label>
+            <p class="field-error" data-error-for="consent-processing">Processing consent is required before the swimmer can be added.</p>
+          </div>
+
+          <div class="form-actions form-section">
+            <button type="button" class="btn btn-secondary" data-preview-cancel>Cancel</button>
+            <button type="submit" class="btn btn-primary">Add swimmer</button>
+          </div>
+        </form>
+      </div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav" id="shell-bottom-nav" aria-label="Primary"></nav>
+</body>
+</html>
