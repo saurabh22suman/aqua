@@ -1,8 +1,7 @@
-import { LogOut } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
-import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { TenantSignOut } from "@/components/tenant-sign-out";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 import { listMyShiftsAction } from "@/lib/actions/shifts";
@@ -57,15 +56,7 @@ export default async function ReceptionMePage() {
         requests={myLeave.requests}
       />
 
-      <form action={logoutTenantAction} className="mt-6">
-        <button
-          type="submit"
-          className="flex w-full items-center gap-2 rounded-card border border-line bg-paper px-4 py-3 text-[14px] font-medium text-ink hover:bg-paper/80"
-        >
-          <LogOut size={16} className="text-ink-3" />
-          Sign out
-        </button>
-      </form>
+      <TenantSignOut />
     </main>
   );
 }

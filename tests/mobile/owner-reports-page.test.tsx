@@ -10,6 +10,16 @@ vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ({
     permissions: new Set(["reports.financial", "reports.operational"]),
   }),
+  requirePagePermission: (ctx: unknown) => ctx,
+}));
+
+// W1-6 continuation — the page resolves the facility choice from the
+// URL and the cookie; no request scope exists in jsdom.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
+}));
+vi.mock("@/lib/actions/people", () => ({
+  listLocationsAction: async () => [],
 }));
 
 const getAttendanceReportAction = vi.fn();
@@ -111,7 +121,7 @@ describe("ReportsPage resilience (PR1-C1)", () => {
     expect(text).toContain("Attendance trend");
     expect(text).toContain("Enquiry funnel");
     expect(screen.getAllByRole("alert").length).toBeGreaterThanOrEqual(2);
-    expect(text).toContain("Collections vs expenses");
+    expect(text).toContain("Collections");
     expect(text).toContain("Revenue by plan");
     expect(text).toContain("couldn't load");
     consoleError.mockRestore();
@@ -127,7 +137,7 @@ describe("ReportsPage resilience (PR1-C1)", () => {
     for (const heading of [
       "Attendance by batch",
       "Attendance trend",
-      "Collections vs expenses",
+      "Collections",
       "Revenue by plan",
       "Enquiry funnel",
       "Retention",

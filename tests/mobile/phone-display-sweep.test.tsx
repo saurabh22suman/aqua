@@ -43,6 +43,7 @@ vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ({ features: new Set(), permissions: new Set() }),
   requireReception: async () => ({}),
   requireCoach: async () => ({}),
+  requirePagePermission: (ctx: unknown) => ctx,
 }));
 vi.mock("@/lib/auth/context", () => ({
   requireDefaultCtx: async () => ({
@@ -52,6 +53,9 @@ vi.mock("@/lib/auth/context", () => ({
 }));
 vi.mock("@/lib/auth/permission", () => ({
   requirePermission: () => {},
+  // R02 (Prompt 1) — the coach Me page gates the curriculum-lead entry
+  // on levels.write; an ordinary coach does not hold it.
+  hasPermission: () => false,
 }));
 vi.mock("@/lib/services/staff", () => ({
   getCurrentStaffIdentity: async () => ({
@@ -111,7 +115,7 @@ describe("phone display sweep (P1-2)", () => {
       source: "walk-in",
       stage: "new",
     } as EnquiryRow;
-    render(<EnquiriesBoard initialEnquiries={[row]} />);
+    render(<EnquiriesBoard initialEnquiries={[row]} locations={[{ id: "loc1", name: "Main" }]} canWrite />);
     expect(renderedText()).toContain(FORMATTED);
   });
 

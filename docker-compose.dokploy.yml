@@ -89,7 +89,11 @@ services:
       NODE_ENV: production
       DEMO_MODE: "false"
       OFFLINE_SYNC_ENABLED: ""
-      WHATSAPP_PROVIDER: disabled
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-disabled}
+      AQUA_DEPLOYMENT_STAGE: ${AQUA_DEPLOYMENT_STAGE:-production}
+      WHATSAPP_CAPTURE_URL: ${WHATSAPP_CAPTURE_URL:-}
+      WHATSAPP_CAPTURE_AUTH_HEADER: ${WHATSAPP_CAPTURE_AUTH_HEADER:-}
+      WHATSAPP_CAPTURE_AUTH_VALUE: ${WHATSAPP_CAPTURE_AUTH_VALUE:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -122,6 +126,11 @@ services:
       R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
       AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET}
       NODE_ENV: production
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-disabled}
+      AQUA_DEPLOYMENT_STAGE: ${AQUA_DEPLOYMENT_STAGE:-production}
+      WHATSAPP_CAPTURE_URL: ${WHATSAPP_CAPTURE_URL:-}
+      WHATSAPP_CAPTURE_AUTH_HEADER: ${WHATSAPP_CAPTURE_AUTH_HEADER:-}
+      WHATSAPP_CAPTURE_AUTH_VALUE: ${WHATSAPP_CAPTURE_AUTH_VALUE:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

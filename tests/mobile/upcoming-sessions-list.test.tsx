@@ -41,6 +41,7 @@ describe("UpcomingSessionsList — F3 times in IST", () => {
   it("renders 11:30Z–12:30Z as 05:00 pm–06:00 pm, not 11:30–12:30", () => {
     const { container } = render(
       <UpcomingSessionsList
+        canManage
         initialSessions={[session()]}
         coaches={[]}
         terminology={TERMINOLOGY}
@@ -55,6 +56,7 @@ describe("UpcomingSessionsList — F3 times in IST", () => {
   it("keeps the header date in IST (regression guard for formatHeaderDate)", () => {
     const { container } = render(
       <UpcomingSessionsList
+        canManage
         initialSessions={[session()]}
         coaches={[]}
         terminology={TERMINOLOGY}

@@ -1,11 +1,23 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { staffAttendance } from "@/db/schema/staff-attendance";
 import { staff } from "@/db/schema/staff";
+import { staffLocations } from "@/db/schema/staff-locations";
+import {
+  membershipLocations,
+  tenantMemberships,
+} from "@/db/schema/memberships";
 import { writeAudit } from "@/lib/audit/write";
 import { ownStaffIdInTx } from "@/lib/services/staff-self";
-import { asStaffId } from "@/lib/ids";
+import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
+import { resolveLocationAccess } from "@/lib/services/location-access";
+import {
+  callerHasPermission,
+  callerIsLegacySystem,
+} from "@/lib/services/resource-access";
+import { todayInZone } from "@/lib/time/tz";
+import { asStaffId, type StaffId, type TenantId, type UserId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // V-24 — the audited manual correction. Split from the check-in/out
@@ -30,6 +42,56 @@ export type AttendanceResult =
   | { ok: true; attendanceId: string }
   | { ok: false; error: string };
 
+async function targetLocationAccessInTx(
+  tx: TenantTx,
+  tenantId: TenantId,
+  target: { id: StaffId; userId: UserId | null },
+): Promise<{ allLocations: boolean; locationIds: string[] }> {
+  const rows = await tx
+    .select({ locationId: staffLocations.locationId })
+    .from(staffLocations)
+    .where(
+      and(
+        eq(staffLocations.tenantId, tenantId),
+        eq(staffLocations.staffId, target.id),
+      ),
+    );
+  const locationIds = new Set(rows.map((row) => row.locationId));
+
+  if (!target.userId) return { allLocations: false, locationIds: [...locationIds] };
+
+  const memberships = await tx
+    .select({ id: tenantMemberships.id, allLocations: tenantMemberships.allLocations })
+    .from(tenantMemberships)
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, tenantId),
+        eq(tenantMemberships.userId, target.userId),
+        eq(tenantMemberships.status, "active"),
+        isNull(tenantMemberships.deletedAt),
+      ),
+    );
+  if (memberships.some((membership) => membership.allLocations)) {
+    return { allLocations: true, locationIds: [...locationIds] };
+  }
+  if (memberships.length > 0) {
+    const membershipRows = await tx
+      .select({ locationId: membershipLocations.locationId })
+      .from(membershipLocations)
+      .where(
+        and(
+          eq(membershipLocations.tenantId, tenantId),
+          inArray(
+            membershipLocations.membershipId,
+            memberships.map((membership) => membership.id),
+          ),
+        ),
+      );
+    for (const row of membershipRows) locationIds.add(row.locationId);
+  }
+  return { allLocations: false, locationIds: [...locationIds] };
+}
+
 export async function correctAttendance(
   ctx: ActionCtx,
   raw: unknown,
@@ -50,7 +112,7 @@ export async function correctAttendance(
     }
 
     const [target] = await tx
-      .select({ id: staff.id })
+      .select({ id: staff.id, userId: staff.userId })
       .from(staff)
       .where(
         and(
@@ -61,6 +123,36 @@ export async function correctAttendance(
       )
       .limit(1);
     if (!target) return { ok: false, error: "Staff member not found." };
+
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!access.unrestricted) {
+      const targetAccess = await targetLocationAccessInTx(tx, ctx.tenantId, target);
+      const allowed =
+        targetAccess.allLocations ||
+        targetAccess.locationIds.some((locationId) =>
+          access.locationIds.includes(locationId),
+        );
+      if (!allowed) {
+        return {
+          ok: false,
+          error: "That staff member is not at one of your locations.",
+        };
+      }
+    }
+
+    const timezone = await tenantTimezoneInTx(tx, ctx.tenantId);
+    if (input.workDate !== todayInZone(timezone)) {
+      const management =
+        callerIsLegacySystem(ctx) ||
+        (await callerHasPermission(tx, ctx, "settings.manage"));
+      if (!management) {
+        return {
+          ok: false,
+          error:
+            "Only an owner or admin can change another day's attendance. Ask them to make this correction.",
+        };
+      }
+    }
 
     const checkedInAt = input.checkedInAt ? new Date(input.checkedInAt) : null;
     const checkedOutAt = input.checkedOutAt ? new Date(input.checkedOutAt) : null;
@@ -116,6 +208,15 @@ export async function correctAttendance(
       if (!updated) return { ok: false, error: "The correction could not be saved." };
       attendanceId = updated.id;
 
+      // The prior/new clock times belong in the trail whenever the
+      // correction moves them: without them a wrong check-in time
+      // correction has no before/after evidence.
+      const timeFieldsChanged =
+        (existing.checkedInAt?.getTime() ?? null) !==
+          (values.checkedInAt?.getTime() ?? null) ||
+        (existing.checkedOutAt?.getTime() ?? null) !==
+          (values.checkedOutAt?.getTime() ?? null);
+
       await writeAudit(tx, {
         tenantId: ctx.tenantId,
         actorId: ctx.userId,
@@ -128,6 +229,12 @@ export async function correctAttendance(
           method: existing.method,
           note: existing.note,
           lateMinutes: existing.lateMinutes,
+          ...(timeFieldsChanged
+            ? {
+                checkedInAt: existing.checkedInAt?.toISOString() ?? null,
+                checkedOutAt: existing.checkedOutAt?.toISOString() ?? null,
+              }
+            : {}),
         },
         after: {
           staffId: input.staffId,
@@ -137,6 +244,12 @@ export async function correctAttendance(
           note: input.note,
           lateMinutes: values.lateMinutes,
           markedBy: marker,
+          ...(timeFieldsChanged
+            ? {
+                checkedInAt: values.checkedInAt?.toISOString() ?? null,
+                checkedOutAt: values.checkedOutAt?.toISOString() ?? null,
+              }
+            : {}),
         },
       });
     } else {
@@ -168,6 +281,8 @@ export async function correctAttendance(
           method: "manual",
           note: input.note,
           lateMinutes: values.lateMinutes,
+          checkedInAt: values.checkedInAt?.toISOString() ?? null,
+          checkedOutAt: values.checkedOutAt?.toISOString() ?? null,
           markedBy: marker,
         },
       });

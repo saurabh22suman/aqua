@@ -85,6 +85,7 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
     const rows = await tx
       .select({
         status: tenantMemberships.status,
+        linksValidFrom: tenantMemberships.linksValidFrom,
         phone: users.phone,
         roleKey: roles.key,
         tenantName: tenants.name,
@@ -107,6 +108,18 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
     if (m.status === "revoked") return { kind: "error" as const, code: "revoked" as const };
     if (m.tenantStatus !== "trial" && m.tenantStatus !== "active") {
       return { kind: "error" as const, code: "tenant_suspended" as const };
+    }
+    // R09 — a token minted before the membership's credential epoch
+    // (set on reactivation) is dead even though the membership is live
+    // again. Token iat is second-precision, so the rule is: reject
+    // when the token's whole second precedes the epoch second; a link
+    // issued in the same second as the epoch (the fresh reactivation
+    // link) stays valid.
+    if (
+      m.linksValidFrom &&
+      claims.iat * 1000 + 1000 <= m.linksValidFrom.getTime()
+    ) {
+      return { kind: "error" as const, code: "invalid" as const };
     }
     const used = await tx
       .select({ jti: inviteLinkUses.jti })
@@ -185,6 +198,7 @@ export async function redeemLoginLink(
       .select({
         membershipId: tenantMemberships.id,
         status: tenantMemberships.status,
+        linksValidFrom: tenantMemberships.linksValidFrom,
         userId: tenantMemberships.userId,
         phone: users.phone,
         roleKey: roles.key,
@@ -208,6 +222,15 @@ export async function redeemLoginLink(
     if (m.status === "revoked") return { kind: "error" as const, code: "revoked" as const };
     if (m.tenantStatus !== "trial" && m.tenantStatus !== "active") {
       return { kind: "error" as const, code: "tenant_suspended" as const };
+    }
+    // R09 — see previewLoginLink: tokens whose second predates the
+    // membership's reactivation epoch are refused even after the
+    // status flips back.
+    if (
+      m.linksValidFrom &&
+      claims.iat * 1000 + 1000 <= m.linksValidFrom.getTime()
+    ) {
+      return { kind: "error" as const, code: "invalid" as const };
     }
     // Defense in depth: issuance gates this, but a hand-signed token
     // must not let a non-owner redeem a reset.

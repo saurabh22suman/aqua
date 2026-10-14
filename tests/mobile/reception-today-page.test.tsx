@@ -13,10 +13,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // operational data (batch name, counted figures) and the café entry
 // point stay.
 
+const receptionCtx = vi.hoisted(() => ({
+  value: {
+    permissions: new Set(["attendance.mark", "payments.record", "invoices.read"]),
+    features: new Set(["billing", "cafe.pos"]),
+  } as { permissions: Set<string>; features: Set<string> },
+}));
+
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireReception: async () => ({
-    permissions: new Set(["attendance.mark"]),
-  }),
+  requireReception: async () => receptionCtx.value,
 }));
 
 const getTodayAction = vi.fn();
@@ -72,6 +77,34 @@ describe("ReceptionTodayPage — no coach link, check-ins panel present (F5, U-0
 
     expect(screen.getByTestId("cafe-link").getAttribute("href")).toBe(
       "/reception/cafe",
+    );
+  });
+
+  it("hides the café entry when the cafe.pos entitlement is off (C03)", async () => {
+    getTodayAction.mockResolvedValue({ sessions: SESSIONS });
+    const before = receptionCtx.value;
+    receptionCtx.value = { ...before, features: new Set(["billing"]) };
+    try {
+      render(await ReceptionTodayPage());
+      expect(screen.queryByTestId("cafe-link")).toBeNull();
+      // The plain recovery path stays: collect/dues still render.
+      expect(screen.getByTestId("collect-payment-link")).not.toBeNull();
+      expect(screen.getByTestId("dues-link")).not.toBeNull();
+    } finally {
+      receptionCtx.value = before;
+    }
+  });
+
+  it("links to Close day and Dues (M01/M02 entry points)", async () => {
+    getTodayAction.mockResolvedValue({ sessions: SESSIONS });
+
+    render(await ReceptionTodayPage());
+
+    expect(screen.getByTestId("close-day-link").getAttribute("href")).toBe(
+      "/reception/close",
+    );
+    expect(screen.getByTestId("dues-link").getAttribute("href")).toBe(
+      "/reception/dues",
     );
   });
 

@@ -42,6 +42,7 @@ describe("MemberFacilitiesPanel (Wave 2)", () => {
         home={HOME}
         opted={[OPTED]}
         locations={[HOME, THIRD]}
+        canWrite
       />,
     );
     expect(document.body.textContent).toContain("Home Pool");
@@ -56,6 +57,7 @@ describe("MemberFacilitiesPanel (Wave 2)", () => {
         home={HOME}
         opted={[OPTED]}
         locations={[HOME, THIRD]}
+        canWrite
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: /end/i }));
@@ -69,6 +71,7 @@ describe("MemberFacilitiesPanel (Wave 2)", () => {
         home={HOME}
         opted={[OPTED]}
         locations={[HOME, THIRD]}
+        canWrite
       />,
     );
     fireEvent.change(screen.getByTestId("facility-add-picker"), {
@@ -88,6 +91,7 @@ describe("MemberFacilitiesPanel (Wave 2)", () => {
           id: "locationId" in l ? l.locationId : l.id,
           name: "locationName" in l ? l.locationName : l.name,
         }))}
+        canWrite
       />,
     );
     const options = Array.from(

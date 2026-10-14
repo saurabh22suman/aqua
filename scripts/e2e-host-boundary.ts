@@ -98,6 +98,9 @@ const PROBES: Probe[] = [
   // surface); on the apex they exist (405 on GET, because they are
   // POST-only — a 404 here would mean the middleware dropped them).
   { path: "/api/login/pin",       host: `ops.localhost:${PORT}`, expect: 404, note: "tenant PIN login NOT reachable on ops" },
+  { path: "/api/login/pin-recovery", host: `ops.localhost:${PORT}`, expect: 404, note: "tenant recovery NOT reachable on ops" },
+  { path: "/api/offline/session", host: `ops.localhost:${PORT}`, expect: 404, note: "offline identity NOT reachable on ops" },
+  { path: "/ops/api/whatsapp-auth", host: `ops.localhost:${PORT}`, expect: 405, note: "ops OTP endpoint reachable, POST only" },
   { path: "/api/account/set-pin", host: `ops.localhost:${PORT}`, expect: 404, note: "tenant set-PIN NOT reachable on ops" },
   // From apex:
   { path: "/ops/login",       host: `localhost:${PORT}`,     expect: 404, note: "/ops NOT reachable on apex" },
@@ -105,6 +108,9 @@ const PROBES: Probe[] = [
   { path: "/login",           host: `localhost:${PORT}`,     expect: 200, note: "tenant login reachable on apex" },
   { path: "/api/health",      host: `localhost:${PORT}`,     expect: 200, note: "health reachable on apex" },
   { path: "/api/login/pin",       host: `localhost:${PORT}`, expect: 405, note: "PIN login reachable on apex (POST-only -> 405 on GET)" },
+  { path: "/api/login/pin-recovery", host: `localhost:${PORT}`, expect: 405, note: "tenant recovery reachable, POST only" },
+  { path: "/api/offline/session", host: `localhost:${PORT}`, expect: 200, note: "offline identity reachable without exposing a signed-out scope" },
+  { path: "/ops/api/whatsapp-auth", host: `localhost:${PORT}`, expect: 404, note: "ops OTP endpoint NOT reachable on apex" },
   { path: "/api/account/set-pin", host: `localhost:${PORT}`, expect: 405, note: "set-PIN reachable on apex (POST-only -> 405 on GET)" },
   { path: "/check-in/anything",   host: `localhost:${PORT}`, expect: 200, note: "premises check-in reachable on apex (signed-out sign-in-first state)" },
 ];

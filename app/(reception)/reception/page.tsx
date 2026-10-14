@@ -8,7 +8,7 @@ import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
 import { CountChip } from "@/components/ui/CountChip";
 import { requireReception } from "@/lib/auth/surface-guard";
-import { hasPermission } from "@/lib/auth/permission";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { todayInZone } from "@/lib/time/tz";
 
 export default async function ReceptionTodayPage() {
@@ -26,6 +26,15 @@ export default async function ReceptionTodayPage() {
   // staff.attendance; a role without it sees no board rather than a
   // tap that would be refused.
   const canMarkStaff = hasPermission(ctx, "staff.attendance");
+  // C03 — module entries follow grant + entitlement, never surface
+  // alone: a card is only shown when its action would be allowed
+  // (payments.record/invoices.read) and the tenant's plan includes the
+  // module the action's requirePermission checks. Otherwise the tap
+  // would land on a refused action.
+  const canCollect = hasPermission(ctx, "payments.record") && hasFeature(ctx, "billing");
+  const canCloseDay = canCollect;
+  const canSeeDues = hasPermission(ctx, "invoices.read") && hasFeature(ctx, "billing");
+  const canUseCafe = hasPermission(ctx, "payments.record") && hasFeature(ctx, "cafe.pos");
   const today = todayInZone("Asia/Kolkata");
   const staffRows = canMarkStaff
     ? await listStaffAttendanceDayAction({ date: today })
@@ -41,19 +50,54 @@ export default async function ReceptionTodayPage() {
         />
       </div>
 
-      <Link
-        href="/reception/collect-payment"
-        className="mt-6 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-        data-testid="collect-payment-link"
-      >
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">Collect payment</p>
-          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-            Show a club payment QR with the amount.
-          </p>
-        </div>
-        <ChevronRight size={18} className="text-ink-3 flex-none" />
-      </Link>
+      {canCollect ? (
+        <Link
+          href="/reception/collect-payment"
+          className="mt-6 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+          data-testid="collect-payment-link"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium leading-tight">Collect payment</p>
+            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+              Find an invoice and record cash or UPI; verify the payment at the
+              counter.
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-ink-3 flex-none" />
+        </Link>
+      ) : null}
+
+      {canCloseDay ? (
+        <Link
+          href="/reception/close"
+          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+          data-testid="close-day-link"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium leading-tight">Close day</p>
+            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+              Count today&apos;s cash and close your counter.
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-ink-3 flex-none" />
+        </Link>
+      ) : null}
+
+      {canSeeDues ? (
+        <Link
+          href="/reception/dues"
+          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+          data-testid="dues-link"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium leading-tight">Dues</p>
+            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+              Pending fee payments, overdue first — for follow-up calls.
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-ink-3 flex-none" />
+        </Link>
+      ) : null}
 
       <Link
         href="/reception/members"
@@ -71,19 +115,21 @@ export default async function ReceptionTodayPage() {
         <ChevronRight size={18} className="text-ink-3 flex-none" />
       </Link>
 
-      <Link
-        href="/reception/cafe"
-        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-        data-testid="cafe-link"
-      >
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">Café</p>
-          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-            Take a counter order and settle it.
-          </p>
-        </div>
-        <ChevronRight size={18} className="text-ink-3 flex-none" />
-      </Link>
+      {canUseCafe ? (
+        <Link
+          href="/reception/cafe"
+          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+          data-testid="cafe-link"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium leading-tight">Café</p>
+            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+              Take a counter order and settle it.
+            </p>
+          </div>
+          <ChevronRight size={18} className="text-ink-3 flex-none" />
+        </Link>
+      ) : null}
 
       <ReceptionCheckIns sessions={sessions} canMark={canMark} />
 

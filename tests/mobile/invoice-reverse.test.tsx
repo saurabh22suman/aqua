@@ -95,6 +95,7 @@ describe("InvoiceExpanded reversals (PR2-C9)", () => {
         canWrite
         canRecord
         canRefund
+        canReadPayments
         onChanged={() => {}}
       />,
     );
@@ -120,6 +121,7 @@ describe("InvoiceExpanded reversals (PR2-C9)", () => {
         canWrite
         canRecord
         canRefund
+        canReadPayments
         onChanged={() => {}}
       />,
     );
@@ -147,6 +149,7 @@ describe("InvoiceExpanded reversals (PR2-C9)", () => {
         canWrite
         canRecord
         canRefund={false}
+        canReadPayments
         onChanged={() => {}}
       />,
     );
@@ -154,5 +157,88 @@ describe("InvoiceExpanded reversals (PR2-C9)", () => {
     expect(await screen.findByText(/Duplicate cash entry/)).toBeTruthy();
     expect(document.body.textContent).toMatch(/₹400\.00 reversed/);
     expect(screen.queryByRole("button", { name: /reverse/i })).toBeNull();
+  });
+
+  it("loads the invoice for a receptionist without payments.read and never calls the reversal read", async () => {
+    setup();
+    listPaymentReversalsAction.mockRejectedValue(
+      new Error("Missing permission: payments.read"),
+    );
+
+    render(
+      <InvoiceExpanded
+        invoiceId="inv-1"
+        canWrite
+        canRecord
+        canRefund={false}
+        canReadPayments={false}
+        onChanged={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText(/Record a payment/i)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /receipt/i })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/Could not load this invoice/);
+    expect(listPaymentReversalsAction).not.toHaveBeenCalled();
+  });
+});
+
+describe("InvoiceExpanded failure recovery (FE-04)", () => {
+  it("releases the record-payment busy state and reconciles after a thrown transport error", async () => {
+    setup();
+    recordPaymentAction.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    render(
+      <InvoiceExpanded
+        invoiceId="inv-1"
+        canWrite
+        canRecord
+        canRefund
+        canReadPayments
+        onChanged={() => {}}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: /record payment/i });
+    fireEvent.click(button);
+
+    await screen.findByText(/did not complete/i);
+    expect(getInvoiceAction).toHaveBeenCalledTimes(2);
+    expect(
+      (screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(document.body.textContent).not.toMatch(/Saving…/);
+  });
+
+  it("releases the reversal busy state and reconciles after a thrown transport error", async () => {
+    setup();
+    reversePaymentAction.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    render(
+      <InvoiceExpanded
+        invoiceId="inv-1"
+        canWrite
+        canRecord
+        canRefund
+        canReadPayments
+        onChanged={() => {}}
+      />,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /reverse/i }));
+    fireEvent.change(screen.getByLabelText(/reason/i), {
+      target: { value: "Duplicate cash entry" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /confirm reversal/i }));
+
+    await screen.findByText(/did not complete/i);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: /confirm reversal/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
   });
 });

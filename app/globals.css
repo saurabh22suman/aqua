@@ -103,7 +103,7 @@ html {
   /* Hide every direct child of <main> except the print-isolate
    * wrapper. This keeps the rest of the detail page off the printout
    * without having to mark every other section. */
-  main > *:not(.print-isolate-block) {
+  main:has([data-print-isolate]) > *:not(.print-isolate-block) {
     display: none !important;
   }
 
@@ -122,5 +122,7 @@ html {
     max-width: 148mm;
     margin: 0 auto !important;
   }
+  .id-card header {
+    display: flex !important;
+  }
 }
-

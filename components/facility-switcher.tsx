@@ -1,14 +1,41 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { MapPin } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  FACILITY_COOKIE,
+  isFacilityScopedPath,
+  parseFacilityValue,
+} from "@/lib/facility";
 
 // W1-6 (docs/role-surfaces-plan.md) — owner facility switcher.
-// Rendered by the owner layout on every owner screen, only when the
-// tenant actually has more than one facility. The choice persists in
-// `?facility=<locationId>`; "All facilities" removes the param, which
-// is the consolidated view. Screens read the param server-side (the
-// members list today; Wave 2 extends it once batches carry a location).
+// Rendered by the owner layout on the screens that actually scope data
+// by facility (Home, Members, Fees, Programs/Sessions, Schedule,
+// Batches, Reports). The choice is written to `?facility=<locationId>`
+// and to a cookie, so it follows the owner from screen to screen;
+// "All facilities" clears both. Pages resolve the URL first and the
+// cookie second (lib/facility.ts), so a shared link wins over a stale
+// device preference.
+
+function readFacilityCookie(): string | undefined {
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${FACILITY_COOKIE}=`));
+  return parseFacilityValue(
+    match ? decodeURIComponent(match.slice(FACILITY_COOKIE.length + 1)) : undefined,
+  );
+}
+
+function writeFacilityCookie(value: string | null): void {
+  const base = `${FACILITY_COOKIE}=`;
+  if (value === null) {
+    document.cookie = `${base}; path=/; max-age=0; samesite=lax`;
+    return;
+  }
+  document.cookie = `${base}${encodeURIComponent(value)}; path=/; max-age=31536000; samesite=lax`;
+}
+
 export function FacilitySwitcher({
   locations,
 }: {
@@ -17,21 +44,40 @@ export function FacilitySwitcher({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const visible = locations.length > 1 && isFacilityScopedPath(pathname);
+  const [current, setCurrent] = useState(() => searchParams.get("facility") ?? "all");
 
-  if (locations.length <= 1) return null;
+  // A page opened from the sidebar carries no `?facility=`, so adopt the
+  // remembered choice and put it in the URL — the server already scoped
+  // the data by that same cookie, and the select now matches the page.
+  useEffect(() => {
+    if (!visible || searchParams.get("facility")) return;
+    const remembered = readFacilityCookie();
+    if (!remembered) return;
+    setCurrent(remembered);
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("facility", remembered);
+    router.replace(`${pathname}?${next.toString()}`);
+  }, [pathname, router, searchParams, visible]);
 
-  const current = searchParams.get("facility") ?? "all";
+  if (!visible) return null;
 
   function onChange(value: string) {
     const next = new URLSearchParams(searchParams.toString());
-    if (value === "all") next.delete("facility");
-    else next.set("facility", value);
+    if (value === "all") {
+      writeFacilityCookie(null);
+      next.delete("facility");
+    } else {
+      writeFacilityCookie(value);
+      next.set("facility", value);
+    }
+    setCurrent(value);
     const query = next.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }
 
   return (
-    <div className="px-5 pt-3">
+    <div className="px-5 pt-3 print:hidden">
       <label htmlFor="facility-switcher" className="sr-only">
         Facility
       </label>

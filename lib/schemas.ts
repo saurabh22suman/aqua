@@ -45,18 +45,27 @@ export const createMemberSchema = z.object({
   witnessedByUserId: z.string().uuid().optional(),
 });
 
-export const updateMemberSchema = z.object({
-  memberId: z.string().uuid(),
-  fullName: z.string().min(1).max(200),
-  phone: z.string().min(8).max(20).optional(),
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  gender: z.enum(["male", "female", "other"]).optional(),
-  locationId: z.string().uuid(),
-  medicalNotes: z.string().max(2000).optional(),
-  // Wave 2 — optional so older callers keep working; when present it
-  // corrects the joining date.
-  joinedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-});
+// Owner-UI review P1 (2026-10-13) — updateMember is now a
+// field-scoped patch. Every field is optional so an inline edit
+// writes only the field the user touched; an earlier save can no
+// longer be overwritten by a stale full-record snapshot. `null`
+// clears an optional field; an absent key leaves it untouched.
+// `.strict()` rejects attempts to smuggle fields outside this
+// contract (status, member code, tenant, …).
+export const updateMemberSchema = z
+  .object({
+    memberId: z.string().uuid(),
+    fullName: z.string().trim().min(1, "Name can't be empty.").max(200).optional(),
+    phone: z.string().trim().min(8).max(20).nullable().optional(),
+    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    gender: z.enum(["male", "female", "other"]).nullable().optional(),
+    locationId: z.string().uuid().optional(),
+    medicalNotes: z.string().max(2000).nullable().optional(),
+    // Wave 2 — optional so older callers keep working; when present it
+    // corrects the joining date.
+    joinedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .strict();
 
 export const memberStatusValueSchema = z.enum(["trial", "active", "paused", "lapsed", "left"]);
 
@@ -89,6 +98,10 @@ export const createEnquirySchema = z.object({
   phone: z.string().min(8).max(20).optional(),
   source: enquirySourceSchema,
   notes: z.string().max(2000).optional(),
+  // R04 — capture site. Required: a counter enquiry belongs to the
+  // location where it was taken, validated against the caller's
+  // allowed locations in the service.
+  locationId: z.string().uuid(),
 });
 
 export const listEnquiriesFilterSchema = z.object({
@@ -144,6 +157,7 @@ export const coachScheduleSchema = z.object({
 });
 
 export const markAttendanceSchema = z.object({
+  offlineScope: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   sessionId: z.string().uuid(),
   memberId: z.string().uuid(),
   status: z.enum(["present", "absent", "late"]).default("present"),

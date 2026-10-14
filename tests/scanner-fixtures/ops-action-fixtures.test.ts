@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_GUARD_EXEMPTIONS,
   EXEMPTIONS,
   listPlatformActionFiles,
   scanOpsActions,
+  scanPlatformAdminGuards,
 } from "@/scripts/lib/ops-action-scan";
 
 // O-05 positive controls for the ops-action scan. The production scan
@@ -70,6 +72,42 @@ describe("ops-action scan", () => {
     expect(violations).toEqual([]);
   });
 
+  it("flags an unguarded mutation that calls opsAction (admin-guard scan)", () => {
+    const source = `declare function opsAction<T>(i: unknown, f: () => Promise<T>): Promise<T>;
+    export async function mutateSomethingAction(): Promise<{ ok: true }> {
+      return opsAction({ scope: "feature.update" }, async () => ({ ok: true }));
+    }`;
+    const violations = scanPlatformAdminGuards(
+      source,
+      "lib/actions/platform-unguarded.ts",
+    );
+    expect(violations).toEqual([
+      {
+        file: "lib/actions/platform-unguarded.ts",
+        functionName: "mutateSomethingAction",
+      },
+    ]);
+  });
+
+  it("passes the guarded known-good action (admin-guard scan)", () => {
+    const source = readFileSync(
+      join(FIXTURES, "known-good-ops-action.ts"),
+      "utf8",
+    );
+    expect(
+      scanPlatformAdminGuards(source, "lib/actions/platform-known-good.ts"),
+    ).toEqual([]);
+  });
+
+  it("scans the real tree for admin guards with no violations", () => {
+    const violations = [];
+    for (const file of listPlatformActionFiles()) {
+      const source = readFileSync(join(process.cwd(), file), "utf8");
+      violations.push(...scanPlatformAdminGuards(source, file));
+    }
+    expect(violations).toEqual([]);
+  });
+
   it("keeps every exemption pointed at a real file#function", () => {
     const sources = new Map(
       listPlatformActionFiles().map((file) => [
@@ -77,7 +115,10 @@ describe("ops-action scan", () => {
         readFileSync(join(process.cwd(), file), "utf8"),
       ]),
     );
-    for (const entry of Object.keys(EXEMPTIONS)) {
+    for (const entry of [
+      ...Object.keys(EXEMPTIONS),
+      ...Object.keys(ADMIN_GUARD_EXEMPTIONS),
+    ]) {
       const [file, fn] = entry.split("#");
       const source = sources.get(file);
       expect(source, file).toBeTruthy();

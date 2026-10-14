@@ -16,6 +16,7 @@ import type { PaymentMethod } from "@/db/schema/payments";
 import type { AuditSource } from "@/db/schema/audit";
 import type { UserId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
+import { toSafePaise } from "@/lib/money/safe-paise";
 
 // C-39 — branded receipts. Generated lazily on first read and stored
 // against the payment record; the unique (tenant_id, payment_id) makes
@@ -87,8 +88,8 @@ async function loadReceiptRow(
 
 function buildReceiptPdf(row: ReceiptRow, sacCode: string | null): Buffer {
   const brand = brandDataFrom(row.tenantName, row.branding);
-  const invoiceTotal = Number(row.invoice.totalPaise);
-  const invoicePaid = Number(row.invoice.paidPaise);
+  const invoiceTotal = toSafePaise(row.invoice.totalPaise);
+  const invoicePaid = toSafePaise(row.invoice.paidPaise);
   return renderReceiptPdf({
     tenantDisplayName: brand.displayName ?? brand.fallbackDisplayName,
     initials: brand.initials,
@@ -100,12 +101,12 @@ function buildReceiptPdf(row: ReceiptRow, sacCode: string | null): Buffer {
     placeOfSupply: placeOfSupplyForGstin(row.invoice.gstin),
     sacCode,
     memberName: row.memberName,
-    paymentAmountPaise: Number(row.payment.amountPaise),
+    paymentAmountPaise: toSafePaise(row.payment.amountPaise),
     paymentMethodLabel: methodLabel(row.payment.method as PaymentMethod),
     paymentReference: row.payment.reference,
     paymentReceivedAt: row.payment.receivedAt.toISOString(),
-    invoiceSubtotalPaise: Number(row.invoice.subtotalPaise),
-    invoiceTaxPaise: Number(row.invoice.taxPaise),
+    invoiceSubtotalPaise: toSafePaise(row.invoice.subtotalPaise),
+    invoiceTaxPaise: toSafePaise(row.invoice.taxPaise),
     invoiceTotalPaise: invoiceTotal,
     invoicePaidPaise: invoicePaid,
     outstandingPaise: Math.max(0, invoiceTotal - invoicePaid),
@@ -181,7 +182,7 @@ async function serveOrCreateReceipt(
     entityId: paymentId,
     after: {
       invoiceNumber: row.invoice.invoiceNumber,
-      amountPaise: Number(row.payment.amountPaise),
+      amountPaise: toSafePaise(row.payment.amountPaise),
       fileSize: pdf.byteLength,
       via: actor.via,
     },

@@ -11,6 +11,12 @@ import { batches } from "@/db/schema/programs";
 import { writeAudit } from "@/lib/audit/write";
 import type { ActionCtx } from "@/lib/auth/context";
 import { resolveAudienceUserIds } from "@/lib/services/announcement-audience";
+import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
+import {
+  callerHasPermission,
+  callerIsLegacySystem,
+} from "@/lib/services/resource-access";
+import { enqueueAnnouncementNotifications } from "@/lib/messaging/notification-events";
 
 // U-06 — announcements and the in-app notification fan-out.
 //
@@ -25,9 +31,8 @@ import { resolveAudienceUserIds } from "@/lib/services/announcement-audience";
 //                 batch, or to a guardian of one.
 //   * `parents` — every user linked to a guardian of an active
 //                 member.
-// WhatsApp stays the C-40a mock; this service never calls a
-// provider. A notification row per resolved user is the whole
-// delivery in Release 1.
+// WhatsApp destinations are queued atomically alongside in-app rows.
+// The worker rechecks contact preferences and consent before transport.
 
 export const sendAnnouncementInput = z
   .object({
@@ -48,7 +53,7 @@ export const sendAnnouncementInput = z
 export type SendAnnouncementInput = z.input<typeof sendAnnouncementInput>;
 
 export type SendAnnouncementResult =
-  | { ok: true; id: string; recipientCount: number }
+  | { ok: true; id: string; recipientCount: number; whatsappRecipientCount?: number }
   | { ok: false; error: string };
 
 export type AnnouncementRow = {
@@ -82,9 +87,27 @@ export async function sendAnnouncement(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // R03 (2026-10-09 role/content/permission audit) — a sender without
+    // settings.manage (e.g. reception, which holds messaging.send) may
+    // only reach a batch at a location visible to them; academy-wide
+    // audiences ("all", "parents") stay with Owner/Admin. Identity-free
+    // legacy/system callers keep the old behaviour — the action layer
+    // remains the authorization boundary, the same trust model as
+    // resolveLocationAccess.
+    const canManage =
+      callerIsLegacySystem(ctx) ||
+      (await callerHasPermission(tx, ctx, "settings.manage"));
+
+    if (!canManage && input.audience !== "batch") {
+      return {
+        ok: false,
+        error: "Only the academy owner or admin can send this announcement.",
+      };
+    }
+
     if (input.audience === "batch") {
       const batchRows = await tx
-        .select({ id: batches.id })
+        .select({ id: batches.id, locationId: batches.locationId })
         .from(batches)
         .where(
           and(
@@ -95,6 +118,22 @@ export async function sendAnnouncement(
         )
         .limit(1);
       if (!batchRows[0]) return { ok: false, error: "Batch not found." };
+      if (!canManage) {
+        const access = await resolveLocationAccess(tx, ctx);
+        // A batch with no location is academy-wide, visible to scoped
+        // staff by the shared helper's NULL rule; for a non-manager
+        // that widening is exactly what R03 keeps with the owner, so
+        // it is refused here rather than delegated.
+        if (
+          batchRows[0].locationId === null ||
+          !locationVisible(access, batchRows[0].locationId)
+        ) {
+          return {
+            ok: false,
+            error: "You can only send announcements to batches at your location.",
+          };
+        }
+      }
     }
 
     const userIds = await resolveAudienceUserIds(
@@ -133,6 +172,9 @@ export async function sendAnnouncement(
       );
     }
 
+    const whatsappRecipientCount = await enqueueAnnouncementNotifications(tx, {
+      tenantId: ctx.tenantId, announcementId, ...input,
+    });
     await writeAudit(tx, {
       tenantId: ctx.tenantId,
       actorId: ctx.userId,
@@ -144,11 +186,12 @@ export async function sendAnnouncement(
         batchId: input.batchId ?? null,
         recipientCount: userIds.length,
         channel: "in_app",
+        whatsappRecipientCount,
       },
       requestId: ctx.requestId,
     });
 
-    return { ok: true, id: announcementId, recipientCount: userIds.length };
+    return { ok: true, id: announcementId, recipientCount: userIds.length, whatsappRecipientCount };
   });
 }
 

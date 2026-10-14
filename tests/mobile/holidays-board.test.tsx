@@ -51,7 +51,7 @@ describe("HolidaysBoard (R.3)", () => {
   it("adds a holiday with the entered values", async () => {
     render(<HolidaysBoard initialHolidays={[]} />);
 
-    fireEvent.change(screen.getByPlaceholderText("Holiday name"), {
+    fireEvent.change(screen.getByLabelText("Holiday name"), {
       target: { value: "Independence Day" },
     });
     fireEvent.change(screen.getByTestId("holiday-date"), {
@@ -77,7 +77,7 @@ describe("HolidaysBoard (R.3)", () => {
     } as never);
 
     render(<HolidaysBoard initialHolidays={[]} />);
-    fireEvent.change(screen.getByPlaceholderText("Holiday name"), {
+    fireEvent.change(screen.getByLabelText("Holiday name"), {
       target: { value: "Independence Day" },
     });
     fireEvent.change(screen.getByTestId("holiday-date"), {

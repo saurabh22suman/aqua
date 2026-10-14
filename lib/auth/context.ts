@@ -40,7 +40,7 @@ export type Ctx = {
 // the schema columns were typed. One shared type instead of eight
 // independently-drifting copies.
 export type ActionCtx = Pick<Ctx, "tenantId"> &
-  Partial<Pick<Ctx, "userId" | "requestId">>;
+  Partial<Pick<Ctx, "userId" | "requestId" | "roleKey" | "allLocations" | "locationIds" | "permissions">>;
 
 export class NotFoundError extends Error {
   constructor() {
@@ -161,4 +161,3 @@ export async function sessionExists(): Promise<boolean> {
   }
   return session !== null;
 }
-

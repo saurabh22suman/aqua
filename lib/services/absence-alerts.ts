@@ -8,6 +8,8 @@ import { resolveConfigInTx, setTenantConfigValue } from "@/db/config";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
+import { enqueueMemberNotification, enqueueStaffNotification } from "@/lib/messaging/notification-enqueue";
+import { staff } from "@/db/schema/staff";
 
 // O-04 — the threshold is a configuration-registry value
 // (attendance.absence_alert_threshold_pct, default 50). Reads and
@@ -187,7 +189,16 @@ export async function detectAbsenceAlerts(
         })),
       )
       .onConflictDoNothing()
-      .returning({ id: absenceAlerts.id });
+      .returning({ id: absenceAlerts.id, memberId: absenceAlerts.memberId, batchId: absenceAlerts.batchId, kind: absenceAlerts.alertKind });
+
+    for (const alert of inserted) {
+      const [batch] = await tx.select({ name: batches.name, locationId: batches.locationId, coachUserId: staff.userId })
+        .from(batches).leftJoin(staff, eq(staff.id, batches.coachId)).where(eq(batches.id, alert.batchId)).limit(1);
+      const event = { tenantId: ctx.tenantId, eventKey: `absence:${alert.id}`,
+        body: `${batch?.name ?? "Your batch"}: ${alert.kind === "consecutive_absences" ? "three or more consecutive sessions were marked absent" : "monthly attendance is below the academy threshold"}. Please contact the academy if you need help.` };
+      await enqueueMemberNotification(tx, event, alert.memberId);
+      await enqueueStaffNotification(tx, event, { locationId: batch?.locationId, coachUserId: batch?.coachUserId, batchId: alert.batchId });
+    }
 
     return { inserted: inserted.length, candidates: toInsert.length };
   });

@@ -25,7 +25,7 @@ const BAND_LABELS: Array<{ key: string; label: string }> = [
   { key: "4", label: "Band 4" },
 ];
 
-function LevelCard({ node }: { node: SkillLadderNodeRow }) {
+function LevelCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boolean }) {
   const [name, setName] = useState(node.name);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -40,29 +40,37 @@ function LevelCard({ node }: { node: SkillLadderNodeRow }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={120}
+          readOnly={!canEdit}
           className={INPUT}
           data-testid={`level-name-${node.id}`}
         />
       </label>
-      <button
-        type="button"
-        disabled={busy || name.trim().length === 0}
-        onClick={() => {
-          setBusy(true);
-          setMessage(null);
-          void (async () => {
-            const result = await updateSkillLevelAction({
-              nodeId: node.id,
-              name,
-            });
-            setMessage(result.ok ? "Saved." : result.error);
-            setBusy(false);
-          })();
-        }}
-        className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-      >
-        {busy ? "Saving…" : "Save level"}
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          disabled={busy || name.trim().length === 0}
+          onClick={() => {
+            setBusy(true);
+            setMessage(null);
+            void (async () => {
+              const result = await updateSkillLevelAction({
+                nodeId: node.id,
+                name,
+              });
+              setMessage(result.ok ? "Saved." : result.error);
+              setBusy(false);
+            })();
+          }}
+          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+        >
+          {busy ? "Saving…" : "Save level"}
+        </button>
+      ) : (
+        <p className="mt-2 text-[12px] text-ink-3">
+          Read only. Curriculum editing is delegated to the academy’s
+          designated curriculum lead.
+        </p>
+      )}
       {message ? (
         <p role="status" className="mt-1.5 text-[12px] text-ink-3">
           {message}
@@ -72,7 +80,7 @@ function LevelCard({ node }: { node: SkillLadderNodeRow }) {
   );
 }
 
-function SkillCard({ node }: { node: SkillLadderNodeRow }) {
+function SkillCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boolean }) {
   const [name, setName] = useState(node.name);
   const [rubric, setRubric] = useState<Record<string, string>>(() => ({
     "1": node.rubric["1"] ?? "",
@@ -93,6 +101,7 @@ function SkillCard({ node }: { node: SkillLadderNodeRow }) {
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={120}
+          readOnly={!canEdit}
           className={INPUT}
           data-testid={`skill-name-${node.id}`}
         />
@@ -114,6 +123,7 @@ function SkillCard({ node }: { node: SkillLadderNodeRow }) {
                 }
                 rows={2}
                 maxLength={2000}
+                readOnly={!canEdit}
                 className={INPUT}
                 data-testid={`skill-rubric-${key}-${node.id}`}
               />
@@ -121,26 +131,28 @@ function SkillCard({ node }: { node: SkillLadderNodeRow }) {
           ))}
         </div>
       </details>
-      <button
-        type="button"
-        disabled={busy || name.trim().length === 0}
-        onClick={() => {
-          setBusy(true);
-          setMessage(null);
-          void (async () => {
-            const result = await updateSkillNodeAction({
-              nodeId: node.id,
-              name,
-              rubric,
-            });
-            setMessage(result.ok ? "Saved." : result.error);
-            setBusy(false);
-          })();
-        }}
-        className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-      >
-        {busy ? "Saving…" : "Save skill"}
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          disabled={busy || name.trim().length === 0}
+          onClick={() => {
+            setBusy(true);
+            setMessage(null);
+            void (async () => {
+              const result = await updateSkillNodeAction({
+                nodeId: node.id,
+                name,
+                rubric,
+              });
+              setMessage(result.ok ? "Saved." : result.error);
+              setBusy(false);
+            })();
+          }}
+          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+        >
+          {busy ? "Saving…" : "Save skill"}
+        </button>
+      ) : null}
       {message ? (
         <p role="status" className="mt-1.5 text-[12px] text-ink-3">
           {message}
@@ -150,7 +162,13 @@ function SkillCard({ node }: { node: SkillLadderNodeRow }) {
   );
 }
 
-export function SkillLadderManager({ ladders }: { ladders: SkillLadderRow[] }) {
+export function SkillLadderManager({
+  ladders,
+  canEdit,
+}: {
+  ladders: SkillLadderRow[];
+  canEdit: boolean;
+}) {
   if (ladders.length === 0) {
     return (
       <div className="rounded-card border border-line bg-paper">
@@ -180,10 +198,10 @@ export function SkillLadderManager({ ladders }: { ladders: SkillLadderRow[] }) {
             </p>
             {levels.map((level) => (
               <div key={level.id}>
-                <LevelCard node={level} />
+                <LevelCard node={level} canEdit={canEdit} />
                 <ul className="mt-1 rounded-card border border-line bg-paper px-3.5">
                   {skillsOf(level.id).map((skill) => (
-                    <SkillCard key={skill.id} node={skill} />
+                    <SkillCard key={skill.id} node={skill} canEdit={canEdit} />
                   ))}
                   {skillsOf(level.id).length === 0 ? (
                     <li className="py-3 text-[12px] text-ink-3">

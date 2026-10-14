@@ -9,8 +9,10 @@ import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import { userLabel, userRoleNameFor, userNameFor } from "@/lib/services/payment-receiver";
 import { locationPredicate, resolveLocationAccess } from "@/lib/services/location-access";
+import { callerHasPermission } from "@/lib/services/resource-access";
 import { dayRangeUtc, todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
+import { toSafePaise } from "@/lib/money/safe-paise";
 import type { PaymentMethod } from "@/db/schema/payments";
 
 // U-02 — the Fees & Payments hub reads. This is one place over the
@@ -70,19 +72,98 @@ export type HubTransactionRow = {
 
 export const feesInvoiceFilterInput = z.object({
   status: z.enum(["dues", "all"]).default("all"),
+  locationId: z.string().uuid().optional(),
 });
 
 export const feesTransactionsInput = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  locationId: z.string().uuid().optional(),
 });
 
 const DUES_STATUSES: InvoiceStatus[] = ["issued", "partial"];
 
+// M02 (2026-10-09 role/content/permission audit §11) — the reception
+// desk's read-only call list: issued/partial invoices with an
+// outstanding balance, restricted to the caller's allowed locations,
+// overdue first, capped. Deliberately narrower than the owner Fees hub:
+// no collected/outstanding/reversal totals, no by-method or by-staff
+// split — just who to call and how much.
+export type DeskDueRow = {
+  id: string;
+  invoiceNumber: string;
+  memberName: string;
+  memberCode: string;
+  phone: string | null;
+  dueOn: string;
+  outstandingPaise: number;
+  overdue: boolean;
+};
+
+export const DESK_DUES_LIMIT = 50;
+
+export async function listDeskDues(
+  ctx: ActionCtx,
+  limit = DESK_DUES_LIMIT,
+): Promise<DeskDueRow[]> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerHasPermission(tx, ctx, "invoices.read"))) return [];
+
+    const [tenant] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const today = todayInZone(tenant?.timezone ?? "UTC");
+
+    const access = await resolveLocationAccess(tx, ctx);
+    const conditions = [
+      eq(invoices.tenantId, ctx.tenantId),
+      inArray(invoices.status, DUES_STATUSES),
+      sql`${invoices.totalPaise} > ${invoices.paidPaise}`,
+    ];
+    const predicate = locationPredicate(invoices.locationId, access);
+    if (predicate) conditions.push(predicate);
+
+    const rows = await tx
+      .select({
+        id: invoices.id,
+        invoiceNumber: invoices.invoiceNumber,
+        memberName: persons.fullName,
+        memberCode: members.memberCode,
+        phone: persons.phone,
+        dueOn: invoices.dueOn,
+        totalPaise: invoices.totalPaise,
+        paidPaise: invoices.paidPaise,
+      })
+      .from(invoices)
+      .innerJoin(
+        members,
+        and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)),
+      )
+      .innerJoin(persons, eq(persons.id, members.personId))
+      .where(and(...conditions))
+      .orderBy(asc(invoices.dueOn), asc(invoices.createdAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      id: row.id,
+      invoiceNumber: row.invoiceNumber,
+      memberName: row.memberName,
+      memberCode: row.memberCode,
+      phone: row.phone,
+      dueOn: row.dueOn,
+      outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
+      overdue: row.dueOn < today,
+    }));
+  });
+}
+
 export async function getFeesOverview(
   ctx: ActionCtx,
   period: { from: string; to: string },
+  options: { locationId?: string } = {},
 ): Promise<FeesOverview> {
+  const locationId = options.locationId;
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
@@ -103,6 +184,7 @@ export async function getFeesOverview(
       gte(payments.receivedAt, fromUtc),
       lt(payments.receivedAt, endUtc),
     ];
+    if (locationId) paymentConditions.push(eq(payments.locationId, locationId));
     if (payPredicate) paymentConditions.push(payPredicate);
 
     const [collected] = await tx
@@ -118,6 +200,7 @@ export async function getFeesOverview(
       inArray(invoices.status, DUES_STATUSES),
       sql`${invoices.totalPaise} > ${invoices.paidPaise}`,
     ];
+    if (locationId) dueConditions.push(eq(invoices.locationId, locationId));
     if (invPredicate) dueConditions.push(invPredicate);
 
     const [outstanding] = await tx
@@ -133,6 +216,11 @@ export async function getFeesOverview(
       gte(paymentReversals.createdAt, fromUtc),
       lt(paymentReversals.createdAt, endUtc),
     ];
+    if (locationId) {
+      reversalConditions.push(
+        sql`${paymentReversals.paymentId} in (select id from payments where tenant_id = ${ctx.tenantId} and location_id = ${locationId})`,
+      );
+    }
     if (payPredicate) {
       reversalConditions.push(
         sql`${paymentReversals.paymentId} in (select id from payments where tenant_id = ${ctx.tenantId} and ${payPredicate})`,
@@ -160,13 +248,13 @@ export async function getFeesOverview(
       // Net of reversals: the ledger's negative rows are subtracted
       // here so the headline reconciles with the transaction list.
       collectedPaise:
-        Number(collected?.paise ?? "0") - Number(reversed?.paise ?? "0"),
+        toSafePaise(BigInt(collected?.paise ?? "0") - BigInt(reversed?.paise ?? "0")),
       paymentCount: Number(collected?.count ?? 0),
-      reversedPaise: Number(reversed?.paise ?? "0"),
+      reversedPaise: toSafePaise(reversed?.paise ?? "0"),
       reversalCount: Number(reversed?.count ?? 0),
-      outstandingPaise: Number(outstanding?.paise ?? "0"),
+      outstandingPaise: toSafePaise(outstanding?.paise ?? "0"),
       dueInvoiceCount: Number(outstanding?.count ?? 0),
-      overduePaise: Number(overdue?.paise ?? "0"),
+      overduePaise: toSafePaise(overdue?.paise ?? "0"),
       overdueInvoiceCount: Number(overdue?.count ?? 0),
       today,
     };
@@ -186,6 +274,9 @@ export async function listHubInvoices(
     if (parsed.data.status === "dues") {
       conditions.push(inArray(invoices.status, DUES_STATUSES));
       conditions.push(sql`${invoices.totalPaise} > ${invoices.paidPaise}`);
+    }
+    if (parsed.data.locationId) {
+      conditions.push(eq(invoices.locationId, parsed.data.locationId));
     }
     const predicate = locationPredicate(invoices.locationId, access);
     if (predicate) conditions.push(predicate);
@@ -222,9 +313,9 @@ export async function listHubInvoices(
       invoiceNumber: r.invoiceNumber,
       memberId: r.memberId,
       memberName: r.memberName,
-      totalPaise: Number(r.totalPaise),
-      paidPaise: Number(r.paidPaise),
-      outstandingPaise: Number(r.totalPaise) - Number(r.paidPaise),
+      totalPaise: toSafePaise(r.totalPaise),
+      paidPaise: toSafePaise(r.paidPaise),
+      outstandingPaise: toSafePaise(r.totalPaise - r.paidPaise),
       status: r.status as InvoiceStatus,
       source: r.source as InvoiceSource,
       issuedOn: r.issuedOn,
@@ -257,6 +348,9 @@ export async function listHubTransactions(
       gte(payments.receivedAt, fromUtc),
       lt(payments.receivedAt, endUtc),
     ];
+    if (parsed.data.locationId) {
+      conditions.push(eq(payments.locationId, parsed.data.locationId));
+    }
     const predicate = locationPredicate(payments.locationId, access);
     if (predicate) conditions.push(predicate);
 
@@ -296,6 +390,9 @@ export async function listHubTransactions(
       gte(paymentReversals.createdAt, fromUtc),
       lt(paymentReversals.createdAt, endUtc),
     ];
+    if (parsed.data.locationId) {
+      reversalConditions.push(eq(payments.locationId, parsed.data.locationId));
+    }
     if (predicate) reversalConditions.push(predicate);
     const reversalRows = await tx
       .select({
@@ -337,7 +434,7 @@ export async function listHubTransactions(
       ...rows.map((r) => ({
         id: r.id,
         receivedAt: r.receivedAt.toISOString(),
-        amountPaise: Number(r.amountPaise),
+        amountPaise: toSafePaise(r.amountPaise),
         method: r.method as PaymentMethod,
         reference: r.reference,
         invoiceNumber: r.invoiceNumber,
@@ -351,7 +448,7 @@ export async function listHubTransactions(
       ...reversalRows.map((r) => ({
         id: r.id,
         receivedAt: r.reversedAt.toISOString(),
-        amountPaise: -Number(r.amountPaise),
+        amountPaise: -toSafePaise(r.amountPaise),
         method: r.method as PaymentMethod,
         reference: null,
         invoiceNumber: r.invoiceNumber,

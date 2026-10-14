@@ -63,13 +63,13 @@ afterEach(() => {
 
 describe("MakeupCreditsPanel (R.7)", () => {
   it("lists credits with their status and source date", async () => {
-    render(<MakeupCreditsPanel memberId="m1" />);
+    render(<MakeupCreditsPanel memberId="m1" canGrant canRedeem />);
     await screen.findByText("5 Sept 2026", { exact: true });
     expect(document.body.textContent).toContain("Available");
   });
 
   it("grants a credit for the chosen excused absence", async () => {
-    render(<MakeupCreditsPanel memberId="m1" />);
+    render(<MakeupCreditsPanel memberId="m1" canGrant canRedeem />);
     await screen.findByTestId("makeup-source");
 
     fireEvent.change(screen.getByTestId("makeup-source"), {
@@ -86,7 +86,7 @@ describe("MakeupCreditsPanel (R.7)", () => {
   });
 
   it("redeems an available credit against the chosen session", async () => {
-    render(<MakeupCreditsPanel memberId="m1" />);
+    render(<MakeupCreditsPanel memberId="m1" canGrant canRedeem />);
     await screen.findByTestId("makeup-target");
 
     fireEvent.change(screen.getByTestId("makeup-target"), {
@@ -101,5 +101,15 @@ describe("MakeupCreditsPanel (R.7)", () => {
         targetSessionId: "s3",
       }),
     );
+  });
+
+  it("hides Grant from a caller without programs.write and asks for the owner", async () => {
+    render(<MakeupCreditsPanel memberId="m1" canGrant={false} canRedeem />);
+    await screen.findByTestId("makeup-target");
+
+    expect(screen.queryByRole("button", { name: /grant credit/i })).toBeNull();
+    expect(document.body.textContent).toMatch(/ask the owner to grant/i);
+    // Redemption stays available (attendance.mark), unlike Grant.
+    expect(screen.getByRole("button", { name: /redeem/i })).toBeTruthy();
   });
 });

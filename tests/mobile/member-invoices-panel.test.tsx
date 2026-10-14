@@ -94,6 +94,7 @@ describe("MemberInvoicesPanel duplicate guard (PR1-C3)", () => {
         canWrite
         canRecord
         canRefund
+        canReadPayments
         timezone={TZ}
       />,
     );
@@ -117,6 +118,7 @@ describe("MemberInvoicesPanel duplicate guard (PR1-C3)", () => {
         canWrite
         canRecord
         canRefund
+        canReadPayments
         timezone={TZ}
       />,
     );
@@ -127,5 +129,33 @@ describe("MemberInvoicesPanel duplicate guard (PR1-C3)", () => {
 
     await screen.findByText(/just raised/i);
     expect(document.body.textContent).not.toMatch(/23505|_uidx/);
+  });
+
+  it("releases the busy state and reconciles when raising an invoice throws", async () => {
+    listMemberSubscriptionsAction.mockResolvedValue([SUBSCRIPTION]);
+    listMemberInvoicesAction.mockResolvedValue([]);
+    createInvoiceAction.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    render(
+      <MemberInvoicesPanel
+        memberId="member-1"
+        canWrite
+        canRecord
+        canRefund
+        canReadPayments
+        timezone={TZ}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: "Raise invoice" });
+    fireEvent.click(button);
+
+    await screen.findByText(/did not complete/i);
+    expect(listMemberInvoicesAction).toHaveBeenCalledTimes(2);
+    expect(
+      (screen.getByRole("button", { name: "Raise invoice" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    expect(document.body.textContent).not.toMatch(/Saving…/);
   });
 });

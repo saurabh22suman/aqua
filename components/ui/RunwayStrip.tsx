@@ -34,7 +34,10 @@ export function RunwayStrip({
           value={usedDays}
           max={totalDays}
           tone={expired ? "late" : usedDays / Math.max(1, totalDays) > 0.8 ? "warn" : "water"}
-          label={`${label} runway`}
+          // The caller's label is the strip's accessible name; appending
+          // " runway" here doubled the word for callers that already
+          // named the strip (e.g. "Gold runway runway").
+          label={label}
         />
       </div>
       <div className="mt-1.5 flex justify-between text-[11.5px] text-ink-3">

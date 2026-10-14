@@ -93,16 +93,18 @@ export type BatchWithProgramName = Batch & {
   locationName: string | null;
 };
 
-export async function listBatches(ctx: ActionCtx): Promise<BatchWithProgramName[]> {
+export async function listBatches(
+  ctx: ActionCtx,
+  options: { locationId?: string } = {},
+): Promise<BatchWithProgramName[]> {
   return withTenant(ctx.tenantId, async (tx) => {
     // O-08 — scoped staff see their locations' batches plus
-    // tenant-wide batches (location_id IS NULL).
+    // tenant-wide batches (location_id IS NULL). W1-6 — the owner
+    // facility switcher narrows the board to one site.
     const access = await resolveLocationAccess(tx, ctx);
     const accessPredicate = locationPredicate(batches.locationId, access);
-    const conditions = [
-      eq(batches.tenantId, ctx.tenantId),
-      isNull(batches.deletedAt),
-    ];
+    const conditions = [eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)];
+    if (options.locationId) conditions.push(eq(batches.locationId, options.locationId));
     if (accessPredicate) conditions.push(accessPredicate);
 
     return tx

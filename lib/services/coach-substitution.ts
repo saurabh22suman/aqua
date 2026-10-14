@@ -4,6 +4,10 @@ import { sessions } from "@/db/schema/scheduling";
 import { staff } from "@/db/schema/staff";
 import { writeAudit } from "@/lib/audit/write";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
+import {
+  locationVisible,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asStaffId, asTenantId } from "@/lib/ids";
 
@@ -71,6 +75,7 @@ export async function substituteCoach(
         sessionDate: sessions.sessionDate,
         startsAt: sessions.startsAt,
         endsAt: sessions.endsAt,
+        locationId: sessions.locationId,
       })
       .from(sessions)
       .where(
@@ -81,6 +86,20 @@ export async function substituteCoach(
       )
       .limit(1);
     if (!s) {
+      return {
+        kind: "error",
+        code: "session_not_found",
+        message: "Session not found.",
+      };
+    }
+
+    // A01 sibling — the session's own location must be inside the
+    // caller's allowed set before any substitution write. A restricted
+    // Admin scoped to site A could otherwise reassign a site-B
+    // session's coach (and the payout that follows coach_id). Refusal
+    // hides the session with the same not-found shape the lifecycle
+    // guards use, and writes no audit because the update never runs.
+    if (!locationVisible(await resolveLocationAccess(tx, ctx), s.locationId)) {
       return {
         kind: "error",
         code: "session_not_found",

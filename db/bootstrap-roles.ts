@@ -1,5 +1,6 @@
 import { Client } from "pg";
 import { env, requireMigrationUrl } from "@/lib/env";
+import { restrictAppPrivileges } from "./app-privileges";
 
 function quotePassword(password: string): string {
   return `'${password.replace(/'/g, "''")}'`;
@@ -19,6 +20,8 @@ export async function bootstrapRoles(
   await client.connect();
 
   try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext('aqua-app-privileges'))");
     await client.query(`
       do $$
       begin
@@ -58,46 +61,7 @@ export async function bootstrapRoles(
     // Revoke after the blanket grant so the guarantee survives
     // re-bootstraps. Partitions are included: "all tables" reaches
     // them, and a REVOKE on the parent does not cascade.
-    const APPEND_ONLY_TENANT_TABLES = [
-      "activity_events",
-      "audit_log",
-      "announcements",
-      "account_entries",
-    ];
-    for (const table of APPEND_ONLY_TENANT_TABLES) {
-      await client.query(`
-        do $$
-        declare
-          part regclass;
-        begin
-          if to_regclass('public.${table}') is not null then
-            revoke update, delete on public.${table} from app_user;
-            for part in
-              select inhrelid::regclass
-                from pg_inherits
-               where inhparent = 'public.${table}'::regclass
-            loop
-              execute format('revoke update, delete on %s from app_user', part);
-            end loop;
-          end if;
-        end
-        $$;
-      `);
-    }
-
-    // U-06 — notifications keep UPDATE (the per-user read state) but
-    // must never be deleted by the app role: a recipient clearing their
-    // inbox would erase the delivery evidence. Same blanket-grant
-    // caveat as above.
-    await client.query(`
-      do $$
-      begin
-        if to_regclass('public.notifications') is not null then
-          revoke delete on public.notifications from app_user;
-        end if;
-      end
-      $$;
-    `);
+    await restrictAppPrivileges(client);
 
     await client.query(`
       grant usage on schema public to app_user;
@@ -123,7 +87,11 @@ export async function bootstrapRoles(
         grant usage, select on sequences to app_user;
     `);
 
+    await client.query("commit");
     console.log("Roles bootstrapped: app_user (nologin), app_login (login, noinherit).");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
   } finally {
     await client.end();
   }

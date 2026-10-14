@@ -10,6 +10,7 @@ import { scheduleReportsRollup } from "@/lib/jobs/reports-rollup-schedule";
 import { scheduleEventsRollup } from "@/lib/jobs/events-rollup-schedule";
 import { scheduleActivityExport } from "@/lib/jobs/activity-export-schedule";
 import { scheduleAuditCheckpoint } from "@/lib/jobs/audit-checkpoint-schedule";
+import { scheduleWhatsAppNotifications } from "@/lib/jobs/whatsapp-notifications-schedule";
 
 // pg-boss needs a role-aware connection. db/client.ts's pool already runs
 // `set role app_user` on every connection (its onConnect hook) — routing
@@ -97,6 +98,7 @@ export async function registerBillingSchedules(
     await scheduleEventsRollup(boss, tenantId, timezone);
     await scheduleActivityExport(boss, tenantId, timezone);
     await scheduleAuditCheckpoint(boss, tenantId, timezone);
+    await scheduleWhatsAppNotifications(boss, tenantId, timezone);
   } finally {
     await boss.stop({ graceful: false, timeout: 5000 });
   }

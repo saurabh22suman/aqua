@@ -52,8 +52,8 @@ describe("U-01 collections vs expenses", () => {
       />,
     );
     expect(screen.getByRole("img", { name: /collections by day/i })).toBeTruthy();
-    expect(document.body.textContent).toMatch(/expenses — not recorded in aqua yet/i);
-    expect(document.body.textContent).toMatch(/no target arc/i);
+    expect(document.body.textContent).toMatch(/expenses are not tracked in aqua yet/i);
+    expect(document.body.textContent).toMatch(/no comparison series/i);
   });
 
   it("has an honest empty state when nothing was collected", () => {

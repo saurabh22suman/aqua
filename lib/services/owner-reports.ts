@@ -1,4 +1,4 @@
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
@@ -6,31 +6,23 @@ import { batches, programs } from "@/db/schema/programs";
 import { members } from "@/db/schema/people";
 import { enquiries } from "@/db/schema/enquiries";
 import { todayInZone } from "@/lib/time/tz";
+import { locationPredicate, resolveLocationAccess } from "@/lib/services/location-access";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // Re-export coach load so the existing import path keeps working.
 export { getCoachLoad, type CoachLoadRow } from "./coach-load";
 
-// Phase 4 — owner reports. Three reads — attendance by batch,
-// enquiry funnel by source, retention (aggregate-only,
-// members meeting an absence signal), coach load — all share
-// one service module so they can sit on the same /owner/reports
-// page and share a common filter shape.
-//
-// 4.5 (retention) is intentionally aggregate-only. Per scope
-// § 7.1 (DPDP profiling restriction), risk-scoring an
-// individual minor is out of scope; we surface the aggregate
-// "X members attended zero of Y recent sessions" only.
-//
-// All four reads run through withTenant() and respect RLS.
+// Phase 4 — owner reports (attendance by batch, enquiry funnel,
+// retention, coach load) sharing one module and filter shape.
+// Retention is aggregate-only per scope § 7.1 (DPDP profiling):
+// we surface "X members attended zero of Y recent sessions".
+// All reads run through withTenant() and respect RLS.
 
 export type ReportPeriod = { from: string; to: string };
 
-// 4.3 — attendance report by batch. Per C-22's upsert, an
-// attendance row exists exactly once per (session, member)
-// pair; "total marks" therefore equals "sessions × enrolled"
-// for that batch in the period. A batch with no sessions
-// returns sessionCount=0 and pct=null — the honest empty.
+// 4.3 — attendance by batch. One attendance row per (session,
+// member); "total marks" equals sessions × enrolled for the period.
+// A batch with no sessions returns sessionCount=0 and pct=null.
 export type BatchAttendanceReportRow = {
   batchId: string;
   batchName: string;
@@ -44,8 +36,13 @@ export type BatchAttendanceReportRow = {
 export async function getAttendanceReport(
   ctx: ActionCtx,
   period: ReportPeriod,
+  options: { locationId?: string } = {},
 ): Promise<BatchAttendanceReportRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — restricted callers see/export only their locations; the
+    // requested locationId can only narrow further.
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(batches.locationId, access);
     const rows = await tx
       .select({
         batchId: batches.id,
@@ -70,7 +67,14 @@ export async function getAttendanceReport(
         attendance,
         and(eq(attendance.sessionId, sessions.id), eq(attendance.tenantId, ctx.tenantId)),
       )
-      .where(and(eq(batches.tenantId, ctx.tenantId), sql`${batches.deletedAt} is null`))
+      .where(
+        and(
+          eq(batches.tenantId, ctx.tenantId),
+          sql`${batches.deletedAt} is null`,
+          ...(options.locationId ? [eq(batches.locationId, options.locationId)] : []),
+          ...(accessPredicate ? [accessPredicate] : []),
+        ),
+      )
       .groupBy(batches.id, batches.name, programs.name)
       .orderBy(batches.name);
 
@@ -234,7 +238,9 @@ export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
       })
       .from(attendance)
       .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
-      .where(and(eq(attendance.tenantId, ctx.tenantId), gte(sessions.sessionDate, since.toISOString().slice(0, 10))))
+      .innerJoin(members, and(eq(members.id, attendance.memberId), eq(members.tenantId, ctx.tenantId)))
+      .where(and(eq(attendance.tenantId, ctx.tenantId), eq(members.status, "active"), isNull(members.deletedAt),
+        gte(sessions.sessionDate, since.toISOString().slice(0, 10))))
       .groupBy(attendance.memberId);
 
     const withZero: string[] = [];
@@ -256,7 +262,7 @@ export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
 
     return {
       memberCountAtRisk,
-      membersWithZeroLast30: withZero.length,
+      membersWithZeroLast30: memberCountAtRisk,
       membersWithPartialLast30: withPartial.length,
       totalActiveMembers: Number(totalActiveMembers),
     };

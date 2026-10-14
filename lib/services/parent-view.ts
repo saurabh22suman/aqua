@@ -9,6 +9,7 @@ import { payments } from "@/db/schema/payments";
 import { subscriptions } from "@/db/schema/subscriptions";
 import { membershipPlans } from "@/db/schema/membership-plans";
 import { asMemberId, type TenantId } from "@/lib/ids";
+import { toSafePaise } from "@/lib/money/safe-paise";
 
 // C-45 — parent-page view service. Used by `/p/[token]` ONLY.
 //
@@ -29,6 +30,11 @@ export type ParentViewNextSession = {
   startsAt: Date;
   endsAt: Date;
   batchName: string;
+  // M05 — the venue the parent needs to show up at. Session-level
+  // location when the session carries one (it is copied from the
+  // batch at generation and independently editable), otherwise the
+  // batch's location. Null when the session is tenant-wide.
+  locationName: string | null;
   coachName: string | null;
 };
 
@@ -144,6 +150,7 @@ export async function getParentViewData(args: {
       starts_at: Date;
       ends_at: Date;
       batch_name: string;
+      location_name: string | null;
       coach_name: string | null;
     }>(sql`
       select s.id as session_id,
@@ -151,9 +158,13 @@ export async function getParentViewData(args: {
              s.starts_at,
              s.ends_at,
              b.name as batch_name,
+             loc.name as location_name,
              coach_person.full_name as coach_name
       from sessions s
       inner join batches b on b.id = s.batch_id and b.tenant_id = s.tenant_id
+      left join locations loc
+        on loc.id = coalesce(s.location_id, b.location_id)
+        and loc.tenant_id = s.tenant_id
       left join staff st on st.id = s.coach_id and st.tenant_id = s.tenant_id
       left join persons coach_person on coach_person.id = st.person_id
       inner join enrolments e
@@ -173,6 +184,7 @@ export async function getParentViewData(args: {
       starts_at: Date;
       ends_at: Date;
       batch_name: string;
+      location_name: string | null;
       coach_name: string | null;
     }> }).rows[0] ?? null;
 
@@ -207,7 +219,9 @@ export async function getParentViewData(args: {
 
     // Recent = last MAX_RECENT rows across the whole history (not
     // bounded to this month), so a parent can see beyond the 30-day
-    // window when the page is viewed on day 28.
+    // window when the page is viewed on day 28. Select newest-first so
+    // the limit picks the newest rows, then reverse the selected subset
+    // back to chronological display order (2026-10-05 audit FE-06).
     const recentRows = await tx
       .select({
         sessionDate: sessions.sessionDate,
@@ -223,8 +237,9 @@ export async function getParentViewData(args: {
           eq(attendance.memberId, asMemberId(args.personId)),
         ),
       )
-      .orderBy(asc(sessions.sessionDate))
+      .orderBy(desc(sessions.sessionDate), desc(sessions.id))
       .limit(MAX_RECENT);
+    recentRows.reverse();
 
     // R.8 — most recent absence alert for this child.
     const [alertRow] = await tx
@@ -354,6 +369,7 @@ export async function getParentViewData(args: {
             startsAt: new Date(next.starts_at),
             endsAt: new Date(next.ends_at),
             batchName: next.batch_name,
+            locationName: next.location_name,
             coachName: next.coach_name,
           }
         : null,
@@ -388,15 +404,15 @@ export async function getParentViewData(args: {
           id: row.id,
           invoiceNumber: row.invoiceNumber,
           dueOn: row.dueOn,
-          totalPaise: Number(row.totalPaise),
-          paidPaise: Number(row.paidPaise),
-          outstandingPaise: Number(row.totalPaise) - Number(row.paidPaise),
+          totalPaise: toSafePaise(row.totalPaise),
+          paidPaise: toSafePaise(row.paidPaise),
+          outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
           status: row.status,
         })),
         payments: paymentRows.map((row) => ({
           id: row.id,
           receivedAt: row.receivedAt.toISOString(),
-          amountPaise: Number(row.amountPaise),
+          amountPaise: toSafePaise(row.amountPaise),
           method: row.method,
           invoiceNumber: row.invoiceNumber ?? null,
         })),

@@ -4,6 +4,8 @@ import { members, memberStatusTransitions, type MemberStatus } from "@/db/schema
 import type { ActionCtx } from "@/lib/auth/context";
 import { MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
 import { asMemberId } from "@/lib/ids";
+import { visibleMember } from "./resource-access";
+import { writeAudit } from "@/lib/audit/write";
 
 export type TransitionResult = { ok: true } | { ok: false; error: string };
 
@@ -19,6 +21,7 @@ export async function transitionMemberStatus(
   }
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!await visibleMember(tx, ctx, input.memberId)) return { ok: false, error: "Member not found." };
     const [member] = await tx
       .select({ status: members.status })
       .from(members)
@@ -51,6 +54,9 @@ export async function transitionMemberStatus(
       reason: input.reason,
       changedBy: ctx.userId,
     });
+    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, actorType: ctx.userId ? "user" : "system", requestId: ctx.requestId,
+      action: "member.status", entityType: "member", entityId: input.memberId,
+      before: { status: fromStatus }, after: { status: input.toStatus, reason: input.reason } });
 
     return { ok: true };
   });
@@ -84,8 +90,9 @@ export async function listMemberStatusHistory(
   ctx: ActionCtx,
   memberId: string,
 ): Promise<MemberStatusHistoryRow[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    if (!await visibleMember(tx, ctx, memberId)) return [];
+    return tx
       .select({
         fromStatus: memberStatusTransitions.fromStatus,
         toStatus: memberStatusTransitions.toStatus,
@@ -100,6 +107,6 @@ export async function listMemberStatusHistory(
           eq(memberStatusTransitions.memberId, asMemberId(memberId)),
         ),
       )
-      .orderBy(memberStatusTransitions.changedAt),
-  );
+      .orderBy(memberStatusTransitions.changedAt);
+  });
 }

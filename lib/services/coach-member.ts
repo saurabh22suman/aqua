@@ -10,6 +10,7 @@ import { coachStaffIdSubquery } from "@/lib/services/staff";
 import { asMemberId } from "@/lib/ids";
 import { addDays, isMinor, todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
+import { visibleMember } from "./resource-access";
 
 // Coach-scoped member lookup. The coach can see this member only if
 // the member is enrolled in at least one of the coach's batches —
@@ -59,6 +60,7 @@ export async function getCoachMemberDetail(
   memberId: string,
 ): Promise<CoachMemberDetail | null> {
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!await visibleMember(tx, ctx, memberId)) return null;
     // First: confirm this member is in at least one of the coach's
     // batches. Coach-scoping mirrors listCoachRoster — the only
     // route to this service. A coach who can somehow pass a member id

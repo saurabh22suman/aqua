@@ -64,6 +64,7 @@ export const members = pgTable(
     // Wave 2 — nullable so backfill could be additive; createMember
     // writes today in the tenant's timezone, updateMember can backdate.
     joinedOn: date("joined_on"),
+    notificationPersonIds: uuid("notification_person_ids").array(),
     ...softDelete,
     ...auditColumns,
   },

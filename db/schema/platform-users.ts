@@ -16,6 +16,7 @@ export const platformUsers = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     email: text("email").notNull().unique(),
+    phone: text("phone").unique(),
     name: text("name").notNull(),
     passwordHash: text("password_hash").notNull(),
     passwordSalt: text("password_salt").notNull(),

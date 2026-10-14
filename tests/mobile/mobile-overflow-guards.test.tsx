@@ -76,7 +76,7 @@ describe("member detail enrolment select can wrap and shrink (F6)", () => {
       },
     ]);
 
-    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} />);
+    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} canEnrol canWaitlist />);
     const select = await screen.findByTestId("enrolment-batch-select");
 
     expect(select.className).toContain("w-full");

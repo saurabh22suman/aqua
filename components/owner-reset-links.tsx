@@ -38,12 +38,17 @@ export function OwnerResetLinks({ owners }: { owners: OwnerMembershipRow[] }) {
   }
 
   return (
-    <section className="mt-8">
-      <h2 className="font-display text-[15px] font-semibold">Owner access</h2>
+    <section className="mt-8" data-testid="owner-reset-links">
+      <h2 className="font-display text-[15px] font-semibold">Help another owner sign in</h2>
       <p className="mt-1 text-[12.5px] text-ink-3">
-        If an owner is locked out, create a one-hour reset link and send it to
-        them yourself. Redeeming it sets a new PIN and signs out their other
-        devices.
+        Locked out? Create a one-hour reset link for any owner listed below and
+        send it to them yourself over a channel you trust. Redeeming it sets a
+        new PIN and signs out their other devices.
+      </p>
+      <p className="mt-1.5 text-[12.5px] text-ink-3">
+        If you are the only owner and cannot sign in, use{" "}
+        <span className="font-medium text-ink-2">Forgot PIN? Reset with WhatsApp</span>{" "}
+        on the login screen, or ask platform support to mint the link for you.
       </p>
 
       <ul className="mt-3 space-y-2">

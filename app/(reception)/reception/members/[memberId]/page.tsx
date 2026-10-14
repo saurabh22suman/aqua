@@ -16,6 +16,8 @@ import { hasPermission } from "@/lib/auth/permission";
 import { formatDateIST } from "@/lib/time/tz";
 import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
+import { getNotificationDestinationsAction } from "@/lib/actions/notification-destinations";
+import { MemberNotificationDestinations } from "@/components/member-notification-destinations";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -46,6 +48,8 @@ export default async function ReceptionMemberDetailPage({
     getTenantTimezoneAction(),
   ]);
   if (!member) notFound();
+  const destinations = hasPermission(ctx, "members.write")
+    ? await getNotificationDestinationsAction(memberId) : null;
 
   return (
     <main className="px-5 pt-10 pb-8">
@@ -70,15 +74,26 @@ export default async function ReceptionMemberDetailPage({
         {member.isMinor ? " · minor" : ""}
       </p>
 
-      <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
+      {destinations ? <MemberNotificationDestinations key={memberId} memberId={memberId} {...destinations} /> : null}
+      <MemberEnrolmentPanel
+        memberId={member.memberId}
+        terminology={terminology}
+        canEnrol={hasPermission(ctx, "members.write")}
+        canWaitlist={hasPermission(ctx, "enquiries.write")}
+      />
 
-      <MemberSubscriptionPanel memberId={member.memberId} />
+      <MemberSubscriptionPanel
+        memberId={member.memberId}
+        canManage={hasPermission(ctx, "members.write")}
+      />
 
       <MemberInvoicesPanel
         memberId={member.memberId}
         canWrite={hasPermission(ctx, "invoices.write")}
+        canVoid={hasPermission(ctx, "settings.manage")}
         canRecord={hasPermission(ctx, "payments.record")}
         canRefund={hasPermission(ctx, "payments.refund")}
+        canReadPayments={hasPermission(ctx, "payments.read")}
         timezone={timezone}
       />
 

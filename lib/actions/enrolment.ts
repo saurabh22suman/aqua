@@ -36,5 +36,5 @@ export async function enrolMemberAction(raw: {
   const input = enrolMemberInput.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.write");
-  return enrolMember({ tenantId: ctx.tenantId }, input);
+  return enrolMember(ctx, input);
 }

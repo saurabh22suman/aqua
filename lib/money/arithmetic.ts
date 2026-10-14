@@ -3,8 +3,10 @@
 // here goes through BigInt for the multiply/divide step so no floating
 // point operation is ever performed on money, not even internally.
 
+import { toSafePaise } from "./safe-paise";
+
 function assertPaise(value: number, label: string): void {
-  if (!Number.isInteger(value) || value < 0) {
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${label} must be a non-negative integer (paise), got ${value}`);
   }
 }
@@ -26,7 +28,7 @@ export function computeTax(basePaise: number, basisPoints: number): number {
   assertPaise(basePaise, "basePaise");
   assertBasisPoints(basisPoints);
   const tax = bigIntRoundedDivide(BigInt(basePaise) * BigInt(basisPoints), 10000n);
-  return Number(tax);
+  return toSafePaise(tax);
 }
 
 // The inverse of computeTax: given a GST-inclusive total and the rate,
@@ -42,7 +44,7 @@ export function splitTotal(
 ): { base: number; tax: number } {
   assertPaise(totalPaise, "totalPaise");
   assertBasisPoints(basisPoints);
-  const base = Number(
+  const base = toSafePaise(
     bigIntRoundedDivide(BigInt(totalPaise) * 10000n, 10000n + BigInt(basisPoints)),
   );
   return { base, tax: totalPaise - base };
@@ -60,7 +62,7 @@ export function applyPayments(
   }
   const outstanding = BigInt(totalPaise) - paid;
   return {
-    paid: Number(paid),
-    outstanding: outstanding > 0n ? Number(outstanding) : 0,
+    paid: toSafePaise(paid),
+    outstanding: outstanding > 0n ? toSafePaise(outstanding) : 0,
   };
 }

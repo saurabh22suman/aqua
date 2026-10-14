@@ -18,20 +18,13 @@ const RUPEE_FORMATTER = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-// The one deliberate exception to "money is bigint paise, never a
-// float" (docs/implementation-plan.md, Standing rules) in this whole
-// module. Display only: the Number this produces is handed straight
-// to Intl.NumberFormat (which requires a Number, not a bigint, and
-// has no integer-cents mode) and returned as a string -- it never
-// goes back into arithmetic.ts or anywhere else money is computed.
-// This is the ONLY place that conversion may happen; guarded by
-// tests/money.test.ts's "no paise-to-Number conversion outside
-// formatINR" check, not just this comment.
-export function formatINR(paise: number): string {
-  if (!Number.isInteger(paise) || paise < 0) {
+export function formatINR(paise: number | bigint): string {
+  if ((typeof paise === "number" && !Number.isSafeInteger(paise)) || paise < 0) {
     throw new Error(`formatINR expects a non-negative integer paise value, got ${paise}`);
   }
-  return RUPEE_FORMATTER.format(paise / 100);
+  const exact = BigInt(paise);
+  return RUPEE_FORMATTER.formatToParts(exact / 100n).map(part =>
+    part.type === "fraction" ? String(exact % 100n).padStart(2, "0") : part.value).join("");
 }
 
 export function parsePaise(formatted: string): number {
@@ -45,5 +38,7 @@ export function parsePaise(formatted: string): number {
     );
   }
   const [, rupees, paise] = match;
-  return Number(rupees) * 100 + Number(paise);
+  const exact = BigInt(rupees) * 100n + BigInt(paise);
+  if (exact > BigInt(Number.MAX_SAFE_INTEGER)) throw new RangeError("Paise amount is outside the exact integer range.");
+  return Number(exact);
 }

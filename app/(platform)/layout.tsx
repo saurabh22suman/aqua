@@ -133,6 +133,14 @@ function SignedInBlock({
       <p>
         Signed in as <span className="text-paper">{status.role}</span>
       </p>
+      {/* R03 (2026-10-13 role-workflow audit) — a viewer gets a
+          read-only platform; writes are refused server-side. Hiding
+          the controls is supplementary, not the enforcement. */}
+      {status.role === "viewer" ? (
+        <p className="mt-1 text-paper/50">
+          Read-only: this account can browse, not change, platform data.
+        </p>
+      ) : null}
       <form action={signOutFormAction}>
         <button
           type="submit"

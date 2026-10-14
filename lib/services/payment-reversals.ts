@@ -10,6 +10,7 @@ import {
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { formatINR } from "@/lib/money/format";
+import { toSafePaise } from "@/lib/money/safe-paise";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // PR2-C8 — payment reversals. The original payment row is immutable;
@@ -78,7 +79,7 @@ export async function reversePayment(
           eq(paymentReversals.tenantId, ctx.tenantId),
         ),
       );
-    const remaining = Number(payment.amountPaise) - Number(reversed);
+    const remaining = toSafePaise(payment.amountPaise - BigInt(reversed));
     if (remaining <= 0) {
       return { ok: false, error: "This payment is already fully reversed." };
     }
@@ -119,9 +120,9 @@ export async function reversePayment(
       if (invoice) {
         const newPaid = Math.max(
           0,
-          Number(invoice.paidPaise) - input.amountPaise,
+          toSafePaise(invoice.paidPaise - BigInt(input.amountPaise)),
         );
-        const total = Number(invoice.totalPaise);
+        const total = toSafePaise(invoice.totalPaise);
         invoiceStatus =
           newPaid <= 0 ? "issued" : newPaid >= total ? "paid" : "partial";
         await tx
@@ -150,10 +151,10 @@ export async function reversePayment(
       entityId: payment.id,
       before: {
         paymentStatus: payment.status,
-        reversedPaise: Number(reversed),
+        reversedPaise: toSafePaise(reversed),
       },
       after: {
-        reversedPaise: Number(reversed) + input.amountPaise,
+        reversedPaise: toSafePaise(BigInt(reversed) + BigInt(input.amountPaise)),
         amountPaise: input.amountPaise,
         reason: input.reason,
         invoiceStatus,
@@ -172,10 +173,13 @@ export type PaymentReversalRow = {
 };
 
 export async function listPaymentReversals(
-  ctx: Pick<ActionCtx, "tenantId">,
+  ctx: ActionCtx,
   paymentId: string,
 ): Promise<PaymentReversalRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const [payment] = await tx.select({ locationId: payments.locationId }).from(payments)
+      .where(and(eq(payments.id, paymentId), eq(payments.tenantId, ctx.tenantId))).limit(1);
+    if (!payment || !locationVisible(await resolveLocationAccess(tx, ctx), payment.locationId)) return [];
     const rows = await tx
       .select({
         id: paymentReversals.id,
@@ -193,7 +197,7 @@ export async function listPaymentReversals(
       .orderBy(paymentReversals.createdAt);
     return rows.map((row) => ({
       id: row.id,
-      amountPaise: Number(row.amountPaise),
+      amountPaise: toSafePaise(row.amountPaise),
       reason: row.reason,
       reversedAt: row.reversedAt.toISOString(),
     }));

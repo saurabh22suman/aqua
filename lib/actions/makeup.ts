@@ -15,8 +15,11 @@ import {
 } from "@/lib/services/makeup";
 
 // Phase R.7 — V.18 makeup credits action. parse-then-permission
-// preamble; management-only (a coach can't self-grant a makeup
-// credit on themselves).
+// preamble. Grant is management-only (programs.write): a coach or
+// counter caller can't self-grant a makeup credit. Redemption stays
+// with attendance.mark holders (Reception); the service further
+// limits a coach to assigned members. Actions pass the complete ctx
+// so the service can enforce role/assignment/location scope.
 
 const grantSchema = z.object({
   memberId: z.string().uuid(),
@@ -67,17 +70,14 @@ export async function grantMakeupCreditAction(
     return { kind: "error", code: "invalid", message: "Invalid grant." };
   }
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.mark");
-  return grantMakeupCredit(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
-    {
-      memberId: parsed.data.memberId,
-      sourceSessionId: parsed.data.sourceSessionId,
-      expiresAt: parsed.data.expiresAt
-        ? new Date(parsed.data.expiresAt)
-        : undefined,
-    },
-  );
+  requirePermission(ctx, "programs.write");
+  return grantMakeupCredit(ctx, {
+    memberId: parsed.data.memberId,
+    sourceSessionId: parsed.data.sourceSessionId,
+    expiresAt: parsed.data.expiresAt
+      ? new Date(parsed.data.expiresAt)
+      : undefined,
+  });
 }
 
 export async function redeemMakeupCreditAction(
@@ -89,8 +89,5 @@ export async function redeemMakeupCreditAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "attendance.mark");
-  return redeemMakeupCredit(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
-    parsed.data,
-  );
+  return redeemMakeupCredit(ctx, parsed.data);
 }

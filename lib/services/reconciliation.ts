@@ -19,6 +19,7 @@ import {
 } from "@/lib/services/location-access";
 import { dayRangeUtc } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
+import { toSafePaise, sumPaise } from "@/lib/money/safe-paise";
 
 // C-34 — the daily collection report and the cash count confirmation.
 //
@@ -187,11 +188,11 @@ export async function getDailyCollection(
     let cafePaise = 0;
 
     for (const row of rows) {
-      const amount = Number(row.amountPaise);
-      totalPaise += amount;
-      if (row.method === "cash") cashPaise += amount;
+      const amount = toSafePaise(row.amountPaise);
+      totalPaise = sumPaise([totalPaise, amount]);
+      if (row.method === "cash") cashPaise = sumPaise([cashPaise, amount]);
       if (row.invoiceSource === "cafe") {
-        cafePaise += amount;
+        cafePaise = sumPaise([cafePaise, amount]);
         if (row.invoiceId) cafeInvoices.add(row.invoiceId);
       }
 
@@ -202,7 +203,7 @@ export async function getDailyCollection(
         totalPaise: 0,
       };
       method.count += 1;
-      method.totalPaise += amount;
+      method.totalPaise = sumPaise([method.totalPaise, amount]);
       byMethod.set(row.method, method);
 
       const staffKey = row.receivedBy ?? "unknown";
@@ -213,7 +214,7 @@ export async function getDailyCollection(
         totalPaise: 0,
       };
       staff.count += 1;
-      staff.totalPaise += amount;
+      staff.totalPaise = sumPaise([staff.totalPaise, amount]);
       byStaff.set(staffKey, staff);
     }
 
@@ -245,10 +246,10 @@ export async function getDailyCollection(
         .limit(1);
       const row = countRows[0];
       if (row) {
-        const variancePaise = Number(row.variancePaise);
+        const variancePaise = toSafePaise(row.variancePaise);
         cashCount = {
-          countedPaise: Number(row.countedPaise),
-          systemPaise: Number(row.systemPaise),
+          countedPaise: toSafePaise(row.countedPaise),
+          systemPaise: toSafePaise(row.systemPaise),
           variancePaise,
           note: row.note,
           confirmedByName: userLabel(row.confirmerName, row.confirmerRole),
@@ -386,10 +387,7 @@ export async function confirmCashCount(
           lt(payments.receivedAt, toUtc),
         ),
       );
-    const systemPaise = cashRows.reduce(
-      (sum, row) => sum + Number(row.amountPaise),
-      0,
-    );
+    const systemPaise = sumPaise(cashRows.map(row => row.amountPaise));
     const variancePaise = countedPaise - systemPaise;
     const varianceAbs = Math.abs(variancePaise);
     const needsReview = varianceAbs > REVIEW_THRESHOLD_PAISE;

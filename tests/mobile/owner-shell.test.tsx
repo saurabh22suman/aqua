@@ -33,7 +33,7 @@ vi.mock("@/lib/actions/global-search", () => ({
 }));
 
 import { OwnerShell } from "@/components/owner-shell";
-import { TENANT_SURFACE_NAV } from "@/lib/nav";
+import { OWNER_SIDEBAR_GROUPS, TENANT_SURFACE_NAV } from "@/lib/nav";
 
 afterEach(cleanup);
 
@@ -56,28 +56,33 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     expect(screen.getByText("Page content")).toBeTruthy();
   });
 
-  it("exposes exactly the four TENANT_SURFACE_NAV.owner items in both navs", () => {
+  it("keeps the bottom nav at the four TENANT_SURFACE_NAV.owner items and groups the sidebar", () => {
     render(
       <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
         <p>Page content</p>
       </OwnerShell>,
     );
 
-    const expectedHrefs = TENANT_SURFACE_NAV.owner.map((i) => i.href);
-
-    const sidebar = screen.getByTestId("owner-sidebar");
-    const sideHrefs = within(sidebar)
-      .getAllByRole("link")
-      .map((l) => l.getAttribute("href"));
-    // PR3-C3 — the sidebar also carries the desktop-only extras (Fees).
-    expect(sideHrefs).toEqual([...expectedHrefs, "/owner/fees"]);
-
     const mobileNav = screen.getByTestId("owner-mobile-nav");
     const mobileHrefs = within(mobileNav)
       .getAllByRole("link")
       .map((l) => l.getAttribute("href"));
-    expect(mobileHrefs).toEqual(expectedHrefs);
+    expect(mobileHrefs).toEqual(TENANT_SURFACE_NAV.owner.map((i) => i.href));
     expect(mobileHrefs).toHaveLength(4);
+
+    // W1-6 continuation — the desktop sidebar carries the grouped
+    // operational destinations (Main / Operations / Insights /
+    // Settings), in group order, with every group label rendered.
+    const sidebar = screen.getByTestId("owner-side-nav");
+    const sideHrefs = within(sidebar)
+      .getAllByRole("link")
+      .map((l) => l.getAttribute("href"));
+    expect(sideHrefs).toEqual(
+      OWNER_SIDEBAR_GROUPS.flatMap((group) => group.items.map((item) => item.href)),
+    );
+    for (const group of OWNER_SIDEBAR_GROUPS) {
+      expect(within(sidebar).getByText(group.label)).toBeTruthy();
+    }
 
     expect(
       within(sidebar).getByRole("link", { name: "Home" }).getAttribute("aria-current"),

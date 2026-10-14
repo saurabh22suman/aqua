@@ -17,7 +17,7 @@ import { vi } from "vitest";
 // resolves on the macrotask instead — no real timing race involved.
 export type FakeIdbHooks = {
   onRequestSuccess?: () => void;
-  onTransactionComplete?: () => void;
+  onTransactionComplete?: (stores: string[]) => void;
 };
 
 type Row = Record<string, unknown>;
@@ -56,24 +56,27 @@ export function installFakeIndexedDB(hooks: FakeIdbHooks = {}): void {
         return undefined;
       }),
       count: () => makeRequest(() => map.size),
+      clear: () => makeRequest(() => { map.clear(); return undefined; }),
     };
   }
 
-  function makeTransaction(keyPaths: Map<string, string | undefined>) {
-    const t: { oncomplete: (() => void) | null; onerror: ((err?: unknown) => void) | null } = {
+  function makeTransaction(keyPaths: Map<string, string | undefined>, names: string | string[]) {
+    let aborted = false;
+    const t: { oncomplete: (() => void) | null; onerror: ((err?: unknown) => void) | null; onabort: (() => void) | null } = {
       oncomplete: null,
       onerror: null,
+      onabort: null,
     };
     // Macrotask: guaranteed by the JS event loop to run after every
     // microtask already queued at the time it's scheduled — including
     // the request's own onsuccess microtask above. This is the whole
     // mechanism the test relies on, not a hopeful delay.
     setTimeout(() => {
-      hooks.onTransactionComplete?.();
-      t.oncomplete?.();
+      if (!aborted) { hooks.onTransactionComplete?.(typeof names === "string" ? [names] : names); t.oncomplete?.(); }
     }, 0);
     return Object.assign(t, {
       objectStore: (name: string) => makeObjectStore(name, keyPaths.get(name)),
+      abort: () => { aborted = true; queueMicrotask(() => t.onabort?.()); },
     });
   }
 
@@ -85,20 +88,23 @@ export function installFakeIndexedDB(hooks: FakeIdbHooks = {}): void {
       stores.set(name, new Map());
       keyPaths.set(name, options?.keyPath);
     },
-    transaction: () => makeTransaction(keyPaths),
+    transaction: (names: string | string[]) => makeTransaction(keyPaths, names),
     close: () => {},
   };
 
+  let openedVersion = 0;
   const fakeIndexedDB = {
-    open: () => {
+    open: (_name: string, requestedVersion = 1) => {
       const req: {
-        onupgradeneeded: (() => void) | null;
+        onupgradeneeded: ((event: { oldVersion: number }) => void) | null;
         onsuccess: (() => void) | null;
         onerror: ((err?: unknown) => void) | null;
         result: typeof fakeDb;
       } = { onupgradeneeded: null, onsuccess: null, onerror: null, result: fakeDb };
       queueMicrotask(() => {
-        req.onupgradeneeded?.();
+        if (requestedVersion > openedVersion) {
+          req.onupgradeneeded?.({ oldVersion: openedVersion }); openedVersion = requestedVersion;
+        }
         req.onsuccess?.();
       });
       return req;

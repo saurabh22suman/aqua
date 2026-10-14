@@ -3,15 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Briefcase,
   Building2,
   CalendarDays,
+  CalendarRange,
   ClipboardList,
   FileText,
   LayoutDashboard,
   ListChecks,
+  Megaphone,
   Receipt,
   Settings,
   SlidersHorizontal,
+  UserCog,
   UserPlus,
   UserRound,
   Users,
@@ -26,15 +30,19 @@ import {
 // Exported for the owner desktop sidebar (U-10), which shares the
 // same registry so the two owner navs can never drift.
 export const ICONS: Record<string, LucideIcon> = {
+  "briefcase": Briefcase,
   "building-2": Building2,
   "calendar-days": CalendarDays,
+  "calendar-range": CalendarRange,
   "clipboard-list": ClipboardList,
   "file-text": FileText,
   "layout-dashboard": LayoutDashboard,
   "list-checks": ListChecks,
+  "megaphone": Megaphone,
   "receipt": Receipt,
   "settings": Settings,
   "sliders-horizontal": SlidersHorizontal,
+  "user-cog": UserCog,
   "user-plus": UserPlus,
   "user-round": UserRound,
   "users": Users,

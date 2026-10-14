@@ -11,6 +11,9 @@ import { gstDocumentKind } from "@/lib/gst";
 import { asMemberId, asTenantId } from "@/lib/ids";
 import type { TenantTx } from "@/db/tenant";
 import type { UserId } from "@/lib/ids";
+import { enqueueMemberNotification } from "@/lib/messaging/notification-enqueue";
+import { formatINR } from "@/lib/money/format";
+import { toSafePaise } from "@/lib/money/safe-paise";
 
 // C-32 — issue an invoice inside a caller's transaction. Used by the
 // owner/reception flow (lib/services/invoices.ts) and by the nightly
@@ -153,9 +156,14 @@ export async function issueInvoiceInTx(
     });
   }
 
-  const subtotalPaise = lines.reduce((sum, l) => sum + l.amountPaise, 0);
-  const taxPaise = lines.reduce((sum, l) => sum + l.taxPaise, 0);
-  const totalPaise = subtotalPaise + taxPaise;
+  const exactSubtotal = lines.reduce((sum, line) => sum + BigInt(line.amountPaise), 0n);
+  const exactTax = lines.reduce((sum, line) => sum + BigInt(line.taxPaise), 0n);
+  if (exactSubtotal + exactTax > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return { ok: false, error: "The invoice total exceeds the supported exact paise range." };
+  }
+  const subtotalPaise = toSafePaise(exactSubtotal);
+  const taxPaise = toSafePaise(exactTax);
+  const totalPaise = toSafePaise(exactSubtotal + exactTax);
   if (totalPaise <= 0) {
     return { ok: false, error: "The invoice total must be positive." };
   }
@@ -226,6 +234,8 @@ export async function issueInvoiceInTx(
     },
   });
 
+  await enqueueMemberNotification(tx, { tenantId, eventKey: `invoice:${invoice.id}`, essential: true,
+    body: `Aqua invoice ${allocated.invoiceNumber} issued. Total: ${formatINR(totalPaise)}. Due date: ${input.dueOn}. Contact the academy for payment details.` }, input.memberId);
   return {
     ok: true,
     invoiceId: invoice.id,

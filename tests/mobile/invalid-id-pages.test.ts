@@ -29,6 +29,7 @@ vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ({}),
   requireReception: async () => ({}),
   requireCoach: async () => ({}),
+  requirePagePermission: (ctx: unknown) => ctx,
 }));
 
 const { failIfCalled } = vi.hoisted(() => ({

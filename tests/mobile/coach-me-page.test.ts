@@ -7,6 +7,7 @@ import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import { formatPhoneIN } from "@/lib/phone";
 import CoachMePage from "@/app/(coach)/coach/me/page";
+import { renderToStaticMarkup } from "react-dom/server";
 
 // F4 (mobile UX plan v2, Phase 0) — the coach "Me" tab crashed with
 // ForbiddenError because the page called
@@ -37,6 +38,7 @@ vi.mock("next/headers", () => ({
   headers: async () => new Headers(),
 }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
   },
@@ -108,23 +110,12 @@ async function setup() {
   authUser.betterAuthId = betterAuthId;
 }
 
-function renderToString(node: unknown): string {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(renderToString).join("");
-  if (typeof node === "object" && "props" in (node as Record<string, unknown>)) {
-    const props = (node as { props: { children?: unknown } }).props;
-    return renderToString(props.children);
-  }
-  return "";
-}
-
 describe("CoachMePage — no members.read permission required (F4)", () => {
   it("renders the identity block and sign-out for a real coach membership", async () => {
     await setup();
 
     const result = await CoachMePage();
-    const rendered = renderToString(result);
+    const rendered = renderToStaticMarkup(result);
 
     expect(rendered).toContain("Coach Me Subject");
     expect(rendered).toContain(formatPhoneIN(COACH_PHONE));

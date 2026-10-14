@@ -11,10 +11,13 @@ import {
 // scripts/lib/tenant-conventions-scan.ts for the rules and the two
 // pre-tenant index exemptions.
 
-const violations = listNewMigrationFiles().flatMap((file) =>
+const files = listNewMigrationFiles();
+const sources = files.map((file) => readFileSync(join(process.cwd(), file), "utf8"));
+const violations = files.flatMap((file, index) =>
   scanTenantConventions(
-    readFileSync(join(process.cwd(), file), "utf8"),
+    sources[index]!,
     file,
+    sources.slice(index + 1).join("\n"),
   ),
 );
 

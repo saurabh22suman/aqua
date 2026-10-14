@@ -139,7 +139,7 @@ export async function runVerifyColdStart(
   await page.goto(`${base}/coach/register/${fixture.sessionId}`).catch(() => {});
   const bodyText = await page.locator("body").textContent().catch(() => "");
 
-  if (bodyText?.includes("hasn't been downloaded yet")) {
+  if (bodyText?.includes("hasn't been downloaded yet") || bodyText?.includes("This register is not available offline")) {
     record(
       "COLD START: never-visited session, offline — clear message, not a mystery",
       "PASS",
