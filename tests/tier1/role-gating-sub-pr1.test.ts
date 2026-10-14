@@ -12,6 +12,7 @@ import {
   SURFACE_COACH,
   SURFACE_RECEPTION,
   SURFACE_PARENT,
+  SURFACE_WORKER,
 } from "@/lib/auth/surface-access";
 import type { Ctx } from "@/lib/auth/context";
 
@@ -42,7 +43,8 @@ describe("lib/auth/surface-access (sub-PR 1)", () => {
     expect(surfaceForRole("accountant")).toBe(SURFACE_OWNER);
     expect(surfaceForRole("receptionist")).toBe(SURFACE_RECEPTION);
     expect(surfaceForRole("coach")).toBe(SURFACE_COACH);
-    expect(surfaceForRole("worker")).toBe(SURFACE_PARENT);
+    expect(surfaceForRole("curriculum_lead")).toBe(SURFACE_COACH);
+    expect(surfaceForRole("worker")).toBe(SURFACE_WORKER);
   });
 
   it("canAccessSurface: owner/admin/accountant -> owner", () => {
@@ -57,6 +59,8 @@ describe("lib/auth/surface-access (sub-PR 1)", () => {
 
   it("canAccessSurface: coach -> coach, denies everyone else", () => {
     expect(canAccessSurface("coach", SURFACE_COACH)).toBe(true);
+    expect(canAccessSurface("curriculum_lead", SURFACE_COACH)).toBe(true);
+    expect(canAccessSurface("curriculum_lead", SURFACE_OWNER)).toBe(false);
     expect(canAccessSurface("owner", SURFACE_COACH)).toBe(false);
     expect(canAccessSurface("admin", SURFACE_COACH)).toBe(false);
     expect(canAccessSurface("receptionist", SURFACE_COACH)).toBe(false);
@@ -69,8 +73,12 @@ describe("lib/auth/surface-access (sub-PR 1)", () => {
     expect(canAccessSurface("admin", SURFACE_RECEPTION)).toBe(false);
   });
 
-  it("canAccessSurface: worker -> parent (placeholder home), but not coach", () => {
-    expect(canAccessSurface("worker", SURFACE_PARENT)).toBe(true);
+  it("canAccessSurface: worker reaches only its self-service surface", () => {
+    expect(canAccessSurface("worker", SURFACE_WORKER)).toBe(true);
+    expect(canAccessSurface("worker", SURFACE_PARENT)).toBe(false);
+    expect(canAccessSurface("worker", SURFACE_COACH)).toBe(false);
+    expect(canAccessSurface("coach", SURFACE_WORKER)).toBe(false);
+    expect(canAccessSurface("owner", SURFACE_WORKER)).toBe(false);
     expect(canAccessSurface("coach", SURFACE_PARENT)).toBe(false);
     expect(canAccessSurface("owner", SURFACE_PARENT)).toBe(false);
     expect(canAccessSurface("receptionist", SURFACE_PARENT)).toBe(false);
@@ -85,6 +93,7 @@ describe("lib/auth/surface-access (sub-PR 1)", () => {
     expect(canAccessSurface("intern", SURFACE_COACH)).toBe(false);
     expect(canAccessSurface("intern", SURFACE_RECEPTION)).toBe(false);
     expect(canAccessSurface("intern", SURFACE_PARENT)).toBe(false);
+    expect(canAccessSurface("intern", SURFACE_WORKER)).toBe(false);
   });
 });
 

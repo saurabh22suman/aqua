@@ -72,6 +72,7 @@ const ALL_PERMISSION_KEYS = [
   "bookings.write",
   "levels.read",
   "levels.assess",
+  "levels.write",
 ];
 
 let tenantId: TenantId = asTenantId("");

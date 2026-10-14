@@ -8,6 +8,7 @@ import {
   SURFACE_COACH,
   SURFACE_RECEPTION,
   SURFACE_PARENT,
+  SURFACE_WORKER,
 } from "@/lib/auth/surface-access";
 import { requirePermission, ForbiddenError } from "@/lib/auth/permission";
 import { resolveCtxFor } from "@/lib/auth/context";
@@ -50,7 +51,7 @@ const userIdsByRole: Record<string, string> = {};
 // Drawn from lib/auth/surface-access.ts.
 const ROLE_SURFACE_MATRIX: Array<{
   role: string;
-  surface: "owner" | "coach" | "reception" | "parent";
+  surface: "owner" | "coach" | "reception" | "parent" | "worker";
   expect: "allow" | "deny";
 }> = [
   { role: "owner", surface: SURFACE_OWNER, expect: "allow" },
@@ -76,7 +77,15 @@ const ROLE_SURFACE_MATRIX: Array<{
   { role: "worker", surface: SURFACE_OWNER, expect: "deny" },
   { role: "worker", surface: SURFACE_COACH, expect: "deny" },
   { role: "worker", surface: SURFACE_RECEPTION, expect: "deny" },
-  { role: "worker", surface: SURFACE_PARENT, expect: "allow" },
+  { role: "worker", surface: SURFACE_PARENT, expect: "deny" },
+  { role: "worker", surface: SURFACE_WORKER, expect: "allow" },
+  { role: "owner", surface: SURFACE_WORKER, expect: "deny" },
+  { role: "coach", surface: SURFACE_WORKER, expect: "deny" },
+  { role: "curriculum_lead", surface: SURFACE_COACH, expect: "allow" },
+  { role: "curriculum_lead", surface: SURFACE_OWNER, expect: "deny" },
+  { role: "curriculum_lead", surface: SURFACE_RECEPTION, expect: "deny" },
+  { role: "curriculum_lead", surface: SURFACE_PARENT, expect: "deny" },
+  { role: "curriculum_lead", surface: SURFACE_WORKER, expect: "deny" },
 ];
 
 // (role, permission, featureOn) → expected verdict for the
@@ -92,7 +101,16 @@ const ACTION_PERM_MATRIX: Array<{
 }> = [
   // Role grants — owner / admin / accountant / receptionist / coach / worker
   // First the always-on module permissions.
-  { role: "owner", permissionKey: "attendance.mark", featureOn: true, expect: "allow" },
+  { role: "owner", permissionKey: "attendance.mark", featureOn: true, expect: "deny-role-grant-missing" },
+  { role: "admin", permissionKey: "attendance.mark", featureOn: true, expect: "deny-role-grant-missing" },
+  { role: "owner", permissionKey: "attendance.read", featureOn: true, expect: "allow" },
+  { role: "receptionist", permissionKey: "attendance.mark", featureOn: true, expect: "allow" },
+  { role: "curriculum_lead", permissionKey: "levels.write", featureOn: true, expect: "allow" },
+  { role: "curriculum_lead", permissionKey: "levels.write", featureOn: false, expect: "deny-feature-disabled" },
+  { role: "coach", permissionKey: "levels.write", featureOn: true, expect: "deny-role-grant-missing" },
+  { role: "curriculum_lead", permissionKey: "settings.manage", featureOn: true, expect: "deny-role-grant-missing" },
+  { role: "worker", permissionKey: "staff.roster", featureOn: true, expect: "deny-role-grant-missing" },
+  { role: "worker", permissionKey: "staff.self", featureOn: true, expect: "allow" },
   { role: "admin", permissionKey: "members.write", featureOn: true, expect: "allow" },
   { role: "receptionist", permissionKey: "members.write", featureOn: true, expect: "allow" },
   // PR2-C2 — the counter raises invoices too; the receptionist role
@@ -117,7 +135,7 @@ beforeAll(async () => {
     [tenantId, SLUG, "Matrix Tenant"],
   );
 
-  // Seed the six roles through seedRoleTemplates — same path as
+  // Seed the seven roles through seedRoleTemplates — same path as
   // production — so role_permissions rows match the closed
   // PERMISSIONS list exactly.
   await seedRoleTemplates(tenantId);
@@ -210,6 +228,7 @@ function permissionToFeature(permKey: string): string | null {
     "bookings.write": "pool.booking",
     "levels.read": "swim.levels",
     "levels.assess": "swim.levels",
+    "levels.write": "swim.levels",
   };
   return m[permKey] ?? null;
 }
@@ -232,7 +251,7 @@ describe("(role × surface) matrix — layout gate", () => {
     // list" class: every seeded role MUST land somewhere.
     // A 7th role added without updating TENANT_ROLE_TO_SURFACE
     // would surface here as null.
-    for (const role of ["owner", "admin", "accountant", "receptionist", "coach", "worker"]) {
+    for (const role of Object.keys(roleIdsByKey)) {
       expect(surfaceForRole(role)).not.toBeNull();
     }
   });
@@ -310,8 +329,10 @@ describe("mutation proof — feature off / unknown role changes the matrix", () 
         expect(e).toBeInstanceOf(ForbiddenError);
         expect((e as ForbiddenError).reason).toBe("feature_disabled");
       }
-      // Surgical: attendance still works for the same owner.
-      expect(() => requirePermission(ctx, "attendance.mark")).not.toThrow();
+      // Report entitlement does not affect the owner's attendance reads;
+      // marking remains execution authority, never a management grant.
+      expect(() => requirePermission(ctx, "attendance.read")).not.toThrow();
+      expect(() => requirePermission(ctx, "attendance.mark")).toThrow(ForbiddenError);
     } finally {
       await setFeature("reports", true);
     }

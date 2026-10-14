@@ -374,7 +374,7 @@ describe("createTenant", () => {
     expect(Number(auditCount.count)).toBe(1);
   });
 
-  it("seeds all six role templates in the same transaction as tenant creation", async () => {
+  it("seeds all seven role templates in the same transaction as tenant creation", async () => {
     const slug = uniqueSlug("roles");
     const tenantId = await expectOk(await createTenant(baseInput(slug), { actorId }));
 
@@ -385,7 +385,7 @@ describe("createTenant", () => {
       )
     ).rows;
     expect(rows.map((r) => r.key)).toEqual(
-      ["accountant", "admin", "coach", "owner", "receptionist", "worker"],
+      ["accountant", "admin", "coach", "curriculum_lead", "owner", "receptionist", "worker"],
     );
     expect(rows.every((r) => r.is_system)).toBe(true);
 
@@ -406,7 +406,8 @@ describe("createTenant", () => {
         [tenantId, owner!.id],
       )
     ).rows[0]!;
-    // Owner gets every permission — mirrors ALL_PERMISSION_KEYS in
+    // Owner gets management permissions, excluding attendance marking.
+    // The broad grant count is cross-checked against the exact matrix in
     // lib/services/roles.ts, cross-checked independently here rather
     // than importing that constant (same reasoning as
     // roles-permissions.test.ts).

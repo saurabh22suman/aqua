@@ -1,5 +1,12 @@
 # Remediation ledger — owner UI workflow / data-scope / state correctness (2026-10-14)
 
+**CI follow-up:** the historical seven-file test-pin blocker recorded below
+has been corrected under explicit owner authorisation. The final local full
+suite passes; see [`ci-resolution-2026-10-14.md`](ci-resolution-2026-10-14.md).
+Original run results remain below as history, not the current CI verdict.
+The Owner/Admin `levels.write` policy question and production redesign stage
+remain open.
+
 Input: `docs/audits/2026-10-13-owner-ui-review-and-image-prompts.md` §7,
 `docs/audits/2026-10-13-role-workflow-audit.md`, and the Prompt 1 ledger
 (`docs/remediation-ledger-2026-10-13-role-workflow.md`).

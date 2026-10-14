@@ -1,5 +1,11 @@
 # Remediation ledger — role/workflow audit (2026-10-13)
 
+**CI follow-up:** the historically outstanding test-pin failures below have
+been corrected under explicit owner authorisation. The final local full suite
+passes; see [`ci-resolution-2026-10-14.md`](ci-resolution-2026-10-14.md).
+Original verification records are preserved. The `levels.write` policy question
+remains open.
+
 Input: `docs/audits/2026-10-13-role-workflow-audit.md`. Branch
 `fix/comprehensive-review-findings` @ `870cf1a` plus working-tree changes.
 No branch switch, no reset, no unrelated commits, no tier1 test edits.

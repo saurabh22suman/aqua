@@ -166,6 +166,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Services leave app_login connections idle in the application pool.
+  // Drain them before stopping Postgres, rather than emitting an unhandled
+  // 57P01 error when the container terminates its clients.
+  const { pool } = await import("@/db/client");
+  await pool.end();
   await admin?.end();
   await container?.stop();
 });
