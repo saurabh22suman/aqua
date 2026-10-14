@@ -7,6 +7,7 @@ import {
   index,
   pgTable,
   text,
+  timestamp,
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -32,6 +33,12 @@ export const tenantMemberships = pgTable(
     roleId: uuid("role_id").notNull(),
     allLocations: boolean("all_locations").notNull().default(true),
     status: text("status").notNull().default("invited"),
+    // 2026-10-13 role-workflow audit R09 — credential epoch. Set when a
+    // revoked membership is deliberately reactivated; invite/relogin
+    // tokens minted before this instant are rejected at preview and
+    // redeem even though the membership is live again. NULL means "no
+    // epoch" (every token's issue time counts).
+    linksValidFrom: timestamp("links_valid_from", { withTimezone: true }),
     ...softDelete,
     ...auditColumns,
   },

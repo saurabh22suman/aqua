@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
 import {
   issueLoginLinkForPhone,
   issueOwnerResetLinkForPhone,
@@ -31,9 +31,16 @@ export async function issueOwnerLoginLinkAction(
     return { kind: "error", code: "membership_not_found", message: "Pick a tenant and a phone number." };
   }
   // (2) platform-session permission check
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
-    return { kind: "error", code: "membership_not_found", message: "Your session has expired. Sign in again." };
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
+    return {
+      kind: "error",
+      code: "membership_not_found",
+      message:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
+    };
   }
   // (3) service
   return issueLoginLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone);
@@ -58,9 +65,16 @@ export async function issueOwnerResetLinkAction(
     return { kind: "error", code: "membership_not_found", message: "Pick a tenant and a phone number." };
   }
   // (2) platform-session permission check
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
-    return { kind: "error", code: "membership_not_found", message: "Your session has expired. Sign in again." };
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
+    return {
+      kind: "error",
+      code: "membership_not_found",
+      message:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
+    };
   }
   // (3) service
   return issueOwnerResetLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone);

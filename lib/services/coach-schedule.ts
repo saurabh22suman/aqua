@@ -96,8 +96,23 @@ export async function listUpcomingSessions(
   fromDate: string,
   toDate: string,
 ): Promise<UpcomingSessionRow[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    // R06 (2026-10-13 role-workflow audit) — the management read is
+    // still location-scoped: a restricted manager sees only sessions
+    // at their allowed locations (NULL location stays tenant-wide), so
+    // a forged read cannot enumerate another site's schedule.
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(sessions.locationId, access);
+    const conditions = [
+      eq(sessions.tenantId, ctx.tenantId),
+      isNull(batches.deletedAt),
+      sql`${sessions.sessionDate} >= ${fromDate}`,
+      sql`${sessions.sessionDate} <= ${toDate}`,
+      sql`${sessions.status} <> 'cancelled'`,
+    ];
+    if (accessPredicate) conditions.push(accessPredicate);
+
+    return tx
       .select({
         id: sessions.id,
         sessionDate: sessions.sessionDate,
@@ -113,17 +128,9 @@ export async function listUpcomingSessions(
       .innerJoin(batches, eq(batches.id, sessions.batchId))
       .leftJoin(staff, eq(staff.id, sessions.coachId))
       .leftJoin(persons, eq(persons.id, staff.personId))
-      .where(
-        and(
-          eq(sessions.tenantId, ctx.tenantId),
-          isNull(batches.deletedAt),
-          sql`${sessions.sessionDate} >= ${fromDate}`,
-          sql`${sessions.sessionDate} <= ${toDate}`,
-          sql`${sessions.status} <> 'cancelled'`,
-        ),
-      )
-      .orderBy(sessions.sessionDate, sessions.startsAt),
-  );
+      .where(and(...conditions))
+      .orderBy(sessions.sessionDate, sessions.startsAt);
+  });
 }
 
 // Coach-scoped "next upcoming session" lookup. Used by the coach

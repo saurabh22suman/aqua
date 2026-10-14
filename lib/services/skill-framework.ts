@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
@@ -8,14 +8,9 @@ import {
   skillNodes,
 } from "@/db/schema/skill-framework";
 import { activityTypes } from "@/db/schema/activity-types";
-import { members } from "@/db/schema/people";
 import { writeAudit } from "@/lib/audit/write";
-import { asMemberId } from "@/lib/ids";
 import { isUniqueViolation } from "@/lib/pg-errors";
-import {
-  locationVisible,
-  resolveLocationAccess,
-} from "@/lib/services/location-access";
+import { visibleMember } from "./resource-access";
 import type { ActionCtx } from "@/lib/auth/context";
 
 export * from "./skill-framework-list";
@@ -217,25 +212,10 @@ export async function recordAssessment(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid assessment." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
-    const memberRows = await tx
-      .select({ id: members.id, locationId: members.locationId })
-      .from(members)
-      .where(
-        and(
-          eq(members.id, asMemberId(parsed.data.memberId)),
-          eq(members.tenantId, ctx.tenantId),
-          isNull(members.deletedAt),
-        ),
-      )
-      .limit(1);
-    const member = memberRows[0];
-    if (!member) {
-      return { ok: false, error: "Member not found." };
-    }
-    // O-08 — a location-scoped caller cannot assess a member outside
-    // their locations. Same answer as a missing member.
-    const access = await resolveLocationAccess(tx, ctx);
-    if (!locationVisible(access, member.locationId)) {
+    // O-08/V-10 — the shared member guard: owner/admin location-visible,
+    // coach only for a member enrolled in a batch they coach. Same
+    // answer (and same absence of a write/audit) as a missing member.
+    if (!(await visibleMember(tx, ctx, parsed.data.memberId))) {
       return { ok: false, error: "Member not found." };
     }
 

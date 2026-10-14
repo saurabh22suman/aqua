@@ -2,7 +2,8 @@ import { v7 as uuidv7 } from "uuid";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withPlatform } from "@/db/scope";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
+import { callerIsLegacySystem } from "./resource-access";
 import {
   findOrCreateUserByPhone,
   findPhonesByUserIds,
@@ -11,12 +12,17 @@ import { tenantMemberships, membershipLocations } from "@/db/schema/memberships"
 import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
+import { users } from "@/db/schema/users";
 import type { StaffType } from "@/db/schema/staff";
 import { staffLocations } from "@/db/schema/staff-locations";
 import { ensurePersonAndStaff } from "@/db/invite-helpers";
 import { writeAudit } from "@/lib/audit/write";
+import { auth } from "@/lib/auth/server";
 import type { ActionCtx } from "@/lib/auth/context";
-import { asTenantId, type UserId } from "@/lib/ids";
+import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
+import { enqueueInvitationNotification } from "@/lib/messaging/invitation-notification";
+import { findBaUserIdByPhone } from "@/lib/services/credentials";
+import { issueLoginLink } from "@/lib/services/invite-link-issue";
 
 // Phase 3.6 — staff invitations. Tenant-side service that
 // invites a person by phone to a specific role on this tenant.
@@ -314,6 +320,7 @@ export async function inviteStaff(
       };
     }
 
+    await enqueueInvitationNotification(tx, ctx.tenantId, inserted[0].id);
     // E-02 — one row for the invite, written after every child write
     // succeeded and before the commit. The payload deliberately
     // carries identifiers (user, role, locations, staff) and never
@@ -546,6 +553,65 @@ export async function revokeInvitation(
   });
 }
 
+// A06 sibling (resend): the resend path signs no token directly, but
+// enqueueInvitationNotification mints a bearer invite link into the
+// outbox — hence the same issuer-target trust gate reset/relogin apply
+// (invite-link-issue.ts's `trustGateDenies`): the issuer's tenant role
+// rank (owner=0, admin=1, ...) must be at or above the target's actual
+// active role rank. Refusal happens before the outbox enqueue and the
+// audit write, so a denied resend materialises nothing.
+//
+// Legacy internal/system callers (no role key and no resolved
+// permission set — the action layer is their authorization boundary)
+// keep the pre-existing contract, matching issueLoginLink's "no issuer
+// supplied" branch.
+async function resendTrustGateDenies(
+  tx: TenantTx,
+  tenantId: TenantId,
+  issuer: ActionCtx,
+  targetOrdinal: number,
+): Promise<boolean> {
+  if (callerIsLegacySystem(issuer)) return false;
+  let issuerOrdinal: number | null = null;
+  if (issuer.roleKey) {
+    const [row] = await tx
+      .select({ homeOrdinal: roles.homeOrdinal })
+      .from(roles)
+      .where(
+        and(
+          eq(roles.tenantId, tenantId),
+          eq(roles.key, issuer.roleKey),
+          isNull(roles.deletedAt),
+        ),
+      )
+      .limit(1);
+    issuerOrdinal = row?.homeOrdinal ?? null;
+  } else if (issuer.userId) {
+    const [row] = await tx
+      .select({ homeOrdinal: roles.homeOrdinal })
+      .from(tenantMemberships)
+      .innerJoin(
+        roles,
+        and(
+          eq(roles.id, tenantMemberships.roleId),
+          eq(roles.tenantId, tenantMemberships.tenantId),
+        ),
+      )
+      .where(
+        and(
+          eq(tenantMemberships.tenantId, tenantId),
+          eq(tenantMemberships.userId, issuer.userId),
+          eq(tenantMemberships.status, "active"),
+          isNull(tenantMemberships.deletedAt),
+          isNull(roles.deletedAt),
+        ),
+      )
+      .limit(1);
+    issuerOrdinal = row?.homeOrdinal ?? null;
+  }
+  return issuerOrdinal === null || targetOrdinal < issuerOrdinal;
+}
+
 // Resend — the messaging layer (WhatsApp, email) that would
 // "send the link again" is not in this codebase (the work
 // guide's "Reserve" lists R.21 / messaging for that, and 3.6's
@@ -556,7 +622,14 @@ export async function revokeInvitation(
 export async function resendInvitation(
   ctx: ActionCtx,
   rawInput: { membershipId: string },
-): Promise<{ kind: "ok"; delivered: false } | { kind: "error"; code: "membership_not_found" | "not_invited"; message: string }> {
+): Promise<
+  | { kind: "ok"; delivered: false }
+  | {
+      kind: "error";
+      code: "membership_not_found" | "not_invited" | "forbidden_target";
+      message: string;
+    }
+> {
   const parsed = z.object({ membershipId: z.string().uuid() }).safeParse(rawInput);
   if (!parsed.success) {
     return { kind: "error", code: "membership_not_found", message: "Invalid membership id." };
@@ -564,8 +637,19 @@ export async function resendInvitation(
   const { membershipId } = parsed.data;
   return withTenant(ctx.tenantId, async (tx) => {
     const [m] = await tx
-      .select({ id: tenantMemberships.id, status: tenantMemberships.status })
+      .select({
+        id: tenantMemberships.id,
+        status: tenantMemberships.status,
+        homeOrdinal: roles.homeOrdinal,
+      })
       .from(tenantMemberships)
+      .innerJoin(
+        roles,
+        and(
+          eq(roles.id, tenantMemberships.roleId),
+          eq(roles.tenantId, tenantMemberships.tenantId),
+        ),
+      )
       .where(
         and(
           eq(tenantMemberships.id, membershipId),
@@ -584,9 +668,14 @@ export async function resendInvitation(
         message: "This membership is no longer in 'invited' state.",
       };
     }
-    // E-02 — the send itself is a no-op until the messaging chain
-    // ships, but the operator's intent to re-issue is durable: one
-    // row per accepted resend, delivery state included.
+    if (await resendTrustGateDenies(tx, ctx.tenantId, ctx, m.homeOrdinal)) {
+      return {
+        kind: "error",
+        code: "forbidden_target",
+        message: "You cannot resend a credential for a higher-trust role.",
+      };
+    }
+    await enqueueInvitationNotification(tx, ctx.tenantId, membershipId);
     await writeAudit(tx, {
       tenantId: asTenantId(ctx.tenantId),
       actorType: "staff",
@@ -599,6 +688,174 @@ export async function resendInvitation(
     });
     return { kind: "ok", delivered: false };
   });
+}
+
+// R09 (2026-10-13 role-workflow audit) — deliberate reactivation of a
+// revoked membership. The row is reused (identity, staff record,
+// audit history and location list all preserved — no duplicate
+// membership): status returns to 'invited' so the existing single-use
+// invite-link flow issues and consumes the fresh credential.
+//
+// Safety properties:
+//   - management only (staff.invite at the action layer) and the same
+//     issuer-target ordinal trust gate as reset/relogin applies here;
+//   - links_valid_from = now() kills every invite/relogin token minted
+//     before the reactivation (see invite-link.ts preview/redeem);
+//   - the target's better-auth sessions are deleted, so a session that
+//     survived revocation cannot resume;
+//   - a fresh single-use, tenant-bound invite link is issued through
+//     the existing mechanism and the flip + audit share one
+//     transaction.
+export type ReactivateStaffResult =
+  | {
+      kind: "ok";
+      urlPath: string;
+      expiresAt: Date;
+      roleKey: string;
+      locationNames: string[];
+      phone: string;
+    }
+  | {
+      kind: "error";
+      code:
+        | "membership_not_found"
+        | "not_revoked"
+        | "forbidden_target"
+        | "issue_failed";
+      message: string;
+    };
+
+export async function reactivateInvitation(
+  ctx: ActionCtx,
+  rawInput: { membershipId: string },
+): Promise<ReactivateStaffResult> {
+  const parsed = z.object({ membershipId: z.string().uuid() }).safeParse(rawInput);
+  if (!parsed.success) {
+    return { kind: "error", code: "membership_not_found", message: "Invalid membership id." };
+  }
+  const { membershipId } = parsed.data;
+
+  const prepared = await withTenant(ctx.tenantId, async (tx) => {
+    const [m] = await tx
+      .select({
+        id: tenantMemberships.id,
+        status: tenantMemberships.status,
+        roleKey: roles.key,
+        homeOrdinal: roles.homeOrdinal,
+        userId: tenantMemberships.userId,
+        phone: users.phone,
+      })
+      .from(tenantMemberships)
+      .innerJoin(
+        roles,
+        and(
+          eq(roles.id, tenantMemberships.roleId),
+          eq(roles.tenantId, tenantMemberships.tenantId),
+        ),
+      )
+      .innerJoin(users, eq(users.id, tenantMemberships.userId))
+      .where(
+        and(
+          eq(tenantMemberships.id, membershipId),
+          eq(tenantMemberships.tenantId, ctx.tenantId),
+          isNull(tenantMemberships.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!m) {
+      return { kind: "error" as const, code: "membership_not_found" as const, message: "Membership not found." };
+    }
+    if (m.status !== "revoked") {
+      return { kind: "error" as const, code: "not_revoked" as const, message: "This membership is not revoked." };
+    }
+    if (await resendTrustGateDenies(tx, ctx.tenantId, ctx, m.homeOrdinal)) {
+      return {
+        kind: "error" as const,
+        code: "forbidden_target" as const,
+        message: "You cannot restore access for a higher-trust role.",
+      };
+    }
+
+    const locationNames = (
+      await tx
+        .select({ name: locations.name })
+        .from(membershipLocations)
+        .innerJoin(locations, eq(locations.id, membershipLocations.locationId))
+        .where(
+          and(
+            eq(membershipLocations.tenantId, ctx.tenantId),
+            eq(membershipLocations.membershipId, membershipId),
+          ),
+        )
+    ).map((l) => l.name);
+
+    await tx
+      .update(tenantMemberships)
+      .set({
+        status: "invited",
+        linksValidFrom: new Date(),
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(
+        and(
+          eq(tenantMemberships.id, membershipId),
+          eq(tenantMemberships.status, "revoked"),
+        ),
+      );
+
+    await writeAudit(tx, {
+      tenantId: asTenantId(ctx.tenantId),
+      actorType: "staff",
+      actorId: ctx.userId ?? null,
+      action: "membership.reactivate",
+      entityType: "tenant_membership",
+      entityId: membershipId,
+      before: { status: "revoked" },
+      after: { status: "invited", roleKey: m.roleKey },
+      changedFields: ["status", "links_valid_from"],
+      requestId: ctx.requestId ?? null,
+    });
+
+    return {
+      kind: "ok" as const,
+      userId: m.userId,
+      phone: m.phone,
+      locationNames,
+    };
+  });
+  if (prepared.kind === "error") return prepared;
+
+  // Old sessions must not resume: revocation already blocked them, but
+  // the identity is live again now, so delete them outright. Failure to
+  // reach better-auth must not silently leave stale sessions usable —
+  // surface it and stop before issuing the fresh link.
+  try {
+    const baUserId = await findBaUserIdByPhone(prepared.phone);
+    if (baUserId) {
+      const baCtx = await auth.$context;
+      await baCtx.internalAdapter.deleteUserSessions(baUserId);
+    }
+  } catch {
+    return {
+      kind: "error",
+      code: "issue_failed",
+      message: "Could not invalidate the old sessions. Try again.",
+    };
+  }
+
+  const link = await issueLoginLink(ctx.tenantId, membershipId, ctx);
+  if (link.kind === "error") {
+    return { kind: "error", code: "issue_failed", message: link.message };
+  }
+  return {
+    kind: "ok",
+    urlPath: link.urlPath,
+    expiresAt: link.expiresAt,
+    roleKey: link.roleKey,
+    locationNames: prepared.locationNames,
+    phone: link.phone,
+  };
 }
 
 // Touch asTenantId brand so the import doesn't get pruned by a

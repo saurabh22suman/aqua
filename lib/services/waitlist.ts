@@ -5,12 +5,11 @@ import { members, persons } from "@/db/schema/people";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { z } from "zod";
+import { enqueueWaitlistPromotion } from "@/lib/messaging/notification-events";
+import { visibleBatch, visibleMember } from "@/lib/services/resource-access";
 
-// Phase R.5 — waitlist. A member joins a queue for a full
-// batch; on a slot opening, the head of the queue is auto-
-// promoted. R.5's hard delivery: "a member joins a queue when
-// capacity is hit and auto-enrols on the next withdrawal. In-app
-// notification on promotion; WhatsApp excluded."
+// Waitlist promotion queues consent-checked WhatsApp notifications.
+// It remains a promotion pending enrolment, not a booked-place guarantee.
 //
 // Position is FIFO: the (tenant, batch, position) index is the
 // queue head. New entries go to position = max+1; promotion
@@ -24,6 +23,7 @@ export type WaitlistResult =
       kind: "error";
       code:
         | "invalid"
+        | "not_found"
         | "already_on_waitlist"
         | "not_on_waitlist"
         | "not_waiting";
@@ -45,6 +45,18 @@ export async function addToWaitlist(
   }
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // R05 (2026-10-13 role-workflow audit) — full resource validation:
+    // a forged batch or member id is refused before any read/write.
+    // visibleBatch applies tenant, live-row, location and (for coach
+    // contexts) assignment checks; visibleMember the same for the
+    // member.
+    if (!(await visibleBatch(tx, ctx, parsed.data.batchId))) {
+      return { kind: "error", code: "not_found", message: "Batch not found." };
+    }
+    if (!(await visibleMember(tx, ctx, parsed.data.memberId))) {
+      return { kind: "error", code: "not_found", message: "Member not found." };
+    }
+
     // Refuse if the member is already enrolled in the batch.
     // (The unique partial on (member, batch) where status='waiting'
     // catches double-add; the live-enrolment check is the
@@ -129,6 +141,12 @@ export async function cancelWaitlist(
   }
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await visibleBatch(tx, ctx, parsed.data.batchId))) {
+      return { kind: "error", code: "not_found", message: "Batch not found." };
+    }
+    if (!(await visibleMember(tx, ctx, parsed.data.memberId))) {
+      return { kind: "error", code: "not_found", message: "Member not found." };
+    }
     const [entry] = await tx
       .update(waitlistEntries)
       .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date(), updatedBy: ctx.userId })
@@ -179,8 +197,9 @@ export async function listWaitlist(
   ctx: ActionCtx,
   batchId: string,
 ): Promise<WaitlistRow[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await visibleBatch(tx, ctx, batchId))) return [];
+    return tx
       .select({
         entryId: waitlistEntries.id,
         memberId: waitlistEntries.memberId,
@@ -199,8 +218,8 @@ export async function listWaitlist(
           eq(waitlistEntries.status, "waiting"),
         ),
       )
-      .orderBy(asc(waitlistEntries.position)),
-  );
+      .orderBy(asc(waitlistEntries.position));
+  });
 }
 
 export type WaitlistHead = {
@@ -216,6 +235,7 @@ export async function getWaitlistHead(
   const parsed = batchSchema.safeParse(raw);
   if (!parsed.success) return null;
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await visibleBatch(tx, ctx, parsed.data.batchId))) return null;
     const [row] = await tx
       .select({
         entryId: waitlistEntries.id,
@@ -259,6 +279,9 @@ export async function promoteHead(
     return { kind: "error", code: "invalid", message: "Invalid promotion." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await visibleBatch(tx, ctx, parsed.data.batchId))) {
+      return { kind: "error", code: "not_found", message: "Batch not found." };
+    }
     // Inline the head query — withTenant cannot nest (db/scope.ts),
     // so getWaitlistHead's own withTenant would throw from here.
     const headRow = await tx
@@ -294,6 +317,7 @@ export async function promoteHead(
           sql`${waitlistEntries.position} > ${head.position}`,
         ),
       );
+    await enqueueWaitlistPromotion(tx, ctx.tenantId, parsed.data.batchId, head.memberId, head.entryId);
     return { kind: "ok", entryId: head.entryId, position: head.position };
   });
 }

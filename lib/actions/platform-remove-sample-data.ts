@@ -6,7 +6,7 @@ import {
   removeSampleData,
   type RemoveSampleDataResult,
 } from "@/db/preset-sample-data";
-import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
 import { opsAction } from "@/db/ops-action";
 
 // Phase 2.3 — server action for the "Remove sample data" button.
@@ -38,12 +38,15 @@ export async function removeSampleDataAction(
   }
 
   // (2) platform-session permission check
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
     return {
       kind: "error",
       code: "invalid",
-      message: "Your session has expired. Sign in again.",
+      message:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
     };
   }
 

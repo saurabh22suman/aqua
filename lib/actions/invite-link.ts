@@ -3,6 +3,8 @@
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
+import { withTenant } from "@/db/tenant";
+import { enqueueInvitationNotification } from "@/lib/messaging/invitation-notification";
 import {
   issueLoginLink,
   type IssueLoginLinkResult,
@@ -28,5 +30,10 @@ export async function issueLoginLinkAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.invite");
-  return issueLoginLink(ctx.tenantId, parsed.data.membershipId);
+  // A06 — pass the authenticated issuer so the service can deny
+  // minting credentials for higher-trust targets before signing.
+  const result = await issueLoginLink(ctx.tenantId, parsed.data.membershipId, ctx);
+  if (result.kind === "ok") await withTenant(ctx.tenantId,
+    (tx) => enqueueInvitationNotification(tx, ctx.tenantId, parsed.data.membershipId));
+  return result;
 }

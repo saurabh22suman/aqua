@@ -6,6 +6,56 @@ import type { TenantId } from "@/lib/ids";
 
 const ALL_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
+// 2026-10-13 role-workflow audit R01 — student attendance is recorded
+// by the coach who ran the session or the front desk as backup. Owner
+// and Admin keep the completion/status reads (attendance.read,
+// reports.operational) but not the marking grant: the owner template is
+// "everything" minus attendance.mark, and the admin template is that
+// minus staff pay. The action/service layer also refuses owner/admin
+// contexts outright, so a stale or accidentally assigned grant on an
+// upgraded tenant cannot re-authorize marking.
+const OWNER_EXCLUDED_PERMISSIONS = new Set(["attendance.mark"]);
+const ADMIN_EXCLUDED_PERMISSIONS = new Set([
+  "attendance.mark",
+  "staff.pay.read",
+  "staff.pay.write",
+]);
+
+const OWNER_PERMISSION_KEYS = ALL_PERMISSION_KEYS.filter(
+  (k) => !OWNER_EXCLUDED_PERMISSIONS.has(k),
+);
+const ADMIN_PERMISSION_KEYS = ALL_PERMISSION_KEYS.filter(
+  (k) => !ADMIN_EXCLUDED_PERMISSIONS.has(k),
+);
+
+// D2: coach holds members.read.assigned (not members.read).
+// members.read is the full-roster read granted to owner /
+// admin / receptionist; coach only sees members attached to
+// their own batches, gated at the service layer
+// (lib/services/people.ts) by a JOIN against coach-staff rows.
+const COACH_PERMISSION_KEYS = [
+  "attendance.read",
+  "attendance.mark",
+  "members.read.assigned",
+  "programs.read",
+  "levels.read",
+  "levels.assess",
+  "staff.self",
+] as const;
+
+// Service-layer authority resolution for contexts that carry a role key
+// but not the request's resolved permission set (synthetic/legacy
+// callers). Template grants are the seed contract; request contexts
+// always carry the authoritative resolved set instead, which
+// callerHasPermission checks first.
+export function roleTemplatePermissionKeys(
+  roleKey: string,
+): ReadonlySet<string> | null {
+  const template = ROLE_TEMPLATES.find((t) => t.key === roleKey);
+  if (!template) return null;
+  return new Set(template.permissions);
+}
+
 // `roles.key` exists for seeding and analytics only. Nothing at runtime may
 // branch on a role key — F-04's Never. These template keys are referenced
 // by seeding code alone. homePath/homeOrdinal are the data a renamed or
@@ -18,15 +68,17 @@ const ROLE_TEMPLATES: ReadonlyArray<{
   homeOrdinal: number;
   permissions: ReadonlyArray<string>;
 }> = [
-  { key: "owner", name: "Owner", homePath: "/owner", homeOrdinal: 0, permissions: ALL_PERMISSION_KEYS },
+  // 2026-10-13 role-workflow audit R01/R02 — the owner template is the
+  // full catalogue minus attendance.mark (student attendance is
+  // execution work) and includes the new levels.write automatically;
+  // admin is that minus staff pay.
+  { key: "owner", name: "Owner", homePath: "/owner", homeOrdinal: 0, permissions: OWNER_PERMISSION_KEYS },
   {
     key: "admin",
     name: "Administrator",
     homePath: "/owner",
     homeOrdinal: 1,
-    permissions: ALL_PERMISSION_KEYS.filter(
-      (k) => k !== "staff.pay.read" && k !== "staff.pay.write",
-    ),
+    permissions: ADMIN_PERMISSION_KEYS,
   },
   {
     key: "accountant",
@@ -92,23 +144,32 @@ const ROLE_TEMPLATES: ReadonlyArray<{
     // admin / receptionist; coach only sees members attached to
     // their own batches, gated at the service layer
     // (lib/services/people.ts) by a JOIN against coach-staff rows.
-    permissions: [
-      "attendance.read",
-      "attendance.mark",
-      "members.read.assigned",
-      "programs.read",
-      "levels.read",
-      "levels.assess",
-      "staff.self",
-    ],
+    permissions: COACH_PERMISSION_KEYS,
+  },
+  {
+    key: "curriculum_lead",
+    name: "Curriculum Lead",
+    // 2026-10-13 role-workflow audit R02 — the delegated curriculum
+    // maintainer. Same coach surface, home ordinal and resource scope
+    // as an ordinary coach (assignment + location checks treat it as
+    // coach-like), plus the academy-wide levels.write grant. It is a
+    // distinct role precisely so ordinary coaches do NOT receive
+    // curriculum editing.
+    homePath: "/coach",
+    homeOrdinal: 2,
+    permissions: [...COACH_PERMISSION_KEYS, "levels.write"],
   },
   {
     key: "worker",
     name: "Worker",
-    homePath: "/parent",
+    homePath: "/worker",
     homeOrdinal: 3,
-    // scope §195: a worker sees a task list and nothing else.
-    permissions: ["staff.roster", "staff.self"],
+    // A05 (2026-10-09 role/content/permission audit) — the worker is
+    // self-service only: their own roster, check-in/out and leave.
+    // Building, deleting or publishing the roster and approving
+    // someone else's leave are staff.roster (owner/admin), so the
+    // worker template must not carry that grant.
+    permissions: ["staff.self"],
   },
 ];
 

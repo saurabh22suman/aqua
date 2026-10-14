@@ -1,10 +1,11 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { tenants } from "@/db/schema/tenants";
 import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
+import { writeAudit } from "@/lib/audit/write";
 import {
   signInviteLinkToken,
   INVITE_LINK_TTL_SECONDS,
@@ -12,6 +13,7 @@ import {
   RESET_LINK_TTL_SECONDS,
 } from "./invite-link-token";
 import { normaliseToE164 } from "@/lib/phone";
+import type { ActionCtx } from "@/lib/auth/context";
 import type { TenantId } from "@/lib/ids";
 
 // Minting side of staff magic-link login (architecture §6.1).
@@ -25,7 +27,10 @@ export type IssueLoginLinkError =
   // only meaningful for an active membership. An invited owner uses
   // the invite flow, whose set-PIN screen is the same UX.
   | "not_owner"
-  | "not_active";
+  | "not_active"
+  // A06 — the issuer's trust rank is below the target's (e.g. an
+  // Administrator minting an Owner credential). No token is signed.
+  | "forbidden_target";
 
 export type IssueLoginLinkResult =
   | {
@@ -40,13 +45,92 @@ export type IssueLoginLinkResult =
     }
   | { kind: "error"; code: IssueLoginLinkError; message: string };
 
+// A06 — issuer-target trust on credential issuance. `homeOrdinal` is
+// the tenant role's trust rank (owner=0, admin=1, coach=2,
+// curriculum_lead=2, receptionist/accountant/worker=3). An issuer may
+// only mint a bearer credential for a target at or below its own rank:
+// Owner -> Owner (co-owner recovery) and Admin -> lower-trust staff
+// stay allowed, Admin -> Owner is refused. The rank is read from the
+// tenant's role rows, never from a caller-supplied label.
+async function issuerHomeOrdinal(
+  tx: TenantTx,
+  tenantId: TenantId,
+  issuer: ActionCtx | null | undefined,
+): Promise<number | null> {
+  if (!issuer) return null;
+  if (issuer.roleKey) {
+    const [row] = await tx
+      .select({ homeOrdinal: roles.homeOrdinal })
+      .from(roles)
+      .where(
+        and(
+          eq(roles.tenantId, tenantId),
+          eq(roles.key, issuer.roleKey),
+          isNull(roles.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row?.homeOrdinal ?? null;
+  }
+  if (!issuer.userId) return null;
+  const [row] = await tx
+    .select({ homeOrdinal: roles.homeOrdinal })
+    .from(tenantMemberships)
+    .innerJoin(
+      roles,
+      and(
+        eq(roles.id, tenantMemberships.roleId),
+        eq(roles.tenantId, tenantMemberships.tenantId),
+      ),
+    )
+    .where(
+      and(
+        eq(tenantMemberships.tenantId, tenantId),
+        eq(tenantMemberships.userId, issuer.userId),
+        eq(tenantMemberships.status, "active"),
+        isNull(tenantMemberships.deletedAt),
+        isNull(roles.deletedAt),
+      ),
+    )
+    .limit(1);
+  return row?.homeOrdinal ?? null;
+}
+
+// Unknown issuer ranks fail closed: a caller with no resolvable active
+// membership or role cannot mint credentials.
+async function trustGateDenies(
+  tx: TenantTx,
+  tenantId: TenantId,
+  issuer: ActionCtx | null | undefined,
+  targetOrdinal: number,
+): Promise<boolean> {
+  if (!issuer) return false;
+  const issuerOrdinal = await issuerHomeOrdinal(tx, tenantId, issuer);
+  return issuerOrdinal === null || targetOrdinal < issuerOrdinal;
+}
+
+function forbiddenTarget(): IssueLoginLinkResult {
+  return {
+    kind: "error",
+    code: "forbidden_target",
+    message: "You cannot issue a credential for a higher-trust role.",
+  };
+}
+
 // Mints a login link for a membership. Purpose (and TTL) derives
 // from status: invited -> invite (72h), active -> relogin (24h).
 // Revoked memberships are refused -- revocation therefore kills
 // outstanding unspent links at redeem time too (redeem re-checks).
+//
+// A06 — when the authenticated issuer is supplied, the target's
+// actual role rank must be at or below the issuer's rank, and a
+// non-token issuance audit is written in the same transaction before
+// the token is returned. System callers (platform operator phone
+// flow) pass no issuer and keep their existing authority.
 export async function issueLoginLink(
   tenantId: TenantId,
   membershipId: string,
+  issuer?: ActionCtx | null,
 ): Promise<IssueLoginLinkResult> {
   return withTenant(tenantId, async (tx) => {
     const rows = await tx
@@ -55,6 +139,7 @@ export async function issueLoginLink(
         status: tenantMemberships.status,
         phone: users.phone,
         roleKey: roles.key,
+        homeOrdinal: roles.homeOrdinal,
         tenantName: tenants.name,
       })
       .from(tenantMemberships)
@@ -79,6 +164,9 @@ export async function issueLoginLink(
     if (m.status !== "invited" && m.status !== "active") {
       return { kind: "error", code: "membership_not_found", message: "Membership not found." };
     }
+    if (await trustGateDenies(tx, tenantId, issuer, m.homeOrdinal)) {
+      return forbiddenTarget();
+    }
     const purpose: InviteLinkPurpose = m.status === "invited" ? "invite" : "relogin";
     const ttl = purpose === "invite" ? INVITE_LINK_TTL_SECONDS : RELOGIN_LINK_TTL_SECONDS;
     const { token, claims } = signInviteLinkToken({
@@ -87,12 +175,26 @@ export async function issueLoginLink(
       purpose,
       ttlSeconds: ttl,
     });
+    const expiresAt = new Date(claims.exp * 1000);
+    if (issuer) {
+      // Same transaction as the checks, before the token leaves this
+      // function. Never token-bearing.
+      await writeAudit(tx, {
+        tenantId,
+        actorId: issuer.userId ?? null,
+        requestId: issuer.requestId ?? null,
+        action: "staff.login_link_issued",
+        entityType: "tenant_membership",
+        entityId: membershipId,
+        after: { purpose, phone: m.phone, expiresAt: expiresAt.toISOString() },
+      });
+    }
     return {
       kind: "ok",
       token,
       urlPath: `/login/link/${token}`,
       purpose,
-      expiresAt: new Date(claims.exp * 1000),
+      expiresAt,
       phone: m.phone,
       roleKey: m.roleKey,
       tenantName: m.tenantName,
@@ -150,6 +252,7 @@ async function findMembershipIdByPhone(
 export async function issueOwnerResetLink(
   tenantId: TenantId,
   membershipId: string,
+  issuer?: ActionCtx | null,
 ): Promise<IssueLoginLinkResult> {
   return withTenant(tenantId, async (tx) => {
     const rows = await tx
@@ -157,6 +260,7 @@ export async function issueOwnerResetLink(
         status: tenantMemberships.status,
         phone: users.phone,
         roleKey: roles.key,
+        homeOrdinal: roles.homeOrdinal,
         tenantName: tenants.name,
       })
       .from(tenantMemberships)
@@ -191,6 +295,12 @@ export async function issueOwnerResetLink(
         code: "not_active",
         message: "This owner has not activated yet — use an invite link.",
       };
+    }
+    // A06 — only an issuer at or above the target owner's rank (i.e.
+    // another active owner) may mint this reset. Platform-Ops callers
+    // pass no issuer and keep their separate recovery authority.
+    if (await trustGateDenies(tx, tenantId, issuer, m.homeOrdinal)) {
+      return forbiddenTarget();
     }
     const { token, claims } = signInviteLinkToken({
       tenantId,

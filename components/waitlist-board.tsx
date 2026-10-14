@@ -19,9 +19,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 export function WaitlistBoard({
   batchId,
   initialRows,
+  canManage,
 }: {
   batchId: string;
   initialRows: WaitlistRow[];
+  // R10 (2026-10-13 role-workflow audit) — promoting/removing rides
+  // enquiries.write; a reader without it keeps the queue view only.
+  canManage: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export function WaitlistBoard({
           <ListOrdered size={15} className="text-ink-3" />
           Waitlist
         </h2>
-        {initialRows.length > 0 ? (
+        {canManage && initialRows.length > 0 ? (
           <button
             type="button"
             onClick={() => run(() => promoteHeadAction({ batchId }))}
@@ -81,19 +85,21 @@ export function WaitlistBoard({
                 </p>
                 <p className="text-[11.5px] text-ink-3">{row.memberCode}</p>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  run(() =>
-                    cancelWaitlistAction({ memberId: row.memberId, batchId }),
-                  )
-                }
-                disabled={busy}
-                aria-label={`Remove ${row.memberName}`}
-                className="flex h-11 w-11 flex-none items-center justify-center rounded-ctl text-ink-3 disabled:opacity-50"
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </button>
+              {canManage ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    run(() =>
+                      cancelWaitlistAction({ memberId: row.memberId, batchId }),
+                    )
+                  }
+                  disabled={busy}
+                  aria-label={`Remove ${row.memberName}`}
+                  className="flex h-11 w-11 flex-none items-center justify-center rounded-ctl text-ink-3 disabled:opacity-50"
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

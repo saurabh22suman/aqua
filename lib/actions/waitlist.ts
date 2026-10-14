@@ -34,7 +34,7 @@ export async function addToWaitlistAction(raw: unknown): Promise<WaitlistResult>
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.write");
-  return addToWaitlist({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
+  return addToWaitlist(ctx, parsed.data);
 }
 
 export async function cancelWaitlistAction(raw: unknown): Promise<WaitlistResult> {
@@ -44,7 +44,7 @@ export async function cancelWaitlistAction(raw: unknown): Promise<WaitlistResult
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.write");
-  return cancelWaitlist({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
+  return cancelWaitlist(ctx, parsed.data);
 }
 
 export async function listWaitlistAction(
@@ -62,7 +62,7 @@ export async function getWaitlistHeadAction(raw: unknown): Promise<WaitlistHead 
   if (!parsed.success) return null;
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.read");
-  return getWaitlistHead({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed);
+  return getWaitlistHead(ctx, parsed);
 }
 
 export async function promoteHeadAction(raw: unknown): Promise<WaitlistResult> {
@@ -72,5 +72,5 @@ export async function promoteHeadAction(raw: unknown): Promise<WaitlistResult> {
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.write");
-  return promoteHead({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed);
+  return promoteHead(ctx, parsed);
 }

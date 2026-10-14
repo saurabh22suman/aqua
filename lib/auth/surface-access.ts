@@ -26,12 +26,18 @@
 export const SURFACE_OWNER = "owner" as const;
 export const SURFACE_COACH = "coach" as const;
 export const SURFACE_RECEPTION = "reception" as const;
+// R08 (2026-10-13 role-workflow audit) — the human Worker now has a
+// real self-service surface (/worker: own shifts, check-in, leave)
+// instead of being routed through the parent placeholder. Parent stays
+// a bearer-link read (/p/[token]) with no tenant session surface.
+export const SURFACE_WORKER = "worker" as const;
 export const SURFACE_PARENT = "parent" as const;
 
 export type TenantSurface =
   | typeof SURFACE_OWNER
   | typeof SURFACE_COACH
   | typeof SURFACE_RECEPTION
+  | typeof SURFACE_WORKER
   | typeof SURFACE_PARENT;
 
 // `roleKey` strings from `roles.key` (F-04's "Never": never branch on
@@ -57,11 +63,14 @@ const TENANT_ROLE_TO_SURFACE: Record<string, TenantSurface | null> = {
   accountant: SURFACE_OWNER,
   receptionist: SURFACE_RECEPTION,
   coach: SURFACE_COACH,
-  // Worker has no UI today (scope §195); their home path is /parent
-  // as a placeholder so an authenticated worker doesn't land on a
-  // dead-end mislabeled page. They are NOT a parent — but until the
-  // worker surface exists, /parent is the closest landing.
-  worker: SURFACE_PARENT,
+  // R02 (2026-10-13 role-workflow audit) — the delegated curriculum
+  // maintainer works from the coach surface with coach-level resource
+  // scoping, plus the academy-wide levels.write grant.
+  curriculum_lead: SURFACE_COACH,
+  // R08 — the human Worker's real self-service home. The role is NOT a
+  // parent: a worker session must never resolve to the parent surface,
+  // and a parent has no session at all (bearer link only).
+  worker: SURFACE_WORKER,
 };
 
 export function surfaceForRole(roleKey: string): TenantSurface | null {

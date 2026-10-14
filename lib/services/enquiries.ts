@@ -1,13 +1,94 @@
-import { and, asc, desc, eq, isNull, lt, sql } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { enquiries, enquiryFollowUps, type EnquiryStage, type EnquirySource } from "@/db/schema/enquiries";
+import { locations } from "@/db/schema/locations";
 import type { ActionCtx } from "@/lib/auth/context";
 import { ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
 import { createMember, enrolMember, type GuardianInput } from "@/lib/services/register";
 import { transitionMemberStatus } from "@/lib/services/member-status";
 import { nextMemberCode } from "@/lib/services/people";
+import {
+  locationVisible,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
+import {
+  callerHasPermission,
+  callerIsLegacySystem,
+  visibleBatch,
+  visibleMember,
+} from "@/lib/services/resource-access";
 import type { ConsentGrantInput } from "@/lib/services/consent";
 import type { MemberId } from "@/lib/ids";
+
+// R04 (2026-10-13 role-workflow audit) — enquiry visibility.
+//
+// An enquiry belongs to a site (location_id). Non-management callers
+// (reception) see and act on located enquiries within their allowed
+// locations only; an unresolved enquiry (location_id IS NULL, e.g. a
+// historical row the backfill could not place) is visible and
+// actionable only through the management review path
+// (settings.manage holders) — missing location never means
+// unrestricted access. Management still respects location-scoped
+// memberships for located rows and keeps the unresolved queue.
+type EnquiryScope = { management: boolean; predicate: SQL | undefined };
+
+async function enquiryScope(tx: TenantTx, ctx: ActionCtx): Promise<EnquiryScope> {
+  const management =
+    callerIsLegacySystem(ctx) ||
+    (await callerHasPermission(tx, ctx, "settings.manage"));
+  const access = await resolveLocationAccess(tx, ctx);
+
+  if (access.unrestricted) {
+    // Management keeps every located row plus the unresolved queue;
+    // a non-management unrestricted caller still never sees
+    // unresolved records.
+    return { management, predicate: management ? undefined : isNotNull(enquiries.locationId) };
+  }
+
+  const located =
+    access.locationIds.length > 0
+      ? inArray(enquiries.locationId, access.locationIds)
+      : sql`false`;
+  return {
+    management,
+    predicate: management
+      ? or(located, isNull(enquiries.locationId))
+      : and(isNotNull(enquiries.locationId), located),
+  };
+}
+
+function enquiryConditions(ctx: ActionCtx, predicate: SQL | undefined, extra: SQL[] = []): SQL[] {
+  const conditions: SQL[] = [
+    eq(enquiries.tenantId, ctx.tenantId),
+    isNull(enquiries.deletedAt),
+    ...extra,
+  ];
+  if (predicate) conditions.push(predicate);
+  return conditions;
+}
+
+async function visibleEnquiry(
+  tx: TenantTx,
+  ctx: ActionCtx,
+  enquiryId: string,
+): Promise<{ id: string; stage: string; memberId: MemberId | null; trialBatchId: string | null; fullName: string; phone: string | null; locationId: string | null } | null> {
+  const { predicate } = await enquiryScope(tx, ctx);
+  const [row] = await tx
+    .select({
+      id: enquiries.id,
+      stage: enquiries.stage,
+      memberId: enquiries.memberId,
+      trialBatchId: enquiries.trialBatchId,
+      fullName: enquiries.fullName,
+      phone: enquiries.phone,
+      locationId: enquiries.locationId,
+    })
+    .from(enquiries)
+    .where(and(...enquiryConditions(ctx, predicate, [eq(enquiries.id, enquiryId)])))
+    .limit(1);
+  return row ?? null;
+}
+
 
 export type EnquiryRow = {
   id: string;
@@ -16,6 +97,7 @@ export type EnquiryRow = {
   source: EnquirySource;
   stage: EnquiryStage;
   memberId: MemberId | null;
+  locationId: string | null;
   createdAt: Date;
 };
 
@@ -25,11 +107,42 @@ export type EnquiryRow = {
 // booked (bookTrial) or the enquiry converts without one
 // (convertEnquiry) -- neither is needed just to log that someone
 // asked.
+//
+// R04 — the capture site is required and must be inside the caller's
+// allowed locations. A counter enquiry is always at the site where it
+// was taken, so there is no legitimate unassigned creation path; the
+// NULL location state exists only for historical rows.
+//
+// The TS input stays optional for internal/system callers and
+// protected fixtures (tests/tier1/** is agent-read-only), but every
+// app path goes through createEnquiryAction, whose Zod schema requires
+// locationId, so a receptionist can never create an unassigned row.
+// An omitted site from an internal caller stores NULL, which the
+// visibility predicate treats as management-review-only.
 export async function createEnquiry(
   ctx: ActionCtx,
-  input: { fullName: string; phone?: string; source: EnquirySource; notes?: string },
+  input: { fullName: string; phone?: string; source: EnquirySource; notes?: string; locationId?: string },
 ): Promise<EnquiryRow> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const locationId = input.locationId ?? null;
+    if (locationId) {
+      const access = await resolveLocationAccess(tx, ctx);
+      const [location] = await tx
+        .select({ id: locations.id })
+        .from(locations)
+        .where(
+          and(
+            eq(locations.id, locationId as never),
+            eq(locations.tenantId, ctx.tenantId),
+            isNull(locations.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!location || !locationVisible(access, locationId)) {
+        throw new Error("Choose a location you have access to.");
+      }
+    }
+
     const [row] = await tx
       .insert(enquiries)
       .values({
@@ -38,6 +151,7 @@ export async function createEnquiry(
         phone: input.phone,
         source: input.source,
         notes: input.notes,
+        locationId: locationId as never,
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
       })
@@ -49,6 +163,7 @@ export async function createEnquiry(
       source: row.source as EnquirySource,
       stage: row.stage as EnquiryStage,
       memberId: row.memberId,
+      locationId: row.locationId,
       createdAt: row.createdAt,
     };
   });
@@ -59,13 +174,14 @@ export async function listEnquiries(
   filters: { stage?: EnquiryStage } = {},
 ): Promise<EnquiryRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const conditions = [eq(enquiries.tenantId, ctx.tenantId), isNull(enquiries.deletedAt)];
-    if (filters.stage) conditions.push(eq(enquiries.stage, filters.stage));
+    const { predicate } = await enquiryScope(tx, ctx);
+    const extra: SQL[] = [];
+    if (filters.stage) extra.push(eq(enquiries.stage, filters.stage));
 
     const rows = await tx
       .select()
       .from(enquiries)
-      .where(and(...conditions))
+      .where(and(...enquiryConditions(ctx, predicate, extra)))
       .orderBy(desc(enquiries.createdAt));
 
     return rows.map((row) => ({
@@ -75,6 +191,7 @@ export async function listEnquiries(
       source: row.source as EnquirySource,
       stage: row.stage as EnquiryStage,
       memberId: row.memberId,
+      locationId: row.locationId,
       createdAt: row.createdAt,
     }));
   });
@@ -91,10 +208,11 @@ export async function getEnquiryDetail(
   enquiryId: string,
 ): Promise<EnquiryDetail | null> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const { predicate } = await enquiryScope(tx, ctx);
     const [row] = await tx
       .select()
       .from(enquiries)
-      .where(and(eq(enquiries.id, enquiryId), eq(enquiries.tenantId, ctx.tenantId), isNull(enquiries.deletedAt)));
+      .where(and(...enquiryConditions(ctx, predicate, [eq(enquiries.id, enquiryId)])));
     if (!row) return null;
 
     const followUps = await tx
@@ -115,6 +233,7 @@ export async function getEnquiryDetail(
       source: row.source as EnquirySource,
       stage: row.stage as EnquiryStage,
       memberId: row.memberId,
+      locationId: row.locationId,
       createdAt: row.createdAt,
       notes: row.notes,
       trialBatchId: row.trialBatchId,
@@ -135,14 +254,10 @@ export async function transitionEnquiryStage(
   input: { enquiryId: string; toStage: EnquiryStage },
 ): Promise<StageResult> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const [enquiry] = await tx
-      .select({ stage: enquiries.stage })
-      .from(enquiries)
-      .where(and(eq(enquiries.id, input.enquiryId), eq(enquiries.tenantId, ctx.tenantId), isNull(enquiries.deletedAt)))
-      .for("update");
-    if (!enquiry) return { ok: false, error: "Enquiry not found." };
+    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
+    if (!visible) return { ok: false, error: "Enquiry not found." };
 
-    const fromStage = enquiry.stage as EnquiryStage;
+    const fromStage = visible.stage as EnquiryStage;
     const allowed = ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? [];
     if (!allowed.includes(input.toStage)) {
       return { ok: false, error: `Cannot move an enquiry from ${fromStage} to ${input.toStage}.` };
@@ -161,6 +276,8 @@ export async function addFollowUp(
   input: { enquiryId: string; dueAt: Date; note?: string },
 ): Promise<{ id: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
+    if (!visible) throw new Error("Enquiry not found.");
     const [row] = await tx
       .insert(enquiryFollowUps)
       .values({
@@ -181,10 +298,17 @@ export async function completeFollowUp(
   followUpId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const { predicate } = await enquiryScope(tx, ctx);
     const [row] = await tx
       .select({ id: enquiryFollowUps.id })
       .from(enquiryFollowUps)
-      .where(and(eq(enquiryFollowUps.id, followUpId), eq(enquiryFollowUps.tenantId, ctx.tenantId)));
+      .innerJoin(enquiries, eq(enquiries.id, enquiryFollowUps.enquiryId))
+      .where(
+        and(...enquiryConditions(ctx, predicate, [
+          eq(enquiryFollowUps.id, followUpId),
+          eq(enquiryFollowUps.tenantId, ctx.tenantId),
+        ])),
+      );
     if (!row) return { ok: false, error: "Follow-up not found." };
 
     await tx
@@ -205,8 +329,9 @@ export type OverdueFollowUp = {
 
 // C-13 done-when: "overdue follow-ups surface on the owner dashboard."
 export async function listOverdueFollowUps(ctx: ActionCtx): Promise<OverdueFollowUp[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    const { predicate } = await enquiryScope(tx, ctx);
+    return tx
       .select({
         id: enquiryFollowUps.id,
         enquiryId: enquiryFollowUps.enquiryId,
@@ -217,14 +342,14 @@ export async function listOverdueFollowUps(ctx: ActionCtx): Promise<OverdueFollo
       .from(enquiryFollowUps)
       .innerJoin(enquiries, eq(enquiries.id, enquiryFollowUps.enquiryId))
       .where(
-        and(
+        and(...enquiryConditions(ctx, predicate, [
           eq(enquiryFollowUps.tenantId, ctx.tenantId),
           isNull(enquiryFollowUps.doneAt),
           lt(enquiryFollowUps.dueAt, sql`now()`),
-        ),
+        ])),
       )
-      .orderBy(asc(enquiryFollowUps.dueAt)),
-  );
+      .orderBy(asc(enquiryFollowUps.dueAt));
+  });
 }
 
 const MAX_CODE_ATTEMPTS = 5;
@@ -259,14 +384,17 @@ export async function bookTrial(
   ctx: ActionCtx,
   input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
-  const enquiry = await withTenant(ctx.tenantId, (tx) =>
-    tx
-      .select({ id: enquiries.id, stage: enquiries.stage, memberId: enquiries.memberId, fullName: enquiries.fullName, phone: enquiries.phone })
-      .from(enquiries)
-      .where(and(eq(enquiries.id, input.enquiryId), eq(enquiries.tenantId, ctx.tenantId), isNull(enquiries.deletedAt)))
-      .then((r) => r[0]),
-  );
-  if (!enquiry) return { ok: false, error: "Enquiry not found." };
+  const enquiry = await withTenant(ctx.tenantId, async (tx) => {
+    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
+    if (!visible) return null;
+    // R04 — the trial batch must be visible to the caller (tenant,
+    // live, location in scope; coach-assignment applies if ever
+    // reachable from a coach role). A forged batch id is refused
+    // before any member is created.
+    if (!(await visibleBatch(tx, ctx, input.batchId))) return null;
+    return visible;
+  });
+  if (!enquiry) return { ok: false, error: "Enquiry or batch not found." };
   if (enquiry.memberId) return { ok: false, error: "This enquiry already has a member linked." };
 
   const fromStage = enquiry.stage as EnquiryStage;
@@ -307,6 +435,9 @@ export async function bookTrial(
           memberId: created.memberId,
           trialBatchId: input.batchId,
           stage: "trial_scheduled",
+          // R04 — assigning the trial site also resolves a legacy
+          // unassigned enquiry; an already-assigned row is untouched.
+          ...(enquiry.locationId ? {} : { locationId: input.details.locationId as never }),
           updatedAt: new Date(),
           updatedBy: ctx.userId,
         })
@@ -328,13 +459,12 @@ export async function convertEnquiry(
   ctx: ActionCtx,
   input: { enquiryId: string; reason: string; newMember?: NewMemberDetails },
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
-  const enquiry = await withTenant(ctx.tenantId, (tx) =>
-    tx
-      .select({ id: enquiries.id, stage: enquiries.stage, memberId: enquiries.memberId, fullName: enquiries.fullName, phone: enquiries.phone })
-      .from(enquiries)
-      .where(and(eq(enquiries.id, input.enquiryId), eq(enquiries.tenantId, ctx.tenantId), isNull(enquiries.deletedAt)))
-      .then((r) => r[0]),
-  );
+  const enquiry = await withTenant(ctx.tenantId, async (tx) => {
+    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
+    if (!visible) return null;
+    if (visible.memberId && !(await visibleMember(tx, ctx, visible.memberId))) return null;
+    return visible;
+  });
   if (!enquiry) return { ok: false, error: "Enquiry not found." };
 
   const fromStage = enquiry.stage as EnquiryStage;
@@ -390,7 +520,15 @@ export async function convertEnquiry(
     await withTenant(ctx.tenantId, (tx) =>
       tx
         .update(enquiries)
-        .set({ memberId: created.memberId, stage: "converted", updatedAt: new Date(), updatedBy: ctx.userId })
+        .set({
+          memberId: created.memberId,
+          stage: "converted",
+          // R04 — conversion resolves a legacy unassigned enquiry to
+          // the site chosen for the new member.
+          ...(enquiry.locationId ? {} : { locationId: input.newMember!.locationId as never }),
+          updatedAt: new Date(),
+          updatedBy: ctx.userId,
+        })
         .where(eq(enquiries.id, input.enquiryId)),
     );
     return { ok: true, memberId: created.memberId };
@@ -403,6 +541,7 @@ export type SourceConversion = { source: EnquirySource; total: number; converted
 // C-15 done-when: "conversion rate by source is reportable."
 export async function conversionRateBySource(ctx: ActionCtx): Promise<SourceConversion[]> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const { predicate } = await enquiryScope(tx, ctx);
     const rows = await tx
       .select({
         source: enquiries.source,
@@ -410,7 +549,7 @@ export async function conversionRateBySource(ctx: ActionCtx): Promise<SourceConv
         converted: sql<number>`count(*) filter (where ${enquiries.stage} = 'converted')::int`,
       })
       .from(enquiries)
-      .where(and(eq(enquiries.tenantId, ctx.tenantId), isNull(enquiries.deletedAt)))
+      .where(and(...enquiryConditions(ctx, predicate)))
       .groupBy(enquiries.source)
       .orderBy(enquiries.source);
 

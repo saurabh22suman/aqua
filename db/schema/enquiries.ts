@@ -5,6 +5,7 @@ import { auditColumns, softDelete } from "./_shared";
 import { tenants } from "./tenants";
 import { members } from "./people";
 import { batches } from "./programs";
+import { locations } from "./locations";
 import type { TenantId, MemberId, UserId } from "@/lib/ids";
 
 export const enquiries = pgTable(
@@ -23,6 +24,12 @@ export const enquiries = pgTable(
     assignedToUserId: uuid("assigned_to_user_id").$type<UserId>(),
     memberId: uuid("member_id").$type<MemberId>(),
     trialBatchId: uuid("trial_batch_id"),
+    // 2026-10-13 role-workflow audit R04 — the site this enquiry
+    // belongs to. Nullable for historical rows whose location cannot
+    // be established reliably: an unassigned enquiry is visible only
+    // through the management review path, never to a scoped
+    // receptionist (missing location must not mean unrestricted).
+    locationId: uuid("location_id"),
     notes: text("notes"),
     ...softDelete,
     ...auditColumns,
@@ -32,6 +39,9 @@ export const enquiries = pgTable(
     index("enquiries_tenant_live_idx").on(t.tenantId).where(sql`deleted_at is null`),
     index("enquiries_tenant_stage_live_idx")
       .on(t.tenantId, t.stage)
+      .where(sql`deleted_at is null`),
+    index("enquiries_tenant_location_live_idx")
+      .on(t.tenantId, t.locationId)
       .where(sql`deleted_at is null`),
     check(
       "enquiries_source_check",
@@ -50,6 +60,11 @@ export const enquiries = pgTable(
       name: "enquiries_trial_batch_tenant_fkey",
       columns: [t.trialBatchId, t.tenantId],
       foreignColumns: [batches.id, batches.tenantId],
+    }),
+    foreignKey({
+      name: "enquiries_location_tenant_fkey",
+      columns: [t.locationId, t.tenantId],
+      foreignColumns: [locations.id, locations.tenantId],
     }),
   ],
 );

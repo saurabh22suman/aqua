@@ -347,6 +347,11 @@ export const PERMISSIONS: ReadonlyArray<{
   { key: "bookings.write", module: "pool.booking", description: "Create and cancel facility bookings" },
   { key: "levels.read", module: "swim.levels", description: "View skill levels and assessments" },
   { key: "levels.assess", module: "swim.levels", description: "Record a skill assessment" },
+  // 2026-10-13 role-workflow audit R02 — curriculum maintenance is a
+  // delegated duty, not a side effect of settings.manage. Held by the
+  // seeded Curriculum Lead role (and owner/admin through their full
+  // grant set); ordinary coaches assess without editing the framework.
+  { key: "levels.write", module: "swim.levels", description: "Maintain the academy curriculum framework and rubrics" },
 ];
 
 export async function seedPermissions(

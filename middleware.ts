@@ -39,6 +39,11 @@ const APEX_ALLOWLIST = [
   "/owner",
   "/coach",
   "/reception",
+  // R08 (2026-10-13 role-workflow audit) — the worker self-service
+  // home. Exact + subtree only: "/worker" does not expose
+  // "/workersomething" because isAllowed matches equality or the
+  // prefix followed by "/".
+  "/worker",
   "/parent",
   "/p/",
   // V-25 — the premises QR the staff scan. It is a tenant surface
@@ -55,6 +60,7 @@ const APEX_ALLOWLIST = [
   // Phone + PIN login (2026-09-11 auth feature). Pre-auth by
   // definition; every failure is a generic 401.
   "/api/login/",
+  "/api/offline/",
   // Session-gated set-PIN safety net (already-authenticated users
   // only; the route checks the better-auth session itself).
   "/api/account/",
