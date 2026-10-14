@@ -1,5 +1,4 @@
-import { requireOwner } from "@/lib/auth/surface-guard";
-import { requirePermission } from "@/lib/auth/permission";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { signPremisesQrToken } from "@/lib/services/premises-qr";
 import { BackLink } from "@/components/ui/BackLink";
 import { PremisesQrCard } from "@/components/premises-qr-card";
@@ -14,7 +13,7 @@ import { PremisesQrCard } from "@/components/premises-qr-card";
 
 export default async function StaffCheckInQrPage() {
   const ctx = await requireOwner();
-  requirePermission(ctx, "staff.roster");
+  requirePagePermission(ctx, "staff.roster");
 
   const { token } = signPremisesQrToken({ tenantId: ctx.tenantId });
 

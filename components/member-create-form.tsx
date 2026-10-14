@@ -8,6 +8,7 @@ import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { DateField } from "@/components/ui/DateField";
+import { MemberConsentChoices } from "@/components/member-consent-choices";
 import {
   resolveTerm,
   titleCase,
@@ -67,6 +68,7 @@ export function MemberCreateForm({
   const [relationship, setRelationship] = useState("");
 
   const [consentGiven, setConsentGiven] = useState(false);
+  const [communicationsGiven, setCommunicationsGiven] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -155,6 +157,8 @@ export function MemberCreateForm({
             policyVersion: CURRENT_POLICY_VERSION,
             evidence: { channel: "staff-assisted-in-person" },
           },
+          ...(communicationsGiven ? [{ purpose: "communications" as const,
+            policyVersion: CURRENT_POLICY_VERSION, evidence: { channel: "staff-assisted-in-person" } }] : []),
         ],
       });
       if (!result.ok) {
@@ -162,6 +166,13 @@ export function MemberCreateForm({
         return;
       }
       router.push(`${memberDetailBasePath}/${result.memberId}`);
+    } catch {
+      // R07 (2026-10-13 role-workflow audit) — a refused or failed
+      // submission must not become an uncaught rejection. The form
+      // keeps every field (controlled inputs) so nothing is lost.
+      setError(
+        "Could not save the member. You may not have permission to register members — check with the owner.",
+      );
     } finally {
       setBusy(false);
     }
@@ -170,21 +181,27 @@ export function MemberCreateForm({
   return (
     <div className="space-y-5">
       <section className="space-y-2.5">
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="Full name"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          data-testid="member-full-name"
-        />
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone (optional)"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Full name</span>
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Full name"
+            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            data-testid="member-full-name"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone (optional)"
+            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          />
+        </label>
         <div>
           <label
             htmlFor="member-dob"
@@ -236,13 +253,16 @@ export function MemberCreateForm({
             </option>
           ))}
         </select>
-        <textarea
-          value={medicalNotes}
-          onChange={(e) => setMedicalNotes(e.target.value)}
-          placeholder="Medical notes (optional)"
-          rows={2}
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Medical notes (optional)</span>
+          <textarea
+            value={medicalNotes}
+            onChange={(e) => setMedicalNotes(e.target.value)}
+            placeholder="Medical notes (optional)"
+            rows={2}
+            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+          />
+        </label>
       </section>
 
       {minor === true ? (
@@ -264,14 +284,19 @@ export function MemberCreateForm({
             </div>
           ) : (
             <>
-              <input
-                type="text"
-                value={guardianQuery}
-                onChange={(e) => runGuardianSearch(e.target.value)}
-                placeholder="Search an existing guardian by name or phone"
-                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                data-testid="guardian-search"
-              />
+              <label className="block">
+                <span className="block text-[12px] text-ink-3 mb-1">
+                  Search existing {resolveTerm(terminology, "guardian", "other")}
+                </span>
+                <input
+                  type="text"
+                  value={guardianQuery}
+                  onChange={(e) => runGuardianSearch(e.target.value)}
+                  placeholder="Search an existing guardian by name or phone"
+                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                  data-testid="guardian-search"
+                />
+              </label>
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
                   {guardianResults.map((r) => (
@@ -295,32 +320,47 @@ export function MemberCreateForm({
               <p className="text-[12px] text-ink-3">
                 Not found? Enter the {resolveTerm(terminology, "guardian", 1)}&apos;s details below.
               </p>
-              <input
-                type="text"
-                value={guardianName}
-                onChange={(e) => setGuardianName(e.target.value)}
-                placeholder="Guardian full name"
-                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                data-testid="guardian-new-name"
-              />
-              <input
-                type="tel"
-                value={guardianPhone}
-                onChange={(e) => setGuardianPhone(e.target.value)}
-                placeholder="Guardian phone (optional)"
-                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              />
+              <label className="block">
+                <span className="block text-[12px] text-ink-3 mb-1">
+                  Guardian full name
+                </span>
+                <input
+                  type="text"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="Guardian full name"
+                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                  data-testid="guardian-new-name"
+                />
+              </label>
+              <label className="block">
+                <span className="block text-[12px] text-ink-3 mb-1">
+                  Guardian phone (optional)
+                </span>
+                <input
+                  type="tel"
+                  value={guardianPhone}
+                  onChange={(e) => setGuardianPhone(e.target.value)}
+                  placeholder="Guardian phone (optional)"
+                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                />
+              </label>
             </>
           )}
 
-          <input
-            type="text"
-            value={relationship}
-            onChange={(e) => setRelationship(e.target.value)}
-            placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-            data-testid="guardian-relationship"
-          />
+          <label className="block">
+            <span className="block text-[12px] text-ink-3 mb-1">
+              Relationship to {resolveTerm(terminology, "member", 1)}
+            </span>
+            <input
+              type="text"
+              value={relationship}
+              onChange={(e) => setRelationship(e.target.value)}
+              placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
+              className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+              data-testid="guardian-relationship"
+            />
+          </label>
 
           {guardianMissing ? (
             <div className="flex items-start gap-2 rounded-ctl bg-warn-soft px-3 py-2.5">
@@ -334,20 +374,9 @@ export function MemberCreateForm({
         </section>
       ) : null}
 
-      <label className="flex items-start gap-2.5 min-h-[44px] py-1">
-        <input
-          type="checkbox"
-          checked={consentGiven}
-          onChange={(e) => setConsentGiven(e.target.checked)}
-          className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent-strong)]"
-          data-testid="consent-checkbox"
-        />
-        <span className="text-[12.5px] text-ink-2">
-          {minor === true
-            ? `The guardian above has agreed to data processing for this ${resolveTerm(terminology, "member", 1)}, per the current privacy notice.`
-            : `This ${resolveTerm(terminology, "member", 1)} has agreed to data processing, per the current privacy notice.`}
-        </span>
-      </label>
+      <MemberConsentChoices minor={minor} memberLabel={resolveTerm(terminology, "member", 1)}
+        processing={consentGiven} communications={communicationsGiven}
+        onProcessing={setConsentGiven} onCommunications={setCommunicationsGiven} />
 
       {error ? (
         <p className="text-[13px] text-late" role="alert">

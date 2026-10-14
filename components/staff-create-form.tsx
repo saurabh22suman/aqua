@@ -36,15 +36,15 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
     return "Accountant";
   }
 
-  function submit() {
+  async function submit() {
     setError(null);
     setPending(true);
-    createStaffAction({
-      staffType,
-      ...(mode === "new" ? { fullName } : { existingPersonId }),
-      ...(employedOn ? { employedOn } : {}),
-    }).then((result) => {
-      setPending(false);
+    try {
+      const result = await createStaffAction({
+        staffType,
+        ...(mode === "new" ? { fullName } : { existingPersonId }),
+        ...(employedOn ? { employedOn } : {}),
+      });
       if (result.kind === "ok") {
         // The form page wraps us; on success, it shows the new
         // staff member. A full page refresh ensures the server
@@ -53,7 +53,13 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
       } else {
         setError(result.message);
       }
-    });
+    } catch {
+      setError(
+        "The staff record could not be saved. Your entries are kept — try again.",
+      );
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

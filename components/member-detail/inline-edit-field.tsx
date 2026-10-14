@@ -4,25 +4,22 @@ import {
   useEffect,
   useRef,
   useState,
-  type ChangeEvent,
   type KeyboardEvent,
 } from "react";
 import { Pencil } from "lucide-react";
 import { updateMemberAction } from "@/lib/actions/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
-import { DateField } from "@/components/ui/DateField";
+import {
+  FIELD_LABELS,
+  InlineEditControl,
+} from "@/components/member-detail/inline-edit-control";
 
-// Member-detail inline edit. Replaces the read-only field block on
-// /owner/members/[id] with a click-to-edit affordance for the five
-// fields a coach/owner usually has to fix (name typo, wrong phone,
-// DOB entered a year off, gender, medical notes). Status transitions,
-// enrolment, parent link, consent, attendance are still owned by their
-// own flows — out of scope per docs/owner-fixes.md.
-//
-// Save on blur (text/textarea) or change (date/select). Optimistic
-// update: the displayed text changes immediately on commit; on failure,
-// we revert and show an inline error. No save/cancel button.
+// Member-detail inline edit for the five fields a coach/owner usually
+// fixes (name, phone, DOB, gender, medical notes). Save on blur
+// (text/textarea) or change (date/select). The display updates
+// optimistically; on failure it reverts, keeps the attempted draft and
+// shows an inline error. Writes are field-scoped (owner-UI review P1).
 
 export type InlineEditFieldName =
   | "fullName"
@@ -42,16 +39,6 @@ export type InlineEditSnapshot = {
   medicalNotes: string | null;
 };
 
-// PR3-C10 — human labels for the edit affordances ("Edit fullName"
-// was the raw field name read out to screen readers).
-const FIELD_LABELS: Record<InlineEditFieldName, string> = {
-  fullName: "name",
-  phone: "phone number",
-  dateOfBirth: "date of birth",
-  gender: "gender",
-  medicalNotes: "medical notes",
-};
-
 export type InlineEditFieldOption = { value: string; label: string };
 
 export type InlineEditFieldProps = {
@@ -63,7 +50,9 @@ export type InlineEditFieldProps = {
   placeholder?: string;
   className?: string;
   valueClassName?: string;
-  snapshot: InlineEditSnapshot;
+  // Retained for existing callers/tests from the pre-patch contract.
+  // Writes are field-scoped now, so the snapshot is not consulted.
+  snapshot?: InlineEditSnapshot;
   // Display-only formatting for the read branch, expressed as a
   // serializable enum because server components cannot pass functions
   // across the RSC boundary. The editing input and the committed value
@@ -89,7 +78,6 @@ export function InlineEditField({
   placeholder,
   className,
   valueClassName,
-  snapshot,
   formatAs,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false);
@@ -100,15 +88,20 @@ export function InlineEditField({
   const inputRef = useRef<
     HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null
   >(null);
+  // P1 (2026-10-13 owner-UI review) — each commit sends ONLY the field
+  // being edited, and commits for this field are serialised so a
+  // slower earlier request cannot land after a newer one and restore
+  // an older value.
+  const commitChain = useRef<Promise<unknown>>(Promise.resolve());
 
   useEffect(() => {
-    // Sync local state when the canonical value prop changes — parent
-    // re-fetched, navigation back to the page, etc. Critically this
-    // must NOT depend on `editing`: when commit() exits edit mode,
-    // editing transitions from true to false, and a [value, editing]
-    // dep would fire and clobber the optimistic displayValue update.
-    setDraft(value);
+    // Sync when the canonical prop changes (parent re-fetch, navigation
+    // back). Must NOT depend on `editing` — that would clobber the
+    // optimistic displayValue when commit() exits edit mode. A failed
+    // save keeps `draft` so the attempted value is not lost.
     setDisplayValue(value);
+    setDraft((current) => (status.kind === "error" ? current : value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   useEffect(() => {
@@ -135,49 +128,71 @@ export function InlineEditField({
     };
   }, [status]);
 
+  function payloadFor(newValue: string) {
+    switch (field) {
+      case "fullName":
+        return { memberId, fullName: newValue.trim() };
+      case "phone":
+        return { memberId, phone: newValue.trim() || null };
+      case "dateOfBirth":
+        return { memberId, dateOfBirth: newValue };
+      case "gender":
+        return { memberId, gender: (newValue || null) as "male" | "female" | "other" | null };
+      case "medicalNotes":
+        return { memberId, medicalNotes: newValue.trim() || null };
+    }
+  }
+
+  // The server-echoed persisted value in this field's display form;
+  // falls back to the client value when the action omits the field.
+  function persistedValue(
+    patch: Record<string, unknown>,
+    fallback: string,
+  ): string {
+    const key =
+      field === "dateOfBirth"
+        ? "dateOfBirth"
+        : field;
+    if (!(key in patch)) return fallback;
+    const stored = patch[key];
+    return typeof stored === "string" ? stored : "";
+  }
+
   async function commit(newValue: string) {
     if (newValue === displayValue && status.kind !== "error") {
       setEditing(false);
       setStatus({ kind: "idle" });
       return;
     }
-    // Optimistic update — display the new value immediately, exit edit
-    // mode. If the server rejects, we revert below.
+    // Optimistic update; on rejection revert the display but keep the
+    // attempted draft so the user can retry without retyping.
     setDisplayValue(newValue);
     setDraft(newValue);
     setEditing(false);
     setStatus({ kind: "saving" });
+    const patch = payloadFor(newValue);
+    const run = commitChain.current.then(
+      () => updateMemberAction(patch),
+      () => updateMemberAction(patch),
+    );
+    commitChain.current = run.catch(() => undefined);
     try {
-      const result = await updateMemberAction({
-        memberId,
-        fullName:
-          field === "fullName" ? newValue : snapshot.fullName,
-        phone:
-          field === "phone"
-            ? newValue || undefined
-            : snapshot.phone ?? undefined,
-        dateOfBirth:
-          field === "dateOfBirth" ? newValue : snapshot.dateOfBirth ?? "",
-        gender:
-          field === "gender"
-            ? newValue || undefined
-            : snapshot.gender ?? undefined,
-        locationId: snapshot.locationId,
-        medicalNotes:
-          field === "medicalNotes"
-            ? newValue || undefined
-            : snapshot.medicalNotes ?? undefined,
-      });
+      const result = await run;
       if (!result.ok) {
         setDisplayValue(value);
-        setDraft(value);
         setStatus({ kind: "error", message: result.error });
         return;
       }
+      // Reflect what the server actually persisted (trimming/nulls)
+      // rather than only the guessed client value.
+      const stored = result.value
+        ? persistedValue({ ...patch, ...result.value }, newValue)
+        : newValue;
+      setDisplayValue(stored);
+      setDraft(stored);
       setStatus({ kind: "saved" });
     } catch (err) {
       setDisplayValue(value);
-      setDraft(value);
       setStatus({
         kind: "error",
         message: err instanceof Error ? err.message : "Save failed",
@@ -202,19 +217,6 @@ export function InlineEditField({
     }
   }
 
-  function handleChange(
-    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
-  ) {
-    const newValue = e.target.value;
-    setDraft(newValue);
-    // Select inputs save on change — no blur step needed. Date fields
-    // use DateField (masked dd/mm/yyyy) and commit on blur/Enter, so a
-    // partially typed date never round-trips to the server.
-    if (type === "select") {
-      void commit(newValue);
-    }
-  }
-
   function handleBlur() {
     if (status.kind === "saving") return;
     if (!editing) return;
@@ -229,18 +231,15 @@ export function InlineEditField({
   }
 
   function enterEdit() {
-    setDraft(displayValue);
+    // Keep the attempted value after a failed save for a quick retry.
+    setDraft(status.kind === "error" ? draft : displayValue);
     setStatus({ kind: "idle" });
     setEditing(true);
   }
 
-  const baseInputClass =
-    "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent-strong)]";
 
-  // P2-8/P2-9: empty fields style the placeholder as editable and keep
-  // the pencil visible (no hover on a phone). Dates read in the
-  // DESIGN.md §4 format (`22 Aug`), never raw ISO, while the edit
-  // draft stays ISO for the write.
+  // Empty fields style the placeholder as editable and keep the pencil
+  // visible. Dates read as `22 Aug`, never raw ISO; the draft stays ISO.
   const shown =
     formatAs === "phone"
       ? formatPhoneIN(displayValue)
@@ -253,64 +252,18 @@ export function InlineEditField({
     <div className={className}>
       <div className="group inline-flex items-center gap-1">
         {editing ? (
-          type === "select" ? (
-            <select
-              ref={inputRef as React.RefObject<HTMLSelectElement>}
-              value={draft}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              aria-label={FIELD_LABELS[field]}
-              className={`${baseInputClass} h-11 pr-7`}
-            >
-              <option value="">—</option>
-              {(options ?? []).map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          ) : type === "textarea" ? (
-            <textarea
-              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-              value={draft}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              aria-label={FIELD_LABELS[field]}
-              rows={2}
-              className={`${baseInputClass} py-2 min-w-[200px]`}
-            />
-          ) : type === "date" ? (
-            <DateField
-              inputRef={inputRef as React.RefObject<HTMLInputElement>}
-              value={draft}
-              onChange={(iso) => {
-                setDraft(iso);
-                // Date saves on change ("saves on change, not blur"):
-                // DateField only emits a complete valid date, so a
-                // partial keypress never reaches the server.
-                if (iso) void commit(iso);
-              }}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              aria-label={FIELD_LABELS[field]}
-              className="h-11 min-w-[140px]"
-            />
-          ) : (
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type="text"
-              value={draft}
-              onChange={handleChange}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              placeholder={placeholder}
-              aria-label={FIELD_LABELS[field]}
-              className={`${baseInputClass} h-11 min-w-[140px]`}
-            />
-          )
+          <InlineEditControl
+            field={field}
+            type={type}
+            draft={draft}
+            options={options}
+            placeholder={placeholder}
+            inputRef={inputRef}
+            onDraftChange={setDraft}
+            onCommit={(value) => void commit(value)}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+          />
         ) : (
           <>
             <span className={isEmpty ? "text-[13px] text-[var(--accent-ink)] underline underline-offset-2" : valueClassName ?? "text-[13px]"}>

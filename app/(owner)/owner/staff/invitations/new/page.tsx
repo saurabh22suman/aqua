@@ -2,14 +2,15 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { listLocationsAction } from "@/lib/actions/people";
 import { StaffInviteForm } from "@/components/staff-invite-form";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // Phase 3.6 — staff invite form. Phone + role + location
 // scope. Locations are read once on the server to render the
 // scope picker; the service re-validates any locationId on
 // submit.
 export default async function StaffInvitePage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "staff.invite");
   const locations = await listLocationsAction();
   return (
     <main className="px-5 pt-6 pb-8">

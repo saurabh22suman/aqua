@@ -12,9 +12,14 @@ import type { BatchAttendanceReportRow, ReportPeriod } from "@/lib/services/owne
 export async function AttendanceReportCard({
   rows,
   period,
+  locationId,
 }: {
   rows: BatchAttendanceReportRow[];
   period: ReportPeriod;
+  // The facility scope the displayed rows were computed with. The CSV
+  // link carries the same scope so the export reconciles with the
+  // on-screen evidence (owner-UI review P1, 2026-10-13).
+  locationId?: string | null;
 }) {
   // L3 audit — the report title routes the closed-key `batch`
   // singular form through resolveTerm so a football preset
@@ -29,7 +34,9 @@ export async function AttendanceReportCard({
           Attendance by {resolveTerm(terminology, "batch", 1)}
         </h2>
         <a
-          href={`/owner/reports/attendance.csv?from=${period.from}&to=${period.to}`}
+          href={`/owner/reports/attendance.csv?from=${period.from}&to=${period.to}${
+            locationId ? `&locationId=${locationId}` : ""
+          }`}
           // Server-rendered download link — no client JS. min-h-44px:
           // the old py-1.5 link was ~30px tall. [automatable]
           className="rounded-ctl px-3 min-h-[44px] inline-flex items-center text-[12px] font-medium bg-deck text-ink-2 gap-1.5 hover:bg-line"

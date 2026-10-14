@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { transitionMemberStatusAction } from "@/lib/actions/people";
 import { MEMBER_STATUS_LABELS, MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
@@ -10,20 +10,25 @@ import { Button } from "@/components/ui/Button";
 export function MemberStatusPanel({
   memberId,
   status,
+  canWrite,
 }: {
   memberId: string;
   status: MemberStatus;
+  // R10 (2026-10-13 role-workflow audit) — transitions ride
+  // members.write; readers see the current state without the controls.
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [target, setTarget] = useState<MemberStatus | null>(null);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const reasonId = useId();
 
   const options = MEMBER_STATUS_TRANSITIONS[status] ?? [];
 
   async function confirm() {
-    if (!target) return;
+    if (!target || busy) return;
     if (!reason.trim()) {
       setError("A reason is required.");
       return;
@@ -39,21 +44,28 @@ export function MemberStatusPanel({
       setTarget(null);
       setReason("");
       router.refresh();
+    } catch {
+      setError("Could not save the status. The member was refreshed; check its status before retrying.");
+      router.refresh();
     } finally {
       setBusy(false);
     }
   }
 
-  if (options.length === 0) return null;
+  if (!canWrite || options.length === 0) return null;
 
   return (
     <div className="mt-3">
+      <p className="text-[12px] text-ink-3">
+        Separate from the paid plan — pausing one does not pause the other.
+      </p>
       {target ? (
         <div className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
           <p className="text-[13px] font-medium">
             Move to {MEMBER_STATUS_LABELS[target]} — why?
           </p>
-          <input
+          <label htmlFor={reasonId} className="block text-[13px] text-ink-2">Reason for status change</label>
+          <input id={reasonId} disabled={busy}
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
@@ -62,7 +74,7 @@ export function MemberStatusPanel({
             data-testid="status-reason"
             autoFocus
           />
-          {error ? <p className="text-[12px] text-late">{error}</p> : null}
+          {error ? <p role="alert" className="text-[12px] text-late">{error}</p> : null}
           <div className="flex gap-2">
             <Button
               variant="primary"
@@ -74,6 +86,7 @@ export function MemberStatusPanel({
             </Button>
             <Button
               variant="secondary"
+              disabled={busy}
               onClick={() => {
                 setTarget(null);
                 setError(null);

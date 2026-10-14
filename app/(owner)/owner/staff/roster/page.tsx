@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
-import { requirePermission } from "@/lib/auth/permission";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { listLocationsAction } from "@/lib/actions/people";
 import { listStaffAction } from "@/lib/actions/staff";
@@ -37,7 +36,7 @@ export default async function StaffRosterPage({
   searchParams?: Promise<{ week?: string; location?: string }>;
 }) {
   const ctx = await requireOwner();
-  requirePermission(ctx, "staff.roster");
+  requirePagePermission(ctx, "staff.roster");
 
   const params = searchParams ? await searchParams : {};
   const timezone = await getTenantTimezoneAction();
@@ -137,7 +136,7 @@ export default async function StaffRosterPage({
         templates={templates}
         staff={staff}
         locations={locations}
-        defaultLocationId={locationId ?? locations[0]?.id ?? null}
+        weekLocationId={locationId ?? null}
       />
     </main>
   );

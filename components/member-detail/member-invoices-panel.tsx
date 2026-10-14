@@ -16,20 +16,25 @@ import { SUBSCRIPTIONS_CHANGED_EVENT } from "@/components/member-subscription-pa
 
 // C-32 — a member's invoices: raise one from an active subscription
 // (the counter flow), then record payments and print receipts in the
-// expanded row. Reception reads + records; issue/void is gated by the
-// action layer.
+// expanded row. Reception reads, issues and records; voiding is
+// management authority (settings.manage) and the expanded row asks
+// non-managers to escalate instead.
 
 export function MemberInvoicesPanel({
   memberId,
   canWrite,
+  canVoid = false,
   canRecord,
   canRefund,
+  canReadPayments,
   timezone,
 }: {
   memberId: string;
   canWrite: boolean;
+  canVoid?: boolean;
   canRecord: boolean;
   canRefund: boolean;
+  canReadPayments: boolean;
   timezone: string;
 }) {
   const router = useRouter();
@@ -145,8 +150,10 @@ export function MemberInvoicesPanel({
                 <InvoiceExpanded
                   invoiceId={invoice.id}
                   canWrite={canWrite}
+                  canVoid={canVoid}
                   canRecord={canRecord}
                   canRefund={canRefund}
+                  canReadPayments={canReadPayments}
                   onChanged={() => {
                     void load();
                     router.refresh();
@@ -178,7 +185,8 @@ export function MemberInvoicesPanel({
                 >
                   {subscriptions.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.planName} · {formatINR(s.amountPaise)} · ends {s.endsOn}
+                      {s.planName} · {formatINR(s.amountPaise)} · ends{" "}
+                      {formatDateIST(s.endsOn)}
                     </option>
                   ))}
                 </select>
@@ -191,18 +199,30 @@ export function MemberInvoicesPanel({
                 setBusy(true);
                 setMessage(null);
                 void (async () => {
-                  const result = await createInvoiceAction({
-                    subscriptionId,
-                  });
-                  setMessage(
-                    result.ok
-                      ? `Raised ${result.invoiceNumber}.`
-                      : result.error,
-                  );
-                  if (result.ok) setExpandedId(result.id);
-                  await load();
-                  router.refresh();
-                  setBusy(false);
+                  try {
+                    const result = await createInvoiceAction({
+                      subscriptionId,
+                    });
+                    setMessage(
+                      result.ok
+                        ? `Raised ${result.invoiceNumber}.`
+                        : result.error,
+                    );
+                    if (result.ok) setExpandedId(result.id);
+                    await load();
+                    router.refresh();
+                  } catch {
+                    try {
+                      await load();
+                    } catch {
+                      // load() already switched the panel to its failed state
+                    }
+                    setMessage(
+                      "The request did not complete. The list was refreshed — check whether the invoice was raised before trying again.",
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
                 })();
               }}
               className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"

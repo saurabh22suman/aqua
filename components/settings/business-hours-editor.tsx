@@ -48,17 +48,40 @@ export function BusinessHoursEditor({
   canWrite: boolean;
 }) {
   const [days, setDays] = useState<DayHours[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const hours = await getBusinessHoursAction(locationId);
-    setDays(hours.days.length > 0 ? fullWeek(hours.days) : fullWeek([]));
+    setLoadError(false);
+    try {
+      const hours = await getBusinessHoursAction(locationId);
+      setDays(hours.days.length > 0 ? fullWeek(hours.days) : fullWeek([]));
+    } catch {
+      setLoadError(true);
+    }
   }, [locationId]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  if (loadError) {
+    return (
+      <div className="mt-3 border-t border-line pt-3">
+        <p className="text-[12.5px] text-ink-2">
+          Could not load hours — this is a read failure, not &ldquo;not set&rdquo;.
+        </p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-1 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (!days) {
     return <p className="mt-2 text-[12.5px] text-ink-3">Loading hours…</p>;
@@ -85,12 +108,13 @@ export function BusinessHoursEditor({
         {days.map((d) => (
           <li key={d.day} className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="w-[72px] capitalize text-ink-2">{d.day}</span>
-            <label className="flex items-center gap-1.5">
+            <label className="flex min-h-[44px] items-center gap-1.5">
               <input
                 type="checkbox"
                 checked={!d.closed}
                 disabled={!canWrite}
                 onChange={(e) => update(d.day, { closed: !e.target.checked })}
+                aria-label={`${d.day} open`}
                 className="h-4 w-4"
               />
               <span className="text-[12px] text-ink-3">
@@ -104,6 +128,7 @@ export function BusinessHoursEditor({
                   value={d.open}
                   disabled={!canWrite}
                   onChange={(e) => update(d.day, { open: e.target.value })}
+                  aria-label={`${d.day} opening time`}
                   className={`${inputClass} min-w-0`}
                 />
                 <span className="text-ink-3">–</span>
@@ -112,6 +137,7 @@ export function BusinessHoursEditor({
                   value={d.close}
                   disabled={!canWrite}
                   onChange={(e) => update(d.day, { close: e.target.value })}
+                  aria-label={`${d.day} closing time`}
                   className={`${inputClass} min-w-0`}
                 />
               </span>
@@ -128,12 +154,19 @@ export function BusinessHoursEditor({
             setBusy(true);
             setMessage(null);
             void (async () => {
-              const result = await setBusinessHoursAction({
-                locationId,
-                hours: { days },
-              });
-              setMessage(result.ok ? "Hours saved." : result.error);
-              setBusy(false);
+              try {
+                const result = await setBusinessHoursAction({
+                  locationId,
+                  hours: { days },
+                });
+                setMessage(result.ok ? "Hours saved." : result.error);
+              } catch {
+                setMessage(
+                  "The hours did not reach the server. Your edits are kept — try again.",
+                );
+              } finally {
+                setBusy(false);
+              }
             })();
           }}
           className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"

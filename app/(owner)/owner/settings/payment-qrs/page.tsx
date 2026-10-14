@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listPaymentQrsAction } from "@/lib/actions/payment-qrs";
 import { PaymentQrManager } from "@/components/payment-qr-manager";
 
@@ -8,7 +8,8 @@ import { PaymentQrManager } from "@/components/payment-qr-manager";
 // screen.
 
 export default async function PaymentQrsPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const qrs = await listPaymentQrsAction();
 
   return (

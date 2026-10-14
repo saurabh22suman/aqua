@@ -1,18 +1,20 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { cookies } from "next/headers";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { listPlansAction } from "@/lib/actions/membership-plans";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
+import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
 import {
   getFeesOverviewAction,
   listHubInvoicesAction,
   listHubTransactionsAction,
 } from "@/lib/actions/fees-hub";
 import { formatINR } from "@/lib/money/format";
-import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
+import { formatDateIST, formatDateTimeIST, formatPeriodRangeIST } from "@/lib/time/tz";
 import { methodLabel } from "@/lib/services/payments";
 import { BackLink } from "@/components/ui/BackLink";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
@@ -36,11 +38,19 @@ function resolveTab(value: string | undefined): FeesTab {
 export default async function FeesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string; from?: string; to?: string }>;
+  searchParams?: Promise<{ tab?: string; from?: string; to?: string; facility?: string }>;
 }) {
   const ctx = await requireOwner();
+  requirePagePermission(ctx, "reports.financial");
+  // Plans management is settings.manage; reads stay open.
+  const canManageSettings = hasPermission(ctx, "settings.manage");
   const params = searchParams ? await searchParams : {};
   const tab = resolveTab(params.tab);
+  const cookieStore = await cookies();
+  const facility = resolveFacilityValue(
+    params.facility,
+    cookieStore.get(FACILITY_COOKIE)?.value,
+  );
   const timezone = await getTenantTimezoneAction();
   const period =
     params.from && params.to
@@ -50,16 +60,18 @@ export default async function FeesPage({
   const memberLabel = titleCase(resolveTerm(terminology, "member", 1));
 
   const [overview, invoices, transactions, plans] = await Promise.all([
-    getFeesOverviewAction(period),
+    getFeesOverviewAction({ ...period, ...(facility ? { locationId: facility } : {}) }),
     tab === "dues" || tab === "invoices"
-      ? listHubInvoicesAction({ status: tab === "dues" ? "dues" : "all" })
+      ? listHubInvoicesAction({
+          status: tab === "dues" ? "dues" : "all",
+          ...(facility ? { locationId: facility } : {}),
+        })
       : Promise.resolve([]),
     tab === "transactions"
-      ? listHubTransactionsAction(period)
+      ? listHubTransactionsAction({ ...period, ...(facility ? { locationId: facility } : {}) })
       : Promise.resolve([]),
     tab === "plans" ? listPlansAction() : Promise.resolve([]),
   ]);
-
   return (
     <main className="px-5 pt-6 pb-8">
       <BackLink href="/owner/reports" label="Reports" />
@@ -68,12 +80,17 @@ export default async function FeesPage({
       </h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
         Collect, reconcile and review — one place over plans, invoices,
-        counter payments and receipts. Period {formatDateIST(period.from)} to{" "}
-        {formatDateIST(period.to)} ({timezone}).
+        counter payments and receipts. Period{" "}
+        {formatPeriodRangeIST(period.from, period.to)} ({timezone}).
       </p>
 
       <div className="mt-4">
-        <FeesTabs active={tab} period={period} />
+        <FeesTabs
+          active={tab}
+          period={period}
+          facility={facility}
+          canManageSettings={canManageSettings}
+        />
       </div>
 
       {tab === "overview" ? (
@@ -98,7 +115,9 @@ export default async function FeesPage({
               hint={`${overview.dueInvoiceCount} invoice${
                 overview.dueInvoiceCount === 1 ? "" : "s"
               } with a balance`}
-              href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}`}
+              href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}${
+                facility ? `&facility=${facility}` : ""
+              }`}
               tone="paper"
             />
             <StatCard
@@ -197,9 +216,12 @@ export default async function FeesPage({
           <FeesInvoiceList
             initial={invoices}
             filter="dues"
+            facility={facility}
             canWrite={hasPermission(ctx, "invoices.write")}
+            canVoid={hasPermission(ctx, "settings.manage")}
             canRecord={hasPermission(ctx, "payments.record")}
             canRefund={hasPermission(ctx, "payments.refund")}
+            canReadPayments={hasPermission(ctx, "payments.read")}
           />
         </section>
       ) : null}
@@ -213,9 +235,12 @@ export default async function FeesPage({
           <FeesInvoiceList
             initial={invoices}
             filter="all"
+            facility={facility}
             canWrite={hasPermission(ctx, "invoices.write")}
+            canVoid={hasPermission(ctx, "settings.manage")}
             canRecord={hasPermission(ctx, "payments.record")}
             canRefund={hasPermission(ctx, "payments.refund")}
+            canReadPayments={hasPermission(ctx, "payments.read")}
           />
         </section>
       ) : null}
@@ -224,12 +249,14 @@ export default async function FeesPage({
         <section className="mt-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-display text-[15px] font-semibold">Plans</h2>
-            <Link
-              href="/owner/settings/plans"
-              className="text-[13px] text-water"
-            >
-              Manage plans →
-            </Link>
+            {canManageSettings ? (
+              <Link
+                href="/owner/settings/plans"
+                className="text-[13px] text-water"
+              >
+                Manage plans →
+              </Link>
+            ) : null}
           </div>
           {plans.length === 0 ? (
             <p className="mt-2 text-[13px] text-ink-3">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listActivitiesAction } from "@/lib/actions/activities";
 import { listLocationsAction } from "@/lib/actions/people";
 import { ActivityManager } from "@/components/activity-manager";
@@ -8,7 +8,8 @@ import { ActivityManager } from "@/components/activity-manager";
 // pool, court, table, café counter. Plans attach to activities next.
 
 export default async function ActivitiesPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const [locations, activities] = await Promise.all([
     listLocationsAction(),
     listActivitiesAction(),

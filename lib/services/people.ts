@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/location-access";
 import { isMinor } from "@/lib/time/tz";
 import { asMemberId } from "@/lib/ids";
+import { writeAudit } from "@/lib/audit/write";
 
 // isMinor() deliberately throws on a null date of birth -- correct at
 // registration, where createMemberSchema makes it mandatory (C-05).
@@ -289,22 +290,93 @@ export async function getMemberDetail(
   });
 }
 
+// R02 (docs/audits/2026-10-09-role-content-permission-audit.md §10) — the
+// Accountant reconciles fees and needs to identify the payer, not the
+// whole child record. This projection deliberately stops at display
+// name, phone, member code, status, home location and the minor flag.
+// dateOfBirth is read only inside this function to derive isMinor and is
+// never returned; medical notes, guardians, consent evidence, address/GPS
+// and status history are not selected at all. Owner/Reception keep
+// getMemberDetail's full projection.
+export type MemberPayerView = {
+  memberId: string;
+  fullName: string;
+  phone: string | null;
+  memberCode: string;
+  status: MemberStatus;
+  locationName: string;
+  isMinor: boolean;
+};
+
+export async function getMemberPayerView(
+  ctx: ActionCtx,
+  memberId: string,
+): Promise<MemberPayerView | null> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const [tenant] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+
+    const [row] = await tx
+      .select({
+        memberId: members.id,
+        fullName: persons.fullName,
+        phone: persons.phone,
+        memberCode: members.memberCode,
+        status: members.status,
+        locationId: members.locationId,
+        locationName: locations.name,
+        dateOfBirth: persons.dateOfBirth,
+      })
+      .from(members)
+      .innerJoin(persons, eq(persons.id, members.personId))
+      .innerJoin(locations, eq(locations.id, members.locationId))
+      .where(and(eq(members.id, asMemberId(memberId)), eq(members.tenantId, ctx.tenantId)));
+    if (!row) return null;
+
+    // Same O-08 answer as getMemberDetail: a member outside a scoped
+    // caller's locations is indistinguishable from a missing row.
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!locationVisible(access, row.locationId)) return null;
+
+    return {
+      memberId: row.memberId,
+      fullName: row.fullName,
+      phone: row.phone,
+      memberCode: row.memberCode,
+      status: row.status as MemberStatus,
+      locationName: row.locationName,
+      isMinor: isMinorSafe(row.dateOfBirth, tenant.timezone),
+    };
+  });
+}
+
+export type UpdateMemberPatch = {
+  fullName?: string;
+  phone?: string | null;
+  dateOfBirth?: string;
+  gender?: "male" | "female" | "other" | null;
+  medicalNotes?: string | null;
+  locationId?: string;
+  // Wave 2 — optional so callers that predate the column keep
+  // working; when present it corrects the joining date (backdated
+  // admissions, import fixes).
+  joinedOn?: string;
+};
+
+// Owner-UI review P1 (2026-10-13) — field-scoped update. Only the
+// keys present in the patch are written, so two inline edits to
+// different fields cannot clobber each other with a stale snapshot.
+// An explicit `null` clears an optional person field.
 export async function updateMember(
   ctx: ActionCtx,
   memberId: string,
-  input: {
-    fullName: string;
-    phone?: string;
-    dateOfBirth: string;
-    gender?: string;
-    medicalNotes?: string;
-    locationId: string;
-    // Wave 2 — optional so callers that predate the column keep
-    // working; when present it corrects the joining date (backdated
-    // admissions, import fixes).
-    joinedOn?: string;
-  },
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  input: UpdateMemberPatch,
+): Promise<
+  | { ok: true; value: UpdateMemberPatch }
+  | { ok: false; error: string }
+> {
   return withTenant(ctx.tenantId, async (tx) => {
     const [member] = await tx
       .select({ personId: members.personId, locationId: members.locationId })
@@ -319,34 +391,53 @@ export async function updateMember(
     if (!locationVisible(access, member.locationId)) {
       return { ok: false, error: "Member not found." };
     }
-    if (!locationVisible(access, input.locationId)) {
+    if (
+      input.locationId !== undefined &&
+      !locationVisible(access, input.locationId)
+    ) {
       return { ok: false, error: "That location is not available to you." };
     }
 
-    await tx
-      .update(persons)
-      .set({
-        fullName: input.fullName,
-        phone: input.phone,
-        dateOfBirth: input.dateOfBirth,
-        gender: input.gender,
-        medicalNotes: input.medicalNotes,
-        updatedAt: new Date(),
-        updatedBy: ctx.userId,
-      })
-      .where(eq(persons.id, member.personId));
+    const personSet: Record<string, unknown> = {};
+    if (input.fullName !== undefined) personSet.fullName = input.fullName;
+    if (input.phone !== undefined) personSet.phone = input.phone;
+    if (input.dateOfBirth !== undefined) personSet.dateOfBirth = input.dateOfBirth;
+    if (input.gender !== undefined) personSet.gender = input.gender;
+    if (input.medicalNotes !== undefined) personSet.medicalNotes = input.medicalNotes;
 
-    await tx
-      .update(members)
-      .set({
-        locationId: input.locationId,
-        ...(input.joinedOn ? { joinedOn: input.joinedOn } : {}),
-        updatedAt: new Date(),
-        updatedBy: ctx.userId,
-      })
-      .where(eq(members.id, asMemberId(memberId)));
+    if (Object.keys(personSet).length > 0) {
+      await tx
+        .update(persons)
+        .set({
+          ...personSet,
+          updatedAt: new Date(),
+          updatedBy: ctx.userId,
+        })
+        .where(eq(persons.id, member.personId));
+    }
 
-    return { ok: true };
+    if (input.locationId !== undefined || input.joinedOn !== undefined) {
+      await tx
+        .update(members)
+        .set({
+          ...(input.locationId !== undefined ? { locationId: input.locationId } : {}),
+          ...(input.joinedOn !== undefined ? { joinedOn: input.joinedOn } : {}),
+          updatedAt: new Date(),
+          updatedBy: ctx.userId,
+        })
+        .where(eq(members.id, asMemberId(memberId)));
+    }
+
+    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId,
+      actorType: ctx.userId ? "user" : "system", requestId: ctx.requestId,
+      action: "member.update", entityType: "member", entityId: memberId,
+      before: { locationId: member.locationId },
+      after: {
+        locationId: input.locationId ?? member.locationId,
+        personId: member.personId,
+      },
+      changedFields: Object.keys(input) });
+    return { ok: true, value: input };
   });
 }
 

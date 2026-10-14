@@ -70,17 +70,14 @@ export function CollectionsExpensesCard({
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
-          Collections vs expenses
-        </h2>
+        <h2 className="font-display text-[15px] font-semibold">Collections</h2>
         <span className="text-[12px] text-ink-3 tabular-nums">
           {formatINR(series.totalPaise)}
         </span>
       </header>
       {series.byDay.length === 0 ? (
         <p className="mt-2 text-[13px] text-ink-3">
-          No payments recorded in this period — nothing collected, nothing to
-          compare.
+          No payments recorded in this period — nothing collected yet.
         </p>
       ) : (
         <div className="mt-3">
@@ -95,22 +92,10 @@ export function CollectionsExpensesCard({
           />
         </div>
       )}
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-3">
-        <li className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-[3px] bg-water" />
-          Collections
-        </li>
-        <li className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-[3px] bg-deck border border-line" />
-          Expenses — not recorded in Aqua yet
-        </li>
-      </ul>
-      {series.expensesPaise === null ? (
-        <p className="mt-2 text-[12px] text-ink-3">
-          Expense tracking is Phase 5, so only the real collections series is
-          drawn. There is no target in the schema, so no target arc either.
-        </p>
-      ) : null}
+      <p className="mt-2 text-[12px] text-ink-3">
+        Expenses are not tracked in Aqua yet, so this chart shows collections
+        only — there is no comparison series or target.
+      </p>
     </article>
   );
 }

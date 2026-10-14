@@ -26,6 +26,7 @@ export function MemberNotesPanel({
   canWrite: boolean;
 }) {
   const [notes, setNotes] = useState<MemberNoteRow[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [body, setBody] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
@@ -33,7 +34,13 @@ export function MemberNotesPanel({
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    setNotes(await listMemberNotesAction(memberId));
+    setLoadError(false);
+    try {
+      setNotes(await listMemberNotesAction(memberId));
+    } catch {
+      // A failed read is not an empty list.
+      setLoadError(true);
+    }
   }, [memberId]);
 
   useEffect(() => {
@@ -44,10 +51,17 @@ export function MemberNotesPanel({
     setBusy(true);
     setMessage(null);
     void (async () => {
-      const result = await fn();
-      setMessage(result.ok ? "Saved." : result.error);
-      if (result.ok) await load();
-      setBusy(false);
+      try {
+        const result = await fn();
+        setMessage(result.ok ? "Saved." : result.error);
+        if (result.ok) await load();
+      } catch {
+        setMessage(
+          "The change did not reach the server. Your text is kept — try again.",
+        );
+      } finally {
+        setBusy(false);
+      }
     })();
   }
 
@@ -90,7 +104,20 @@ export function MemberNotesPanel({
         </div>
       ) : null}
 
-      {notes === null ? (
+      {loadError ? (
+        <div className="mt-3 rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] text-ink-2">
+            Could not load notes — this is a read failure, not an empty list.
+          </p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-1 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
+          >
+            Retry
+          </button>
+        </div>
+      ) : notes === null ? (
         <p className="mt-3 text-[13px] text-ink-3">Loading notes…</p>
       ) : notes.length === 0 ? (
         <p className="mt-3 text-[13px] text-ink-3">

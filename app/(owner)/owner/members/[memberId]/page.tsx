@@ -4,6 +4,7 @@ import { Pencil } from "lucide-react";
 import {
   getMemberDetailAction,
   getMemberIdCardContextAction,
+  getMemberPayerAction,
   listLocationsAction,
 } from "@/lib/actions/people";
 import { getMemberAttendanceHistoryAction } from "@/lib/actions/attendance";
@@ -31,6 +32,9 @@ import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
+import { getNotificationDestinationsAction } from "@/lib/actions/notification-destinations";
+import { MemberNotificationDestinations } from "@/components/member-notification-destinations";
+import { MemberPayerFinance } from "@/components/member-detail/member-payer-finance";
 
 const TAB_KEYS = new Set<MemberTab>([
   "overview",
@@ -44,11 +48,8 @@ function resolveTab(value: string | undefined): MemberTab {
   return TAB_KEYS.has(value as MemberTab) ? (value as MemberTab) : "overview";
 }
 
-// U-03/V-11 — the member 360 with Overview / Payments / Progress /
-// Notes / Documents tabs. Payments reuses the C-32/C-33 invoice panel;
-// Progress renders the generic framework's assessments (V-11); Notes
-// is the audited member_notes surface; Documents states honestly that
-// C-07 (photo/document uploads) is unbuilt.
+// U-03/V-11 — the member 360: Overview / Payments / Progress / Notes /
+// Documents. Payments reuses the C-32/C-33 invoice panel.
 
 export default async function MemberDetailPage({
   params,
@@ -62,6 +63,26 @@ export default async function MemberDetailPage({
   requireUuidParam(memberId);
   const sp = searchParams ? await searchParams : {};
   const tab = resolveTab(sp.tab);
+
+  // C01/R02 — Accountant: skip the 360's reads, render the payer view.
+  if (hasPermission(ctx, "invoices.read") && !hasPermission(ctx, "attendance.read")) {
+    const [payer, timezone] = await Promise.all([
+      getMemberPayerAction(memberId),
+      getTenantTimezoneAction(),
+    ]);
+    if (!payer) notFound();
+    return (
+      <MemberPayerFinance
+        payer={payer}
+        timezone={timezone}
+        canWrite={hasPermission(ctx, "invoices.write")}
+        canVoid={hasPermission(ctx, "settings.manage")}
+        canRecord={hasPermission(ctx, "payments.record")}
+        canRefund={hasPermission(ctx, "payments.refund")}
+        canReadPayments={hasPermission(ctx, "payments.read")}
+      />
+    );
+  }
 
   const [
     member,
@@ -81,6 +102,8 @@ export default async function MemberDetailPage({
     getTenantTimezoneAction(),
   ]);
   if (!member) notFound();
+  const destinations = tab === "overview" && hasPermission(ctx, "members.write")
+    ? await getNotificationDestinationsAction(memberId) : null;
 
   // V-11 — only fetched when the Progress tab is actually open, and
   // only when the swim.levels module is on; the panel renders the
@@ -142,23 +165,41 @@ export default async function MemberDetailPage({
 
       {tab === "overview" ? (
         <>
+          {destinations ? <MemberNotificationDestinations key={memberId} memberId={memberId} {...destinations} /> : null}
           <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] text-ink-3">Status</p>
+            <p className="text-[12px] text-ink-3">Academy participation</p>
             <p className="mt-0.5 font-display text-[16px] font-semibold">
               {MEMBER_STATUS_LABELS[member.status]}
             </p>
-            <MemberStatusPanel memberId={member.memberId} status={member.status} />
+            <MemberStatusPanel
+              memberId={member.memberId}
+              status={member.status}
+              canWrite={hasPermission(ctx, "members.write")}
+            />
           </div>
 
-          <MemberEnrolmentPanel memberId={member.memberId} terminology={terminology} />
-          <MemberSubscriptionPanel memberId={member.memberId} />
+          <MemberEnrolmentPanel
+            memberId={member.memberId}
+            terminology={terminology}
+            canEnrol={hasPermission(ctx, "members.write")}
+            canWaitlist={hasPermission(ctx, "enquiries.write")}
+          />
+          <MemberSubscriptionPanel
+            memberId={member.memberId}
+            canManage={hasPermission(ctx, "members.write")}
+          />
           <MemberFacilitiesPanel
             memberId={member.memberId}
             home={{ id: member.locationId, name: member.locationName }}
             opted={optedFacilities}
             locations={locations}
+            canWrite={hasPermission(ctx, "members.write")}
           />
-          <MakeupCreditsPanel memberId={member.memberId} />
+          <MakeupCreditsPanel
+            memberId={member.memberId}
+            canGrant={hasPermission(ctx, "programs.write")}
+            canRedeem={hasPermission(ctx, "attendance.mark")}
+          />
           <ParentLinkPanel
             memberId={member.memberId}
             memberName={member.fullName}
@@ -242,8 +283,10 @@ export default async function MemberDetailPage({
         <MemberInvoicesPanel
           memberId={member.memberId}
           canWrite={hasPermission(ctx, "invoices.write")}
+          canVoid={hasPermission(ctx, "settings.manage")}
           canRecord={hasPermission(ctx, "payments.record")}
           canRefund={hasPermission(ctx, "payments.refund")}
+          canReadPayments={hasPermission(ctx, "payments.read")}
           timezone={timezone}
         />
       ) : null}

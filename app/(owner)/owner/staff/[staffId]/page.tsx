@@ -4,23 +4,37 @@ import { ChevronLeft } from "lucide-react";
 import { listStaffAction } from "@/lib/actions/staff";
 import { titleCase } from "@/lib/terminology/keys";
 import { formatDateIST } from "@/lib/time/tz";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { hasPermission } from "@/lib/auth/permission";
+import { getCurriculumLeadState } from "@/lib/services/curriculum-lead";
+import { CurriculumLeadControl } from "@/components/curriculum-lead-control";
 
 // Phase 3.5 — staff detail view. Read-only at this phase;
 // edit + delete land with 3.6 (invitations), where the
 // "rescind an invite" and "remove staff" actions are
 // designed together — both involve the same audit + state
 // machine.
+//
+// R02 (2026-10-13 role-workflow audit) — the one delegated change
+// this page carries: the owner/admin can designate a coach as the
+// academy's curriculum lead or remove that delegation.
 export default async function StaffDetailPage({
   params,
 }: {
   params: Promise<{ staffId: string }>;
 }) {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "staff.read");
   const { staffId } = await params;
   const rows = await listStaffAction({});
   const staff = rows.find((r) => r.id === staffId);
   if (!staff) notFound();
+
+  const canDelegate = hasPermission(ctx, "settings.manage");
+  const curriculumState =
+    canDelegate && staff.staffType === "coach"
+      ? await getCurriculumLeadState(ctx, staffId)
+      : null;
 
   const initials =
     staff.fullName
@@ -69,8 +83,23 @@ export default async function StaffDetailPage({
         </div>
       </div>
 
+      {curriculumState ? (
+        <CurriculumLeadControl
+          staffId={staff.id}
+          fullName={staff.fullName}
+          state={curriculumState}
+        />
+      ) : null}
+
       <p className="mt-6 text-[12.5px] text-ink-3 leading-snug">
-        Detail view is read-only — edit and dismiss ship with the next staff cycle.
+        This profile is read-only. Manage login access from{" "}
+        <Link
+          href="/owner/staff/invitations"
+          className="text-[var(--accent-ink)] underline underline-offset-2"
+        >
+          Invitations
+        </Link>
+        .
       </p>
     </main>
   );

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BarChart3, Calendar } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
+import { hasPermission } from "@/lib/auth/permission";
 import { todayInZone } from "@/lib/time/tz";
 import { withTenant } from "@/db/tenant";
 import { eq } from "drizzle-orm";
@@ -13,7 +13,7 @@ import {
 } from "@/lib/services/attendance-history";
 import { listWaitlistAction } from "@/lib/actions/waitlist";
 import { WaitlistBoard } from "@/components/waitlist-board";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // Phase 4.2 — per-batch attendance summary. Service existed
 // since C-27 (lib/services/attendance-history.ts), deferred
@@ -32,7 +32,7 @@ export default async function BatchDetailPage({
   await requireOwner();
   const { batchId } = await params;
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "programs.read");
+  requirePagePermission(ctx, "programs.read");
 
   // Read the tenant's timezone in its own short transaction, then call
   // the service from outside that scope. Opening withTenant here and
@@ -92,11 +92,15 @@ export default async function BatchDetailPage({
         </p>
       )}
 
-      <WaitlistBoard batchId={batchId} initialRows={waitlist} />
+      <WaitlistBoard
+        batchId={batchId}
+        initialRows={waitlist}
+        canManage={hasPermission(ctx, "enquiries.write")}
+      />
 
       <div className="mt-6 rounded-card border border-line bg-paper p-4">
         <Link
-          href={`/owner/reports?from=${periodFrom()}&to=${periodTo()}`}
+          href={`/owner/reports?from=${period.from}&to=${period.to}`}
           className="flex items-center gap-2 text-[13px] font-medium text-ink hover:text-ink-2"
         >
           <BarChart3 size={14} className="text-water" />
@@ -112,16 +116,4 @@ export default async function BatchDetailPage({
       </div>
     </main>
   );
-}
-
-// The summary doesn't carry the period it was computed over,
-// so the "See this month in the reports view" link uses today
-// as the boundary anchor — the same calendar-month period the
-// summary was computed over. Computed inline here (cheap).
-function periodFrom(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function periodTo(): string {
-  return periodFrom();
 }

@@ -1,7 +1,5 @@
 import Link from "next/link";
-import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listOwnerVisibleConfigAction } from "@/lib/actions/owner-config";
 import { OwnerConfigForm } from "@/components/owner-config-form";
 
@@ -11,9 +9,9 @@ import { OwnerConfigForm } from "@/components/owner-config-form";
 // owner_read keys offer a change request.
 
 export default async function OwnerConfigurationPage() {
-  await requireOwner();
-  const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "settings.read");
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
+
   const items = await listOwnerVisibleConfigAction();
 
   return (

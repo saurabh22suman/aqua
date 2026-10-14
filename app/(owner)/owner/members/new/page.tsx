@@ -2,10 +2,11 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { MemberCreateForm } from "@/components/member-create-form";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 export default async function NewMemberPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "members.write");
   const [locations, terminology] = await Promise.all([
     listLocationsAction(),
     // L3 audit — the page heading and the form's guardian copy

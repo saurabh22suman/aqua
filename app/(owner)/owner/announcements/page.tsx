@@ -1,4 +1,4 @@
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import {
   listAnnouncementsAction,
@@ -24,6 +24,7 @@ const AUDIENCE_LABELS: Record<string, string> = {
 
 export default async function AnnouncementsPage() {
   const ctx = await requireOwner();
+  requirePagePermission(ctx, "messaging.send");
   const [announcements, notifications, batches, terminology] = await Promise.all([
     listAnnouncementsAction(),
     listMyNotificationsAction(),
@@ -38,9 +39,8 @@ export default async function AnnouncementsPage() {
         Announcements
       </h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        One message to staff, a batch&apos;s families or every guardian —
-        delivered as in-app notifications. WhatsApp remains a non-production
-        mock, so no WhatsApp message is attempted.
+        Send in-app notifications and queue WhatsApp updates for relevant staff
+        and selected student contacts. The local demo captures messages in the mock viewer.
       </p>
 
       <div className="mt-4 space-y-4">

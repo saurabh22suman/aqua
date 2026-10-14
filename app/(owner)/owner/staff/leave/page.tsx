@@ -1,5 +1,4 @@
-import { requireOwner } from "@/lib/auth/surface-guard";
-import { requirePermission } from "@/lib/auth/permission";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import {
   listLeaveRequestsAction,
   listLeaveTypesAction,
@@ -23,7 +22,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
 
 export default async function StaffLeavePage() {
   const ctx = await requireOwner();
-  requirePermission(ctx, "staff.roster");
+  requirePagePermission(ctx, "staff.roster");
 
   const [types, requests] = await Promise.all([
     listLeaveTypesAction(),

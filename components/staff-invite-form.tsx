@@ -30,28 +30,36 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
     );
   }
 
-  function submit() {
+  async function submit() {
     setError(null);
     setPending(true);
-    inviteStaffAction({
-      phone,
-      fullName,
-      roleKey,
-      locationIds,
-    }).then((result) => {
-      setPending(false);
+    try {
+      const result = await inviteStaffAction({
+        phone,
+        fullName,
+        roleKey,
+        locationIds,
+      });
       if (result.kind === "ok") {
         window.location.assign("/owner/staff/invitations");
       } else {
         setError(result.message);
       }
-    });
+    } catch {
+      setError(
+        "The invitation could not be created. Your entries are kept — try again.",
+      );
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
     <div>
       <label className="block mb-4">
-        <span className="block text-[12.5px] font-medium mb-1.5">Phone (E.164)</span>
+        <span className="block text-[12.5px] font-medium mb-1.5">
+          Phone number (with country code)
+        </span>
         <input
           type="tel"
           value={phone}

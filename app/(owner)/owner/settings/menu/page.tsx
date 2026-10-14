@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listMenuAction } from "@/lib/actions/menu";
 import { listLocationsAction } from "@/lib/actions/people";
 import { MenuManager } from "@/components/menu-manager";
@@ -10,7 +10,8 @@ import { MenuManager } from "@/components/menu-manager";
 // screen or its actions.
 
 export default async function OwnerMenuPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const [menu, locations] = await Promise.all([
     listMenuAction({}),
     listLocationsAction(),

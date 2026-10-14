@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { listHubInvoicesAction } from "@/lib/actions/fees-hub";
@@ -14,32 +14,99 @@ import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
 // the full invoice list uses the same rows without inviting a
 // payment on a settled document. One client island per list, no
 // page-level JavaScript.
+//
+// Owner-UI review P1 (2026-10-13) — the reload used to drop the
+// facility scope the server rendered with, so recording a payment
+// silently widened the list to every facility. The scope is now
+// part of the request and of the rendered state: rows are only
+// shown when they belong to the current scope, and an older
+// response cannot replace a newer one (request sequence).
+
+type RowsState = { scope: string; rows: HubInvoiceRow[] };
 
 export function FeesInvoiceList({
   initial,
   filter,
+  facility,
   canWrite,
+  canVoid = false,
   canRecord,
   canRefund,
+  canReadPayments,
 }: {
   initial: HubInvoiceRow[];
   filter: "dues" | "all";
+  // The validated facility scope the server rendered with. null/absent
+  // means "every facility the caller may see".
+  facility?: string | null;
   canWrite: boolean;
+  canVoid?: boolean;
   canRecord: boolean;
   canRefund: boolean;
+  canReadPayments: boolean;
 }) {
   const router = useRouter();
-  const [rows, setRows] = useState<HubInvoiceRow[]>(initial);
+  const scope = `${filter}|${facility ?? ""}`;
+  const [data, setData] = useState<RowsState | null>(() => ({
+    scope,
+    rows: initial,
+  }));
+  const [loadError, setLoadError] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const requestSeq = useRef(0);
+  const loadedScope = useRef(scope);
 
   const load = useCallback(async () => {
-    const next = await listHubInvoicesAction({ status: filter });
-    setRows(next);
-  }, [filter]);
+    const requestScope = `${filter}|${facility ?? ""}`;
+    const seq = ++requestSeq.current;
+    setLoadError(false);
+    try {
+      const next = await listHubInvoicesAction({
+        status: filter,
+        ...(facility ? { locationId: facility } : {}),
+      });
+      // A slower response for an earlier scope must not replace the
+      // current one; the next load() (new scope or explicit reload)
+      // bumps the sequence. The render also refuses rows whose scope
+      // no longer matches the heading.
+      if (seq !== requestSeq.current) return;
+      setData({ scope: requestScope, rows: next });
+    } catch {
+      if (seq === requestSeq.current) setLoadError(true);
+    }
+  }, [filter, facility]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    // The server already rendered this scope's rows. Only fetch when
+    // the scope changed after mount, or on the explicit reload path.
+    if (loadedScope.current !== scope) {
+      loadedScope.current = scope;
+      void load();
+    }
+  }, [scope, load]);
+
+  const rows = data && data.scope === scope ? data.rows : null;
+
+  if (loadError) {
+    return (
+      <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
+        <p className="text-[13px] text-ink-3">
+          Could not load this list — the figures above may be stale.
+        </p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-2 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (rows === null) {
+    return <p className="mt-4 text-[13px] text-ink-3">Loading…</p>;
+  }
 
   if (rows.length === 0) {
     return (
@@ -106,8 +173,10 @@ export function FeesInvoiceList({
               <InvoiceExpanded
                 invoiceId={invoice.id}
                 canWrite={canWrite}
+                canVoid={canVoid}
                 canRecord={canRecord}
                 canRefund={canRefund}
+                canReadPayments={canReadPayments}
                 onChanged={() => {
                   void load();
                   router.refresh();

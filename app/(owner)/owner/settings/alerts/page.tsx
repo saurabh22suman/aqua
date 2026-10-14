@@ -1,11 +1,12 @@
 import { getAbsenceAlertThresholdAction } from "@/lib/actions/absence-alerts";
 import { AlertSettingsForm } from "@/components/alert-settings-form";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 
 // R.8 — owner surface for the low-attendance alert threshold.
 export default async function AlertSettingsPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const threshold = await getAbsenceAlertThresholdAction();
 
   return (

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { notFound } from "next/navigation";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { hasPermission } from "@/lib/auth/permission";
 import {
   listPlanTemplatesAction,
   listPlansAction,
@@ -10,9 +12,14 @@ import { PlanManager } from "@/components/plan-manager";
 
 // C-29 — owner surface for membership plans: preset templates become
 // sellable plans once priced; custom plans can be added directly.
+// Plan mutations require settings.manage (the actions enforce it);
+// the page 404s for a caller without the grant so the accountant,
+// who shares the owner surface, is never shown the management forms.
 
 export default async function PlansPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
+  if (!hasPermission(ctx, "settings.manage")) notFound();
   const [templates, plans, locations, activities] = await Promise.all([
     listPlanTemplatesAction(),
     listPlansAction(),

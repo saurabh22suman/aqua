@@ -7,11 +7,12 @@ import { Skeleton } from "@/components/skeleton";
 // nothing. With it, Next.js streams this skeleton immediately while
 // the page's data fetches resolve.
 //
-// Shape mirrors components/owner-dashboard.tsx:
-//   header (mark + name)  →  hero card (3.5rem tall)  →  3 stat chips
-//   (3.5rem)  →  "Needs you today" section (4 rows)  →  "Today's
-//   facilities" section (2 lane rows). Heights match the real
-//   font sizes from DESIGN.md §1.3 (h=N means N*4px).
+// Shape mirrors components/owner-dashboard.tsx in its C02 order:
+//   header (mark + name)  →  money hero (figure + the two
+//   Outstanding/Overdue sub-cards)  →  "Needs you today" rows  →
+//   "Today's registers" card  →  3 stat chips  →  "Batches today"
+//   lane rows. Heights match the real font sizes from DESIGN.md §1.3
+//   (h=N means N*4px).
 
 export default function Loading() {
   return (
@@ -25,14 +26,11 @@ export default function Loading() {
         </div>
       </div>
 
-      {/* Hero card (3.5rem tall — matches the marine block on the live page) */}
+      {/* Money hero: label + figure + count, then the two sub-cards */}
       <Skeleton w={80} h={14} rounded="rounded-card" />
-
-      {/* 3 stat chips (3.5rem tall) */}
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <Skeleton w={28} h={14} rounded="rounded-ctl" />
-        <Skeleton w={28} h={14} rounded="rounded-ctl" />
-        <Skeleton w={28} h={14} rounded="rounded-ctl" />
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <Skeleton w={38} h={12} rounded="rounded-ctl" />
+        <Skeleton w={38} h={12} rounded="rounded-ctl" />
       </div>
 
       {/* "Needs you today" heading + 4 attention rows */}
@@ -52,7 +50,21 @@ export default function Loading() {
         ))}
       </ul>
 
-      {/* "Today's facilities" heading + 2 lane strip rows */}
+      {/* "Today's registers" card: label + percentage + marked line */}
+      <div className="mt-3 rounded-card border border-line px-5 py-4">
+        <Skeleton w={28} h={3} />
+        <Skeleton w={16} h={6} className="mt-2" />
+        <Skeleton w={48} h={3} className="mt-1.5" />
+      </div>
+
+      {/* 3 stat chips (3.5rem tall) */}
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <Skeleton w={28} h={14} rounded="rounded-ctl" />
+        <Skeleton w={28} h={14} rounded="rounded-ctl" />
+        <Skeleton w={28} h={14} rounded="rounded-ctl" />
+      </div>
+
+      {/* "Batches today" heading + 2 lane strip rows */}
       <Skeleton w={40} h={4} className="mt-7 mb-2.5" />
       <ul>
         {[0, 1].map((i) => (

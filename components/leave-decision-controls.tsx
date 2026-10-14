@@ -21,6 +21,7 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<UncoveredSessionRow[] | null>(null);
+  const [coverageFailed, setCoverageFailed] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -28,30 +29,43 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
   function review() {
     setOpen(true);
     setError(null);
-    if (sessions !== null) return;
+    if (sessions !== null && !coverageFailed) return;
+    setCoverageFailed(false);
+    setSessions(null);
     startTransition(async () => {
-      setSessions(await listUncoveredSessionsAction({ requestId }));
+      try {
+        setSessions(await listUncoveredSessionsAction({ requestId }));
+      } catch {
+        // A failed coverage check is not "no uncovered sessions".
+        setCoverageFailed(true);
+      }
     });
   }
 
   function decide(kind: "approved" | "rejected") {
     startTransition(async () => {
-      const result =
-        kind === "approved"
-          ? await approveLeaveRequestAction({
-              requestId,
-              note: note.trim() === "" ? null : note.trim(),
-            })
-          : await rejectLeaveRequestAction({
-              requestId,
-              note: note.trim() === "" ? null : note.trim(),
-            });
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result =
+          kind === "approved"
+            ? await approveLeaveRequestAction({
+                requestId,
+                note: note.trim() === "" ? null : note.trim(),
+              })
+            : await rejectLeaveRequestAction({
+                requestId,
+                note: note.trim() === "" ? null : note.trim(),
+              });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setOpen(false);
+        router.refresh();
+      } catch {
+        setError(
+          "The decision did not reach the server. Check the request state before retrying — it may already be recorded.",
+        );
       }
-      setOpen(false);
-      router.refresh();
     });
   }
 
@@ -66,7 +80,22 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
   return (
     <div className="mt-2 w-full rounded-ctl border border-line bg-deck/50 p-3">
       <p className="text-[12.5px] font-medium">Sessions left uncovered</p>
-      {sessions === null ? (
+      {coverageFailed ? (
+        <div className="mt-1">
+          <p className="text-[12.5px] text-ink-2">
+            Could not check coverage — this is a read failure, not a cleared
+            schedule.
+          </p>
+          <button
+            type="button"
+            onClick={review}
+            disabled={pending}
+            className="mt-1 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
+          >
+            Retry
+          </button>
+        </div>
+      ) : sessions === null ? (
         <p className="mt-1 text-[12.5px] text-ink-3">Loading…</p>
       ) : sessions.length === 0 ? (
         <p className="mt-1 text-[12.5px] text-ink-3">

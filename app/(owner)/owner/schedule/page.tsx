@@ -1,5 +1,4 @@
-import { requireOwner } from "@/lib/auth/surface-guard";
-import { requirePermission } from "@/lib/auth/permission";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { listLocationsAction } from "@/lib/actions/people";
 import { getScheduleGridAction } from "@/lib/actions/schedule-grid";
@@ -25,7 +24,7 @@ export default async function OwnerSchedulePage({
   searchParams?: Promise<{ view?: string; date?: string; location?: string }>;
 }) {
   const ctx = await requireOwner();
-  requirePermission(ctx, "attendance.read");
+  requirePagePermission(ctx, "attendance.read");
 
   const params = searchParams ? await searchParams : {};
   const timezone = await getTenantTimezoneAction();
@@ -68,6 +67,7 @@ export default async function OwnerSchedulePage({
 
       <OwnerScheduleGrid
         view={view}
+        anchor={anchor}
         locationId={locationId}
         locations={locations}
         sessions={sessions}

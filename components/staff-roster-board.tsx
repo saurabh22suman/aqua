@@ -2,26 +2,32 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/Button";
-import { DateField } from "@/components/ui/DateField";
+import { Trash2 } from "lucide-react";
 import {
   createShiftAction,
   deleteShiftAction,
   publishRosterAction,
 } from "@/lib/actions/shifts";
 import { ShiftTemplateEditor } from "@/components/shift-template-editor";
+import { AddShiftForm, type ShiftDraftInput } from "@/components/roster/add-shift-form";
+import { RosterPublishPanel } from "@/components/roster/roster-publish-panel";
 import type { RosterShiftRow, ShiftTemplateRow } from "@/lib/services/shifts";
 import type { StaffRow } from "@/lib/services/staff";
-import { addDays, formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
+import {
+  addDays,
+  formatDateIST,
+  formatTimeIST,
+  formatWeekdayDateIST,
+} from "@/lib/time/tz";
 
 // V-23 — the weekly roster builder's interactive half: publish, add a
 // shift, delete a shift, and manage the shift templates the builder
 // starts from. The week frame and day sections are server-rendered by
 // /owner/staff/roster; this island owns the mutations only.
 //
-// Day cells stack vertically at 390px (no horizontal scroll), matching
-// the owner schedule grid. Touch targets stay at the 44px floor.
+// P1 (2026-10-13 owner-UI review) — the add-shift form's location and
+// the publication scope are separate state; the scope is stated before
+// submission and results name the week, scope and count.
 
 const STATUS_LABEL: Record<string, string> = {
   rostered: "Rostered",
@@ -36,32 +42,63 @@ export function StaffRosterBoard({
   templates,
   staff,
   locations,
-  defaultLocationId,
+  weekLocationId,
 }: {
   weekStart: string;
   shifts: RosterShiftRow[];
   templates: ShiftTemplateRow[];
   staff: StaffRow[];
   locations: Array<{ id: string; name: string }>;
-  defaultLocationId: string | null;
+  // The board's own location filter (null = all locations). This is
+  // the publication scope the owner sees and submits.
+  weekLocationId: string | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
-  const [staffId, setStaffId] = useState<string>(staff[0]?.id ?? "");
-  const [shiftDate, setShiftDate] = useState(weekStart);
-  const [startTime, setStartTime] = useState("06:00");
-  const [endTime, setEndTime] = useState("10:00");
-  const [templateId, setTemplateId] = useState("");
-  const [locationId, setLocationId] = useState(defaultLocationId ?? "");
-
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     startTransition(async () => {
-      const result = await fn();
-      setMessage(result.ok ? null : (result.error ?? "Something went wrong."));
-      if (result.ok) router.refresh();
+      try {
+        const result = await fn();
+        setMessage(result.ok ? null : (result.error ?? "Something went wrong."));
+        if (result.ok) router.refresh();
+      } catch {
+        setMessage(
+          "The request did not complete. Refresh the board before retrying — it may already have been applied.",
+        );
+      }
     });
+  }
+
+  function publish(targetId: string | null) {
+    startTransition(async () => {
+      const targetName =
+        locations.find((location) => location.id === targetId)?.name ??
+        "all locations";
+      try {
+        const result = await publishRosterAction({
+          weekStart,
+          ...(targetId ? { locationId: targetId } : {}),
+        });
+        setMessage(
+          result.ok
+            ? result.count === 0
+              ? `Nothing to publish for the week of ${formatDateIST(weekStart)} at ${targetName} — every shift there is already published.`
+              : `Published ${result.count} shift${result.count === 1 ? "" : "s"} for the week of ${formatDateIST(weekStart)} at ${targetName}.`
+            : result.error,
+        );
+        if (result.ok) router.refresh();
+      } catch {
+        setMessage(
+          "The publish request did not complete. Refresh the board before retrying — some shifts may already be published.",
+        );
+      }
+    });
+  }
+
+  function addShift(input: ShiftDraftInput) {
+    run(() => createShiftAction(input));
   }
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -72,40 +109,15 @@ export function StaffRosterBoard({
     byDay.set(shift.shiftDate, list);
   }
 
-  function applyTemplate(id: string) {
-    setTemplateId(id);
-    const template = templates.find((t) => t.id === id);
-    if (template) {
-      setStartTime(template.startTime.slice(0, 5));
-      setEndTime(template.endTime.slice(0, 5));
-      if (locations.some((l) => l.id === template.locationId)) {
-        setLocationId(template.locationId);
-      }
-    }
-  }
-
   return (
     <div className="mt-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="primary"
-          size="md"
-          disabled={pending}
-          onClick={() =>
-            run(() =>
-              publishRosterAction({
-                weekStart,
-                ...(locationId ? { locationId } : {}),
-              }),
-            )
-          }
-        >
-          Publish this week
-        </Button>
-        <span className="text-[12.5px] text-ink-3">
-          Draft shifts stay invisible to staff until published.
-        </span>
-      </div>
+      <RosterPublishPanel
+        weekStart={weekStart}
+        locations={locations}
+        weekLocationId={weekLocationId}
+        pending={pending}
+        onPublish={publish}
+      />
 
       {message ? (
         <p role="alert" className="mt-2 text-[13px] text-ink-2">
@@ -113,109 +125,15 @@ export function StaffRosterBoard({
         </p>
       ) : null}
 
-      <section className="mt-5 rounded-card border border-line bg-paper p-4">
-        <h2 className="font-display text-[15px] font-semibold">Add a shift</h2>
-        {staff.length === 0 || locations.length === 0 ? (
-          <p className="mt-2 text-[13px] text-ink-3">
-            Add a staff member and a location before building the roster.
-          </p>
-        ) : (
-          <div className="mt-3 grid gap-3">
-            <label className="block">
-              <span className="mb-1 block text-[11px] text-ink-3">Staff</span>
-              <select
-                value={staffId}
-                onChange={(e) => setStaffId(e.target.value)}
-                className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-              >
-                {staff.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.fullName} · {s.staffType}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] text-ink-3">Date</span>
-                <DateField value={shiftDate} onChange={setShiftDate} />
-              </label>
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] text-ink-3">
-                  Template (optional)
-                </span>
-                <select
-                  value={templateId}
-                  onChange={(e) => applyTemplate(e.target.value)}
-                  className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-                >
-                  <option value="">Custom times</option>
-                  {templates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] text-ink-3">Start</span>
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-                />
-              </label>
-              <label className="block min-w-0">
-                <span className="mb-1 block text-[11px] text-ink-3">End</span>
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-                />
-              </label>
-            </div>
-            {locations.length > 1 ? (
-              <label className="block">
-                <span className="mb-1 block text-[11px] text-ink-3">Location</span>
-                <select
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-                >
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <Button
-              variant="primary"
-              size="md"
-              disabled={pending || !staffId || !locationId}
-              onClick={() =>
-                run(() =>
-                  createShiftAction({
-                    staffId,
-                    locationId,
-                    shiftDate,
-                    startTime,
-                    endTime,
-                    ...(templateId ? { templateId } : {}),
-                  }),
-                )
-              }
-            >
-              <Plus size={16} /> Add shift
-            </Button>
-          </div>
-        )}
-      </section>
+      <AddShiftForm
+        weekStart={weekStart}
+        templates={templates}
+        staff={staff}
+        locations={locations}
+        initialLocationId={weekLocationId ?? locations[0]?.id ?? ""}
+        pending={pending}
+        onAdd={addShift}
+      />
 
       <div className="mt-5 space-y-4">
         {days.map((day) => {
@@ -263,7 +181,10 @@ export function StaffRosterBoard({
         })}
       </div>
 
-      <ShiftTemplateEditor templates={templates} locationId={locationId} />
+      <ShiftTemplateEditor
+        templates={templates}
+        locationId={weekLocationId ?? locations[0]?.id ?? ""}
+      />
     </div>
   );
 }

@@ -47,15 +47,21 @@ export function BrandingForm({ initial }: { initial: FormState }) {
   function submit() {
     setError(null);
     startTransition(async () => {
-      const result = await updateBrandingAction({
-        displayName: state.displayName.trim() || undefined,
-        shortName: state.shortName.trim() || undefined,
-        accent: state.accent,
-      });
-      if (result.kind === "error") {
-        setError(result.message);
-      } else {
-        setSavedAt(new Date());
+      try {
+        const result = await updateBrandingAction({
+          displayName: state.displayName.trim() || undefined,
+          shortName: state.shortName.trim() || undefined,
+          accent: state.accent,
+        });
+        if (result.kind === "error") {
+          setError(result.message);
+        } else {
+          setSavedAt(new Date());
+        }
+      } catch {
+        setError(
+          "The change did not reach the server. Your edits are kept — try again.",
+        );
       }
     });
   }

@@ -1,7 +1,7 @@
 import { BackLink } from "@/components/ui/BackLink";
 import { getBrandingAction } from "@/lib/actions/branding";
 import { BrandingForm } from "@/components/branding/branding-form";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // Phase 2.9 — owner branding editor. Setting display name and
 // short name, and choosing an accent from the six approved
@@ -9,7 +9,8 @@ import { requireOwner } from "@/lib/auth/surface-guard";
 // see the PR description and docs/five-day-work-guide.md
 // (no new dependency without asking).
 export default async function BrandingSettingsPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const data = await getBrandingAction();
   return (
     <main className="px-5 pt-6 pb-8">
