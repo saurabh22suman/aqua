@@ -2,317 +2,150 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import type { RosterRow } from "@/lib/actions/coach";
 import { formatTimeIST } from "@/lib/time/tz";
-import {
-  enqueueMark,
-  kvDelete,
-  kvGet,
-  kvSet,
-  queueAll,
-  queueDelete,
-  type QueueEntry,
-} from "@/lib/offline/idb";
+import { activateOfflineIdentity, storedOfflineIdentity, enqueueMark, kvDelete, kvGet, queueForIdentity,
+  queueDelete, scopedKvSet } from "@/lib/offline/idb";
+import type { OfflineIdentity } from "@/lib/offline/identity";
+import { runOfflineLifecycle } from "@/lib/offline/client-session";
 
 export type Mark = "present" | "absent" | "late";
 type LastError = { at: number; message: string };
-
 declare global {
-  interface Window {
-    // Test hook only — lets scripts/e2e-offline.ts trigger a sync attempt
-    // deterministically instead of racing the 4s interval.
-    __flushQueue?: () => Promise<void>;
-    // Test hook only — lets scripts/e2e-offline.ts wait for in-flight
-    // local writes to commit before doing something (like a reload) that
-    // would otherwise race them (issue #4, mechanism 3).
-    __waitForPendingWrites?: () => Promise<void>;
-  }
+  interface Window { __flushQueue?: () => Promise<void>; __waitForPendingWrites?: () => Promise<void>; }
 }
 
-// The offline queue/sync state machine for one register screen. Split out
-// of components/register-board.tsx (which stayed presentational) purely to
-// keep both files under the 300-line rule — this isn't reused elsewhere.
-export function useOfflineRegister(
-  sessionId: string,
-  rows: RosterRow[],
-  initialStatuses: Record<string, Mark>,
-  offlineSyncEnabled: boolean,
-) {
+export function useOfflineRegister(sessionId: string, rows: RosterRow[], initialStatuses: Record<string, Mark>,
+  offlineSyncEnabled: boolean, identity?: OfflineIdentity | null) {
   const [marks, setMarks] = useState<Record<string, Mark>>(initialStatuses);
-  const [pending, setPending] = useState(0);
+  const [pending, setPending] = useState(0), [saving, setSaving] = useState(0);
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [lastError, setLastError] = useState<LastError | null>(null);
-  const [online, setOnline] = useState(true);
-  const [saving, setSaving] = useState(0);
-  const runningRef = useRef(false);
-  // Counts writes that have started but not yet committed to IndexedDB —
-  // incremented synchronously in mark(), decremented when enqueueMark's
-  // own promise settles (issue #4, mechanism 3). `saving` (state) drives
-  // the UI; this ref is what waitForPendingWrites() below actually reads,
-  // since it needs a synchronously-current value, not one that lags a
-  // render behind.
-  const inFlightRef = useRef(0);
-  const waitersRef = useRef<Array<() => void>>([]);
+  const [online, setOnline] = useState(true), [sessionEnded, setSessionEnded] = useState(false);
+  const running = useRef(false), inFlight = useRef(0);
+  const waiters = useRef<Array<() => void>>([]);
+  const offlineAvailable = offlineSyncEnabled && Boolean(identity && identity.expiresAt > Date.now());
+  const fail = (error: unknown) => setLastError({ at: Date.now(), message: error instanceof Error ? error.message : String(error) });
 
-  // Re-reads the whole queue and recomputes state scoped to THIS session —
-  // the queue is shared across every session a coach has visited offline,
-  // but a register screen must only ever show what's true for its own
-  // roster, never a total from elsewhere.
-  async function refreshFromQueue() {
-    const all = await queueAll();
-    const mine = all.filter((e) => e.sessionId === sessionId);
-    setPending(mine.length);
-
-    // The reload-while-offline case: a hard refresh re-mounts this
-    // component from whatever the server (or the service worker's cached
-    // shell) rendered, which reflects the DB at that moment — not marks
-    // still sitting unsynced in the queue. Overlay the queue on top of the
-    // server's rows so nothing a coach already marked appears to have
-    // vanished. Queue entries are newer than the server render by
-    // definition (they exist because they haven't synced yet), so they
-    // win.
-    if (mine.length > 0) {
-      setMarks((current) => {
-        const next = { ...current };
-        for (const e of mine) next[e.memberId] = e.status;
-        return next;
-      });
-    }
+  async function ensureIdentity(): Promise<OfflineIdentity> {
+    return runOfflineLifecycle(async () => {
+    if (!identity || identity.expiresAt <= Date.now()) throw new Error("Your offline session ended. Sign in again.");
+    const active = await storedOfflineIdentity();
+    // A cached component can never replace another session's storage scope.
+    if (active && active.scope !== identity.scope) throw new Error("Offline storage is switching sessions. Retry when connected.");
+    if (!active && !await activateOfflineIdentity(identity)) throw new Error("Your offline session ended. Sign in again.");
+    return identity;
+    });
   }
 
-  const flush = useRef(async () => {
-    if (runningRef.current || !navigator.onLine) return;
-    runningRef.current = true;
-    try {
-      for (;;) {
-        const entries = await queueAll();
-        const entry: QueueEntry | undefined = entries[0];
-        if (!entry) break;
+  async function refreshFromQueue() {
+    if (!identity) return;
+    const mine = (await queueForIdentity(identity)).filter(entry => entry.sessionId === sessionId);
+    setPending(mine.length);
+    if (mine.length) setMarks(current => {
+      const next = { ...current };
+      for (const entry of mine) next[entry.memberId] = entry.status;
+      return next;
+    });
+  }
 
+  const flush = useRef(async () => {});
+  flush.current = async () => {
+    if (running.current || !navigator.onLine || !offlineAvailable || !identity) return;
+    running.current = true;
+    try {
+      for (const entry of await queueForIdentity(identity)) {
+        // Server verifies this session-bound scope again before its mutation.
+        let timeout: ReturnType<typeof setTimeout> | undefined;
         try {
-          const res = await Promise.race([
-            markAttendanceSessionAction({
-              sessionId: entry.sessionId,
-              memberId: entry.memberId,
-              status: entry.status,
-              clientId: entry.clientId,
-            }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("sync timed out")), 8000),
-            ),
+          const result = await Promise.race([
+            markAttendanceSessionAction({ sessionId: entry.sessionId, memberId: entry.memberId,
+              status: entry.status, clientId: entry.clientId, offlineScope: identity.scope }),
+            new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Sync timed out. Retry when connected.")), 8000); }),
           ]);
-          if (!res.ok) throw new Error(res.error ?? "sync failed");
+          if (!result.ok) throw new Error(result.error ?? "Could not sync attendance.");
           await queueDelete(entry.clientId);
-          await kvSet("lastSynced", { at: Date.now() });
-          await kvDelete("lastError");
-          setLastError(null);
-          setLastSynced(Date.now());
-        } catch (err) {
-          // Fail LOUD: recorded to durable storage and reflected in the UI
-          // as a distinct state (never folded into "syncing" or "offline")
-          // — a mark that silently stops trying is worse than one that
-          // visibly won't go through. Requeued with the SAME clientId
-          // (idb.enqueueMark upserts on it), so retrying never duplicates
-          // and never regenerates the idempotency key.
-          const message = err instanceof Error ? err.message : String(err);
-          console.warn("[aqua] sync attempt failed:", err);
-          entry.attempts += 1;
-          await enqueueMark(entry);
-          const e = { at: Date.now(), message };
-          await kvSet("lastError", e);
-          setLastError(e);
+          const at = Date.now();
+          await scopedKvSet(identity, "lastSynced", { at });
+          await kvDelete(`${identity.scope}:lastError`);
+          setLastSynced(at); setLastError(null);
+        } catch (error) {
+          fail(error);
+          await scopedKvSet(identity, "lastError", { at: Date.now(), message: error instanceof Error ? error.message : String(error) }).catch(() => {});
+          await enqueueMark({ ...entry, attempts: entry.attempts + 1 }).catch(() => {});
           break;
-        }
+        } finally { if (timeout) clearTimeout(timeout); }
       }
       await refreshFromQueue();
-      const ls = await kvGet<{ at: number }>("lastSynced");
-      if (ls) setLastSynced(ls.at);
-    } finally {
-      runningRef.current = false;
-    }
-  });
+    } catch (error) { fail(error); }
+    finally { running.current = false; }
+  };
+
+  function waitForPendingWrites(): Promise<void> {
+    return inFlight.current === 0 ? Promise.resolve() : new Promise(resolve => waiters.current.push(resolve));
+  }
 
   useEffect(() => {
-    // With the flag off there is no queue to drain or restore from —
-    // marking either lands directly or is refused (mark(), below).
-    // Connectivity tracking still runs unconditionally: it is what
-    // drives the proactive "you're offline" banner (register-board.tsx),
-    // which must appear the instant connectivity drops, not only after
-    // a failed tap.
-    const goOnline = () => {
-      setOnline(true);
-      if (offlineSyncEnabled) void flush.current();
+    const connected = () => { setOnline(true); if (offlineAvailable) void flush.current(); };
+    const disconnected = () => setOnline(false);
+    const ended = () => { setSessionEnded(true); setMarks({}); setPending(0); };
+    const cleared = (event: Event) => {
+      if (identity && (event as CustomEvent<{ scope: string }>).detail?.scope === identity.scope) ended();
     };
-    const goOffline = () => setOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
+    const changed = (event: Event) => {
+      if (identity && (event as CustomEvent<{ scope: string | null }>).detail?.scope !== identity.scope) ended();
+    };
+    window.addEventListener("online", connected); window.addEventListener("offline", disconnected);
+    window.addEventListener("aqua-offline-cleared", cleared);
+    window.addEventListener("aqua-offline-identity", changed);
     setOnline(navigator.onLine);
-
-    if (!offlineSyncEnabled) {
-      return () => {
-        window.removeEventListener("online", goOnline);
-        window.removeEventListener("offline", goOffline);
-      };
+    if (offlineAvailable && identity) {
+      window.__flushQueue = () => flush.current(); window.__waitForPendingWrites = waitForPendingWrites;
+      void ensureIdentity().then(async active => {
+        await scopedKvSet(active, `roster:${sessionId}`, { rows, savedAt: Date.now() });
+        await refreshFromQueue();
+        const last = await kvGet<{ at: number }>(`${active.scope}:lastSynced`);
+        if (last) setLastSynced(last.at);
+        const error = await kvGet<LastError>(`${active.scope}:lastError`);
+        if (error) setLastError(error);
+      }).catch(fail);
     }
-
-    window.__flushQueue = () => flush.current();
-    window.__waitForPendingWrites = () => waitForPendingWrites();
-
-    void kvGet<{ at: number }>("lastSynced").then((ls) => {
-      if (ls) setLastSynced(ls.at);
-    });
-    void kvGet<LastError>("lastError").then((e) => {
-      if (e) setLastError(e);
-    });
-    void refreshFromQueue();
-
     const tick = setInterval(() => {
       setOnline(navigator.onLine);
-      void refreshFromQueue();
-      if (navigator.onLine) void flush.current();
+      if (identity && identity.expiresAt <= Date.now()) { ended(); return; }
+      if (offlineAvailable) void refreshFromQueue().catch(fail).then(() => flush.current());
     }, 4000);
-
     return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-      clearInterval(tick);
+      window.removeEventListener("online", connected); window.removeEventListener("offline", disconnected);
+      window.removeEventListener("aqua-offline-cleared", cleared); clearInterval(tick);
+      window.removeEventListener("aqua-offline-identity", changed);
+      delete window.__flushQueue; delete window.__waitForPendingWrites;
     };
+    // The scope/expiry/session identify this register; persisted roster writes
+    // are effects, never SSR work. Server props are stable within that scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, offlineSyncEnabled]);
+  }, [sessionId, identity?.scope, identity?.expiresAt, offlineAvailable]);
 
-  useMemo(() => {
-    void kvSet(`roster:${sessionId}`, { rows, savedAt: Date.now() });
-  }, [sessionId, rows]);
-
-  // Returns a promise a caller CAN await (a test, or a future
-  // navigation guard) — previously this fired the write inside a
-  // detached, unawaited `void (async () => {...})()` IIFE, so nothing
-  // could ever observe whether the write had actually landed, and an
-  // exception from enqueueMark became a silent unhandled rejection
-  // (issue #4). Callers in the UI still don't await it — a click
-  // handler can't block a real navigation regardless (see
-  // docs/architecture.md §12.1 for why that's a deliberate, documented
-  // limit and not an oversight) — but the write itself is now a single
-  // connected chain, not a fire-and-forget one, and its settlement is
-  // independently observable via waitForPendingWrites() below.
   function mark(memberId: string, next: Mark): Promise<void> {
-    // Idempotency key: generated on-device, before any network call, and
-    // never regenerated for this mark — retries reuse the same clientId
-    // (see flush(), above), which is what makes replay safe against the
-    // (tenant_id, session_id, member_id) upsert in the register service.
     const clientId = crypto.randomUUID();
-
-    // Kill switch off (issue #4 postmortem): no optimistic update, no
-    // IndexedDB write, no queue. A tap is refused outright while
-    // offline — not silently accepted, not queued for later — and
-    // online it only reaches the DOM once the server has actually
-    // confirmed it. "Marking does not report success" is the literal
-    // contract here, not a figure of speech.
-    //
-    // PR #6's variant of this branch used `void (async () => {...})()` —
-    // the detached, unawaited IIFE shape diagnosed as issue #4 mechanism 2.
-    // Reintroducing it silently undoes that fix; rejected here in favour of
-    // the chained-Promise form below. saveError (PR #6's flag) is dropped
-    // for the same reason: lastError (with timestamp) already records
-    // save failures and the rest of the UI reads from it.
-    if (!offlineSyncEnabled) {
-      if (!navigator.onLine) {
-        const e = { at: Date.now(), message: "Offline — marking is unavailable until you reconnect." };
-        setLastError(e);
-        return Promise.resolve();
-      }
-      return markAttendanceSessionAction({ sessionId, memberId, status: next, clientId })
-        .then((res) => {
-          if (!res.ok) {
-            setLastError({ at: Date.now(), message: res.error ?? "Mark failed." });
-            return;
-          }
-          setMarks((m) => ({ ...m, [memberId]: next }));
-          setLastError(null);
-          setLastSynced(Date.now());
-        })
-        .catch((err) => {
-          const message = err instanceof Error ? err.message : String(err);
-          setLastError({ at: Date.now(), message });
-        });
+    if (!offlineAvailable) {
+      if (!navigator.onLine) { fail(new Error("Offline — marking is unavailable until you reconnect.")); return Promise.resolve(); }
+      return markAttendanceSessionAction({ sessionId, memberId, status: next, clientId }).then(result => {
+        if (!result.ok) { fail(new Error(result.error ?? "Mark failed.")); return; }
+        setMarks(current => ({ ...current, [memberId]: next })); setLastError(null); setLastSynced(Date.now());
+      }).catch(fail);
     }
-
-    setMarks((m) => ({ ...m, [memberId]: next }));
-
-    inFlightRef.current += 1;
-    setSaving((n) => n + 1);
-
-    const written = enqueueMark({
-      clientId,
-      sessionId,
-      memberId,
-      status: next,
-      savedAt: Date.now(),
-      attempts: 0,
-    }).finally(() => {
-      inFlightRef.current -= 1;
-      setSaving((n) => n - 1);
-      if (inFlightRef.current === 0) {
-        const waiters = waitersRef.current;
-        waitersRef.current = [];
-        for (const resolve of waiters) resolve();
-      }
-    });
-
-    return written
-      .then(() => refreshFromQueue())
-      .then(() => {
-        void flush.current();
+    if (sessionEnded) return Promise.resolve();
+    inFlight.current++; setSaving(count => count + 1);
+    return ensureIdentity().then(active => enqueueMark({ clientId, sessionId, memberId, status: next,
+      savedAt: Date.now(), attempts: 0, scope: active.scope, expiresAt: active.expiresAt }))
+      .then(() => { setMarks(current => ({ ...current, [memberId]: next })); return refreshFromQueue(); })
+      .then(() => { void flush.current(); }).catch(fail).finally(() => {
+        inFlight.current--; setSaving(count => count - 1);
+        if (!inFlight.current) { const pendingWaiters = waiters.current; waiters.current = []; for (const done of pendingWaiters) done(); }
       });
   }
-
-  // Lets a caller that did NOT await mark() itself — the real onClick
-  // handler's shape, and the E2E harness driving the same UI — find out
-  // when every write started so far has actually committed. Resolves
-  // immediately if nothing is in flight.
-  function waitForPendingWrites(): Promise<void> {
-    if (inFlightRef.current === 0) return Promise.resolve();
-    return new Promise((resolve) => {
-      waitersRef.current.push(resolve);
-    });
-  }
-
-  // Manual retry trigger for the queue — wired to the red sync-failure
-  // banner in components/register-board.tsx. Same effect as the timer-
-  // driven flush, but caller-initiated. flush()'s own guards make a
-  // retry while offline (or while a previous flush is in flight) a
-  // harmless no-op; we don't re-check navigator.onLine here because
-  // flush() is the single source of truth for that gate.
-  function retrySync(): Promise<void> {
-    return flush.current();
-  }
-
-  const markedCount = useMemo(
-    () => Object.values(marks).filter(Boolean).length,
-    [marks],
-  );
-
-  // F31 (mobile UX plan v2): the label is the persisted-sync time in
-  // IST, or null before the first successful sync. The component owns
-  // the copy ("Saved at 05:00 pm" / "Saved on this phone") so it never
-  // claims a sync that hasn't happened.
-  const savedAtLabel = lastSynced ? formatTimeIST(new Date(lastSynced)) : null;
-
-  // A failure only counts as "current" if nothing has synced since it
-  // happened — otherwise a stale error from an hour ago would keep
-  // showing red forever even though sync recovered.
-  const hasActiveFailure =
-    lastError !== null && (!lastSynced || lastError.at > lastSynced);
-
-
-  return {
-    marks,
-    mark,
-    markedCount,
-    pending,
-    online,
-    savedAtLabel,
-    hasActiveFailure,
-    saving,
-    waitForPendingWrites,
-    retrySync,
-  };
+  const markedCount = useMemo(() => Object.values(marks).filter(Boolean).length, [marks]);
+  return { marks, mark, markedCount, pending, online, saving, waitForPendingWrites,
+    savedAtLabel: lastSynced ? formatTimeIST(new Date(lastSynced)) : null,
+    hasActiveFailure: lastError !== null && (!lastSynced || lastError.at > lastSynced),
+    retrySync: () => flush.current(), offlineAvailable, sessionEnded };
 }

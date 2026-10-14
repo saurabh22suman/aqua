@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import {
@@ -52,10 +53,16 @@ export async function deleteProgramAction(
   return deleteProgram(ctx, programId);
 }
 
-export async function listBatchesAction(): Promise<BatchWithProgramName[]> {
+export async function listBatchesAction(raw?: {
+  locationId?: string;
+}): Promise<BatchWithProgramName[]> {
+  const input = z
+    .object({ locationId: z.string().uuid().optional() })
+    .optional()
+    .parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "programs.read");
-  return listBatches(ctx);
+  return listBatches(ctx, { locationId: input?.locationId });
 }
 
 export async function listCoachesAction(): Promise<CoachOption[]> {

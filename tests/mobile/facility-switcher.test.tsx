@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // until Wave 2.
 
 const push = vi.hoisted(() => vi.fn());
+const replace = vi.hoisted(() => vi.fn());
 const { LOCATIONS, FACILITY_2 } = vi.hoisted(() => ({
   FACILITY_2: "22222222-2222-7222-8222-222222222222",
   LOCATIONS: [
@@ -21,9 +22,12 @@ const { LOCATIONS, FACILITY_2 } = vi.hoisted(() => ({
   ],
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
   usePathname: () => "/owner/members",
   useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock("next/headers", () => ({
+  cookies: vi.fn(async () => ({ get: vi.fn(() => undefined) })),
 }));
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -46,9 +50,29 @@ vi.mock("@/lib/actions/people", () => ({
 vi.mock("@/lib/actions/terminology", () => ({
   getTerminologyAction: async () => ({ overrides: {}, locale: "en" }),
 }));
-vi.mock("@/lib/auth/surface-guard", () => ({ requireOwner: async () => ({}) }));
+vi.mock("@/lib/auth/surface-guard", () => ({
+  requireOwner: async () => ({
+    roleKey: "owner",
+    permissions: new Set(["members.read", "members.write"]),
+  }),
+  requirePagePermission: (ctx: unknown) => ctx,
+}));
 vi.mock("@/lib/auth/context", () => ({
-  requireDefaultCtx: async () => ({ tenantId: "t1", roleKey: "owner" }),
+  requireDefaultCtx: async () => ({
+    tenantId: "t1",
+    roleKey: "owner",
+    permissions: new Set([
+      "members.read",
+      "invoices.read",
+      "enquiries.read",
+      "messaging.send",
+      "programs.read",
+      "staff.read",
+      "reports.operational",
+      "settings.manage",
+    ]),
+    features: new Set(),
+  }),
 }));
 vi.mock("@/lib/auth/surface-access", () => ({
   canAccessSurface: () => true,
@@ -77,6 +101,14 @@ const DASHBOARD: OwnerDashboardData = {
   activeMemberCount: 32,
   attendanceThisWeekPct: null,
   activeBatchCount: 4,
+  money: {
+    collectedTodayPaise: 0,
+    collectedTodayCount: 0,
+    outstandingPaise: 0,
+    dueInvoiceCount: 0,
+    overduePaise: 0,
+    overdueInvoiceCount: 0,
+  },
   needsAttention: [],
   todaysLanes: [],
   facilityBreakdown: [
@@ -113,12 +145,20 @@ describe("facility switcher (W1-6)", () => {
     expect(screen.getByRole("option", { name: "Bandra Annex" })).toBeTruthy();
   });
 
-  it("persists the choice in the URL", () => {
+  it("persists the choice in the URL and the cookie", () => {
     render(<FacilitySwitcher locations={LOCATIONS} />);
     fireEvent.change(screen.getByTestId("facility-switcher"), {
       target: { value: FACILITY_2 },
     });
     expect(push).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
+    expect(document.cookie).toContain(`aqua_facility=${encodeURIComponent(FACILITY_2)}`);
+  });
+
+  it("adopts a remembered cookie when the URL has no choice", () => {
+    document.cookie = `aqua_facility=${encodeURIComponent(FACILITY_2)}; path=/`;
+    render(<FacilitySwitcher locations={LOCATIONS} />);
+    expect(replace).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
+    document.cookie = "aqua_facility=; path=/; max-age=0";
   });
 });
 

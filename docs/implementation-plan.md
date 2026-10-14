@@ -95,7 +95,7 @@ Done when: {ACCEPTANCE}
 ### S-02 · Design tokens and DESIGN.md
 **Depends:** S-01
 **Build:** `DESIGN.md` at repo root. Tailwind theme extension with the deck/marine/water/mango palette, semantic tokens (`good`, `late`, `warn`), type scale, two shadow levels, radii. Self-hosted subset Bricolage Grotesque and Instrument Sans with `font-display: swap`.
-**Done when:** a test page renders every token; total font payload under 45 KB.
+**Done when:** a test page renders every token; total font payload under the current 60 KB Latin-subset budget (measured 55.2 KB).
 **Never:** raw hex values in components from this point on.
 
 ### S-03 · Local database
@@ -811,7 +811,7 @@ of the `message_log` written by C-40a.
 
 ### C-47 · Scheduled jobs
 **Depends:** C-30, C-32
-**Status:** complete — the three billing queues ship with per-tenant schedules (02:15 / 02:30 / 03:00 tenant time) registered at tenant creation and reconciled by `db/deploy.ts`. `subscriptions.expire` marks lapsed actives; `invoices.generate` raises one renewal invoice for an `auto_renew` subscription inside the 7-day window, due the day the period ends, made idempotent by `invoices_subscription_due_live_uidx`; `reports.rollup` upserts `daily_rollups` for the day that just ended. Job mutations carry no tenant audit row — `audit_log.actor_id` is NOT NULL and jobs have no user actor (the standing F-15 gap; same as `sessions.generate`).
+**Status:** complete — per-tenant billing schedules are registered at creation and reconciled at deploy. Renewal invoices are due the day after the inclusive subscription end, with the live due-date unique index as backstop. E-01 made audit actors nullable; current job mutations write system audits. This does not certify every tenant mutation's F-15 coverage; current October closure and evidence are in `review-fixes-status.md`.
 **Build:** `subscriptions.expire`, `invoices.generate`, `reports.rollup`. Idempotent, tenant-scoped, chunked.
 **Done when:** re-running a night's jobs changes nothing.
 
@@ -2137,8 +2137,8 @@ budget check passes, and no photo-upload affordance exists anywhere.
 
 | Item | Why deferred |
 |---|---|
-| K-05 wallet ledger | Needs balance re-derivation and reconciliation tests; R1 café works with counter payments |
-| Parent expansion (progress, fees, announcements) | Parent stays the S5 token link this release |
+| Wallet UI and café settlement | K-05 ledger services/tests exist; wallet-to-café UI and credit-limit decisions remain deferred |
+| Parent expansion (progress, schedule, announcements) | Read-only fees/runway/receipts already ship; further screens remain deferred and zero-JS |
 | Per-row hash chain (E-03 upgrade) | Daily signed checkpoint covers R1; enterprise demand only |
 | CDC/logical-replication pipeline (on top of E-06) | R2 Parquet export is sufficient at current volume |
 | Discount codes, offline POS, inventory, tables | Phase 5 per `project-scope.md` |

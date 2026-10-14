@@ -5,12 +5,9 @@ import {
   skillFrameworks,
   skillNodes,
 } from "@/db/schema/skill-framework";
-import { members, persons } from "@/db/schema/people";
+import { persons } from "@/db/schema/people";
 import { users } from "@/db/schema/users";
-import {
-  locationVisible,
-  resolveLocationAccess,
-} from "@/lib/services/location-access";
+import { visibleMember } from "./resource-access";
 import { asMemberId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -19,7 +16,8 @@ import type { ActionCtx } from "@/lib/auth/context";
 // from the generic framework (M-03) and the assessments recorded
 // against its nodes.
 //
-// A member outside the caller's location scope reads exactly like a
+// A member outside the caller's scope (assignment for a coach,
+// location for anyone location-restricted) reads exactly like a
 // missing member (null / empty) — the same DPDP answer
 // recordAssessment already gives, and the same answer as another
 // tenant's member (RLS would hide the rows anyway; the explicit
@@ -61,7 +59,7 @@ export type MemberProgress = {
   frameworks: MemberProgressFramework[];
 };
 
-async function visibleMember(
+async function visibleMemberProfile(
   tx: Parameters<Parameters<typeof withTenant>[1]>[0],
   ctx: ActionCtx,
   memberId: string,
@@ -72,27 +70,26 @@ async function visibleMember(
   code: string;
   personId: string;
 } | null> {
-  const [member] = await tx
-    .select({
-      id: members.id,
-      locationId: members.locationId,
-      name: persons.fullName,
-      code: members.memberCode,
-      personId: members.personId,
-    })
-    .from(members)
-    .innerJoin(persons, eq(persons.id, members.personId))
+  const member = await visibleMember(tx, ctx, memberId);
+  if (!member) return null;
+  const [person] = await tx
+    .select({ name: persons.fullName })
+    .from(persons)
     .where(
       and(
-        eq(members.id, asMemberId(memberId)),
-        eq(members.tenantId, ctx.tenantId),
+        eq(persons.id, member.personId),
+        eq(persons.tenantId, ctx.tenantId),
       ),
     )
     .limit(1);
-  if (!member) return null;
-  const access = await resolveLocationAccess(tx, ctx);
-  if (!locationVisible(access, member.locationId)) return null;
-  return member;
+  if (!person) return null;
+  return {
+    id: member.id,
+    locationId: member.locationId,
+    name: person.name,
+    code: member.memberCode,
+    personId: member.personId,
+  };
 }
 
 async function loadHistory(
@@ -150,7 +147,7 @@ export async function listAssessmentHistory(
   memberId: string,
 ): Promise<AssessmentHistoryRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const member = await visibleMember(tx, ctx, memberId);
+    const member = await visibleMemberProfile(tx, ctx, memberId);
     if (!member) return [];
     return loadHistory(tx, ctx, memberId);
   });
@@ -161,7 +158,7 @@ export async function getMemberProgress(
   memberId: string,
 ): Promise<MemberProgress | null> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const member = await visibleMember(tx, ctx, memberId);
+    const member = await visibleMemberProfile(tx, ctx, memberId);
     if (!member) return null;
 
     const frameworks = await tx

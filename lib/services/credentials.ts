@@ -184,6 +184,16 @@ export async function hasCredentialByBaUserId(baUserId: string): Promise<boolean
 }
 
 export async function hasCredentialByPhone(phone: string): Promise<boolean> {
+  const baUserId = await findBaUserIdByPhone(phone);
+  if (!baUserId) return false;
+  return hasCredentialByBaUserId(baUserId);
+}
+
+// R09 (2026-10-13 role-workflow audit) — read-only better-auth user
+// lookup. Reactivating a revoked membership deletes the target's old
+// sessions (they were invalidated by revocation and must not come back
+// to life); this finds the account without creating one.
+export async function findBaUserIdByPhone(phone: string): Promise<string | null> {
   const baUserRow = await withPlatform(async () => {
     const rows = await db
       .select({ id: baUser.id })
@@ -192,9 +202,7 @@ export async function hasCredentialByPhone(phone: string): Promise<boolean> {
       .limit(1);
     return rows;
   });
-  const baUserId = baUserRow[0]?.id;
-  if (!baUserId) return false;
-  return hasCredentialByBaUserId(baUserId);
+  return baUserRow[0]?.id ?? null;
 }
 
 // Lockout bookkeeping — write failed_pin_attempts and pin_locked_until.

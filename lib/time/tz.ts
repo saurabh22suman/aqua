@@ -142,6 +142,20 @@ export function formatDateTimeIST(iso: string | Date): string {
   return `${formatDateIST(d)}, ${formatTimeIST(d)}`;
 }
 
+// Report periods carry an exclusive upper bound (`to` = the day after
+// the last included day). Rendering `to` verbatim would present an
+// exclusive boundary as an inclusive date (owner-UI review P2,
+// 2026-10-13). This labels the human range: a single day when the
+// range covers one date, otherwise "from – last included day".
+export function formatPeriodRangeIST(from: string, exclusiveTo: string): string {
+  const lastIncluded = addDays(exclusiveTo, -1);
+  if (lastIncluded < from) {
+    return `${formatDateIST(from)} (empty range — the end date must be after the start)`;
+  }
+  if (lastIncluded === from) return formatDateIST(from);
+  return `${formatDateIST(from)} – ${formatDateIST(lastIncluded)}`;
+}
+
 export function formatWeekdayDateIST(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
   return d.toLocaleDateString("en-IN", {

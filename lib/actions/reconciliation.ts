@@ -10,9 +10,11 @@ import {
   type DailyCollection,
 } from "@/lib/services/reconciliation";
 import {
+  getReceptionCloseSummary,
   listCashCountHistory,
   reopenCashCount,
   type CashCountHistoryRow,
+  type ReceptionCloseSummary,
   type ReopenCashCountResult,
 } from "@/lib/services/reconciliation-closed-state";
 
@@ -86,6 +88,16 @@ export async function confirmCashCountAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "payments.record");
   return confirmCashCount(ctx, parsed.data);
+}
+
+// M01 — the reception close read. Same counter grant that confirms the
+// count (payments.record), and the service narrows to the caller's
+// allowed locations and today. Reopening stays settings.manage above;
+// reception gets no path back into a closed day.
+export async function getReceptionCloseSummaryAction(): Promise<ReceptionCloseSummary> {
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "payments.record");
+  return getReceptionCloseSummary(ctx);
 }
 
 export async function reopenCashCountAction(

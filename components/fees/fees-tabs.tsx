@@ -17,16 +17,28 @@ export const FEES_TABS: Array<{ key: FeesTab; label: string }> = [
 export function FeesTabs({
   active,
   period,
+  facility,
+  canManageSettings = false,
 }: {
   active: FeesTab;
   period: { from: string; to: string };
+  facility?: string;
+  // The Plans tab leads to /owner/settings/plans, which is
+  // settings.manage territory; without the grant it is not offered
+  // (an accountant can reach the owner surface but must not be
+  // routed to plan management).
+  canManageSettings?: boolean;
 }) {
-  const query = `from=${period.from}&to=${period.to}`;
+  const query = `from=${period.from}&to=${period.to}${
+    facility ? `&facility=${facility}` : ""
+  }`;
   return (
     <SegmentedTabs
       ariaLabel="Fees sections"
       active={active}
-      tabs={FEES_TABS.map((tab) => ({
+      tabs={FEES_TABS.filter(
+        (tab) => tab.key !== "plans" || canManageSettings,
+      ).map((tab) => ({
         key: tab.key,
         label: tab.label,
         href: `/owner/fees?tab=${tab.key}&${query}`,

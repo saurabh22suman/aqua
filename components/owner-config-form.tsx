@@ -2,240 +2,296 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   requestConfigChangeAction,
   setOwnerConfigValueAction,
 } from "@/lib/actions/owner-config";
+import {
+  KEY_TITLES,
+  fromInputValue,
+  isStructured,
+  readOnlyValue,
+  scopeLabel,
+  toInputValue,
+  valueType,
+  type OwnerConfigItem,
+} from "@/components/settings/owner-config-values";
 
 // O-07 — the registry-rendered owner settings form. Editable keys get
 // an inline control; read-only keys show the current value greyed with
 // a Request change disclosure. Values are rendered from the key's
 // jsonSchema, never hardcoded per key.
-
-type OwnerItem = {
-  key: string;
-  value: unknown;
-  visibility: "owner_edit" | "owner_read";
-  risk: string;
-  description: string;
-  jsonSchema: Record<string, unknown>;
-  source: {
-    scopeType: string;
-    scopeId: string | null;
-    setBy: string | null;
-    setAt: string | null;
-  };
-  editable: boolean;
-};
+//
+// P1 (2026-10-13 owner-UI review) — structured values are never
+// stringified into a text box (`[object Object]`), technical UUID
+// scope ids are not primary labels, and known keys get human titles.
+// `operations.business_hours` is edited at location scope in the
+// Locations workspace, so this page summarises it and links there
+// instead of pretending a tenant-level text field can edit it.
+// Display helpers live in components/settings/owner-config-values.ts.
 
 const inputClass =
   "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
-function valueType(item: OwnerItem): string {
-  const type = item.jsonSchema["type"];
-  return typeof type === "string" ? type : "string";
-}
-
-function toInputValue(value: unknown): string {
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (value === null || value === undefined) return "";
-  return String(value);
-}
-
-function fromInputValue(item: OwnerItem, raw: string): unknown {
-  const type = valueType(item);
-  if (type === "boolean") return raw === "true";
-  if (type === "integer" || type === "number") return Number(raw);
-  return raw;
-}
-
-function renderSource(item: OwnerItem): string {
-  if (item.source.scopeType === "default") return "platform default";
-  const scope = item.source.scopeId
-    ? `${item.source.scopeType}: ${item.source.scopeId}`
-    : item.source.scopeType;
-  return scope;
-}
-
-export function OwnerConfigForm({ items }: { items: OwnerItem[] }) {
+export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(items.map((item) => [item.key, toInputValue(item.value)])),
+    Object.fromEntries(
+      items
+        .filter((item) => !isStructured(item))
+        .map((item) => [item.key, toInputValue(item.value)]),
+    ),
   );
   const [requestValues, setRequestValues] = useState<Record<string, string>>({});
   const [requestNotes, setRequestNotes] = useState<Record<string, string>>({});
 
-  function save(item: OwnerItem) {
+  function setMessage(key: string, message: string) {
+    setMessages((prev) => ({ ...prev, [key]: message }));
+  }
+
+  function save(item: OwnerConfigItem) {
+    const type = valueType(item);
+    const raw = drafts[item.key] ?? "";
+    if (type !== "boolean" && raw.trim() === "") {
+      setMessage(item.key, "Enter a value.");
+      return;
+    }
+    if (
+      (type === "integer" || type === "number") &&
+      !Number.isFinite(Number(raw))
+    ) {
+      setMessage(item.key, "Enter a number.");
+      return;
+    }
     setPendingKey(item.key);
-    setMessages((prev) => ({ ...prev, [item.key]: "" }));
+    setMessage(item.key, "");
     startTransition(async () => {
-      const result = await setOwnerConfigValueAction({
-        key: item.key,
-        value: fromInputValue(item, drafts[item.key] ?? ""),
-      });
-      setMessages((prev) => ({
-        ...prev,
-        [item.key]: result.ok ? "Saved." : result.error,
-      }));
-      if (result.ok) router.refresh();
-      setPendingKey(null);
+      try {
+        const result = await setOwnerConfigValueAction({
+          key: item.key,
+          value: fromInputValue(item, raw),
+        });
+        setMessage(item.key, result.ok ? "Saved." : result.error);
+        if (result.ok) {
+          setDrafts((prev) => ({ ...prev, [item.key]: raw }));
+          router.refresh();
+        }
+      } catch {
+        setMessage(
+          item.key,
+          "The change did not reach the server. Check the value and retry.",
+        );
+      } finally {
+        setPendingKey(null);
+      }
     });
   }
 
-  function requestChange(item: OwnerItem) {
+  function requestChange(item: OwnerConfigItem) {
     setPendingKey(item.key);
-    setMessages((prev) => ({ ...prev, [item.key]: "" }));
+    setMessage(item.key, "");
     startTransition(async () => {
-      const result = await requestConfigChangeAction({
-        key: item.key,
-        requestedValue: requestValues[item.key] ?? "",
-        ...(requestNotes[item.key]?.trim()
-          ? { note: requestNotes[item.key]?.trim() }
-          : {}),
-      });
-      setMessages((prev) => ({
-        ...prev,
-        [item.key]: result.ok
-          ? "Request sent to the platform."
-          : result.error,
-      }));
-      if (result.ok) {
-        setRequestValues((prev) => ({ ...prev, [item.key]: "" }));
-        setRequestNotes((prev) => ({ ...prev, [item.key]: "" }));
+      try {
+        const result = await requestConfigChangeAction({
+          key: item.key,
+          requestedValue: requestValues[item.key] ?? "",
+          ...(requestNotes[item.key]?.trim()
+            ? { note: requestNotes[item.key]?.trim() }
+            : {}),
+        });
+        setMessage(
+          item.key,
+          result.ok ? "Request sent to the platform." : result.error,
+        );
+        if (result.ok) {
+          setRequestValues((prev) => ({ ...prev, [item.key]: "" }));
+          setRequestNotes((prev) => ({ ...prev, [item.key]: "" }));
+        }
+      } catch {
+        setMessage(
+          item.key,
+          "The request did not reach the platform. Try again.",
+        );
+      } finally {
+        setPendingKey(null);
       }
-      setPendingKey(null);
     });
   }
+
+  const schemaNumber = (
+    item: OwnerConfigItem,
+    field: "minimum" | "maximum",
+  ): number | undefined => {
+    const value = item.jsonSchema[field];
+    return typeof value === "number" ? value : undefined;
+  };
 
   return (
     <div className="space-y-3">
-      {items.map((item) => (
-        <section
-          key={item.key}
-          className="rounded-card bg-paper border border-line p-4"
-          data-testid={`config-${item.key}`}
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[14px] font-medium text-ink">{item.description}</p>
-            <span className="rounded-pill bg-deck px-2 py-0.5 text-[11px] text-ink-3">
-              {renderSource(item)}
-            </span>
-          </div>
-
-          {item.editable ? (
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              <label className="block grow min-w-[12rem]">
-                <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                  Current value
-                </span>
-                {valueType(item) === "boolean" ? (
-                  <select
-                    value={drafts[item.key] ?? "false"}
-                    onChange={(e) =>
-                      setDrafts((prev) => ({ ...prev, [item.key]: e.target.value }))
-                    }
-                    className={inputClass}
-                  >
-                    <option value="true">On</option>
-                    <option value="false">Off</option>
-                  </select>
-                ) : (
-                  <input
-                    type={valueType(item) === "integer" || valueType(item) === "number" ? "number" : "text"}
-                    value={drafts[item.key] ?? ""}
-                    onChange={(e) =>
-                      setDrafts((prev) => ({ ...prev, [item.key]: e.target.value }))
-                    }
-                    className={inputClass}
-                  />
-                )}
-              </label>
-              <button
-                type="button"
-                disabled={pending && pendingKey === item.key}
-                onClick={() => save(item)}
-                className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-              >
-                {pending && pendingKey === item.key ? "Saving…" : "Save"}
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3">
-              <p className="text-[13px] text-ink-3">
-                Current value:{" "}
-                <span className="font-medium text-ink-2">
-                  {typeof item.value === "boolean"
-                    ? item.value
-                      ? "On"
-                      : "Off"
-                    : String(item.value ?? "—")}
-                </span>{" "}
-                · changed by the platform
+      {items.map((item) => {
+        const structured = isStructured(item);
+        return (
+          <section
+            key={item.key}
+            className="rounded-card bg-paper border border-line p-4"
+            data-testid={`config-${item.key}`}
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-[14px] font-medium text-ink">
+                {KEY_TITLES[item.key] ?? item.description}
               </p>
-              <details className="mt-2">
-                <summary className="cursor-pointer text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
-                  Request change
-                </summary>
-                <div className="mt-2 space-y-2">
-                  <label className="block">
-                    <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                      What should it be?
-                    </span>
-                    <input
-                      value={requestValues[item.key] ?? ""}
-                      onChange={(e) =>
-                        setRequestValues((prev) => ({
-                          ...prev,
-                          [item.key]: e.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                      Why? (optional)
-                    </span>
-                    <input
-                      value={requestNotes[item.key] ?? ""}
-                      onChange={(e) =>
-                        setRequestNotes((prev) => ({
-                          ...prev,
-                          [item.key]: e.target.value,
-                        }))
-                      }
-                      className={inputClass}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={
-                      (pending && pendingKey === item.key) ||
-                      (requestValues[item.key] ?? "").trim().length === 0
-                    }
-                    onClick={() => requestChange(item)}
-                    className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 py-1.5 text-[12px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
-                  >
-                    Send request
-                  </button>
-                </div>
-              </details>
+              <span className="rounded-pill bg-deck px-2 py-0.5 text-[11px] text-ink-3">
+                {scopeLabel(item)}
+              </span>
             </div>
-          )}
+            {KEY_TITLES[item.key] ? (
+              <p className="mt-0.5 text-[12px] text-ink-3">{item.description}</p>
+            ) : null}
 
-          {messages[item.key] ? (
-            <p
-              role="status"
-              className="mt-2 rounded-ctl bg-deck px-3 py-2 text-[12px] text-ink-2"
-            >
-              {messages[item.key]}
-            </p>
-          ) : null}
-        </section>
-      ))}
+            {item.editable && !structured ? (
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <label className="block grow min-w-[12rem]">
+                  <span className="block text-[12px] font-medium text-ink-2 mb-1">
+                    Current value
+                  </span>
+                  {valueType(item) === "boolean" ? (
+                    <select
+                      value={drafts[item.key] ?? "false"}
+                      onChange={(e) =>
+                        setDrafts((prev) => ({
+                          ...prev,
+                          [item.key]: e.target.value,
+                        }))
+                      }
+                      className={inputClass}
+                    >
+                      <option value="true">On</option>
+                      <option value="false">Off</option>
+                    </select>
+                  ) : (
+                    <input
+                      type={
+                        valueType(item) === "integer" ||
+                        valueType(item) === "number"
+                          ? "number"
+                          : "text"
+                      }
+                      min={schemaNumber(item, "minimum")}
+                      max={schemaNumber(item, "maximum")}
+                      step={valueType(item) === "integer" ? 1 : undefined}
+                      value={drafts[item.key] ?? ""}
+                      onChange={(e) =>
+                        setDrafts((prev) => ({
+                          ...prev,
+                          [item.key]: e.target.value,
+                        }))
+                      }
+                      className={inputClass}
+                    />
+                  )}
+                </label>
+                <button
+                  type="button"
+                  disabled={pending && pendingKey === item.key}
+                  onClick={() => save(item)}
+                  className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+                >
+                  {pending && pendingKey === item.key ? "Saving…" : "Save"}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <p className="text-[13px] text-ink-3">
+                  Current value:{" "}
+                  <span className="font-medium text-ink-2">
+                    {readOnlyValue(item)}
+                  </span>{" "}
+                  · {scopeLabel(item)}
+                </p>
+                {item.key === "operations.business_hours" ? (
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    Opening hours are set for each location.{" "}
+                    <Link
+                      href="/owner/settings/locations"
+                      className="text-[var(--accent-ink)] underline underline-offset-2"
+                    >
+                      Edit hours in Locations
+                    </Link>
+                    .
+                  </p>
+                ) : null}
+                {structured && item.key !== "operations.business_hours" ? (
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    This setting has a structured value and is edited from
+                    its own workspace, not as a single field here.
+                  </p>
+                ) : null}
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
+                    Request change
+                  </summary>
+                  <div className="mt-2 space-y-2">
+                    <label className="block">
+                      <span className="block text-[12px] font-medium text-ink-2 mb-1">
+                        What should it be?
+                      </span>
+                      <input
+                        value={requestValues[item.key] ?? ""}
+                        onChange={(e) =>
+                          setRequestValues((prev) => ({
+                            ...prev,
+                            [item.key]: e.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="block text-[12px] font-medium text-ink-2 mb-1">
+                        Why? (optional)
+                      </span>
+                      <input
+                        value={requestNotes[item.key] ?? ""}
+                        onChange={(e) =>
+                          setRequestNotes((prev) => ({
+                            ...prev,
+                            [item.key]: e.target.value,
+                          }))
+                        }
+                        className={inputClass}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={
+                        (pending && pendingKey === item.key) ||
+                        (requestValues[item.key] ?? "").trim().length === 0
+                      }
+                      onClick={() => requestChange(item)}
+                      className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 py-1.5 text-[12px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
+                    >
+                      Send request
+                    </button>
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {messages[item.key] ? (
+              <p
+                role="status"
+                className="mt-2 rounded-ctl bg-deck px-3 py-2 text-[12px] text-ink-2"
+              >
+                {messages[item.key]}
+              </p>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use server";
 
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
+import { hasPermission, requirePermission } from "@/lib/auth/permission";
 import { z } from "zod";
 import {
   createMemberSchema,
@@ -15,6 +15,7 @@ const memberIdSchema = z.string().uuid();
 import { createMember } from "@/lib/services/register";
 import {
   getMemberDetail,
+  getMemberPayerView,
   listLocations,
   listMembers,
   nextMemberCode,
@@ -23,6 +24,7 @@ import {
   type LocationOption,
   type MemberDetail,
   type MemberListRow,
+  type MemberPayerView,
   type PersonSearchRow,
 } from "@/lib/services/people";
 import { transitionMemberStatus } from "@/lib/services/member-status";
@@ -44,7 +46,33 @@ export async function getMemberDetailAction(rawMemberId: string): Promise<Member
   const memberId = memberIdSchema.parse(rawMemberId);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
+  // R02 direct-action gap: members.read alone is the roster read, not
+  // the full 360. The Accountant holds members.read for the payer-only
+  // surface but has neither attendance.read (teaching loop) nor
+  // members.write (record editing), so the full projection — DOB,
+  // medical notes, guardians, consent evidence — must not cross the
+  // RSC boundary for that caller. Coach/Owner/Reception/Admin keep the
+  // full detail; everyone else falls back to the payer projection.
+  if (
+    !hasPermission(ctx, "attendance.read") &&
+    !hasPermission(ctx, "members.write")
+  ) {
+    return null;
+  }
   return getMemberDetail(ctx, memberId);
+}
+
+// R02 — the payer-only read for the Accountant's member finance page.
+// Gated by invoices.read (the reconcile grant), NOT members.read, and it
+// returns the narrow getMemberPayerView projection: no DOB, medical
+// notes, guardians or consent rows ever cross the RSC boundary here.
+export async function getMemberPayerAction(
+  rawMemberId: string,
+): Promise<MemberPayerView | null> {
+  const memberId = memberIdSchema.parse(rawMemberId);
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "invoices.read");
+  return getMemberPayerView(ctx, memberId);
 }
 
 export async function listLocationsAction(): Promise<LocationOption[]> {
@@ -57,7 +85,11 @@ export async function searchPersonsAction(query: string): Promise<PersonSearchRo
   const parsed = searchPersonsSchema.safeParse(query);
   if (!parsed.success) return [];
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "members.read");
+  // R07 (2026-10-13 role-workflow audit) — guardian lookup is a
+  // member-editing flow (create/edit member). Riding members.write
+  // keeps the Accountant's finance-only access from enumerating
+  // person records through the search box.
+  requirePermission(ctx, "members.write");
   return searchPersons(ctx, parsed.data);
 }
 
@@ -105,20 +137,36 @@ export async function createMemberAction(
   return { ok: false, error: "Could not generate a unique member code. Try again." };
 }
 
-export async function updateMemberAction(raw: {
-  memberId: string;
-  fullName: string;
-  phone?: string;
-  dateOfBirth: string;
-  gender?: string;
-  locationId: string;
-  medicalNotes?: string;
+export type UpdateMemberPatch = {
+  fullName?: string;
+  phone?: string | null;
+  dateOfBirth?: string;
+  gender?: "male" | "female" | "other" | null;
+  locationId?: string;
+  medicalNotes?: string | null;
   joinedOn?: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
-  const input = updateMemberSchema.parse(raw);
+};
+
+export async function updateMemberAction(
+  raw: { memberId: string } & UpdateMemberPatch,
+): Promise<
+  | { ok: true; value: UpdateMemberPatch }
+  | { ok: false; error: string }
+> {
+  // safeParse, not parse: an invalid edit (empty name, bad number)
+  // is a user-facing refusal the inline editor renders, not a
+  // thrown server error.
+  const parsed = updateMemberSchema.safeParse(raw);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "That change is not valid.",
+    };
+  }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.write");
-  return updateMember(ctx, input.memberId, input);
+  const { memberId, ...patch } = parsed.data;
+  return updateMember(ctx, memberId, patch);
 }
 
 export async function transitionMemberStatusAction(raw: {
@@ -139,7 +187,14 @@ export async function transitionMemberStatusAction(raw: {
 // surfaces both read this on the member detail page. Returns null
 // when the tenant is missing (e.g. deleted) — the page treats that
 // as "skip the card" rather than crashing the surrounding detail.
+//
+// R07 (2026-10-13 role-workflow audit) — the action contract map
+// already documented members.read; the implementation now enforces
+// it like every other tenant read. The payload is tenant branding
+// only (no member data), but an unpermissioned exported action is
+// still an unpermissioned boundary.
 export async function getMemberIdCardContextAction(): Promise<MemberIdCardContext | null> {
   const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "members.read");
   return getMemberIdCardContext({ tenantId: ctx.tenantId });
 }

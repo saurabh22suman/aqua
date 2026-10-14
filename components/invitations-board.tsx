@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, ChevronRight, Copy, Loader2, RotateCcw, X } from "lucide-react";
 import {
+  reactivateInvitationAction,
   revokeInvitationAction,
 } from "@/lib/actions/staff-invitations";
 import { issueLoginLinkAction } from "@/lib/actions/invite-link";
@@ -72,29 +74,65 @@ export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
 }
 
 function InvitationRow({ row }: { row: ListInvitationsRow }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [busy, setBusy] = useState<"revoke" | "link" | null>(null);
+  const [busy, setBusy] = useState<"revoke" | "link" | "reactivate" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirmingReactivate, setConfirmingReactivate] = useState(false);
+  const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+
+  const scopeLabel =
+    row.locationNames.length === 0
+      ? "all locations in this academy"
+      : row.locationNames.join(", ");
+
+  function onReactivate() {
+    if (pending || busy) return;
+    setError(null);
+    setBusy("reactivate");
+    startTransition(async () => {
+      const result = await reactivateInvitationAction(row.membershipId);
+      if (result.kind === "error") {
+        setError(result.message);
+      } else {
+        setConfirmingReactivate(false);
+        setLink({
+          url: `${window.location.origin}${result.urlPath}`,
+          expiresAt: formatDateTimeIST(result.expiresAt),
+        });
+        // Server-component re-render keeps the status pill aligned;
+        // the fresh link above stays visible (client state survives
+        // refresh).
+        router.refresh();
+      }
+      setBusy(null);
+    });
+  }
 
   function onRevoke() {
+    if (pending || busy) return;
     setError(null);
     setBusy("revoke");
     startTransition(async () => {
       const result = await revokeInvitationAction(row.membershipId);
       if (result.kind === "error") {
+        // The confirmation panel stays open so the owner can retry.
         setError(result.message);
       } else {
-        // Server-component re-render: a hard refresh keeps the
-        // list aligned with the audit row.
-        window.location.reload();
+        setConfirmingRevoke(false);
+        setLink(null);
+        // Server-component re-render keeps the row and the roster
+        // aligned with the persisted revocation.
+        router.refresh();
       }
       setBusy(null);
     });
   }
 
   function onIssueLink() {
+    if (pending || busy) return;
     setError(null);
     setBusy("link");
     setCopied(false);
@@ -142,7 +180,8 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
       {row.status === "invited" ? (
         <p className="mt-2 text-[12px] text-ink-3">
           They sign in with the login link below — the membership flips to &quot;active&quot; on first use.
-          Nothing is sent by SMS or WhatsApp; copy the link and share it yourself.
+          Invitations are queued for WhatsApp. Creating a login link also queues
+          a private link to the registered number. You can still copy and share it yourself.
         </p>
       ) : null}
       {link ? (
@@ -182,7 +221,10 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
         {row.status === "active" || row.status === "invited" ? (
           <button
             type="button"
-            onClick={onRevoke}
+            onClick={() => {
+              setError(null);
+              setConfirmingRevoke(true);
+            }}
             disabled={pending}
             className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium border border-line text-ink-2 disabled:opacity-50 gap-1.5"
             data-testid={`revoke-${row.membershipId}`}
@@ -191,12 +233,91 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
             Revoke
           </button>
         ) : null}
-        {row.status === "revoked" ? (
-          <span className="text-[12px] text-ink-3 flex items-center gap-1.5">
-            <RotateCcw size={12} /> Revoked
-          </span>
-        ) : null}
+      {row.status === "revoked" ? (
+        confirmingReactivate ? (
+          <div className="mt-2 w-full rounded-ctl border border-line bg-deck p-3">
+            <p className="text-[13px] font-medium">
+              Restore access for {formatPhoneIN(row.phone)}?
+            </p>
+            <p className="mt-1 text-[12px] text-ink-3 leading-snug">
+              They were signed in as {row.roleKey} with access to {scopeLabel}.
+              Old invitation and login links stay invalid. A fresh
+              single-use link will be issued and shown here.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={onReactivate}
+                disabled={pending}
+                className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-[var(--accent-strong)] text-paper disabled:opacity-50"
+                data-testid={`reactivate-confirm-${row.membershipId}`}
+              >
+                {busy === "reactivate" ? "Restoring…" : "Restore access"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingReactivate(false)}
+                disabled={pending}
+                className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-paper border border-line text-ink-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setConfirmingReactivate(true);
+            }}
+            disabled={pending}
+            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 gap-1.5"
+            data-testid={`reactivate-${row.membershipId}`}
+          >
+            <RotateCcw size={13} />
+            Reactivate
+          </button>
+        )
+      ) : null}
       </div>
+
+      {confirmingRevoke ? (
+        <div className="mt-2 rounded-ctl border border-line bg-deck p-3">
+          <p className="text-[13px] font-medium">
+            Revoke access for {formatPhoneIN(row.phone)}?
+          </p>
+          <p className="mt-1 text-[12px] text-ink-3 leading-snug">
+            They act as {row.roleKey} with access to {scopeLabel}. Revoking
+            removes that access immediately: pending and existing login links
+            stop working, and any signed-in session can no longer use this
+            academy. The staff directory record is kept, and you can restore
+            access later.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={onRevoke}
+              disabled={pending || busy !== null}
+              className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium border border-line bg-paper text-ink-2 disabled:opacity-50"
+              data-testid={`revoke-confirm-${row.membershipId}`}
+            >
+              {busy === "revoke" ? "Revoking…" : "Revoke access"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirmingRevoke(false);
+                setError(null);
+              }}
+              disabled={pending || busy !== null}
+              className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-paper border border-line text-ink-2"
+            >
+              Keep access
+            </button>
+          </div>
+        </div>
+      ) : null}
     </li>
   );
 }

@@ -21,16 +21,46 @@ export async function loginAsCoach(
   // credential to DEMO_PIN.
   const page = await context.newPage();
   await page.goto(`${base}/login`);
+  await page.waitForLoadState("networkidle");
   await page.getByPlaceholder("+91 98765 43210").fill(coachPhone);
   await page.getByLabel("PIN").fill(DEMO_PIN);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL("**/coach", { timeout: 15_000 });
+  await page.waitForURL("**/coach", { timeout: 60_000 });
   return page;
 }
 
 export async function gotoRegister(page: Page, base: string, sessionId: string): Promise<void> {
-  await page.goto(`${base}/coach/register/${sessionId}`);
-  await page.locator('li button[aria-label="Present"]').first().waitFor({ timeout: 15_000 });
+  const url = `${base}/coach/register/${sessionId}`;
+  await page.goto(url);
+  await page.locator('li button[aria-label="Present"]').first().waitFor({ timeout: 60_000 });
+  if (await page.evaluate(() => navigator.onLine)) {
+    await page.waitForLoadState("networkidle");
+    const state = await page.evaluate(async () => (await fetch("/api/offline/session")).json());
+    if (state.identity) await waitForOfflineCopy(page, url, state.identity.scope);
+  }
+}
+
+export async function waitForOfflineCopy(page: Page, url: string, scope: string): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const ready = await page.evaluate(async ({ url, scope }) => {
+      if (!navigator.serviceWorker.controller) return false;
+      const meta = await (await caches.open("aqua-offline-state-v2")).match(new URL("/__aqua_offline_state", location.origin).href);
+      if (!meta || (await meta.json()).identity?.scope !== scope) return false;
+      return Boolean(await (await caches.open(`aqua-private-v2-${scope}`)).match(url, { ignoreVary: true }));
+    }, { url, scope });
+    if (ready) return;
+    await page.waitForTimeout(100);
+  }
+  const diagnostics = await page.evaluate(async ({ url, scope }) => {
+    const response = await (await caches.open("aqua-offline-state-v2")).match(new URL("/__aqua_offline_state", location.origin).href);
+    const keys = await (await caches.open(`aqua-private-v2-${scope}`)).keys();
+    return { url, scope, controlled: Boolean(navigator.serviceWorker.controller), meta: response ? await response.json() : null,
+      registrations: (await navigator.serviceWorker.getRegistrations()).map(registration => ({ scope: registration.scope,
+        active: registration.active?.state, script: registration.active?.scriptURL })),
+      cachedUrls: keys.map(key => key.url) };
+  }, { url, scope });
+  throw new Error(`The authenticated offline document was not fully downloaded: ${JSON.stringify(diagnostics)}`);
 }
 
 export async function markAll(

@@ -17,7 +17,8 @@ export function PremisesQrCard({ urlPath }: { urlPath: string }) {
   }, [urlPath]);
 
   return (
-    <div className="mt-5 rounded-card border border-line bg-paper p-4">
+    <div data-print-isolate="premises-qr" className="print-isolate-block mt-5 rounded-card border border-line bg-paper p-4">
+      <h2 className="mb-4 text-center font-display text-[19px] font-semibold">Staff check-in</h2>
       <div className="flex justify-center">
         <LinkQr url={url} size={220} />
       </div>
@@ -27,7 +28,7 @@ export function PremisesQrCard({ urlPath }: { urlPath: string }) {
       <Button
         variant="secondary"
         size="md"
-        className="mt-3 w-full"
+        className="mt-3 w-full print:hidden"
         onClick={() => window.print()}
       >
         Print this page

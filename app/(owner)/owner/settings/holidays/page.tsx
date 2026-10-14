@@ -1,13 +1,14 @@
 import { listHolidaysAction } from "@/lib/actions/holidays";
 import { HolidaysBoard } from "@/components/holidays-board";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 
 // R.3 (docs/five-day-work-guide.md) — the owner-facing holiday and
 // closure calendar. The generator already consults tenant_holidays;
 // this page is where the owner declares them.
 export default async function HolidaysPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const holidays = await listHolidaysAction();
 
   return (

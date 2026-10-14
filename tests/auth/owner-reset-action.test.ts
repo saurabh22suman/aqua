@@ -11,6 +11,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const platformAuthStatusAction = vi.fn();
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: (...args: unknown[]) => platformAuthStatusAction(...args),
+  // R03 — the mutating platform actions gate on the admin guard. It
+  // delegates to the same mocked status so these tests keep pinning
+  // the session/role boundary.
+  requireOpsAdminAction: async (...args: unknown[]) => {
+    const status = (await platformAuthStatusAction(...args)) as {
+      kind: string;
+      userId?: string;
+      role?: string;
+    };
+    if (status.kind !== "authenticated") return { kind: "error", reason: "unauthenticated" };
+    if (status.role !== "admin") return { kind: "error", reason: "forbidden" };
+    return { kind: "ok", userId: status.userId, role: "admin" };
+  },
 }));
 
 const issueOwnerResetLinkForPhone = vi.fn();

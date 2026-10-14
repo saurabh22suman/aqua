@@ -40,6 +40,7 @@ import {
   schedulePlatformMetricsSnapshot,
 } from "@/lib/jobs/platform-metrics-snapshot-schedule";
 import { ACTIVITY_INGEST_QUEUE } from "@/lib/jobs/activity-ingest-job";
+import { WHATSAPP_NOTIFICATIONS_QUEUE, scheduleWhatsAppNotifications } from "@/lib/jobs/whatsapp-notifications-schedule";
 
 type JobTenant = { id: string; timezone: string };
 
@@ -59,6 +60,7 @@ const QUEUES = [
   AUDIT_CHECKPOINT_QUEUE,
   PLATFORM_METRICS_SNAPSHOT_QUEUE,
   ACTIVITY_INGEST_QUEUE,
+  WHATSAPP_NOTIFICATIONS_QUEUE,
 ];
 
 type ScheduleFn = (
@@ -177,6 +179,10 @@ async function main(): Promise<void> {
   await bootstrapRoles(migrationUrl);
 
   await runMigrations(migrationUrl);
+  // Defaults apply to newly created tables; restrict their grants on this
+  // first deploy, before web/worker can start serving requests.
+  const { reconcileAppPrivileges } = await import("./app-privileges");
+  await reconcileAppPrivileges(migrationUrl);
 
   console.log("ensuring pg-boss schema, queues and per-tenant schedules (idempotent)...");
   const boss = new PgBoss(migrationUrl);
@@ -185,6 +191,7 @@ async function main(): Promise<void> {
   const tenants = await fetchJobTenants(migrationUrl);
   await syncPerTenantSchedules(boss, SESSIONS_GENERATE_QUEUE, tenants, scheduleSessionsGenerate);
   await syncPerTenantSchedules(boss, ABSENCE_ALERTS_QUEUE, tenants, scheduleAbsenceAlerts);
+  await syncPerTenantSchedules(boss, WHATSAPP_NOTIFICATIONS_QUEUE, tenants, scheduleWhatsAppNotifications);
   await syncPerTenantSchedules(boss, SUBSCRIPTIONS_EXPIRE_QUEUE, tenants, scheduleSubscriptionsExpire);
   await syncPerTenantSchedules(boss, INVOICES_GENERATE_QUEUE, tenants, scheduleInvoicesGenerate);
   await syncPerTenantSchedules(boss, REPORTS_ROLLUP_QUEUE, tenants, scheduleReportsRollup);

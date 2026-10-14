@@ -18,7 +18,7 @@ import {
   transitionTenantStatus,
   type TransitionResult,
 } from "@/db/platform-tenant-status";
-import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
 import { opsAction } from "@/db/ops-action";
 import { asUserId, asTenantId } from "@/lib/ids";
 
@@ -81,12 +81,15 @@ export async function createTenantAction(
   };
 
   // (2) permission check — platform session, fully past 2FA.
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
     return {
       kind: "error",
       code: "invalid",
-      message: "Your session has expired. Sign in again.",
+      message:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
     };
   }
 
@@ -139,12 +142,15 @@ export async function transitionTenantStatusAction(
   };
 
   // (2) permission check — same shape as createTenant.
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
     return {
       kind: "error",
       code: "invalid",
-      message: "Your session has expired. Sign in again.",
+      message:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
     };
   }
 

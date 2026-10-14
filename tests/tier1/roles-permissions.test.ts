@@ -57,12 +57,13 @@ const ALL_PERMISSION_KEYS = [
   "bookings.write",
   "levels.read",
   "levels.assess",
+  "levels.write",
 ];
 
 const ROLE_MATRIX: Record<string, string[]> = {
-  owner: [...ALL_PERMISSION_KEYS].sort(),
+  owner: ALL_PERMISSION_KEYS.filter((k) => k !== "attendance.mark").sort(),
   admin: ALL_PERMISSION_KEYS.filter(
-    (k) => k !== "staff.pay.read" && k !== "staff.pay.write",
+    (k) => k !== "attendance.mark" && k !== "staff.pay.read" && k !== "staff.pay.write",
   ).sort(),
   accountant: [
     "invoices.read",
@@ -104,7 +105,11 @@ const ROLE_MATRIX: Record<string, string[]> = {
     "levels.assess",
     "staff.self",
   ].sort(),
-  worker: ["staff.roster", "staff.self"],
+  curriculum_lead: [
+    "attendance.read", "attendance.mark", "members.read.assigned", "programs.read",
+    "levels.read", "levels.assess", "levels.write", "staff.self",
+  ].sort(),
+  worker: ["staff.self"],
 };
 
 const TEMPLATE_KEYS = Object.keys(ROLE_MATRIX).sort();
@@ -133,7 +138,7 @@ afterAll(async () => {
 });
 
 describe("F-04 roles and permissions", () => {
-  it("templates seed per tenant: six is_system roles matching the matrix", async () => {
+  it("templates seed per tenant: seven is_system roles matching the matrix", async () => {
     await admin.query(
       "insert into tenants (id, slug, name) values ($1, $2, 'Roles A'), ($3, $4, 'Roles B')",
       [tenantA, `roles-a-${RUN}`, tenantB, `roles-b-${RUN}`],
@@ -151,7 +156,7 @@ describe("F-04 roles and permissions", () => {
         "select key, is_system, name from roles where tenant_id = $1 order by key",
         [tenantId],
       );
-      expect(rows).toHaveLength(6);
+      expect(rows).toHaveLength(7);
       expect(rows.map((r) => r.key)).toEqual(TEMPLATE_KEYS);
       for (const row of rows) expect(row.is_system).toBe(true);
 

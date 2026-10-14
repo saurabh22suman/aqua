@@ -8,7 +8,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // bookings tile stays absent (PR1-C5).
 
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireReception: async () => ({ permissions: new Set() }),
+  requireReception: async () => ({
+    permissions: new Set(["payments.record", "invoices.read"]),
+    features: new Set(["billing"]),
+  }),
 }));
 
 const getTodayAction = vi.fn();

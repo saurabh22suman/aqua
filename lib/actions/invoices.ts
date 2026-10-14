@@ -16,8 +16,9 @@ import {
 } from "@/lib/services/invoice-mutations";
 
 // C-32 — invoice actions. Standing preamble: (1) parse, (2)
-// permission. Reads need invoices.read (reception holds it),
-// issue/void need invoices.write (owner/admin/accountant).
+// permission. Reads need invoices.read (reception holds it); issue
+// needs invoices.write (owner/admin/accountant); void needs
+// settings.manage (owner/admin only — R01).
 
 const memberInput = z.object({ memberId: z.string().uuid() });
 const invoiceInput = z.object({ invoiceId: z.string().uuid() });
@@ -73,6 +74,6 @@ export async function voidInvoiceAction(
     return { ok: false, error: "Give a reason (3-300 characters)." };
   }
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "invoices.write");
+  requirePermission(ctx, "settings.manage");
   return voidInvoice(ctx, parsed.data.invoiceId, parsed.data.reason);
 }

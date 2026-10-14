@@ -13,6 +13,7 @@ import {
 import { gstDocumentKind, splitIntraStateTax } from "@/lib/gst";
 import { asMemberId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
+import { toSafePaise } from "@/lib/money/safe-paise";
 import type { InvoiceStatus, InvoiceSource } from "@/db/schema/invoices";
 
 // C-32 — invoice reads. Location-scoped (O-08): a scoped receptionist
@@ -71,8 +72,8 @@ type InvoiceJoinRow = {
 
 function toRow(row: InvoiceJoinRow): InvoiceRow {
   const inv = row.invoice;
-  const total = Number(inv.totalPaise);
-  const paid = Number(inv.paidPaise);
+  const total = toSafePaise(inv.totalPaise);
+  const paid = toSafePaise(inv.paidPaise);
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
@@ -80,8 +81,8 @@ function toRow(row: InvoiceJoinRow): InvoiceRow {
     documentKind: gstDocumentKind(inv.gstin),
     issuedOn: inv.issuedOn,
     dueOn: inv.dueOn,
-    subtotalPaise: Number(inv.subtotalPaise),
-    taxPaise: Number(inv.taxPaise),
+    subtotalPaise: toSafePaise(inv.subtotalPaise),
+    taxPaise: toSafePaise(inv.taxPaise),
     totalPaise: total,
     paidPaise: paid,
     outstandingPaise: total - paid,
@@ -189,13 +190,13 @@ export async function getInvoice(
       memberId: row.invoice.memberId,
       memberName: row.memberName,
       lines: lineRows.map((line) => {
-        const tax = Number(line.taxPaise);
+        const tax = toSafePaise(line.taxPaise);
         const split = splitIntraStateTax(tax);
         return {
           id: line.id,
           description: line.description,
           sacCode: line.sacCode,
-          amountPaise: Number(line.amountPaise),
+          amountPaise: toSafePaise(line.amountPaise),
           taxRateBp: line.taxRateBp,
           taxPaise: tax,
           cgstPaise: split.cgstPaise,

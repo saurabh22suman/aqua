@@ -31,8 +31,8 @@ export async function cancelSessionAction(
     return { kind: "error", code: "session_not_found", message: "Invalid session id." };
   }
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.mark");
-  return cancelSession({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data.sessionId);
+  requirePermission(ctx, "programs.write");
+  return cancelSession(ctx, parsed.data.sessionId);
 }
 
 export async function rescheduleSessionAction(
@@ -43,9 +43,9 @@ export async function rescheduleSessionAction(
     return { kind: "error", code: "invalid", message: "Invalid reschedule request." };
   }
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.mark");
+  requirePermission(ctx, "programs.write");
   return rescheduleSession(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    ctx,
     {
       sessionId: parsed.data.sessionId,
       newSessionDate: parsed.data.newSessionDate,

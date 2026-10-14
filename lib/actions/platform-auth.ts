@@ -2,16 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import {
-  platformLogin,
-  platformVerifyTotp,
-  lookupPlatformSession,
-  platformLogout,
-  PlatformAuthError,
-} from "@/db/platform-auth";
+import { lookupPlatformSession, platformLogout } from "@/db/platform-auth";
 import {
   readPlatformSessionToken,
-  writePlatformSessionCookie,
   clearPlatformSessionCookie,
 } from "@/lib/auth/platform-cookie";
 
@@ -51,34 +44,8 @@ export async function loginPlatformAction(
   if (!parsed.success) {
     return { kind: "error", message: "Enter a valid email and password." };
   }
-  let fullyAuthenticated = false;
-  try {
-    const result = await platformLogin(parsed.data);
-    // Since the 2026-09-11 auth feature, platformLogin can return
-    // fully_authenticated when the env-only operator door is
-    // configured (no TOTP). Otherwise the half-authenticated session
-    // goes to the /ops/verify challenge.
-    await writePlatformSessionCookie(result.sessionToken);
-    fullyAuthenticated = result.kind === "fully_authenticated";
-  } catch (err) {
-    if (err instanceof PlatformAuthError) {
-      if (err.code === "no_totp") {
-        return {
-          kind: "error",
-          message:
-            "This account has no enrolled second factor. Contact another operator to finish enrolment.",
-        };
-      }
-      if (err.code === "user_suspended") {
-        return { kind: "error", message: "This account is suspended." };
-      }
-      return { kind: "error", message: "Wrong email or password." };
-    }
-    throw err;
-  }
-  // redirect() throws a framework signal and must stay outside the
-  // try/catch above.
-  redirect(fullyAuthenticated ? "/ops" : "/ops/verify");
+  // Retained export for old clients; no password/TOTP or env-only door.
+  return { kind: "error", message: "Use your registered phone and WhatsApp code to sign in." };
 }
 
 export type PlatformVerifyResult =
@@ -94,46 +61,8 @@ export async function verifyPlatformTotpAction(
   if (!parsed.success) {
     return { kind: "error", message: "Enter the 6-digit code from your authenticator." };
   }
-  const token = await readPlatformSessionToken();
-  if (!token) {
-    return {
-      kind: "error",
-      message: "Sign-in expired. Enter your email and password again.",
-    };
-  }
-  try {
-    const result = await platformVerifyTotp({
-      sessionToken: token,
-      code: parsed.data.code,
-    });
-    if (result.kind !== "fully_authenticated") {
-      return { kind: "error", message: "Unexpected verify state." };
-    }
-  } catch (err) {
-    if (err instanceof PlatformAuthError) {
-      if (err.code === "invalid_totp") {
-        return { kind: "error", message: "Wrong code. Try again." };
-      }
-      if (err.code === "session_expired" || err.code === "session_invalid") {
-        await clearPlatformSessionCookie();
-        return {
-          kind: "error",
-          message: "Sign-in expired. Enter your email and password again.",
-        };
-      }
-      if (err.code === "no_totp") {
-        return {
-          kind: "error",
-          message: "Second factor is not enrolled on this account.",
-        };
-      }
-      if (err.code === "user_suspended") {
-        return { kind: "error", message: "This account is suspended." };
-      }
-    }
-    throw err;
-  }
-  redirect("/ops");
+  await clearPlatformSessionCookie();
+  redirect("/ops/login");
 }
 
 export type PlatformLogoutResult = { kind: "ok" };
@@ -155,4 +84,26 @@ export async function platformAuthStatusAction(): Promise<PlatformAuthStatus> {
   const token = await readPlatformSessionToken();
   if (!token) return { kind: "not_found" };
   return lookupPlatformSession(token);
+}
+
+// R03 (2026-10-13 role-workflow audit) — the authoritative admin gate
+// for platform mutations. `platform_users.role` is resolved from the
+// validated session token (lookupPlatformSession), never from a
+// client-supplied field; viewers are read-only. Every mutating
+// platform action calls this before any write or enqueue; db/ops-action
+// re-checks the actor row inside opsAction as defence in depth, and
+// scripts/check-ops-actions.ts pins the call site mechanically.
+export type OpsAdminGate =
+  | { kind: "ok"; userId: string; role: "admin" }
+  | { kind: "error"; reason: "unauthenticated" | "forbidden" };
+
+export async function requireOpsAdminAction(): Promise<OpsAdminGate> {
+  const status = await platformAuthStatusAction();
+  if (status.kind !== "authenticated") {
+    return { kind: "error", reason: "unauthenticated" };
+  }
+  if (status.role !== "admin") {
+    return { kind: "error", reason: "forbidden" };
+  }
+  return { kind: "ok", userId: status.userId, role: "admin" };
 }

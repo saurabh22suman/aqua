@@ -1,8 +1,8 @@
-import { LogOut } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
-import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { TenantSignOut } from "@/components/tenant-sign-out";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import { hasPermission } from "@/lib/auth/permission";
 import { formatPhoneIN } from "@/lib/phone";
 import { listMyShiftsAction } from "@/lib/actions/shifts";
 import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
@@ -14,6 +14,8 @@ import { MyShiftsCard } from "@/components/my-shifts-card";
 import { MyAttendanceCard } from "@/components/my-attendance-card";
 import { MyLeaveCard } from "@/components/my-leave-card";
 import { addDays, todayInZone } from "@/lib/time/tz";
+import Link from "next/link";
+import { BookOpen, ChevronRight } from "lucide-react";
 
 // K2 — coach's account surface. Minimum the K2 brief asks for: the
 // user's name and phone, plus a sign-out button. The bottom nav's
@@ -64,15 +66,29 @@ export default async function CoachMePage() {
         requests={myLeave.requests}
       />
 
-      <form action={logoutTenantAction} className="mt-6">
-        <button
-          type="submit"
-          className="flex w-full items-center gap-2 rounded-card border border-line bg-paper px-4 py-3 text-[14px] font-medium text-ink hover:bg-paper/80"
+      {/* R02 — the designated curriculum lead's editing surface entry.
+          Ordinary coaches do not hold levels.write, so this card is
+          invisible to them. */}
+      {hasPermission(ctx, "levels.write") ? (
+        <Link
+          href="/coach/curriculum"
+          className="mt-4 flex min-h-[56px] items-center gap-3 rounded-card border border-line bg-paper px-4 py-3"
+          data-testid="coach-curriculum-link"
         >
-          <LogOut size={16} className="text-ink-3" />
-          Sign out
-        </button>
-      </form>
+          <BookOpen size={17} className="flex-none text-ink-2" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-medium leading-tight">
+              Curriculum framework
+            </span>
+            <span className="mt-0.5 block text-[12px] leading-tight text-ink-3">
+              Levels, skills and the four-band rubric you assess against.
+            </span>
+          </span>
+          <ChevronRight size={17} className="flex-none text-ink-3" aria-hidden="true" />
+        </Link>
+      ) : null}
+
+      <TenantSignOut />
     </main>
   );
 }

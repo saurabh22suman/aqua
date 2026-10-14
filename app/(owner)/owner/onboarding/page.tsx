@@ -1,9 +1,10 @@
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
 import { OnboardingChecklistView } from "@/components/onboarding-checklist";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 export default async function OwnerOnboardingPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "members.read");
   const data = await getOnboardingChecklistAction();
   return <OnboardingChecklistView data={data} />;
 }

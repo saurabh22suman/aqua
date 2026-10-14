@@ -2,13 +2,14 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/ui/BackLink";
 import { AcademyProfileForm } from "@/components/settings/academy-profile-form";
 import { getTenantProfileAction } from "@/lib/actions/tenant-profile";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // PR2-C1 — owner academy profile. The GSTIN here is the one the
 // invoice spine snapshots at issue time; fixing a typo no longer
 // needs a platform operator.
 export default async function AcademySettingsPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const profile = await getTenantProfileAction();
   if (!profile) notFound();
 

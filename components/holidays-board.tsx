@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Trash2 } from "lucide-react";
 import { addHolidayAction, removeHolidayAction } from "@/lib/actions/holidays";
@@ -12,18 +12,32 @@ import { DateField } from "@/components/ui/DateField";
 // R.3 (docs/five-day-work-guide.md) — owner holiday/closure editor.
 // The session generator already skips these dates; this is the surface
 // that lets an owner declare them.
+//
+// P1 (2026-10-13 owner-UI review) — the board used to freeze the
+// initial prop, so a refresh after add/remove could not change the
+// list. It now adopts the server's refreshed collection whenever the
+// server re-renders, after every successful mutation (and after a
+// failure the draft inputs are kept for retry).
 export function HolidaysBoard({
   initialHolidays,
 }: {
   initialHolidays: HolidayRow[];
 }) {
   const router = useRouter();
-  const [holidays] = useState(initialHolidays);
+  const [holidays, setHolidays] = useState(initialHolidays);
   const [name, setName] = useState("");
   const [holidayDate, setHolidayDate] = useState("");
   const [recurringYearly, setRecurringYearly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // The server component re-renders after router.refresh(); adopting
+    // the fresh prop is what makes a successful add/remove visible
+    // without a manual browser reload, and stops a removed row from
+    // being resurrected by local state.
+    setHolidays(initialHolidays);
+  }, [initialHolidays]);
 
   async function submit() {
     if (!name.trim() || !holidayDate) return;
@@ -43,6 +57,10 @@ export function HolidaysBoard({
       setHolidayDate("");
       setRecurringYearly(false);
       router.refresh();
+    } catch {
+      setError(
+        "The holiday was not saved. Check the date and retry — your entry is kept below.",
+      );
     } finally {
       setBusy(false);
     }
@@ -58,6 +76,10 @@ export function HolidaysBoard({
         return;
       }
       router.refresh();
+    } catch {
+      setError(
+        "The removal did not complete. The list was not changed — refresh and retry.",
+      );
     } finally {
       setBusy(false);
     }
@@ -66,14 +88,19 @@ export function HolidaysBoard({
   return (
     <div className="space-y-4">
       <div className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Holiday name"
-          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          data-testid="holiday-name"
-        />
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">
+            Holiday name
+          </span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Founder's Day"
+            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            data-testid="holiday-name"
+          />
+        </label>
         <div>
           <label
             htmlFor="holiday-date"
@@ -89,7 +116,7 @@ export function HolidaysBoard({
             data-testid="holiday-date"
           />
         </div>
-        <label className="flex items-center gap-2 text-[13px] text-ink-2">
+        <label className="flex min-h-[44px] items-center gap-2 text-[13px] text-ink-2">
           <input
             type="checkbox"
             checked={recurringYearly}
@@ -106,7 +133,11 @@ export function HolidaysBoard({
         >
           Add holiday
         </button>
-        {error ? <p className="text-[12px] text-ink-2">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-[12px] text-ink-2">
+            {error}
+          </p>
+        ) : null}
       </div>
 
       {holidays.length === 0 ? (

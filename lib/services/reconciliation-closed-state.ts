@@ -1,8 +1,9 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { cashCounts } from "@/db/schema/cash-counts";
 import { locations } from "@/db/schema/locations";
+import { tenants } from "@/db/schema/tenants";
 import { auditLog } from "@/db/schema/audit";
 import {
   userLabel,
@@ -10,10 +11,18 @@ import {
   userNameFor,
 } from "@/lib/services/payment-receiver";
 import {
+  locationPredicate,
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
-import { REVIEW_THRESHOLD_PAISE } from "@/lib/services/reconciliation";
+import { callerHasPermission } from "@/lib/services/resource-access";
+import {
+  getDailyCollection,
+  REVIEW_THRESHOLD_PAISE,
+  type CashCountRow,
+  type CollectionGroup,
+} from "@/lib/services/reconciliation";
+import { todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // C-34 audit fix, Fix B's other half — split out of
@@ -195,6 +204,92 @@ export async function listCashCountHistory(
       reopenReason: row.reopenReason,
     }));
   });
+}
+
+// M01 (2026-10-09 role/content/permission audit §11) — reception's
+// narrow close read. The counter holds payments.record and closes the
+// day through confirmCashCount, but reports.financial (and the owner
+// collections report) is not a counter grant. This summary returns
+// only: the caller's assigned locations, tenant-local today, the
+// per-method collected totals for each, and each location's live
+// closed state with its counted/variance figure. No by-staff split, no
+// café split, no dues/outstanding totals, no other location.
+//
+// The money math is not duplicated: each location's totals come from
+// getDailyCollection (the same aggregation the owner report reads),
+// then are narrowed into this DTO so report-only fields cannot leak.
+export type ReceptionCloseLocation = {
+  locationId: string;
+  locationName: string;
+  paymentCount: number;
+  totalPaise: number;
+  cashPaise: number;
+  upiPaise: number;
+  bankTransferPaise: number;
+  methods: CollectionGroup[];
+  closed: boolean;
+  cashCount: CashCountRow | null;
+};
+
+export type ReceptionCloseSummary = {
+  onDate: string;
+  locations: ReceptionCloseLocation[];
+};
+
+export async function getReceptionCloseSummary(
+  ctx: ActionCtx,
+): Promise<ReceptionCloseSummary> {
+  const scope = await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerHasPermission(tx, ctx, "payments.record"))) {
+      return { onDate: "", locations: [] as Array<{ id: string; name: string }> };
+    }
+    const [tenantRow] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const access = await resolveLocationAccess(tx, ctx);
+    const conditions = [
+      eq(locations.tenantId, ctx.tenantId),
+      isNull(locations.deletedAt),
+    ];
+    const predicate = locationPredicate(locations.id, access);
+    if (predicate) conditions.push(predicate);
+
+    const rows = await tx
+      .select({ id: locations.id, name: locations.name })
+      .from(locations)
+      .where(and(...conditions))
+      .orderBy(asc(locations.name));
+
+    return {
+      onDate: todayInZone(tenantRow?.timezone ?? "Asia/Kolkata"),
+      locations: rows,
+    };
+  });
+
+  const summaries: ReceptionCloseLocation[] = [];
+  for (const location of scope.locations) {
+    const daily = await getDailyCollection(ctx, {
+      onDate: scope.onDate,
+      locationId: location.id,
+    });
+    const methodTotal = (key: string) =>
+      daily.byMethod.find((method) => method.key === key)?.totalPaise ?? 0;
+    summaries.push({
+      locationId: location.id,
+      locationName: location.name,
+      paymentCount: daily.paymentCount,
+      totalPaise: daily.totalPaise,
+      cashPaise: daily.cashPaise,
+      upiPaise: methodTotal("upi"),
+      bankTransferPaise: methodTotal("bank_transfer"),
+      methods: daily.byMethod,
+      closed: daily.cashCount !== null,
+      cashCount: daily.cashCount,
+    });
+  }
+
+  return { onDate: scope.onDate, locations: summaries };
 }
 
 export type NeedsReviewCashCount = {

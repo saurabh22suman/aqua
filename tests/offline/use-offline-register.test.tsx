@@ -2,6 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { installFakeIndexedDB } from "./fake-indexeddb";
+import { OFFLINE_IDENTITY } from "./fixture-identity";
 
 // Pinned in this file too (tests/offline/use-offline-register-disabled.test.tsx
 // has its own copy) so the retrySync suite can stub navigator.onLine without
@@ -36,7 +37,7 @@ describe("useOfflineRegister — mark() write durability", () => {
     installFakeIndexedDB();
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
-    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true));
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true, OFFLINE_IDENTITY));
 
     // Let mount-time effects (kvGet x2, refreshFromQueue) settle first —
     // real timers, real event loop, nothing to fake here.
@@ -68,13 +69,13 @@ describe("useOfflineRegister — mark() write durability", () => {
   it("mark()'s returned promise does not resolve until the write has actually committed", async () => {
     let committed = false;
     installFakeIndexedDB({
-      onTransactionComplete: () => {
-        committed = true;
+      onTransactionComplete: stores => {
+        if (stores.includes("queue")) committed = true;
       },
     });
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
-    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true));
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true, OFFLINE_IDENTITY));
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -142,7 +143,7 @@ describe("useOfflineRegister — observing settlement without awaiting mark() it
     });
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
-    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true));
+    const { result, unmount } = renderHook(() => useOfflineRegister("session-1", [], {}, true, OFFLINE_IDENTITY));
 
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -193,7 +194,7 @@ describe("useOfflineRegister — retrySync", () => {
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
     const { result, unmount } = renderHook(() =>
-      useOfflineRegister("session-1", [], {}, true),
+      useOfflineRegister("session-1", [], {}, true, OFFLINE_IDENTITY),
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -209,7 +210,7 @@ describe("useOfflineRegister — retrySync", () => {
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
     const { result, unmount } = renderHook(() =>
-      useOfflineRegister("session-1", [], {}, true),
+      useOfflineRegister("session-1", [], {}, true, OFFLINE_IDENTITY),
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -230,7 +231,7 @@ describe("useOfflineRegister — retrySync", () => {
 
     const { useOfflineRegister } = await import("@/lib/hooks/use-offline-register");
     const { result, unmount } = renderHook(() =>
-      useOfflineRegister("session-1", [], {}, true),
+      useOfflineRegister("session-1", [], {}, true, OFFLINE_IDENTITY),
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));

@@ -1,6 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { platformAuditLog } from "./schema/platform-users";
+import { db } from "./client";
+import { withPlatform } from "./scope";
+import { platformAuditLog, platformUsers } from "./schema/platform-users";
 import type { TenantTx } from "./tenant";
 import type { UserId } from "@/lib/ids";
 
@@ -73,11 +76,40 @@ export function currentOpsScope(): OpsScope | null {
 // Wraps a mutation. Validation is strict: an unknown scope or a
 // non-uuid actor is a programming error, not user input, so this
 // throws rather than returning a result union.
+//
+// R03 (2026-10-13 role-workflow audit) — defence in depth: the actor's
+// platform role and status are re-read from platform_users before the
+// mutation callback can run. Actions already gate on the
+// session-validated role (requireOpsAdminAction); this catches any
+// future caller that reaches opsAction without that gate. Viewers,
+// suspended actors and unknown actor ids are refused before any
+// write, enqueue or audit side effect. Internal background callers use
+// recordOpsAudit outside an opsAction context and are unaffected.
+export class OpsForbiddenError extends Error {
+  constructor() {
+    super("forbidden: platform actor is not an active admin");
+    this.name = "OpsForbiddenError";
+  }
+}
+
 export async function opsAction<T>(
   input: OpsActionInput,
   fn: () => Promise<T>,
 ): Promise<T> {
   const parsed = opsActionInput.parse(input);
+  // Platform scope: the role lookup is a platform-table read, so it
+  // declares withPlatform() like every other platform query.
+  const actor = await withPlatform(async () => {
+    const [row] = await db
+      .select({ role: platformUsers.role, status: platformUsers.status })
+      .from(platformUsers)
+      .where(eq(platformUsers.id, parsed.actorId))
+      .limit(1);
+    return row;
+  });
+  if (!actor || actor.role !== "admin" || actor.status !== "active") {
+    throw new OpsForbiddenError();
+  }
   const context: OpsContext = {
     scope: parsed.scope,
     actorId: parsed.actorId as UserId,

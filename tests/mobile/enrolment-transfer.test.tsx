@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe("MemberEnrolmentPanel transfer (R.6)", () => {
   it("moves a member to another batch through the action", async () => {
-    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} />);
+    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} canEnrol canWaitlist />);
 
     fireEvent.click(await screen.findByRole("button", { name: /^transfer$/i }));
     fireEvent.change(screen.getByTestId("transfer-target"), {
@@ -71,7 +71,7 @@ describe("MemberEnrolmentPanel transfer (R.6)", () => {
       message: "Destination batch is full.",
     } as never);
 
-    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} />);
+    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} canEnrol canWaitlist />);
     fireEvent.click(await screen.findByRole("button", { name: /^transfer$/i }));
     fireEvent.change(screen.getByTestId("transfer-target"), {
       target: { value: "b2" },

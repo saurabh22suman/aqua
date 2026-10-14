@@ -27,6 +27,8 @@ import { ACTIVITY_EXPORT_QUEUE } from "@/lib/jobs/activity-export-schedule";
 import { AUDIT_CHECKPOINT_QUEUE } from "@/lib/jobs/audit-checkpoint-schedule";
 import { PLATFORM_METRICS_SNAPSHOT_QUEUE } from "@/lib/jobs/platform-metrics-snapshot-schedule";
 import { asTenantId, type TenantId } from "@/lib/ids";
+import { WHATSAPP_NOTIFICATIONS_QUEUE } from "@/lib/jobs/whatsapp-notifications-schedule";
+import { runWhatsAppNotificationsJob } from "@/lib/jobs/whatsapp-notifications-job";
 
 // Connects as app_user (via db/queue.ts's drizzle-backed adapter) —
 // never the privileged migration role. No tenant enumeration happens
@@ -70,6 +72,7 @@ const HANDLERS: ReadonlyArray<{
   queue: string;
   run: (tenantId: TenantId) => Promise<void>;
 }> = [
+  { queue: WHATSAPP_NOTIFICATIONS_QUEUE, run: runWhatsAppNotificationsJob },
   { queue: SESSIONS_GENERATE_QUEUE, run: runSessionsGenerateJob },
   { queue: ABSENCE_ALERTS_QUEUE, run: runAbsenceAlertsJob },
   { queue: SUBSCRIPTIONS_EXPIRE_QUEUE, run: runSubscriptionsExpireJob },

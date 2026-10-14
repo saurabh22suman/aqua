@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { reportPeriodSchema } from "@/lib/services/owner-reports";
@@ -7,8 +8,10 @@ import {
   feesInvoiceFilterInput,
   feesTransactionsInput,
   getFeesOverview,
+  listDeskDues,
   listHubInvoices,
   listHubTransactions,
+  type DeskDueRow,
   type FeesOverview,
   type HubInvoiceRow,
   type HubTransactionRow,
@@ -20,7 +23,9 @@ import {
 // dues lists ride invoices.read so the desk roles that raise and
 // collect see exactly what they can act on.
 
-const overviewInput = reportPeriodSchema;
+const overviewInput = reportPeriodSchema.extend({
+  locationId: z.string().uuid().optional(),
+});
 
 export async function getFeesOverviewAction(raw: unknown): Promise<FeesOverview> {
   const parsed = overviewInput.safeParse(raw);
@@ -41,7 +46,7 @@ export async function getFeesOverviewAction(raw: unknown): Promise<FeesOverview>
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.financial");
-  return getFeesOverview(ctx, parsed.data);
+  return getFeesOverview(ctx, parsed.data, { locationId: parsed.data.locationId });
 }
 
 export async function listHubInvoicesAction(
@@ -62,4 +67,13 @@ export async function listHubTransactionsAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "payments.read");
   return listHubTransactions(ctx, parsed.data);
+}
+
+// M02 — the reception desk's dues call list, read-only. Same grant the
+// desk already uses to see invoices; the service narrows to the
+// caller's allowed locations and never returns report aggregates.
+export async function listDeskDuesAction(): Promise<DeskDueRow[]> {
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "invoices.read");
+  return listDeskDues(ctx);
 }

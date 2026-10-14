@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { requireDefaultCtx } from "@/lib/auth/context";
+import { NotFoundError, requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema";
@@ -18,6 +18,10 @@ import {
 } from "@/lib/services/register";
 import { coachScheduleSchema, markAttendanceSchema, sessionIdSchema } from "@/lib/schemas";
 import { emitActivityEvents } from "@/lib/events/emit";
+import { isCoachLikeRoleKey } from "@/lib/services/resource-access";
+import { offlineSessionState } from "@/lib/offline/server-session";
+import type { OfflineIdentity } from "@/lib/offline/identity";
+import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 
 const memberIdSchema = z.string().uuid();
 import type { CoachRosterRow, CoachScheduleRow } from "@/lib/services/coach-schedule";
@@ -71,7 +75,7 @@ export async function getCoachHomeAction(): Promise<{
 }> {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "attendance.read");
-  if (ctx.roleKey !== "coach") {
+  if (!isCoachLikeRoleKey(ctx.roleKey)) {
     // Reception and other staff see only today; the home-page empty
     // state is a coach-only thing.
     const today = await getTodayAction();
@@ -167,6 +171,7 @@ export async function getRosterAction(
   startsAt: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
+  offlineIdentity?: OfflineIdentity | null;
 } | null> {
   const sessionId = sessionIdSchema.parse(rawSessionId);
   const ctx = await requireDefaultCtx();
@@ -188,6 +193,7 @@ export async function getRosterAction(
     startsAt: roster.startsAt.toISOString(),
     rows: roster.rows,
     offlineSyncEnabled: roster.offlineSyncEnabled,
+    offlineIdentity: roster.offlineSyncEnabled && OFFLINE_SYNC_ENABLED ? (await offlineSessionState()).identity : null,
   };
 }
 
@@ -196,10 +202,20 @@ export async function markAttendanceSessionAction(raw: {
   memberId: string;
   status: "present" | "absent" | "late";
   clientId: string;
+  offlineScope?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const input = markAttendanceSchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "attendance.mark");
+  // R01 — Owner/Admin are read-only over student attendance even if a
+  // stale or tenant-edited grant survives (the service refuses too;
+  // this returns the truthful counter message instead of a not-found).
+  if (ctx.roleKey === "owner" || ctx.roleKey === "admin") {
+    return { ok: false, error: "Student attendance is recorded by the coach or the front desk." };
+  }
+  if (input.offlineScope && (await offlineSessionState()).identity?.scope !== input.offlineScope) {
+    return { ok: false, error: "Your offline session changed. Sign in again before syncing." };
+  }
 
   const visible = await sessionVisibleToCaller(
     { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
@@ -209,7 +225,11 @@ export async function markAttendanceSessionAction(raw: {
     return { ok: false, error: "Session not found." };
   }
 
-  await markAttendance(ctx, input);
+  try { await markAttendance(ctx, input); }
+  catch (error) {
+    if (error instanceof NotFoundError) return { ok: false, error: "Session or eligible member not found." };
+    throw error;
+  }
 
   // E-05 — emit after the mutation transaction has committed, never
   // inside it (architecture.md §8.11). Properties carry opaque ids and
@@ -238,7 +258,11 @@ export async function markAttendanceSessionAction(raw: {
       context: {},
       source: "web",
     },
-  ]);
+  ]).catch(error => {
+    // The mark and its authoritative audit have committed. An analytics
+    // outage must not report a saved mark as failed and trigger blind retries.
+    console.error("[attendance] activity enqueue failed", { tenantId: ctx.tenantId, requestId: ctx.requestId, error });
+  });
 
   return { ok: true };
 }

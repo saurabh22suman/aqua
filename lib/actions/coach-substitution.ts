@@ -26,8 +26,9 @@ export async function substituteCoachAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "programs.write");
-  return substituteCoach(
-    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
-    parsed.data,
-  );
+  // A01 sibling — the complete authenticated ctx travels with the
+  // request: the service resolves the session-location boundary from
+  // allLocations/locationIds. Narrowing it re-opened the cross-site
+  // substitution gap the lifecycle guards closed.
+  return substituteCoach(ctx, parsed.data);
 }

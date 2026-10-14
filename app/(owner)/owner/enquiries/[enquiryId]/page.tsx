@@ -4,7 +4,7 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
@@ -14,7 +14,8 @@ export default async function EnquiryDetailPage({
 }: {
   params: Promise<{ enquiryId: string }>;
 }) {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "enquiries.read");
   const { enquiryId } = await params;
   requireUuidParam(enquiryId);
   const [enquiry, locations, batches, terminology] = await Promise.all([

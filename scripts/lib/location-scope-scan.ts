@@ -19,24 +19,15 @@ const LOCATION_TABLE_RE =
   /\.from\((members|batches|sessions|attendance)\)|from\s+(members|batches|sessions|attendance)\b/;
 
 const HELPER_MARKER = "resolveLocationAccess(";
+const RESOURCE_HELPER_RE = /\b(?:resolveLocationAccess|visibleMember|visibleBatch)\s*\(/;
 
 export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
   "lib/services/dashboard.ts":
     "owner dashboard aggregates; the owner surface is never location-restricted (access applies to staff)",
   "lib/services/owner-reports.ts":
     "owner reports; the owner surface is never location-restricted",
-  "lib/services/coach-member.ts":
-    "coach member detail is assignment-scoped (members.read.assigned), which is narrower than location",
-  "lib/services/attendance-history.ts":
-    "follow-up: reached through a location-checked member detail or coach surface; scope the member/batch history queries when the receptionist surface needs it",
-  "lib/services/enrolment.ts":
-    "member enrolment history, reached through a location-checked member detail",
-  "lib/services/transfer.ts":
-    "follow-up: batch transfer is reached through a location-checked member detail; the target batch needs its own check",
   "lib/services/makeup.ts":
     "follow-up: makeup credits are reached through location-checked member/batch surfaces",
-  "lib/services/member-status.ts":
-    "member status transitions, reached through a location-checked member detail",
   "lib/services/facility-optins.ts":
     "member facility opt-ins, reached through a location-checked member detail",
   "lib/services/session-lifecycle.ts":
@@ -84,7 +75,7 @@ export function scanLocationScope(
   if (!LOCATION_TABLE_RE.test(stripped)) {
     return { violation: false, reason: null };
   }
-  if (stripped.includes(HELPER_MARKER)) {
+  if (RESOURCE_HELPER_RE.test(stripped)) {
     return { violation: false, reason: null };
   }
   const allowlisted = LOCATION_SCOPE_ALLOWLIST[filePath];

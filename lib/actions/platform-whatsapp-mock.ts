@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { opsAction } from "@/db/ops-action";
-import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
 import { mockMessagingEnabled } from "@/lib/messaging/provider";
 import { createMockProvider } from "@/lib/messaging/mock-provider";
 import { sendMessage } from "@/lib/messaging/send";
@@ -60,9 +60,15 @@ export async function sendMockMessageAction(
     };
   }
 
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
-    return { ok: false, error: "Your session has expired. Sign in again." };
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
+    return {
+      ok: false,
+      error:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
+    };
   }
   const guard = mockGuard();
   if (guard) return { ok: false, error: guard };
@@ -102,9 +108,15 @@ export async function injectInboundMessageAction(
     };
   }
 
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") {
-    return { ok: false, error: "Your session has expired. Sign in again." };
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
+    return {
+      ok: false,
+      error:
+        status.reason === "forbidden"
+          ? "Your platform account has read-only access."
+          : "Your session has expired. Sign in again.",
+    };
   }
   const guard = mockGuard();
   if (guard) return { ok: false, error: guard };

@@ -54,6 +54,7 @@ beforeAll(async () => {
   markAttendance = registerModule.markAttendance;
 
   admin = new Pool({ connectionString: adminUri });
+  await admin.query("insert into users(id,phone) values($1,$2)", [userId, `+9195${String(Date.now()).slice(-8)}`]);
   await admin.query(
     "insert into tenants (id, slug, name, status) values ($1, $2, 'O-02 Service', 'active')",
     [tenantId, `o02-service-${RUN}`],
@@ -123,6 +124,9 @@ describe("O-02 forward path", () => {
       [tenantId, locatedBatchId],
     );
     const sessionId = rows[0].id;
+    // The location propagation case uses a legitimate effective roster pair.
+    await admin.query(`insert into enrolments(id,tenant_id,member_id,batch_id,enrolled_on)
+      select gen_random_uuid(),$1,$2,batch_id,session_date from sessions where id=$3`, [tenantId, memberId, sessionId]);
 
     await markAttendance(
       { tenantId, userId },

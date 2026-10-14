@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { StaffCreateForm } from "@/components/staff-create-form";
 import { getTerminologyAction } from "@/lib/actions/terminology";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // Phase 3.5 — staff create form. Single primary action, two
 // adjacent surface patterns: "new person" or "existing person
@@ -17,7 +17,8 @@ import { requireOwner } from "@/lib/auth/surface-guard";
 // inline so the operator doesn't need to back out to navigate
 // between them.
 export default async function StaffCreatePage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "staff.write");
   // L3 audit — the staff-type option labelled "Coach" routes
   // through the closed-key `coach` resolver so a gym / multi-sport
   // tenant renders "Trainer", a dance / martial-arts tenant

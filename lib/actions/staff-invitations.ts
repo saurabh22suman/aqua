@@ -6,11 +6,13 @@ import { requirePermission } from "@/lib/auth/permission";
 import {
   inviteStaff,
   listInvitations,
+  reactivateInvitation,
   revokeInvitation,
   resendInvitation,
   STAFF_INVITABLE_ROLES,
   type InviteStaffResult,
   type ListInvitationsRow,
+  type ReactivateStaffResult,
   type RevokeStaffResult,
 } from "@/lib/services/staff-invitations";
 
@@ -93,7 +95,15 @@ export async function resendInvitationAction(
   membershipId: unknown,
 ): Promise<
   | { kind: "ok"; delivered: false }
-  | { kind: "error"; code: "membership_not_found" | "not_invited" | "invalid"; message: string }
+  | {
+      kind: "error";
+      code:
+        | "membership_not_found"
+        | "not_invited"
+        | "invalid"
+        | "forbidden_target";
+      message: string;
+    }
 > {
   const parsed = z.object({ membershipId: membershipIdSchema }).safeParse({ membershipId });
   if (!parsed.success) {
@@ -101,8 +111,24 @@ export async function resendInvitationAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.invite");
-  return resendInvitation(
-    { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
-    parsed.data,
-  );
+  // A06 sibling — the complete authenticated ctx is the issuer the
+  // service's trust gate resolves; narrowing to {tenantId, userId,
+  // requestId} would drop the role/permission rank it checks.
+  return resendInvitation(ctx, parsed.data);
+}
+
+// R09 (2026-10-13 role-workflow audit) — reactivate a revoked
+// membership. Same management gate as revoke/resend; the service
+// applies the issuer-target trust gate, rotates the credential epoch,
+// deletes old sessions and issues a fresh single-use invite link.
+export async function reactivateInvitationAction(
+  membershipId: unknown,
+): Promise<ReactivateStaffResult> {
+  const parsed = z.object({ membershipId: membershipIdSchema }).safeParse({ membershipId });
+  if (!parsed.success) {
+    return { kind: "error", code: "membership_not_found", message: "Invalid membership id." };
+  }
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "staff.invite");
+  return reactivateInvitation(ctx, parsed.data);
 }

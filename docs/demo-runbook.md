@@ -198,10 +198,15 @@ picks) and the "different accent per tenant" detail.
     Masters waitlist (the batch is near-empty).
   - **R.7 makeup credit** — `Aaradhya Iyer` (AWS-002) holds one
     makeup credit against a 5-days-ago Morning Squad session.
-  - **O-02 event locations** — every seeded session and attendance
-    mark carries its batch's location. All demo data sits at the
-    single primary location, so the per-site view and the
-    consolidated view agree by construction.
+  - **O-02 event locations** — every seeded batch carries the
+    primary location and every seeded session and attendance mark
+    inherits it, so the owner facility switcher (Worli Main / Bandra
+    Turf / All facilities) scopes the dashboard, fees, programs and
+    reports exactly like a production tenant. Swim data sits at
+    **Worli Main**; **Bandra Turf** stays empty on purpose, so the
+    operator can show the filtered view going to zero and back.
+    Re-running the seed backfills batches/sessions/attendance from
+    older demo databases that predate batch locations.
 - Enquiries (Aqua Worli): 8 rows spanning `new`, `contacted`,
   `trial_scheduled`, `trial_completed`, `converted`, `lost`. The
   operator can move a `new` enquiry to `contacted`, add a

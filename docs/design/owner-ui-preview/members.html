@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Members — Aqua owner UI preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+</head>
+<body data-page="members" data-states="populated,empty,loading,failed,limited">
+<div class="preview-bar" id="preview-bar"></div>
+<div class="shell">
+  <aside class="sidebar" id="shell-sidebar" aria-label="Owner navigation"></aside>
+  <div class="shell-main">
+    <header class="topbar" id="shell-topbar"></header>
+    <header class="mobile-head" id="shell-mobile-head"></header>
+
+    <main class="page">
+      <div class="page-head">
+        <div>
+          <h1>Swimmers</h1>
+          <p class="meta">Worli Main · all statuses</p>
+        </div>
+        <div class="ph-actions st-write">
+          <button type="button" class="btn btn-secondary" data-toast="Preview only — CSV import is not part of this preview stage.">
+            <img src="/icon.svg?name=upload&size=16&color=%233C534F" alt="" aria-hidden="true">Import
+          </button>
+          <a class="btn btn-primary" href="/member-new">
+            <img src="/icon.svg?name=user-plus&size=16&color=%23FFFFFF" alt="" aria-hidden="true">Add swimmer
+          </a>
+        </div>
+      </div>
+
+      <div class="failed-box st-limited" style="margin-top:14px">
+        <img src="/icon.svg?name=info&size=18&color=%233C534F" alt="" aria-hidden="true">
+        <div class="fb-text">
+          <p class="fb-title">Read-only access</p>
+          <p class="fb-detail">You can view swimmers but not add or import them. Ask an owner if a record needs changing.</p>
+        </div>
+      </div>
+
+      <div class="toolbar st-pop" style="margin-top:16px">
+        <div class="search">
+          <img src="/icon.svg?name=search&size=16&color=%235B6F6B" alt="" aria-hidden="true">
+          <label class="visually-hidden" for="member-search">Search swimmers by name or phone</label>
+          <input class="input" type="search" id="member-search" placeholder="Search by name or phone">
+        </div>
+        <div class="field">
+          <label class="field-label" for="member-status">Status</label>
+          <select class="input" id="member-status">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="trial">Trial</option>
+            <option value="paused">Paused</option>
+            <option value="lapsed">Lapsed</option>
+            <option value="left">Left</option>
+          </select>
+        </div>
+      </div>
+      <div class="filter-chips st-pop" id="filter-chips" hidden></div>
+
+      <!-- populated working table (desktop) / divided rows (mobile) -->
+      <div class="card st-pop" style="margin-top:14px">
+        <div class="table-wrap desktop-only">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Swimmer</th>
+                <th scope="col">Phone</th>
+                <th scope="col">Joined</th>
+                <th scope="col" class="num">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr data-member-row data-member-name="Aaradhya Iyer" data-member-phone="919820004411" data-member-status="active">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-002&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Aaradhya Iyer</span>
+                      <span class="sub-line">AWS-002 · Worli Main · minor</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 98200 04411</td>
+                <td>10 Oct 2026</td>
+                <td class="num"><span class="pill pill-good">Active</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Ayaan Shaikh" data-member-phone="919833021187" data-member-status="active">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-004&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Ayaan Shaikh</span>
+                      <span class="sub-line">AWS-004 · Worli Main</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 98330 21187</td>
+                <td>28 Sep 2026</td>
+                <td class="num"><span class="pill pill-good">Active</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Meera Nair" data-member-phone="919819555210" data-member-status="paused">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-011&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Meera Nair</span>
+                      <span class="sub-line">AWS-011 · Worli Main</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 98195 55210</td>
+                <td>02 Aug 2026</td>
+                <td class="num"><span class="pill pill-warn">Paused</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Rohan Patel" data-member-phone="919821190344" data-member-status="active">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-017&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Rohan Patel</span>
+                      <span class="sub-line">AWS-017 · Worli Main</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 98211 90344</td>
+                <td>14 Jun 2026</td>
+                <td class="num"><span class="pill pill-good">Active</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Ishita Rao" data-member-phone="919967033218" data-member-status="lapsed">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-021&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Ishita Rao</span>
+                      <span class="sub-line">AWS-021 · Worli Main</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 99670 33218</td>
+                <td>03 Mar 2026</td>
+                <td class="num"><span class="pill pill-late">Lapsed</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Kabir Menon" data-member-phone="919004071126" data-member-status="active">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-028&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Kabir Menon</span>
+                      <span class="sub-line">AWS-028 · Worli Main · minor</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 90040 71126</td>
+                <td>19 Sep 2026</td>
+                <td class="num"><span class="pill pill-good">Active</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Tara Ghosh" data-member-phone="919867055829" data-member-status="trial">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-031&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Tara Ghosh</span>
+                      <span class="sub-line">AWS-031 · Worli Main</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 98670 55829</td>
+                <td>05 Oct 2026</td>
+                <td class="num"><span class="pill pill-warn">Trial</span></td>
+              </tr>
+              <tr data-member-row data-member-name="Vivaan Joshi" data-member-phone="919820941763" data-member-status="left">
+                <td>
+                  <a class="row-link" href="/member">
+                    <img class="avatar" src="/avatar.svg?seed=member-aws-035&size=36" alt="" width="36" height="36" aria-hidden="true">
+                    <span>
+                      <span class="item-name">Vivaan Joshi</span>
+                      <span class="sub-line">AWS-035 · Worli Main</span>
+                    </span>
+                  </a>
+                </td>
+                <td>+91 98209 41763</td>
+                <td>21 Jan 2026</td>
+                <td class="num"><span class="pill pill-neutral">Left</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="mobile-list mobile-only">
+          <li data-member-row data-member-name="Aaradhya Iyer" data-member-phone="919820004411" data-member-status="active">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-002&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Aaradhya Iyer <span class="meta">(minor)</span></span>
+                <span class="pill pill-good">Active</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-002 · Worli Main · +91 98200 04411</span>
+              <span class="item-quiet" style="display:block">Joined 10 Oct 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Ayaan Shaikh" data-member-phone="919833021187" data-member-status="active">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-004&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Ayaan Shaikh</span>
+                <span class="pill pill-good">Active</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-004 · Worli Main · +91 98330 21187</span>
+              <span class="item-quiet" style="display:block">Joined 28 Sep 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Meera Nair" data-member-phone="919819555210" data-member-status="paused">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-011&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Meera Nair</span>
+                <span class="pill pill-warn">Paused</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-011 · Worli Main · +91 98195 55210</span>
+              <span class="item-quiet" style="display:block">Joined 02 Aug 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Rohan Patel" data-member-phone="919821190344" data-member-status="active">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-017&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Rohan Patel</span>
+                <span class="pill pill-good">Active</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-017 · Worli Main · +91 98211 90344</span>
+              <span class="item-quiet" style="display:block">Joined 14 Jun 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Ishita Rao" data-member-phone="919967033218" data-member-status="lapsed">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-021&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Ishita Rao</span>
+                <span class="pill pill-late">Lapsed</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-021 · Worli Main · +91 99670 33218</span>
+              <span class="item-quiet" style="display:block">Joined 03 Mar 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Kabir Menon" data-member-phone="919004071126" data-member-status="active">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-028&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Kabir Menon <span class="meta">(minor)</span></span>
+                <span class="pill pill-good">Active</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-028 · Worli Main · +91 90040 71126</span>
+              <span class="item-quiet" style="display:block">Joined 19 Sep 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Tara Ghosh" data-member-phone="919867055829" data-member-status="trial">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-031&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Tara Ghosh</span>
+                <span class="pill pill-warn">Trial</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-031 · Worli Main · +91 98670 55829</span>
+              <span class="item-quiet" style="display:block">Joined 05 Oct 2026</span>
+            </a>
+          </li>
+          <li data-member-row data-member-name="Vivaan Joshi" data-member-phone="919820941763" data-member-status="left">
+            <a class="item" href="/member">
+              <span class="item-top">
+                <img class="avatar" src="/avatar.svg?seed=member-aws-035&size=40" alt="" width="40" height="40" aria-hidden="true">
+                <span class="item-name">Vivaan Joshi</span>
+                <span class="pill pill-neutral">Left</span>
+              </span>
+              <span class="item-sub" style="display:block">AWS-035 · Worli Main · +91 98209 41763</span>
+              <span class="item-quiet" style="display:block">Joined 21 Jan 2026</span>
+            </a>
+          </li>
+        </ul>
+
+        <div class="empty-state" id="members-filter-empty" hidden>
+          <h3>No swimmers match</h3>
+          <p>Try a different name, phone or status.</p>
+          <button type="button" class="btn btn-secondary" id="clear-filters">Clear filters</button>
+        </div>
+      </div>
+
+      <!-- true-empty state (new academy) -->
+      <div class="card st-empty">
+        <div class="empty-state">
+          <h3>No swimmers yet</h3>
+          <p>Import from a spreadsheet, or add your first swimmer.</p>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+            <button type="button" class="btn btn-secondary" data-toast="Preview only — CSV import is not part of this preview stage.">Import swimmers</button>
+            <a class="btn btn-primary" href="/member-new">Add swimmer</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- loading -->
+      <div class="card st-loading">
+        <div class="card-body" aria-hidden="true">
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+          <div class="sk sk-row"></div>
+        </div>
+      </div>
+
+      <!-- failed read -->
+      <div class="st-failed" style="margin-top:14px">
+        <div class="failed-box">
+          <img src="/icon.svg?name=triangle-alert&size=18&color=%23B2332B" alt="" aria-hidden="true">
+          <div class="fb-text">
+            <p class="fb-title">Could not load the swimmer list</p>
+            <p class="fb-detail">No rows are shown — this is a failed read, not an empty directory.</p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" data-retry>Retry</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<nav class="bottom-nav" id="shell-bottom-nav" aria-label="Primary"></nav>
+</body>
+</html>

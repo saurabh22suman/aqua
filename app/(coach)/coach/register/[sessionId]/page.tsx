@@ -57,6 +57,7 @@ export default async function RegisterPage({
           sessionId={sessionId}
           rows={data.rows}
           offlineSyncEnabled={data.offlineSyncEnabled && OFFLINE_SYNC_ENABLED}
+          offlineIdentity={data.offlineIdentity}
           terminology={terminology}
         />
       </div>

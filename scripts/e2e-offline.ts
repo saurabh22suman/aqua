@@ -66,7 +66,7 @@ async function main() {
   // environment-sensitive; an explicit BETTER_AUTH_URL is the
   // shape that survives both IPv4 and IPv6 dev environments.
   const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
     detached: true,
     env: {
       ...process.env,
@@ -74,6 +74,8 @@ async function main() {
       BETTER_AUTH_URL: BASE,
     },
   });
+  server.stdout?.on("data", data => process.stdout.write(data));
+  server.stderr?.on("data", data => process.stderr.write(data));
 
   let fixture: OfflineFixture | undefined;
   const browser = await chromium.launch();
@@ -117,6 +119,15 @@ async function main() {
       await page.waitForTimeout(1500);
       const afterReload = await domStatuses(page).catch(() => ({}) as Record<string, string>);
       const markedAfterReload = Object.values(afterReload).filter((s) => s === "present").length;
+      if (markedAfterReload !== MEMBER_COUNT) {
+        console.error("Offline reload diagnostics", JSON.stringify(await page.evaluate(async () => ({
+          body: document.body.innerText, online: navigator.onLine,
+          caches: await Promise.all((await caches.keys()).map(async name => {
+            const cache = await caches.open(name), keys = await cache.keys();
+            return { name, urls: keys.map(key => key.url), meta: name === "aqua-offline-state-v2" && keys[0] ? await (await cache.match(keys[0]))?.json() : undefined };
+          })),
+        })), null, 2));
+      }
 
       if (markedBeforeReload === MEMBER_COUNT && markedAfterReload === MEMBER_COUNT) {
         record("VERIFY 1: 16 marks survive hard refresh while offline", "PASS", `${markedAfterReload}/${MEMBER_COUNT} present after reload`);
@@ -161,6 +172,7 @@ async function main() {
 
       const beforeCount = (await attendanceRows(admin, fixture.sessionId)).length;
       const replayMemberId = fixture.memberIds[0];
+      const replayIdentity = await page.evaluate(async () => (await (await fetch("/api/offline/session")).json()).identity);
 
       // Inject a duplicate of an already-synced entry directly into
       // IndexedDB (same shape enqueueMark would produce) and flush twice.
@@ -171,7 +183,7 @@ async function main() {
       // exist. A nested `function openDb() {...}` reproduced exactly this
       // (ReferenceError: __name is not defined); inline Promises avoid it.
       await page.evaluate(
-        ({ sessionId, memberId }) => {
+        ({ sessionId, memberId, identity }) => {
           // Same schema as lib/offline/idb.ts's open(). Racing the app's
           // own IDB init (it opens on mount, in a useEffect) with a raw
           // open that has no onupgradeneeded handler is exactly how you
@@ -180,7 +192,7 @@ async function main() {
           // Handling the upgrade here too removes the race regardless of
           // who opens first.
           const db: Promise<IDBDatabase> = new Promise((resolve, reject) => {
-            const req = indexedDB.open("aqua-offline", 1);
+            const req = indexedDB.open("aqua-offline", 2);
             req.onupgradeneeded = () => {
               const opened = req.result;
               if (!opened.objectStoreNames.contains("queue")) {
@@ -194,6 +206,7 @@ async function main() {
             req.onerror = () => reject(req.error);
           });
           const entry = {
+            ...identity,
             clientId: crypto.randomUUID(),
             sessionId,
             memberId,
@@ -214,7 +227,7 @@ async function main() {
               }),
           );
         },
-        { sessionId: fixture.sessionId, memberId: replayMemberId },
+        { sessionId: fixture.sessionId, memberId: replayMemberId, identity: replayIdentity },
       );
       await page.evaluate(() => window.__flushQueue?.());
       await page.waitForTimeout(1000);

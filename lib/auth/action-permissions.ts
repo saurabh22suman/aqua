@@ -26,13 +26,23 @@ export type PermissionActionMap = Readonly<Record<string, string>>;
 export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // Members
   listMembersAction: "members.read",
+  // getMemberDetailAction's documented key is members.read; the
+  // implementation ALSO refuses the full 360 unless the caller holds
+  // attendance.read or members.write (R07, 2026-10-13 role-workflow
+  // audit — the Accountant's payer-only projection depends on that
+  // narrowing). The map records the primary key; the runtime narrowing
+  // is pinned by tests/review-accountant-projection.test.ts.
   getMemberDetailAction: "members.read",
-  searchPersonsAction: "members.read",
+  getMemberPayerAction: "invoices.read",
+  // R07 — guardian lookup is a member-editing flow.
+  searchPersonsAction: "members.write",
   getMemberIdCardContextAction: "members.read",
   listLocationsAction: "members.read",
   createMemberAction: "members.write",
   updateMemberAction: "members.write",
   transitionMemberStatusAction: "members.write",
+  getNotificationDestinationsAction: "members.write",
+  saveNotificationDestinationsAction: "members.write",
   // Wave 2 — member facility opt-ins.
   listOptedFacilitiesAction: "members.read",
   addMemberFacilityAction: "members.write",
@@ -78,9 +88,11 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   convertEnquiryAction: "enquiries.write",
 
   // Sessions / scheduling
-  listUpcomingSessionsAction: "attendance.read",
-  cancelSessionAction: "attendance.mark",
-  rescheduleSessionAction: "attendance.mark",
+  // R06 — management read: the upcoming-sessions list gates on the
+  // scheduling-management grant, not attendance.read.
+  listUpcomingSessionsAction: "programs.write",
+  cancelSessionAction: "programs.write",
+  rescheduleSessionAction: "programs.write",
   substituteCoachAction: "programs.write",
   checkCoachConflictsAction: "programs.read",
 
@@ -107,7 +119,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   promoteHeadAction: "enquiries.write",
 
   // Makeup credits
-  grantMakeupCreditAction: "attendance.mark",
+  grantMakeupCreditAction: "programs.write",
   redeemMakeupCreditAction: "attendance.mark",
 
   // Reports — the audit's "operator turning Reports off, CSV still
@@ -129,7 +141,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   globalSearchAction: "members.read",
 
   // Owner dashboard
-  getOwnerDashboardAction: "reports.operational",
+  getOwnerDashboardAction: "dashboard.view",
   getOnboardingChecklistAction: "members.read",
 
   // Staff
@@ -139,6 +151,9 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   inviteStaffAction: "staff.invite",
   revokeInvitationAction: "staff.invite",
   resendInvitationAction: "staff.invite",
+  // R09 (2026-10-13 role-workflow audit) — reactivation is the same
+  // management credential duty as invite/revoke.
+  reactivateInvitationAction: "staff.invite",
   issueLoginLinkAction: "staff.invite",
 
   // V-23 — shifts and the weekly roster. Building/publishing rides
@@ -199,6 +214,11 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   setOwnerConfigValueAction: "settings.manage",
   requestConfigChangeAction: "settings.manage",
 
+  // R02 (2026-10-13 role-workflow audit) — curriculum-lead
+  // designation is management authority; ladder edits ride
+  // levels.write (see V-09 above).
+  setStaffCurriculumLeadAction: "settings.manage",
+
   // C-35 — payment QRs. Reception reads for the collect screen;
   // owner/admin manage.
   listPaymentQrsAction: "settings.read",
@@ -232,13 +252,14 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   removeSubUnitAction: "settings.manage",
 
   // C-32/C-33 — invoices and counter payments. Reception holds
-  // invoices.read + payments.record; accountant/owner/admin hold the
-  // write set; the daily collection report is accountant-grade
-  // (reports.financial).
+  // invoices.read + payments.record and may issue (invoices.write);
+  // voiding a live receivable is management authority — settings.manage
+  // (owner/admin only, R01). The daily collection report is
+  // accountant-grade (reports.financial).
   listMemberInvoicesAction: "invoices.read",
   getInvoiceAction: "invoices.read",
   createInvoiceAction: "invoices.write",
-  voidInvoiceAction: "invoices.write",
+  voidInvoiceAction: "settings.manage",
   listInvoicePaymentsAction: "invoices.read",
   recordPaymentAction: "payments.record",
   // PR2-C8 — reversals are a separate duty: recording is counter work
@@ -247,6 +268,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   listPaymentReversalsAction: "payments.read",
   getDailyCollectionAction: "reports.financial",
   confirmCashCountAction: "payments.record",
+  getReceptionCloseSummaryAction: "payments.record",
   // Reopening a closed count is the escape hatch a dishonest recount
   // would want — owner/admin-only, same gate as an over-₹2,000 close.
   reopenCashCountAction: "settings.manage",
@@ -280,6 +302,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getFeesOverviewAction: "reports.financial",
   listHubInvoicesAction: "invoices.read",
   listHubTransactionsAction: "payments.read",
+  listDeskDuesAction: "invoices.read",
 
   // U-03 — member notes. Staff-internal: read with the member,
   // author with members.write.
@@ -327,11 +350,12 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getFacilityUtilisationAction: "reports.operational",
 
   // V-09 — skill ladder editor. Reading the ladder is the same
-  // levels.read the coach progress view uses; editing is a settings
-  // change (owner/admin carry settings.manage).
+  // levels.read the coach progress view uses; editing is the delegated
+  // curriculum capability (R02, 2026-10-13 role-workflow audit),
+  // deliberately separate from settings.manage.
   listSkillLaddersAction: "levels.read",
-  updateSkillLevelAction: "settings.manage",
-  updateSkillNodeAction: "settings.manage",
+  updateSkillLevelAction: "levels.write",
+  updateSkillNodeAction: "levels.write",
 
   // V-10 — assessments from the register. The progress view reads with
   // levels.read; recording a band is the assess gesture the coach role

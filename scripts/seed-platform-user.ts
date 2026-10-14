@@ -11,6 +11,7 @@ import { Pool } from "pg";
 import { randomBytes } from "node:crypto";
 import qrcode from "qrcode";
 import { env } from "@/lib/env";
+import { normaliseToE164 } from "@/lib/phone";
 import {
   provisionPlatformUser,
   markTotpEnrolled,
@@ -64,6 +65,7 @@ async function main() {
   const args = parseArgs();
   const email = args.email ?? "ops@aqua.local";
   const name = args.name ?? "Default Operator";
+  const phone = normaliseToE164(args.phone ?? "+919000000099");
   const password = args.password ?? randomBytes(12).toString("base64url");
 
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
@@ -74,6 +76,7 @@ async function main() {
     const { id, totpSecret } = await provisionPlatformUser({
       email,
       name,
+      phone,
       password,
       role: "admin",
     });
@@ -96,6 +99,8 @@ async function main() {
     console.log("=== Platform operator seeded ===");
     console.log(`id           ${id}`);
     console.log(`email        ${email}`);
+    console.log(`phone        ${phone} (sign in with a WhatsApp OTP; view it in the local mock)`);
+    console.log("The password/TOTP metadata below is retained for legacy local tooling; the web login uses phone + WhatsApp OTP.");
     console.log(`password     ${password}`);
     console.log(`totp secret  ${totpSecret}`);
     console.log(`otpauth URI  ${uri}`);

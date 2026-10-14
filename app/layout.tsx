@@ -9,7 +9,7 @@ import "@fontsource/instrument-sans/latin-400.css";
 import "@fontsource/instrument-sans/latin-500.css";
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import { DemoBanner } from "@/components/demo-banner";
-import "@/lib/env";
+import { env } from "@/lib/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,6 +35,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body className="bg-deck text-ink font-sans antialiased">
         <DemoBanner />
+        {env.AQUA_DEPLOYMENT_STAGE === "preview" ? <div role="status" className="bg-marine px-5 py-3 text-[13px] text-paper">
+          Synthetic preview. {env.WHATSAPP_PROVIDER === "capture"
+            ? "Messages are captured by a mock service, not delivered on WhatsApp."
+            : "Use synthetic records only; this is not a real-data production deployment."}
+        </div> : null}
         {children}
         <ServiceWorkerRegistrar />
       </body>

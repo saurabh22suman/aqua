@@ -10,6 +10,11 @@ import {
   type TerminologyState,
 } from "@/lib/terminology/keys";
 import {
+  LOCALE_NAMES,
+  ResolvePreviewNotice,
+  contextualSample,
+} from "@/components/terminology/terminology-shared";
+import {
   updateTermOverrideAction,
   clearTermOverrideAction,
 } from "@/lib/actions/terminology";
@@ -17,8 +22,8 @@ import { Button } from "@/components/ui/Button";
 
 // Phase 2.10 + 4.20 — terminology editor. Eight rows, each
 // with singular + plural forms, scoped to a single locale at a
-// time (the page at /owner/settings/terminology/[locale] picks
-// the locale; the URL is the source of truth so the form has no
+// time (the page at /owner/settings/terminology picks the
+// locale; the URL is the source of truth so the form has no
 // internal locale toggle). One primary CTA on the row saves
 // just that row — saves are granular so the owner doesn't
 // draft across all eight and find one row's input has rotted
@@ -26,10 +31,12 @@ import { Button } from "@/components/ui/Button";
 // default for that key, which the resolveTerm() fallback
 // picks up automatically (deletes the override key).
 //
-// Composition: the dominant element here is the row itself —
-// each row shows the current rendering so the owner sees the
-// change in place. The locale picker lives at the form level
-// (the page route above) so this component stays locale-narrow.
+// P1 (2026-10-13 owner-UI review) — only WRITABLE_LOCALES accept
+// writes; a non-writable locale renders read-only (no Save, no
+// reset) with a clear explanation, and the page keys this form
+// by locale so switching locales never carries the previous
+// locale's editor state. Sample sentences are per-term, so the
+// preview never claims a guardian was "marked present".
 
 type RowState = {
   one: string;
@@ -53,6 +60,8 @@ const ROW_KEYS: ReadonlyArray<{
 // Per-locale sample sentence so the preview rendering shows
 // the same language the user is editing. Defaults to English
 // placeholders — translations land in the data-only R.20 pass.
+// (Kept generic and byte-stable: tests/tier1/terminology-preview
+// pins the English template text.)
 export const SAMPLE_SENTENCES: Record<Locale, { singular: (n: string) => string; plural: (n: string) => string }> = {
   en: {
     singular: (n: string) => `1 ${n} marked present`,
@@ -68,12 +77,17 @@ export const SAMPLE_SENTENCES: Record<Locale, { singular: (n: string) => string;
   },
 };
 
+
 export function TerminologyForm({
   initial,
   locale,
+  editable = true,
 }: {
   initial: TerminologyState;
   locale: Locale;
+  // Server write support for this locale. Read-only locales render
+  // resolved values with no Save/reset controls.
+  editable?: boolean;
 }) {
   // Local form state — starts at the resolved values for *this*
   // locale (override wins on the row, otherwise locale default).
@@ -143,161 +157,179 @@ export function TerminologyForm({
     if (!row) return;
     setPendingKey(key);
     setErrors({ ...errors, [key]: undefined });
-    updateTermOverrideAction({
-      key,
-      locale,
-      one: row.one.trim(),
-      other: row.other.trim(),
-    }).then((result) => {
-      setPendingKey(null);
-      if (result.kind === "error") {
-        setErrors({ ...errors, [key]: result.message });
-      } else {
-        setSaved({ ...saved, [key]: new Date() });
-        setBaselines({
-          ...baselines,
-          [key]: { one: row.one.trim(), other: row.other.trim() },
+    void (async () => {
+      try {
+        const result = await updateTermOverrideAction({
+          key,
+          locale,
+          one: row.one.trim(),
+          other: row.other.trim(),
         });
+        if (result.kind === "error") {
+          setErrors({ ...errors, [key]: result.message });
+        } else {
+          setSaved({ ...saved, [key]: new Date() });
+          setBaselines({
+            ...baselines,
+            [key]: { one: row.one.trim(), other: row.other.trim() },
+          });
+        }
+      } catch {
+        setErrors({
+          ...errors,
+          [key]: "Could not save this term. Your text is kept — try again.",
+        });
+      } finally {
+        setPendingKey(null);
       }
-    });
+    })();
   }
 
   function resetRow(key: TermKey) {
     setPendingKey(key);
     setErrors({ ...errors, [key]: undefined });
-    clearTermOverrideAction({ key, locale }).then((result) => {
-      setPendingKey(null);
-      if (result.kind === "error") {
-        setErrors({ ...errors, [key]: result.message });
-      } else {
-        // Reverted to locale defaults — drop the local override
-        // so the inputs match the live state.
-        setOverrides({ ...overrides, [key]: undefined });
-        setSaved({ ...saved, [key]: new Date() });
-        setBaselines({ ...baselines, [key]: undefined });
+    void (async () => {
+      try {
+        const result = await clearTermOverrideAction({ key, locale });
+        if (result.kind === "error") {
+          setErrors({ ...errors, [key]: result.message });
+        } else {
+          // Reverted to locale defaults — drop the local override
+          // so the inputs match the live state.
+          setOverrides({ ...overrides, [key]: undefined });
+          setSaved({ ...saved, [key]: new Date() });
+          setBaselines({ ...baselines, [key]: undefined });
+        }
+      } catch {
+        setErrors({
+          ...errors,
+          [key]: "Could not reset this term. Try again.",
+        });
+      } finally {
+        setPendingKey(null);
       }
-    });
+    })();
   }
 
-  const sample = SAMPLE_SENTENCES[locale];
-
   return (
-    <ul className="space-y-3" data-testid={`terminology-form-${locale}`}>
-      {ROW_KEYS.map((row) => {
-        const defaults = DEFAULT_TERMS[locale][row.key];
-        const oneRaw = overrides[row.key]?.one ?? defaults.one;
-        const otherRaw = overrides[row.key]?.other ?? defaults.other;
-        const oneInput = overrides[row.key]?.one ?? "";
-        const otherInput = overrides[row.key]?.other ?? "";
-        const isCustom = overrides[row.key] !== undefined;
-        const isPending = pendingKey === row.key;
-        const errorMsg = errors[row.key];
-        const savedAt = saved[row.key];
-        const dirty = isDirty(row.key);
+    <div>
+      {!editable ? (
+        <p
+          role="status"
+          className="mb-3 rounded-ctl border border-line bg-deck px-3 py-2 text-[12.5px] text-ink-2"
+        >
+          {LOCALE_NAMES[locale]} vocabulary is shown read-only. English is the
+          only editable locale today; these values come from the shipped
+          defaults and any stored overrides.
+        </p>
+      ) : null}
+      <ul className="space-y-3" data-testid={`terminology-form-${locale}`}>
+        {ROW_KEYS.map((row) => {
+          const defaults = DEFAULT_TERMS[locale][row.key];
+          const oneRaw = overrides[row.key]?.one ?? defaults.one;
+          const otherRaw = overrides[row.key]?.other ?? defaults.other;
+          const oneInput = overrides[row.key]?.one ?? "";
+          const otherInput = overrides[row.key]?.other ?? "";
+          const isCustom = overrides[row.key] !== undefined;
+          const isPending = pendingKey === row.key;
+          const errorMsg = errors[row.key];
+          const savedAt = saved[row.key];
+          const dirty = isDirty(row.key);
+          const sample = contextualSample(locale, row.key, SAMPLE_SENTENCES[locale]);
 
-        return (
-          <li key={row.key} className="bg-paper border border-line rounded-ctl p-4">
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-display text-[14px] font-semibold">{titleCase(row.label)}</h3>
-              <span className="text-[11px] uppercase tracking-wide text-ink-3">
-                {isCustom ? "Custom" : "Default"}
-              </span>
-            </div>
+          return (
+            <li key={row.key} className="bg-paper border border-line rounded-ctl p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-display text-[14px] font-semibold">{titleCase(row.label)}</h3>
+                <span className="text-[11px] uppercase tracking-wide text-ink-3">
+                  {isCustom ? "Custom" : "Default"}
+                </span>
+              </div>
 
-            <p className="mt-1.5 text-[12.5px] text-ink-3">
-              Reads as: <span className="text-ink-2">{sample.singular(oneRaw)}</span>{" "}
-              ·{" "}
-              <span className="text-ink-2">{sample.plural(otherRaw)}</span>
-            </p>
+              <p className="mt-1.5 text-[12.5px] text-ink-3">
+                Reads as: <span className="text-ink-2">{sample.singular(oneRaw)}</span>{" "}
+                ·{" "}
+                <span className="text-ink-2">{sample.plural(otherRaw)}</span>
+              </p>
 
-            <div className="mt-3 grid grid-cols-2 gap-2.5">
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">Singular</span>
-                <input
-                  type="text"
-                  value={oneInput}
-                  onChange={(e) => setRow(row.key, { one: e.target.value })}
-                  placeholder={defaults.one}
-                  maxLength={60}
-                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
-                  data-testid={`term-${row.key}-one`}
-                />
-              </label>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">Plural</span>
-                <input
-                  type="text"
-                  value={otherInput}
-                  onChange={(e) => setRow(row.key, { other: e.target.value })}
-                  placeholder={defaults.other}
-                  maxLength={60}
-                  className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
-                  data-testid={`term-${row.key}-other`}
-                />
-              </label>
-            </div>
+              {editable ? (
+                <div className="mt-3 grid grid-cols-2 gap-2.5">
+                  <label className="block">
+                    <span className="block text-[12px] text-ink-3 mb-1">Singular</span>
+                    <input
+                      type="text"
+                      value={oneInput}
+                      onChange={(e) => setRow(row.key, { one: e.target.value })}
+                      placeholder={defaults.one}
+                      maxLength={60}
+                      className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+                      data-testid={`term-${row.key}-one`}
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="block text-[12px] text-ink-3 mb-1">Plural</span>
+                    <input
+                      type="text"
+                      value={otherInput}
+                      onChange={(e) => setRow(row.key, { other: e.target.value })}
+                      placeholder={defaults.other}
+                      maxLength={60}
+                      className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+                      data-testid={`term-${row.key}-other`}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <dl className="mt-3 grid grid-cols-2 gap-2.5 text-[13px]">
+                  <div>
+                    <dt className="text-[12px] text-ink-3">Singular</dt>
+                    <dd className="text-ink">{defaults.one}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[12px] text-ink-3">Plural</dt>
+                    <dd className="text-ink">{defaults.other}</dd>
+                  </div>
+                </dl>
+              )}
 
-            {errorMsg ? (
-              <p className="mt-2 text-[12.5px] text-ink-3" role="alert">{errorMsg}</p>
-            ) : null}
-            {savedAt && !errorMsg ? (
-              <p className="mt-2 text-[12.5px] text-ink-3" role="status">Saved.</p>
-            ) : null}
-
-            <div className="mt-3 flex gap-2">
-              <Button
-                variant="primary"
-                pill
-                onClick={() => saveRow(row.key)}
-                disabled={isPending || !dirty}
-                className="flex-1"
-                data-testid={`term-${row.key}-save`}
-              >
-                <Save size={14} aria-hidden="true" />
-                {isPending ? "Saving…" : "Save"}
-              </Button>
-              {isCustom ? (
-                <Button
-                  variant="secondary"
-                  pill
-                  onClick={() => resetRow(row.key)}
-                  disabled={isPending}
-                  data-testid={`term-${row.key}-reset`}
-                >
-                  <RotateCcw size={13} aria-hidden="true" /> Use default
-                </Button>
+              {errorMsg ? (
+                <p className="mt-2 text-[12.5px] text-ink-3" role="alert">{errorMsg}</p>
               ) : null}
-            </div>
-          </li>
-        );
-      })}
-      <ResolvePreviewNotice state={previewState} locale={locale} />
-    </ul>
+              {savedAt && !errorMsg ? (
+                <p className="mt-2 text-[12.5px] text-ink-3" role="status">Saved.</p>
+              ) : null}
+
+              {editable ? (
+                <div className="mt-3 flex gap-2">
+                  <Button
+                    variant="primary"
+                    pill
+                    onClick={() => saveRow(row.key)}
+                    disabled={isPending || !dirty}
+                    className="flex-1"
+                    data-testid={`term-${row.key}-save`}
+                  >
+                    <Save size={14} aria-hidden="true" />
+                    {isPending ? "Saving…" : "Save"}
+                  </Button>
+                  {isCustom ? (
+                    <Button
+                      variant="secondary"
+                      pill
+                      onClick={() => resetRow(row.key)}
+                      disabled={isPending}
+                      data-testid={`term-${row.key}-reset`}
+                    >
+                      <RotateCcw size={13} aria-hidden="true" /> Use default
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+        <ResolvePreviewNotice state={previewState} locale={locale} />
+      </ul>
+    </div>
   );
 }
-
-function ResolvePreviewNotice({ state, locale }: { state: TerminologyState; locale: Locale }) {
-  // Renders one line confirming what the closed-key resolver
-  // sees for the active locale. The locale selector sits on
-  // the page (above this component) — the form itself stays
-  // locale-narrow, which is why the preview is also narrow.
-  return (
-    <li className="text-[12px] text-ink-3 px-1">
-      Today&apos;s view uses{" "}
-      <span className="text-ink">{titleCase(resolveTerm(state, "member", "other"))}</span>{" "}
-      ·{" "}
-      <span className="text-ink">{titleCase(resolveTerm(state, "batch", "other"))}</span>{" "}
-      ·{" "}
-      <span className="text-ink">{titleCase(resolveTerm(state, "session", "other"))}</span>
-      . Database columns stay <span className="text-ink">member_code</span>, never renamed.
-      <span className="block mt-0.5 text-ink-3">Active locale: <span className="text-ink-2 font-mono">{locale}</span></span>
-    </li>
-  );
-}
-
-// Touch locale-imported-after-render so the closure compiles
-// even when SAMPLE_SENTENCES has only the 'en' branch populated.
-// (At runtime the entry is required; this is just type-aware
-// documentation that no entry silently regresses.)
-import { resolveTerm } from "@/lib/terminology/keys";
-void resolveTerm;

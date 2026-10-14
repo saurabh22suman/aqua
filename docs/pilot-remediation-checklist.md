@@ -6,8 +6,8 @@
 
 | Field | Current value |
 |---|---|
-| Current status | PR-B [#193](https://github.com/saurabh22suman/aqua/pull/193) is open into `main`; both `ci` and `agent-protected-paths` passed on the PR (runs `36039565127` and `36039565054`). No live deployment, scheduled timer or R2 upload claimed. |
-| Current task | Agent PR-B source/CI work complete; human review and merge pending. |
+| Current status | PR-B #193 is merged in local history (`9228d52`). Its dated evidence below is retained. Current October remediation is tracked in `docs/review-fixes-status.md`; no live deployment, timer or R2 upload is claimed. |
+| Current task | October defect checks and human review of the new branch; protected-test follow-ups remain human-owned. |
 | Next task | Human Dev/Prod, GHCR, live R2 and restore verification before any release-gate decision. |
 | Known blockers | R2 credentials/real upload and restore, actual Dev/Prod VPS and Dokploy settings, Production approval and pilot-role walkthrough require a human. No pilot/Production release approval. |
 

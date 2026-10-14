@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireDefaultCtx, type Ctx } from "./context";
+import { hasPermission } from "./permission";
 import {
   canAccessSurface,
   type TenantSurface,
@@ -52,3 +53,18 @@ export async function requireSurface(surface: TenantSurface): Promise<Ctx> {
 export const requireOwner = (): Promise<Ctx> => requireSurface("owner" as TenantSurface);
 export const requireCoach = (): Promise<Ctx> => requireSurface("coach" as TenantSurface);
 export const requireReception = (): Promise<Ctx> => requireSurface("reception" as TenantSurface);
+
+// R07 (2026-10-13 role-workflow audit) — page-level permission guard.
+// A shared owner/admin/accountant surface means a page whose data
+// action needs a permission the caller lacks (e.g. the Accountant on a
+// member-management or settings route) used to throw ForbiddenError
+// mid-render, after the shared frame had already fetched. Pages call
+// this immediately after requireSurface and before any data fetch:
+// unauthorized routes 404 like a made-up path, and no protected read
+// ever starts.
+export function requirePagePermission(ctx: Ctx, permissionKey: string): Ctx {
+  if (!hasPermission(ctx, permissionKey)) {
+    notFound();
+  }
+  return ctx;
+}

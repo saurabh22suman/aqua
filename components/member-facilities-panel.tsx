@@ -20,11 +20,15 @@ export function MemberFacilitiesPanel({
   home,
   opted,
   locations,
+  canWrite,
 }: {
   memberId: string;
   home: { id: string; name: string };
   opted: OptedFacilityRow[];
   locations: LocationOption[];
+  // R10 (2026-10-13 role-workflow audit) — opt-in/end ride
+  // members.write; readers keep the list.
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -77,19 +81,21 @@ export function MemberFacilitiesPanel({
                 since {formatDateIST(o.optedOn)}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => run(() => endMemberFacilityAction({ optinId: o.optinId }))}
-              disabled={busy}
-              className="flex-none rounded-ctl border border-line px-3 min-h-[44px] text-[12.5px] text-ink-3 disabled:opacity-50"
-            >
-              End
-            </button>
+            {canWrite ? (
+              <button
+                type="button"
+                onClick={() => run(() => endMemberFacilityAction({ optinId: o.optinId }))}
+                disabled={busy}
+                className="flex-none rounded-ctl border border-line px-3 min-h-[44px] text-[12.5px] text-ink-3 disabled:opacity-50"
+              >
+                End
+              </button>
+            ) : null}
           </li>
         ))}
       </ul>
 
-      {available.length > 0 ? (
+      {canWrite && available.length > 0 ? (
         <div className="mt-2 flex gap-2">
           <select
             value={pick}

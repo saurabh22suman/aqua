@@ -36,6 +36,7 @@ export async function createEnquiryAction(raw: {
   phone?: string;
   source: string;
   notes?: string;
+  locationId: string;
 }): Promise<EnquiryRow> {
   const input = createEnquirySchema.parse(raw);
   const ctx = await requireDefaultCtx();

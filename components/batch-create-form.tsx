@@ -64,9 +64,15 @@ export function BatchCreateForm({
       daysOfWeek: days,
       startTime,
       endTime,
-    }).then((res) => {
-      if (!cancelled) setConflicts(res.conflicts);
-    });
+    })
+      .then((res) => {
+        if (!cancelled) setConflicts(res.conflicts);
+      })
+      .catch(() => {
+        // The conflict check is advisory; a failed check must not
+        // block or crash creation.
+        if (!cancelled) setConflicts([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -94,6 +100,10 @@ export function BatchCreateForm({
       onCreated(res.batch);
       setName("");
       setConflicts([]);
+    } catch {
+      setError(
+        "The batch could not be created. Your entries are kept — try again.",
+      );
     } finally {
       setBusy(false);
     }

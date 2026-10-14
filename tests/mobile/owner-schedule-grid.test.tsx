@@ -130,7 +130,11 @@ describe("U-04 schedule grid", () => {
       />,
     );
     expect(container.querySelector("table")).toBeTruthy();
-    expect(container.querySelectorAll('a[href*="view=week&date="]').length).toBe(7);
+    // Only the month table's day cells (the toolbar Week/Month links
+    // also carry view=week&date= now that they preserve the anchor).
+    expect(
+      container.querySelectorAll('td a[href*="view=week&date="]').length,
+    ).toBe(7);
     const cells = container.querySelectorAll("td a");
     expect(cells.length).toBe(7);
     expect((cells[0] as HTMLElement).className).toContain("min-h-[44px]");

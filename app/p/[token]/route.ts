@@ -6,6 +6,7 @@ import {
   type ParentViewAbsenceAlert,
 } from "@/lib/services/parent-view";
 import { formatINR } from "@/lib/money/format";
+import { TOKENS } from "@/lib/design-tokens";
 import { getBranding } from "@/lib/services/branding";
 import { getTerminology } from "@/lib/services/terminology";
 import { asTenantId } from "@/lib/ids";
@@ -106,14 +107,14 @@ function wrapDocument(title: string, body: string): string {
 <meta name="referrer" content="no-referrer">
 <title>${esc(title)}</title>
 </head>
-<body style="margin:0;background:#EDF0EC;">${body}</body>
+<body style="margin:0;background:${TOKENS.deck};">${body}</body>
 </html>`;
 }
 
 function statusColor(status: string): { color: string; bg: string } {
-  if (status === "present") return { color: "#2E9E5B", bg: "#E4F4EA" };
-  if (status === "late") return { color: "#B8710A", bg: "#FDF0DC" };
-  return { color: "#D8453C", bg: "#FCE9E7" };
+  if (status === "present") return { color: TOKENS.good, bg: TOKENS.goodSoft };
+  if (status === "late") return { color: TOKENS.warn, bg: TOKENS.warnSoft };
+  return { color: TOKENS.late, bg: TOKENS.lateSoft };
 }
 
 // F-3 (2026-09-13 Indian-user UX audit): this page used to hardcode
@@ -123,9 +124,9 @@ function statusColor(status: string): { color: string; bg: string } {
 // to thread the resolved term itself — the resolved STRING is passed
 // in, not the resolver; the page still ships zero client JS.
 function renderExpired(memberTerm: string): string {
-  const body = `<main style="max-width:480px;margin:0 auto;padding:32px 20px;font-family:system-ui,sans-serif;color:#0F1F1C;">
+  const body = `<main style="max-width:480px;margin:0 auto;padding:32px 20px;font-family:system-ui,sans-serif;color:${TOKENS.ink};">
 <h1 style="font-size:22px;font-weight:600;margin:0 0 12px;">This link is no longer valid.</h1>
-<p style="font-size:14px;line-height:1.5;color:#3C534F;margin:0;">Magic links expire after seven days for safety. Ask the academy to send you a fresh link from the ${esc(memberTerm.toLowerCase())}&rsquo;s record.</p>
+<p style="font-size:14px;line-height:1.5;color:${TOKENS.ink2};margin:0;">Magic links expire after seven days for safety. Ask the academy to send you a fresh link from the ${esc(memberTerm.toLowerCase())}&rsquo;s record.</p>
 </main>`;
   return wrapDocument("Link expired", body);
 }
@@ -138,6 +139,9 @@ function renderParentView(args: {
     startsAt: Date;
     endsAt: Date;
     batchName: string;
+    // M05 — venue line; null for a tenant-wide session with no
+    // location, in which case no location row is rendered.
+    locationName: string | null;
     coachName: string | null;
   } | null;
   runway?: {
@@ -212,26 +216,32 @@ function renderParentView(args: {
         const coachPart = ns.coachName
           ? ` &middot; with ${esc(ns.coachName)}`
           : "";
+        // M05 — the parent needs to know where to show up. The venue
+        // is omitted (not invented) when the session has no location.
+        const venueHtml = ns.locationName
+          ? `
+<p style="font-size:13px;margin:6px 0 0;color:rgba(255,255,255,.75);">Venue: ${esc(ns.locationName)}</p>`
+          : "";
         return `<p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:22px;font-weight:600;margin:0;color:#FFFFFF;">${esc(dateText)}</p>
-<p style="font-size:14px;margin:6px 0 0;color:rgba(255,255,255,.85);">${timeRange} &middot; ${batchName}${coachPart}</p>`;
+<p style="font-size:14px;margin:6px 0 0;color:rgba(255,255,255,.85);">${timeRange} &middot; ${batchName}${coachPart}</p>${venueHtml}`;
       })()
     : `<p style="font-size:14px;margin:0;color:rgba(255,255,255,.85);">No upcoming ${sessionOther} scheduled.</p>`;
 
   const attendanceHtml =
     args.attendance.totalCount === 0
-      ? `<p style="font-size:14px;color:#3C534F;margin:0;">No ${sessionOther} have been marked yet this month.</p>`
+      ? `<p style="font-size:14px;color:${TOKENS.ink2};margin:0;">No ${sessionOther} have been marked yet this month.</p>`
       : (() => {
           const pct = args.attendance.pct ?? 0;
           return `<div style="display:flex;align-items:baseline;gap:12px;">
 <p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:38px;font-weight:600;margin:0;color:#0D3B36;line-height:1;">${pct}%</p>
-<p style="font-size:14px;margin:0;color:#3C534F;">${args.attendance.presentCount} of ${args.attendance.totalCount} ${sessionOther} marked present</p>
+<p style="font-size:14px;margin:0;color:${TOKENS.ink2};">${args.attendance.presentCount} of ${args.attendance.totalCount} ${sessionOther} marked present</p>
 </div>`;
         })();
 
   // R.8 — one plain line under this month's attendance; read-only and
   // never a substitute for talking to the coach.
   const alertHtml = args.absenceAlert
-    ? `<p style="font-size:13px;margin:16px 0 0;padding:10px 12px;border-radius:12px;background-color:#FBEBD9;color:#7A4A12;">${esc(parentAlertLine(args.absenceAlert))}</p>`
+    ? `<p style="font-size:13px;margin:16px 0 0;padding:10px 12px;border-radius:12px;background-color:${TOKENS.warnSoft};color:${TOKENS.warn};">${esc(parentAlertLine(args.absenceAlert))}</p>`
     : "";
 
   const recentListHtml =
@@ -247,7 +257,7 @@ function renderParentView(args: {
               const status = esc(r.status);
               const sc = statusColor(r.status);
               return `<li style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
-<span style="color:#0F1F1C;">${dayText} &middot; <span style="color:#7B918D;">${batchName}</span></span>
+<span style="color:${TOKENS.ink};">${dayText} &middot; <span style="color:${TOKENS.ink3};">${batchName}</span></span>
 <span style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px;color:${sc.color};background-color:${sc.bg};">${status}</span>
 </li>`;
             })
@@ -269,8 +279,8 @@ function renderParentView(args: {
   const outstandingItems = (args.fees?.outstanding ?? [])
     .map(
       (invoice) => `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
-<span style="color:#0F1F1C;font-weight:500;">${esc(formatINR(invoice.outstandingPaise))} due</span>
-<span style="color:#7B918D;">${esc(invoice.invoiceNumber)} &middot; due ${esc(DAY_FMT.format(new Date(`${invoice.dueOn}T00:00:00`)))}</span>
+<span style="color:${TOKENS.ink};font-weight:500;">${esc(formatINR(invoice.outstandingPaise))} due</span>
+<span style="color:${TOKENS.ink3};">${esc(invoice.invoiceNumber)} &middot; due ${esc(DAY_FMT.format(new Date(`${invoice.dueOn}T00:00:00`)))}</span>
 </li>`,
     )
     .join("");
@@ -281,24 +291,24 @@ function renderParentView(args: {
         ? ` <a href="${esc(args.receiptBase)}/${esc(payment.id)}" style="color:#0D3B36;text-decoration:underline;">Receipt</a>`
         : "";
       return `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
-<span style="color:#0F1F1C;font-weight:500;">${esc(formatINR(payment.amountPaise))}</span>
-<span style="color:#7B918D;">${esc(methodText(payment.method))} &middot; ${esc(DAY_FMT.format(new Date(payment.receivedAt)))}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}${receiptLink}</span>
+<span style="color:${TOKENS.ink};font-weight:500;">${esc(formatINR(payment.amountPaise))}</span>
+<span style="color:${TOKENS.ink3};">${esc(methodText(payment.method))} &middot; ${esc(DAY_FMT.format(new Date(payment.receivedAt)))}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}${receiptLink}</span>
 </li>`;
     })
     .join("");
 
   const feesHtml =
     outstandingItems.length === 0 && paymentItems.length === 0
-      ? `<p style="font-size:13px;color:#3C534F;margin:0;">No fees due, and no payments recorded yet.</p>`
-      : `<p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#7B918D;margin:0;">Outstanding</p>
-${outstandingItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin:8px 0 0;">Nothing due right now.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${outstandingItems}</ul>`}
-<p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#7B918D;margin:20px 0 0;">Payment history</p>
-${paymentItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin:8px 0 0;">No payments recorded yet.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${paymentItems}</ul>`}`;
+      ? `<p style="font-size:13px;color:${TOKENS.ink2};margin:0;">No fees due, and no payments recorded yet.</p>`
+      : `<p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:${TOKENS.ink3};margin:0;">Outstanding</p>
+${outstandingItems.length === 0 ? `<p style="font-size:13px;color:${TOKENS.ink2};margin:8px 0 0;">Nothing due right now.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${outstandingItems}</ul>`}
+<p style="font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:${TOKENS.ink3};margin:20px 0 0;">Payment history</p>
+${paymentItems.length === 0 ? `<p style="font-size:13px;color:${TOKENS.ink2};margin:8px 0 0;">No payments recorded yet.</p>` : `<ul style="list-style:none;padding:0;margin:4px 0 0;">${paymentItems}</ul>`}`;
 
   const monthSummaryHtml =
     args.attendance.totalCount === 0
       ? ""
-      : `<p style="font-size:13px;color:#3C534F;margin:10px 0 0;">Present ${args.attendance.present ?? 0} · Late ${args.attendance.late ?? 0} · Absent ${args.attendance.absent ?? 0} this month</p>`;
+      : `<p style="font-size:13px;color:${TOKENS.ink2};margin:10px 0 0;">Present ${args.attendance.present ?? 0} · Late ${args.attendance.late ?? 0} · Absent ${args.attendance.absent ?? 0} this month</p>`;
 
   const runwayHtml = args.runway
     ? (() => {
@@ -308,36 +318,45 @@ ${paymentItems.length === 0 ? `<p style="font-size:13px;color:#3C534F;margin:8px
           100,
           Math.round((runway.usedDays / Math.max(1, runway.totalDays)) * 100),
         );
-        const barColor = runway.usedDays / Math.max(1, runway.totalDays) > 0.8 ? "#8F5400" : "#0E7C86";
-        return `<p style="font-size:13px;color:#0F1F1C;margin:0;font-weight:500;">${esc(
+        const barColor = runway.usedDays / Math.max(1, runway.totalDays) > 0.8 ? TOKENS.warn : TOKENS.water;
+        return `<p style="font-size:13px;color:${TOKENS.ink};margin:0;font-weight:500;">${esc(
           runway.planName,
         )} — ${left} of ${runway.totalDays} days left</p>
-<div style="margin-top:10px;height:6px;border-radius:999px;background-color:#EDF0EC;overflow:hidden;">
+<div style="margin-top:10px;height:6px;border-radius:999px;background-color:${TOKENS.deck};overflow:hidden;">
 <div style="height:100%;width:${pct}%;background-color:${barColor};"></div>
 </div>
-<div style="display:flex;justify-content:space-between;font-size:11.5px;color:#7B918D;margin-top:6px;">
+<div style="display:flex;justify-content:space-between;font-size:11.5px;color:${TOKENS.ink3};margin-top:6px;">
 <span>${esc(DAY_FMT.format(new Date(`${runway.startsOn}T00:00:00`)))}</span>
 <span>${esc(DAY_FMT.format(new Date(`${runway.endsOn}T00:00:00`)))}</span>
 </div>`;
       })()
-    : `<p style="font-size:13px;color:#3C534F;margin:0;">No active plan right now.</p>`;
+    : `<p style="font-size:13px;color:${TOKENS.ink2};margin:0;">No active plan right now.</p>`;
 
-  const body = `<main style="max-width:560px;margin:0 auto;padding:0 16px 56px;font-family:'Instrument Sans',system-ui,sans-serif;color:#0F1F1C;background-color:#EDF0EC;min-height:100vh;">
+  // M05 — help line. The academy profile (name/currency/timezone/GSTIN)
+  // and branding (display name/short name/accent) carry no public
+  // phone or email, so the page tells the parent who to ask without
+  // inventing a contact. Replace the generic text only after a real
+  // public contact field exists.
+  const helpHtml = `<section style="background-color:#FFFFFF;border-radius:20px;padding:20px 24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
+<p style="font-size:13px;color:${TOKENS.ink2};margin:0;line-height:1.5;">Questions about this page? Contact your academy.</p>
+</section>`;
+
+  const body = `<main style="max-width:560px;margin:0 auto;padding:0 16px 56px;font-family:'Instrument Sans',system-ui,sans-serif;color:${TOKENS.ink};background-color:${TOKENS.deck};min-height:100vh;">
 <header style="padding:32px 0 24px;display:flex;align-items:center;gap:16px;">
 <svg viewBox="0 0 100 100" width="56" height="56" role="img" aria-label="${displayName} mark">
 <rect x="0" y="0" width="100" height="100" rx="22" ry="22" fill="${accentBg}" />
 <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Bricolage Grotesque',system-ui,sans-serif" font-weight="600" font-size="${clubInitials.length === 1 ? 50 : 36}" fill="${accentInk}">${clubInitials}</text>
 </svg>
 <div>
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0;">${memberTerm} view</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0;">${memberTerm} view</p>
 <h1 style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;font-weight:600;margin:4px 0 0;color:#0D3B36;">${displayName}</h1>
 </div>
 </header>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 8px;">${memberTerm}</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0 0 8px;">${memberTerm}</p>
 <p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:26px;font-weight:600;margin:0;color:#0D3B36;">${fullName}</p>
-<p style="font-size:13px;color:#3C534F;margin:6px 0 0;font-family:monospace;">${memberCode}</p>
+<p style="font-size:13px;color:${TOKENS.ink2};margin:6px 0 0;font-family:monospace;">${memberCode}</p>
 </section>
 
 <section style="background-color:#0D3B36;color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;">
@@ -346,7 +365,7 @@ ${nextSessionHtml}
 </section>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">This month</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0 0 12px;">This month</p>
 ${attendanceHtml}
 ${monthSummaryHtml}
 ${alertHtml}
@@ -354,16 +373,18 @@ ${recentListHtml}
 </section>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">Plan</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0 0 12px;">Plan</p>
 ${runwayHtml}
 </section>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
-<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:#7B918D;margin:0 0 12px;">Fees</p>
+<p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0 0 12px;">Fees</p>
 ${feesHtml}
 </section>
 
-<footer style="padding:16px 0 0;text-align:center;font-size:11px;color:#7B918D;">
+${helpHtml}
+
+<footer style="padding:16px 0 0;text-align:center;font-size:11px;color:${TOKENS.ink3};">
 This link is unique to ${fullName}. It expires in 7 days and carries no tracking. Contact ${displayName} directly if it stops working.
 </footer>
 </main>`;
@@ -464,6 +485,7 @@ export async function GET(
             startsAt: data.nextSession.startsAt,
             endsAt: data.nextSession.endsAt,
             batchName: data.nextSession.batchName,
+            locationName: data.nextSession.locationName,
             coachName: data.nextSession.coachName,
           }
         : null,

@@ -65,12 +65,23 @@ describe("tenant-conventions scan", () => {
     expect(files).toContain(
       "db/migrations/20260918050000_h01_hardening_indexes.sql",
     );
-    const violations = files.flatMap((file) =>
+    const sources = files.map((file) => readFileSync(join(process.cwd(), file), "utf8"));
+    const violations = files.flatMap((file, index) =>
       scanTenantConventions(
-        readFileSync(join(process.cwd(), file), "utf8"),
+        sources[index]!,
         file,
+        sources.slice(index + 1).join("\n"),
       ),
     );
     expect(violations).toEqual([]);
+  });
+
+  it("recognizes only an exact forward DROP DEFAULT for an applied table/column", () => {
+    const source = "CREATE TABLE widgets (\n id uuid PRIMARY KEY DEFAULT gen_random_uuid(),\n tenant_id uuid\n);";
+    expect(scanTenantConventions(source, "original.sql")).toHaveLength(1);
+    expect(scanTenantConventions(source, "original.sql", "ALTER TABLE widgets ALTER COLUMN id DROP DEFAULT;")).toEqual([]);
+    expect(scanTenantConventions(source, "original.sql", "ALTER TABLE other_table ALTER COLUMN id DROP DEFAULT;")).toHaveLength(1);
+    expect(scanTenantConventions(source, "original.sql", "ALTER TABLE widgets ALTER COLUMN other_id DROP DEFAULT;")).toHaveLength(1);
+    expect(scanTenantConventions(source, "original.sql", "-- ALTER TABLE widgets ALTER COLUMN id DROP DEFAULT;")).toHaveLength(1);
   });
 });

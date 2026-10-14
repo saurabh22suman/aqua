@@ -11,7 +11,12 @@ import {
   type GetTerminologyResult,
   type UpdateTermOverrideResult,
 } from "@/lib/services/terminology";
-import { TERM_KEYS, type Locale, type TermKey } from "@/lib/terminology/keys";
+import {
+  TERM_KEYS,
+  WRITABLE_LOCALES,
+  type Locale,
+  type TermKey,
+} from "@/lib/terminology/keys";
 
 // Phase 2.10 — server actions for the terminology editor.
 //
@@ -27,16 +32,18 @@ export async function getTerminologyAction(): Promise<GetTerminologyResult> {
   return getTerminology({ tenantId: ctx.tenantId });
 }
 
+const writableLocaleSchema = z.enum(WRITABLE_LOCALES);
+
 const setSchema = z.object({
   key: z.enum(TERM_KEYS),
-  locale: z.literal("en"),
+  locale: writableLocaleSchema,
   one: z.string().trim().min(1, "Singular form can't be empty.").max(60),
   other: z.string().trim().min(1, "Plural form can't be empty.").max(60),
 });
 
 const clearSchema = z.object({
   key: z.enum(TERM_KEYS),
-  locale: z.literal("en"),
+  locale: writableLocaleSchema,
 });
 
 export async function updateTermOverrideAction(

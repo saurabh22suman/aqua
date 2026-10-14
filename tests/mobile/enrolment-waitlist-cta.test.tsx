@@ -50,7 +50,7 @@ afterEach(() => {
 
 describe("MemberEnrolmentPanel full-batch waitlist CTA (R.5)", () => {
   it("offers Join waitlist after a capacity refusal and calls the action", async () => {
-    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} />);
+    render(<MemberEnrolmentPanel memberId="m1" terminology={TERMINOLOGY} canEnrol canWaitlist />);
 
     const enrol = await screen.findByRole("button", { name: /^enrol$/i });
     fireEvent.click(enrol);

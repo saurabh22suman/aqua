@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { installFakeIndexedDB } from "./fake-indexeddb";
+import { OFFLINE_IDENTITY } from "./fixture-identity";
 
 // issue #4, mechanism 2: tx() in lib/offline/idb.ts resolves its
 // promise on the underlying request's `onsuccess`, not the enclosing
@@ -21,9 +22,12 @@ describe("lib/offline/idb.ts — durability", () => {
       },
     });
 
-    const { enqueueMark } = await import("@/lib/offline/idb");
+    const { enqueueMark, activateOfflineIdentity } = await import("@/lib/offline/idb");
+    await activateOfflineIdentity(OFFLINE_IDENTITY);
+    transactionCompleted = false;
 
     await enqueueMark({
+      ...OFFLINE_IDENTITY,
       clientId: "c1",
       sessionId: "s1",
       memberId: "m1",
@@ -46,8 +50,10 @@ describe("lib/offline/idb.ts — durability", () => {
       },
     });
 
-    const { enqueueMark, queueAll } = await import("@/lib/offline/idb");
+    const { enqueueMark, queueAll, activateOfflineIdentity } = await import("@/lib/offline/idb");
+    await activateOfflineIdentity(OFFLINE_IDENTITY);
     await enqueueMark({
+      ...OFFLINE_IDENTITY,
       clientId: "c2",
       sessionId: "s1",
       memberId: "m2",

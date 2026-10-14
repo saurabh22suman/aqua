@@ -4,7 +4,10 @@ import { OwnerShell } from "@/components/owner-shell";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { listLocations } from "@/lib/services/people";
-import { TENANT_SURFACE_NAV } from "@/lib/nav";
+import {
+  ownerNavForPermissions,
+  ownerSidebarGroupsForPermissions,
+} from "@/lib/nav";
 
 // Owner layout — sub-PR 1 of the role-gating migration. The
 // layout is the gate: `sessionExists()` admits any role with a
@@ -33,10 +36,16 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   // tenants, so this query is the only cost a small academy pays.
   const locations = await listLocations(ctx);
   // U-10 — responsive shell: sidebar + top bar (with global search,
-  // U-05) at lg, the existing four-item bottom nav below it. The
-  // item list is unchanged: TENANT_SURFACE_NAV.owner.
+  // U-05) at lg, the existing bottom nav below it. C01 — both lists
+  // are permission-filtered: the Accountant gets Home (→ Fees),
+  // Members, Fees & payments and Reports; Owner/Admin hold every gate
+  // and see the full contract unchanged.
   return (
-    <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={locations}>
+    <OwnerShell
+      navItems={ownerNavForPermissions(ctx.permissions)}
+      sidebarGroups={ownerSidebarGroupsForPermissions(ctx.permissions)}
+      locations={locations}
+    >
       {children}
     </OwnerShell>
   );

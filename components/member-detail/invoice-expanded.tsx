@@ -23,10 +23,12 @@ import { formatDateIST } from "@/lib/time/tz";
 
 // C-32/C-33/C-39 — one invoice, expanded: lines with the CGST/SGST
 // split, recorded payments with receipt links, the record-payment
-// form, and void before money arrives.
+// form, and void before money arrives. Void is management authority
+// (settings.manage — owner/admin, R01); other invoice writers see an
+// ask-the-owner note instead.
 
 const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 function statusTone(status: InvoiceDetail["status"]): string {
   if (status === "paid") return "bg-marine/10 text-marine";
@@ -44,14 +46,18 @@ function methodLabel(method: PaymentRow["method"]): string {
 export function InvoiceExpanded({
   invoiceId,
   canWrite,
+  canVoid = false,
   canRecord,
   canRefund,
+  canReadPayments,
   onChanged,
 }: {
   invoiceId: string;
   canWrite: boolean;
+  canVoid?: boolean;
   canRecord: boolean;
   canRefund: boolean;
+  canReadPayments: boolean;
   onChanged: () => void;
 }) {
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
@@ -79,13 +85,17 @@ export function InvoiceExpanded({
       ]);
       setDetail(invoice);
       setPayments(pays);
-      const reversalLists = await Promise.all(
-        pays.map(async (payment) => [
-          payment.id,
-          await listPaymentReversalsAction(payment.id),
-        ] as const),
-      );
-      setReversals(Object.fromEntries(reversalLists));
+      if (canReadPayments) {
+        const reversalLists = await Promise.all(
+          pays.map(async (payment) => [
+            payment.id,
+            await listPaymentReversalsAction(payment.id),
+          ] as const),
+        );
+        setReversals(Object.fromEntries(reversalLists));
+      } else {
+        setReversals({});
+      }
       setAmount(
         invoice && invoice.outstandingPaise > 0
           ? String(invoice.outstandingPaise / 100)
@@ -95,7 +105,7 @@ export function InvoiceExpanded({
     } catch {
       setFailed(true);
     }
-  }, [invoiceId]);
+  }, [invoiceId, canReadPayments]);
 
   useEffect(() => {
     void load();
@@ -105,19 +115,40 @@ export function InvoiceExpanded({
     setBusy(true);
     setMessage(null);
     void (async () => {
-      const result = await fn();
-      setMessage(result.ok ? "Saved." : result.error);
-      if (result.ok) {
-        await load();
-        onChanged();
+      try {
+        const result = await fn();
+        setMessage(result.ok ? "Saved." : result.error);
+        if (result.ok) {
+          await load();
+          onChanged();
+        }
+      } catch {
+        try {
+          await load();
+        } catch {
+          // load() already switched the panel to its failed state
+        }
+        setMessage(
+          "The request did not complete. The invoice was refreshed — check it before retrying, in case the change already went through.",
+        );
+      } finally {
+        setBusy(false);
       }
-      setBusy(false);
     })();
   }
 
   if (failed) {
     return (
-      <p className="mt-2 text-[12px] text-ink-3">Could not load this invoice.</p>
+      <div className="mt-2">
+        <p className="text-[12px] text-ink-3">Could not load this invoice.</p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-1.5 inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink"
+        >
+          Retry
+        </button>
+      </div>
     );
   }
   if (!detail) {
@@ -303,22 +334,34 @@ export function InvoiceExpanded({
                         setBusy(true);
                         setReverseError(null);
                         void (async () => {
-                          const result = await reversePaymentAction({
-                            paymentId: payment.id,
-                            amountPaise: Number(paise),
-                            reason: reverseReason.trim(),
-                          });
-                          if (!result.ok) {
-                            setReverseError(result.error);
-                          } else {
-                            setReverseFor(null);
-                            await load();
-                            onChanged();
+                          try {
+                            const result = await reversePaymentAction({
+                              paymentId: payment.id,
+                              amountPaise: Number(paise),
+                              reason: reverseReason.trim(),
+                            });
+                            if (!result.ok) {
+                              setReverseError(result.error);
+                            } else {
+                              setReverseFor(null);
+                              await load();
+                              onChanged();
+                            }
+                          } catch {
+                            try {
+                              await load();
+                            } catch {
+                              // load() already switched the panel to its failed state
+                            }
+                            setReverseError(
+                              "The request did not complete. The payment was refreshed — check it before retrying, in case the reversal already went through.",
+                            );
+                          } finally {
+                            setBusy(false);
                           }
-                          setBusy(false);
                         })();
                       }}
-                      className="mt-1.5 rounded-pill px-3.5 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+                      className="mt-1.5 inline-flex min-h-11 items-center justify-center rounded-pill px-3.5 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
                     >
                       Confirm reversal
                     </button>
@@ -396,7 +439,7 @@ export function InvoiceExpanded({
         </div>
       ) : null}
 
-      {canWrite && detail.status !== "void" && detail.paidPaise === 0 ? (
+      {canVoid && detail.status !== "void" && detail.paidPaise === 0 ? (
         <div className="mt-2">
           {showVoid ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -404,6 +447,7 @@ export function InvoiceExpanded({
                 value={voidReason}
                 onChange={(e) => setVoidReason(e.target.value)}
                 placeholder="Reason for voiding"
+                aria-label="Reason for voiding"
                 className={`${inputClass} max-w-xs`}
               />
               <button
@@ -427,6 +471,10 @@ export function InvoiceExpanded({
             </button>
           )}
         </div>
+      ) : canWrite && detail.status !== "void" && detail.paidPaise === 0 ? (
+        <p className="mt-2 text-[12px] text-ink-3">
+          Ask the owner to cancel an invoice.
+        </p>
       ) : null}
 
       {message ? (

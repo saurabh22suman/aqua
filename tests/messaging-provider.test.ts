@@ -67,4 +67,17 @@ describe("env boot guard for WHATSAPP_PROVIDER", () => {
       "disabled",
     );
   });
+
+  it("requires an explicit synthetic preview for a configured hosted capture origin", () => {
+    expect(() => parseEnv({ ...PROD_ENV, WHATSAPP_PROVIDER: "capture", WHATSAPP_CAPTURE_URL: "https://capture.example.test" })).toThrow(/preview/);
+    const parsed = parseEnv({ ...PROD_ENV, AQUA_DEPLOYMENT_STAGE: "preview", WHATSAPP_PROVIDER: "capture",
+      WHATSAPP_CAPTURE_URL: "https://capture.example.test", WHATSAPP_CAPTURE_AUTH_HEADER: "authorization",
+      WHATSAPP_CAPTURE_AUTH_VALUE: "Bearer synthetic-test" });
+    expect(parsed.WHATSAPP_CAPTURE_URL).toBe("https://capture.example.test");
+    expect(resolveProviderName({ provider: "capture", nodeEnv: "production", deploymentStage: "preview" })).toBe("capture");
+    expect(() => resolveProviderName({ provider: "capture", nodeEnv: "production", deploymentStage: "production" })).toThrow(/preview/);
+    for (const url of ["http://capture.example.test", "https://capture.example.test/path", "invalid"]) {
+      expect(() => parseEnv({ ...PROD_ENV, AQUA_DEPLOYMENT_STAGE: "preview", WHATSAPP_PROVIDER: "capture", WHATSAPP_CAPTURE_URL: url })).toThrow();
+    }
+  });
 });

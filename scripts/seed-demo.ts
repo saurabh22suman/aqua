@@ -528,6 +528,12 @@ async function ensureBatches(
     let id: string;
     if (existing.rows.length > 0) {
       id = existing.rows[0].id;
+      // Wave 2 repair — older demo databases predate batch locations;
+      // backfill so the facility switcher scopes real data.
+      await adminPool.query(
+        "update batches set location_id = $1, updated_at = now() where id = $2 and tenant_id = $3 and location_id is null",
+        [locationId, id, tenantId],
+      );
     } else {
       id = uuidv7();
       // Primary coach on the morning + Sunday batches, secondary
@@ -548,10 +554,10 @@ async function ensureBatches(
       await adminPool.query(
         `insert into batches
            (id, tenant_id, program_id, name, capacity, days_of_week,
-            start_time, end_time, is_sample, coach_id, created_by, updated_by)
+            start_time, end_time, is_sample, coach_id, location_id, created_by, updated_by)
          values
-           ($1, $2, $3, $4, $5, $6::int[], $7, $8, false, $9, null, null)`,
-        [id, tenantId, programId, b.name, b.capacity, dowArr, b.startTime, endTime, coachId],
+           ($1, $2, $3, $4, $5, $6::int[], $7, $8, false, $9, $10, null, null)`,
+        [id, tenantId, programId, b.name, b.capacity, dowArr, b.startTime, endTime, coachId, locationId],
       );
     }
     out.set(b.name, id);
@@ -1025,6 +1031,29 @@ async function ensurePastSessions(
   if (created > 0) console.log(`past sessions materialised → ${created}`);
 }
 
+// Wave 2 repair — demo databases seeded before batches carried a
+// location have sessions/attendance rows with location_id NULL.
+// Copy the batch's location down so the owner facility switcher,
+// schedule grid and attendance reports scope real data.
+async function backfillSessionLocations(tenantId: TenantId): Promise<void> {
+  const sessions = await adminPool.query(
+    `update sessions s set location_id = b.location_id
+       from batches b
+      where s.batch_id = b.id and s.tenant_id = $1
+        and s.location_id is null and b.location_id is not null`,
+    [tenantId],
+  );
+  const attendance = await adminPool.query(
+    `update attendance a set location_id = s.location_id
+       from sessions s
+      where a.session_id = s.id and a.tenant_id = $1
+        and a.location_id is null and s.location_id is not null`,
+    [tenantId],
+  );
+  const total = (sessions.rowCount ?? 0) + (attendance.rowCount ?? 0);
+  if (total > 0) console.log(`location backfill → ${total} row(s)`);
+}
+
 async function ensureAttendanceHistory(
   tenantId: TenantId,
   members: MemberSeedResult[],
@@ -1105,11 +1134,9 @@ async function ensureKicksFootballTenant(actor: UserId): Promise<void> {
     DEMO_FOOTBALL_TENANT.firstLocation.name,
     DEMO_FOOTBALL_TENANT.firstLocation.address,
   );
-  // The locationId is not used directly — ensureLocation returns it
-  // and the batches reference it via the location table only
-  // through the (member-location) join, not as a column on batches.
-  // For consistency with the main tenant's seed, we resolve it here
-  // anyway so the structure reads the same.
+  // Wave 2 — the location is written onto batches (and copied to
+  // their sessions) so the owner facility switcher scopes this
+  // tenant's data like any production tenant's.
   const programsByName = await ensurePrograms(tenantId, [
     { name: "Junior football" },
     { name: "Senior football" },
@@ -1163,6 +1190,10 @@ async function ensureKicksFootballTenant(actor: UserId): Promise<void> {
     let id: string;
     if (existing.rows.length > 0) {
       id = existing.rows[0].id;
+      await adminPool.query(
+        "update batches set location_id = $1, updated_at = now() where id = $2 and tenant_id = $3 and location_id is null",
+        [locationId, id, tenantId],
+      );
     } else {
       id = uuidv7();
       const endTime = addHour(b.startTime);
@@ -1170,10 +1201,10 @@ async function ensureKicksFootballTenant(actor: UserId): Promise<void> {
       await adminPool.query(
         `insert into batches
            (id, tenant_id, program_id, name, capacity, days_of_week,
-            start_time, end_time, is_sample, coach_id, created_by, updated_by)
+            start_time, end_time, is_sample, coach_id, location_id, created_by, updated_by)
          values
-           ($1, $2, $3, $4, $5, $6::int[], $7, $8, false, $9, null, null)`,
-        [id, tenantId, programId, b.name, b.capacity, dowArr, b.startTime, endTime, coachStaffId],
+           ($1, $2, $3, $4, $5, $6::int[], $7, $8, false, $9, $10, null, null)`,
+        [id, tenantId, programId, b.name, b.capacity, dowArr, b.startTime, endTime, coachStaffId, locationId],
       );
     }
     fbBatchIds.set(b.name, id);
@@ -1191,6 +1222,9 @@ async function ensureKicksFootballTenant(actor: UserId): Promise<void> {
   await withTenant(tenantId, async (tx) => {
     await generateSessions(tx, tenantId, DEMO_FOOTBALL_TENANT.timezone);
   });
+  // Wave 2 repair — sessions created before batches carried a location
+  // keep NULL; backfill from the batch so facility-scoped reads see them.
+  await backfillSessionLocations(tenantId);
   // Members + enrolments + enquiries + past attendance — enough that
   // the second tenant reads as a live club (not an empty shell) on
   // the platform tenant list. See DEMO_FOOTBALL_MEMBERS / _ENQUIRIES
@@ -1506,6 +1540,9 @@ async function main() {
     primaryCoachStaffId,
     secondaryCoachStaffId,
   );
+  // Wave 2 repair — pre-location sessions and attendance keep NULL on
+  // re-run; backfill them so the facility switcher scopes the history.
+  await backfillSessionLocations(tenantId);
 
   // Late Squad — R.2 demo helper. Tuesday 17:30-18:30 with primary coach,
   // overlapping Morning Squad's 07:00-08:00 only on day-of-week, but
@@ -1527,10 +1564,10 @@ async function main() {
         await adminPool.query(
           `insert into batches
              (id, tenant_id, program_id, name, capacity, days_of_week,
-              start_time, end_time, is_sample, coach_id, created_by, updated_by)
+              start_time, end_time, is_sample, coach_id, location_id, created_by, updated_by)
            values
-             ($1, $2, $3, $4, $5, $6::int[], $7, $8, false, $9, null, null)`,
-          [id, tenantId, programId, "Late Squad", 12, "{1,2,3,4,5}", "18:00", "19:00", primaryCoachStaffId],
+             ($1, $2, $3, $4, $5, $6::int[], $7, $8, false, $9, $10, null, null)`,
+          [id, tenantId, programId, "Late Squad", 12, "{1,2,3,4,5}", "18:00", "19:00", primaryCoachStaffId, locationId],
         );
         batchIdsByName.set("Late Squad", id);
         // Re-assign Holiday Recovery to primary coach too so the

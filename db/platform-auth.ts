@@ -258,6 +258,7 @@ export async function lookupPlatformSession(
       .where(eq(platformSessions.tokenHash, tokenHash))
       .limit(1);
     if (!row) return { kind: "not_found" } as const;
+    if (row.user.status !== "active") return { kind: "not_found" } as const;
     if (row.session.expiresAt.getTime() < Date.now()) {
       return { kind: "expired" } as const;
     }
@@ -307,8 +308,10 @@ export async function provisionPlatformUser(input: {
   name: string;
   password: string;
   role?: "admin" | "viewer";
+  phone?: string;
 }): Promise<{ id: string; totpSecret: string }> {
   const email = input.email.toLowerCase();
+  const phone = input.phone ? z.string().regex(/^\+[1-9]\d{7,14}$/).parse(input.phone) : undefined;
   const salt = randomBytes(16).toString("hex");
   const passwordHash = hashPassword(input.password, salt);
   const totpSecret = generateTotpSecret();
@@ -318,6 +321,7 @@ export async function provisionPlatformUser(input: {
       .values({
         email,
         name: input.name,
+        phone,
         passwordHash,
         passwordSalt: salt,
         totpSecret,

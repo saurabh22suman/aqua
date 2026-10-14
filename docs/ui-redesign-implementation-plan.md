@@ -1,7 +1,9 @@
 # Aqua UI redesign implementation plan
 
 **Date:** 2026-09-21 · **Baseline:** `d483ec7`, merged PR #187.
-**Status:** planning/handoff complete; UR-01–UR-15 implementation not started.
+**Status:** historical acceptance plan, partially superseded by PR1–PR3 and
+October remediation. UR-01/UR-02 functionality and much of UR-03 foundations
+shipped; the remaining target-board/state acceptance is not blanket-certified.
 **User direction:** prioritise UI/UX, compare all seven target boards, and
 attend to small details. This file replaces reliance on the preceding chat.
 **Resume prompt:** “Read this plan and implement the first incomplete UR task;
@@ -121,7 +123,10 @@ Trends need a comparable denominator/period; never copy numbers from a PNG.
 
 ## 4. Ordered tasks
 
-All tasks start **pending**. Preserve earlier functional acceptance criteria.
+The checkboxes retain the original acceptance definitions. Consult the current
+pilot execution record and `review-fixes-status.md` before implementing a task;
+do not restart shipped Reports/check-in/token/parent-money work. Preserve earlier
+functional acceptance criteria.
 If blocked on a decision, record it and ask; do not silently skip ahead.
 
 ### [ ] UR-01 · Restore owner Reports

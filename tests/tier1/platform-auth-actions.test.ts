@@ -1,287 +1,221 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
-import { createHmac } from "node:crypto";
 import { env } from "@/lib/env";
+import { provisionPlatformUser, markTotpEnrolled } from "@/db/platform-auth";
 import {
-  provisionPlatformUser,
-  markTotpEnrolled,
-} from "@/db/platform-auth";
-import {
-  loginPlatformAction,
-  verifyPlatformTotpAction,
-  logoutPlatformAction,
-  platformAuthStatusAction,
+  loginPlatformAction, verifyPlatformTotpAction, logoutPlatformAction,
+  platformAuthStatusAction, requireOpsAdminAction,
 } from "@/lib/actions/platform-auth";
 import {
-  writePlatformSessionCookie,
-  readPlatformSessionToken,
-  clearPlatformSessionCookie,
+  writePlatformSessionCookie, readPlatformSessionToken,
+  clearPlatformSessionCookie, PLATFORM_COOKIE_NAME,
 } from "@/lib/auth/platform-cookie";
+import { POST } from "@/app/(platform)/ops/api/whatsapp-auth/route";
+import type { MessageProvider } from "@/lib/messaging/provider";
 
-// Mock next/headers so server actions that read/write cookies can run
-// in unit tests outside a Next.js request context. A plain Map replaces
-// the cookie jar; production behaviour (HttpOnly, Secure, SameSite)
-// is set by next/headers itself, so we test only the round-trip here.
-const cookieJar = new Map<string, string>();
+// Only request transport and external delivery are mocked. Challenges,
+// verification, sessions, audit and action authority use the real database.
+const { cookieJar, send } = vi.hoisted(() => ({
+  cookieJar: new Map<string, string>(),
+  send: vi.fn<MessageProvider["send"]>().mockResolvedValue({
+    providerMessageId: "synthetic-ops-otp", status: "sent",
+  }),
+}));
+vi.mock("@/lib/messaging/provider", () => ({
+  getMessageProvider: () => ({ name: "mock", send }),
+}));
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => {
-      const v = cookieJar.get(name);
-      return v ? { name, value: v } : undefined;
+      const value = cookieJar.get(name);
+      return value ? { name, value } : undefined;
     },
-    set: (arg: { name: string; value: string }) => {
-      cookieJar.set(arg.name, arg.value);
+    set: ({ name, value }: { name: string; value: string }) => {
+      cookieJar.set(name, value);
     },
   }),
 }));
-
-// H1 — the actions now call redirect() on success. Redirect throws
-// NEXT_REDIRECT inside Next.js; in a unit test we want to capture
-// the redirect target without honouring it. The mock turns redirect
-// into a tagged error that the test can assert on.
 class RedirectSignal extends Error {
-  constructor(public path: string) {
-    super(`REDIRECT:${path}`);
-  }
+  constructor(public path: string) { super(`REDIRECT:${path}`); }
 }
 vi.mock("next/navigation", () => ({
-  redirect: (path: string) => {
-    throw new RedirectSignal(path);
-  },
+  redirect: (path: string) => { throw new RedirectSignal(path); },
 }));
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
-
 const RUN = Date.now().toString(36);
+const ids: string[] = [];
+const phones: string[] = [];
+let sequence = 0;
+const challengeCookie = "aqua_whatsapp_ops_login";
 
-beforeAll(async () => {
-  await admin.query("delete from platform_sessions");
-  await admin.query("delete from platform_audit_log");
-  await admin.query("delete from platform_users");
-});
-
+afterEach(() => { cookieJar.clear(); send.mockClear(); });
 afterAll(async () => {
-  await admin.query("delete from platform_sessions");
-  await admin.query("delete from platform_audit_log");
-  await admin.query("delete from platform_users");
+  await admin.query("delete from whatsapp_auth_challenges where phone=any($1::text[])", [phones]);
+  await admin.query("delete from platform_sessions where user_id=any($1::uuid[])", [ids]);
+  await admin.query("delete from platform_audit_log where actor_id=any($1::uuid[])", [ids]);
+  await admin.query("delete from platform_users where id=any($1::uuid[])", [ids]);
   await admin.end();
 });
 
-async function createEnrolledUser(label: string) {
-  const ts = `${RUN}-${label}`;
-  const email = `${label}-${ts}@platform.test`;
-  const password = `pw-${label}-${ts}`;
-  const { id, totpSecret } = await provisionPlatformUser({
-    email,
-    name: `Operator ${label}`,
-    password,
-    role: "admin",
-  });
+async function operator(role: "admin" | "viewer" = "admin") {
+  const label = `${RUN}-${++sequence}`;
+  const email = `${label}@platform.test`;
+  const password = `synthetic-password-${label}`;
+  const phone = `+9197${String(Date.now()).slice(-6)}${String(sequence).padStart(2, "0")}`;
+  const { id } = await provisionPlatformUser({ email, name: label, password, role });
+  ids.push(id); phones.push(phone);
   await markTotpEnrolled(id);
-  return { id, password, totpSecret, email };
+  await admin.query("update platform_users set phone=$1 where id=$2", [phone, id]);
+  return { id, email, password, phone };
 }
 
-function makeCode(secret: string, atMs = Date.now()): string {
-  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const cleaned = secret.replace(/=+$/g, "").toUpperCase();
-  const bytes: number[] = [];
-  let bits = 0;
-  let value = 0;
-  for (const ch of cleaned) {
-    const v = ALPHABET.indexOf(ch);
-    if (v < 0) throw new Error(`invalid base32 char: ${ch}`);
-    value = (value << 5) | v;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.push((value >>> bits) & 0xff);
-    }
-  }
-  const key = Buffer.from(bytes);
-  const counter = Math.floor(atMs / 1000 / 30);
-  const counterHex = counter.toString(16).padStart(16, "0");
-  const hmac = createHmac("sha1", key)
-    .update(Buffer.from(counterHex, "hex"))
-    .digest();
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const binary =
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff);
-  return (binary % 1_000_000).toString().padStart(6, "0");
+function form(values: Record<string, string>) {
+  const data = new FormData();
+  for (const [key, value] of Object.entries(values)) data.set(key, value);
+  return data;
 }
 
-describe("platform-cookie helpers", () => {
-  it("writes and reads a session token", async () => {
+async function request(body: unknown, origin = "http://ops.localhost", host = "ops.localhost") {
+  return POST(new Request("http://ops.localhost/ops/api/whatsapp-auth", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin, host,
+      cookie: [...cookieJar].map(([name, value]) => `${name}=${value}`).join("; ") },
+    body: JSON.stringify(body),
+  }));
+}
+
+async function challenge(phone: string) {
+  const response = await request({ intent: "request", phone });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ step: "code" });
+  const token = response.cookies.get(challengeCookie)?.value;
+  expect(token).toMatch(/^[a-f0-9]{64}$/);
+  expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+  expect(response.headers.get("set-cookie")).toContain("SameSite=strict");
+  cookieJar.set(challengeCookie, token!);
+  const code = send.mock.calls.at(-1)?.[0].body.match(/code is (\d{6})/)?.[1];
+  if (!code) throw new Error("Synthetic transport did not receive an OTP");
+  return code;
+}
+
+async function authenticate(user: Awaited<ReturnType<typeof operator>>) {
+  const code = await challenge(user.phone);
+  const response = await request({ intent: "verify", code });
+  expect(await response.json()).toEqual({ step: "done", redirectPath: "/ops" });
+  const token = response.cookies.get(PLATFORM_COOKIE_NAME)?.value;
+  expect(token).toMatch(/^[a-f0-9]{64}$/);
+  cookieJar.set(PLATFORM_COOKIE_NAME, token!);
+  return token!;
+}
+
+describe("platform authentication boundary", () => {
+  it("round-trips and clears the session cookie", async () => {
     await writePlatformSessionCookie("a".repeat(64));
-    const got = await readPlatformSessionToken();
-    expect(got).toBe("a".repeat(64));
+    expect(await readPlatformSessionToken()).toBe("a".repeat(64));
     await clearPlatformSessionCookie();
-    const after = await readPlatformSessionToken();
-    expect(after).toBeNull();
-  });
-});
-
-describe("loginPlatformAction", () => {
-  // H1 — actions take FormData and call redirect() on the success
-  // path. The mock at the top of the file turns redirect() into a
-  // thrown RedirectSignal, so the assertions below catch the path
-  // instead of comparing against a removed result.kind.
-  function fd(obj: Record<string, string>): FormData {
-    const f = new FormData();
-    for (const [k, v] of Object.entries(obj)) f.set(k, v);
-    return f;
-  }
-
-  it("returns error for zod-invalid input without touching the database", async () => {
-    const result = await loginPlatformAction(null, fd({ email: "not-an-email", password: "" }));
-    expect(result.kind).toBe("error");
-    if (result.kind !== "error") return;
-    expect(result.message).toMatch(/email and password/);
+    expect(await readPlatformSessionToken()).toBeNull();
   });
 
-  it("redirects to /ops/verify on a correct password and writes the half-auth cookie", async () => {
-    const { password, email } = await createEnrolledUser("login-ok");
-    let captured: string | null = null;
-    try {
-      await loginPlatformAction(null, fd({ email, password }));
-    } catch (err) {
-      if (err instanceof RedirectSignal) captured = err.path;
-      else throw err;
-    }
-    expect(captured).toBe("/ops/verify");
-    const cookie = await readPlatformSessionToken();
-    expect(cookie).toMatch(/^[0-9a-f]{64}$/);
-    await clearPlatformSessionCookie();
+  it("validates legacy input but never authenticates even a correct password", async () => {
+    expect(await loginPlatformAction(null, form({ email: "invalid", password: "" })))
+      .toEqual({ kind: "error", message: "Enter a valid email and password." });
+    const user = await operator();
+    const known = await loginPlatformAction(null, form(user));
+    const unknown = await loginPlatformAction(null, form({ email: "missing@platform.test", password: "wrong" }));
+    expect(known).toEqual(unknown);
+    expect(known).toEqual({ kind: "error", message: "Use your registered phone and WhatsApp code to sign in." });
+    expect(await readPlatformSessionToken()).toBeNull();
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [user.id])).rows).toEqual([]);
   });
 
-  it("returns the generic error message on a wrong password, by design", async () => {
-    const { password, email } = await createEnrolledUser("login-wrong");
-    const result = await loginPlatformAction(null, fd({ email, password: password + "X" }));
-    expect(result.kind).toBe("error");
-    if (result.kind !== "error") return;
-    // The message must not distinguish "wrong password" from "no such
-    // user" — a known account + a wrong password is otherwise the
-    // cheap way to enumerate emails.
-    expect(result.message.toLowerCase()).toContain("email or password");
-  });
-});
-
-describe("verifyPlatformTotpAction", () => {
-  function fd(obj: Record<string, string>): FormData {
-    const f = new FormData();
-    for (const [k, v] of Object.entries(obj)) f.set(k, v);
-    return f;
-  }
-
-  it("rejects with sign-in-expired message when no cookie is set", async () => {
-    await clearPlatformSessionCookie();
-    const result = await verifyPlatformTotpAction(null, fd({ code: "123456" }));
-    expect(result.kind).toBe("error");
-    if (result.kind !== "error") return;
-    expect(result.message.toLowerCase()).toContain("sign-in");
+  it("legacy TOTP cannot upgrade a session and redirects back to login", async () => {
+    const user = await operator();
+    await authenticate(user);
+    await expect(verifyPlatformTotpAction(null, form({ code: "123456" })))
+      .rejects.toEqual(new RedirectSignal("/ops/login"));
+    expect(await readPlatformSessionToken()).toBeNull();
+    expect(await platformAuthStatusAction()).toEqual({ kind: "not_found" });
   });
 
-  it("redirects to /ops on a correct code", async () => {
-    const { password, email, totpSecret } = await createEnrolledUser("verify-ok");
-    try {
-      await loginPlatformAction(null, fd({ email, password }));
-    } catch (err) {
-      if (!(err instanceof RedirectSignal)) throw err;
-    }
-    let captured: string | null = null;
-    try {
-      await verifyPlatformTotpAction(null, fd({ code: makeCode(totpSecret) }));
-    } catch (err) {
-      if (err instanceof RedirectSignal) captured = err.path;
-      else throw err;
-    }
-    // 2026-09-11 auth feature: the ops console lives at /ops (the
-    // middleware only admits /ops on the ops host). The old /platform
-    // target predated the PR #105 rename and 404'd.
-    expect(captured).toBe("/ops");
-    await clearPlatformSessionCookie();
+  it("rejects invalid input and cross-host/origin requests without sending an OTP", async () => {
+    expect((await request({ intent: "request", phone: "" })).status).toBe(400);
+    expect(await (await request({ intent: "request", phone: "invalid" })).json())
+      .toMatchObject({ step: "phone", error: expect.any(String) });
+    expect((await request({ intent: "request", phone: "+919000008099" }, "http://evil.test")).status).toBe(403);
+    expect((await request({ intent: "request", phone: "+919000008099" }, "http://localhost", "localhost")).status).toBe(403);
+    expect(send).not.toHaveBeenCalled();
   });
 
-  it("returns wrong-code error on an incorrect code and clears nothing", async () => {
-    const { password, email } = await createEnrolledUser("verify-wrong");
-    try {
-      await loginPlatformAction(null, fd({ email, password }));
-    } catch (err) {
-      if (!(err instanceof RedirectSignal)) throw err;
-    }
-    const tokenBefore = await readPlatformSessionToken();
-    const result = await verifyPlatformTotpAction(null, fd({ code: "000000" }));
-    expect(result.kind).toBe("error");
-    if (result.kind !== "error") return;
-    expect(result.message.toLowerCase()).toContain("wrong");
-    const tokenAfter = await readPlatformSessionToken();
-    expect(tokenAfter).toBe(tokenBefore);
-    await clearPlatformSessionCookie();
-  });
-});
-
-describe("logoutPlatformAction", () => {
-  function fd(obj: Record<string, string>): FormData {
-    const f = new FormData();
-    for (const [k, v] of Object.entries(obj)) f.set(k, v);
-    return f;
-  }
-
-  it("clears the cookie and removes the session row", async () => {
-    const { password, email } = await createEnrolledUser("logout");
-    try {
-      await loginPlatformAction(null, fd({ email, password }));
-    } catch (err) {
-      if (!(err instanceof RedirectSignal)) throw err;
-    }
-    const tokenBefore = await readPlatformSessionToken();
-    expect(tokenBefore).toMatch(/^[0-9a-f]{64}$/);
-    const before = await admin.query<{ count: string }>(
-      "select count(*)::text from platform_sessions",
-    );
-    await logoutPlatformAction();
-    const tokenAfter = await readPlatformSessionToken();
-    expect(tokenAfter).toBeNull();
-    const after = await admin.query<{ count: string }>(
-      "select count(*)::text from platform_sessions",
-    );
-    expect(Number(after.rows[0]!.count)).toBeLessThan(
-      Number(before.rows[0]!.count),
-    );
-  });
-});
-
-describe("platformAuthStatusAction", () => {
-  function fd(obj: Record<string, string>): FormData {
-    const f = new FormData();
-    for (const [k, v] of Object.entries(obj)) f.set(k, v);
-    return f;
-  }
-
-  it("reports not_found with no cookie", async () => {
-    await clearPlatformSessionCookie();
-    const status = await platformAuthStatusAction();
-    expect(status.kind).toBe("not_found");
+  it("does not enumerate accounts or authenticate at the challenge-request stage", async () => {
+    const user = await operator();
+    const known = await request({ intent: "request", phone: user.phone });
+    const unknownPhone = "+919000009999";
+    phones.push(unknownPhone);
+    const unknown = await request({ intent: "request", phone: unknownPhone });
+    expect(await known.json()).toEqual(await unknown.json());
+    expect(known.cookies.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
+    expect(unknown.cookies.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [user.id])).rows).toEqual([]);
   });
 
-  it("reports authenticated after a successful 2FA", async () => {
-    const { password, email, totpSecret } = await createEnrolledUser("status-full");
-    try {
-      await loginPlatformAction(null, fd({ email, password }));
-    } catch (err) {
-      if (!(err instanceof RedirectSignal)) throw err;
-    }
-    try {
-      await verifyPlatformTotpAction(null, fd({ code: makeCode(totpSecret) }));
-    } catch (err) {
-      if (!(err instanceof RedirectSignal)) throw err;
-    }
-    const status = await platformAuthStatusAction();
-    expect(status.kind).toBe("authenticated");
-    if (status.kind !== "authenticated") return;
-    expect(status.role).toBe("admin");
-    await clearPlatformSessionCookie();
+  it("rejects a wrong OTP, then authenticates once with the valid browser-bound OTP", async () => {
+    const user = await operator();
+    const code = await challenge(user.phone);
+    const wrong = code === "000000" ? "111111" : "000000";
+    const rejected = await request({ intent: "verify", code: wrong });
+    expect(await rejected.json()).toMatchObject({ step: "code", error: expect.any(String) });
+    expect(rejected.cookies.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [user.id])).rows).toEqual([]);
+    const accepted = await request({ intent: "verify", code });
+    expect(await accepted.json()).toEqual({ step: "done", redirectPath: "/ops" });
+    expect(accepted.cookies.get(challengeCookie)?.value).toBe("");
+    const replay = await request({ intent: "verify", code });
+    expect(await replay.json()).toMatchObject({ step: "code", error: expect.any(String) });
+    expect(replay.cookies.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
+    const sessions = await admin.query("select second_factor_passed from platform_sessions where user_id=$1", [user.id]);
+    expect(sessions.rows).toEqual([{ second_factor_passed: true }]);
+    const audits = await admin.query("select detail from platform_audit_log where actor_id=$1 and action='platform.login'", [user.id]);
+    expect(audits.rows).toEqual([{ detail: { method: "whatsapp_otp" } }]);
+  });
+
+  it("rejects missing and expired challenges without creating a session", async () => {
+    expect(await (await request({ intent: "verify", code: "123456" })).json())
+      .toMatchObject({ step: "phone", error: expect.any(String) });
+    const user = await operator();
+    const code = await challenge(user.phone);
+    await admin.query("update whatsapp_auth_challenges set expires_at=now()-interval '1 minute' where phone=$1", [user.phone]);
+    const response = await request({ intent: "verify", code });
+    expect(await response.json()).toMatchObject({ step: "code", error: expect.any(String) });
+    expect(response.cookies.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [user.id])).rows).toEqual([]);
+  });
+
+  it("rechecks account status before issuing a session", async () => {
+    const user = await operator();
+    const code = await challenge(user.phone);
+    await admin.query("update platform_users set status='suspended' where id=$1", [user.id]);
+    const response = await request({ intent: "verify", code });
+    expect(await response.json()).toHaveProperty("error");
+    expect(response.cookies.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [user.id])).rows).toEqual([]);
+  });
+
+  it("reports authenticated identity, and logout revokes both the cookie and persisted session", async () => {
+    const user = await operator();
+    await authenticate(user);
+    expect(await platformAuthStatusAction()).toMatchObject({ kind: "authenticated", userId: user.id, role: "admin" });
+    expect(await requireOpsAdminAction()).toEqual({ kind: "ok", userId: user.id, role: "admin" });
+    expect(await logoutPlatformAction()).toEqual({ kind: "ok" });
+    expect(await readPlatformSessionToken()).toBeNull();
+    expect(await platformAuthStatusAction()).toEqual({ kind: "not_found" });
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [user.id])).rows).toEqual([]);
+  });
+
+  it("authenticates viewers without granting platform mutation authority", async () => {
+    const user = await operator("viewer");
+    await authenticate(user);
+    expect(await platformAuthStatusAction()).toMatchObject({ kind: "authenticated", userId: user.id, role: "viewer" });
+    expect(await requireOpsAdminAction()).toEqual({ kind: "error", reason: "forbidden" });
   });
 });

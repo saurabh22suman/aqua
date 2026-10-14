@@ -4,7 +4,10 @@ import { defaultMonthPeriod } from "@/lib/services/owner-reports";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
-import { formatDateIST } from "@/lib/time/tz";
+import { formatPeriodRangeIST } from "@/lib/time/tz";
+import { cookies } from "next/headers";
+import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { listLocationsAction } from "@/lib/actions/people";
 import { AttendanceReportCard } from "@/components/reports/attendance-report-card";
 import { EnquiryFunnelCard } from "@/components/reports/enquiry-funnel-card";
 import { RetentionCard } from "@/components/reports/retention-card";
@@ -17,25 +20,40 @@ import {
   PlanRevenueCard,
 } from "@/components/reports/analytics-cards";
 import { ReportCardError } from "@/components/reports/report-card-error";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import Link from "next/link";
 
 // Phase 4 — owner reports surface. Four cards (4.2 / 4.3 /
 // 4.4 / 4.5 / 4.6), one dominant element on each. Period
 // defaults to "this calendar month" in the tenant's timezone.
 // The page picks up `?from=…&to=…` from the URL when set.
+//
+// W1-6 continuation — a facility selection scopes the cards that
+// carry a location dimension (attendance, analytics, collections,
+// utilisation) and hides the ones that do not yet (enquiry funnel,
+// retention, coach load), with an explicit note instead of showing
+// tenant-wide numbers under a single-site heading.
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ from?: string; to?: string }>;
+  searchParams?: Promise<{ from?: string; to?: string; facility?: string }>;
 }) {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "reports.operational");
   const params = searchParams ? await searchParams : {};
+  const cookieStore = await cookies();
+  const facility = resolveFacilityValue(
+    params.facility,
+    cookieStore.get(FACILITY_COOKIE)?.value,
+  );
   const timezone = await getTenantTimezoneAction();
+  const defaultPeriod = defaultMonthPeriod(timezone);
   const period = (() => {
     if (params.from && params.to) return { from: params.from, to: params.to };
-    return defaultMonthPeriod(timezone);
+    return defaultPeriod;
   })();
+  const isDefaultMonth =
+    period.from === defaultPeriod.from && period.to === defaultPeriod.to;
 
   const [
     attendance,
@@ -45,20 +63,30 @@ export default async function ReportsPage({
     utilisation,
     operational,
     money,
+    locations,
   ] = await Promise.allSettled([
-    getAttendanceReportAction(period),
-    getEnquiryFunnelAction(period),
-    getRetentionViewAction(),
-    getCoachLoadAction(period),
-    // V-08 — facility utilisation for the last 4 weeks.
-    getFacilityUtilisationAction(),
+    getAttendanceReportAction({
+      ...period,
+      ...(facility ? { locationId: facility } : {}),
+    }),
+    facility ? Promise.resolve([]) : getEnquiryFunnelAction(period),
+    facility ? Promise.resolve(null) : getRetentionViewAction(),
+    facility ? Promise.resolve([]) : getCoachLoadAction(period),
+    // V-08 — facility utilisation for the last 4 weeks, scoped by the
+    // switcher when one is selected.
+    getFacilityUtilisationAction(facility ? { locationId: facility } : {}),
     // U-01 — the analytics series. Operational and financial are
     // separate actions because they carry different permission keys;
     // an owner holds both.
-    getOperationalAnalyticsAction(period),
-    getMoneyAnalyticsAction(period),
+    getOperationalAnalyticsAction(period, facility),
+    getMoneyAnalyticsAction(period, facility),
+    listLocationsAction(),
   ] as const);
   const terminology = await getTerminologyAction();
+  const facilityName =
+    facility && locations.status === "fulfilled"
+      ? locations.value.find((l) => l.id === facility)?.name
+      : undefined;
 
   const attendanceRows = settled(attendance, "Attendance by batch");
   const enquiryRows = settled(enquiry, "Enquiry funnel");
@@ -72,10 +100,24 @@ export default async function ReportsPage({
     <main className="px-5 pt-6 pb-8">
       <h1 className="font-display text-[19px] font-semibold">Reports</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Period <span className="font-mono">{formatDateIST(period.from)}</span> to{" "}
-        <span className="font-mono">{formatDateIST(period.to)}</span>{" "}
-        ({timezone}). This calendar month, in the tenant&apos;s timezone.
+        {isDefaultMonth ? "This calendar month: " : "Period: "}
+        <span className="font-mono">
+          {formatPeriodRangeIST(period.from, period.to)}
+        </span>{" "}
+        ({timezone}).
       </p>
+
+      {facility ? (
+        <p
+          data-testid="reports-facility-note"
+          className="mt-3 rounded-ctl border border-line bg-paper px-3.5 py-2.5 text-[12.5px] text-ink-2"
+        >
+          Showing <span className="font-medium">{facilityName ?? "one facility"}</span>.
+          Attendance, collections and utilisation are scoped to it. Enquiry,
+          retention and coach-load reports are tenant-wide and are hidden while
+          a facility is selected.
+        </p>
+      ) : null}
 
       <Link
         href="/owner/reports/collections"
@@ -109,7 +151,11 @@ export default async function ReportsPage({
 
       <div className="mt-6 space-y-3">
         {attendanceRows ? (
-          <AttendanceReportCard rows={attendanceRows} period={period} />
+          <AttendanceReportCard
+            rows={attendanceRows}
+            period={period}
+            locationId={facility}
+          />
         ) : (
           <ReportCardError title="Attendance by batch" />
         )}
@@ -121,7 +167,7 @@ export default async function ReportsPage({
         {moneyData ? (
           <CollectionsExpensesCard series={moneyData.collections} />
         ) : (
-          <ReportCardError title="Collections vs expenses" />
+          <ReportCardError title="Collections" />
         )}
         {moneyData ? (
           <PlanRevenueCard rows={moneyData.planRevenue} />
@@ -136,21 +182,21 @@ export default async function ReportsPage({
         ) : (
           <ReportCardError title="Members by status" />
         )}
-        {enquiryRows ? (
+        {!facility && enquiryRows ? (
           <EnquiryFunnelCard rows={enquiryRows} />
-        ) : (
+        ) : !facility ? (
           <ReportCardError title="Enquiry funnel" />
-        )}
-        {retentionRow ? (
+        ) : null}
+        {!facility && retentionRow ? (
           <RetentionCard row={retentionRow} />
-        ) : (
+        ) : !facility ? (
           <ReportCardError title="Retention" />
-        )}
-        {coachLoadRows ? (
+        ) : null}
+        {!facility && coachLoadRows ? (
           <CoachLoadCard rows={coachLoadRows} />
-        ) : (
+        ) : !facility ? (
           <ReportCardError title="Coach load" />
-        )}
+        ) : null}
         {utilisationReport ? (
           <UtilisationCard report={utilisationReport} />
         ) : (

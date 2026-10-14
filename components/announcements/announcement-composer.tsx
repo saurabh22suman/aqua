@@ -4,10 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { sendAnnouncementAction } from "@/lib/actions/announcements";
 
-// U-06 — the announcement composer. In-app delivery only in Release
-// 1: the WhatsApp provider is the C-40a mock and no send is
-// attempted, which the copy below states so an owner is never left
-// believing a WhatsApp message went out.
+// In-app notifications and consent-checked WhatsApp outbox delivery.
 
 const inputClass =
   "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
@@ -40,9 +37,9 @@ export function AnnouncementComposer({
         Send an announcement
       </h2>
       <p className="mt-1 text-[12.5px] text-ink-3">
-        Delivered in-app, to every account the audience resolves to.
-        WhatsApp is not connected in this release — nothing is sent
-        through it.
+        Creates in-app notifications and queues WhatsApp updates to selected
+        student contacts and relevant staff. Student updates require active
+        communications consent. The local demo captures messages in the mock viewer.
       </p>
 
       <div className="mt-3 space-y-3">
@@ -127,7 +124,8 @@ export function AnnouncementComposer({
           setBusy(true);
           setMessage(null);
           void (async () => {
-            const result = await sendAnnouncementAction({
+            try {
+              const result = await sendAnnouncementAction({
               title,
               body,
               audience,
@@ -137,7 +135,7 @@ export function AnnouncementComposer({
               result.ok
                 ? `Sent in-app to ${result.recipientCount} account${
                     result.recipientCount === 1 ? "" : "s"
-                  }.`
+                   }. WhatsApp queued for ${result.whatsappRecipientCount ?? 0} number${result.whatsappRecipientCount === 1 ? "" : "s"}.`
                 : result.error,
             );
             if (result.ok) {
@@ -145,12 +143,16 @@ export function AnnouncementComposer({
               setBody("");
               router.refresh();
             }
-            setBusy(false);
+            } catch {
+              setMessage("Could not confirm the announcement. Refresh the sent list before retrying.");
+            } finally {
+              setBusy(false);
+            }
           })();
         }}
         className="mt-3 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
       >
-        {busy ? "Sending…" : "Send in-app"}
+        {busy ? "Sending…" : "Send announcement"}
       </button>
 
       {message ? (

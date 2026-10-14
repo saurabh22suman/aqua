@@ -1,7 +1,9 @@
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, exists, gte, isNull, lt, or, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { members } from "@/db/schema/people";
+import { memberFacilityOptins } from "@/db/schema/facility-optins";
+import { batches } from "@/db/schema/programs";
 import { tenants } from "@/db/schema/tenants";
 import { payments } from "@/db/schema/payments";
 import { invoices } from "@/db/schema/invoices";
@@ -10,6 +12,7 @@ import { membershipPlans } from "@/db/schema/membership-plans";
 import { dayRangeUtc } from "@/lib/time/tz";
 import type { ReportPeriod } from "@/lib/services/owner-reports";
 import type { ActionCtx } from "@/lib/auth/context";
+import { toSafePaise } from "@/lib/money/safe-paise";
 
 // U-01 — owner analytics reads for /owner/reports. Four series,
 // all computed from existing tables (no new schema):
@@ -57,7 +60,9 @@ export type OperationalAnalytics = {
 export async function getOperationalAnalytics(
   ctx: ActionCtx,
   period: ReportPeriod,
+  options: { locationId?: string } = {},
 ): Promise<OperationalAnalytics> {
+  const locationId = options.locationId;
   return withTenant(ctx.tenantId, async (tx) => {
     const trendRows = await tx
       .select({
@@ -66,6 +71,7 @@ export async function getOperationalAnalytics(
         total: sql<number>`count(${attendance.id})::int`,
       })
       .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
       .leftJoin(
         attendance,
         and(
@@ -79,6 +85,7 @@ export async function getOperationalAnalytics(
           sql`${sessions.status} <> 'cancelled'`,
           gte(sessions.sessionDate, period.from),
           lt(sessions.sessionDate, period.to),
+          ...(locationId ? [eq(batches.locationId, locationId)] : []),
         ),
       )
       .groupBy(sessions.sessionDate)
@@ -90,7 +97,31 @@ export async function getOperationalAnalytics(
         count: sql<number>`count(*)::int`,
       })
       .from(members)
-      .where(and(eq(members.tenantId, ctx.tenantId), isNull(members.deletedAt)))
+      .where(
+        and(
+          eq(members.tenantId, ctx.tenantId),
+          isNull(members.deletedAt),
+          ...(locationId
+            ? [
+                or(
+                  eq(members.locationId, locationId),
+                  exists(
+                    tx
+                      .select({ one: sql`1` })
+                      .from(memberFacilityOptins)
+                      .where(
+                        and(
+                          eq(memberFacilityOptins.memberId, members.id),
+                          eq(memberFacilityOptins.locationId, locationId),
+                          isNull(memberFacilityOptins.endedOn),
+                        ),
+                      ),
+                  ),
+                )!,
+              ]
+            : []),
+        ),
+      )
       .groupBy(members.status);
 
     return {
@@ -111,7 +142,9 @@ export async function getOperationalAnalytics(
 export async function getMoneyAnalytics(
   ctx: ActionCtx,
   period: ReportPeriod,
+  options: { locationId?: string } = {},
 ): Promise<MoneyAnalytics> {
+  const locationId = options.locationId;
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
@@ -128,6 +161,7 @@ export async function getMoneyAnalytics(
       eq(payments.status, "captured"),
       gte(payments.receivedAt, fromUtc),
       lt(payments.receivedAt, endUtc),
+      ...(locationId ? [eq(payments.locationId, locationId)] : []),
     );
 
     // The tenant-local day is computed in a derived table so the
@@ -183,7 +217,7 @@ export async function getMoneyAnalytics(
 
     const byDay = byDayRows.map((r) => ({
       date: r.date,
-      paise: Number(r.paise),
+      paise: toSafePaise(r.paise),
     }));
 
     return {
@@ -194,7 +228,7 @@ export async function getMoneyAnalytics(
       },
       planRevenue: planRows.map((r) => ({
         planName: r.planName,
-        paise: Number(r.paise),
+        paise: toSafePaise(r.paise),
         paymentCount: Number(r.paymentCount),
       })),
     };

@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { LOCALES, type Locale } from "@/lib/terminology/keys";
+import { LOCALES, WRITABLE_LOCALES, type Locale } from "@/lib/terminology/keys";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { TerminologyForm } from "@/components/terminology/terminology-form";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 
 // Phase 2.10 / 4.20 — owner vocabulary editor. Eight closed
@@ -24,12 +24,14 @@ export default async function TerminologySettingsPage({
 }: {
   searchParams: Promise<{ locale?: string }>;
 }) {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const params = await searchParams;
   const requested = params.locale;
   const locale: Locale = (LOCALES as readonly string[]).includes(requested ?? "")
     ? (requested as Locale)
     : "en";
+  const canEditLocale = (WRITABLE_LOCALES as readonly string[]).includes(locale);
 
   const data = await getTerminologyAction();
   return (
@@ -63,11 +65,20 @@ export default async function TerminologySettingsPage({
       </nav>
 
       <p className="mt-3 text-[12px] text-ink-3">
-        Editing <span className="text-ink-2 font-mono">{locale}</span>. The tenant&apos;s actual display locale lives on the coach / parent-side surfaces; this picker edits vocabulary only.
+        {canEditLocale
+          ? "Editing English. The tenant's actual display locale lives on the coach / parent-side surfaces; this picker edits vocabulary only."
+          : `${LOCALE_LABEL[locale]} vocabulary is read-only today — only English overrides can be saved.`}
       </p>
 
       <div className="mt-6">
-        <TerminologyForm initial={data} locale={locale} />
+        {/* Keyed by locale: switching locale must never retain the
+            previous locale's editor state. */}
+        <TerminologyForm
+          key={locale}
+          initial={data}
+          locale={locale}
+          editable={canEditLocale}
+        />
       </div>
     </main>
   );

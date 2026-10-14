@@ -16,8 +16,10 @@ import {
 } from "@/lib/services/location-access";
 import { applyPayments } from "@/lib/money/arithmetic";
 import { formatINR } from "@/lib/money/format";
+import { toSafePaise } from "@/lib/money/safe-paise";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { PaymentMethod } from "@/db/schema/payments";
+import { enqueueMemberNotification } from "@/lib/messaging/notification-enqueue";
 
 // C-33 — payments recorded at the counter (cash, UPI reference, bank
 // transfer). A payment against an invoice updates paid_paise and the
@@ -110,8 +112,8 @@ export async function recordPayment(
       return { ok: false, error: "This invoice is already fully paid." };
     }
 
-    const { paid, outstanding } = applyPayments(Number(invoice.totalPaise), [
-      Number(invoice.paidPaise),
+    const { paid, outstanding } = applyPayments(toSafePaise(invoice.totalPaise), [
+      toSafePaise(invoice.paidPaise),
     ]);
     if (outstanding <= 0) {
       return { ok: false, error: "This invoice is already fully paid." };
@@ -135,7 +137,7 @@ export async function recordPayment(
     }
 
     const newPaid = paid + input.amountPaise;
-    const newStatus = newPaid === Number(invoice.totalPaise) ? "paid" : "partial";
+    const newStatus = newPaid === toSafePaise(invoice.totalPaise) ? "paid" : "partial";
 
     // Bug fix (live-attack audit): the same UPI UTR / bank reference
     // cannot justify two different payments. Pre-check here for a
@@ -235,6 +237,8 @@ export async function recordPayment(
       },
     });
 
+    await enqueueMemberNotification(tx, { tenantId: ctx.tenantId, eventKey: `payment:${payment.id}`, essential: true,
+      body: `Aqua payment recorded: ${formatINR(input.amountPaise)} by ${input.method} against invoice ${invoice.invoiceNumber}. Status at recording: ${newStatus}.` }, invoice.memberId);
     return { ok: true, id: payment.id, invoiceStatus: newStatus };
   });
 }
@@ -284,7 +288,7 @@ export async function listInvoicePayments(
       id: row.payment.id,
       invoiceId: row.payment.invoiceId,
       invoiceNumber: row.invoiceNumber,
-      amountPaise: Number(row.payment.amountPaise),
+      amountPaise: toSafePaise(row.payment.amountPaise),
       method: row.payment.method as PaymentMethod,
       channel: row.payment.channel,
       reference: row.payment.reference,

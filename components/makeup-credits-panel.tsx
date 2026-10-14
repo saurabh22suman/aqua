@@ -21,13 +21,30 @@ import { formatDateIST } from "@/lib/time/tz";
 // session in the member's batches. One free session per absence — no
 // fee credit, no subscription adjustment (the service enforces the
 // same rule).
+//
+// A02 (2026-10-09 role/content/permission audit §8) — granting is a
+// management decision (programs.write), so the Grant affordance only
+// renders for a caller the page has resolved as holding it; everyone
+// else gets the ask-the-owner note instead of a button the action
+// would refuse.
 const STATUS_LABEL: Record<string, string> = {
   granted: "Available",
   redeemed: "Redeemed",
   expired: "Expired",
 };
 
-export function MakeupCreditsPanel({ memberId }: { memberId: string }) {
+export function MakeupCreditsPanel({
+  memberId,
+  canGrant,
+  canRedeem,
+}: {
+  memberId: string;
+  canGrant: boolean;
+  // R10 (2026-10-13 role-workflow audit) — redemption rides
+  // attendance.mark (coach/front desk); the owner grants the credit
+  // but does not redeem it. Readers keep the credit list.
+  canRedeem: boolean;
+}) {
   const router = useRouter();
   const [credits, setCredits] = useState<MakeupCreditRow[] | null>(null);
   const [sources, setSources] = useState<MakeupSessionOption[]>([]);
@@ -92,7 +109,9 @@ export function MakeupCreditsPanel({ memberId }: { memberId: string }) {
         <div className="mt-2.5 space-y-3">
           {credits.length === 0 ? (
             <p className="text-[13px] text-ink-3">
-              No makeup credits yet. Excuse an absence below to grant one.
+              {canGrant
+                ? "No makeup credits yet. Excuse an absence below to grant one."
+                : "No makeup credits yet."}
             </p>
           ) : (
             <ul className="divide-y divide-line">
@@ -117,75 +136,87 @@ export function MakeupCreditsPanel({ memberId }: { memberId: string }) {
             </ul>
           )}
 
-          {sources.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={sourcePick}
-                onChange={(e) => setSourcePick(e.target.value)}
-                className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                data-testid="makeup-source"
-                aria-label="Excused absence"
-              >
-                {sources.map((s) => (
-                  <option key={s.sessionId} value={s.sessionId}>
-                    {formatDateIST(s.sessionDate)} — {s.batchName}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() =>
-                  run(() =>
-                    grantMakeupCreditAction({
-                      memberId,
-                      sourceSessionId: sourcePick,
-                    }),
-                  )
-                }
-                disabled={busy || !sourcePick}
-                className="rounded-ctl bg-[var(--accent-strong)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Grant credit"}
-              </button>
-            </div>
+          {canGrant ? (
+            sources.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={sourcePick}
+                  onChange={(e) => setSourcePick(e.target.value)}
+                  className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                  data-testid="makeup-source"
+                  aria-label="Excused absence"
+                >
+                  {sources.map((s) => (
+                    <option key={s.sessionId} value={s.sessionId}>
+                      {formatDateIST(s.sessionDate)} — {s.batchName}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() =>
+                    run(() =>
+                      grantMakeupCreditAction({
+                        memberId,
+                        sourceSessionId: sourcePick,
+                      }),
+                    )
+                  }
+                  disabled={busy || !sourcePick}
+                  className="rounded-ctl bg-[var(--accent-strong)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
+                >
+                  {busy ? "Saving…" : "Grant credit"}
+                </button>
+              </div>
+            ) : (
+              <p className="text-[12px] text-ink-3">
+                No unexcused absences to grant from.
+              </p>
+            )
           ) : (
             <p className="text-[12px] text-ink-3">
-              No unexcused absences to grant from.
+              Ask the owner to grant a makeup credit.
             </p>
           )}
 
           {available.length > 0 && targets.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={targetPick}
-                onChange={(e) => setTargetPick(e.target.value)}
-                className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                data-testid="makeup-target"
-                aria-label="Makeup session"
-              >
-                {targets.map((t) => (
-                  <option key={t.sessionId} value={t.sessionId}>
-                    {formatDateIST(t.sessionDate)} — {t.batchName}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() =>
-                  run(() =>
-                    redeemMakeupCreditAction({
-                      memberId,
-                      sourceSessionId: available[0]!.sourceSessionId,
-                      targetSessionId: targetPick,
-                    }),
-                  )
-                }
-                disabled={busy || !targetPick}
-                className="rounded-ctl border border-line bg-deck px-3.5 min-h-[44px] text-[13px] font-medium text-ink-2 disabled:opacity-50"
-              >
-                {busy ? "Saving…" : "Redeem"}
-              </button>
-            </div>
+            canRedeem ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={targetPick}
+                  onChange={(e) => setTargetPick(e.target.value)}
+                  className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+                  data-testid="makeup-target"
+                  aria-label="Makeup session"
+                >
+                  {targets.map((t) => (
+                    <option key={t.sessionId} value={t.sessionId}>
+                      {formatDateIST(t.sessionDate)} — {t.batchName}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() =>
+                    run(() =>
+                      redeemMakeupCreditAction({
+                        memberId,
+                        sourceSessionId: available[0]!.sourceSessionId,
+                        targetSessionId: targetPick,
+                      }),
+                    )
+                  }
+                  disabled={busy || !targetPick}
+                  className="rounded-ctl border border-line bg-deck px-3.5 min-h-[44px] text-[13px] font-medium text-ink-2 disabled:opacity-50"
+                >
+                  {busy ? "Saving…" : "Redeem"}
+                </button>
+              </div>
+            ) : (
+              <p className="text-[12px] text-ink-3">
+                A coach or the front desk records the makeup attendance.
+              </p>
+            )
           ) : null}
 
           {error ? <p className="text-[12px] text-ink-2">{error}</p> : null}

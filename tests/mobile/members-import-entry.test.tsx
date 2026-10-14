@@ -6,7 +6,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // (header + empty state), not only by typing the URL.
 
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireOwner: async () => ({}),
+  requireOwner: async () => ({
+    roleKey: "owner",
+    permissions: new Set(["members.read", "members.write"]),
+  }),
+  requirePagePermission: (ctx: unknown) => ctx,
+}));
+
+// W1-6 continuation — the page reads the remembered facility cookie;
+// jsdom has no request scope, so the cookie always reads as absent.
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: () => undefined }),
 }));
 
 const listMembersAction = vi.fn();

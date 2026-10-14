@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { UserCog } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
+import { hasPermission } from "@/lib/auth/permission";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
 import { listCoaches } from "@/lib/services/programs";
 import { listBatches } from "@/lib/services/programs";
@@ -9,7 +9,7 @@ import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { daysAheadWindow } from "@/lib/time/tz";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 
 // F3 (R.1) — owner-facing upcoming-sessions page. Lists every
@@ -30,7 +30,7 @@ import { BackLink } from "@/components/ui/BackLink";
 export default async function SessionsPage() {
   await requireOwner();
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.read");
+  requirePagePermission(ctx, "programs.write");
 
   const timezone = await getTenantTimezoneAction();
   const { fromDate, toDate } = daysAheadWindow(timezone, 14);
@@ -84,6 +84,7 @@ export default async function SessionsPage() {
         coaches={coaches}
         terminology={terminology}
         timezone={timezone}
+        canManage={hasPermission(ctx, "programs.write")}
       />
 
       <div className="mt-6 rounded-card border border-line bg-paper p-4">

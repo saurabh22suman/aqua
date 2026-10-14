@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
@@ -38,27 +38,60 @@ export function MembersBoard({
   const [members, setMembers] = useState(initialMembers);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
+  const [isPending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const requestEpoch = useRef(0);
   // W1-6 — the facility comes from the URL via the page; the board's
   // other filters are local state. A facility change is a server
   // navigation (the switcher pushes `?facility=`), so this never needs
   // a setter.
   const locationId = initialLocationId ?? "";
-  const [isPending, startTransition] = useTransition();
+  const currentLocation = useRef(locationId);
+  currentLocation.current = locationId;
+  // Facility navigation re-renders the page with new server data, but
+  // local state would otherwise keep showing the previous facility's
+  // rows. Adopt the new rows and reset the local filters so the list
+  // and its visible controls agree (docs/audits/2026-10-05 FE-03).
+  const [shownLocationId, setShownLocationId] = useState(locationId);
+  if (shownLocationId !== locationId) {
+    setShownLocationId(locationId);
+    setMembers(initialMembers);
+    setSearch("");
+    setStatus("");
+    setError("");
+    setPending(false);
+    requestEpoch.current += 1;
+  }
 
   function refetch(next: { search?: string; status?: string; locationId?: string }) {
     const merged = { search, status, locationId, ...next };
-    startTransition(async () => {
-      const rows = await listMembersAction({
-        search: merged.search || undefined,
-        status: (merged.status || undefined) as MemberListRow["status"] | undefined,
-        locationId: merged.locationId || undefined,
-      });
-      setMembers(rows);
-    });
+    const epoch = ++requestEpoch.current;
+    setError("");
+    setPending(true);
+    void (async () => {
+      try {
+        const rows = await listMembersAction({
+          search: merged.search || undefined,
+          status: (merged.status || undefined) as MemberListRow["status"] | undefined,
+          locationId: merged.locationId || undefined,
+        });
+        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) setMembers(rows);
+      } catch {
+        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
+          setError("Could not refresh this list. Previous results are still shown.");
+        }
+      } finally {
+        if (epoch === requestEpoch.current) setPending(false);
+      }
+    })();
   }
 
   return (
     <div>
+      {error ? <div role="alert" className="mb-3 text-[13px] text-ink-2">
+        <p>{error}</p><button type="button" onClick={() => refetch({})} disabled={isPending}
+          className="min-h-11 underline">{`Retry ${resolveTerm(terminology, "member", 1)} search`}</button>
+      </div> : null}
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
         <input
@@ -69,6 +102,7 @@ export function MembersBoard({
             refetch({ search: e.target.value });
           }}
           placeholder="Search by name or phone"
+          aria-label="Search members"
           className="w-full min-h-11 rounded-ctl border border-line bg-paper py-2.5 pl-9 pr-3 text-[16px]"
           data-testid="members-search"
         />

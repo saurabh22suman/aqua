@@ -56,13 +56,10 @@ time; one is now closed. **Update (2026-09-13):** the lane strip's
 owner reuse (per-batch capacity, Owner Home "Today's lanes") and coach
 reuse (register/schedule marking progress) are confirmed **shipped**
 — verified via computed style (6px track, correct `water`/`warn` fill
-logic per session state) during a full UI/UX audit, see
-`docs/audits/2026-09-13-ui-ux-audit.md` §3. **The parent reuse
-(membership runway) is still genuinely open** — `/p/[token]` has no
-membership/plan card or progress track, reasonably blocked on Wave-3
-billing data not existing yet. Whoever builds the parent membership
-card should read the reference file's Parent screen first, not invent
-a fresh treatment.
+logic per session state) during the September audit. **Current update:**
+parent membership runway and read-only money/receipts shipped in PR2–PR3.
+Preserve their production zero-JS contract. Parent progress, schedule and
+announcement expansion remain separate decisions, not missing billing data.
 
 ---
 
@@ -81,24 +78,24 @@ Everything below follows from this.
 ### 1.1 Palette
 
 ```js
-// tailwind.config.ts — theme.extend.colors
+// Reference values from app/globals.css @theme (Tailwind v4)
 {
   deck:    '#EDF0EC',   // page background — pool deck tile
   paper:   '#FFFFFF',   // card surfaces
   ink:     '#0F1F1C',   // primary text
   'ink-2': '#3C534F',   // secondary text
-  'ink-3': '#7B918D',   // muted text, icons
+  'ink-3': '#5B6F6B',   // accessible muted text, icons
   marine:  '#0D3B36',   // hero blocks, dark surfaces
   water:   '#0E7C86',   // DATA only — charts, capacity, progress
   'water-soft': '#E3F1F2',
   line:    'rgba(15,31,28,.10)',
 
   // SEMANTIC — reserved meanings, never decorative
-  good:    '#2E9E5B',   // paid · present
+  good:    '#1F7A43',   // paid · present
   'good-soft': '#E4F4EA',
-  late:    '#D8453C',   // overdue · absent
+  late:    '#B2332B',   // overdue · absent
   'late-soft': '#FCE9E7',
-  warn:    '#B8710A',   // needs attention
+  warn:    '#8F5400',   // needs attention
   'warn-soft': '#FDF0DC',
 }
 ```
@@ -267,8 +264,8 @@ Rule of thumb: **≤ ~10 curated items → row-card; more or working lists → d
 ### Primary action
 
 ```jsx
-<button className="w-full rounded-pill py-4 text-[14.5px] font-semibold
-                   text-white bg-[var(--accent)] transition-colors duration-150">
+<button className="w-full rounded-pill py-4 text-[14.5px] font-medium
+                   text-white bg-[var(--accent-strong)] transition-colors duration-150">
   Send reminders on WhatsApp
 </button>
 ```
@@ -322,7 +319,7 @@ Every list has one. Every empty state has a verb CTA. The first screen a new aca
 Rules that keep it there:
 
 - Server Components by default. Client islands only: attendance marker, booking calendar, POS keypad, charts.
-- Icons: `import { Check } from 'lucide-react'` — **never** the barrel import. This is the single most common way an AI-generated Next.js app ships 100 KB it doesn't need.
+- Icons: individual icon paths, **never** a package-barrel sample. Check the installed module/type declarations before introducing a new icon; bundle measurement decides the shipped cost.
 - No chart library on any mobile route. Server-render SVG or lazy-load behind interaction.
 - No component library. shadcn/ui copied source only.
 - Images through `next/image` with explicit dimensions.

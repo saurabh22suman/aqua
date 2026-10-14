@@ -1,5 +1,10 @@
 # Agent setup — Aqua
 
+> **Current setup:** use `opencode-development.md` for verified toolchain versions,
+> local ports/env loading, installed skills, OpenCode agents/MCP and test commands.
+> This older discovery document includes historical candidates and bootstrapping
+> sketches; `CLAUDE.md`, package scripts and CI govern current safeguards.
+
 **How to prepare the environment before an agent executes a single task from `implementation-plan.md`.**
 
 | | |

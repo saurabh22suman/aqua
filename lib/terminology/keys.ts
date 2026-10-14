@@ -50,6 +50,13 @@ export type TermKey = (typeof TERM_KEYS)[number];
 export const LOCALES = ["en", "hi", "bn"] as const;
 export type Locale = (typeof LOCALES)[number];
 
+// Owner-UI review P1 (2026-10-13) — the server action only accepts
+// writes for these locales (English today; Hindi/Bengali defaults
+// ship read-only until their write support lands in the data-only
+// R.20 pass). The editor must not offer Save for a locale the
+// action would refuse.
+export const WRITABLE_LOCALES = ["en"] as const satisfies readonly Locale[];
+
 export const DEFAULT_LOCALE: Locale = "en";
 
 export type TermForms = { one: string; other: string };

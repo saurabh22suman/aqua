@@ -11,7 +11,7 @@ import type { TenantId } from "@/lib/ids";
 // can never silently pretend to deliver: either a real provider is
 // configured or sends fail loudly (C-40 adds the Cloud API adapter).
 
-export type MessageProviderName = "mock" | "cloud" | "disabled";
+export type MessageProviderName = "mock" | "capture" | "cloud" | "disabled";
 
 export type MessageCategory =
   | "utility"
@@ -34,11 +34,15 @@ export const MESSAGE_COST_PAISE: Record<MessageCategory, bigint> = {
 export type ProviderConfig = {
   provider?: MessageProviderName;
   nodeEnv?: "development" | "test" | "production";
+  deploymentStage?: "development" | "preview" | "production";
 };
 
 export function resolveProviderName(config: ProviderConfig = {}): MessageProviderName {
   const provider = config.provider ?? env.WHATSAPP_PROVIDER;
   const nodeEnv = config.nodeEnv ?? env.NODE_ENV;
+  if (provider === "capture" && (config.deploymentStage ?? env.AQUA_DEPLOYMENT_STAGE) !== "preview") {
+    throw new Error("Hosted WhatsApp capture is allowed only in an explicit synthetic preview.");
+  }
   if (provider === "mock" && nodeEnv === "production") {
     // lib/env.ts refuses this at boot; this is the second layer for any
     // caller that bypassed env parsing (tests, scripts).
@@ -51,11 +55,12 @@ export function resolveProviderName(config: ProviderConfig = {}): MessageProvide
 }
 
 export function mockMessagingEnabled(config: ProviderConfig = {}): boolean {
-  return resolveProviderName(config) === "mock";
+  return ["mock", "capture"].includes(resolveProviderName(config));
 }
 
 export type OutboundMessage = {
-  tenantId: TenantId;
+  // Platform authentication has no tenant. Tenant messages still carry one.
+  tenantId?: TenantId;
   toPhone: string;
   body: string;
   templateKey?: string;
@@ -77,6 +82,12 @@ export function getMessageProvider(
 ): MessageProvider | null {
   const name = resolveProviderName(config);
   if (name === "mock") return createMockProvider();
+  if (name === "capture") {
+    if (!env.WHATSAPP_CAPTURE_URL) throw new Error("Hosted WhatsApp capture URL is not configured.");
+    return createMockProvider({ url: env.WHATSAPP_CAPTURE_URL,
+      headers: env.WHATSAPP_CAPTURE_AUTH_VALUE
+        ? { [env.WHATSAPP_CAPTURE_AUTH_HEADER ?? "authorization"]: env.WHATSAPP_CAPTURE_AUTH_VALUE } : undefined });
+  }
   // "cloud" arrives with C-40 (WhatsApp Cloud API adapter); until then
   // there is no provider, so sends fail loudly rather than silently.
   return null;

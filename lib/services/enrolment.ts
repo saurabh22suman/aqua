@@ -4,6 +4,9 @@ import { enrolments } from "@/db/schema/scheduling";
 import { batches, programs } from "@/db/schema/programs";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
+import { visibleMember, resourceRole } from "./resource-access";
+import { locationPredicate, resolveLocationAccess } from "./location-access";
+import { coachStaffIdSubquery } from "./staff";
 
 // B3 — a member created through reception's add-member form, or
 // produced by converting an enquiry that never had a trial booked,
@@ -23,8 +26,11 @@ export async function listMemberEnrolments(
   ctx: ActionCtx,
   memberId: string,
 ): Promise<MemberEnrolment[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    if (!await visibleMember(tx, ctx, memberId)) return [];
+    const access = await resolveLocationAccess(tx, ctx);
+    const coach = await resourceRole(tx, ctx) === "coach";
+    return tx
       .select({
         batchId: batches.id,
         batchName: batches.name,
@@ -39,8 +45,10 @@ export async function listMemberEnrolments(
           eq(enrolments.tenantId, ctx.tenantId),
           eq(enrolments.memberId, asMemberId(memberId)),
           isNull(batches.deletedAt),
+          locationPredicate(batches.locationId, access),
+          coach ? eq(batches.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
         ),
       )
-      .orderBy(batches.name),
-  );
+      .orderBy(batches.name);
+  });
 }

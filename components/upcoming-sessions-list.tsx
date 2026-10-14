@@ -50,12 +50,17 @@ export function UpcomingSessionsList({
   coaches,
   terminology,
   timezone = "Asia/Kolkata",
+  canManage,
 }: {
   initialSessions: UpcomingSessionRow[];
   coaches: CoachOption[];
   // Closed-key vocab resolved by the parent server page (L3 audit).
   terminology: TerminologyState;
   timezone?: string;
+  // R10 (2026-10-13 role-workflow audit) — independent write gate.
+  // Substitute/cancel/reschedule require programs.write; a reader
+  // without it keeps the read-only list.
+  canManage: boolean;
 }) {
   const [sessions, setSessions] = useState(initialSessions);
   const [manageId, setManageId] = useState<string | null>(null);
@@ -187,18 +192,20 @@ export function UpcomingSessionsList({
                             Coach: <span className="text-ink-2">{s.coachName ?? "Unassigned"}</span>
                           </p>
                         </div>
-                        <Button
-                          variant="secondary"
-                          onClick={() => setManageId(open ? null : s.id)}
-                          aria-expanded={open}
-                          className="flex-none"
-                          data-testid={`manage-session-${s.id}`}
-                        >
-                          <SlidersHorizontal size={13} aria-hidden="true" />
-                          {open ? "Close" : "Manage"}
-                        </Button>
+                        {canManage ? (
+                          <Button
+                            variant="secondary"
+                            onClick={() => setManageId(open ? null : s.id)}
+                            aria-expanded={open}
+                            className="flex-none"
+                            data-testid={`manage-session-${s.id}`}
+                          >
+                            <SlidersHorizontal size={13} aria-hidden="true" />
+                            {open ? "Close" : "Manage"}
+                          </Button>
+                        ) : null}
                       </div>
-                      {open ? (
+                      {canManage && open ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <SessionSubstituteControl
                             sessionId={s.id}

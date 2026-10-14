@@ -48,7 +48,7 @@ afterEach(() => {
 
 describe("WaitlistBoard (R.5)", () => {
   it("lists the queue in position order with names and codes", () => {
-    render(<WaitlistBoard batchId="b1" initialRows={ROWS} />);
+    render(<WaitlistBoard batchId="b1" initialRows={ROWS} canManage />);
     const text = document.body.textContent ?? "";
     expect(text).toContain("Aadhya Sharma");
     expect(text).toContain("AWS-010");
@@ -58,12 +58,12 @@ describe("WaitlistBoard (R.5)", () => {
   });
 
   it("shows an empty state when nobody is waiting", () => {
-    render(<WaitlistBoard batchId="b1" initialRows={[]} />);
+    render(<WaitlistBoard batchId="b1" initialRows={[]} canManage />);
     expect(document.body.textContent).toContain("No one is waiting");
   });
 
   it("promotes the head through the action", async () => {
-    render(<WaitlistBoard batchId="b1" initialRows={ROWS} />);
+    render(<WaitlistBoard batchId="b1" initialRows={ROWS} canManage />);
     fireEvent.click(screen.getByRole("button", { name: /promote next/i }));
     await vi.waitFor(() =>
       expect(promoteHeadAction).toHaveBeenCalledWith({ batchId: "b1" }),
@@ -71,7 +71,7 @@ describe("WaitlistBoard (R.5)", () => {
   });
 
   it("removes a member from the queue through the action", async () => {
-    render(<WaitlistBoard batchId="b1" initialRows={ROWS} />);
+    render(<WaitlistBoard batchId="b1" initialRows={ROWS} canManage />);
     fireEvent.click(screen.getAllByRole("button", { name: /remove/i })[0]!);
     await vi.waitFor(() =>
       expect(cancelWaitlistAction).toHaveBeenCalledWith({

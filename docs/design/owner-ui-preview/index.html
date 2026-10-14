@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-state="populated">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+
+<title>Aqua owner UI — design preview</title>
+<link rel="stylesheet" href="/assets/preview.css">
+<script src="/assets/preview.js" defer></script>
+<style>
+  .idx-wrap { max-width: 980px; margin: 0 auto; padding: 28px 20px 80px; }
+  .idx-wrap h1 { font-size: 26px; margin-bottom: 6px; }
+  .idx-grid { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 18px; }
+  @media (min-width: 760px) { .idx-grid { grid-template-columns: 1fr 1fr; } }
+  .idx-card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 18px; }
+  .idx-card h2 { font-family: var(--font-display); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .idx-card p { font-size: 13.5px; color: var(--ink-2); }
+  .idx-links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .idx-list { margin: 10px 0 0 18px; font-size: 13.5px; color: var(--ink-2); }
+  .idx-list li { margin-top: 4px; }
+  .idx-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 500; }
+</style>
+</head>
+<body data-page="index" data-states="populated">
+<div class="preview-bar" id="preview-bar"></div>
+
+<div class="idx-wrap">
+  <p class="idx-kicker">Prompt 3 · design proposal</p>
+  <h1>Owner UI design preview</h1>
+  <p class="sub" style="font-size:15px; max-width:70ch">
+    A runnable visual proposal for the owner experience, built on the current capabilities and the
+    established Aqua visual system. It renders locally, writes nothing and is not wired to the application
+    database. Read <strong>DESIGN-NOTES.md</strong> beside the source for the control mapping, decisions and
+    rollout order.
+  </p>
+
+  <div class="idx-grid">
+    <div class="idx-card">
+      <h2>1 · Owner Home</h2>
+      <p>Money first, then decisions, then today's registers and capacity. Trends use only real series
+      (attendance, collections) with honest period labels.</p>
+      <div class="idx-links">
+        <a class="btn btn-secondary btn-sm" href="/home">Open home</a>
+        <a class="btn btn-quiet btn-sm" href="/home?state=empty">Empty</a>
+        <a class="btn btn-quiet btn-sm" href="/home?state=loading">Loading</a>
+        <a class="btn btn-quiet btn-sm" href="/home?state=failed">Failed read</a>
+      </div>
+    </div>
+
+    <div class="idx-card">
+      <h2>2 · Members</h2>
+      <p>The working swimmer directory and the selected-member Overview, with a read-only progress
+      pointer and the two bounded editor forms (add, correction).</p>
+      <div class="idx-links">
+        <a class="btn btn-secondary btn-sm" href="/members">Directory</a>
+        <a class="btn btn-quiet btn-sm" href="/member">Overview</a>
+        <a class="btn btn-quiet btn-sm" href="/member-new">Add swimmer</a>
+        <a class="btn btn-quiet btn-sm" href="/member-edit">Edit member</a>
+      </div>
+    </div>
+
+    <div class="idx-card">
+      <h2>3 · Fees</h2>
+      <p>Five tabs with period collections separated from current balances; an expanded partial invoice
+      with lines, payments, recording and the distinct reversal/void controls.</p>
+      <div class="idx-links">
+        <a class="btn btn-secondary btn-sm" href="/fees">Dues (default)</a>
+        <a class="btn btn-quiet btn-sm" href="/fees?tab=transactions">Transactions</a>
+        <a class="btn btn-quiet btn-sm" href="/fees?tab=invoices">Invoices</a>
+        <a class="btn btn-quiet btn-sm" href="/fees?tab=plans">Plans</a>
+        <a class="btn btn-quiet btn-sm" href="/fees?state=confirm">Void confirmation</a>
+      </div>
+    </div>
+
+    <div class="idx-card">
+      <h2>The three reusable patterns</h2>
+      <ul class="idx-list">
+        <li><strong>Working list/table</strong> — Members directory, Fees dues, transactions and invoices. Aligned columns, identity first, status and amounts scannable.</li>
+        <li><strong>Bounded editor</strong> — Add swimmer and Edit member: labelled fields, grouped sections, validation near the control, explicit Cancel/primary.</li>
+        <li><strong>Evidence with contextual action</strong> — an expanded invoice keeps lines, payments and the record-payment/reversal/void controls together; the member Overview pairs evidence with its next action.</li>
+      </ul>
+    </div>
+
+    <div class="idx-card">
+      <h2>Reading the preview</h2>
+      <ul class="idx-list">
+        <li>Desktop <strong>1280×900</strong>; mobile <strong>390×844</strong>. The bar above is preview chrome, not product UI — hide it before judging composition.</li>
+        <li>State switcher: populated, empty, loading, failed read, permission-limited, validation error, destructive confirmation (page-dependent).</li>
+        <li>Buttons that would mutate data show an explicit “preview only” note. Nothing is persisted.</li>
+        <li>Avatars, icons and fonts come from the app's installed packages; values are synthetic.</li>
+      </ul>
+    </div>
+
+    <div class="idx-card">
+      <h2>Run it</h2>
+      <p><code>pnpm preview:owner-ui</code> then open <code>http://127.0.0.1:3210</code>. The server is a
+      small Node script (<code>scripts/preview-owner-ui.ts</code>); it reads only files in
+      <code>docs/design/owner-ui-preview/</code> and the installed font/icon/avatar packages.</p>
+      <p style="margin-top:8px">Design notes, the proposed-control→capability map, decisions needed and the rollout order live in <code>DESIGN-NOTES.md</code>; run instructions and captures in <code>README.md</code>.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

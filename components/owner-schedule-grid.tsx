@@ -15,6 +15,7 @@ import { formatDateIST, formatWallTime24hIST } from "@/lib/time/tz";
 
 export function OwnerScheduleGrid({
   view,
+  anchor,
   locationId,
   locations,
   sessions,
@@ -25,6 +26,11 @@ export function OwnerScheduleGrid({
   todayHref,
 }: {
   view: "week" | "month";
+  // The selected schedule date. View/location switches carry it so the
+  // owner does not lose the period they were looking at
+  // (owner-UI review P2, 2026-10-13). Defaults to the first rendered
+  // day when a caller does not supply one.
+  anchor?: string;
   locationId?: string;
   locations: Array<{ id: string; name: string }>;
   sessions: GridSessionRow[];
@@ -34,6 +40,7 @@ export function OwnerScheduleGrid({
   nextHref: string;
   todayHref: string;
 }) {
+  const anchorDate = anchor ?? days[0] ?? "";
   const byDay = new Map<string, GridSessionRow[]>();
   for (const session of sessions) {
     const list = byDay.get(session.sessionDate) ?? [];
@@ -64,14 +71,27 @@ export function OwnerScheduleGrid({
           Next →
         </Link>
         <div className="ml-auto flex flex-wrap gap-2">
-          <ViewLink label="Week" active={view === "week"} view="week" locationId={locationId} />
-          <ViewLink label="Month" active={view === "month"} view="month" locationId={locationId} />
+          <ViewLink
+            label="Week"
+            active={view === "week"}
+            view="week"
+            anchor={anchorDate}
+            locationId={locationId}
+          />
+          <ViewLink
+            label="Month"
+            active={view === "month"}
+            view="month"
+            anchor={anchorDate}
+            locationId={locationId}
+          />
         </div>
       </div>
 
       {locations.length > 1 ? (
         <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
           <input type="hidden" name="view" value={view} />
+          <input type="hidden" name="date" value={anchorDate} />
           <label className="block">
             <span className="mb-0.5 block text-[11px] text-ink-3">
               Location
@@ -207,16 +227,18 @@ function ViewLink({
   label,
   active,
   view,
+  anchor,
   locationId,
 }: {
   label: string;
   active: boolean;
   view: string;
+  anchor: string;
   locationId?: string;
 }) {
   return (
     <Link
-      href={`/owner/schedule?view=${view}${locationId ? `&location=${locationId}` : ""}`}
+      href={`/owner/schedule?view=${view}&date=${anchor}${locationId ? `&location=${locationId}` : ""}`}
       aria-current={active ? "page" : undefined}
       className={`flex min-h-[44px] items-center rounded-ctl border px-3 text-[13px] ${
         active ? "border-ink bg-ink text-paper" : "border-line bg-paper text-ink-2"

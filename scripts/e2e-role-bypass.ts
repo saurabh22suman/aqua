@@ -72,6 +72,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { Pool } from "pg";
+import { DEMO_PIN } from "./lib/demo-credentials";
 import {
   PostgreSqlContainer,
 } from "@testcontainers/postgresql";
@@ -176,39 +177,19 @@ async function buildAndStart(
 // three roles that have a real UI surface.
 type Role = "owner" | "coach" | "receptionist";
 
-// ----- better-auth OTP login -----
-async function readOtp(adminUri: string, phone: string): Promise<string> {
-  const admin = new Pool({ connectionString: adminUri });
-  try {
-    const r = await admin.query<{ value: string }>(
-      `select value from ba_verification where identifier = $1 order by created_at desc limit 1`,
-      [phone],
-    );
-    const raw = r.rows[0]?.value;
-    if (!raw) throw new Error(`no OTP for ${phone} — ba_verification is empty`);
-    return raw.split(":")[0]!;
-  } finally {
-    await admin.end();
-  }
-}
-
-async function loginAs(adminUri: string, phone: string): Promise<string> {
-  const send = await fetch(`${BASE}/api/auth/phone-number/send-otp`, {
+// Supported tenant credential boundary; public Better Auth OTP doors are
+// deliberately disabled and must not be reopened just for this driver.
+async function loginAs(phone: string): Promise<string> {
+  const response = await fetch(`${BASE}/api/login/pin`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phoneNumber: phone }),
-  });
-  if (!send.ok) throw new Error(`send-otp failed: ${send.status} ${await send.text()}`);
-  const otp = await readOtp(adminUri, phone);
-  const verify = await fetch(`${BASE}/api/auth/phone-number/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phoneNumber: phone, code: otp }),
+    headers: { "Content-Type": "application/json", Origin: BASE },
+    body: JSON.stringify({ phone, pin: DEMO_PIN }),
     redirect: "manual",
   });
-  const setCookie = verify.headers.get("set-cookie");
-  if (!setCookie) throw new Error(`verify-otp failed: ${verify.status} ${await verify.text()}`);
-  const match = setCookie.match(/(better-auth\.session_token=[^;]+)/);
+  if (!response.ok) throw new Error(`PIN login failed: ${response.status} ${await response.text()}`);
+  const setCookie = response.headers.get("set-cookie");
+  if (!setCookie) throw new Error("PIN login returned no session cookie");
+  const match = setCookie.match(/((?:__Secure-)?better-auth\.session_token=[^;]+)/);
   if (!match) throw new Error(`no better-auth.session_token: ${setCookie}`);
   return match[1]!;
 }
@@ -435,14 +416,14 @@ const TEST_CASES: TestCase[] = [
 
   // Vector 3 — coach → listMembersAction / getMemberDetailAction.
   {
-    id: "coach→listMembersAction (Next-Action, no-arg bypass via empty filter)",
+    id: "coach→listMembersAction (Next-Action, valid parsed filter)",
     role: "coach",
-    attack: { caseName: "action-list", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__LIST_MEMBERS__", actionArgs: [] },
+    attack: { caseName: "action-list", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__LIST_MEMBERS__", actionArgs: [{}] },
   },
   {
-    id: "coach→getMemberDetailAction (Next-Action, no-arg bypass via empty id)",
+    id: "coach→getMemberDetailAction (Next-Action, real member id)",
     role: "coach",
-    attack: { caseName: "action-detail", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__GET_MEMBER_DETAIL__", actionArgs: [""] },
+    attack: { caseName: "action-detail", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__GET_MEMBER_DETAIL__", actionArgs: ["__MEMBER_ID__"] },
   },
 
   // Vector 4 — receptionist attacking owner pages.
@@ -462,7 +443,7 @@ const TEST_CASES: TestCase[] = [
     attack: { caseName: "action", shape: "action", path: "/owner", routeGroup: "owner", actionId: "__GET_OWNER_DASH__", actionArgs: [] },
   },
   {
-    id: "receptionist→listMembersAction (Next-Action)",
+    id: "receptionist→listMembersAction (malformed input rejected, not an authorization test)",
     role: "receptionist",
     attack: { caseName: "action-list", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__LIST_MEMBERS__", actionArgs: [] },
   },
@@ -560,9 +541,9 @@ const POSITIVE_CONTROLS: {
   // Owner → /owner pages.
   { id: "owner→/owner (plain)", role: "owner", attack: { caseName: "plain", shape: "plain", path: "/owner", routeGroup: "owner" } },
   { id: "owner→/owner (RSC)", role: "owner", attack: { caseName: "rsc", shape: "rsc", path: "/owner", routeGroup: "owner" } },
-  { id: "owner→/owner (action)", role: "owner", attack: { caseName: "action", shape: "action", path: "/owner", routeGroup: "owner", actionId: "__GET_OWNER_DASH__", actionArgs: [] } },
+  { id: "owner→listMembersAction (valid filter control)", role: "owner", attack: { caseName: "action", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__LIST_MEMBERS__", actionArgs: [{}] } },
   { id: "owner→/owner/members (plain)", role: "owner", attack: { caseName: "plain", shape: "plain", path: "/owner/members", routeGroup: "owner" } },
-  { id: "owner→/owner/members (RSC)", role: "owner", attack: { caseName: "rsc", shape: "rsc", path: "/owner/members", routeGroup: "owner" } },
+  { id: "owner→getMemberDetailAction (real id control)", role: "owner", attack: { caseName: "action", shape: "action", path: "/owner/members", routeGroup: "owner", actionId: "__GET_MEMBER_DETAIL__", actionArgs: ["__MEMBER_ID__"] } },
   // Coach → /coach pages.
   { id: "coach→/coach (plain)", role: "coach", attack: { caseName: "plain", shape: "plain", path: "/coach", routeGroup: "coach" } },
   { id: "coach→/coach (RSC)", role: "coach", attack: { caseName: "rsc", shape: "rsc", path: "/coach", routeGroup: "coach" } },
@@ -637,6 +618,7 @@ async function main(): Promise<void> {
     // with the resolved hashes + member id.
     function resolve(attack: Attack): Attack {
       const out = { ...attack };
+      out.actionArgs = out.actionArgs?.map(argument => argument === "__MEMBER_ID__" ? memberId : argument);
       if (out.path === "__MEMBER_ID__") out.path = `/owner/members/${memberId}`;
       if (out.actionId === "__GET_OWNER_DASH__") out.actionId = actionHashes.getOwnerDashboardAction!;
       if (out.actionId === "__LIST_MEMBERS__") out.actionId = actionHashes.listMembersAction!;
@@ -646,9 +628,9 @@ async function main(): Promise<void> {
 
     // --- login each role ---
     const cookies: Record<Role, string> = {
-      owner: await loginAs(iso.adminUri, "+919000000001"),
-      coach: await loginAs(iso.adminUri, "+919000000002"),
-      receptionist: await loginAs(iso.adminUri, "+919000000005"),
+      owner: await loginAs("+919000000001"),
+      coach: await loginAs("+919000000002"),
+      receptionist: await loginAs("+919000000005"),
     };
 
     // --- positive controls first ---

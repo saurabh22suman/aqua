@@ -6,7 +6,7 @@
 |---|---|
 | Document | Project scope |
 | Version | 0.1 (draft) |
-| Status | Pre-development |
+| Status | Active implementation; pilot/Production gates pending |
 | First vertical | Swimming academy + pool facility + café |
 | First tenant | Aqua Club (reference implementation) |
 | Target market | India — sports academies, clubs, gyms, recreation facilities |
@@ -720,7 +720,7 @@ Every tenant is a data fiduciary; we are a processor. The data processing agreem
 
 ### 7.2 Tax and invoicing
 
-- GST-compliant invoice numbering — sequential, per financial year, per branch, gapless
+- GST-compliant invoice numbering: gapless per tenant and financial year under the confirmed one-tenant/one-GSTIN decision. Additional GSTINs need a separate design.
 - Tenant GSTIN captured and printed
 - HSN/SAC codes on line items
 - Credit notes properly linked to original invoices
@@ -780,7 +780,7 @@ The visual direction is defined in the accompanying UI direction file. Scope com
 |---|---|
 | Design tokens | Single source of truth in Tailwind config, no ad-hoc hex values |
 | Palette | Deck / marine / water / mango. Mango is actions only, water is data, green and red are payment and attendance state |
-| Type | Bricolage Grotesque display, Instrument Sans body, self-hosted and subset, 45 KB total |
+| Type | Bricolage Grotesque display, Instrument Sans body, self-hosted Latin subsets; 60 KB budget, measured 55.2 KB |
 | Components | shadcn/ui copy-paste. **No component library dependency** |
 | Icons | Lucide, individually imported. Never a barrel import, never emoji |
 | Shadows | Exactly two levels, defined once |
@@ -847,7 +847,7 @@ Tenancy, identity, authorisation, entitlements, audit. The reusable engine.
 
 The part the customer actually pays for.
 
-**Scope:** people and guardians, enquiries and follow-ups, programs, batches, session generation, attendance with offline sync, membership plans and subscriptions, invoicing, payment recording for cash and online, **member account charging** (§5.12 — the café line item, not the POS), Razorpay integration with idempotent webhooks, WhatsApp utility templates with per-tenant metering, magic-link parent pages, owner dashboard, Excel importer, consent capture.
+**Current R1 scope:** people/guardians, enquiries, programs/batches/sessions, attendance with explicitly enabled offline sync, plans/subscriptions, invoicing and counter-recorded cash/UPI/card-terminal references, café billing, read-only parent money/attendance, owner reports, CSV import and consent capture. No PSP/gateway ships. Real WhatsApp, XLSX/mapping/undo, wallet settlement and additional parent screens follow their separate implementation decisions; see the current execution/status records.
 
 **Deliverables:** a business can run its full monthly cycle in the product.
 

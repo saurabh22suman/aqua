@@ -5,20 +5,25 @@ import { invoices } from "@/db/schema/invoices";
 import { subscriptions } from "@/db/schema/subscriptions";
 import { membershipPlans } from "@/db/schema/membership-plans";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import { issueInvoiceInTx } from "@/lib/services/invoice-issue";
 import {
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import {
+  callerHasPermission,
+  callerIsLegacySystem,
+} from "@/lib/services/resource-access";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import { todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // C-32 — invoice mutations. Issue goes through issueInvoiceInTx
 // (lib/services/invoice-issue.ts) so the counter flow and the nightly
-// renewal job share the money math. Void is the only other mutation,
-// refused once any payment exists.
+// renewal job share the money math. Void is the only other mutation:
+// it needs management authority (settings.manage — owner/admin, R01)
+// for direct callers too, and is refused once any payment exists.
 
 export type InvoiceMutationResult =
   | { ok: true; id: string; invoiceNumber: string }
@@ -161,6 +166,17 @@ export async function voidInvoice(
   const actorId = ctx.userId;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    const authorized =
+      callerIsLegacySystem(ctx) ||
+      (await callerHasPermission(tx, ctx, "settings.manage"));
+    if (!authorized) {
+      return {
+        ok: false,
+        error:
+          "Only an owner or admin can void an invoice. Ask them to cancel it.",
+      };
+    }
+
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()
@@ -190,7 +206,10 @@ export async function voidInvoice(
         and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)),
       );
 
-    await tx.insert(auditLog).values({
+    // E-01 — the one audit writer, same transaction as the status
+    // change. requestId carries the middleware correlation id like the
+    // other remediated mutation audits; before/after are unchanged.
+    await writeAudit(tx, {
       tenantId: ctx.tenantId,
       actorId,
       action: "invoice.void",
@@ -198,6 +217,7 @@ export async function voidInvoice(
       entityId: invoiceId,
       before: { status: invoice.status },
       after: { status: "void", reason: trimmed.data },
+      requestId: ctx.requestId ?? null,
     });
 
     return { ok: true, id: invoiceId, invoiceNumber: invoice.invoiceNumber };

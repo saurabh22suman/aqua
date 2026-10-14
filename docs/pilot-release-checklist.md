@@ -50,8 +50,8 @@ previous one merges. There is no `develop` branch. PR2 and PR3 branch from updat
 
 | Field | Value |
 |---|---|
-| **Current status** | PR1–PR3, Dokploy Dev Compose #191 and Pilot Safety #192 merged. Operational Readiness [PR #193](https://github.com/saurabh22suman/aqua/pull/193) is open with PR `ci` and `agent-protected-paths` green; no Dev/Production deployment or R2 live restore is claimed. |
-| **Current task** | Human review/merge of PR #193; source checks are recorded in `docs/pilot-remediation-checklist.md`. |
+| **Current status** | PR1–PR3 and #191–#193 are merged in the reviewed local history (#193: `9228d52`). October defect remediation is on `fix/comprehensive-review-findings`; see `docs/review-fixes-status.md`. No live deployment or R2 restore is claimed. |
+| **Current task** | Complete the October regression/release checks, then human review of the uncommitted changes and protected-test follow-ups. |
 | **Next task** | Human verifies actual Dev deployment, offsite R2 upload and isolated restore, role journeys, then separate Production approval before considering any release gate. |
 | **Known blockers** | Production remains blocked (`PILOT_RELEASE_GATE` is not set by this work); Dev deploy and live R2 upload/restore are unverified without human credentials and VPS access. Do not treat backups as ready. |
 

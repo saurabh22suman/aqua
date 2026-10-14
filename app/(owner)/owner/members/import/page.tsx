@@ -1,12 +1,18 @@
 import Link from "next/link";
 import { BackLink } from "@/components/ui/BackLink";
 import { MemberImportForm } from "@/components/member-import-form";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // PR2-C5 — member import, step 1: check the file. The commit step
 // lands in PR2-C6 on the same preview.
+//
+// P2 (2026-10-13 owner-UI review) — the page-level gate now matches
+// the actions: import is a members.write surface, so a role with only
+// members.read never sees the form. The actions still enforce the
+// permission independently.
 export default async function MemberImportPage() {
-  await requireOwner();
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "members.write");
   return (
     <main className="px-5 pt-6 pb-8">
       <BackLink href="/owner/members" label="Members" />

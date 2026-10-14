@@ -5,6 +5,9 @@ import { batches } from "@/db/schema/programs";
 import { addDays } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
+import { resourceRole, visibleMember, visibleBatch } from "./resource-access";
+import { coachStaffIdSubquery } from "./staff";
+import { locationPredicate, resolveLocationAccess } from "./location-access";
 
 export type Period = { from: string; to: string };
 
@@ -56,6 +59,9 @@ export async function getMemberAttendanceHistory(
   period: Period,
 ): Promise<MemberAttendanceHistory> {
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!await visibleMember(tx, ctx, memberId)) return { rows: [], presentCount: 0, totalCount: 0, pct: null };
+    const access = await resolveLocationAccess(tx, ctx);
+    const coach = await resourceRole(tx, ctx) === "coach";
     const rows = await tx
       .select({
         sessionId: attendance.sessionId,
@@ -73,6 +79,8 @@ export async function getMemberAttendanceHistory(
           eq(attendance.memberId, asMemberId(memberId)),
           gte(sessions.sessionDate, period.from),
           lt(sessions.sessionDate, period.to),
+          locationPredicate(sessions.locationId, access),
+          coach ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
         ),
       )
       .orderBy(asc(sessions.sessionDate));
@@ -113,11 +121,9 @@ export async function getBatchAttendanceSummary(
   period: Period,
 ): Promise<BatchAttendanceSummary | null> {
   return withTenant(ctx.tenantId, async (tx) => {
-    const [batch] = await tx
-      .select({ id: batches.id, name: batches.name })
-      .from(batches)
-      .where(and(eq(batches.id, batchId), eq(batches.tenantId, ctx.tenantId)));
+    const batch = await visibleBatch(tx, ctx, batchId);
     if (!batch) return null;
+    const coach = await resourceRole(tx, ctx) === "coach";
 
     const [row] = await tx
       .select({
@@ -136,6 +142,7 @@ export async function getBatchAttendanceSummary(
           eq(sessions.batchId, batchId),
           gte(sessions.sessionDate, period.from),
           lt(sessions.sessionDate, period.to),
+          coach ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
         ),
       );
 

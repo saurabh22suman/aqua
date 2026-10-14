@@ -74,9 +74,14 @@ export function BatchEditForm({
       startTime: form.startTime,
       endTime: form.endTime,
       excludeBatchId: batchId,
-    }).then((res) => {
-      if (!cancelled) setConflicts(res.conflicts);
-    });
+    })
+      .then((res) => {
+        if (!cancelled) setConflicts(res.conflicts);
+      })
+      .catch(() => {
+        // Advisory check only — never block or crash the editor.
+        if (!cancelled) setConflicts([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -116,6 +121,10 @@ export function BatchEditForm({
         return;
       }
       onSaved(res.batch);
+    } catch {
+      onError(
+        "The change did not reach the server. Your edits are kept — try again.",
+      );
     } finally {
       setSaving(false);
     }

@@ -3,6 +3,16 @@ import { withTenant } from "@/db/tenant";
 import { sessions } from "@/db/schema/scheduling";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
 import type { ActionCtx } from "@/lib/auth/context";
+import { enqueueSessionNotification } from "@/lib/messaging/notification-events";
+import { writeAudit } from "@/lib/audit/write";
+import {
+  callerHasPermission,
+  callerIsLegacySystem,
+} from "@/lib/services/resource-access";
+import {
+  locationVisible,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 
 // Phase R.4 — session cancellation / rescheduling.
 //
@@ -42,6 +52,7 @@ export type SessionLifecycleResult =
       kind: "error";
       code:
         | "invalid"
+        | "forbidden"
         | "session_not_found"
         | "no_change"
         | "cannot_cancel_held"
@@ -55,8 +66,23 @@ export async function cancelSession(
   sessionId: string,
 ): Promise<SessionLifecycleResult> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const authorized =
+      callerIsLegacySystem(ctx) ||
+      (await callerHasPermission(tx, ctx, "programs.write"));
+    if (!authorized) {
+      return {
+        kind: "error",
+        code: "forbidden",
+        message: "Scheduling authority is required to cancel a session.",
+      };
+    }
     const [s] = await tx
-      .select({ id: sessions.id, status: sessions.status, sessionDate: sessions.sessionDate })
+      .select({
+        id: sessions.id,
+        status: sessions.status,
+        sessionDate: sessions.sessionDate,
+        locationId: sessions.locationId,
+      })
       .from(sessions)
       .where(
         and(
@@ -66,6 +92,13 @@ export async function cancelSession(
       )
       .limit(1);
     if (!s) {
+      return {
+        kind: "error",
+        code: "session_not_found",
+        message: "Session not found.",
+      };
+    }
+    if (!locationVisible(await resolveLocationAccess(tx, ctx), s.locationId)) {
       return {
         kind: "error",
         code: "session_not_found",
@@ -102,6 +135,9 @@ export async function cancelSession(
       })
       .where(eq(sessions.id, sessionId));
 
+    await enqueueSessionNotification(tx, ctx.tenantId, sessionId, "cancelled");
+    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, action: "session.cancel.notification",
+      entityType: "session", entityId: sessionId, after: { status: "cancelled" }, requestId: ctx.requestId });
     return {
       kind: "ok",
       sessionId: s.id,
@@ -137,12 +173,23 @@ export async function rescheduleSession(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    const authorized =
+      callerIsLegacySystem(ctx) ||
+      (await callerHasPermission(tx, ctx, "programs.write"));
+    if (!authorized) {
+      return {
+        kind: "error",
+        code: "forbidden",
+        message: "Scheduling authority is required to reschedule a session.",
+      };
+    }
     const [s] = await tx
       .select({
         id: sessions.id,
         status: sessions.status,
         sessionDate: sessions.sessionDate,
         coachId: sessions.coachId,
+        locationId: sessions.locationId,
       })
       .from(sessions)
       .where(
@@ -153,6 +200,13 @@ export async function rescheduleSession(
       )
       .limit(1);
     if (!s) {
+      return {
+        kind: "error",
+        code: "session_not_found",
+        message: "Session not found.",
+      };
+    }
+    if (!locationVisible(await resolveLocationAccess(tx, ctx), s.locationId)) {
       return {
         kind: "error",
         code: "session_not_found",
@@ -233,6 +287,9 @@ export async function rescheduleSession(
         })
         .where(eq(sessions.id, input.sessionId));
     }
+    await enqueueSessionNotification(tx, ctx.tenantId, input.sessionId, "rescheduled");
+    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, action: "session.reschedule.notification",
+      entityType: "session", entityId: input.sessionId, after: { sessionDate: input.newSessionDate }, requestId: ctx.requestId });
     return {
       kind: "ok",
       sessionId: s.id,

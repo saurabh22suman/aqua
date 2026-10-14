@@ -1,4 +1,4 @@
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { listAdminLocationsAction } from "@/lib/actions/locations";
 import { BackLink } from "@/components/ui/BackLink";
@@ -17,6 +17,7 @@ import { LocationManager } from "@/components/settings/location-manager";
 
 export default async function LocationsSettingsPage() {
   const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const locations = await listAdminLocationsAction();
   const multiLocation = locations.length > 1;
 

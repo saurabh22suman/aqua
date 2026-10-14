@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireOwner } from "@/lib/auth/surface-guard";
-import { hasFeature } from "@/lib/auth/permission";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { listSkillLaddersAction } from "@/lib/actions/skill-ladder";
 import { SkillLadderManager } from "@/components/skill-ladder-manager";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -10,14 +10,22 @@ import { EmptyState } from "@/components/ui/EmptyState";
 // level/skill name or a rubric band audits one row and never touches
 // the preset-shaped skill_levels/skills tables.
 //
+// R02 (2026-10-13 role-workflow audit) — viewing the ladder needs
+// levels.read; editing needs levels.write, the delegated curriculum
+// capability. Owner/admin hold it via their full grant set; the
+// designated Curriculum Lead edits from the same framework through
+// its own delegated role; the ladder is read-only otherwise.
+//
 // The swim.levels feature gates the surface: a tenant without the
 // module gets the honest "not enabled" state instead of a 403 from
 // the levels.read action.
 
 export default async function OwnerSkillsPage() {
   const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
   const enabled = hasFeature(ctx, "swim.levels");
   const ladders = enabled ? await listSkillLaddersAction() : [];
+  const canEdit = hasPermission(ctx, "levels.write");
 
   return (
     <main className="px-5 pt-6 pb-8 max-w-2xl">
@@ -40,7 +48,7 @@ export default async function OwnerSkillsPage() {
         the preset&apos;s own ladder stays as seeded.
       </p>
       {enabled ? (
-        <SkillLadderManager ladders={ladders} />
+        <SkillLadderManager ladders={ladders} canEdit={canEdit} />
       ) : (
         <div className="mt-4 rounded-card border border-line bg-paper">
           <EmptyState

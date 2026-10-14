@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { homeForSessionAction } from "@/lib/actions/auth-ui";
 import { formatPhoneIN, normaliseToE164 } from "@/lib/phone";
+import { syncBeforeLogout } from "@/lib/offline/logout";
+import { clearOfflineData, runOfflineLifecycle } from "@/lib/offline/client-session";
 
 // 2026-09-11 auth feature: phone + PIN login.
 //
@@ -24,6 +27,7 @@ export function LoginForm() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [drafts, setDrafts] = useState(0);
 
   // F-1 (2026-09-13 Indian-user UX audit): the same shared helper the
   // service uses, so what the client sends is exactly what the server
@@ -41,10 +45,18 @@ export function LoginForm() {
 
   const canSubmit = phone.length > 0 && /^\d{6,12}$/.test(pin) && !busy;
 
-  async function submit() {
+  async function submit(discard = false) {
+    if (busy) return;
     setError(null);
     setBusy(true);
     try {
+      if (typeof indexedDB !== "undefined" && "serviceWorker" in navigator) {
+        if (discard) await runOfflineLifecycle(() => clearOfflineData());
+        else {
+          const remaining = await syncBeforeLogout();
+          if (remaining) { setDrafts(remaining); return; }
+        }
+      }
       const res = await fetch("/api/login/pin", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -68,6 +80,8 @@ export function LoginForm() {
         return;
       }
       setError("No club found for this number.");
+    } catch {
+      setError("Could not sign in. Retry when connected; pending offline drafts must be synced or explicitly discarded before switching accounts.");
     } finally {
       setBusy(false);
     }
@@ -77,9 +91,7 @@ export function LoginForm() {
     <div className="px-5 pt-16 max-w-md mx-auto">
       <h1 className="font-display text-[22px] font-semibold text-marine">Sign in</h1>
       <p className="mt-2 text-[14px] text-ink-2">
-        Use your mobile number and the PIN you set when you joined. No code arrives by
-        SMS — if you have never set a PIN, ask your club for a login link or a
-        PIN reset.
+        Use your mobile number and PIN. If you have never joined, ask your club for a login link.
       </p>
 
       <label className="mt-8 block">
@@ -106,6 +118,7 @@ export function LoginForm() {
         <span className="block text-[13px] font-medium text-ink-2">PIN</span>
         <input
           value={pin}
+          type="password"
           onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
           onKeyDown={(e) => e.key === "Enter" && canSubmit && submit()}
           inputMode="numeric"
@@ -124,12 +137,22 @@ export function LoginForm() {
       ) : null}
 
       <button
-        onClick={submit}
+        onClick={() => void submit()}
         disabled={!canSubmit}
         className="mt-6 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-40"
       >
         {busy ? "One moment…" : "Sign in"}
       </button>
+      {drafts > 0 ? <div className="mt-4 space-y-3 rounded-ctl border border-line bg-paper p-4">
+        <p role="alert" className="text-[14px] text-ink">{drafts} unsynced attendance marks remain on this device. Connect to sync them, or discard them before signing in.</p>
+        <button type="button" disabled={busy} onClick={() => void submit(true)}
+          className="min-h-11 rounded-ctl border border-line px-3 text-[14px] text-ink">Discard drafts and continue sign-in</button>
+        <button type="button" disabled={busy} onClick={() => { setDrafts(0); setPin(""); }}
+          className="ml-2 min-h-11 text-[14px] text-ink-2 underline">Cancel sign-in</button>
+      </div> : null}
+      <Link href="/login/reset" className="mt-3 flex min-h-[44px] items-center justify-center text-[14px] text-ink-2 underline">
+        Forgot PIN? Reset with WhatsApp
+      </Link>
     </div>
   );
 }

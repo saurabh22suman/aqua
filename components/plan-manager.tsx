@@ -24,6 +24,25 @@ import { parseRupeesToPaise } from "@/lib/payment-qr";
 const inputClass =
   "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
+// Owner-UI review P1 (2026-10-13) — price parsing is validated before
+// any write. An invalid price is a visible field error, never a silent
+// return or a coerced ₹0; a rejected price can never ride along as a
+// "Saved." result. The server still validates the same rules
+// (integer paise, at least 1 paise).
+function parsePlanPrice(raw: string): { paise: number } | { error: string } {
+  const paise = parseRupeesToPaise(raw);
+  if (paise === null) {
+    return { error: "Enter a price in rupees, like 2500 or 2500.50." };
+  }
+  if (paise <= 0n) {
+    return { error: "Price must be more than ₹0." };
+  }
+  if (paise > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return { error: "That price is too large." };
+  }
+  return { paise: Number(paise) };
+}
+
 type LocationOption = { id: string; name: string };
 type ActivityOption = { id: string; name: string; locationId: string };
 
@@ -155,6 +174,7 @@ function ActivateTemplateForm({
   const [activityId, setActivityId] = useState("");
   const [shapeId, setShapeId] = useState(templates[0]?.shapeId ?? "");
   const [price, setPrice] = useState("");
+  const [priceError, setPriceError] = useState<string | null>(null);
 
   const facilityActivities = activities.filter(
     (activity) => activity.locationId === locationId,
@@ -245,11 +265,20 @@ function ActivateTemplateForm({
               </span>
               <input
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={(e) => {
+                  setPrice(e.target.value);
+                  setPriceError(null);
+                }}
                 inputMode="decimal"
                 placeholder="2500"
+                aria-invalid={priceError !== null}
                 className={inputClass}
               />
+              {priceError ? (
+                <span role="alert" className="mt-1 block text-[12px] text-ink-2">
+                  {priceError}
+                </span>
+              ) : null}
             </label>
           </div>
           <div className="flex items-center gap-3">
@@ -257,13 +286,17 @@ function ActivateTemplateForm({
               type="button"
               disabled={pending || alreadyActivated}
               onClick={() => {
-                const amountPaise = parseRupeesToPaise(price);
-                if (amountPaise === null) return;
+                const parsed = parsePlanPrice(price);
+                if ("error" in parsed) {
+                  setPriceError(parsed.error);
+                  return;
+                }
+                setPriceError(null);
                 onSubmit({
                   shapeId,
                   locationId,
                   ...(activityId ? { activityId } : {}),
-                  amountPaise: Number(amountPaise),
+                  amountPaise: parsed.paise,
                 });
               }}
               className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
@@ -304,6 +337,8 @@ function PlanRowEditor({
   const [price, setPrice] = useState(
     formatINR(plan.amountPaise).replace(/[₹,]/g, ""),
   );
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   return (
     <div className="border-b border-line last:border-b-0 px-4 py-3">
@@ -330,7 +365,20 @@ function PlanRowEditor({
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Name
             </span>
-            <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+            <input
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNameError(null);
+              }}
+              aria-invalid={nameError !== null}
+              className={inputClass}
+            />
+            {nameError ? (
+              <span role="alert" className="mt-1 block text-[12px] text-ink-2">
+                {nameError}
+              </span>
+            ) : null}
           </label>
           <label className="block">
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
@@ -338,10 +386,19 @@ function PlanRowEditor({
             </span>
             <input
               value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              onChange={(e) => {
+                setPrice(e.target.value);
+                setPriceError(null);
+              }}
               inputMode="decimal"
+              aria-invalid={priceError !== null}
               className={inputClass}
             />
+            {priceError ? (
+              <span role="alert" className="mt-1 block text-[12px] text-ink-2">
+                {priceError}
+              </span>
+            ) : null}
           </label>
         </div>
         <div className="mt-3 flex items-center gap-2">
@@ -349,11 +406,21 @@ function PlanRowEditor({
             type="button"
             disabled={pending}
             onClick={() => {
-              const paise = parseRupeesToPaise(price);
-              onSave({
-                name,
-                ...(paise !== null ? { amountPaise: Number(paise) } : {}),
-              });
+              // Validate every field before writing anything: a bad
+              // price must not be silently omitted while the name
+              // saves and the UI reports success.
+              const parsed = parsePlanPrice(price);
+              if ("error" in parsed) {
+                setPriceError(parsed.error);
+                return;
+              }
+              if (name.trim().length === 0) {
+                setNameError("Name can't be empty.");
+                return;
+              }
+              setPriceError(null);
+              setNameError(null);
+              onSave({ name: name.trim(), amountPaise: parsed.paise });
             }}
             className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
@@ -400,6 +467,8 @@ function CustomPlanForm({
   const [durationDays, setDurationDays] = useState("30");
   const [sessions, setSessions] = useState("1");
   const [price, setPrice] = useState("");
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const facilityActivities = activities.filter(
     (activity) => activity.locationId === locationId,
@@ -451,7 +520,20 @@ function CustomPlanForm({
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Name
           </span>
-          <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
+          <input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setNameError(null);
+            }}
+            aria-invalid={nameError !== null}
+            className={inputClass}
+          />
+          {nameError ? (
+            <span role="alert" className="mt-1 block text-[12px] text-ink-2">
+              {nameError}
+            </span>
+          ) : null}
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
@@ -502,11 +584,20 @@ function CustomPlanForm({
           </span>
           <input
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
+            onChange={(e) => {
+              setPrice(e.target.value);
+              setPriceError(null);
+            }}
             inputMode="decimal"
             placeholder="2500"
+            aria-invalid={priceError !== null}
             className={inputClass}
           />
+          {priceError ? (
+            <span role="alert" className="mt-1 block text-[12px] text-ink-2">
+              {priceError}
+            </span>
+          ) : null}
         </label>
       </div>
       <div className="flex items-center gap-3">
@@ -514,13 +605,23 @@ function CustomPlanForm({
           type="button"
           disabled={pending || locations.length === 0}
           onClick={() => {
-            const amountPaise = parseRupeesToPaise(price);
+            const parsed = parsePlanPrice(price);
+            if ("error" in parsed) {
+              setPriceError(parsed.error);
+              return;
+            }
+            if (name.trim().length === 0) {
+              setNameError("Name can't be empty.");
+              return;
+            }
+            setPriceError(null);
+            setNameError(null);
             onSubmit({
               locationId,
               ...(activityId ? { activityId } : {}),
-              name,
+              name: name.trim(),
               kind,
-              amountPaise: amountPaise === null ? 0 : Number(amountPaise),
+              amountPaise: parsed.paise,
               ...(kind === "duration" || kind === "term"
                 ? { durationDays: Number(durationDays) }
                 : {}),

@@ -267,6 +267,8 @@ describe("O-08 location-scoped staff access", () => {
   });
 
   it("still allows the in-scope write paths", async () => {
+    // An in-scope member must also be on this session's effective roster.
+    await register.enrolMember(scopedReception, { memberId: memberA, batchId: batchA, enrolledOn: DATE });
     await register.markAttendance(scopedReception, {
       sessionId: sessionA,
       memberId: memberA,

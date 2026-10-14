@@ -21,28 +21,25 @@ export function isPinLocked(
 }
 
 export async function recordPinFailure(userId: UserId): Promise<void> {
-  await withPlatform(async () => {
-    // Two-step (read, write) because pg doesn't expose
-    // SET x = x + 1 ... RETURNING in a way Drizzle composes cleanly
-    // here. Two requests racing the same user can both push past the
-    // threshold; the worst outcome is the lock fires one attempt
-    // earlier — harmless.
-    const rows = await db
-      .select({ attempts: users.failedPinAttempts })
+  await withPlatform(() => db.transaction(async (tx) => {
+    // Serialize increment and lock computation, including expiry races.
+    const [user] = await tx
+      .select({ attempts: users.failedPinAttempts, lockedUntil: users.pinLockedUntil })
       .from(users)
       .where(eq(users.id, userId))
-      .limit(1);
-    const current = rows[0]?.attempts ?? 0;
+      .for("update");
+    if (!user) return;
+    const current = user.lockedUntil && !isPinLocked(user.lockedUntil) ? 0 : user.attempts;
     const updated = current + 1;
     const lockedUntil =
       updated >= PIN_LOCKOUT_THRESHOLD
         ? new Date(Date.now() + PIN_LOCKOUT_WINDOW_MS)
         : null;
-    await db
+    await tx
       .update(users)
       .set({ failedPinAttempts: updated, pinLockedUntil: lockedUntil })
       .where(eq(users.id, userId));
-  });
+  }));
 }
 
 export async function clearPinFailures(userId: UserId): Promise<void> {

@@ -35,11 +35,11 @@ export function MemberEditForm({
       const result = await updateMemberAction({
         memberId: member.memberId,
         fullName: fullName.trim(),
-        phone: phone.trim() || undefined,
+        phone: phone.trim() || null,
         dateOfBirth,
-        gender: (gender || undefined) as "male" | "female" | "other" | undefined,
+        gender: (gender || null) as "male" | "female" | "other" | null,
         locationId,
-        medicalNotes: medicalNotes.trim() || undefined,
+        medicalNotes: medicalNotes.trim() || null,
         joinedOn: joinedOn || undefined,
       });
       if (!result.ok) {
@@ -47,6 +47,8 @@ export function MemberEditForm({
         return;
       }
       router.push(`/owner/members/${member.memberId}`);
+    } catch {
+      setError("The change could not be saved. Check the fields and try again.");
     } finally {
       setBusy(false);
     }
@@ -54,20 +56,26 @@ export function MemberEditForm({
 
   return (
     <div className="space-y-2.5">
-      <input
-        type="text"
-        value={fullName}
-        onChange={(e) => setFullName(e.target.value)}
-        placeholder="Full name"
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      />
-      <input
-        type="tel"
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        placeholder="Phone (optional)"
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      />
+      <label className="block">
+        <span className="block text-[12px] text-ink-3 mb-1">Full name</span>
+        <input
+          type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Full name"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+        />
+      </label>
+      <label className="block">
+        <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
+        <input
+          type="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Phone (optional)"
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+        />
+      </label>
       <div>
         <label htmlFor="edit-dob" className="block text-[12px] text-ink-3 mb-1">
           Date of birth
@@ -111,13 +119,16 @@ export function MemberEditForm({
           </option>
         ))}
       </select>
-      <textarea
-        value={medicalNotes}
-        onChange={(e) => setMedicalNotes(e.target.value)}
-        placeholder="Medical notes (optional)"
-        rows={2}
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      />
+      <label className="block">
+        <span className="block text-[12px] text-ink-3 mb-1">Medical notes (optional)</span>
+        <textarea
+          value={medicalNotes}
+          onChange={(e) => setMedicalNotes(e.target.value)}
+          placeholder="Medical notes (optional)"
+          rows={2}
+          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+        />
+      </label>
 
       {error ? <p className="text-[13px] text-ink-3">{error}</p> : null}
 

@@ -18,12 +18,48 @@ vi.mock("@/lib/actions/payments", () => ({
   listInvoicePaymentsAction: vi.fn(),
   recordPaymentAction: vi.fn(),
 }));
+const notFound = vi.hoisted(() =>
+  vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
+);
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
+  notFound,
 }));
+
+// Plans-page guard — the page must refuse a caller without
+// settings.manage before rendering the management forms. The actions
+// already refuse mutations; this pins the page-level gate.
+const ownerCtx = vi.hoisted(() => ({
+  value: { permissions: new Set<string>() },
+}));
+vi.mock("@/lib/auth/surface-guard", () => ({
+  requireOwner: async () => ownerCtx.value,
+  requirePagePermission: (ctx: { permissions: Set<string> }, key: string) => {
+    if (!ctx.permissions.has(key)) notFound();
+    return ctx;
+  },
+}));
+vi.mock("@/lib/auth/permission", () => ({
+  hasPermission: (ctx: { permissions: Set<string> }, key: string) =>
+    ctx.permissions.has(key),
+}));
+vi.mock("@/lib/actions/membership-plans", () => ({
+  listPlanTemplatesAction: vi.fn(async () => []),
+  listPlansAction: vi.fn(async () => []),
+}));
+vi.mock("@/lib/actions/activities", () => ({
+  listActivitiesAction: vi.fn(async () => []),
+}));
+vi.mock("@/lib/actions/people", () => ({
+  listLocationsAction: vi.fn(async () => []),
+}));
+vi.mock("@/components/plan-manager", () => ({ PlanManager: () => null }));
 
 import { FEES_TABS, FeesTabs } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
+import PlansPage from "@/app/(owner)/owner/settings/plans/page";
 import type { HubInvoiceRow } from "@/lib/services/fees-hub";
 
 const PERIOD = { from: "2026-09-01", to: "2026-10-01" };
@@ -50,7 +86,7 @@ afterEach(() => {
 
 describe("U-02 fees hub tabs", () => {
   it("renders Overview / Transactions / Dues / Invoices / Plans and nothing about discounts", () => {
-    render(<FeesTabs active="overview" period={PERIOD} />);
+    render(<FeesTabs active="overview" period={PERIOD} canManageSettings />);
     for (const label of ["Overview", "Transactions", "Dues", "Invoices", "Plans"]) {
       expect(
         Array.from(document.querySelectorAll("a")).some(
@@ -67,13 +103,50 @@ describe("U-02 fees hub tabs", () => {
       "plans",
     ]);
   });
+
+  it("hides the Plans tab from a caller without settings.manage", () => {
+    render(<FeesTabs active="overview" period={PERIOD} />);
+    for (const label of ["Overview", "Transactions", "Dues", "Invoices"]) {
+      expect(
+        Array.from(document.querySelectorAll("a")).some(
+          (a) => a.textContent === label,
+        ),
+        `missing tab ${label}`,
+      ).toBe(true);
+    }
+    expect(
+      Array.from(document.querySelectorAll("a")).some(
+        (a) => a.textContent === "Plans",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("plans page guard (settings.manage)", () => {
+  it("404s for a caller without settings.manage", async () => {
+    ownerCtx.value = { permissions: new Set<string>() };
+    await expect(PlansPage()).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFound).toHaveBeenCalled();
+  });
+
+  it("renders for a settings.manage holder", async () => {
+    ownerCtx.value = { permissions: new Set(["settings.manage"]) };
+    await expect(PlansPage()).resolves.toBeTruthy();
+  });
 });
 
 describe("U-02 dues list", () => {
   it("renders a collectible pending invoice with member, number and outstanding amount", async () => {
     listHubInvoicesAction.mockResolvedValue([DUE]);
     const { findByText } = render(
-      <FeesInvoiceList initial={[DUE]} filter="dues" canWrite canRecord canRefund />,
+      <FeesInvoiceList
+        initial={[DUE]}
+        filter="dues"
+        canWrite
+        canRecord
+        canRefund
+        canReadPayments
+      />,
     );
     expect(await findByText("Ananya Sharma")).toBeTruthy();
     expect(document.body.textContent).toContain("2026-0001");
@@ -84,7 +157,14 @@ describe("U-02 dues list", () => {
   it("says so when nothing is outstanding", () => {
     listHubInvoicesAction.mockResolvedValue([]);
     render(
-      <FeesInvoiceList initial={[]} filter="dues" canWrite canRecord={false} canRefund={false} />,
+      <FeesInvoiceList
+        initial={[]}
+        filter="dues"
+        canWrite
+        canRecord={false}
+        canRefund={false}
+        canReadPayments={false}
+      />,
     );
     expect(document.body.textContent).toMatch(/nothing outstanding/i);
   });

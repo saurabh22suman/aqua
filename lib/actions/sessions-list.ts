@@ -16,6 +16,11 @@ export type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 // form on each row can swap the coach in one tap. Parse-then-
 // permission preamble; the action is management-only — coaches
 // see their own sessions via the existing coach-side surfaces.
+//
+// R06 (2026-10-13 role-workflow audit) — the gate is programs.write
+// (the management scheduling authority), not attendance.read:
+// attendance.read is held by coach/reception and must not open the
+// tenant-wide scheduling read.
 
 const listSchema = z.object({
   fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -28,6 +33,6 @@ export async function listUpcomingSessionsAction(
   const parsed = listSchema.safeParse(raw);
   if (!parsed.success) return [];
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.read");
+  requirePermission(ctx, "programs.write");
   return listUpcomingSessions(ctx, parsed.data.fromDate, parsed.data.toDate);
 }

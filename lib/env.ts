@@ -76,7 +76,38 @@ const envSchema = z
     // at boot (superRefine below) — no silent mocking of deliveries.
     WHATSAPP_PROVIDER: z.preprocess(
       emptyAsUndefined,
-      z.enum(["mock", "cloud", "disabled"]).optional(),
+      z.enum(["mock", "capture", "cloud", "disabled"]).optional(),
+    ),
+    AQUA_DEPLOYMENT_STAGE: z.preprocess(emptyAsUndefined, z.enum(["development", "preview", "production"]).optional()),
+    // Explicit hosted mock for a separate synthetic preview. Its origin is
+    // operator configuration, never a recipient/form-controlled destination.
+    WHATSAPP_CAPTURE_URL: z.preprocess(emptyAsUndefined, z.string().url().refine(value => {
+      try {
+        const url = new URL(value);
+        return url.protocol === "https:" && url.pathname === "/" && !url.username && !url.password && !url.search && !url.hash;
+      } catch { return false; }
+    }, "Must be a bare HTTPS capture origin").optional()),
+    WHATSAPP_CAPTURE_AUTH_HEADER: z.preprocess(emptyAsUndefined, z.enum(["authorization", "x-api-key"]).optional()),
+    WHATSAPP_CAPTURE_AUTH_VALUE: z.preprocess(emptyAsUndefined, z.string().min(1).max(2048).refine(value => !/[\r\n]/.test(value)).optional()),
+    // Optional local capture viewer for the non-production mock. Restrict
+    // transport to loopback so this cannot target a real WhatsApp endpoint.
+    WHATSAPP_MOCK_URL: z.preprocess(
+      emptyAsUndefined,
+      z.string().url().refine((value) => {
+        try {
+          const url = new URL(value);
+          return url.protocol === "http:" &&
+            ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) &&
+            !url.username && !url.password && !url.search && !url.hash &&
+            url.pathname === "/";
+        } catch {
+          return false;
+        }
+      }, "Must be an HTTP loopback origin, e.g. http://localhost:3000").optional(),
+    ),
+    WHATSAPP_MOCK_FROM: z.preprocess(
+      emptyAsUndefined,
+      z.string().regex(/^\+?[0-9]{5,20}$/).optional(),
     ),
     // E-03/E-06 — Cloudflare R2 (S3-compatible) object store. All four
     // are optional and the store is enabled exactly when all four are
@@ -196,6 +227,10 @@ const envSchema = z
           "WHATSAPP_PROVIDER=mock is not permitted in production — the mock pretends to deliver. Refusing to boot.",
       });
     }
+    if (val.WHATSAPP_PROVIDER === "capture" && (val.AQUA_DEPLOYMENT_STAGE !== "preview" || !val.WHATSAPP_CAPTURE_URL)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["WHATSAPP_PROVIDER"],
+        message: "Hosted capture requires AQUA_DEPLOYMENT_STAGE=preview and WHATSAPP_CAPTURE_URL; never use it with real academy records." });
+    }
   });
 
 export type ParsedEnv = {
@@ -207,7 +242,13 @@ export type ParsedEnv = {
   PARENT_LINK_SECRET?: string;
   OPS_EMAIL?: string;
   OPS_PASSWORD?: string;
-  WHATSAPP_PROVIDER?: "mock" | "cloud" | "disabled";
+  WHATSAPP_PROVIDER?: "mock" | "capture" | "cloud" | "disabled";
+  AQUA_DEPLOYMENT_STAGE?: "development" | "preview" | "production";
+  WHATSAPP_CAPTURE_URL?: string;
+  WHATSAPP_CAPTURE_AUTH_HEADER?: "authorization" | "x-api-key";
+  WHATSAPP_CAPTURE_AUTH_VALUE?: string;
+  WHATSAPP_MOCK_URL?: string;
+  WHATSAPP_MOCK_FROM?: string;
   R2_ACCOUNT_ID?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
@@ -231,24 +272,7 @@ export function parseEnv(raw: Record<string, string | undefined>): ParsedEnv {
       `Invalid environment configuration:\n${issues}\nCopy .env.example to .env and fill in every variable.`,
     );
   }
-  return {
-    DATABASE_URL: parsed.data.DATABASE_URL,
-    MIGRATION_DATABASE_URL: parsed.data.MIGRATION_DATABASE_URL,
-    APP_LOGIN_PASSWORD: parsed.data.APP_LOGIN_PASSWORD,
-    BETTER_AUTH_SECRET: parsed.data.BETTER_AUTH_SECRET,
-    BETTER_AUTH_URL: parsed.data.BETTER_AUTH_URL,
-    PARENT_LINK_SECRET: parsed.data.PARENT_LINK_SECRET,
-    OPS_EMAIL: parsed.data.OPS_EMAIL,
-    OPS_PASSWORD: parsed.data.OPS_PASSWORD,
-    WHATSAPP_PROVIDER: parsed.data.WHATSAPP_PROVIDER,
-    R2_ACCOUNT_ID: parsed.data.R2_ACCOUNT_ID,
-    R2_ACCESS_KEY_ID: parsed.data.R2_ACCESS_KEY_ID,
-    R2_SECRET_ACCESS_KEY: parsed.data.R2_SECRET_ACCESS_KEY,
-    R2_BUCKET: parsed.data.R2_BUCKET,
-    AUDIT_CHECKPOINT_SECRET: parsed.data.AUDIT_CHECKPOINT_SECRET,
-    NODE_ENV: parsed.data.NODE_ENV,
-    DEMO_MODE: parsed.data.DEMO_MODE,
-  };
+  return parsed.data;
 }
 
 // J7 fail-fast, relocated: MIGRATION_DATABASE_URL is optional at

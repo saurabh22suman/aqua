@@ -34,6 +34,8 @@ import { Button } from "@/components/ui/Button";
 export function MemberEnrolmentPanel({
   memberId,
   terminology,
+  canEnrol,
+  canWaitlist,
 }: {
   memberId: string;
   // Closed-key vocab resolved by the parent server page (L3 audit).
@@ -43,6 +45,11 @@ export function MemberEnrolmentPanel({
   // football tenant that customises `batch` or `program` does
   // not drift from what the panel says.
   terminology: TerminologyState;
+  // R10 (2026-10-13 role-workflow audit) — independent write gates:
+  // enrol/transfer ride members.write; joining the waitlist rides
+  // enquiries.write. Readers keep the enrolment list.
+  canEnrol: boolean;
+  canWaitlist: boolean;
 }) {
   const router = useRouter();
   const [enrolments, setEnrolments] = useState<MemberEnrolment[] | null>(null);
@@ -204,7 +211,7 @@ export function MemberEnrolmentPanel({
                     <span className="min-w-0 truncate text-[13.5px]">
                       {e.batchName} — {e.programName}
                     </span>
-                    {availableBatches.length > 0 ? (
+                    {canEnrol && availableBatches.length > 0 ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -220,7 +227,7 @@ export function MemberEnrolmentPanel({
                       </button>
                     ) : null}
                   </div>
-                  {transferFrom === e.batchId ? (
+                  {canEnrol && transferFrom === e.batchId ? (
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
                       <select
                         value={transferTarget}
@@ -265,11 +272,12 @@ export function MemberEnrolmentPanel({
             <p className="text-[13px] text-ink-3">Not enrolled in any {resolveTerm(terminology, "batch", "other")} yet.</p>
           )}
 
-          {availableBatches.length > 0 ? (
+          {!canEnrol ? null : availableBatches.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               <select
                 value={effectiveBatchId}
                 onChange={(e) => setSelectedBatchId(e.target.value)}
+                aria-label={`Select ${resolveTerm(terminology, "batch", 1)} to enrol in`}
                 className="w-full min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
                 data-testid="enrolment-batch-select"
               >
@@ -298,7 +306,7 @@ export function MemberEnrolmentPanel({
             </p>
           )}
           {actionError ? <p className="text-[12px] text-late">{actionError}</p> : null}
-          {fullBatch ? (
+          {fullBatch && canWaitlist ? (
             <button
               type="button"
               onClick={joinWaitlist}

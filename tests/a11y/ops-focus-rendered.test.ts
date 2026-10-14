@@ -82,8 +82,8 @@ const CONTROLS: ReadonlyArray<{
   // the same class string, so if the focus pattern renders here
   // it renders everywhere; tests/mobile/ops-focus-visible.test.ts
   // guards source-class presence file-by-file separately.
-  { path: "/ops/login", selector: 'input[name="email"]', label: "login email" },
-  { path: "/ops/login", selector: 'input[name="password"]', label: "login password" },
+  { path: "/ops/login", selector: 'input[name="phone"]', label: "registered mobile number" },
+  { path: "/ops/login", selector: 'button[type="submit"]', label: "send WhatsApp code" },
 ];
 
 beforeAll(async () => {
@@ -153,6 +153,12 @@ describe("/ops focus indicator renders (computed style, not source)", () => {
       // ops host header naturally resolves to 127.0.0.1 without a
       // /etc/hosts entry. The middleware routes on `Host: ops.*`.
       await page.goto(`http://ops.localhost:${PORT}${path}`);
+      // The JSON-only authentication form stays disabled until hydrated.
+      // Probe an interactive control, rather than its inert SSR shell.
+      await page.waitForFunction((sel) => {
+        const control = document.querySelector(sel);
+        return control !== null && !control.matches(":disabled");
+      }, selector);
       const result = await probe(page, selector);
 
       expect(result, `${label}: element not found at ${path}`).not.toBeNull();

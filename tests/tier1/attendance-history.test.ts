@@ -107,7 +107,11 @@ beforeAll(async () => {
   if (!created.ok) throw new Error("fixture failed: " + created.error);
   memberId = created.memberId;
 
-  await enrolMember({ tenantId }, { memberId, batchId });
+  // Eligibility is evaluated against historical session dates, not the
+  // wall clock on the day the test happens to run.
+  expect(await enrolMember({ tenantId, systemActor: true }, {
+    memberId, batchId, enrolledOn: "2026-05-01",
+  })).toEqual({ ok: true });
   await markAttendance(
     { tenantId },
     { sessionId: sessionInMonthId, memberId, status: "present", clientId: `ath-${RUN}-in` },

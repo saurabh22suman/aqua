@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // / Documents. V-11 wires Progress to the generic framework (the tab
 // was deliberately absent while M-03/V-10 were other workstreams).
 // Notes render an honest empty state and a create form for writers;
-// Documents states C-07 is unbuilt.
+// Documents states uploads are not available yet (C06: no internal
+// task IDs or future promises).
 
 const listMemberNotesAction = vi.fn();
 vi.mock("@/lib/actions/member-notes", () => ({
@@ -97,9 +98,10 @@ describe("U-03 notes panel", () => {
 });
 
 describe("U-03 documents tab", () => {
-  it("states that document storage is not built, without an upload affordance", () => {
+  it("states that uploads are not available, without an upload affordance or task ID", () => {
     render(<MemberDocumentsPanel />);
-    expect(document.body.textContent).toMatch(/not built yet/i);
+    expect(document.body.textContent).toMatch(/uploads aren't available/i);
+    expect(document.body.textContent).not.toMatch(/C-07|not built/i);
     expect(document.querySelector('input[type="file"]')).toBeNull();
   });
 });

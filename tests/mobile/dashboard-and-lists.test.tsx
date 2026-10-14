@@ -38,8 +38,12 @@ vi.mock("@/lib/actions/terminology", () => ({
 vi.mock("@/lib/auth/surface-guard", () => ({
   requireCoach: async () => ({}),
   // U-08 — the reception page reads ctx.permissions to decide whether
-  // the check-ins panel offers the one-tap mark.
-  requireReception: async () => ({ permissions: new Set(["attendance.mark"]) }),
+  // the check-ins panel offers the one-tap mark; C03 also reads
+  // ctx.features for the module cards.
+  requireReception: async () => ({
+    permissions: new Set(["attendance.mark", "payments.record", "invoices.read"]),
+    features: new Set(["billing"]),
+  }),
 }));
 
 const homeAction = vi.hoisted(() => ({
@@ -78,6 +82,14 @@ const DASHBOARD: OwnerDashboardData = {
   activeMemberCount: 32,
   attendanceThisWeekPct: null,
   activeBatchCount: 4,
+  money: {
+    collectedTodayPaise: 420000,
+    collectedTodayCount: 3,
+    outstandingPaise: 250000,
+    dueInvoiceCount: 2,
+    overduePaise: 100000,
+    overdueInvoiceCount: 1,
+  },
   needsAttention: [
     {
       title: "Register not started",

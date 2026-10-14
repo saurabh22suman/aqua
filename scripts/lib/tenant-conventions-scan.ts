@@ -29,6 +29,8 @@ export const PRE_TENANT_INDEX_EXEMPTIONS: Record<string, string> = {
     "H-01: withUser()/user_resolution runs before a tenant is selected; a tenant-leading index cannot serve the lookup",
   "message_log.provider_message_id":
     "H-01: provider webhook dedupe arrives before tenant resolution (the receiving phone number resolves the tenant)",
+  "whatsapp_auth_challenges.phone":
+    "Pre-authentication ops OTP / PIN recovery resolves a registered phone before any tenant session exists; forced RLS requires the explicit auth transaction scope",
 };
 
 export type TenantConventionViolation = {
@@ -109,6 +111,7 @@ export function listNewMigrationFiles(root = process.cwd()): string[] {
 export function scanTenantConventions(
   source: string,
   filePath: string,
+  subsequentSql = "",
 ): TenantConventionViolation[] {
   const stripped = stripComments(source);
   const violations: TenantConventionViolation[] = [];
@@ -137,6 +140,18 @@ export function scanTenantConventions(
 
   const v4Re = /default\s+gen_random_uuid\s*\(/gi;
   for (const match of stripped.matchAll(v4Re)) {
+    // Applied migrations are immutable. Recognize an exact later DROP
+    // DEFAULT for this table/column, rather than demanding historical edits.
+    const offset = match.index ?? 0;
+    const statement = stripped.slice(stripped.lastIndexOf(";", offset) + 1, offset);
+    const table = statement.match(/create\s+table\s+(?:if\s+not\s+exists\s+)?([\w".]+)/i)?.[1];
+    const column = stripped.slice(stripped.lastIndexOf("\n", offset) + 1, offset)
+      .match(/^\s*([\w"]+)\s+uuid\b/i)?.[1];
+    if (table && column) {
+      const later = stripComments(subsequentSql).replace(/"/g, "").toLowerCase();
+      const drop = new RegExp(`alter\\s+table\\s+${unquote(table).replace(/\./g, "\\.")}\\s+alter\\s+column\\s+${unquote(column)}\\s+drop\\s+default\\s*;`);
+      if (drop.test(later)) continue;
+    }
     violations.push({
       file: filePath,
       line: lineAt(stripped, match.index ?? 0),

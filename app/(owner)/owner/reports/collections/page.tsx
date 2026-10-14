@@ -1,4 +1,4 @@
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { listLocationsAction } from "@/lib/actions/people";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
@@ -15,6 +15,7 @@ import { BackLink } from "@/components/ui/BackLink";
 
 export default async function CollectionsPage() {
   const ctx = await requireOwner();
+  requirePagePermission(ctx, "reports.financial");
   const [locations, timezone, terminology] = await Promise.all([
     listLocationsAction(),
     getTenantTimezoneAction(),
@@ -40,6 +41,7 @@ export default async function CollectionsPage() {
         locations={locations}
         facilityLabel={resolveTerm(terminology, "facility", 1)}
         canConfirm={hasPermission(ctx, "payments.record")}
+        canReopen={hasPermission(ctx, "settings.manage")}
       />
     </main>
   );

@@ -54,7 +54,7 @@ afterEach(() => {
 });
 
 describe("U-06 announcement composer", () => {
-  it("states it is in-app only and offers the three audiences", () => {
+  it("states WhatsApp is queued with consent checks and offers the three audiences", () => {
     render(
       <AnnouncementComposer
         batches={BATCHES}
@@ -63,7 +63,8 @@ describe("U-06 announcement composer", () => {
         guardianLabel="Guardians"
       />,
     );
-    expect(document.body.textContent).toMatch(/whatsapp is not connected/i);
+    expect(document.body.textContent).toMatch(/queues WhatsApp updates/i);
+    expect(document.body.textContent).toMatch(/communications consent/i);
     expect(document.body.textContent).toMatch(/in-app/i);
     const options = Array.from(document.querySelectorAll("option")).map(
       (o) => o.textContent,

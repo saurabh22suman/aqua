@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { reportPeriodSchema } from "@/lib/services/owner-reports";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/services/owner-reports";
 import {
   getFacilityUtilisation,
+  utilisationInput,
   type UtilisationReport,
 } from "@/lib/services/utilisation";
 
@@ -31,12 +33,17 @@ type CsvEnvelope = {
 // reuses the same period so a curl to the route stays canonical.
 
 const periodSchema = reportPeriodSchema;
+const periodWithFacilitySchema = reportPeriodSchema.extend({
+  locationId: z.string().uuid().optional(),
+});
 
 export async function getAttendanceReportAction(raw: unknown): Promise<BatchAttendanceReportRow[]> {
-  const period = periodSchema.parse(raw);
+  const parsed = periodWithFacilitySchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getAttendanceReport({ tenantId: ctx.tenantId }, period);
+  return getAttendanceReport({ tenantId: ctx.tenantId }, parsed, {
+    locationId: parsed.locationId,
+  });
 }
 
 export async function getEnquiryFunnelAction(raw: unknown): Promise<EnquiryFunnelRow[]> {
@@ -62,21 +69,31 @@ export async function getCoachLoadAction(raw: unknown): Promise<CoachLoadRow[]> 
 }
 
 // V-08 — facility utilisation card. A read of the last 4 weeks of
-// bookings against configured business hours; no input beyond the
-// caller's tenant scope.
-export async function getFacilityUtilisationAction(): Promise<UtilisationReport> {
+// bookings against configured business hours; an optional locationId
+// narrows it to one facility (the owner facility switcher), otherwise
+// every facility is reported.
+export async function getFacilityUtilisationAction(raw?: unknown): Promise<UtilisationReport> {
+  const parsed = utilisationInput.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getFacilityUtilisation({ tenantId: ctx.tenantId });
+  return getFacilityUtilisation({ tenantId: ctx.tenantId }, parsed);
 }
 
 export async function attendanceReportCsvAction(raw: unknown): Promise<CsvEnvelope> {
-  const period = periodSchema.parse(raw);
+  // P1 (2026-10-13 owner-UI review) — the export carries the same
+  // facility scope the on-screen report displays; the service applies
+  // the caller's location predicate on top, so a restricted caller
+  // cannot export records outside their access.
+  const parsed = periodWithFacilitySchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  const rows = await getAttendanceReport({ tenantId: ctx.tenantId }, period);
+  const rows = await getAttendanceReport({ tenantId: ctx.tenantId }, parsed, {
+    locationId: parsed.locationId,
+  });
   return {
-    filename: `attendance-${period.from}-to-${period.to}.csv`,
+    filename: `attendance-${parsed.from}-to-${parsed.to}${
+      parsed.locationId ? `-${parsed.locationId}` : ""
+    }.csv`,
     body: attendanceReportCsv(rows),
   };
 }

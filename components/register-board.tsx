@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { CountChip } from "@/components/ui/CountChip";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import type { OfflineIdentity } from "@/lib/offline/identity";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 
@@ -33,11 +34,13 @@ export function RegisterBoard({
   sessionId,
   rows,
   offlineSyncEnabled,
+  offlineIdentity,
   terminology = DEFAULT_TERMINOLOGY,
 }: {
   sessionId: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
+  offlineIdentity?: OfflineIdentity | null;
   // Closed-key vocab resolved by the parent server page (L3 audit).
   // Optional so existing callers/tests render the generic terms; the
   // page passes the tenant-resolved state.
@@ -56,7 +59,9 @@ export function RegisterBoard({
     hasActiveFailure,
     saving,
     retrySync,
-  } = useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled);
+    offlineAvailable,
+    sessionEnded,
+  } = useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled, offlineIdentity);
 
   // C-D1 (2026-09-13 audit) — bulk marking for the common case where
   // nearly everyone is present. Only unmarked rows are touched, so it
@@ -66,8 +71,12 @@ export function RegisterBoard({
   // dropped responses; sequential writes keep the count honest and let
   // the button show progress.
   const unmarked = rows.filter((r) => !marks[r.memberId]);
-  const canMark = offlineSyncEnabled || online;
+  const canMark = offlineAvailable || online;
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
+  if (sessionEnded) return <div role="alert" className="py-6 text-[14px] text-ink-2">
+    <p>Offline access ended. Connect and sign in to reload this page.</p>
+    <Link href="/login" className="inline-flex min-h-11 items-center underline">Sign in again</Link>
+  </div>;
 
   async function markAllPresent() {
     if (bulk) return;

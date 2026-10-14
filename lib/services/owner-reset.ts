@@ -75,7 +75,9 @@ export async function issueTenantOwnerResetLink(
   ctx: ActionCtx,
   membershipId: string,
 ): Promise<IssueLoginLinkResult> {
-  const result = await issueOwnerResetLink(ctx.tenantId, membershipId);
+  // A06 — the authenticated issuer ctx is forwarded so the service can
+  // enforce the issuer-target trust gate before signing anything.
+  const result = await issueOwnerResetLink(ctx.tenantId, membershipId, ctx);
   if (result.kind !== "ok") return result;
 
   await withTenant(ctx.tenantId, async (tx) => {

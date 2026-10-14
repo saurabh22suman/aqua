@@ -84,7 +84,7 @@ jobs:
       - run: pnpm lint
 
       # M1: fails fast (~1s) on a migration numbering collision or a
-      # non-conforming filename, before the ~2min db:reset step below
+      # non-conforming filename, before the fresh db:deploy step below
       # would discover the same problem at runtime. See
       # scripts/check-migration-naming.ts and docs/agent-lanes.md.
       - run: pnpm check:migrations
@@ -203,14 +203,6 @@ jobs:
       # M2: non-blocking by design -- see docs/agent-lanes.md.
       - run: pnpm exec tsx scripts/check-lane-overlap.ts
 
-      # db/reset.ts refuses to run unless DEMO_MODE=true or --i-understand
-      # is passed explicitly (see db/reset-guard.ts) — CI's Postgres
-      # service is scratch/ephemeral, but the script has no way to know
-      # that on its own, so this is an explicit declaration of intent
-      # rather than a silent bypass.
-      - name: db:reset (bootstrap roles + migrate against the CI Postgres service)
-        run: pnpm db:reset -- --i-understand
-
       # D2/D3 fallout: db/deploy.ts is the only place that ever bootstraps
       # pg-boss's own schema (pgboss.*, via boss.start() under the
       # privileged MIGRATION_DATABASE_URL — app_user has no CREATE on the
@@ -225,7 +217,9 @@ jobs:
       # pgboss.schedule does not exist" until this step was added. Run it
       # here for the same reason db:reset runs here: match what a real
       # deploy guarantees before anything downstream depends on it.
-      - name: db:deploy (bootstrap pg-boss schema + queues before tests depend on it)
+      # The service DB is fresh. Exactly one deploy must prepare it: reset
+      # followed by deploy would mask first-deploy privilege regressions.
+      - name: db:deploy (one fresh deploy, roles + migrations + pg-boss + exact grants)
         run: pnpm db:deploy
 
       - name: Backup CLI dry-run against disposable CI database (no R2 upload)
@@ -291,6 +285,7 @@ jobs:
       # queued. Own dev server on a different port so it can't collide
       # with the run above if step ordering ever changes.
       - run: pnpm exec tsx scripts/e2e-offline-disabled.ts
+      - run: pnpm e2e:offline-privacy
 
       # H1 follow-up — parent-page zero-JS contract. The shipped
       # artifact must contain zero <script> tags. A dev-server

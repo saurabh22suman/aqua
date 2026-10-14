@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { Award, BellRing, Building2, CalendarOff, CreditCard, Dumbbell, LogOut, ChevronRight, Languages, ListChecks, MapPin, Megaphone, Palette, QrCode, SlidersHorizontal, Users, Utensils } from "lucide-react";
-import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
+import { Award, BellRing, Building2, CalendarOff, CreditCard, Dumbbell, ChevronRight, Languages, ListChecks, MapPin, Megaphone, Palette, QrCode, SlidersHorizontal, Users, Utensils } from "lucide-react";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
-import { logoutTenantAction } from "@/lib/actions/tenant-auth";
+import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
+import { TenantSignOut } from "@/components/tenant-sign-out";
 import { listAdminLocationsAction } from "@/lib/actions/locations";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 
 // F-23 — settings surface. Branding (Phase 2.9), Terminology
@@ -20,9 +19,9 @@ import { formatPhoneIN } from "@/lib/phone";
 // block + sign-out lives here instead. When a dedicated /owner/me
 // lands it can replace this section in place.
 export default async function Page() {
-  await requireOwner();
-  const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "members.read");
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "settings.manage");
+
   // V-09 — the ladder editor is only offered when the module is on.
   const ladderEnabled = ctx.features.has("swim.levels");
   const identity = await getCurrentStaffIdentity(ctx);
@@ -32,30 +31,45 @@ export default async function Page() {
   // location is the only way the concept ever becomes real.
   const locations = await listAdminLocationsAction();
   const multiLocation = locations.length > 1;
+  // W1-6 continuation — the checklist is a first-run aid, so it is
+  // gone from every owner surface once complete: no dashboard tile,
+  // no Settings row. The /owner/onboarding page stays live for anyone
+  // who types the URL or is sent there by support.
+  const checklist = await getOnboardingChecklistAction().catch(() => null);
+  const setupComplete = checklist ? checklist.items.every((item) => item.complete) : false;
 
   return (
     <main className="px-5 pt-6 pb-8">
       <h1 className="font-display text-[19px] font-semibold">Settings</h1>
       <p className="mt-1.5 text-[13px] text-ink-3">
-        Branding, vocabulary, staff and onboarding — everything the owner can change about the academy.
+        {setupComplete
+          ? "Branding, vocabulary and staff — everything the owner can change about the academy."
+          : "Branding, vocabulary, staff and onboarding — everything the owner can change about the academy."}
       </p>
 
-      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Setup</h2>
-      <Link
-        href="/owner/onboarding"
-        className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
-      >
-        <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-warn-soft text-warn">
-          <ListChecks size={16} strokeWidth={2} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">Onboarding checklist</p>
-          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-            See what&apos;s left before members and coaches are ready to go.
-          </p>
-        </div>
-        <ChevronRight size={18} className="text-ink-3 flex-none" />
-      </Link>
+      {!setupComplete ? (
+        <>
+          <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Setup</h2>
+          <Link
+            href="/owner/onboarding"
+            className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+            data-testid="settings-onboarding"
+          >
+            <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-warn-soft text-warn">
+              <ListChecks size={16} strokeWidth={2} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-medium leading-tight">
+                Onboarding checklist
+              </p>
+              <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
+                See what&apos;s left before members and coaches are ready to go.
+              </p>
+            </div>
+            <ChevronRight size={18} className="text-ink-3 flex-none" />
+          </Link>
+        </>
+      ) : null}
 
       <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Academy</h2>
       <Link
@@ -311,15 +325,7 @@ export default async function Page() {
           {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
         </p>
       </section>
-      <form action={logoutTenantAction} className="mt-3">
-        <button
-          type="submit"
-          className="flex w-full items-center gap-2 rounded-card border border-line bg-paper px-4 py-3 text-[14px] font-medium text-ink hover:bg-paper/80"
-        >
-          <LogOut size={16} className="text-ink-3" />
-          Sign out
-        </button>
-      </form>
+      <TenantSignOut className="mt-3" />
     </main>
   );
 }

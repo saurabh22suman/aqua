@@ -50,7 +50,15 @@ function daysBetween(fromIso: string, toIso: string): number {
   );
 }
 
-export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
+export function MemberSubscriptionPanel({
+  memberId,
+  canManage,
+}: {
+  memberId: string;
+  // R10 (2026-10-13 role-workflow audit) — start/pause/resume/cancel
+  // ride members.write. A reader without it keeps the plan view.
+  canManage: boolean;
+}) {
   const router = useRouter();
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[] | null>(
     null,
@@ -91,16 +99,24 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
     setBusy(true);
     setMessage(null);
     void (async () => {
-      const result = await fn();
-      setMessage(result.ok ? "Done." : result.error);
-      if (result.ok) {
-        await load();
-        router.refresh();
-        // Sibling panels (the invoices panel's raise picker) hold their
-        // own client state; a server refresh does not remount them.
-        window.dispatchEvent(new Event(SUBSCRIPTIONS_CHANGED_EVENT));
+      try {
+        const result = await fn();
+        setMessage(result.ok ? "Done." : result.error);
+        if (result.ok) {
+          await load();
+          router.refresh();
+          // Sibling panels (the invoices panel's raise picker) hold their
+          // own client state; a server refresh does not remount them.
+          window.dispatchEvent(new Event(SUBSCRIPTIONS_CHANGED_EVENT));
+        }
+      } catch {
+        setMessage(
+          "The change did not complete. The list below was refreshed — check it before retrying, in case the change already applied.",
+        );
+        await load().catch(() => setLoadError(true));
+      } finally {
+        setBusy(false);
       }
-      setBusy(false);
     })();
   }
 
@@ -130,7 +146,11 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        Membership
+        Paid plan
+      </p>
+      <p className="mt-0.5 text-[12px] text-ink-3">
+        Separate from academy participation — pausing one does not pause the
+        other.
       </p>
 
       {subscriptions.length === 0 ? (
@@ -159,9 +179,10 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                 </span>
               </div>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {subscription.startsOn} → {subscription.endsOn}
+                {formatDateIST(subscription.startsOn)} →{" "}
+                {formatDateIST(subscription.endsOn)}
                 {subscription.status === "paused" && subscription.pausedFrom
-                  ? ` · paused from ${subscription.pausedFrom}`
+                  ? ` · paused from ${formatDateIST(subscription.pausedFrom)}`
                   : ""}
               </p>
               {subscription.status === "active" || subscription.status === "paused" ? (
@@ -185,7 +206,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                 </div>
               ) : null}
               <div className="mt-2 flex flex-wrap gap-2">
-                {subscription.status === "active" ? (
+                {canManage && subscription.status === "active" ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -197,7 +218,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                     Pause
                   </button>
                 ) : null}
-                {subscription.status === "paused" ? (
+                {canManage && subscription.status === "paused" ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -209,8 +230,9 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
                     Resume
                   </button>
                 ) : null}
-                {subscription.status === "active" ||
-                subscription.status === "paused" ? (
+                {canManage &&
+                (subscription.status === "active" ||
+                  subscription.status === "paused") ? (
                   <button
                     type="button"
                     disabled={busy}
@@ -231,7 +253,7 @@ export function MemberSubscriptionPanel({ memberId }: { memberId: string }) {
         </ul>
       )}
 
-      {plans.length === 0 ? (
+      {!canManage ? null : plans.length === 0 ? (
         <p className="mt-3 text-[12px] text-ink-3">
           No active plans. The owner can price one in Settings → Membership
           plans.
