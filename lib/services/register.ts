@@ -6,8 +6,7 @@ import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { ActionCtx } from "@/lib/auth/context";
 import { coachStaffIdSubquery } from "./staff";
-import { locationPredicate, resolveLocationAccess } from "./location-access";
-import { locationVisible } from "./location-access";
+import { locationPredicate, locationVisible, resolveLocationAccess, type LocationAwareCtx } from "./location-access";
 import { createMember as registerMember } from "./member-registration";
 import { markAttendance as writeAttendance } from "./attendance-mark";
 import { visibleMember, isCoachLikeRoleKey } from "./resource-access";
@@ -27,12 +26,12 @@ export async function createMember(ctx: ActionCtx, input: Parameters<typeof regi
   return registerMember(ctx, input);
 }
 
-export async function markAttendance(ctx: ActionCtx, input: Parameters<typeof writeAttendance>[1]): Promise<void> {
+export async function markAttendance(ctx: LocationAwareCtx, input: Parameters<typeof writeAttendance>[1]): Promise<void> {
   if (!input.clientId.trim()) throw new Error("Attendance needs an idempotency key.");
   return writeAttendance(ctx, input);
 }
 
-export async function enrolMember(ctx: ActionCtx, input: { memberId: string; batchId: string; enrolledOn?: string }):
+export async function enrolMember(ctx: LocationAwareCtx, input: { memberId: string; batchId: string; enrolledOn?: string }):
 Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async tx => {
     const [batch] = await tx.select({ capacity: batches.capacity, locationId: batches.locationId }).from(batches)

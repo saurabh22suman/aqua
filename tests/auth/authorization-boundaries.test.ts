@@ -9,7 +9,7 @@ import { enrolMemberAction } from "@/lib/actions/enrolment";
 import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
 import { listPaymentReversalsAction } from "@/lib/actions/payment-reversals";
-import { enrolMember } from "@/lib/services/register";
+import { enrolMember, markAttendance } from "@/lib/services/register";
 import { setCredential } from "@/lib/services/credentials";
 import { POST as loginWithPin } from "@/app/api/login/pin/route";
 
@@ -168,14 +168,29 @@ describe("authenticated authorization boundaries", () => {
   });
 
   it("H02 refuses a member outside the session roster and permits an enrolled member", async () => {
+    // R01 (2026-10-13 role-workflow remediation) changed the actor
+    // contract this test originally pinned: the owner's management
+    // surface is read-only over student attendance. The action refuses
+    // management contexts; the roster rule itself still holds at the
+    // service boundary coaches, the front desk and jobs use.
     await signIn("owner");
     await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: outsiderA,
       status: "present", clientId: `nonroster-${RUN}` })).rejects.toThrow();
-    expect((await admin.query("select id from attendance where session_id=$1 and member_id=$2", [sessionB, outsiderA])).rowCount).toBe(0);
-    expect(await markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
-      status: "present", clientId: `roster-${RUN}` })).toMatchObject({ ok: true });
-    await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: otherMember,
-      status: "present", clientId: `foreign-${RUN}` })).rejects.toThrow();
+    await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
+      status: "present", clientId: `roster-${RUN}` })).rejects.toThrow();
+    expect((await admin.query("select id from attendance where session_id=$1 and member_id=any($2::uuid[])",
+      [sessionB, [outsiderA, memberB]])).rowCount).toBe(0);
+
+    const systemCtx = { tenantId, systemActor: true as const };
+    await expect(markAttendance(systemCtx, { sessionId: sessionB, memberId: outsiderA,
+      status: "present", clientId: `nonroster-svc-${RUN}` })).rejects.toThrow();
+    await expect(markAttendance(systemCtx, { sessionId: sessionB, memberId: otherMember,
+      status: "present", clientId: `foreign-svc-${RUN}` })).rejects.toThrow();
+    await markAttendance(systemCtx, { sessionId: sessionB, memberId: memberB,
+      status: "present", clientId: `roster-svc-${RUN}` });
+    expect((await admin.query("select id from attendance where session_id=$1 and member_id=$2",
+      [sessionB, memberB])).rowCount).toBe(1);
+
     await signIn("reception");
     expect(await markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
       status: "present", clientId: `foreign-site-${RUN}` })).toMatchObject({ ok: false, error: "Session not found." });
