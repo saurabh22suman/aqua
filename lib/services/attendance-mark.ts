@@ -38,12 +38,22 @@ export async function markAttendance(ctx: ActionCtx, input: {
       .where(and(eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, session.batchId),
         eq(members.id, asMemberId(input.memberId)), lte(enrolments.enrolledOn, session.sessionDate),
         inArray(members.status, ["active", "trial"]), isNull(members.deletedAt), isNull(persons.deletedAt))).limit(1);
-    if (!eligible) throw new NotFoundError();
+    if (!eligible) {
+      // #195 — a historical correction of an already-marked session
+      // survives a later batch transfer: the roster rule governs new
+      // marks, not the correction of an existing one. The location and
+      // coach checks above still apply.
+      const [priorMark] = await tx.select({ id: attendance.id }).from(attendance)
+        .where(and(eq(attendance.tenantId, ctx.tenantId), eq(attendance.sessionId, session.id),
+          eq(attendance.memberId, asMemberId(input.memberId)))).limit(1);
+      if (!priorMark) throw new NotFoundError();
+    }
+    const memberId = eligible?.id ?? asMemberId(input.memberId);
     const [previous] = await tx.select().from(attendance).where(and(eq(attendance.tenantId, ctx.tenantId),
-      eq(attendance.sessionId, session.id), eq(attendance.memberId, eligible.id))).for("update");
+      eq(attendance.sessionId, session.id), eq(attendance.memberId, memberId))).for("update");
     if (previous?.clientId === input.clientId) return;
     const [saved] = await tx.insert(attendance).values({ tenantId: ctx.tenantId, sessionId: session.id,
-      locationId: session.locationId, memberId: eligible.id, status: input.status, clientId: input.clientId,
+      locationId: session.locationId, memberId, status: input.status, clientId: input.clientId,
       markedBy: ctx.userId, createdBy: ctx.userId, updatedBy: ctx.userId,
     }).onConflictDoUpdate({ target: [attendance.tenantId, attendance.sessionId, attendance.memberId], set: {
       status: input.status, clientId: input.clientId, locationId: session.locationId,

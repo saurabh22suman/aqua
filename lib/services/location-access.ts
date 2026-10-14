@@ -18,8 +18,8 @@ import type { ActionCtx } from "@/lib/auth/context";
 // tenant-wide behaviour. When ON, a staff member whose membership
 // carries an explicit location list (membership_locations) is
 // constrained to those locations on the enforced service reads and
-// writes. Memberships with all_locations = true stay unrestricted, and
-// a caller with no user identity (jobs) is never scoped.
+// writes. Memberships with all_locations = true stay unrestricted. A job
+// must identify itself explicitly; an omitted human identity is not a job.
 //
 // Tenant-wide rows (a batch or session with location_id IS NULL) stay
 // visible to scoped staff: NULL means "the whole business", not
@@ -37,6 +37,7 @@ export type LocationAccess =
 export type LocationAwareCtx = ActionCtx & {
   allLocations?: boolean;
   locationIds?: string[];
+  systemActor?: true;
 };
 
 export async function resolveLocationAccess(
@@ -50,13 +51,12 @@ export async function resolveLocationAccess(
   );
   if (enabled !== true) return { unrestricted: true };
 
+  if (ctx.systemActor === true && !ctx.userId) return { unrestricted: true };
+  if (!ctx.userId) return { unrestricted: false, locationIds: [] };
   if (ctx.allLocations === true) return { unrestricted: true };
   if (ctx.allLocations === false && Array.isArray(ctx.locationIds)) {
     return { unrestricted: false, locationIds: ctx.locationIds };
   }
-
-  // No user identity: a job or system caller — never scoped.
-  if (!ctx.userId) return { unrestricted: true };
 
   // Fallback: the caller's default membership, mirroring
   // resolveDefaultCtx's ordering (role home ordinal, then creation).
