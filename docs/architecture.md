@@ -330,7 +330,7 @@ Mechanical guarantees, not code review: `tests/tier1/user-scope.test.ts` proves 
 
 **Phone number plus PIN is the primary tenant-staff method** (2026-09-11 auth feature) — it matches how this market actually works and needs no delivery channel. A first-time user always arrives via a single-use magic link, which shows the set-PIN screen; from then on they sign in at `/login` with their mobile number and a 6–12 digit PIN. Failed attempts lock the account (5 failures → 15 minutes; `lib/services/pin-lockout.ts`). A relogin magic link remains a parallel door into the same session table.
 
-Phone OTP is still wired in better-auth and lights up with no migration once an SMS channel lands, but nothing is delivered today and the UI does not surface it. Email and password is enabled only as the credential store behind the PIN (`disableSignUp: true`; nobody self-registers).
+Tenant-staff login remains phone + PIN. **Decision, 2026-10-07:** self-service recovery uses a WhatsApp OTP, then New PIN / Re-enter PIN / Save. Durable challenges are hashed, rate-limited, browser- and purpose-bound, and single-use; saving revokes that identity's existing sessions. Public Better Auth email/phone sign-in and OTP verification doors are blocked; internal email/password APIs remain the credential store behind the scoped PIN service (`disableSignUp: true`).
 
 | Actor | Method |
 |---|---|
@@ -338,7 +338,7 @@ Phone OTP is still wired in better-auth and lights up with no migration once an 
 | Receptionist | Same doors, session hard-capped at **12h from login** (shared front-desk device; enforced in `sessionExists()` + `requireDefaultCtx()`/`requireCtx()` via `isSessionExpiredForRole()`, because better-auth has no per-role session concept) |
 | Parent | **No account.** Signed magic link, single-purpose, 7-day expiry |
 | Walk-in customer | No account. Booking reference plus phone |
-| Platform staff | Separate table, separate session. DB password + TOTP, **or** env credentials (`OPS_EMAIL`/`OPS_PASSWORD`, constant-time compare, no TOTP) when configured — see `db/platform-auth-env.ts`. The env door is a temporary operating arrangement; unsetting the pair restores the DB+TOTP path unchanged |
+| Platform staff | Separate table and session; registered phone + WhatsApp OTP (decision 2026-10-07). Phone provisioning is explicit. Password/TOTP and the env-only credential door are no longer exposed by web actions; legacy DB helpers remain for historical tooling/tests. Mock capture is non-production only; production requires a real configured transport |
 
 A person can belong to multiple tenants (a coach working at two academies). Identity is global; membership is per tenant.
 
@@ -1719,7 +1719,7 @@ The repo's actual structure (J7 — the previous version of this section claimed
 app/
   layout.tsx                          — root layout
   globals.css
-  (auth)/login/                       — phone+OTP sign-in (staff + parents)
+  login/                             — tenant phone+PIN sign-in; reset/ is OTP-verified PIN recovery
   (owner)/owner/                      — owner/admin surfaces
     page.tsx                          — dashboard
     batches/, members/, staff/, sessions/, enquiries/, programs/,
@@ -1732,7 +1732,7 @@ app/
     members/, members/[memberId]/, members/new/, enquiries/, enquiries/[enquiryId]/
   (parent)/parent/                    — parent surfaces (legacy; superseded by /p/[token])
     page.tsx
-  (platform)/ops/                — control plane — separate auth (password + TOTP, or env creds)
+  (platform)/ops/                — control plane — separate registered-phone + WhatsApp OTP auth
     page.tsx                          — activity feed
     login/, verify/, features/, presets/, presets/[key]/,
     tenants/, tenants/[tenantId]/, tenants/new/, activity/
