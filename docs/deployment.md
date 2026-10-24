@@ -125,6 +125,31 @@ if someone sets it. There is no VPS-only deploy script.
    recreates the one-shot migrate container; Compose `config --quiet`
    alone cannot prove how its UI handles a previously completed job.
 
+### Bare-domain probes (both hosts)
+
+The bare domain is an entry point: each host must answer `/` with a
+**307** to its own door, and the redirect must stay on the host that
+was asked for.
+
+```sh
+# Tenant apex -> the tenant door. Same host, /login.
+curl -sS -o /dev/null -D - https://aqua.preprabbit.in/ \
+  | grep -iE '^HTTP|^location'
+# Expect: HTTP/2 307 and location: https://aqua.preprabbit.in/login
+
+# Platform host -> the platform door. Same host, /ops.
+curl -sS -o /dev/null -D - https://aquaops.preprabbit.in/ \
+  | grep -iE '^HTTP|^location'
+# Expect: HTTP/2 307 and location: https://aquaops.preprabbit.in/ops
+```
+
+A 404 on `/` means the deployed image predates the entry-point route.
+A redirect to the **other** host's path means `OPS_HOST` does not
+match the host Dokploy routes to `web` — the app would send the
+tenant apex to `/ops`, which the routing layer then refuses. Fix
+`OPS_HOST` and redeploy; do not work around it by routing the hosts
+differently.
+
 Local configuration checks use **dummy values only**:
 
 ```sh
