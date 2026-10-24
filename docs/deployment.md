@@ -105,7 +105,9 @@ if someone sets it. There is no VPS-only deploy script.
    `APP_LOGIN_PASSWORD`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (HTTPS
    tenant host, not ops), `PARENT_LINK_SECRET`, `OPS_HOST` (bare
    hostname of the platform host — `aquaops.preprabbit.in` — no
-   scheme, port or path), all four `R2_*` values
+   scheme, port or path), `OPS_EMAIL` + `OPS_PASSWORD` (the env
+   operator door — both or neither, password ≥ 12 characters), all
+   four `R2_*` values
    and `AUDIT_CHECKPOINT_SECRET`. Use **different** values/buckets per
    VPS. The backup profile also needs these values, but only it and
    `migrate` receive `MIGRATION_DATABASE_URL`; worker receives R2 and
@@ -124,6 +126,93 @@ if someone sets it. There is no VPS-only deploy script.
    and inspect the actual image digest. On redeploy, **verify** Dokploy
    recreates the one-shot migrate container; Compose `config --quiet`
    alone cannot prove how its UI handles a previously completed job.
+
+### Synthetic demo club (Splash Sports Club)
+
+A deployment starts with an empty database. That is right for a real
+club and useless for a demo, so the deploy step can seed ONE synthetic
+club:
+
+| Variable | Meaning |
+|---|---|
+| `SEED_SPLASH_CLUB=true` | Seed the club during the `migrate` step |
+| `SEED_SPLASH_CLUB_PIN=<6-12 digits>` | The PIN the seeded owner / coach / receptionist sign in with |
+
+What it writes: the tenant **Splash Sports Club** on the `swimming`
+preset (three swim programs, a four-lane pool facility), the location
+**Splash Pool**, staff roles **owner**, **coach** and
+**receptionist**, eight swimmers (three of them minors, with
+guardians), the batch **Evening Squad** (Mon/Wed/Fri 18:00), a priced
+**Monthly Swimming** plan (₹3,000, priced against the pool) and one
+live subscription on it.
+
+Everything about it is invented — names, phones, dates, amounts.
+
+Notes:
+
+- The PIN has **no default on purpose**. A fixed credential on a
+  publicly reachable host is a credential everybody can use. The
+  seeder refuses to run without a usable one, and the deploy step
+  fails with that message.
+- The flag is **not** `DEMO_MODE`: `DEMO_MODE` means "this process is
+  a local demo" and the app refuses to SERVE in production with it set.
+- The seeder is idempotent. Leave the flag true and every redeploy
+  refreshes nothing and duplicates nothing. Flip it back to `false`
+  once the demo is done — the seeded data stays.
+- Only the `migrate` (one-shot) service receives these two variables;
+  the web and worker containers never see them.
+
+### The platform sign-in (env operator door)
+`OPS_EMAIL` + `OPS_PASSWORD` are **required** in both tracked Compose
+files, and they are what makes the platform sign-in work:
+
+- With both set, `db/platform-auth.ts` routes the platform login to
+  `db/platform-auth-env.ts`: the email and password are compared in
+  constant time and the session is created fully authenticated — **no
+  TOTP, no registered operator phone, no WhatsApp message**. The
+  operator row is found-or-created on first sign-in.
+- The email + password form is rendered on `/ops/login` whenever the
+  pair is set. The WhatsApp door stays available alongside it for
+  operators who have a registered phone.
+- Both or neither: `lib/env.ts` refuses to boot when only one is set,
+  and the password must be at least 12 characters.
+
+Go-live check (from outside the VPS):
+
+```sh
+# The email + password form is on the page — and the form posts with
+# method="post", so the password never reaches the query string.
+curl -sS https://aquaops.preprabbit.in/ops/login | grep -c 'name="password"'
+# Expect: 1
+```
+
+Then sign in at `https://aquaops.preprabbit.in/ops/login` with those
+credentials and confirm `/ops` renders the overview.
+
+### Bare-domain probes (both hosts)
+
+The bare domain is an entry point: each host must answer `/` with a
+**307** to its own door, and the redirect must stay on the host that
+was asked for.
+
+```sh
+# Tenant apex -> the tenant door. Same host, /login.
+curl -sS -o /dev/null -D - https://aqua.preprabbit.in/ \
+  | grep -iE '^HTTP|^location'
+# Expect: HTTP/2 307 and location: https://aqua.preprabbit.in/login
+
+# Platform host -> the platform door. Same host, /ops.
+curl -sS -o /dev/null -D - https://aquaops.preprabbit.in/ \
+  | grep -iE '^HTTP|^location'
+# Expect: HTTP/2 307 and location: https://aquaops.preprabbit.in/ops
+```
+
+A 404 on `/` means the deployed image predates the entry-point route.
+A redirect to the **other** host's path means `OPS_HOST` does not
+match the host Dokploy routes to `web` — the app would send the
+tenant apex to `/ops`, which the routing layer then refuses. Fix
+`OPS_HOST` and redeploy; do not work around it by routing the hosts
+differently.
 
 Local configuration checks use **dummy values only**:
 

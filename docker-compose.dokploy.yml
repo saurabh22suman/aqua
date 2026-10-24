@@ -61,6 +61,15 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
       PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      # Synthetic demo club for a pilot deployment. The deploy step
+      # (migrate) seeds Splash Sports Club when this is true: owner,
+      # coach, receptionist, swimmers, a batch, a priced plan and a
+      # subscription. SEED_SPLASH_CLUB_PIN is the PIN the seeded staff
+      # sign in with — there is NO default, because a fixed credential
+      # on a public host is a credential everybody can use. Flip
+      # SEED_SPLASH_CLUB back to false once the demo is done.
+      SEED_SPLASH_CLUB: ${SEED_SPLASH_CLUB:-false}
+      SEED_SPLASH_CLUB_PIN: ${SEED_SPLASH_CLUB_PIN:-}
     depends_on:
       db:
         condition: service_healthy
@@ -93,6 +102,14 @@ services:
       # Dokploy routes to web for the platform domain, and must differ
       # from the apex host.
       OPS_HOST: ${OPS_HOST:?set OPS_HOST}
+      # The env operator door (db/platform-auth-env.ts): the platform
+      # login's email + password live in the deployment's environment,
+      # the session is created fully authenticated, and no TOTP or a
+      # registered operator phone is needed to get into /ops. Both
+      # must be set (lib/env.ts refuses one without the other), and
+      # the password needs at least 12 characters.
+      OPS_EMAIL: ${OPS_EMAIL:?set OPS_EMAIL}
+      OPS_PASSWORD: ${OPS_PASSWORD:?set OPS_PASSWORD}
       NODE_ENV: production
       DEMO_MODE: "false"
       OFFLINE_SYNC_ENABLED: ""

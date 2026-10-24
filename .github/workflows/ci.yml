@@ -164,6 +164,8 @@ jobs:
           BETTER_AUTH_URL=https://ci.invalid \
           PARENT_LINK_SECRET=ci-dummy-parent-link \
           OPS_HOST=ci-dummy-ops-host \
+          OPS_EMAIL=ci-dummy-ops@example.invalid \
+          OPS_PASSWORD=ci-dummy-ops-password \
           R2_ACCOUNT_ID=ci-dummy-r2-account \
           R2_ACCESS_KEY_ID=ci-dummy-r2-access \
           R2_SECRET_ACCESS_KEY=ci-dummy-r2-secret \
@@ -180,6 +182,8 @@ jobs:
           BETTER_AUTH_URL=https://ci.invalid \
           PARENT_LINK_SECRET=ci-dummy-parent-link \
           OPS_HOST=ci-dummy-ops-host \
+          OPS_EMAIL=ci-dummy-ops@example.invalid \
+          OPS_PASSWORD=ci-dummy-ops-password \
           R2_ACCOUNT_ID=ci-dummy-r2-account \
           R2_ACCESS_KEY_ID=ci-dummy-r2-access \
           R2_SECRET_ACCESS_KEY=ci-dummy-r2-secret \

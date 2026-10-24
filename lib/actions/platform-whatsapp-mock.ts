@@ -4,19 +4,27 @@ import { z } from "zod";
 import { opsAction } from "@/db/ops-action";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
 import { mockMessagingEnabled } from "@/lib/messaging/provider";
-import { createMockProvider } from "@/lib/messaging/mock-provider";
 import { sendMessage } from "@/lib/messaging/send";
 import { handleInboundMessage } from "@/lib/messaging/inbound";
 import { asUserId } from "@/lib/ids";
 
-// C-40a — the non-production WhatsApp mock's actions: compose an
-// outbound message and inject an inbound one. Both go through the same
+// C-40a — the WhatsApp mock console's actions: compose an outbound
+// message and inject an inbound one. Both go through the same
 // services the real provider/webhook will use, so what is exercised
 // here is the production code path with a fake transport.
 //
-// The screen and these actions refuse to operate in production (the
-// env boot guard already refuses WHATSAPP_PROVIDER=mock there; this is
-// the request-time layer).
+// The outbound action uses the CONFIGURED provider — the same one
+// every other WhatsApp path in the app uses (tenant notifications,
+// the platform sign-in code, the PIN-reset code). It used to pass a
+// bare in-process mock instead, which posts to WHATSAPP_MOCK_URL: the
+// local loopback viewer. In a deployment that variable is unset (it
+// is validated as a loopback origin), so the action recorded
+// "sent" and delivered NOTHING — the operator saw a success and the
+// mock stayed empty. The configured provider is the hosted mock
+// (WHATSAPP_CAPTURE_URL), which is where the message must land.
+//
+// The inbound injection is a database write (a message arriving FROM
+// WhatsApp); it has no transport and no provider.
 
 const sendFormInput = z.object({
   tenantId: z.string().uuid(),
@@ -86,7 +94,9 @@ export async function sendMockMessageAction(
         tenantId: surface.data.tenantId as never,
         toPhone: surface.data.toPhone,
         body: surface.data.body,
-        provider: createMockProvider(),
+        // No provider override: sendMessage resolves the CONFIGURED
+        // provider, which is the hosted mock in a deployment and the
+        // in-process mock in local development.
       }),
   );
   return result.ok ? { ok: true } : { ok: false, error: result.error };

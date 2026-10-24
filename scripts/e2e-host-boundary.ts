@@ -92,6 +92,20 @@ interface Expectation {
   note: string;
 }
 
+// The bare domain is an ENTRY POINT, and its redirect is asserted
+// separately (see REDIRECT_PROBES) because "where does it send you"
+// is the whole point: a bare domain that answered 404 was the bug,
+// and one that redirected to the OTHER app's door would be a boundary
+// breach.
+//
+// These probes read the redirect itself — they do NOT follow it — so
+// they can assert the status AND the destination.
+interface RedirectProbe {
+  host: string;
+  expectPath: string;
+  note: string;
+}
+
 // The path contract, per surface. It does not mention hosts: the same
 // expectations must hold for every host spelling that reaches the
 // app, which is the whole point of the pin.
@@ -166,6 +180,28 @@ const PROBES: Probe[] = HOST_PAIRS.flatMap((pair) => [
   })),
 ]);
 
+// The bare domain must open the right app on each host.
+//
+// The assertion is on the REDIRECT, not on the page it lands on: the
+// destination must be the same host that was asked for (a redirect to
+// the other app's host would be a boundary breach) and the right path
+// on it (the tenant door on the apex, the platform door on the ops
+// host). The status must be a real redirect — a redirect decided
+// during render answers 200 and hides the destination in the RSC
+// payload, which is not an entry point any client can follow.
+const REDIRECT_PROBES: RedirectProbe[] = HOST_PAIRS.flatMap((pair) => [
+  {
+    host: `${pair.platform}:${PORT}`,
+    expectPath: "/ops",
+    note: `bare domain opens the platform app (${pair.label})`,
+  },
+  {
+    host: `${pair.apex}:${PORT}`,
+    expectPath: "/login",
+    note: `bare domain opens the tenant app (${pair.label})`,
+  },
+]);
+
 async function waitForServer(proc: ChildProcess): Promise<void> {
   for (let i = 0; i < 90; i++) {
     try {
@@ -206,6 +242,30 @@ function probeUrl(p: Probe): { url: string; status: number } {
   return { url, status: parseInt(out.trim(), 10) };
 }
 
+function probeRedirect(p: RedirectProbe): { status: number; location: string } {
+  // NO -L here: following the redirect would hide the destination,
+  // which is the thing under test. The raw Location header is the
+  // contract.
+  const out = execFileSync(
+    "curl",
+    [
+      "-k",
+      "-sS",
+      "-o",
+      "/dev/null",
+      "-D",
+      "-",
+      "-H",
+      `Host: ${p.host}`,
+      `http://127.0.0.1:${PORT}/`,
+    ],
+    { encoding: "utf8", timeout: 10_000 },
+  );
+  const status = parseInt(out.match(/^HTTP\/[\d.]+ (\d+)/m)?.[1] ?? "0", 10);
+  const location = out.match(/^location:\s*(.+)$/im)?.[1]?.trim() ?? "";
+  return { status, location };
+}
+
 async function main(): Promise<void> {
   await assertPortFree(PORT);
   // Bind to :: (dual-stack) so curl can hit ops.localhost (which
@@ -243,8 +303,32 @@ async function main(): Promise<void> {
     }
   }
 
+  for (const p of REDIRECT_PROBES) {
+    try {
+      const { status, location } = probeRedirect(p);
+      const path = location.replace(/^https?:\/\/[^/]+/, "");
+      const host = location.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+      const ok =
+        status === 307 &&
+        path === p.expectPath &&
+        host === p.host;
+      if (!ok) {
+        failures++;
+        console.log(
+          `[✗] ${p.host}/ → ${status} ${location || "(no Location)"} (expected 307 to ${p.expectPath} on ${p.host}) — ${p.note}`,
+        );
+      } else {
+        console.log(`[✓] ${p.host}/ → ${status} → ${path} (same host)`);
+      }
+    } catch (err) {
+      failures++;
+      console.log(
+        `[✗] ${p.host}/ → error: ${(err as Error).message} — ${p.note}`,
+      );
+    }
+  }
+
   if (server.pid) process.kill(-server.pid!);
   process.exit(failures === 0 ? 0 : 1);
 }
-
 main();
