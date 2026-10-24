@@ -1,11 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { isOpsHost } from "@/lib/ops-host";
 
 // Host-based route-group gating. Two rules:
 //
-//   1. ops.<base>     — serves ONLY /ops/*. Anything else 404s.
-//   2. <base> (apex)  — serves tenant surfaces, /login, /p/*, /api/auth/*,
-//                        /api/health, and Next's own _next/* and asset
-//                        routes. /ops/* 404s.
+//   1. the platform host (OPS_HOST, e.g.
+//      aquaops.preprabbit.in) — serves ONLY /ops/*. Anything else
+//      404s.
+//   2. the tenant apex (e.g. aqua.preprabbit.in) — serves tenant
+//      surfaces, /login, /p/*, /api/auth/*, /api/health, and Next's
+//      own _next/* and asset routes. /ops/* 404s.
 //
 // The boundary is mechanical — neither host can serve the other's
 // path prefix. Verified end-to-end by scripts/e2e-host-boundary.ts
@@ -14,22 +17,23 @@ import { NextResponse, type NextRequest } from "next/server";
 // Why this exists: the platform surface uses TOTP-based auth with
 // its own `platform_session` cookie (lib/auth/platform-cookie.ts)
 // and never touches better-auth or the tenant schema. Putting it on
-// its own subdomain narrows the cookie's reach (browsers scope
+// its own host narrows the cookie's reach (browsers scope
 // `Set-Cookie` without an explicit `Domain=` attribute to the
-// exact host that set it — `platform_session` set on `ops.<base>`
-// is never sent to `aquaworli.<base>`, and vice versa) and makes
+// exact host that set it — `platform_session` set on the platform
+// host is never sent to the tenant apex, and vice versa) and makes
 // the platform-vs-tenant boundary something the routing layer
 // enforces, not just the layout auth gates.
-
-const OPS_PREFIX = "ops.";
+//
+// Which host is the platform host is lib/ops-host.ts's decision —
+// the same module the WhatsApp sign-in route uses, so the routing
+// layer and the auth layer can never disagree about it.
 
 function classifyHost(host: string | null): "ops" | "apex" | "unknown" {
   if (!host) return "unknown";
-  const lower = host.toLowerCase().split(":")[0]!;
-  if (lower.startsWith(OPS_PREFIX)) return "ops";
-  // Anything without a subdomain, or with a subdomain we don't
-  // recognise yet, is treated as apex. Per-tenant subdomains
-  // (B) will extend this branch — see docs/deployment.md § B.
+  if (isOpsHost(host)) return "ops";
+  // Anything that is not the platform host is treated as apex.
+  // Per-tenant subdomains (B) will extend this branch — see
+  // docs/deployment.md § B.
   return "apex";
 }
 

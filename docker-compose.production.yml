@@ -56,10 +56,33 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
       PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      # The platform (ops) host — the sibling of the tenant apex that
+      # serves ONLY /ops/*. It is NOT a subdomain of the apex any more
+      # (aquaops.preprabbit.in beside aqua.preprabbit.in), so
+      # the app cannot infer it: name it here. Must match the host
+      # Dokploy routes to web for the platform domain, and must differ
+      # from the apex host.
+      OPS_HOST: ${OPS_HOST:?set OPS_HOST}
       NODE_ENV: production
       DEMO_MODE: "false"
       OFFLINE_SYNC_ENABLED: ""
-      WHATSAPP_PROVIDER: disabled
+      # Hosted WhatsApp mock. The mock service runs at wa.preprabbit.in
+      # and speaks the WhatsApp Cloud API shape, so the app POSTs to
+      # <WHATSAPP_CAPTURE_URL>/v23.0/<from>/messages. Release 1 has no
+      # real provider (the Cloud adapter is post-pilot work), so the
+      # hosted mock is the only working transport; the preview stage
+      # makes the deployment SAY SO on every page instead of pretending
+      # messages were delivered.
+      #
+      # Override in the Dokploy Environment editor when a real provider
+      # lands, or when the database holds real academy records:
+      #   WHATSAPP_PROVIDER=disabled
+      #   AQUA_DEPLOYMENT_STAGE=production
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-capture}
+      AQUA_DEPLOYMENT_STAGE: ${AQUA_DEPLOYMENT_STAGE:-preview}
+      WHATSAPP_CAPTURE_URL: ${WHATSAPP_CAPTURE_URL:-https://wa.preprabbit.in}
+      WHATSAPP_CAPTURE_AUTH_HEADER: ${WHATSAPP_CAPTURE_AUTH_HEADER:-}
+      WHATSAPP_CAPTURE_AUTH_VALUE: ${WHATSAPP_CAPTURE_AUTH_VALUE:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -89,6 +112,15 @@ services:
       R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
       AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET}
       NODE_ENV: production
+      # The worker is what actually delivers tenant notifications, so
+      # it needs the same messaging configuration as web. Without it
+      # the worker resolves the production default (disabled) and every
+      # queued notification fails.
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-capture}
+      AQUA_DEPLOYMENT_STAGE: ${AQUA_DEPLOYMENT_STAGE:-preview}
+      WHATSAPP_CAPTURE_URL: ${WHATSAPP_CAPTURE_URL:-https://wa.preprabbit.in}
+      WHATSAPP_CAPTURE_AUTH_HEADER: ${WHATSAPP_CAPTURE_AUTH_HEADER:-}
+      WHATSAPP_CAPTURE_AUTH_VALUE: ${WHATSAPP_CAPTURE_AUTH_VALUE:-}
     depends_on:
       migrate:
         condition: service_completed_successfully

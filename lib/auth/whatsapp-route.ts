@@ -4,6 +4,7 @@ import { whatsappAuthInput, type WhatsAppAuthState } from "@/lib/schemas/whatsap
 import { issueWhatsAppChallenge, type WhatsAppAuthPurpose } from "@/db/whatsapp-auth";
 import { finishOpsWhatsAppLogin, verifyPinResetCode, saveResetPin } from "@/db/whatsapp-auth-complete";
 import { PLATFORM_COOKIE_NAME, platformSessionCookieMaxAgeSeconds } from "./platform-cookie";
+import { isOpsHost } from "@/lib/ops-host";
 
 export async function handleWhatsAppAuth(request: Request, purpose: WhatsAppAuthPurpose) {
   const input: unknown = await request.json().catch(() => null);
@@ -21,7 +22,7 @@ export async function handleWhatsAppAuth(request: Request, purpose: WhatsAppAuth
   catch { return NextResponse.json({ error: "Invalid origin." }, { status: 403 }); }
   if (origin.host.toLowerCase() !== host ||
     (process.env.NODE_ENV === "production" && origin.protocol !== "https:") ||
-    ((purpose === "ops_login") !== Boolean(host?.startsWith("ops.")))) {
+    ((purpose === "ops_login") !== isOpsHost(host))) {
     return NextResponse.json({ error: "Use the sign-in page for this account." }, { status: 403 });
   }
   const cookieName = `aqua_whatsapp_${purpose}`;

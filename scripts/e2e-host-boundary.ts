@@ -1,18 +1,20 @@
 // Host-boundary mechanical pin.
 //
-// A — the platform is on its own subdomain (ops.<base>). The
-// boundary between ops.<base> and apex is enforced by middleware.ts
-// and pinned by THIS test. Without it, a future route group move
-// or middleware refactor could silently re-enable /ops on apex
-// (or /owner on ops) and the only thing left enforcing the
-// boundary would be the layout auth gates — which would let a
-// platform admin navigate to /owner on their own host without
-// being blocked at the routing layer. The boundary is a
-// security claim, not just a UX claim.
+// A — the platform is on its own host. It used to be a subdomain of
+// the tenant apex (`ops.<base>`); it is now a SIBLING host
+// (aquaops.preprabbit.in beside aqua.preprabbit.in), named
+// by OPS_HOST. The boundary between the platform host and the apex
+// is enforced by middleware.ts and pinned by THIS test. Without it, a
+// future route group move or middleware refactor could silently
+// re-enable /ops on apex (or /owner on the platform host) and the
+// only thing left enforcing the boundary would be the layout auth
+// gates — which would let a platform admin navigate to /owner on
+// their own host without being blocked at the routing layer. The
+// boundary is a security claim, not just a UX claim.
 //
 // What this test pins:
 //
-//   1. From ops.<base>:
+//   1. From the platform host (OPS_HOST):
 //        - /ops/login       200 (platform login reachable)
 //        - /ops/            200 (platform overview, with auth)
 //        - /login           404 (tenant login NOT reachable)
@@ -23,12 +25,16 @@
 //        - /p/anything      404
 //        - /check-in/…      404 (premises QR is a tenant surface)
 //
-//   2. From apex (<base>):
+//   2. From the apex:
 //        - /ops/login       404
 //        - /ops/            404
 //        - /login           200 (or 307 to login)
 //        - /api/health      200
 //        - /check-in/…      200 (signed-out sign-in-first state)
+//
+//   3. The legacy `ops.<base>` shape still resolves to the platform
+//      surface — local development (ops.localhost) and any older
+//      deployment depend on it.
 //
 // 404 is the contract — anything else means the boundary is open.
 // The middleware returns plain-text "not found" with status 404
@@ -46,6 +52,13 @@ import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 
 const PORT = 3222;
+
+// The deployed host pair. The platform host is named by OPS_HOST; the
+// apex is its sibling. These are the hosts the Dokploy deployment
+// routes, so the boundary is pinned in its real shape — a host
+// pattern nobody deploys would not prove anything.
+const PLATFORM_HOST = "aquaops.preprabbit.in";
+const APEX_HOST = "aqua.preprabbit.in";
 
 async function assertPortFree(port: number): Promise<void> {
   await new Promise<void>((resolve, reject) => {
@@ -73,47 +86,85 @@ interface Probe {
   note: string;
 }
 
-// Both "ops" and the apex share the same dev server. The Host
-// header is the only thing that flips the boundary.
-const PROBES: Probe[] = [
-  // From ops.<base>:
-  { path: "/ops/login",       host: `ops.localhost:${PORT}`, expect: 200, note: "platform login reachable on ops" },
-  // /ops/ on ops reaches the platform overview (which itself
-  // redirects unauthed users to /ops/verify → /ops/login). With
-  // -L following redirects, the final status is the platform
-  // login (200). The point of this probe is "did the request
-  // reach ops at all" — the 200 confirms yes. The corresponding
-  // apex probe below pins "did NOT reach" via the 404 chain.
-  { path: "/ops/",            host: `ops.localhost:${PORT}`, expect: 200, note: "platform surface reachable on ops (follows auth redirects)" },
-  { path: "/login",           host: `ops.localhost:${PORT}`, expect: 404, note: "tenant login NOT reachable on ops" },
-  { path: "/owner",           host: `ops.localhost:${PORT}`, expect: 404, note: "/owner NOT reachable on ops" },
-  { path: "/coach",           host: `ops.localhost:${PORT}`, expect: 404, note: "/coach NOT reachable on ops" },
-  { path: "/reception",       host: `ops.localhost:${PORT}`, expect: 404, note: "/reception NOT reachable on ops" },
-  { path: "/parent",          host: `ops.localhost:${PORT}`, expect: 404, note: "/parent NOT reachable on ops" },
-  { path: "/p/anything",      host: `ops.localhost:${PORT}`, expect: 404, note: "parent magic-link NOT reachable on ops" },
-  { path: "/check-in/anything", host: `ops.localhost:${PORT}`, expect: 404, note: "premises check-in NOT reachable on ops" },
-  { path: "/api/health",      host: `ops.localhost:${PORT}`, expect: 200, note: "health reachable on ops (Traefik / Dokploy check)" },
+interface Expectation {
+  path: string;
+  expect: number;
+  note: string;
+}
+
+// The path contract, per surface. It does not mention hosts: the same
+// expectations must hold for every host spelling that reaches the
+// app, which is the whole point of the pin.
+const PLATFORM_EXPECTATIONS: Expectation[] = [
+  { path: "/ops/login",       expect: 200, note: "platform login reachable on the platform host" },
+  // /ops/ on the platform host reaches the platform overview (which
+  // itself redirects unauthed users to /ops/verify → /ops/login).
+  // With -L following redirects, the final status is the platform
+  // login (200). The point of this probe is "did the request reach
+  // the platform surface at all" — the 200 confirms yes. The
+  // corresponding apex probe below pins "did NOT reach" via the 404
+  // chain.
+  { path: "/ops/",            expect: 200, note: "platform surface reachable (follows auth redirects)" },
+  { path: "/login",           expect: 404, note: "tenant login NOT reachable" },
+  { path: "/owner",           expect: 404, note: "/owner NOT reachable" },
+  { path: "/coach",           expect: 404, note: "/coach NOT reachable" },
+  { path: "/reception",       expect: 404, note: "/reception NOT reachable" },
+  { path: "/parent",          expect: 404, note: "/parent NOT reachable" },
+  { path: "/p/anything",      expect: 404, note: "parent magic-link NOT reachable" },
+  { path: "/check-in/anything", expect: 404, note: "premises check-in NOT reachable (tenant surface)" },
+  { path: "/api/health",      expect: 200, note: "health reachable (Traefik / Dokploy check)" },
   // 2026-09-11 auth feature: the phone+PIN and set-PIN routes are
-  // apex-only. On ops they must 404 (never reach the tenant auth
-  // surface); on the apex they exist (405 on GET, because they are
-  // POST-only — a 404 here would mean the middleware dropped them).
-  { path: "/api/login/pin",       host: `ops.localhost:${PORT}`, expect: 404, note: "tenant PIN login NOT reachable on ops" },
-  { path: "/api/login/pin-recovery", host: `ops.localhost:${PORT}`, expect: 404, note: "tenant recovery NOT reachable on ops" },
-  { path: "/api/offline/session", host: `ops.localhost:${PORT}`, expect: 404, note: "offline identity NOT reachable on ops" },
-  { path: "/ops/api/whatsapp-auth", host: `ops.localhost:${PORT}`, expect: 405, note: "ops OTP endpoint reachable, POST only" },
-  { path: "/api/account/set-pin", host: `ops.localhost:${PORT}`, expect: 404, note: "tenant set-PIN NOT reachable on ops" },
-  // From apex:
-  { path: "/ops/login",       host: `localhost:${PORT}`,     expect: 404, note: "/ops NOT reachable on apex" },
-  { path: "/ops/",            host: `localhost:${PORT}`,     expect: 404, note: "/ops/* NOT reachable on apex" },
-  { path: "/login",           host: `localhost:${PORT}`,     expect: 200, note: "tenant login reachable on apex" },
-  { path: "/api/health",      host: `localhost:${PORT}`,     expect: 200, note: "health reachable on apex" },
-  { path: "/api/login/pin",       host: `localhost:${PORT}`, expect: 405, note: "PIN login reachable on apex (POST-only -> 405 on GET)" },
-  { path: "/api/login/pin-recovery", host: `localhost:${PORT}`, expect: 405, note: "tenant recovery reachable, POST only" },
-  { path: "/api/offline/session", host: `localhost:${PORT}`, expect: 200, note: "offline identity reachable without exposing a signed-out scope" },
-  { path: "/ops/api/whatsapp-auth", host: `localhost:${PORT}`, expect: 404, note: "ops OTP endpoint NOT reachable on apex" },
-  { path: "/api/account/set-pin", host: `localhost:${PORT}`, expect: 405, note: "set-PIN reachable on apex (POST-only -> 405 on GET)" },
-  { path: "/check-in/anything",   host: `localhost:${PORT}`, expect: 200, note: "premises check-in reachable on apex (signed-out sign-in-first state)" },
+  // apex-only. On the platform host they must 404 (never reach the
+  // tenant auth surface); on the apex they exist (405 on GET, because
+  // they are POST-only — a 404 here would mean the middleware dropped
+  // them).
+  { path: "/api/login/pin",       expect: 404, note: "tenant PIN login NOT reachable" },
+  { path: "/api/login/pin-recovery", expect: 404, note: "tenant recovery NOT reachable" },
+  { path: "/api/offline/session", expect: 404, note: "offline identity NOT reachable" },
+  { path: "/ops/api/whatsapp-auth", expect: 405, note: "ops OTP endpoint reachable, POST only" },
+  { path: "/api/account/set-pin", expect: 404, note: "tenant set-PIN NOT reachable" },
 ];
+
+const APEX_EXPECTATIONS: Expectation[] = [
+  { path: "/ops/login",       expect: 404, note: "/ops NOT reachable on apex" },
+  { path: "/ops/",            expect: 404, note: "/ops/* NOT reachable on apex" },
+  { path: "/login",           expect: 200, note: "tenant login reachable on apex" },
+  { path: "/api/health",      expect: 200, note: "health reachable on apex" },
+  { path: "/api/login/pin",       expect: 405, note: "PIN login reachable on apex (POST-only -> 405 on GET)" },
+  { path: "/api/login/pin-recovery", expect: 405, note: "tenant recovery reachable, POST only" },
+  { path: "/api/offline/session", expect: 200, note: "offline identity reachable without exposing a signed-out scope" },
+  { path: "/ops/api/whatsapp-auth", expect: 404, note: "ops OTP endpoint NOT reachable on apex" },
+  { path: "/api/account/set-pin", expect: 405, note: "set-PIN reachable on apex (POST-only -> 405 on GET)" },
+  { path: "/check-in/anything",   expect: 200, note: "premises check-in reachable on apex (signed-out sign-in-first state)" },
+];
+
+// Both host shapes share the same dev server. The Host header is the
+// only thing that flips the boundary.
+//
+// The configured pair is the deployed shape: OPS_HOST names the
+// platform host, and the apex is its sibling. The legacy pair is the
+// `ops.<base>` shape that local development and older deployments
+// still use — it must keep resolving to the platform surface, so the
+// platform host is not the only way in.
+const HOST_PAIRS: { platform: string; apex: string; label: string }[] = [
+  { platform: PLATFORM_HOST, apex: APEX_HOST, label: "configured OPS_HOST" },
+  { platform: "ops.localhost", apex: "localhost", label: "legacy ops.<base> shape" },
+];
+
+const PROBES: Probe[] = HOST_PAIRS.flatMap((pair) => [
+  ...PLATFORM_EXPECTATIONS.map((e) => ({
+    path: e.path,
+    host: `${pair.platform}:${PORT}`,
+    expect: e.expect,
+    note: `${e.note} (${pair.label})`,
+  })),
+  ...APEX_EXPECTATIONS.map((e) => ({
+    path: e.path,
+    host: `${pair.apex}:${PORT}`,
+    expect: e.expect,
+    note: `${e.note} (${pair.label})`,
+  })),
+]);
 
 async function waitForServer(proc: ChildProcess): Promise<void> {
   for (let i = 0; i < 90; i++) {
@@ -160,9 +211,14 @@ async function main(): Promise<void> {
   // Bind to :: (dual-stack) so curl can hit ops.localhost (which
   // resolves to ::1 on most systems) AND 127.0.0.1 without
   // forcing IPv4 with -4.
+  //
+  // OPS_HOST is set explicitly: the dev server must resolve the
+  // platform host the way the deployment does, from configuration,
+  // not from a host-name convention baked into the source.
   const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: "ignore",
     detached: true,
+    env: { ...process.env, OPS_HOST: PLATFORM_HOST },
   });
   await waitForServer(server);
 

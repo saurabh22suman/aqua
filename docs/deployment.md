@@ -1,10 +1,51 @@
 # Deployment and recovery — current operator runbook
 
-**Status:** tracked configuration is prepared for separate Dev and Production
-VPSs. Neither a live R2 upload/restore nor a live Production deploy is
-certified by this document. Do not mark `PILOT_RELEASE_GATE=passed` from
-code or a dry run. Historical, superseded plans are in
+**Status:** tracked configuration is prepared for separate Dev and
+Production VPSs. Neither a live R2 upload/restore nor a live Production
+deploy is certified by this document. Do not mark `PILOT_RELEASE_GATE=passed`
+from code or a dry run. Historical, superseded plans are in
 [`deployment-legacy.md`](deployment-legacy.md); do not follow them.
+
+## Hosts
+
+The tenant surface and the platform (ops) surface are **sibling hosts**,
+not a host and its subdomain:
+
+| Surface | Host | Serves |
+|---|---|---|
+| Tenant apex | `aqua.preprabbit.in` | `/login`, `/owner`, `/coach`, `/reception`, `/worker`, `/parent`, `/p/*`, `/check-in/*`, `/api/auth/*` |
+| Platform (ops) | `aquaops.preprabbit.in` | `/ops/*` only — every other path 404s |
+| WhatsApp mock (capture) | `wa.preprabbit.in` | The hosted mock the app POSTs Cloud-API-shaped messages to |
+
+`BETTER_AUTH_URL` is the tenant apex (`https://aqua.preprabbit.in`).
+`OPS_HOST` names the platform host (`aquaops.preprabbit.in`). The
+platform host is **not** a subdomain of the apex any more, so the app
+cannot infer it: `OPS_HOST` is a required variable in both tracked
+Compose files, and the routing layer (`middleware.ts`) treats that host
+as the platform surface. The legacy `ops.<base>` shape is still
+recognised as well, so an older deployment keeps working — the apex
+host never gains `/ops` either way. Both hosts point at the same `web`
+container; the host header decides which surface answers.
+
+### Messaging
+
+Release 1 has no real WhatsApp provider (the Cloud API adapter is
+post-pilot work), so the hosted mock at `wa.preprabbit.in` is the only
+working transport. The Compose files therefore default to
+`WHATSAPP_PROVIDER=capture`, `AQUA_DEPLOYMENT_STAGE=preview` and
+`WHATSAPP_CAPTURE_URL=https://wa.preprabbit.in`. The app POSTs to
+`<WHATSAPP_CAPTURE_URL>/v23.0/<from>/messages`; the mock answers with
+the Cloud API response shape.
+
+The preview stage is what makes that honest: the layout shows a
+"messages are captured, not delivered" banner on every page, and
+`capture` is refused at boot without it. When a real provider lands, or
+when the database holds real academy records, set
+`WHATSAPP_PROVIDER=disabled` and `AQUA_DEPLOYMENT_STAGE=production` in
+the Dokploy Environment editor. `disabled` means sends fail loudly
+rather than pretending to deliver — including the ops WhatsApp
+sign-in, which then needs the `OPS_EMAIL` + `OPS_PASSWORD` operator
+door instead.
 
 ## Which deployment owns each VPS
 
@@ -50,10 +91,11 @@ if someone sets it. There is no VPS-only deploy script.
 
 ## Environment and first deploy (human steps)
 
-1. Provision the **separate** VPS/Dokploy projects, TLS hosts `<base>`
-   and `ops.<base>`, and a private GHCR registry credential with only
-   `read:packages`. Verify `dokploy-network` exists on **each** target.
-   Do not paste credentials into tracked files or CI logs.
+1. Provision the **separate** VPS/Dokploy projects, TLS hosts
+   `aqua.preprabbit.in` and `aquaops.preprabbit.in`, and a
+   private GHCR registry credential with only `read:packages`. Verify
+   `dokploy-network` exists on **each** target. Do not paste credentials
+   into tracked files or CI logs.
 2. Add the variables listed in `docker-compose.dokploy.env.example` or
    `docker-compose.production.env.example` to the corresponding Dokploy
    Compose Environment editor. Dokploy writes `.env` adjacent to its
@@ -61,7 +103,9 @@ if someone sets it. There is no VPS-only deploy script.
    `AQUA_IMAGE_DIGEST=sha256:<64 hex>` resolved from the approved tag,
    URL-safe `POSTGRES_PASSWORD` and
    `APP_LOGIN_PASSWORD`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL` (HTTPS
-   tenant host, not ops), `PARENT_LINK_SECRET`, all four `R2_*` values
+   tenant host, not ops), `PARENT_LINK_SECRET`, `OPS_HOST` (bare
+   hostname of the platform host — `aquaops.preprabbit.in` — no
+   scheme, port or path), all four `R2_*` values
    and `AUDIT_CHECKPOINT_SECRET`. Use **different** values/buckets per
    VPS. The backup profile also needs these values, but only it and
    `migrate` receive `MIGRATION_DATABASE_URL`; worker receives R2 and
@@ -73,9 +117,10 @@ if someone sets it. There is no VPS-only deploy script.
    Deploy. No step in this document assumes that `docker compose config`
    can validate Dokploy-injected Traefik labels.
 4. Deploy. Check DB `pg_isready`, migration exit 0, web and worker start,
-   then `https://<base>/api/health` returns 200 with `worker: healthy`.
-   Run host-boundary probes (`/login` only on tenant host, `/ops/login`
-   only on ops host), check `Secure; HttpOnly; SameSite=Lax` cookies,
+   then `https://aqua.preprabbit.in/api/health` returns 200 with
+   `worker: healthy`. Run host-boundary probes (`/login` only on the
+   tenant host, `/ops/login` only on the platform host), check
+   `Secure; HttpOnly; SameSite=Lax` cookies,
    and inspect the actual image digest. On redeploy, **verify** Dokploy
    recreates the one-shot migrate container; Compose `config --quiet`
    alone cannot prove how its UI handles a previously completed job.
@@ -86,6 +131,7 @@ Local configuration checks use **dummy values only**:
 AQUA_IMAGE_TAG=sha-000000000000 POSTGRES_PASSWORD=ci-dummy-postgres \
 APP_LOGIN_PASSWORD=ci-dummy-app BETTER_AUTH_SECRET=ci-dummy-auth \
 BETTER_AUTH_URL=https://ci.invalid PARENT_LINK_SECRET=ci-dummy-parent \
+OPS_HOST=ci-dummy-ops-host \
 R2_ACCOUNT_ID=ci-dummy-account R2_ACCESS_KEY_ID=ci-dummy-access \
 R2_SECRET_ACCESS_KEY=ci-dummy-secret R2_BUCKET=ci-dummy-bucket \
 AUDIT_CHECKPOINT_SECRET=ci-dummy-checkpoint \
@@ -94,7 +140,8 @@ docker compose -f docker-compose.dokploy.yml --profile backup config --quiet
 AQUA_IMAGE_DIGEST=sha256:0000000000000000000000000000000000000000000000000000000000000000 \
 POSTGRES_PASSWORD=ci-dummy-postgres APP_LOGIN_PASSWORD=ci-dummy-app \
 BETTER_AUTH_SECRET=ci-dummy-auth BETTER_AUTH_URL=https://ci.invalid \
-PARENT_LINK_SECRET=ci-dummy-parent R2_ACCOUNT_ID=ci-dummy-account \
+PARENT_LINK_SECRET=ci-dummy-parent OPS_HOST=ci-dummy-ops-host \
+R2_ACCOUNT_ID=ci-dummy-account \
 R2_ACCESS_KEY_ID=ci-dummy-access R2_SECRET_ACCESS_KEY=ci-dummy-secret \
 R2_BUCKET=ci-dummy-bucket AUDIT_CHECKPOINT_SECRET=ci-dummy-checkpoint \
 docker compose -f docker-compose.production.yml --profile backup config --quiet
@@ -197,6 +244,6 @@ by this PR.
 ## Per-tenant subdomains (future)
 
 The current middleware serves tenant routes at the configured base
-host, ops at `ops.<base>`; it does not resolve tenant subdomains.
-Wildcard TLS, cookie scope and tenant slug validation need a separate
+host, the platform surface at `OPS_HOST`; it does not resolve tenant
+subdomains. Wildcard TLS, cookie scope and tenant slug validation need a separate
 design and proof before enabling `<slug>.<base>` routing.
