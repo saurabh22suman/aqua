@@ -8,7 +8,7 @@ import { seedDefaultLeaveTypes } from "@/lib/services/leave";
 import { setCredentialForPhone } from "@/lib/services/credentials";
 import { applyPreset } from "./preset-engine";
 import { defaultPlanId, seedPlatformCatalogue } from "./seed-platform";
-import { env, requireMigrationUrl } from "@/lib/env";
+import { requireMigrationUrl } from "@/lib/env";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
 import { isMinor } from "@/lib/time/tz";
 
@@ -128,6 +128,17 @@ function db(): Pool {
   return adminPool;
 }
 
+// What the seeder needs from the deployment's configuration. The
+// caller (db/deploy.ts) reads the validated env and passes it here, so
+// there is ONE reader of the variables and the seeder stays a pure
+// function of its inputs.
+export type SplashSeedOptions = {
+  /** SEED_SPLASH_CLUB — seed the club at all. */
+  enabled: boolean;
+  /** SEED_SPLASH_CLUB_PIN — the PIN the seeded staff sign in with. */
+  pin?: string;
+};
+
 export type SplashSeedResult = {
   tenantId: string;
   locationId: string;
@@ -145,13 +156,30 @@ export type SplashSeedResult = {
  * can sign in to, and a DEFAULT credential on a public host is a
  * credential everybody can use.
  */
-export async function seedSplashSportsClub(): Promise<SplashSeedResult> {
-  if (!env.SEED_SPLASH_CLUB) {
+export async function seedSplashSportsClub(
+  options: SplashSeedOptions,
+): Promise<SplashSeedResult> {
+  try {
+    return await seed(options);
+  } finally {
+    // The privileged pool is closed here, not on the success path
+    // only: a seed that throws halfway (a missing role template, a
+    // bad PIN) must not leave a live connection behind. A connection
+    // that outlives the database it points at is an unhandled error
+    // in whatever process closed that database — the test's
+    // throwaway container, or a redeploy's database going away.
+    await adminPool?.end();
+    adminPool = null;
+  }
+}
+
+async function seed(options: SplashSeedOptions): Promise<SplashSeedResult> {
+  if (!options.enabled) {
     throw new Error(
       "SEED_SPLASH_CLUB is not enabled — refusing to seed the Splash Sports Club.",
     );
   }
-  const pin = (env.SEED_SPLASH_CLUB_PIN ?? "").trim();
+  const pin = (options.pin ?? "").trim();
   if (!/^\d{6,12}$/.test(pin)) {
     throw new Error(
       "SEED_SPLASH_CLUB_PIN must be 6-12 digits — refusing to seed a club " +
@@ -179,8 +207,6 @@ export async function seedSplashSportsClub(): Promise<SplashSeedResult> {
     `splash sports club seeded → tenant ${tenantId}, ${STAFF.length} staff, ` +
       `${memberIds.length} students, batch ${BATCH.name}`,
   );
-  await adminPool?.end();
-  adminPool = null;
   return {
     tenantId,
     locationId,

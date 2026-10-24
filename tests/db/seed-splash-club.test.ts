@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Client } from "pg";
 import { execFileSync } from "node:child_process";
@@ -22,12 +22,11 @@ const SEED_ENV = {
   SEED_SPLASH_CLUB_PIN: "246810",
 };
 
-// A fresh module graph per call: lib/env.ts parses process.env at
-// import time, so the variables under test have to be in place BEFORE
-// the seeder is loaded — and the module cache has to be dropped, or
-// the second call would keep the first call's parsed env.
+// The seeder takes its configuration as arguments (db/deploy.ts
+// passes the validated env), so the tests can call it with different
+// settings without re-importing anything — and without the module
+// resets that would leave a second app pool behind.
 async function loadSeeder() {
-  vi.resetModules();
   const mod = await import("@/db/seed-splash-club");
   return mod.seedSplashSportsClub;
 }
@@ -71,24 +70,27 @@ afterAll(async () => {
 
 describe("Splash Sports Club seeder", () => {
   it("refuses to run without the flag", async () => {
-    process.env.SEED_SPLASH_CLUB = "false";
     const seedSplashSportsClub = await loadSeeder();
-    await expect(seedSplashSportsClub()).rejects.toThrow(/SEED_SPLASH_CLUB/);
-    process.env.SEED_SPLASH_CLUB = SEED_ENV.SEED_SPLASH_CLUB;
+    await expect(
+      seedSplashSportsClub({ enabled: false, pin: SEED_ENV.SEED_SPLASH_CLUB_PIN }),
+    ).rejects.toThrow(/SEED_SPLASH_CLUB/);
   });
 
   it("refuses to run without a usable PIN", async () => {
     // A seeded club whose staff cannot sign in is useless, and a
     // DEFAULT pin on a public host is a credential everybody can use.
-    process.env.SEED_SPLASH_CLUB_PIN = "123";
     const seedSplashSportsClub = await loadSeeder();
-    await expect(seedSplashSportsClub()).rejects.toThrow(/SEED_SPLASH_CLUB_PIN/);
-    process.env.SEED_SPLASH_CLUB_PIN = SEED_ENV.SEED_SPLASH_CLUB_PIN;
+    await expect(seedSplashSportsClub({ enabled: true, pin: "123" })).rejects.toThrow(
+      /SEED_SPLASH_CLUB_PIN/,
+    );
   });
 
   it("seeds the club, its staff, students, batch, plan and subscription", async () => {
     const seedSplashSportsClub = await loadSeeder();
-    const result = await seedSplashSportsClub();
+    const result = await seedSplashSportsClub({
+      enabled: true,
+      pin: SEED_ENV.SEED_SPLASH_CLUB_PIN,
+    });
     expect(result.staffCount).toBe(3);
     expect(result.memberIds).toHaveLength(8);
 
@@ -220,7 +222,10 @@ describe("Splash Sports Club seeder", () => {
 
   it("is idempotent — a redeploy duplicates nothing", async () => {
     const seedSplashSportsClub = await loadSeeder();
-    await seedSplashSportsClub();
+    await seedSplashSportsClub({
+      enabled: true,
+      pin: SEED_ENV.SEED_SPLASH_CLUB_PIN,
+    });
     const { rows: [counts] } = await client.query(
       `select
          (select count(*)::int from tenants where slug = 'splash-sports-club') as tenants,

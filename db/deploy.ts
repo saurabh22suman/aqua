@@ -212,7 +212,10 @@ async function main(): Promise<void> {
   if (env.SEED_SPLASH_CLUB) {
     console.log("seeding the Splash Sports Club (synthetic demo data)...");
     const { seedSplashSportsClub } = await import("./seed-splash-club");
-    await seedSplashSportsClub();
+    await seedSplashSportsClub({
+      enabled: env.SEED_SPLASH_CLUB,
+      pin: env.SEED_SPLASH_CLUB_PIN,
+    });
   }
 
   console.log(`deploy migration complete. ${tenants.length} tenant(s) scheduled.`);
