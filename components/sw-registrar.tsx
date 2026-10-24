@@ -8,7 +8,17 @@ import { clearOfflineData, localOfflineScope, readOfflineSessionState, runOfflin
 export function ServiceWorkerRegistrar() {
   const pathname = usePathname();
   useEffect(() => {
-    if (!("serviceWorker" in navigator) || window.location.hostname.toLowerCase().startsWith("ops.")) return;
+    // The platform (ops) surface must never run the offline service
+    // worker: the worker caches the tenant surface, and the platform
+    // host is a separate origin whose storage is separate anyway.
+    //
+    // The guard is path-based, not host-based, because the browser
+    // cannot read OPS_HOST — it is a server-only variable, and the
+    // image is built once in CI and then deployed to more than one
+    // host. The platform host serves ONLY /ops/* (middleware.ts), so
+    // the path is the one signal that is correct on every deployment
+    // without any build-time configuration.
+    if (!("serviceWorker" in navigator) || pathname.startsWith("/ops")) return;
     let revision = 0, disposed = false;
     async function refresh() {
       const request = ++revision;

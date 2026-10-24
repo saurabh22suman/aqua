@@ -80,6 +80,10 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
       PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      # Platform (ops) host for the local stack. Defaults to the legacy
+      # ops.localhost shape so the local stack exercises the explicit
+      # OPS_HOST path exactly like the tracked Dokploy Compose files.
+      OPS_HOST: ${OPS_HOST:-ops.localhost}
       OFFLINE_SYNC_ENABLED: ""
     depends_on:
       migrate:

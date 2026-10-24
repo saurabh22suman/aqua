@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { loadDotEnv } from "@/lib/load-env";
+import { HOSTNAME_PATTERN } from "@/lib/ops-host";
 
 loadDotEnv();
 
@@ -35,6 +36,24 @@ const envSchema = z
     APP_LOGIN_PASSWORD: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     BETTER_AUTH_SECRET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     BETTER_AUTH_URL: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    // The platform (ops) host — the sibling of the tenant apex that
+    // serves ONLY /ops/*. It is not a subdomain of the apex any more
+    // (aquaops.preprabbit.in beside aqua.preprabbit.in), so
+    // the app cannot infer it and the operator names it. A bare
+    // hostname only: no scheme, no port, no path.
+    //
+    // Optional here because a local checkout has no platform host
+    // (the legacy `ops.` prefix still resolves there). The tracked
+    // Dokploy Compose files require it, so a real deployment cannot
+    // come up without it.
+    OPS_HOST: z.preprocess(
+      emptyAsUndefined,
+      z
+        .string()
+        .max(253)
+        .regex(HOSTNAME_PATTERN, "must be a bare hostname (no scheme, port or path)")
+        .optional(),
+    ),
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     // Demo gate. Defaults to false. When true:
     //  - `scripts/seed-demo.ts` and `scripts/seed-platform-user.ts` may
@@ -239,6 +258,7 @@ export type ParsedEnv = {
   APP_LOGIN_PASSWORD?: string;
   BETTER_AUTH_SECRET?: string;
   BETTER_AUTH_URL?: string;
+  OPS_HOST?: string;
   PARENT_LINK_SECRET?: string;
   OPS_EMAIL?: string;
   OPS_PASSWORD?: string;
