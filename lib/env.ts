@@ -145,6 +145,34 @@ const envSchema = z
       emptyAsUndefined,
       z.string().min(1).optional(),
     ),
+    // SEED_SPLASH_CLUB — a deployment starts with an empty database,
+    // which is right for a real club and useless for a demo. When
+    // this is true, the deploy step seeds ONE synthetic club (Splash
+    // Sports Club: owner, coach, receptionist, swimmers, a batch, a
+    // priced plan and a subscription) so a pilot has something to
+    // look at. See db/seed-splash-club.ts.
+    //
+    // Deliberately NOT DEMO_MODE: DEMO_MODE means "this process is a
+    // local demo" and the app refuses to SERVE in production with it
+    // set. This flag only switches on a seeder.
+    //
+    // SEED_SPLASH_CLUB_PIN is the PIN the seeded staff sign in with.
+    // There is no default: a fixed credential on a publicly reachable
+    // host is a credential everybody can use. The seeder refuses to
+    // run without it.
+    SEED_SPLASH_CLUB: z.preprocess(
+      emptyAsUndefined,
+      z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+    ),
+    // The PIN's shape (6-12 digits) is the SEEDER's rule, not the
+    // boot's: this variable is only read by the one-shot deploy step,
+    // and a boot-time rejection here would take the web and worker
+    // down over a demo-data typo. The seeder refuses to seed and says
+    // so, which fails that one step and nothing else.
+    SEED_SPLASH_CLUB_PIN: z.preprocess(
+      emptyAsUndefined,
+      z.string().min(1).optional(),
+    ),
   })
   .superRefine((val, ctx) => {
     // `next build` forces NODE_ENV=production for the child process that
@@ -274,6 +302,8 @@ export type ParsedEnv = {
   R2_SECRET_ACCESS_KEY?: string;
   R2_BUCKET?: string;
   AUDIT_CHECKPOINT_SECRET?: string;
+  SEED_SPLASH_CLUB: boolean;
+  SEED_SPLASH_CLUB_PIN?: string;
   NODE_ENV: "development" | "test" | "production";
   DEMO_MODE: boolean;
 };

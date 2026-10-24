@@ -112,6 +112,17 @@ const FORM_TARGETS: FormTarget[] = [
     source: "components/whatsapp-auth-form.tsx",
   },
   {
+    // The env operator door (email + password). Re-rendered on the
+    // platform login page whenever the deployment sets OPS_EMAIL +
+    // OPS_PASSWORD, so it is a live form on the platform surface and
+    // carries a credential — it belongs in this scan like every other
+    // form with input. It posts through the same server-action shape
+    // (method="post"), so the password never reaches the query
+    // string.
+    name: "platform env operator login",
+    source: "app/(platform)/ops/login/login-form.tsx",
+  },
+  {
     name: "feature catalogue edit",
     source: "app/(platform)/ops/features/feature-catalogue.tsx",
   },
@@ -286,8 +297,17 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       await loginPage.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => undefined);
       await loginPage.waitForSelector("form", { timeout: 15_000, state: "attached" });
       if (!await loginPage.locator('input[name="phone"]').isDisabled()) throw new Error("Pre-hydration phone form was not inert");
-      const action = await loginPage.locator("form").getAttribute("action");
-      const method = await loginPage.locator("form").getAttribute("method");
+      // Scope to the form that carries the phone field. The page can
+      // carry a second form — the env operator door (email +
+      // password) is rendered alongside the WhatsApp one whenever the
+      // deployment sets OPS_EMAIL + OPS_PASSWORD — and a bare
+      // locator("form") would then match more than one element and
+      // throw in strict mode.
+      const phoneForm = loginPage.locator("form").filter({
+        has: loginPage.locator('input[name="phone"]'),
+      });
+      const action = await phoneForm.getAttribute("action");
+      const method = await phoneForm.getAttribute("method");
       if (method?.toLowerCase() !== "post") throw new Error("Native credential form would use GET");
       // Force the native body format through the browser's request context,
       // without enabling a JS-disabled field or relying on a destroyed eval

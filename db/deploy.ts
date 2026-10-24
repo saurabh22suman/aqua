@@ -2,7 +2,7 @@ import { PgBoss } from "pg-boss";
 import { Client } from "pg";
 import { bootstrapRoles } from "@/db/bootstrap-roles";
 import { runMigrations } from "@/db/migrate";
-import { requireMigrationUrl } from "@/lib/env";
+import { requireMigrationUrl, env } from "@/lib/env";
 import {
   SESSIONS_GENERATE_QUEUE,
   scheduleSessionsGenerate,
@@ -204,6 +204,16 @@ async function main(): Promise<void> {
   await boss.stop({ graceful: false, timeout: 5000 });
 
   await grantAppUserOnPgBossSchema(migrationUrl);
+
+  // Synthetic club for a demo deployment. Opt-in only: the flag has
+  // to be set in the deployment's environment, and the seeder refuses
+  // to run without a PIN for its staff. Idempotent — re-running the
+  // deploy refreshes nothing and duplicates nothing.
+  if (env.SEED_SPLASH_CLUB) {
+    console.log("seeding the Splash Sports Club (synthetic demo data)...");
+    const { seedSplashSportsClub } = await import("./seed-splash-club");
+    await seedSplashSportsClub();
+  }
 
   console.log(`deploy migration complete. ${tenants.length} tenant(s) scheduled.`);
 }
