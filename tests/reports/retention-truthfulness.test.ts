@@ -122,7 +122,6 @@ beforeAll(async () => {
   const { startIsolatedDb } = await import("@/tests/helpers/isolated-db");
   db = await startIsolatedDb();
   process.env.DATABASE_URL = db.appUri;
-  process.env.MIGRATION_DATABASE_URL = db.adminUri;
   // The isolated database's app_login password (lib/env.ts refuses to
   // boot when APP_LOGIN_PASSWORD and the URL disagree).
   process.env.APP_LOGIN_PASSWORD = "isolated-test-pw";
