@@ -152,27 +152,41 @@ export function BatchEditForm({
         className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         data-testid={`edit-batch-name-${batchId}`}
       />
-      <div className="flex flex-wrap gap-2">
-        <input
-          type="number"
-          min={1}
-          value={form.capacity}
-          onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-          className="min-h-11 w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          aria-label="Capacity"
-        />
-        <input
-          type="time"
-          value={form.startTime}
-          onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-        />
-        <input
-          type="time"
-          value={form.endTime}
-          onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-        />
+      {/* Owner UX audit (2026-10-24): the two time inputs had no
+          visible label AND no accessible name. Persistent visible
+          labels, in the same shape as the create form. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
+          <input
+            type="number"
+            min={1}
+            value={form.capacity}
+            onChange={(e) => setForm({ ...form, capacity: e.target.value })}
+            className="min-h-11 w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="Capacity"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Start time</span>
+          <input
+            type="time"
+            value={form.startTime}
+            onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+            className="min-h-11 w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="Start time"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">End time</span>
+          <input
+            type="time"
+            value={form.endTime}
+            onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+            className="min-h-11 w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="End time"
+          />
+        </label>
       </div>
       {locations.length > 1 ? (
         <select

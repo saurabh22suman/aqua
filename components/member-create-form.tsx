@@ -179,7 +179,17 @@ export function MemberCreateForm({
   }
 
   return (
-    <div className="space-y-5">
+    // Owner UX audit (high) — the save bar is sticky, so while the
+    // form is longer than the viewport it FLOATS over whatever is at
+    // the bottom of the screen. That is exactly where the mandatory
+    // consent choices live: the bar covered the checkboxes and their
+    // copy, and the mobile layout crowded the lower form as well.
+    //
+    // The reserve below is the bar's own footprint (48px control +
+    // its padding and border, plus the gap) AND the fixed bottom nav
+    // it pins above, so the last section can always scroll clear of
+    // both. Everything stays visible and reachable.
+    <div className="space-y-5 pb-[calc(10.5rem+env(safe-area-inset-bottom))] lg:pb-32">
       <section className="space-y-2.5">
         <label className="block">
           <span className="block text-[12px] text-ink-3 mb-1">Full name</span>

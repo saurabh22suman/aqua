@@ -10,7 +10,7 @@ import {
 import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs";
 import type { LocationOption } from "@/lib/services/people";
 import type { Program } from "@/db/schema/programs";
-import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -138,49 +138,76 @@ export function BatchCreateForm({
           ))}
         </select>
       ) : null}
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Batch name"
-        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-      />
-      <div className="flex flex-wrap gap-2">
+      <label className="block">
+        {/* The tenant's own word for a batch (L3: never hardcode the
+            vocabulary). */}
+        <span className="block text-[12px] text-ink-3 mb-1">
+          {titleCase(resolveTerm(terminology, "batch", 1))} name
+        </span>
         <input
-          type="number"
-          min={1}
-          value={capacity}
-          onChange={(e) => setCapacity(e.target.value)}
-          className="min-h-11 w-24 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          aria-label="Capacity"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Batch name"
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
-        <input
-          type="time"
-          value={startTime}
-          onChange={(e) => setStartTime(e.target.value)}
-          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-        />
-        <input
-          type="time"
-          value={endTime}
-          onChange={(e) => setEndTime(e.target.value)}
-          className="min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-        />
+      </label>
+      {/* Owner UX audit (2026-10-24): the two time inputs had no
+          visible label AND no accessible name, so a time field read as
+          "07:00" with nothing to say what it was. Persistent visible
+          labels, and the tenant's own word for the coach. */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
+          <input
+            type="number"
+            min={1}
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+            className="min-h-11 w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="Capacity"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">Start time</span>
+          <input
+            type="time"
+            value={startTime}
+            onChange={(e) => setStartTime(e.target.value)}
+            className="min-h-11 w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="Start time"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">End time</span>
+          <input
+            type="time"
+            value={endTime}
+            onChange={(e) => setEndTime(e.target.value)}
+            className="min-h-11 w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            aria-label="End time"
+          />
+        </label>
       </div>
-      <select
-        value={coachId}
-        onChange={(e) => setCoachId(e.target.value)}
-        aria-label={resolveTerm(terminology, "coach", 1)}
-        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-        data-testid="batch-coach-picker"
-      >
+      <label className="block">
+        <span className="block text-[12px] text-ink-3 mb-1">
+          {resolveTerm(terminology, "coach", 1)}
+        </span>
+        <select
+          value={coachId}
+          onChange={(e) => setCoachId(e.target.value)}
+          aria-label={resolveTerm(terminology, "coach", 1)}
+          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          data-testid="batch-coach-picker"
+        >
         <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>
-        {coaches.map((c) => (
-          <option key={c.staffId} value={c.staffId}>
-            {c.fullName}
-          </option>
-        ))}
-      </select>
+          {coaches.map((c) => (
+            <option key={c.staffId} value={c.staffId}>
+              {c.fullName}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="flex gap-1.5">
         {DAY_LABELS.map((label, day) => (
           <button

@@ -88,11 +88,19 @@ const UTILISATION = {
 function resolveAllBut(money: "resolve" | "reject") {
   getAttendanceReportAction.mockResolvedValue([]);
   getEnquiryFunnelAction.mockResolvedValue([]);
+  // The retention action returns the report: the four aggregate
+  // numbers plus the evidence behind them (owner UX audit
+  // 2026-10-24).
   getRetentionViewAction.mockResolvedValue({
-    memberCountAtRisk: 0,
-    membersWithZeroLast30: 0,
-    membersWithPartialLast30: 0,
-    totalActiveMembers: 0,
+    row: {
+      memberCountAtRisk: 0,
+      membersWithZeroLast30: 0,
+      membersWithPartialLast30: 0,
+      totalActiveMembers: 0,
+    },
+    eligibleMemberCount: 0,
+    sessionsInWindow: 0,
+    history: "insufficient",
   });
   getCoachLoadAction.mockResolvedValue([]);
   getFacilityUtilisationAction.mockResolvedValue(UTILISATION);

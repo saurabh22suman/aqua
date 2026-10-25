@@ -47,6 +47,7 @@ const DASHBOARD: OwnerDashboardData = {
   },
   needsAttention: [],
   todaysLanes: [],
+  nextClass: null,
   facilityBreakdown: [],
 };
 

@@ -156,6 +156,15 @@ describe("review resource and roster closure", () => {
     await admin.query("delete from attendance where member_id=$1", [memberA]);
     // The inactive member has a recent mark; the sole active member has none.
     await admin.query("update sessions set session_date=current_date where id=$1", [sessionB]);
+    // A risk claim needs the member to have been around for the whole
+    // window (owner UX audit 2026-10-24): someone who joined inside
+    // the window had no chance to attend the sessions before they
+    // joined. The active member has been here longer than the
+    // 30-day window, so the claim is eligible.
+    await admin.query(
+      "update members set joined_on = current_date - interval '60 days' where id=$1",
+      [memberA],
+    );
     expect(await getRetentionView(owner)).toMatchObject({ totalActiveMembers: 1, memberCountAtRisk: 1, membersWithZeroLast30: 1 });
   });
 });

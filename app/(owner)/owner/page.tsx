@@ -54,12 +54,22 @@ export default async function OwnerHomePage({
     getMoneyAnalyticsAction(trendPeriod, facility).catch(() => null),
   ]);
 
+  // The everyday actions the Today screen puts first. Each one is
+  // gated by the same permission the destination itself enforces, so
+  // the screen never offers an action the caller would be refused.
+  const can = {
+    addMember: hasPermission(ctx, "members.write"),
+    recordPayment: hasPermission(ctx, "payments.record"),
+    captureEnquiry: hasPermission(ctx, "enquiries.write"),
+  };
+
   return (
     <OwnerDashboard
       data={data}
       branding={branding}
       terminology={terminology}
       showOnboarding={checklist ? checklist.items.some((item) => !item.complete) : false}
+      can={can}
       charts={{
         attendance: operational?.attendanceTrend ?? null,
         collections: money?.collections ?? null,

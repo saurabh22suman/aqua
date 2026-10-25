@@ -20,7 +20,7 @@ export default async function EditMemberPage({
   if (!member) notFound();
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <main className="px-5 pt-10 pb-8 max-w-2xl">
       <h1 className="font-display text-[19px] font-semibold">Edit {member.fullName}</h1>
       <div className="mt-4">
         <MemberEditForm member={member} locations={locations} />

@@ -112,6 +112,7 @@ const DASHBOARD: OwnerDashboardData = {
       capacity: 12,
     },
   ],
+  nextClass: null,
   facilityBreakdown: [],
 };
 

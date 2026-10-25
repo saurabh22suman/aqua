@@ -8,7 +8,6 @@ import type { MemberListRow } from "@/lib/services/people";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { formatPhoneIN } from "@/lib/phone";
-import { formatDateIST } from "@/lib/time/tz";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
@@ -131,13 +130,18 @@ export function MembersBoard({
       {/* PR3-C3/C4 — desktop column header; the rows below share the
           same grid so the roster scans and compares at 1280px while the
           phone keeps the one-column card rows. */}
+      {/* Owner UX audit (2026-10-24): the roster gave the same weight
+          to the joined date as to the member, and the phone shared a
+          line with the code and location on a phone, so it wrapped
+          mid-number. The joined date is context the member's own page
+          carries; the roster now gives its width to the member and
+          keeps the phone readable. */}
       <div
         data-testid="members-table-head"
-        className="mt-4 hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 border-b border-line pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
+        className="mt-4 hidden grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] gap-3 border-b border-line pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
       >
         <span>{titleCase(resolveTerm(terminology, "member", 1))}</span>
         <span>Phone</span>
-        <span>Joined</span>
         <span className="text-right">Status</span>
       </div>
       <ul className="mt-3 md:mt-0" data-testid="members-list" aria-busy={isPending}>
@@ -163,7 +167,7 @@ export function MembersBoard({
             <li key={m.memberId} className="border-b border-line last:border-0">
               <Link
                 href={`/owner/members/${m.memberId}`}
-                className="flex items-center gap-3 py-3 md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:gap-3"
+                className="flex items-center gap-3 py-3 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] md:gap-3"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-medium">
@@ -172,19 +176,10 @@ export function MembersBoard({
                   </p>
                   <p className="mt-0.5 text-[12px] text-ink-3 md:truncate">
                     {m.memberCode} · {m.locationName}
-                    <span className="md:hidden">
-                      {m.phone ? ` · ${formatPhoneIN(m.phone)}` : ""}
-                    </span>
                   </p>
                 </div>
-                <p className="mt-0.5 text-[11px] text-ink-3 md:hidden">
-                  Joined {formatDateIST(m.joinedOn)}
-                </p>
-                <p className="hidden truncate text-[12.5px] text-ink-2 md:block">
+                <p className="shrink-0 text-[12.5px] text-ink-2 tabular-nums md:block">
                   {m.phone ? formatPhoneIN(m.phone) : "—"}
-                </p>
-                <p className="hidden text-[12.5px] text-ink-3 md:block">
-                  {formatDateIST(m.joinedOn)}
                 </p>
                 <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
                   {STATUS_LABELS[m.status]}

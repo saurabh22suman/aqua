@@ -15,7 +15,7 @@ export default async function NewMemberPage() {
   ]);
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <main className="px-5 pt-10 pb-8 max-w-2xl">
       <h1 className="font-display text-[19px] font-semibold">
         Add {resolveTerm(terminology, "member", 1)}
       </h1>

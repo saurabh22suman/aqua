@@ -77,7 +77,15 @@ export function OwnerShell({
             shell does not add a second switcher. */}
         <FacilitySwitcher locations={locations} />
 
-        <div className="lg:px-8">{children}</div>
+        <div className="lg:px-8">
+          {/* Owner UX audit (2026-10-24): the desktop content ran the
+              full width of whatever window the owner had, so a form
+              stretched across the screen and a table's columns drifted
+              apart. The content is now capped at 1280px and centred
+              — the audit's 1120–1280px band. Forms cap further, on
+              their own pages. */}
+          <div className="mx-auto w-full max-w-[1280px]">{children}</div>
+        </div>
 
         {!hasSettingsDestination ? (
           <div className="px-5 pb-4 lg:hidden">

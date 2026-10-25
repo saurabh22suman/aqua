@@ -7,13 +7,13 @@ import { requirePermission } from "@/lib/auth/permission";
 import {
   getAttendanceReport,
   getEnquiryFunnel,
-  getRetentionView,
+  getRetentionReport,
   getCoachLoad,
   attendanceReportCsv,
   type BatchAttendanceReportRow,
   type CoachLoadRow,
   type EnquiryFunnelRow,
-  type RetentionRow,
+  type RetentionReport,
 } from "@/lib/services/owner-reports";
 import {
   getFacilityUtilisation,
@@ -53,12 +53,12 @@ export async function getEnquiryFunnelAction(raw: unknown): Promise<EnquiryFunne
   return getEnquiryFunnel({ tenantId: ctx.tenantId }, period);
 }
 
-export async function getRetentionViewAction(): Promise<RetentionRow> {
+export async function getRetentionViewAction(): Promise<RetentionReport> {
   // No input — the period is "the last 30 days from today",
   // computed inside the service.
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getRetentionView({ tenantId: ctx.tenantId });
+  return getRetentionReport({ tenantId: ctx.tenantId });
 }
 
 export async function getCoachLoadAction(raw: unknown): Promise<CoachLoadRow[]> {
