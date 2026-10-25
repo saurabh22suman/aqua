@@ -107,11 +107,17 @@ export function PlanRevenueCard({ rows }: { rows: PlanRevenueRow[] }) {
         <h2 className="font-display text-[15px] font-semibold">
           Revenue by plan
         </h2>
-        <span className="text-[12px] text-ink-3">{rows.length} plans</span>
+        {/* Owner UX audit (2026-10-24): "0 plans" in the header read as
+            "no plans are configured", which is a different claim. The
+            count only appears when there IS something to count, and the
+            empty state says what the report actually measures. */}
+        {rows.length > 0 ? (
+          <span className="text-[12px] text-ink-3">{rows.length} plans</span>
+        ) : null}
       </header>
       {rows.length === 0 ? (
         <p className="mt-2 text-[13px] text-ink-3">
-          No payments linked to a plan in this period.
+          No plan-linked collections in this period.
         </p>
       ) : (
         <div className="mt-3">
@@ -155,15 +161,14 @@ export function MemberMixCard({
   memberLabel: string;
 }) {
   const total = slices.reduce((sum, s) => sum + s.count, 0);
-  const donutSlices: DonutSlice[] = slices
-    .filter((s) => s.count > 0)
-    .map((s) => ({
-      label:
-        MEMBER_STATUS_LABELS[s.status as keyof typeof MEMBER_STATUS_LABELS] ??
-        s.status,
-      value: s.count,
-      tone: MIX_TONES[s.status] ?? "stroke-ink-3",
-    }));
+  const present = slices.filter((s) => s.count > 0);
+  const donutSlices: DonutSlice[] = present.map((s) => ({
+    label:
+      MEMBER_STATUS_LABELS[s.status as keyof typeof MEMBER_STATUS_LABELS] ??
+      s.status,
+    value: s.count,
+    tone: MIX_TONES[s.status] ?? "stroke-ink-3",
+  }));
 
   return (
     <article className="bg-paper border border-line rounded-card p-4">
@@ -176,6 +181,15 @@ export function MemberMixCard({
       {total === 0 ? (
         <p className="mt-2 text-[13px] text-ink-3">
           No {memberLabel.toLowerCase()} records yet.
+        </p>
+      ) : present.length === 1 ? (
+        // Owner UX audit (2026-10-24): a donut with one slice is a
+        // chart of nothing. One category reads better as a sentence.
+        <p className="mt-2 text-[13px]">
+          All {total} {memberLabel.toLowerCase()} are{" "}
+          {(MEMBER_STATUS_LABELS[present[0]!.status as keyof typeof MEMBER_STATUS_LABELS] ??
+            present[0]!.status).toLowerCase()}
+          .
         </p>
       ) : (
         <div className="mt-3 flex items-center gap-4">

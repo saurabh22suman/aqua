@@ -314,24 +314,30 @@ describe("review dashboard location scope (A07)", () => {
 });
 
 // C02's composition contract, pinned as a source scan (the same shape
-// the repo's kpi-label-size and date-display-sweep guards use): the
-// owner home must lead with the money hero, then the decisions, then
-// register completion, then the batch-capacity lanes — and the
-// mislabelled "Today's facilities" heading must not come back.
+// the repo's kpi-label-size and date-display-sweep guards use).
+//
+// The owner UX audit (2026-10-24) changed the ORDER and the shape of
+// the home screen: it now leads with what needs attention (the
+// owner's first question), then today's classes, then the register
+// completion, then a compact money row — the large money hero was the
+// biggest area on the page and it was mostly zeroes. The labelling
+// contracts survive unchanged: the figure is the GROSS captured total
+// ("Payments recorded today", not "Collected today" — the Fees hub
+// nets reversals) and the mislabelled "Today's facilities" heading
+// must not come back.
 describe("C02 owner home priority and labels", () => {
-  it("orders money hero → needs you today → registers → batch lanes, and drops the mislabel", () => {
+  it("orders needs you today → classes → registers → money, and keeps the labels honest", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
-    // The hero figure is the gross captured total, so it is titled
-    // "Payments recorded today" (the Fees hub nets reversals); the old
-    // "Collected today" label must not come back.
-    const money = src.indexOf("Payments recorded today");
     const attention = src.indexOf("Needs you today");
+    // The section title is a JSX ATTRIBUTE, so it carries the character
+    // itself (JSX does not decode entities in attribute values).
+    const classes = src.indexOf("Today\u2019s classes");
     const registers = src.indexOf("Today&apos;s registers");
-    const lanes = src.indexOf("title={`${titleCase(batchesOther)} today`}");
-    expect(money).toBeGreaterThan(-1);
-    expect(attention).toBeGreaterThan(money);
-    expect(registers).toBeGreaterThan(attention);
-    expect(lanes).toBeGreaterThan(registers);
+    const money = src.indexOf("Payments recorded today");
+    expect(attention).toBeGreaterThan(-1);
+    expect(classes).toBeGreaterThan(attention);
+    expect(registers).toBeGreaterThan(classes);
+    expect(money).toBeGreaterThan(registers);
     expect(src).not.toContain("Collected today");
     expect(src).not.toContain("Today's facilities");
   });

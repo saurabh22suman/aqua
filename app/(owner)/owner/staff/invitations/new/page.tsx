@@ -13,7 +13,7 @@ export default async function StaffInvitePage() {
   requirePagePermission(ctx, "staff.invite");
   const locations = await listLocationsAction();
   return (
-    <main className="px-5 pt-6 pb-8">
+    <main className="px-5 pt-6 pb-8 max-w-2xl">
       <Link
         href="/owner/staff/invitations"
         className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"

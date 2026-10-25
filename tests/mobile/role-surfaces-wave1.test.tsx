@@ -58,6 +58,7 @@ const DASHBOARD: OwnerDashboardData = {
   },
   needsAttention: [],
   todaysLanes: [],
+  nextClass: null,
   facilityBreakdown: [],
 };
 
@@ -123,7 +124,12 @@ describe("W1-4 owner Home quick links (F26)", () => {
 });
 
 describe("W1-5 member joined date", () => {
-  it("renders the joining date on the member row", () => {
+  // Owner UX audit (2026-10-24): the roster gave the joined date the
+  // same weight as the member, and the phone shared a line with the
+  // code and location on a phone, so it wrapped mid-number. The
+  // joined date is context the member's OWN page carries (the roster
+  // no longer shows it); the phone stays, on its own line, readable.
+  it("leaves the joined date to the member's own page", () => {
     const row = {
       memberId: "m1",
       fullName: "Aadhya Sharma",
@@ -136,7 +142,11 @@ describe("W1-5 member joined date", () => {
       joinedOn: "2026-09-01",
     } as MemberListRow;
     render(<MembersBoard initialMembers={[row]} />);
-    expect(document.body.textContent).toContain("Joined 1 Sept 2026");
+    expect(document.body.textContent).not.toContain("Joined 1 Sept 2026");
+    // The business context the row does carry is still there.
+    expect(document.body.textContent).toContain("Aadhya Sharma");
+    expect(document.body.textContent).toContain("AWS-010");
+    expect(document.body.textContent).toContain("Worli Main");
   });
 
 describe("members desktop columns (PR3-C4)", () => {
@@ -158,8 +168,9 @@ describe("members desktop columns (PR3-C4)", () => {
     expect(head).not.toBeNull();
     expect(head!.textContent).toContain("Member");
     expect(head!.textContent).toContain("Phone");
-    expect(head!.textContent).toContain("Joined");
     expect(head!.textContent).toContain("Status");
+    // The joined date moved to the member's own page (audit 2026-10-24).
+    expect(head!.textContent).not.toContain("Joined");
 
     const link = document.querySelector('[data-testid="members-list"] a');
     expect(link!.className).toContain("md:grid");

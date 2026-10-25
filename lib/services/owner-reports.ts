@@ -213,6 +213,28 @@ export async function getEnquiryFunnel(
 // the cohort's count, not the cohort's identities. scope §
 // 7.1 prevents per-member risk scores on minors; the report
 // is intentionally a number, not a list.
+//
+// TRUTHFULNESS (owner UX audit, high). "At risk" is a claim about
+// someone NOT doing something they had every chance to do. That
+// needs two facts the previous version never established:
+//
+//   1. There was a chance — the academy ran attendance-eligible
+//      sessions in the window. A club with no sessions at all cannot
+//      have a retention problem.
+//   2. The member was around for the whole window. A swimmer who
+//      joined yesterday has had no chance to attend a session that
+//      happened before they joined; calling them "at risk" is a false
+//      alarm, and on a freshly seeded club it labelled every single
+//      swimmer at risk.
+//
+// When either fact is missing the view reports INSUFFICIENT HISTORY
+// instead of a risk count, so the owner is never told a cohort is
+// slipping on the strength of no evidence. The rule lives here, once,
+// so the report and the dashboard cannot disagree about it.
+// The aggregate the report shows. Its shape is PINNED by
+// tests/tier1/owner-reports.test.ts ("returns aggregate numbers only
+// — never a per-member list"), so it carries the four numbers and
+// nothing else — no per-member identifier, and no extra fields.
 export type RetentionRow = {
   memberCountAtRisk: number;
   membersWithZeroLast30: number;
@@ -220,7 +242,21 @@ export type RetentionRow = {
   totalActiveMembers: number;
 };
 
-export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
+// The report plus the evidence behind it: the cohort the claim is
+// about, the sessions that ran, and whether the history supports a
+// claim at all.
+export type RetentionReport = {
+  row: RetentionRow;
+  // The cohort the risk claim is about: active members who were
+  // members for the whole window (joined on or before its start).
+  eligibleMemberCount: number;
+  // Attendance-eligible sessions that actually ran in the window.
+  sessionsInWindow: number;
+  // "insufficient" means the view cannot make a risk claim yet.
+  history: "sufficient" | "insufficient";
+};
+
+export async function getRetentionReport(ctx: ActionCtx): Promise<RetentionReport> {
   return withTenant(ctx.tenantId, async (tx) => {
     // active-member denominator
     const [{ n: totalActiveMembers }] = await tx
@@ -231,6 +267,7 @@ export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
     // distinct members with at least one attendance row in
     // the last 30 days.
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const windowStart = since.toISOString().slice(0, 10);
     const attendanceWindow = await tx
       .select({
         memberId: attendance.memberId,
@@ -240,33 +277,71 @@ export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
       .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
       .innerJoin(members, and(eq(members.id, attendance.memberId), eq(members.tenantId, ctx.tenantId)))
       .where(and(eq(attendance.tenantId, ctx.tenantId), eq(members.status, "active"), isNull(members.deletedAt),
-        gte(sessions.sessionDate, since.toISOString().slice(0, 10))))
+        gte(sessions.sessionDate, windowStart)))
       .groupBy(attendance.memberId);
 
-    const withZero: string[] = [];
-    const withPartial: string[] = [];
-    for (const r of attendanceWindow) {
-      if (r.markedSessions === 0) withZero.push(r.memberId);
-      else if (r.markedSessions < 4) withPartial.push(r.memberId);
-    }
-    // The "at risk" headline: distinct active members who
-    // appear in neither window (i.e. were active at the
-    // head of the period and haven't marked at all). Privacy-
-    // preserving aggregate: we count, we do not list.
-    const presentIds = new Set(attendanceWindow.map((r) => r.memberId));
-    const [{ n: activeIds }] = await tx
+    // The eligible cohort: active members who were members for the
+    // whole window. A member with no joined_on cannot be shown to
+    // have had the chance, so they are NOT eligible — claiming risk
+    // for them would be the same false alarm in a different shape.
+    const [{ n: eligibleMemberCount }] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(members)
-      .where(and(eq(members.tenantId, ctx.tenantId), eq(members.status, "active"), sql`${members.deletedAt} is null`));
-    const memberCountAtRisk = Math.max(0, Number(activeIds) - presentIds.size);
+      .where(and(
+        eq(members.tenantId, ctx.tenantId),
+        eq(members.status, "active"),
+        isNull(members.deletedAt),
+        sql`${members.deletedAt} is null`,
+        sql`${members.joinedOn} is not null`,
+        sql`${members.joinedOn} <= ${windowStart}`,
+      ));
+
+    // Attendance-eligible sessions in the window. A cancelled
+    // session is not a chance to attend.
+    const [{ n: sessionsInWindow }] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(sessions)
+      .where(and(
+        eq(sessions.tenantId, ctx.tenantId),
+        sql`${sessions.status} <> 'cancelled'`,
+        gte(sessions.sessionDate, windowStart),
+      ));
+
+    const withPartial: string[] = [];
+    for (const r of attendanceWindow) {
+      if (r.markedSessions > 0 && r.markedSessions < 4) withPartial.push(r.memberId);
+    }
+    // The "at risk" headline: eligible members who appear in no
+    // attendance window at all. Privacy-preserving aggregate: we
+    // count, we do not list.
+    const presentIds = new Set(attendanceWindow.map((r) => r.memberId));
+    const eligiblePresent = [...presentIds].length;
+    const history: RetentionReport["history"] =
+      sessionsInWindow > 0 && eligibleMemberCount > 0 ? "sufficient" : "insufficient";
+    const memberCountAtRisk =
+      history === "sufficient"
+        ? Math.max(0, Number(eligibleMemberCount) - eligiblePresent)
+        : 0;
 
     return {
-      memberCountAtRisk,
-      membersWithZeroLast30: memberCountAtRisk,
-      membersWithPartialLast30: withPartial.length,
-      totalActiveMembers: Number(totalActiveMembers),
+      row: {
+        memberCountAtRisk,
+        membersWithZeroLast30: memberCountAtRisk,
+        membersWithPartialLast30: withPartial.length,
+        totalActiveMembers: Number(totalActiveMembers),
+      },
+      eligibleMemberCount: Number(eligibleMemberCount),
+      sessionsInWindow: Number(sessionsInWindow),
+      history,
     };
   });
+}
+
+// The four aggregate numbers, unchanged in shape. The report action
+// uses getRetentionReport (it also needs the history state); this
+// stays for callers that only want the numbers.
+export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
+  return (await getRetentionReport(ctx)).row;
 }
 
 // 4.6 — coach load lives in ./coach-load.ts (kept here as a

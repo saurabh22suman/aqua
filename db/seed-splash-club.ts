@@ -7,6 +7,7 @@ import { seedRoleTemplates } from "@/lib/services/roles";
 import { seedDefaultLeaveTypes } from "@/lib/services/leave";
 import { setCredentialForPhone } from "@/lib/services/credentials";
 import { applyPreset } from "./preset-engine";
+import { generateSessions } from "@/lib/jobs/session-generator";
 import { defaultPlanId, seedPlatformCatalogue } from "./seed-platform";
 import { requireMigrationUrl } from "@/lib/env";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
@@ -157,7 +158,7 @@ export type SplashSeedResult = {
  * credential everybody can use.
  */
 export async function seedSplashSportsClub(
-  options: SplashSeedOptions,
+  options: SplashSeedOptions = { enabled: false },
 ): Promise<SplashSeedResult> {
   try {
     return await seed(options);
@@ -199,6 +200,12 @@ async function seed(options: SplashSeedOptions): Promise<SplashSeedResult> {
   await ensureStaff(tenantId);
   await setStaffCredentials(pin);
   const batchId = await ensureBatch(tenantId, locationId);
+  // The sessions the batch runs. Without them the club's calendar,
+  // the registers and "Today's classes" are all empty — a demo club
+  // with a batch but no sessions reads as broken.
+  await withTenant(tenantId, (tx) =>
+    generateSessions(tx, tenantId, SPLASH.timezone),
+  );
   const memberIds = await ensureStudents(tenantId, locationId, batchId);
   await ensureMonthlyPlan(tenantId, locationId);
   await ensureSubscription(tenantId, locationId, memberIds[0]!);
@@ -267,7 +274,7 @@ async function ensureTenant(actor: UserId): Promise<TenantId> {
       JSON.stringify({
         displayName: SPLASH.displayName,
         shortName: SPLASH.shortName,
-        accent: "teal",
+        accent: "marine",
       }),
     ],
   );

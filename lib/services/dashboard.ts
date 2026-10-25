@@ -35,6 +35,17 @@ export type TodaysLane = {
   capacity: number;
 };
 
+// The next class after now — the answer to "nothing today" that is
+// still useful. The owner wants to know WHEN they next see swimmers.
+export type NextClass = {
+  batchId: string;
+  batchName: string;
+  programName: string;
+  startTime: string;
+  startsAt: Date;
+  sessionDate: string;
+};
+
 export type FacilityBreakdownRow = {
   locationId: string;
   locationName: string;
@@ -73,6 +84,10 @@ export type OwnerDashboardData = {
   activeBatchCount: number;
   needsAttention: NeedsAttentionItem[];
   todaysLanes: TodaysLane[];
+  // The next session after now (any day). Null when the academy has
+  // nothing scheduled ahead — the quiet-day message then has nothing
+  // to point at and says so plainly.
+  nextClass: NextClass | null;
   // C02 — collected today / outstanding / overdue, the figures the
   // owner home now leads with (periods stated in the labels there).
   money: OwnerMoneySummary;
@@ -299,6 +314,45 @@ export async function getOwnerDashboard(
     const todayMarked = todaysSessions.reduce((sum, s) => sum + s.marked, 0);
     const todayTotal = todaysSessions.reduce((sum, s) => sum + s.enrolled, 0);
 
+    // The next class — the quiet-day answer. When today has nothing
+    // scheduled, the owner still wants to know WHEN they next see
+    // swimmers, so "nothing today" is answered with the next session
+    // rather than an empty space. Same gates as today's sessions
+    // (cancelled excluded, the caller's facilities only).
+    const nextSession = await tx
+      .select({
+        batchId: sessions.batchId,
+        batchName: batches.name,
+        programName: programs.name,
+        startTime: batches.startTime,
+        startsAt: sessions.startsAt,
+        sessionDate: sessions.sessionDate,
+      })
+      .from(sessions)
+      .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .innerJoin(programs, eq(programs.id, batches.programId))
+      .where(
+        and(
+          eq(sessions.tenantId, ctx.tenantId),
+          gte(sessions.startsAt, new Date(now)),
+          sql`${sessions.status} <> 'cancelled'`,
+          locationCondition(batches.locationId),
+        ),
+      )
+      .orderBy(sessions.startsAt)
+      .limit(1);
+    const nextRow = nextSession[0];
+    const nextClass: NextClass | null = nextRow
+      ? {
+          batchId: nextRow.batchId,
+          batchName: nextRow.batchName,
+          programName: nextRow.programName,
+          startTime: nextRow.startTime,
+          startsAt: nextRow.startsAt,
+          sessionDate: nextRow.sessionDate,
+        }
+      : null;
+
     // Needs attention, C02 priority order: cash discrepancies first
     // (money that does not add up), then the billing decision (overdue
     // fees), then unresolved follow-ups, then register execution
@@ -490,6 +544,7 @@ export async function getOwnerDashboard(
       attendanceThisWeekPct,
       activeBatchCount,
       needsAttention,
+    nextClass,
       todaysLanes,
       money,
       facilityBreakdown,

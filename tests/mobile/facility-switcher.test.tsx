@@ -111,6 +111,7 @@ const DASHBOARD: OwnerDashboardData = {
   },
   needsAttention: [],
   todaysLanes: [],
+  nextClass: null,
   facilityBreakdown: [
     { locationId: "loc-1", locationName: "Worli Main", activeMembers: 20, attendancePct: 80 },
     { locationId: "loc-2", locationName: "Bandra Annex", activeMembers: 12, attendancePct: null },

@@ -85,7 +85,11 @@ describe("member detail enrolment select can wrap and shrink (F6)", () => {
 });
 
 describe("batch create capacity+time row wraps (F7)", () => {
-  it("row has flex-wrap and both time inputs have min-w-0", () => {
+  // The row is a two-column grid on a phone (the audit asked for
+  // persistent visible labels, so each field is now a labelled cell).
+  // Two columns wrap by definition; the time inputs still have to be
+  // shrinkable so they cannot push the row wider than the screen.
+  it("row wraps and both time inputs have min-w-0", () => {
     checkCoachConflictsAction.mockResolvedValue({ conflicts: [] });
 
     const { container } = render(
@@ -99,13 +103,14 @@ describe("batch create capacity+time row wraps (F7)", () => {
     );
 
     const capacity = screen.getByLabelText("Capacity");
-    expect(capacity.parentElement?.className).toContain("flex-wrap");
+    // The field's wrapper is the labelled cell; the row is its parent.
+    expect(capacity.parentElement?.parentElement?.className).toContain("grid-cols-2");
     expectTimeInputsShrinkable(container);
   });
 });
 
 describe("batch edit capacity+time row wraps (F7)", () => {
-  it("row has flex-wrap and both time inputs have min-w-0", () => {
+  it("row wraps and both time inputs have min-w-0", () => {
     checkCoachConflictsAction.mockResolvedValue({ conflicts: [] });
 
     const { container } = render(
@@ -133,7 +138,8 @@ describe("batch edit capacity+time row wraps (F7)", () => {
     );
 
     const capacity = screen.getByLabelText("Capacity");
-    expect(capacity.parentElement?.className).toContain("flex-wrap");
+    // The field's wrapper is the labelled cell; the row is its parent.
+    expect(capacity.parentElement?.parentElement?.className).toContain("grid-cols-2");
     expectTimeInputsShrinkable(container);
   });
 });

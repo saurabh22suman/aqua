@@ -14,7 +14,7 @@ export default async function MemberImportPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "members.write");
   return (
-    <main className="px-5 pt-6 pb-8">
+    <main className="px-5 pt-6 pb-8 max-w-2xl">
       <BackLink href="/owner/members" label="Members" />
 
       <h1 className="font-display text-[19px] font-semibold">Import members</h1>

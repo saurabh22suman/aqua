@@ -147,7 +147,7 @@ describe("phone display sweep (P1-2)", () => {
   });
 
   it("formats the owner settings identity phone", async () => {
-    render(await OwnerSettingsPage());
+    render(await OwnerSettingsPage({ searchParams: Promise.resolve({}) }));
     expect(renderedText()).toContain(FORMATTED);
   });
 

@@ -90,7 +90,7 @@ export default async function ReportsPage({
 
   const attendanceRows = settled(attendance, "Attendance by batch");
   const enquiryRows = settled(enquiry, "Enquiry funnel");
-  const retentionRow = settled(retention, "Retention");
+  const retentionReport = settled(retention, "Retention");
   const coachLoadRows = settled(coachLoad, "Coach load");
   const utilisationReport = settled(utilisation, "Facility utilisation");
   const operationalData = settled(operational, "Attendance and member mix");
@@ -149,7 +149,35 @@ export default async function ReportsPage({
         <span className="text-[13px] text-ink-3">→</span>
       </Link>
 
-      <div className="mt-6 space-y-3">
+      {/* Owner UX audit (2026-10-24): the page stacked nine sections
+          with no index, so the owner scrolled past several empty ones
+          to find the one they wanted. The index below names what the
+          page answers, and the cards sit under the same four headings
+          so a report is findable by what it is about. */}
+      <nav
+        aria-label="Report index"
+        className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4"
+      >
+        {[
+          { href: "#attendance", label: "Attendance" },
+          { href: "#money", label: "Money" },
+          { href: "#people", label: "People" },
+          { href: "#enquiries", label: "Enquiries" },
+        ].map((entry) => (
+          <a
+            key={entry.href}
+            href={entry.href}
+            className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3.5 text-[13px] font-medium"
+          >
+            {entry.label}
+          </a>
+        ))}
+      </nav>
+
+      <h2 id="attendance" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
+        Attendance
+      </h2>
+      <div className="space-y-3">
         {attendanceRows ? (
           <AttendanceReportCard
             rows={attendanceRows}
@@ -164,6 +192,17 @@ export default async function ReportsPage({
         ) : (
           <ReportCardError title="Attendance trend" />
         )}
+        {utilisationReport ? (
+          <UtilisationCard report={utilisationReport} />
+        ) : (
+          <ReportCardError title="Facility utilisation" />
+        )}
+      </div>
+
+      <h2 id="money" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
+        Money
+      </h2>
+      <div className="space-y-3">
         {moneyData ? (
           <CollectionsExpensesCard series={moneyData.collections} />
         ) : (
@@ -174,6 +213,12 @@ export default async function ReportsPage({
         ) : (
           <ReportCardError title="Revenue by plan" />
         )}
+      </div>
+
+      <h2 id="people" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
+        People
+      </h2>
+      <div className="space-y-3">
         {operationalData ? (
           <MemberMixCard
             slices={operationalData.memberMix}
@@ -182,13 +227,12 @@ export default async function ReportsPage({
         ) : (
           <ReportCardError title="Members by status" />
         )}
-        {!facility && enquiryRows ? (
-          <EnquiryFunnelCard rows={enquiryRows} />
-        ) : !facility ? (
-          <ReportCardError title="Enquiry funnel" />
-        ) : null}
-        {!facility && retentionRow ? (
-          <RetentionCard row={retentionRow} />
+        {!facility && retentionReport ? (
+          <RetentionCard
+            report={retentionReport}
+            memberLabel={resolveTerm(terminology, "member", "other")}
+            memberLabelOne={resolveTerm(terminology, "member", 1)}
+          />
         ) : !facility ? (
           <ReportCardError title="Retention" />
         ) : null}
@@ -197,12 +241,22 @@ export default async function ReportsPage({
         ) : !facility ? (
           <ReportCardError title="Coach load" />
         ) : null}
-        {utilisationReport ? (
-          <UtilisationCard report={utilisationReport} />
-        ) : (
-          <ReportCardError title="Facility utilisation" />
-        )}
       </div>
+
+      {!facility ? (
+        <>
+          <h2 id="enquiries" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
+            Enquiries
+          </h2>
+          <div className="space-y-3">
+            {enquiryRows ? (
+              <EnquiryFunnelCard rows={enquiryRows} />
+            ) : (
+              <ReportCardError title="Enquiry funnel" />
+            )}
+          </div>
+        </>
+      ) : null}
     </main>
   );
 }

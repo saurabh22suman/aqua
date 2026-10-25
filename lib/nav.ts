@@ -37,12 +37,25 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
       { href: "/owner/fees", label: "Fees & payments", iconName: "receipt" },
       { href: "/owner/enquiries", label: "Enquiries", iconName: "clipboard-list" },
       // C04 (2026-10-09 role/content/permission audit §9) — announcements
-      // are recurring communication work, so the desktop sidebar carries
-      // the entry point; the Settings → Announcements link stays on the
+      // are recurring communication work, so the desktop sidebar carries the
+      // entry point; the Settings → Announcements link stays on the
       // same route (no second implementation). Desktop only: the mobile
       // bottom nav stays at the four-item design contract.
       { href: "/owner/announcements", label: "Announcements", iconName: "megaphone" },
-      { href: "/owner/programs", label: "Programs & sessions", iconName: "calendar-days" },
+      { href: "/owner/staff", label: "Staff", iconName: "briefcase" },
+    ],
+  },
+  {
+    // Owner UX audit (2026-10-24): "Programs & sessions", "Sessions"
+    // and "Schedule" were three destinations in one flat group, and
+    // they competed — the owner could not tell which one answered
+    // "when is it on?". They are the same job (when, what and who
+    // covers it), so they now sit under one group. The routes and
+    // the pages are untouched; only the grouping and one redundant
+    // label changed.
+    label: "Scheduling",
+    items: [
+      { href: "/owner/programs", label: "Programs & batches", iconName: "calendar-days" },
       // R10 (2026-10-13 role-workflow audit) — scheduling management and
       // the read-only grid were reachable only by drilling through
       // Programs. They stay owner/admin-only (Programs gate is
@@ -51,7 +64,6 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
       // already enforce.
       { href: "/owner/sessions", label: "Sessions", iconName: "user-cog" },
       { href: "/owner/schedule", label: "Schedule", iconName: "calendar-range" },
-      { href: "/owner/staff", label: "Staff", iconName: "briefcase" },
     ],
   },
   {

@@ -74,7 +74,7 @@ describe("settings onboarding row (W1-6 continuation)", () => {
       completedCount: 3,
       totalCount: 3,
     };
-    render(await SettingsPage());
+    render(await SettingsPage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.queryByTestId("settings-onboarding")).toBeNull();
     expect(document.body.textContent).not.toContain("Onboarding checklist");
@@ -91,7 +91,7 @@ describe("settings onboarding row (W1-6 continuation)", () => {
       completedCount: 1,
       totalCount: 3,
     };
-    render(await SettingsPage());
+    render(await SettingsPage({ searchParams: Promise.resolve({}) }));
 
     const row = screen.getByTestId("settings-onboarding");
     expect(row.getAttribute("href")).toBe("/owner/onboarding");

@@ -84,7 +84,9 @@ describe("U-01 plan-wise revenue", () => {
 
   it("says so when no payment links to a plan", () => {
     render(<PlanRevenueCard rows={[]} />);
-    expect(document.body.textContent).toMatch(/no payments linked to a plan/i);
+    // The audit: "0 plans" reads as "no plans are configured", which is a
+    // different claim. The card now says what the report measures.
+    expect(document.body.textContent).toMatch(/no plan-linked collections in this period/i);
   });
 });
 
