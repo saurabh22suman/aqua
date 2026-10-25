@@ -92,6 +92,8 @@ describe("Splash Sports Club seeder", () => {
       pin: SEED_ENV.SEED_SPLASH_CLUB_PIN,
     });
     expect(result.staffCount).toBe(3);
+    // The club seeder writes the named swimmers; the history seeder
+    // adds the rest of the academy.
     expect(result.memberIds).toHaveLength(8);
 
     const { rows: [tenant] } = await client.query(
@@ -157,15 +159,17 @@ describe("Splash Sports Club seeder", () => {
          join tenants t on t.id = m.tenant_id
         where t.slug = 'splash-sports-club'`,
     );
-    expect(students.n).toBe(8);
+    // The named swimmers plus the academy the history seeder adds.
+    expect(students.n).toBe(38);
 
     const { rows: [guardianships] } = await client.query(
       `select count(*)::int as n from guardianships g
          join tenants t on t.id = g.tenant_id
         where t.slug = 'splash-sports-club'`,
     );
-    // The three minors in the seed (2012, 2013, 2015) each need one.
-    expect(guardianships.n).toBe(3);
+    // The three minors in the seed (2012, 2013, 2015) plus the ones
+    // the history seeder adds, each need a guardian.
+    expect(guardianships.n).toBe(9);
 
     const { rows: [batch] } = await client.query(
       `select b.name, b.capacity, array_to_string(b.days_of_week, ',') as days,
@@ -186,7 +190,8 @@ describe("Splash Sports Club seeder", () => {
          join tenants t on t.id = e.tenant_id
         where t.slug = 'splash-sports-club'`,
     );
-    expect(enrolments.n).toBe(8);
+    // Every swimmer is on a weekly batch (the two squads alternate).
+    expect(enrolments.n).toBe(46);
 
     // The priced plan on the pool, and a live subscription on it.
     const { rows: [plan] } = await client.query(
@@ -242,10 +247,14 @@ describe("Splash Sports Club seeder", () => {
     );
     expect(counts).toEqual({
       tenants: 1,
-      members: 8,
-      batches: 1,
-      enrolments: 8,
-      subscriptions: 1,
+      // 38 swimmers: the 8 named ones plus the academy the history
+      // seeder adds.
+      members: 38,
+      // Two weekly batches: the evening squad and the morning squad.
+      batches: 2,
+      enrolments: 46,
+      // One subscription per swimmer on the monthly plan.
+      subscriptions: 38,
       plans: 1,
     });
   });

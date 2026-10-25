@@ -8,6 +8,7 @@ import { seedDefaultLeaveTypes } from "@/lib/services/leave";
 import { setCredentialForPhone } from "@/lib/services/credentials";
 import { applyPreset } from "./preset-engine";
 import { generateSessions } from "@/lib/jobs/session-generator";
+import { seedSplashHistory } from "./seed-splash-history";
 import { defaultPlanId, seedPlatformCatalogue } from "./seed-platform";
 import { requireMigrationUrl } from "@/lib/env";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
@@ -93,13 +94,21 @@ const STUDENTS = [
   { code: "SPL-008", fullName: "Meera Joshi", phone: "+919000000217", dob: "1998-08-22" },
 ];
 
-// The batch they swim in.
+// The batches they swim in.
 const BATCH = {
   name: "Evening Squad",
   daysOfWeek: [1, 3, 5] as const,
   startTime: "18:00",
   endTime: "19:00",
   capacity: 16,
+};
+
+const MORNING_BATCH = {
+  name: "Morning Squad",
+  daysOfWeek: [1, 3, 5] as const,
+  startTime: "07:00",
+  endTime: "08:00",
+  capacity: 12,
 };
 
 // The priced monthly plan and the subscription on it. The preset's
@@ -197,9 +206,10 @@ async function seed(options: SplashSeedOptions): Promise<SplashSeedResult> {
   const actor = await ensureBootstrapActor();
   const tenantId = await ensureTenant(actor);
   const locationId = await ensureLocation(tenantId);
-  await ensureStaff(tenantId);
+  const staffUserIds = await ensureStaff(tenantId);
   await setStaffCredentials(pin);
-  const batchId = await ensureBatch(tenantId, locationId);
+  const batchIds = await ensureBatches(tenantId, locationId);
+  const batchId = batchIds[0]!;
   // The sessions the batch runs. Without them the club's calendar,
   // the registers and "Today's classes" are all empty — a demo club
   // with a batch but no sessions reads as broken.
@@ -207,8 +217,26 @@ async function seed(options: SplashSeedOptions): Promise<SplashSeedResult> {
     generateSessions(tx, tenantId, SPLASH.timezone),
   );
   const memberIds = await ensureStudents(tenantId, locationId, batchId);
+  // Half the swimmers also swim in the morning squad, so the club has
+  // two weekly classes and both batches have a register.
+  await enrolInBatch(tenantId, batchIds[1]!, memberIds.filter((_, i) => i % 2 === 0));
   await ensureMonthlyPlan(tenantId, locationId);
   await ensureSubscription(tenantId, locationId, memberIds[0]!);
+
+  // Three months of club history: attendance, money, enquiries and
+  // the four things "Needs you today" can hold.
+  const history = await seedSplashHistory({
+    tenantId,
+    locationId,
+    batchIds,
+    ownerUserId: staffUserIds.get(STAFF[0].phone)!,
+    coachUserId: staffUserIds.get(STAFF[1].phone)!,
+  });
+  console.log(
+    `history seeded → ${history.swimmers} swimmers, ${history.sessions} sessions, ` +
+      `${history.attendance} marks, ${history.invoices} invoices, ` +
+      `${history.payments} payments, ${history.enquiries} enquiries`,
+  );
 
   console.log(
     `splash sports club seeded → tenant ${tenantId}, ${STAFF.length} staff, ` +
@@ -356,7 +384,8 @@ async function ensureLocation(tenantId: TenantId): Promise<string> {
 // The three staff rows: a person, a user keyed by phone, a staff row
 // (coach/receptionist) and an active membership in the role. The
 // owner has no staff row — the owner IS the membership.
-async function ensureStaff(tenantId: TenantId): Promise<void> {
+async function ensureStaff(tenantId: TenantId): Promise<Map<string, string>> {
+  const userIds = new Map<string, string>();
   for (const s of STAFF) {
     const personId = uuidv7();
     await db().query(
@@ -379,6 +408,7 @@ async function ensureStaff(tenantId: TenantId): Promise<void> {
         [userId, s.phone],
       );
     }
+    userIds.set(s.phone, userId);
     const roleRow = await db().query<{ id: string }>(
       "select id from roles where tenant_id = $1 and key = $2",
       [tenantId, s.role],
@@ -406,6 +436,7 @@ async function ensureStaff(tenantId: TenantId): Promise<void> {
       [tenantId, userId, roleRow.rows[0].id],
     );
   }
+  return userIds;
 }
 
 // The PIN the seeded staff sign in with. Set after the users exist,
@@ -416,13 +447,25 @@ async function setStaffCredentials(pin: string): Promise<void> {
   }
 }
 
+async function ensureBatches(
+  tenantId: TenantId,
+  locationId: string,
+): Promise<string[]> {
+  const ids: string[] = [];
+  for (const spec of [BATCH, MORNING_BATCH]) {
+    ids.push(await ensureBatch(tenantId, locationId, spec));
+  }
+  return ids;
+}
+
 async function ensureBatch(
   tenantId: TenantId,
   locationId: string,
+  spec: typeof BATCH | typeof MORNING_BATCH,
 ): Promise<string> {
   const existing = await db().query<{ id: string }>(
     "select id from batches where tenant_id = $1 and name = $2",
-    [tenantId, BATCH.name],
+    [tenantId, spec.name],
   );
   if (existing.rows.length > 0) return existing.rows[0].id;
 
@@ -453,16 +496,34 @@ async function ensureBatch(
       id,
       tenantId,
       program.rows[0].id,
-      BATCH.name,
-      BATCH.capacity,
-      `{${BATCH.daysOfWeek.join(",")}}`,
-      BATCH.startTime,
-      BATCH.endTime,
+      spec.name,
+      spec.capacity,
+      `{${spec.daysOfWeek.join(",")}}`,
+      spec.startTime,
+      spec.endTime,
       coach.rows[0].id,
       locationId,
     ],
   );
   return id;
+}
+
+async function enrolInBatch(
+  tenantId: TenantId,
+  batchId: string,
+  memberIds: string[],
+): Promise<void> {
+  for (const memberId of memberIds) {
+    await db().query(
+      `insert into enrolments (id, tenant_id, member_id, batch_id, enrolled_on)
+       select gen_random_uuid(), $1, $2, $3, current_date
+       where not exists (
+         select 1 from enrolments
+         where tenant_id = $1 and member_id = $2 and batch_id = $3
+       )`,
+      [tenantId, memberId, batchId],
+    );
+  }
 }
 
 async function ensureStudents(
