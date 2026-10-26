@@ -7,7 +7,7 @@ not calendar days; sessions are calendar units. Progress is read off the checkli
 
 ## Read, in this order
 
-1. **`CLAUDE.md`** at repo root (lands with PR #1; if missing, `docs/agent-setup.md` §3).
+1. **`CLAUDE.md`** at repo root (lands with PR #1; if missing, `docs/archive/agent-setup.md` §3).
 2. **`docs/agent-onboarding.md`** — full. The "Never do this" list and the access invariants.
 3. **`DESIGN.md`** and **`docs/sports-club-ui-direction.html`** — both, before any screen.
 4. **`docs/agent-lanes.md`** — pick your lane before opening an editor.

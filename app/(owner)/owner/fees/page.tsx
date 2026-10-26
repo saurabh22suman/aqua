@@ -16,12 +16,18 @@ import {
 import { formatINR } from "@/lib/money/format";
 import { formatDateIST, formatDateTimeIST, formatPeriodRangeIST } from "@/lib/time/tz";
 import { methodLabel } from "@/lib/services/payments";
+import {
+  groupLabel,
+  isPaymentGroup,
+  isPaymentMethod,
+} from "@/lib/money/payment-groups";
 import { BackLink } from "@/components/ui/BackLink";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
 import { DataTable } from "@/components/ui/DataTable";
 import { StatCard } from "@/components/ui/StatCard";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 
 // U-02 — the Fees & Payments hub: Overview / Transactions / Dues /
 // Invoices / Plans over the existing C-29…C-39 services. Tabs are
@@ -38,7 +44,14 @@ function resolveTab(value: string | undefined): FeesTab {
 export default async function FeesPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string; from?: string; to?: string; facility?: string }>;
+  searchParams?: Promise<{
+    tab?: string;
+    from?: string;
+    to?: string;
+    facility?: string;
+    method?: string;
+    group?: string;
+  }>;
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.financial");
@@ -58,6 +71,14 @@ export default async function FeesPage({
       : defaultMonthPeriod(timezone);
   const terminology = await getTerminologyAction();
   const memberLabel = titleCase(resolveTerm(terminology, "member", 1));
+  // Home's payment-mix drill-down narrows this list (and only this list).
+  const method = isPaymentMethod(params.method) ? params.method : undefined;
+  const group = isPaymentGroup(params.group) ? params.group : undefined;
+  const activeFilter = method
+    ? methodLabel(method)
+    : group
+      ? `${groupLabel(group)} payments`
+      : null;
 
   const [overview, invoices, transactions, plans] = await Promise.all([
     getFeesOverviewAction({ ...period, ...(facility ? { locationId: facility } : {}) }),
@@ -68,7 +89,12 @@ export default async function FeesPage({
         })
       : Promise.resolve([]),
     tab === "transactions"
-      ? listHubTransactionsAction({ ...period, ...(facility ? { locationId: facility } : {}) })
+      ? listHubTransactionsAction({
+          ...period,
+          ...(facility ? { locationId: facility } : {}),
+          ...(method ? { method } : {}),
+          ...(group ? { group } : {}),
+        })
       : Promise.resolve([]),
     tab === "plans" ? listPlansAction() : Promise.resolve([]),
   ]);
@@ -133,12 +159,55 @@ export default async function FeesPage({
               tone="paper"
             />
           </div>
+          {overview.overdueInvoiceCount > 0 ? (
+            <div className="rounded-card border border-line bg-paper p-4">
+              <h3 className="font-display text-[15px] font-semibold">Overdue ageing</h3>
+              <p className="mt-0.5 text-[12.5px] text-ink-3">
+                Days past the due date (IST). This is money owed, not money
+                collected; invoices due today are not yet late.
+              </p>
+              <ul className="mt-3 space-y-2.5">
+                {overview.overdueAgeing.map((row) => (
+                  <li key={row.bucket}>
+                    <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                      <span className="font-medium text-ink-2">{row.bucket} days</span>
+                      <span className="tabular-nums text-ink-2">
+                        {formatINR(row.paise)} · {row.count} invoice
+                        {row.count === 1 ? "" : "s"}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      <ProgressBar
+                        value={row.paise}
+                        max={overview.overduePaise}
+                        tone="late"
+                        label={`${row.bucket} days overdue`}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
       {tab === "transactions" ? (
         <section className="mt-4 rounded-card border border-line bg-paper p-4">
-          <SectionHeader title="Transactions" />
+          <SectionHeader
+            title="Transactions"
+            subtitle={activeFilter ? `Filtered to ${activeFilter}` : undefined}
+          />
+          {activeFilter ? (
+            <Link
+              href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
+                facility ? `&facility=${facility}` : ""
+              }`}
+              className="mt-1 inline-flex min-h-[44px] items-center text-[12.5px] text-water"
+            >
+              Clear filter
+            </Link>
+          ) : null}
           <div className="mt-2">
             <DataTable
               columns={[

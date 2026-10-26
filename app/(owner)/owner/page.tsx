@@ -4,12 +4,7 @@ import { getOwnerDashboardAction } from "@/lib/actions/dashboard";
 import { getBrandingAction } from "@/lib/actions/branding";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
-import {
-  getMoneyAnalyticsAction,
-  getOperationalAnalyticsAction,
-} from "@/lib/actions/owner-analytics";
-import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
-import { addDays, todayInZone } from "@/lib/time/tz";
+import { getOwnerChartsAction } from "@/lib/actions/owner-home-charts";
 import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { requireOwner } from "@/lib/auth/surface-guard";
@@ -24,7 +19,7 @@ import { hasPermission } from "@/lib/auth/permission";
 export default async function OwnerHomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ facility?: string }>;
+  searchParams?: Promise<{ facility?: string; trend?: string; period?: string }>;
 }) {
   const ctx = await requireOwner();
   // C01 (docs/audits/2026-10-09-role-content-permission-audit.md §9) —
@@ -41,17 +36,21 @@ export default async function OwnerHomePage({
     cookieStore.get(FACILITY_COOKIE)?.value,
   );
 
-  const timezone = await getTenantTimezoneAction();
-  const today = todayInZone(timezone);
-  const trendPeriod = { from: addDays(today, -29), to: addDays(today, 1) };
+  const trend = params.trend === "attendance" ? "attendance" : "collections";
+  const period =
+    params.period === "week" || params.period === "month" ? params.period : "day";
 
-  const [data, branding, terminology, checklist, operational, money] = await Promise.all([
+  const [data, branding, terminology, checklist, chartsData] = await Promise.all([
     getOwnerDashboardAction(facility ? { facility } : undefined),
     getBrandingAction(),
     getTerminologyAction(),
     getOnboardingChecklistAction().catch(() => null),
-    getOperationalAnalyticsAction(trendPeriod, facility).catch(() => null),
-    getMoneyAnalyticsAction(trendPeriod, facility).catch(() => null),
+    // The chart band degrades to a stated "unavailable" panel rather
+    // than taking the page down with it.
+    getOwnerChartsAction({
+      period,
+      ...(facility ? { facility } : {}),
+    }).catch(() => null),
   ]);
 
   // The everyday actions the Today screen puts first. Each one is
@@ -61,19 +60,24 @@ export default async function OwnerHomePage({
     addMember: hasPermission(ctx, "members.write"),
     recordPayment: hasPermission(ctx, "payments.record"),
     captureEnquiry: hasPermission(ctx, "enquiries.write"),
+    readFees:
+      hasPermission(ctx, "reports.financial") && hasPermission(ctx, "invoices.read"),
+    viewSchedule: hasPermission(ctx, "attendance.read"),
   };
+  // Onboarding is for an academy that has not started yet — not a
+  // standing nag for one unfinished checklist item.
+  const isNewAcademy = checklist !== null && checklist.completedCount === 0;
 
   return (
     <OwnerDashboard
       data={data}
       branding={branding}
       terminology={terminology}
-      showOnboarding={checklist ? checklist.items.some((item) => !item.complete) : false}
+      showOnboarding={isNewAcademy}
       can={can}
-      charts={{
-        attendance: operational?.attendanceTrend ?? null,
-        collections: money?.collections ?? null,
-      }}
+      trend={trend}
+      facility={facility}
+      chartsData={chartsData}
     />
   );
 }

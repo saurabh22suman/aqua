@@ -13,6 +13,24 @@ import { z } from "zod";
 
 export const FACILITY_COOKIE = "aqua_facility";
 
+/**
+ * Drop the facility scope choice (browser only).
+ *
+ * The facility choice is a *scope* decision made by the signed-in
+ * owner: which location the lists are filtered to. It lives on the
+ * device, so it belongs to the account that made it — the sign-out and
+ * the PIN login both clear it, so the next person on a shared device
+ * starts on the tenant's default (all facilities) rather than on
+ * somebody else's location.
+ *
+ * The cookie is written by components/facility-switcher.tsx with the
+ * same path, so the deletion matches it.
+ */
+export function clearFacilityCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${FACILITY_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
 const facilitySchema = z.string().uuid();
 
 export function parseFacilityValue(value: string | null | undefined): string | undefined {

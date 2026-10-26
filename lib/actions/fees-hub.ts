@@ -41,6 +41,7 @@ export async function getFeesOverviewAction(raw: unknown): Promise<FeesOverview>
       dueInvoiceCount: 0,
       overduePaise: 0,
       overdueInvoiceCount: 0,
+      overdueAgeing: [],
       today: "",
     };
   }

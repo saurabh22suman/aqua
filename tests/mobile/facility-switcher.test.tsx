@@ -95,6 +95,7 @@ const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 
 const DASHBOARD: OwnerDashboardData = {
   tenantName: "Aqua",
+    scopeLocationName: null,
   today: "2026-09-13",
   todayMarked: 0,
   todayTotal: 0,
@@ -108,6 +109,7 @@ const DASHBOARD: OwnerDashboardData = {
     dueInvoiceCount: 0,
     overduePaise: 0,
     overdueInvoiceCount: 0,
+      oldestOverdueDays: null,
   },
   needsAttention: [],
   todaysLanes: [],

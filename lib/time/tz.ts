@@ -168,6 +168,25 @@ export function formatWeekdayDateIST(iso: string | Date): string {
 
 // 24-hour IST wall time for form controls (a date/time editor needs
 // "17:00", not "05:00 pm"). Display text still uses formatTimeIST.
+// The complete date for an identity header: weekday, day, month and
+// year, day-first and unambiguous. Date-only strings ("2026-10-25")
+// land at UTC midnight, which is the same calendar day in IST.
+export function formatFullDateIST(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  // Compose from parts: en-IN inserts a comma before the year
+  // ("25 Oct, 2026"), which reads as a list rather than a date.
+  const parts = new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).formatToParts(d);
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("weekday")}, ${get("day")} ${get("month")} ${get("year")}`;
+}
+
 export function formatWallTime24hIST(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
   return new Intl.DateTimeFormat("en-GB", {

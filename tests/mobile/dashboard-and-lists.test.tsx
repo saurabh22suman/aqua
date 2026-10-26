@@ -76,6 +76,7 @@ const SNAPSHOT = {
 
 const DASHBOARD: OwnerDashboardData = {
   tenantName: "Aqua Worli",
+    scopeLocationName: null,
   today: "2026-09-12",
   todayMarked: 0,
   todayTotal: 0,
@@ -89,6 +90,7 @@ const DASHBOARD: OwnerDashboardData = {
     dueInvoiceCount: 2,
     overduePaise: 100000,
     overdueInvoiceCount: 1,
+      oldestOverdueDays: null,
   },
   needsAttention: [
     {
@@ -104,12 +106,16 @@ const DASHBOARD: OwnerDashboardData = {
   ],
   todaysLanes: [
     {
+      sessionId: "sess-1",
       batchId: "b1",
       batchName: "Junior TTS",
       programName: "Learn to Swim",
       startTime: "17:00:00",
       enrolled: 8,
       capacity: 12,
+      coachName: "Imran Sheikh",
+      marked: 0,
+      started: true,
     },
   ],
   nextClass: null,

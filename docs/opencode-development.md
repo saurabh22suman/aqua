@@ -1,5 +1,60 @@
 # OpenCode development setup
 
+## Active harness — OpenCode V2 (25 October 2026)
+
+OpenCode **2.1.4** is installed on this workstation. Global and project configs,
+agent permissions and delegated commands use native V2 syntax. Older tooling
+notes below describe the previous verified setup where stated. V2 does not run
+LSP servers: use the project compiler/lint commands. No model is forced by this
+harness; review agents inherit the selected model. Credentials stay outside Git.
+
+Global commands: `/task-contract`, `/diagnose`, `/quality-review`,
+`/browser-check`, `/verify-change`, `/harness-doctor`. Global MCPs are the pinned
+isolated Playwright and Context7; Aqua overrides Playwright with its pinned
+Chromium configuration and `.playwright-mcp` output. Do not install another
+browser/profile MCP or broad database-access server merely to run tests.
+
+Project commands: `/aqua-doctor`, `/aqua-test-env`, `/aqua-check [test paths]`,
+`/aqua-ui-check [URL and acceptance scope]`, `/review [scope]`, `/verify`.
+Use `opencode reload` after configuration changes. OpenCode's background service
+has a default Location: programmatic V2 API callers must supply the intended
+`location[directory]` rather than assume the caller's current directory is used.
+
+Current collaboration rules: `docs/agent-workflow.md`; UI acceptance:
+`docs/ui-quality-contract.md`. New work branches from develop and feature PRs
+return to develop. Human testing and promotion to main remain separate.
+Read the dated owner handoff for WIP; an old pause note is not current task state.
+Load aqua-ui-quality for UI changes and aqua-parallel-work for parallel sessions.
+Commands: `/aqua-ui-contract [scope]`, `/aqua-integration-check [branches]`.
+
+### Isolated verification
+
+```bash
+python3 .opencode/scripts/harness.py doctor
+python3 .opencode/scripts/harness.py prepare-test
+python3 .opencode/scripts/harness.py quick
+python3 .opencode/scripts/harness.py test tests/money.test.ts
+python3 .opencode/scripts/harness.py release
+python3 .opencode/scripts/test_harness.py
+```
+
+`prepare-test` creates a checkout-specific disposable Postgres 16 container on
+127.0.0.1:55433 (override with `--port` if occupied), bootstraps roles/migrations
+and saves an ignored **0600** `.env.aqua-harness-test.local`. It does not overwrite
+root `.env` or seed/reset the running club. The database is named `aqua_test_*`,
+runtime uses `app_login`, migration uses `aqua`. Tests reject a development target,
+remote DB, mismatched URLs or missing disposable marker. Each worktree needs its
+own profile/container/port. The tmpfs test data is disposable; restarting the
+container discards it, so do not restart it casually. No cleanup is automatic.
+
+The harness serializes its operations per checkout. It cannot stop arbitrary
+commands outside the harness: do not run raw competing tests or builds. Release
+checks refuse when a Next process owns the checkout; use an isolated verification
+worktree rather than kill another owner's dev server. The existing scripts each
+perform their own bundle/font builds and remain serial. Change-specific CI
+scanners and e2es still apply. A passing harness setup is not certification that
+the current product changes pass their application gate.
+
 ## Local development
 
 Use Node 22 (`nvm use`) and pnpm 11.22.0 from `package.json`.

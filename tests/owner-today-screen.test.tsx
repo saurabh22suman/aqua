@@ -1,21 +1,23 @@
 // @vitest-environment jsdom
 //
-// Owner "Today" — the calm first screen (owner UX audit 2026-10-24).
+// Owner Home — the daily oversight workspace (DESIGN.md §7).
 //
 // What this pins:
-//   * the everyday actions (add a member, record a payment, capture an
-//     enquiry) are on the screen, and ONLY the ones this caller may
-//     actually perform;
-//   * the attention list carries at most three rows, the real total is
-//     visible, and nothing is hidden from the owner — the rest is one
-//     disclosure away;
-//   * a quiet day names the next scheduled class instead of repeating
-//     that nothing is scheduled;
-//   * the money block is a compact row of links, not a large hero.
+//   * ONE dominant shortcut: collecting a payment, linked to the real
+//     collection journey (Fees → Dues → open invoice → record payment),
+//     never to the history-only transactions list; secondary actions
+//     are quiet links and only the permitted ones exist;
+//   * the summary row labels its basis: today's collection, the current
+//     overdue balance with its invoice count and the outstanding total;
+//   * at most three exceptions carry the queue, the real total is
+//     visible, and the rest stay one disclosure away;
+//   * a quiet day names the next scheduled class with its coach;
+//   * a class row reports REGISTER COMPLETION (marks recorded), never
+//     attendance;
+//   * drill-downs keep the facility scope.
 //
 // The data is a fixture; the dashboard service is not under test here
-// (tests/reports/retention-truthfulness.test.ts covers the retention
-// rule at the database layer).
+// (tests/tier1/owner-dashboard.test.ts covers the reads).
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -35,15 +37,24 @@ const BRANDING = {
 
 const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 
+const ALL_CAN = {
+  addMember: true,
+  recordPayment: true,
+  captureEnquiry: true,
+  readFees: true,
+  viewSchedule: true,
+};
+
 function dashboard(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardData {
   return {
     tenantName: "Splash Sports Club",
+    scopeLocationName: "Splash Pool",
     today: "2026-10-25",
     todayMarked: 0,
     todayTotal: 0,
     activeMemberCount: 8,
     attendanceThisWeekPct: null,
-    activeBatchCount: 1,
+    activeBatchCount: 2,
     needsAttention: [],
     todaysLanes: [],
     nextClass: null,
@@ -55,6 +66,7 @@ function dashboard(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardD
       dueInvoiceCount: 0,
       overduePaise: 0,
       overdueInvoiceCount: 0,
+      oldestOverdueDays: null,
     },
     ...overrides,
   } as OwnerDashboardData;
@@ -70,23 +82,45 @@ function attentionItem(index: number) {
 
 afterEach(cleanup);
 
-describe("owner Today — the everyday actions", () => {
-  it("offers the actions this caller may perform, and only those", () => {
+describe("owner Home — the dominant shortcut", () => {
+  it("collects payment as the single primary action, into the real journey", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
         branding={BRANDING}
         terminology={TERMINOLOGY}
-        can={{ addMember: true, recordPayment: false, captureEnquiry: true }}
+        can={ALL_CAN}
       />,
     );
+    const collect = screen.getByRole("link", { name: /collect payment/i });
+    // The Dues list is where an invoice is opened and the payment is
+    // recorded — not the transactions history.
+    expect(collect.getAttribute("href")).toBe("/owner/fees?tab=dues");
+    expect(collect.className).toContain("bg-[var(--accent-strong)]");
+    // Secondary actions are quiet links, not competing filled buttons.
+    const add = screen.getByRole("link", { name: /add member/i });
+    expect(add.className).not.toContain("bg-[var(--accent-strong)]");
+    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+  });
+
+  it("never offers an action the caller cannot perform", () => {
+    render(
+      <OwnerDashboard
+        data={dashboard()}
+        branding={BRANDING}
+        terminology={TERMINOLOGY}
+        can={{
+          addMember: true,
+          recordPayment: false,
+          captureEnquiry: true,
+          readFees: true,
+          viewSchedule: false,
+        }}
+      />,
+    );
+    expect(screen.queryByRole("link", { name: /collect payment/i })).toBeNull();
     expect(screen.getByRole("link", { name: /add member/i })).toBeTruthy();
     expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
-    // Record payment is not permitted for this caller, so the action
-    // is not offered. (The money block still links to the Fees hub —
-    // that is a different link, and the figures are already the
-    // caller's.)
-    expect(screen.queryByRole("link", { name: /record payment/i })).toBeNull();
   });
 
   it("offers no actions when the caller holds none of them", () => {
@@ -95,17 +129,85 @@ describe("owner Today — the everyday actions", () => {
         data={dashboard()}
         branding={BRANDING}
         terminology={TERMINOLOGY}
-        can={{ addMember: false, recordPayment: false, captureEnquiry: false }}
+        can={{
+          addMember: false,
+          recordPayment: false,
+          captureEnquiry: false,
+          readFees: false,
+          viewSchedule: false,
+        }}
       />,
     );
+    expect(screen.queryByRole("link", { name: /collect payment/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /add member/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /record payment/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /capture enquiry/i })).toBeNull();
   });
 });
 
-describe("owner Today — the attention list", () => {
-  it("carries at most three rows and states the real total", () => {
+describe("owner Home — the summary row", () => {
+  it("states each figure's basis and keeps the period on its drill-down", () => {
+    render(
+      <OwnerDashboard
+        data={dashboard({
+          facilityBreakdown: [
+            { locationId: "l1", locationName: "Splash Pool", activeMembers: 8, attendancePct: null },
+          ],
+          money: {
+            collectedTodayPaise: 300000,
+            collectedTodayCount: 1,
+            outstandingPaise: 10500000,
+            dueInvoiceCount: 35,
+            overduePaise: 5700000,
+            overdueInvoiceCount: 19,
+            oldestOverdueDays: 18,
+          },
+        })}
+        branding={BRANDING}
+        terminology={TERMINOLOGY}
+        can={ALL_CAN}
+        facility="loc-1"
+      />,
+    );
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("Collected today");
+    expect(text).toContain("Overdue");
+    // Indian grouping without immaterial ".00" (DESIGN.md §4).
+    expect(text).toContain("₹3,000");
+    expect(text).not.toContain("₹3,000.00");
+    // The overdue tile states the count, the oldest age and the
+    // outstanding (current) balance.
+    expect(text).toContain("19 invoices past due");
+    expect(text).toContain("₹1,05,000 outstanding");
+
+    const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
+      a.getAttribute("href"),
+    );
+    // Today's collection drills into today's transactions, with the
+    // facility scope preserved.
+    expect(hrefs).toContain(
+      "/owner/fees?tab=transactions&from=2026-10-25&to=2026-10-26&facility=loc-1",
+    );
+    expect(hrefs).toContain("/owner/fees?tab=dues&facility=loc-1");
+  });
+
+  it("says so plainly when nothing was collected or is late", () => {
+    render(
+      <OwnerDashboard
+        data={dashboard()}
+        branding={BRANDING}
+        terminology={TERMINOLOGY}
+        can={ALL_CAN}
+      />,
+    );
+    const text = document.body.textContent ?? "";
+    expect(text).toContain("No payments recorded today yet");
+    expect(text).toContain("Nothing past due");
+    expect(text).toContain("₹0 outstanding");
+  });
+});
+
+describe("owner Home — the attention queue", () => {
+  it("carries at most three exceptions and states the real total", () => {
     const items = [1, 2, 3, 4, 5].map(attentionItem);
     render(
       <OwnerDashboard
@@ -134,8 +236,8 @@ describe("owner Today — the attention list", () => {
   });
 });
 
-describe("owner Today — a quiet day", () => {
-  it("names the next scheduled class instead of an empty space", () => {
+describe("owner Home — a quiet day", () => {
+  it("names the next class with its coach instead of an empty space", () => {
     render(
       <OwnerDashboard
         data={dashboard({
@@ -146,6 +248,9 @@ describe("owner Today — a quiet day", () => {
             startTime: "18:00:00",
             startsAt: new Date("2026-10-27T12:30:00Z"),
             sessionDate: "2026-10-27",
+            coachName: "Imran Sheikh",
+            enrolled: 4,
+            capacity: 12,
           },
         })}
         branding={BRANDING}
@@ -156,6 +261,8 @@ describe("owner Today — a quiet day", () => {
     expect(text).toContain("Nothing scheduled today");
     expect(text).toContain("Evening Squad");
     expect(text).toContain("6:00 pm");
+    expect(text).toContain("Imran Sheikh");
+    expect(text).toContain("4 of 12 enrolled");
   });
 
   it("says when there is nothing booked ahead either", () => {
@@ -167,42 +274,58 @@ describe("owner Today — a quiet day", () => {
       />,
     );
     expect(document.body.textContent).toContain(
-      "Nothing is scheduled for today, and there is no class booked ahead.",
+      "Nothing scheduled today, and no class booked ahead.",
     );
   });
 });
 
-describe("owner Today — the money block", () => {
-  it("is a compact row of linked figures, not a hero", () => {
+describe("owner Home — today's classes", () => {
+  it("reports register completion, not attendance", () => {
     render(
       <OwnerDashboard
         data={dashboard({
-          money: {
-            collectedTodayPaise: 0,
-            collectedTodayCount: 0,
-            outstandingPaise: 450000,
-            dueInvoiceCount: 3,
-            overduePaise: 0,
-            overdueInvoiceCount: 0,
-          },
+          todayMarked: 9,
+          todayTotal: 12,
+          todaysLanes: [
+            {
+              sessionId: "s1",
+              batchId: "b1",
+              batchName: "Morning Squad",
+              programName: "Learn to swim",
+              startTime: "07:00:00",
+              enrolled: 12,
+              capacity: 16,
+              coachName: "Imran Sheikh",
+              marked: 12,
+              started: true,
+            },
+            {
+              sessionId: "s2",
+              batchId: "b2",
+              batchName: "Junior TTS",
+              programName: "Stroke clinic",
+              startTime: "08:00:00",
+              enrolled: 8,
+              capacity: 16,
+              coachName: null,
+              marked: 0,
+              started: true,
+            },
+          ],
         })}
         branding={BRANDING}
         terminology={TERMINOLOGY}
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Payments recorded today");
-    expect(text).toContain("Outstanding");
-    expect(text).toContain("Overdue");
-    expect(text).toContain("No payments recorded today yet");
-    expect(text).toContain("3 invoices with a balance");
-    // The old hero showed one large figure; the three figures are now
-    // side by side and each links to its itemised view.
-    const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
-      a.getAttribute("href"),
-    );
-    expect(hrefs).toContain("/owner/fees?tab=dues");
-    expect(hrefs).toContain("/owner/fees?tab=transactions");
+    expect(text).toContain("Morning Squad");
+    expect(text).toContain("Imran Sheikh");
+    expect(text).toContain("Register complete — 12 of 12 marked");
+    expect(text).toContain("Register not started");
+    expect(text).toContain("no coach assigned");
+    expect(text).toContain("9 of 12 marked across 2 sessions");
+    // Completion is never dressed up as attendance.
+    expect(text.toLowerCase()).not.toContain("attendance — 12");
   });
 });
 

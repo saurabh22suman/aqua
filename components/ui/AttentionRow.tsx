@@ -31,7 +31,7 @@ export function AttentionRow({
       </div>
       <div className="min-w-0">
         <p className="text-[14px] font-medium leading-tight">{title}</p>
-        <p className="mt-0.5 text-[12px] text-ink-3 leading-tight truncate">
+        <p className="mt-0.5 text-[12px] text-ink-3 leading-tight line-clamp-3">
           {detail}
         </p>
       </div>

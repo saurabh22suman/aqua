@@ -163,7 +163,10 @@ beforeAll(async () => {
       `ui-b-${memberRefB}`,
     ],
   );
-});
+  // Starting PostgreSQL, applying every migration and seeding the catalogue
+  // can exceed Vitest's 10-second default on a busy runner. Keep the
+  // assertions unchanged and give this integration fixture an explicit limit.
+}, 60_000);
 
 afterAll(async () => {
   // Services leave app_login connections idle in the application pool.

@@ -1,8 +1,34 @@
 import type { ReactNode } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { BottomNav, type NavItem } from "@/components/bottom-nav";
+
+// The operator console is not an installable app.
+//
+// The tenant surface publishes a web app manifest, and the console's
+// pages must not advertise one. The manifest DOCUMENT is never served
+// on the platform host (it is not in OPS_ALLOWLIST, so the console is
+// not installable either way), and the <link rel="manifest"> itself is
+// rendered only on the tenant surface
+// (components/pwa/manifest-link.tsx) — so the console's HTML carries no
+// install metadata at all.
+//
+// This typed override is the framework-level guard for that rule: it
+// withdraws a manifest declared anywhere up the tree (the root layout
+// today declares none) from these pages, and nothing else about the
+// console's metadata changes — title, description, theme colour and
+// viewport are still inherited from the root layout.
+//
+// Why the link is not simply left to Next's app/manifest.ts file
+// convention: that convention injects <link rel="manifest"> into every
+// document that inherits the root layout and re-applies it after every
+// metadata merge, so no layout — this one, or the root layout itself —
+// can withdraw it. Verified on Next 15.5.24.
+export const metadata: Metadata = {
+  manifest: null,
+};
 
 // Visually distinct from tenant surfaces so nobody confuses the two.
 // Per Phase 1.2: own navigation. Tenant nav has a four-item bottom bar

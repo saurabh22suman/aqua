@@ -10,6 +10,15 @@ description: >
 
 # Execute task
 
+## Current Aqua workflow override
+
+Read AGENTS.md and docs/agent-workflow.md first. Historical commit/continue
+steps below are conditional on explicit task authorization. New branches start
+from develop and feature PRs target develop. Feature agents never self-merge;
+only the human promotes tested develop to main. Parallel tasks have distinct
+worktrees and file ownership. Load aqua-ui-quality for UI acceptance; a green
+functional gate does not establish visual quality.
+
 ## Loop
 
 1. Read the task in `docs/implementation-plan.md` plus every task it

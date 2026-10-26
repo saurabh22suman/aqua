@@ -2,7 +2,7 @@
 
 > **Superseded, kept for history.** This verdict is retroactively wrong —
 > it did not catch that R.1–R.7 shipped backend-only. See
-> `docs/retroactive-checklist-audit.md` for the correction and
+> `docs/archive/retroactive-checklist-audit.md` for the correction and
 > `docs/five-day-work-guide.md` item 5.10 for current status. Archived
 > 2026-09-13.
 

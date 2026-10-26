@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { pinLogin, pinSchema } from "@/lib/services/credentials";
+import { FACILITY_COOKIE } from "@/lib/facility";
+import { THEME_COOKIE } from "@/lib/theme/storage";
 
 // POST /api/login/pin — the phone + PIN login door (2026-09-11 auth
 // feature).
@@ -50,6 +52,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   // our own JSON response (the client reads the body, the browser
   // keeps the cookie).
   const res = NextResponse.json({ kind: "ok" });
+  // The display preferences on this device — the appearance preset and
+  // the facility scope choice — belong to whoever was signed in here
+  // before. A successful login starts a new session, so they are
+  // dropped: the next person on a shared device starts on the default
+  // preset and the tenant's default scope instead of inheriting them.
+  //
+  // A FAILED login never reaches this line, so a mistyped PIN cannot
+  // strip the signed-in user's own choices.
+  //
+  // Order matters: mutating the cookie jar rewrites the whole
+  // `set-cookie` header, so the deletions come first and better-auth's
+  // cookies are appended afterwards — otherwise the session cookie
+  // would be dropped from the response and nobody could sign in.
+  res.cookies.delete(THEME_COOKIE);
+  res.cookies.delete(FACILITY_COOKIE);
   for (const cookie of result.headers.getSetCookie()) {
     res.headers.append("set-cookie", cookie);
   }

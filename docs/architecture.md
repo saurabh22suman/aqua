@@ -93,7 +93,7 @@ Validated against current sources (August 2026). The stack holds, but these are 
 | **pg-boss** | Fine at this volume, but the job API has changed across majors | Pin the version, isolate handlers behind our own interface |
 | **Single Postgres** | No horizontal escape hatch without work | Correct at projected load. A read replica is the first step and is a config change |
 
-None of these is a reason to change the stack. All are reasons to pin versions and read current documentation rather than relying on model recall — see `agent-setup.md` §4.2.
+None of these is a reason to change the stack. All are reasons to pin versions and read current documentation rather than relying on model recall — see root `AGENTS.md` and [OpenCode development](opencode-development.md).
 
 ---
 
@@ -1850,7 +1850,7 @@ docs/architecture.md
 docs/project-scope.md
 docs/implementation-plan.md
 docs/testing-strategy.md
-docs/agent-setup.md
+docs/archive/agent-setup.md
 ```
 
 **Testing priority — not uniform coverage:**

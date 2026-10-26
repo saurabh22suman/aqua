@@ -1,10 +1,11 @@
 # Deployment and recovery — current operator runbook
 
 **Status:** tracked configuration is prepared for separate Dev and
-Production VPSs. Neither a live R2 upload/restore nor a live Production
+Production VPSs, and a **staging** deployment unit is prepared but **not
+deployed**. Neither a live R2 upload/restore nor a live Production
 deploy is certified by this document. Do not mark `PILOT_RELEASE_GATE=passed`
 from code or a dry run. Historical, superseded plans are in
-[`deployment-legacy.md`](deployment-legacy.md); do not follow them.
+[`deployment-legacy.md`](archive/deployment-legacy.md); do not follow them.
 
 ## Hosts
 
@@ -70,6 +71,199 @@ builds on the host and publishes 3000; it must not be selected as a Dokploy
 source or production deployment file. The old SSH `deploy-dev` trigger is
 inert while `DEV_DEPLOY_ENABLED` is unset and fails rather than deploying
 if someone sets it. There is no VPS-only deploy script.
+
+## Staging environment — prepared, NOT deployed
+
+**Status: the staging environment is PREPARED; it is NOT deployed.** The
+deployment unit exists in this repository as `docker-compose.staging.yml`,
+with a placeholder environment (`docker-compose.staging.env.example`) and a
+machine-checked isolation gate. On the host, the Dokploy **staging project
+exists** with its public environment configuration saved, a **private R2
+bucket** with a scoped token, the **HTTPS routes and DNS records** saved,
+and a **mode-600 credential file** holding fresh staging secrets.
+
+What is NOT true, and must not be claimed:
+
+- **No staging deploy has been run.** Staging autodeploy is disabled, and
+  no deployment has been started.
+- **No staging endpoint is live.** The routes are saved but not applied
+  until a deploy, and the **TLS certificates are not verified**.
+- **No staging database exists.** Nothing has been deployed, so nothing has
+  been migrated or seeded. No database was reset.
+- **The staging secrets are not yet in Dokploy.** They sit in a mode-600
+  file on the host for the human to paste into the Dokploy Environment
+  editor. They are not in this repository and are never printed here.
+- **Production is untouched.** The production project, environment and
+  compose file are unchanged, and its autodeploy is unchanged.
+
+The coordinator's own record of this setup, with the project IDs and the
+credential-file path, is `docs/handoffs/dokploy-staging-setup.md` in the
+ui-system lane. **Do not follow the older, incomplete notes in that file**;
+its "Follow-up setup" section supersedes them.
+
+| | Dev | Staging | Production |
+|---|---|---|---|
+| Manager | Dokploy **Docker Compose** service | Dokploy **Docker Compose** service (project exists; autodeploy off) | Separate Dokploy **Docker Compose** service |
+| Git source | `main`, `docker-compose.dokploy.yml` | `main`, `docker-compose.staging.yml` | `main`, `docker-compose.production.yml` |
+| Project / volume | `aqua-dev` / `aqua-pgdata-dev` | `sportsip-staging` / `sportsip-staging-pgdata` | `aqua-prod` / `aqua-pgdata-prod` |
+| Internal network | `aqua-dev-internal` | `sportsip-staging-internal` | `aqua-prod-internal` |
+| Hosts | `aqua.preprabbit.in`, `aquaops.preprabbit.in` | `sportsip-staging.preprabbit.in`, `sportsip-staging-ops.preprabbit.in` (routes saved, not applied) | the production hosts |
+| Image | `ghcr.io/saurabh22suman/aqua:sha-<12>` | the **same** published `sha-<12>` tag as Dev | GHCR **digest** of the approved tag (`AQUA_IMAGE_DIGEST=sha256:<64 hex>`) |
+| Object store | the Dev bucket | a **private** staging bucket with a token scoped to that bucket only | the production bucket, unchanged |
+| Data | the Dev database | **none yet** — the database is created by the first deploy | the Production database |
+
+### Unique resources — the reason this unit exists
+
+Two Compose projects on one Docker host share everything Docker namespaces
+by **name**. Get one name wrong and a staging preview writes into the Dev
+pilot's database. The staging unit therefore pins three names of its own:
+
+- project `sportsip-staging`
+- database volume `sportsip-staging-pgdata`
+- internal network `sportsip-staging-internal`
+
+**Never** `aqua-pgdata-dev`, `aqua-dev-internal`, `aqua-pgdata-prod`,
+`aqua-prod-internal`, `aqua-pgdata-local` or `aqua-pgdata`. The only
+resource it shares with the other units on purpose is Dokploy's external
+`dokploy-network`, which every unit joins so Traefik can route to `web`.
+
+The gate that enforces this is `scripts/check-staging-compose.ts` (see
+below). It is a pure source parse: no container, no image, no database, no
+network.
+
+```sh
+# The staging isolation gate. Exits non-zero and names every violation.
+pnpm tsx scripts/check-staging-compose.ts
+# Expect: Staging compose check passed (docker-compose.staging.yml).
+
+# The same gate against the shared required-secrets contract.
+pnpm check:compose-secrets docker-compose.staging.yml
+```
+
+### Mocked providers, and the one explicit capture origin
+
+Staging runs with `WHATSAPP_PROVIDER=capture` and
+`AQUA_DEPLOYMENT_STAGE=preview`: messages are captured by a mock that
+speaks the WhatsApp Cloud API shape and **never delivered to a real
+person**, and the preview stage makes the deployment say so on every page.
+No paid provider is involved.
+
+`WHATSAPP_CAPTURE_URL` is **required** in the staging compose file — it
+has no default, precisely so a staging deployment cannot capture into
+another environment's mock inbox by accident. Set it explicitly:
+
+- Prefer a dedicated staging capture origin.
+- The approved existing mock (`https://wa.preprabbit.in`) may be reused for
+  the **synthetic demo only** — the Splash Sports Club data, where every
+  name, phone and amount is invented. Do not leave it pointed there once
+  the staging database holds a real academy's records.
+
+### Manual secret provisioning
+
+Secrets are **provisioned by hand in the Dokploy Environment editor** and
+never committed. `docker-compose.staging.env.example` lists every variable
+with a `<placeholder>` and no real value; the human copies the names into
+the staging service's Environment editor and replaces each placeholder
+there. Dokploy writes its own `.env` next to its checkout on the VPS.
+
+**The staging secrets already exist, held off to the side.** A mode-600
+file on the host carries fresh staging values for the database password,
+the app-login password, the auth/parent/audit secrets and the ops
+password; the object-store entries are separate. Nothing in that file is
+in this repository, and no value is printed here. The human still has to
+paste them into Dokploy — that step has not happened, and until it does
+the deploy refuses to render.
+
+Every value in the compose file is `${VAR:?message}`, so a missing secret
+refuses the deploy instead of starting on a placeholder. The staging
+values must **differ** from the Dev values:
+
+- `POSTGRES_PASSWORD`, `APP_LOGIN_PASSWORD` — a different database.
+- `BETTER_AUTH_SECRET`, `PARENT_LINK_SECRET`, `AUDIT_CHECKPOINT_SECRET` —
+  a shared auth secret would let a staging session be replayed against a
+  Dev host.
+- `R2_*` — the staging bucket is private and its token is scoped to that
+  bucket only; reusing the Dev bucket would put staging exports beside
+  Dev's.
+
+The two hosts are siblings, not subdomains: `BETTER_AUTH_URL` is the
+staging apex and `OPS_HOST` is the staging ops host. `OPS_EMAIL` and
+`OPS_PASSWORD` are the env operator door (both or neither, password ≥ 12
+characters).
+
+### Immutable image promotion
+
+Staging runs the **same published build as Dev** — a staging preview of a
+different image proves nothing, and a staging-only build would be a fork
+that nobody promotes. Promotion is therefore:
+
+1. A green `CI` run publishes one GHCR tag `sha-<first 12 of main commit>`.
+   Record the commit, the registry digest and the CI run ID.
+2. Set `AQUA_IMAGE_TAG` to that tag in the staging Dokploy environment and
+   deploy. Never `:latest`; rollback is setting the previous tag back.
+3. Compare the pulled image digest on staging with the published digest. A
+   SHA-shaped **tag can still be re-pointed in a registry**, and
+   `docker inspect` of `.Config.Image` confirms the tag only.
+
+Production remains on the **digest** of the approved tag, and staging is
+not a step on the Production release path.
+
+### DNS, TLS and health verification
+
+DNS and TLS for staging are **prepared**: the routes and the letsencrypt
+settings are saved in Dokploy for
+`sportsip-staging.preprabbit.in` and `sportsip-staging-ops.preprabbit.in`,
+and both A records resolve to the VPS. What is missing is the **deploy**
+that applies the routes, and the certificate verification that follows it.
+The verification sequence, once the human has entered the secrets and
+pressed Deploy, is:
+
+1. **TLS hosts** for the staging apex and the staging ops host, and a
+   `dokploy-network` that exists on the target. Do not paste credentials
+   into tracked files or CI logs.
+2. **Dokploy Domains** route both staging hosts to **web**, internal
+   container port 3000, HTTPS. No Caddy, no host port mapping — the
+   staging unit publishes no port at all.
+3. **Render check before deploying** (dummy values only, nothing starts):
+
+   ```sh
+   AQUA_IMAGE_TAG=sha-000000000000 POSTGRES_PASSWORD=ci-dummy-postgres \
+   APP_LOGIN_PASSWORD=ci-dummy-app BETTER_AUTH_SECRET=ci-dummy-auth \
+   BETTER_AUTH_URL=https://ci.invalid PARENT_LINK_SECRET=ci-dummy-parent \
+   OPS_HOST=ci-dummy-ops-host OPS_EMAIL=ci-dummy@invalid \
+   OPS_PASSWORD=ci-dummy-ops-password R2_ACCOUNT_ID=ci-dummy \
+   R2_ACCESS_KEY_ID=ci-dummy R2_SECRET_ACCESS_KEY=ci-dummy \
+   R2_BUCKET=ci-dummy-bucket AUDIT_CHECKPOINT_SECRET=ci-dummy-checkpoint \
+   WHATSAPP_CAPTURE_URL=https://ci.invalid \
+   docker compose -f docker-compose.staging.yml --profile backup config --quiet
+   # Expect: no output and exit 0.
+   ```
+
+   `--profile backup` matters: the dormant profile is not rendered without
+   it, so the check would skip the one service that holds the privileged
+   connection.
+4. **After the deploy** — the same probes the Dev unit uses, against the
+   staging hosts: DB `pg_isready`, the migrate job exiting 0, web and
+   worker starting, `https://<staging-apex>/api/health` returning 200 with
+   `worker: healthy`, the bare-domain 307 probes (apex → its own door,
+   ops host → `/ops/login`), `Secure; HttpOnly; SameSite=Lax` cookies, and
+   the actual pulled image digest. On redeploy, **verify** Dokploy recreates
+   the one-shot migrate container; `config --quiet` alone cannot prove how
+   its UI handles a previously completed job.
+5. **Backups** are the dormant `backup` profile. It holds the privileged
+   connection because `pg_dump` needs a privileged role, and it is
+   accepted **only** as a dormant, operator-run job — never a runtime
+   service, and never a second worker. A staging timer, if one is
+   installed, must point at `docker-compose.staging.yml` with its own
+   paths-only environment file; nothing installs it for you.
+
+### The synthetic demo on staging
+
+The staging database starts **empty**. `SEED_SPLASH_CLUB=true` plus a
+chosen `SEED_SPLASH_CLUB_PIN` seeds the synthetic club during the migrate
+step — see [Synthetic demo club](#synthetic-demo-club-splash-sports-club). A
+demo reset means re-seeding **this** database. It never means resetting
+another environment's database.
 
 ## Image and release approval
 

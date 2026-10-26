@@ -13,6 +13,11 @@ import { callerHasPermission } from "@/lib/services/resource-access";
 import { dayRangeUtc, todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { toSafePaise } from "@/lib/money/safe-paise";
+import {
+  PAYMENT_GROUPS,
+  PAYMENT_METHODS,
+  methodsForGroup,
+} from "@/lib/money/payment-groups";
 import type { PaymentMethod } from "@/db/schema/payments";
 
 // U-02 — the Fees & Payments hub reads. This is one place over the
@@ -35,6 +40,8 @@ export type FeesOverview = {
   dueInvoiceCount: number;
   overduePaise: number;
   overdueInvoiceCount: number;
+  /** Past-due balance by age, in whole days late (IST due dates). */
+  overdueAgeing: { bucket: "1-7" | "8-30" | "31+"; paise: number; count: number }[];
   today: string;
 };
 
@@ -79,6 +86,11 @@ export const feesTransactionsInput = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   locationId: z.string().uuid().optional(),
+  // Home's payment-mix drill-down: one method, or one of the three owner
+  // groups (cash / digital / other). Both narrow the same read the
+  // screen totals come from, so the filtered list always reconciles.
+  method: z.enum(PAYMENT_METHODS).optional(),
+  group: z.enum(PAYMENT_GROUPS).optional(),
 });
 
 const DUES_STATUSES: InvoiceStatus[] = ["issued", "partial"];
@@ -242,6 +254,37 @@ export async function getFeesOverview(
       .from(invoices)
       .where(and(...dueConditions, lt(invoices.dueOn, today)));
 
+    // Ageing buckets: the due date is a calendar date, so "days late" is
+    // the IST date difference. Invoices due today are not yet late and
+    // are excluded (the same lt() gate as the overdue total).
+    const ageingBucket = sql<string>`case
+        when (${today}::date - ${invoices.dueOn}) between 1 and 7 then '1-7'
+        when (${today}::date - ${invoices.dueOn}) between 8 and 30 then '8-30'
+        else '31+'
+      end`.as("bucket");
+    const scopedOverdue = tx
+      .select({
+        bucket: ageingBucket,
+        outstanding: sql`${invoices.totalPaise} - ${invoices.paidPaise}`.as("outstanding"),
+      })
+      .from(invoices)
+      .where(and(...dueConditions, lt(invoices.dueOn, today)))
+      .as("scoped_overdue");
+    const ageingRows = await tx
+      .select({
+        bucket: scopedOverdue.bucket,
+        paise: sql<string>`coalesce(sum(${scopedOverdue.outstanding}), 0)::text`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(scopedOverdue)
+      .groupBy(scopedOverdue.bucket);
+    const ageing = new Map(ageingRows.map((row) => [row.bucket, row]));
+    const overdueAgeing = (["1-7", "8-30", "31+"] as const).map((bucket) => ({
+      bucket,
+      paise: toSafePaise(ageing.get(bucket)?.paise ?? "0"),
+      count: Number(ageing.get(bucket)?.count ?? 0),
+    }));
+
     return {
       from: period.from,
       to: period.to,
@@ -256,6 +299,7 @@ export async function getFeesOverview(
       dueInvoiceCount: Number(outstanding?.count ?? 0),
       overduePaise: toSafePaise(overdue?.paise ?? "0"),
       overdueInvoiceCount: Number(overdue?.count ?? 0),
+      overdueAgeing,
       today,
     };
   });
@@ -353,6 +397,10 @@ export async function listHubTransactions(
     }
     const predicate = locationPredicate(payments.locationId, access);
     if (predicate) conditions.push(predicate);
+    if (parsed.data.method) conditions.push(eq(payments.method, parsed.data.method));
+    if (parsed.data.group) {
+      conditions.push(inArray(payments.method, [...methodsForGroup(parsed.data.group)]));
+    }
 
     const rows = await tx
       .select({
@@ -394,6 +442,12 @@ export async function listHubTransactions(
       reversalConditions.push(eq(payments.locationId, parsed.data.locationId));
     }
     if (predicate) reversalConditions.push(predicate);
+    if (parsed.data.method) reversalConditions.push(eq(payments.method, parsed.data.method));
+    if (parsed.data.group) {
+      reversalConditions.push(
+        inArray(payments.method, [...methodsForGroup(parsed.data.group)]),
+      );
+    }
     const reversalRows = await tx
       .select({
         id: paymentReversals.id,

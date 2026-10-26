@@ -313,32 +313,32 @@ describe("review dashboard location scope (A07)", () => {
   });
 });
 
-// C02's composition contract, pinned as a source scan (the same shape
-// the repo's kpi-label-size and date-display-sweep guards use).
+// Owner Home composition, pinned as a source scan (the same shape the
+// repo's kpi-label-size and date-display-sweep guards use).
 //
-// The owner UX audit (2026-10-24) changed the ORDER and the shape of
-// the home screen: it now leads with what needs attention (the
-// owner's first question), then today's classes, then the register
-// completion, then a compact money row — the large money hero was the
-// biggest area on the page and it was mostly zeroes. The labelling
-// contracts survive unchanged: the figure is the GROSS captured total
-// ("Payments recorded today", not "Collected today" — the Fees hub
-// nets reversals) and the mislabelled "Today's facilities" heading
-// must not come back.
-describe("C02 owner home priority and labels", () => {
-  it("orders needs you today → classes → registers → money, and keeps the labels honest", () => {
+// Superseded 2026-10-25 by the approved owner redesign. The first
+// screen now leads with the figures (each label stating its basis),
+// then the one dominant shortcut, then the 60/40 workspace (today's
+// classes beside the exceptions), then the single trend panel. The
+// honesty contracts survive: the money figure is today's captured
+// total and says so, register state is never called attendance, and
+// the phantom "Today's facilities" heading stays gone.
+describe("owner Home composition and labels", () => {
+  it("leads with the summary, then the dominant action, then the workspace, then one trend panel", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
+    const summary = src.indexOf("Collected today");
+    const action = src.indexOf("Collect payment");
     const attention = src.indexOf("Needs you today");
-    // The section title is a JSX ATTRIBUTE, so it carries the character
-    // itself (JSX does not decode entities in attribute values).
-    const classes = src.indexOf("Today\u2019s classes");
-    const registers = src.indexOf("Today&apos;s registers");
-    const money = src.indexOf("Payments recorded today");
-    expect(attention).toBeGreaterThan(-1);
-    expect(classes).toBeGreaterThan(attention);
-    expect(registers).toBeGreaterThan(classes);
-    expect(money).toBeGreaterThan(registers);
-    expect(src).not.toContain("Collected today");
+    const trend = src.indexOf("<OwnerHomeCharts");
+    expect(summary).toBeGreaterThan(-1);
+    expect(action).toBeGreaterThan(summary);
+    expect(attention).toBeGreaterThan(action);
+    expect(trend).toBeGreaterThan(attention);
+    // The old gross-only label and the phantom facilities heading are gone.
+    expect(src).not.toContain("Payments recorded today");
     expect(src).not.toContain("Today's facilities");
+    // Completion is stated as marks recorded, never as attendance.
+    expect(src).toContain("Register complete");
+    expect(src).not.toContain("Attendance\u2019s");
   });
 });

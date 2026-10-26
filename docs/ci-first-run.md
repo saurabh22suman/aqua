@@ -16,6 +16,26 @@ workflow whose *rationale* isn't obvious from reading the YAML:
 - which e2e scenario is **timing-sensitive** and what to do when it flakes,
 - what each step is actually checking, so a red step points somewhere.
 
+## Runtime optimization prepared 26 October 2026
+
+The accompanying `perf/ci-runtime` maintenance branch splits Docker/runtime
+backup verification from application checks into independent runners, each with
+its own Postgres service. A final required `ci` check passes only when both lanes
+succeed. Failed, cancelled, skipped or missing lane results fail the gate.
+The workflow also covers develop pushes and cancels superseded PR runs only.
+
+The font check can use `--reuse-build` after the successful bundle-budget build.
+A source/artifact receipt rejects a missing or changed build; standalone
+`check:fonts` keeps its self-building behavior. Security e2e production builds
+remain independent; they were not replaced by stale/shared artifacts.
+
+Measured baseline: [run 40202148703](https://github.com/saurabh22suman/aqua/actions/runs/40202148703),
+24m27s elapsed: sharded tests 574s, Docker/runtime build 184s, bundle check 99s,
+font check 77s. Overlapping Docker and removing the repeated font build should
+save roughly four minutes. This is an estimate, not a measured optimized GitHub
+run. The new two-runner workflow needs its first real CI execution after review;
+no test coverage or required security checks were removed.
+
 ## Do you need a secret?
 
 **No.** Nothing in the suite requires a real credential. Every `env:`
@@ -24,7 +44,7 @@ value in `ci.yml` is a fixed, non-secret string:
 | Var | Why it's there |
 |---|---|
 | `DATABASE_URL` | Unprivileged app role against the `postgres` service container. |
-| `MIGRATION_DATABASE_URL` | Privileged role — migrations, `db:reset`, `db:deploy`. |
+| `MIGRATION_DATABASE_URL` | Privileged role — fresh `db:deploy` and migration fixtures. |
 | `APP_LOGIN_PASSWORD` | Must match the password embedded in `DATABASE_URL`; change one, change the other. |
 | `NODE_ENV` | `test`. |
 | `BETTER_AUTH_SECRET` | Log-noise suppression only — see below. |
@@ -53,19 +73,20 @@ SMS/WhatsApp provider key for OTP delivery, say), it goes in
 `Settings → Secrets and variables → Actions` on the repo and gets
 referenced as `${{ secrets.NAME }}` — nothing does today.
 
-## Two Postgres instances, on purpose
+## Separate Postgres scopes, on purpose
 
-**Both are needed, they are not redundant.**
+Service databases and disposable fixture containers serve different purposes.
 
 - The `postgres` **service** (fixed `localhost:5432`, defined in
-  `services:`) is the long-lived database every test file *except*
-  `isolation.test.ts` uses, via `MIGRATION_DATABASE_URL`/`DATABASE_URL`.
-  It's the CI equivalent of running `pnpm db:reset` against your local
-  `docker-compose` Postgres before `pnpm test`.
-- `tests/tier1/isolation.test.ts` alone spins up its **own** disposable
+  `services:`) is the database for shared-service suites in that runner,
+  via `MIGRATION_DATABASE_URL`/`DATABASE_URL`. Independent CI lanes do not
+  share this service.
+  Each CI run starts with a fresh service and runs db:deploy directly. Local
+  reproduction uses a dedicated disposable database, never the running club.
+- Isolation/migration fixtures can spin up their **own** disposable
   Postgres via `@testcontainers/postgresql` (`tests/helpers/isolated-db.ts`),
   on a dynamically allocated port, thrown away when the test file
-  finishes. It does this because its mutation proofs (`ISOLATION_MUTATE`)
+  finishes. For example isolation.test.ts mutation proofs (`ISOLATION_MUTATE`)
   deliberately `DROP POLICY`/`ALTER TABLE ... NO FORCE ROW LEVEL SECURITY`
   against a live database — running that against the shared service
   Postgres would corrupt the schema every other test file in the same
@@ -75,8 +96,7 @@ referenced as `${{ secrets.NAME }}` — nothing does today.
   running as the runner user.
 
 Which database a test file uses, as a rule rather than a list (the
-enumeration that used to live here went stale almost immediately —
-`tests/tier1/` alone now holds ~99 files):
+enumeration goes stale as suites change):
 
 - **Its own Testcontainers Postgres** — `tests/tier1/isolation.test.ts`,
   plus `tests/mobile/wave2-schema.test.ts` and
@@ -178,7 +198,7 @@ In `ci.yml` order.
 
 7. **`pnpm check:migrations`** (`scripts/check-migration-naming.ts`) —
    fails fast (~1s) on a migration numbering collision or a
-   non-conforming filename, rather than letting `db:reset` discover the
+   non-conforming filename, rather than letting the fresh deploy discover the
    same problem minutes later at runtime. Fix: renumber the new
    migration; never edit an applied one.
 
@@ -202,30 +222,18 @@ In `ci.yml` order.
     rather than blocks. It cannot turn the job red; if you want to know
     whether it fired, read the annotation, not the exit status.
 
-11. **`pnpm db:reset -- --i-understand`** — drops and recreates the
-    `public` schema, bootstraps `app_user`/`app_login`, runs all
-    migrations against the `postgres` service. The `--i-understand` flag
-    is mandatory, not decorative: `db/reset-guard.ts` refuses to run
-    unless `DEMO_MODE=true` or that flag is passed explicitly, because
-    `db/reset.ts` is directly runnable on its own and can't infer that
-    CI's Postgres is scratch. (The guard refuses outright under
-    `NODE_ENV=production`, flag or not.) A connection-refused failure
-    here means the service health check didn't gate the step — raise
-    `--health-retries`/`--health-interval` in the `services:` block.
+11. **Fresh CI database, no reset.** The runner's new Postgres service is
+    already empty. Do not insert db:reset before deployment: that hides whether
+    the production fresh-deploy path can bootstrap itself.
 
-12. **`pnpm db:deploy`** — bootstraps pg-boss's own schema (`pgboss.*`,
-    via `boss.start()` under the privileged `MIGRATION_DATABASE_URL`)
-    and grants `app_user` read/write on it afterward. This is **not**
-    covered by `db:reset`, which only runs our own migrations. Without
-    this step a fresh CI Postgres has no `pgboss.schedule`, and every
-    test that touches scheduling (`platform-tenants-create.test.ts`'s D2
-    case, `tenant-creation-parity.test.ts`) fails with `relation
-    pgboss.schedule does not exist`. A real deploy always runs this
-    before serving a request, so `createTenant()` is allowed to assume
-    it; this step matches that guarantee.
+12. **`pnpm db:deploy`** — bootstraps app roles before migrations, then pg-boss
+    schema, queues and exact grants. Both application and runtime-image lanes
+    have their own service and run this against their own fresh database.
+    Missing pg-boss relations indicate failed bootstrap, not permission to
+    patch a fixture or run a destructive reset against development.
 
-13. **`pnpm test`** (`pretest` seeds the platform catalogue, then
-    `vitest run`) — the big one. Two independent failure modes:
+13. **`pnpm test:sharded`** — seeds the catalogue once, runs all four shards
+    serially, verifies the discovered-file union and aggregates failures/skips. Two independent failure modes:
     - **Shared-service tests fail**: something about the `postgres`
       service differs from local `docker-compose.yml` (same image tag,
       same `POSTGRES_USER`/`PASSWORD`/`DB` — they should be identical,
@@ -252,16 +260,17 @@ In `ci.yml` order.
     locally. Read the script for the current budget rather than trusting
     a number quoted in prose.
 
-15. **`pnpm exec tsx scripts/check-font-budget.ts`** — also runs its own
-    `next build` (small duplicate build cost, traded for a script that's
-    correct standalone regardless of step order) and sums shipped
-    `.woff2` bytes against the `DESIGN.md` §1.3 budget. Same as above:
-    a failure is real, reproduce locally with the same command.
+15. **Font budget** — the optimized CI calls
+    `pnpm exec tsx scripts/check-font-budget.ts --reuse-build` immediately
+    after the successful bundle check. Source, Node/public build flags and
+    artifact receipt must match or reuse fails. The standalone script without
+    the flag still builds itself. Both enforce shipped .woff2 bytes.
 
-16. **`pnpm exec playwright install --with-deps chromium`** — downloads
-    a Chromium binary plus OS libraries. Failure here is almost always
-    network/registry access on the runner, not this repo; retrying the
-    job is a reasonable first move if this specific step is what's red.
+16. **`pnpm exec playwright install --with-deps chromium chromium-headless-shell`**
+    runs BEFORE rendered tests and browser e2es, not after the budget scripts.
+    This numbered list explains checks, not executable workflow ordering; the
+    actual YAML owns that order. Installation failure may be runner network or
+    OS dependencies rather than an application defect.
 
 17. **`pnpm seed`** — same script, same output as local dev. Failure
     here means something upstream (schema, roles, platform catalogue) is
@@ -314,22 +323,24 @@ In `ci.yml` order.
 
 ## If something is red and it isn't obvious why
 
-Reproduce the exact failing step locally against a *fresh* container,
-not the one sitting around from a dev session — state left over from
-manual testing is the single most common way "works locally, fails in
-CI" happens:
+Reproduce against a dedicated disposable database, never the running club or
+its Compose volume. Read root AGENTS.md and the current OpenCode verification
+guide before exporting database URLs. Where the reviewed harness is provisioned:
 
-```
-docker compose down -v && docker compose up -d db
-pnpm db:reset -- --i-understand                # step 11
-pnpm db:deploy                                 # step 12
-pnpm test                                      # step 13
-pnpm exec tsx scripts/check-bundle-budget.ts   # step 14
-pnpm exec tsx scripts/check-font-budget.ts     # step 15
-pnpm seed                                      # step 17
-pnpm exec tsx scripts/e2e-offline.ts           # step 18
+```bash
+python3 .opencode/scripts/harness.py prepare-test --port 55436
+python3 .opencode/scripts/harness.py test
+python3 .opencode/scripts/harness.py release
 ```
 
-If that's green and CI is still red, the difference is genuinely
-runner-specific (Docker availability for Testcontainers is the prime
-suspect — see above) rather than something wrong with the code.
+Use an available unique port per worktree, inspect any existing container rather
+than deleting it, and keep its private test profile outside Git. Release refuses
+an active Next process in the same checkout; use a separate verification
+worktree. The harness is not a replacement for change-specific scanners/e2es:
+run those with the disposable profile and their documented fixture requirements.
+
+If the harness is not yet present on the branch, provision the reviewed setup
+or follow the dedicated test-DB procedure in opencode-development.md. Do not
+substitute a blanket default-project volume deletion or reset. A successful
+local reproduction narrows the investigation; it does not prove a remaining CI
+failure is runner-specific without comparing environment, revision and fixtures.

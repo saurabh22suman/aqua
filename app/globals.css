@@ -1,6 +1,37 @@
 @import "tailwindcss";
 
+/* ============================================================================
+   Aqua UI foundation — theme layer.
+
+   Two LIGHT presets only (human decision, docs/design-system/README.md):
+   Mint Garden (default) and Lavender Club. One layout, typography,
+   spacing and component behaviour across both.
+
+   How the layers work:
+
+   1. `@theme` declares the BASE PALETTE. Tailwind generates the
+      utilities (`bg-deck`, `text-ink`, …) from these names, and every
+      utility resolves to `var(--color-*)` — so the palette can be
+      swapped at runtime without touching a component.
+
+   2. `:root` carries the default preset's runtime tokens: the action
+      family, the focus ring, the semantic surface layer, the chart
+      series, the shared control metrics and the motion primitives.
+      Because the semantic layer is written with `var()` references, it
+      follows the base palette automatically.
+
+   3. `[data-theme="lavender"]` overrides the tokens that differ. It
+      restates every base colour on purpose: a token that is forgotten
+      here would silently keep the Mint value, so the preset contract
+      (tests/foundation/theme-tokens.test.ts) requires the full set.
+
+   Semantic status colours (good / late / warn) are deliberately NOT
+   restated in the second preset: money and attendance meaning must not
+   move with the theme.
+   ========================================================================= */
+
 @theme {
+  /* ── Mint Garden — the default base palette ──────────────────────── */
   --color-deck: #EDF0EC;
   --color-paper: #FFFFFF;
   --color-ink: #0F1F1C;
@@ -11,6 +42,7 @@
   --color-water-soft: #E3F1F2;
   --color-line: rgba(15, 31, 28, 0.1);
 
+  /* SEMANTIC — reserved meanings, never decorative */
   --color-good: #1F7A43;
   --color-good-soft: #E4F4EA;
   --color-late: #B2332B;
@@ -29,30 +61,135 @@
   --shadow-2: 0 2px 6px rgba(15, 31, 28, 0.05), 0 14px 32px rgba(15, 31, 28, 0.08);
 }
 
+/* ── Default preset runtime tokens (Mint Garden) ────────────────────── */
 :root {
-  --accent: #FF7A18;
-  --accent-soft: #FFEEE1;
-  --accent-ink: #B84E00;
+  /* Action family. Mint Garden acts in deep forest; the second preset
+   * restates these below. The tenant's own branding accent
+   * (lib/branding/accents.ts) paints the academy mark, not the action
+   * surface, so a preset never fights a tenant's identity colour. */
+  --accent: #1F5E3A;
+  --accent-soft: #DFEEE3;
+  --accent-ink: #0F3220;
   /* PR3-C1 — the accessible action surface. White on --accent is
-   * 2.61:1 (the audit's finding); this darker mango in the same hue
-   * family carries white text at 5.09:1, so primary buttons use it
+   * 2.61:1 (the audit's finding); this darker green in the same hue
+   * family carries white text at 7.72:1, so primary buttons use it
    * while --accent stays the identity/active-nav colour. */
-  --accent-strong: #B84E00;
+  --accent-strong: #1F5E3A;
   /* WCAG 1.4.11 — focus indicator ≥3:1 vs every control surface.
-   * Paper #FFFFFF: 5.09:1. Deck #EDF0EC: 4.43:1. Mango --accent
-   * itself fails on both (2.61 / 2.27) and is reserved for primary
-   * actions and active nav state per §1.2. The check that holds this
-   * value to the threshold is scripts/check-focus-contrast.ts
-   * (pnpm check:focus-contrast) — keep this hex literal so the
-   * script can parse a real value, not a CSS expression. */
-  --focus-ring: #B84E00;
+   * Paper #FFFFFF: 7.72:1. Deck #EDF0EC: 6.72:1. The check that holds
+   * this value to the threshold is scripts/check-focus-contrast.ts
+   * (pnpm check:focus-contrast) — keep this hex literal so the script
+   * can parse a real value, not a CSS expression. The second preset
+   * restates its own ring below; the per-preset rings are asserted by
+   * tests/foundation/theme-tokens.test.ts. */
+  --focus-ring: #1F5E3A;
+
+  /* ── Semantic surface layer ───────────────────────────────────────
+   * One vocabulary for every surface, in every preset. Written as
+   * var() references so the layer follows the base palette instead of
+   * being restated (and drifting) per preset. */
+  --surface-canvas: var(--color-deck);
+  --surface-raised: var(--color-paper);
+  --surface-elevated: var(--color-paper);
+  --surface-sunken: color-mix(in srgb, var(--color-deck) 55%, var(--color-paper));
+  /* Dark structural surface. Reserved for the approved desktop sidebar
+   * direction — not applied yet: the coloured sidebar is still pending
+   * human design selection (docs/ui-quality-contract.md). */
+  --surface-inverse: var(--color-marine);
+
+  --text-primary: var(--color-ink);
+  --text-secondary: var(--color-ink-2);
+  --text-muted: var(--color-ink-3);
+  --text-inverse: #FFFFFF;
+
+  --border-subtle: var(--color-line);
+  --border-strong: color-mix(in srgb, var(--color-ink) 24%, transparent);
+
+  --action-surface: var(--accent-strong);
+  --action-surface-hover: #17492C;
+  --action-foreground: #FFFFFF;
+  --action-soft: var(--accent-soft);
+  --action-ink: var(--accent-ink);
+
+  --selected-surface: var(--accent-soft);
+  --selected-ink: var(--accent-ink);
+
+  /* Restrained secondary tints — surfaces, never text. */
+  --tint-butter: #F7EFD9;
+  --tint-powder: #E4EEF7;
+
+  /* Chart series — data colours, one per series, distinct inside a
+   * chart and readable on both canvases. Never decorative. */
+  --chart-1: #1F5E3A;
+  --chart-2: #0E7C86;
+  --chart-3: #8A5A00;
+  --chart-4: #7E2B6E;
+  --chart-5: #41525A;
+
+  /* ── Shared control metrics ───────────────────────────────────────
+   * One definition of the control heights, icon sizes and layer order,
+   * so a page never re-guesses them. */
+  --control-height-sm: 44px;
+  --control-height-md: 48px;
+  --control-height-lg: 52px;
+  --icon-size-sm: 16px;
+  --icon-size-md: 18px;
+  --icon-size-lg: 20px;
+  --icon-stroke: 1.8;
+  --icon-stroke-active: 2.2;
+
+  --z-nav: 30;
+  --z-sticky: 30;
+  --z-overlay: 40;
+  --z-toast: 50;
+
+  /* ── Motion primitives ─────────────────────────────────────────────
+   * CSS first, no motion library (docs/design-system/motion.md):
+   * hover/press feedback only, no entrance animation. */
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 150ms;
+  --motion-duration-slow: 200ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* ── Lavender Club — the second (and only other) preset ─────────────── */
+[data-theme="lavender"] {
+  --color-deck: #F6F3FB;
+  --color-paper: #FFFFFF;
+  --color-ink: #2B1B3D;
+  --color-ink-2: #4A3A63;
+  --color-ink-3: #6B5A85;
+  /* Structural dark surface. Deliberately unchanged: the platform
+   * console keeps its marine identity in both presets. */
+  --color-marine: #0D3B36;
+  --color-water: #0E7C86;
+  --color-water-soft: #E3F1F2;
+  --color-line: rgba(43, 27, 61, 0.12);
+
+  --accent: #4C2E93;
+  --accent-soft: #EDE7FA;
+  --accent-ink: #3A2170;
+  --accent-strong: #4C2E93;
+  --focus-ring: #4C2E93;
+
+  --action-surface-hover: #3A2170;
+  --surface-inverse: #2E1B4D;
+
+  --tint-butter: #F7EFD9;
+  --tint-powder: #E7E4F7;
+
+  --chart-1: #4C2E93;
+  --chart-2: #0E7C86;
+  --chart-3: #A6427E;
+  --chart-4: #1F5E3A;
+  --chart-5: #41525A;
 }
 
 /* Focus fallback for controls that do not opt into the ring with a
  * utility class (selects, hand-rolled buttons, date fields). The
  * :where() keeps specificity at 0 so any component-level
  * `focus-visible:outline-*` utility still wins; scanners and tests
- * that parse --focus-ring keep working off the literal above. */
+ * that parse the focus token keep working off the literal above. */
 @layer base {
   :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
     outline: 2px solid var(--focus-ring);
@@ -71,6 +208,24 @@ html {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+
+/* Motion primitives. Prefer transform and opacity; never animate
+ * width/height/top/left. The reduced-motion block below neutralises
+ * them for users who ask for that. */
+@utility motion-fast {
+  transition-duration: var(--motion-duration-fast);
+  transition-timing-function: var(--motion-ease-standard);
+}
+
+@utility motion-base {
+  transition-duration: var(--motion-duration-base);
+  transition-timing-function: var(--motion-ease-standard);
+}
+
+@utility motion-slow {
+  transition-duration: var(--motion-duration-slow);
+  transition-timing-function: var(--motion-ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -4,7 +4,6 @@ import {
   CalendarRange,
   ChevronDown,
   ClipboardList,
-  Clock,
   ListChecks,
   Receipt,
   UserPlus,
@@ -12,112 +11,139 @@ import {
 } from "lucide-react";
 import { AttentionRow } from "@/components/ui/AttentionRow";
 import { CountChip } from "@/components/ui/CountChip";
-import { LaneStrip } from "@/components/ui/LaneStrip";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { StatCard } from "@/components/ui/StatCard";
-import type { OwnerDashboardData } from "@/lib/services/dashboard";
+import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import type { ChartMetric, OwnerChartsData } from "@/lib/services/owner-home-charts";
+import type { OwnerDashboardData, TodaysLane } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
-import type { CollectionsSeries, TrendPoint } from "@/lib/services/owner-analytics";
-import { DashboardTrends } from "@/components/dashboard-trends";
 import { TenantMark } from "@/components/branding/tenant-mark";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
-import { formatINR } from "@/lib/money/format";
-import { formatWallTime12h } from "@/lib/time/tz";
+import { formatINRCompact } from "@/lib/money/format";
+import {
+  addDays,
+  formatFullDateIST,
+  formatWeekdayDateIST,
+  formatWallTime12h,
+} from "@/lib/time/tz";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 
-// Owner "Today" — the calm first screen.
+// Owner Home — the daily oversight workspace (composition contract in
+// DESIGN.md §7). The owner is a reviewer, not an operator: the screen
+// answers "what is happening, what is owed, what needs me" and never
+// becomes a capture form or an attendance-marking console.
 //
-// Owner UX audit (2026-10-24). The old home led with a large marine
-// money hero, then the attention list, then a register card, then
-// three KPI tiles, then two charts, then (on mobile) a link grid
-// pushed under every summary section. On a seeded club that read as a
-// wall of zeroes with four different empty messages in it, and the
-// everyday actions (add a swimmer, record a payment, capture an
-// enquiry) were nowhere on the screen.
+// Order, top to bottom on desktop:
+//   1. identity header — academy, the location the figures cover, the
+//      full date, the account menu (record search stays in the shell)
+//   2. Summary — four figures whose labels state whether they are
+//      today's, a current balance, or a count
+//   3. one dominant shortcut (collect money) + quiet secondary actions
+//   4. 60/40 — today's classes | at most three actionable exceptions
+//   5. one trend panel with Attendance / Collections switching
 //
-// The order below is the audit's proposal, and each block answers ONE
-// question:
-//
-//   1. header   — where am I, what day is it, and how do I get out
-//   2. actions  — what do I came here to do
-//   3. attention — what is wrong (at most three, with the real total)
-//   4. classes  — what is happening today
-//   5. money    — what came in and what is owed (compact, linked)
-//   6. tiles    — the three standing figures
-//   7. trends   — the one trend link, and the drill-throughs
-//
-// Honesty rules kept from S4/C02: zeroes state themselves ("No
-// payments recorded today yet", "No dues outstanding", "Nothing past
-// due"), a null attendance percentage is "—", and no profit/cost
-// figure exists anywhere because no such data exists in the schema.
-// The money block is a compact row, not a hero: it was the largest
-// area on the page and the numbers were zeroes.
+// Every figure is a real read from lib/services/dashboard; zeroes say
+// so in words ("No payments recorded today yet"), an unavailable
+// percentage is "—", and completion (marks recorded) is never labelled
+// attendance. Nothing here invents growth, targets, profit or weather.
 
 const MAX_ATTENTION_ROWS = 3;
+
+type Can = {
+  addMember: boolean;
+  recordPayment: boolean;
+  captureEnquiry: boolean;
+  readFees: boolean;
+  viewSchedule: boolean;
+};
 
 export function OwnerDashboard({
   data,
   branding,
   terminology,
-  charts,
-  showOnboarding = true,
-  can = { addMember: false, recordPayment: false, captureEnquiry: false },
+  chartsData,
+  showOnboarding = false,
+  can = {
+    addMember: false,
+    recordPayment: false,
+    captureEnquiry: false,
+    readFees: false,
+    viewSchedule: false,
+  },
+  trend = "attendance",
+  facility = null,
 }: {
   data: OwnerDashboardData;
   branding: BrandingData;
   terminology: TerminologyState;
-  charts?: {
-    attendance: TrendPoint[] | null;
-    collections: CollectionsSeries | null;
-  };
+  chartsData?: OwnerChartsData | null;
+  // Only a genuinely new academy gets the setup prompt; an established
+  // academy with one unfinished checklist item does not.
   showOnboarding?: boolean;
-  // Which everyday actions this caller may actually perform. The
-  // audit asked for them near the top; the permission gates decide
-  // which ones exist (the owner's full set, an accountant's finance
-  // set, a viewer sees none of them).
-  can?: { addMember: boolean; recordPayment: boolean; captureEnquiry: boolean };
+  can?: Can;
+  trend?: ChartMetric;
+  // The resolved facility scope, carried into every drill-down link so
+  // a narrowed Home never opens an unnarrowed destination.
+  facility?: string | null;
 }) {
-  const dayLabel = new Date(`${data.today}T00:00:00`).toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-  const todayPct = data.todayTotal > 0 ? Math.round((data.todayMarked / data.todayTotal) * 100) : null;
-  // The display name surfaces the tenant's preferred name when
-  // it has one (Phase 2.9 editable); falls back to the column
-  // name when it doesn't. data.tenantName is the column-level
-  // fallback, branding.displayName is the override.
   const displayName = branding.displayName ?? data.tenantName;
-  // Phase 2.10 — the resolved vocabulary: a swimming academy
-  // sees "Active swimmers" rather than "Active members"; a
-  // tenant that never customised still reads "Active members".
-  // Database columns stay canonical (member_code is never
-  // renamed), per architecture § 7.5.
   const membersOther = resolveTerm(terminology, "member", "other");
+  const memberOne = resolveTerm(terminology, "member", 1);
   const batchesOther = resolveTerm(terminology, "batch", "other");
   const sessionsOther = resolveTerm(terminology, "session", "other");
   const sessionsOne = resolveTerm(terminology, "session", 1);
+  const coachOne = resolveTerm(terminology, "coach", 1);
+  const enquiryOne = resolveTerm(terminology, "enquiry", 1);
   const facilitiesOther = resolveTerm(terminology, "facility", "other");
-  const overdueCount = data.money.overdueInvoiceCount;
-  const hasOverdue = overdueCount > 0;
+  const programsOther = resolveTerm(terminology, "program", "other");
+
+  const scopeLabel =
+    data.scopeLocationName ??
+    (data.facilityBreakdown.length > 1 ? "All locations" : null);
   const attention = data.needsAttention;
   const visibleAttention = attention.slice(0, MAX_ATTENTION_ROWS);
   const hiddenAttention = attention.slice(MAX_ATTENTION_ROWS);
+  const hasOverdue = data.money.overdueInvoiceCount > 0;
+  const sessionCount = data.todaysLanes.length;
+
+  const withFacility = (href: string) =>
+    facility ? `${href}${href.includes("?") ? "&" : "?"}facility=${facility}` : href;
+  const scopeParams = (params: Record<string, string>) => {
+    const query = new URLSearchParams(params);
+    if (facility) query.set("facility", facility);
+    return `/owner/fees?${query.toString()}`;
+  };
+
+  const fees = {
+    collected: scopeParams({
+      tab: "transactions",
+      from: data.today,
+      to: addDays(data.today, 1),
+    }),
+    dues: scopeParams({ tab: "dues" }),
+  };
+  const membersHref = withFacility("/owner/members");
+  const scheduleHref = facility
+    ? `/owner/schedule?date=${data.today}&location=${facility}`
+    : `/owner/schedule?date=${data.today}`;
 
   return (
     <main className="px-5 pt-5 pb-8">
-      {/* 1 — compact header: who and when, plus the way out. The
-          sign-out lives in an account menu rather than a full-width
-          button in the header; P1-4 put it in the header because it
-          used to be three taps deep in Settings, and the audit's
-          answer is one tap from here either way. */}
-      <div className="flex items-center gap-3">
+      {/* 1 — identity, scope and date. The record search lives in the
+          shell's top bar above this, so it is not duplicated here. */}
+      <div className="flex items-start gap-3">
         <div className="flex-none">
           <TenantMark initials={branding.initials} accent={branding.accent} size={40} />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-[19px] font-semibold leading-tight">{displayName}</h1>
-          <p className="text-[12.5px] text-ink-3">{dayLabel}</p>
+          <h1 className="font-display text-[20px] font-semibold leading-tight">
+            {displayName}
+          </h1>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">
+            {scopeLabel ? `${scopeLabel} · ` : ""}
+            {formatFullDateIST(data.today)}
+          </p>
         </div>
         <details className="relative flex-none">
           <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 rounded-ctl border border-line bg-paper px-3 text-[12.5px] font-medium text-ink-2 marker:content-none">
@@ -137,321 +163,282 @@ export function OwnerDashboard({
         </details>
       </div>
 
-      {/* 2 — the everyday actions, first. Each one opens the existing
-          workflow: the register form, the counter's transactions tab,
-          the enquiry capture on the enquiries board. Nothing here is a
-          second implementation of a workflow that already exists. */}
-      {can.addMember || can.recordPayment || can.captureEnquiry ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+      {/* Mobile reads task-first: the one shortcut, then the money, then
+          the queue. Desktop leads with the figures. */}
+      <div className="flex flex-col">
+        {/* 2 — Summary. Each label states its basis: today, current
+            balance, or a count. A figure that could not be read is "—",
+            never ₹0. */}
+        <div className="order-2 mt-4 grid grid-cols-2 gap-2 lg:order-1 lg:grid-cols-4">
+          <StatCard
+            label="Collected today"
+            value={formatINRCompact(data.money.collectedTodayPaise)}
+            hint={
+              data.money.collectedTodayCount === 0
+                ? "No payments recorded today yet"
+                : `${data.money.collectedTodayCount} payment${
+                    data.money.collectedTodayCount === 1 ? "" : "s"
+                  } recorded`
+            }
+            href={can.readFees ? fees.collected : undefined}
+            tone="paper"
+          />
+          <StatCard
+            label="Overdue"
+            value={
+              <span className={hasOverdue ? "text-late" : undefined}>
+                {formatINRCompact(data.money.overduePaise)}
+              </span>
+            }
+            hint={
+              hasOverdue
+                ? `${data.money.overdueInvoiceCount} invoice${
+                    data.money.overdueInvoiceCount === 1 ? "" : "s"
+                  } past due · ${formatINRCompact(data.money.outstandingPaise)} outstanding`
+                : `Nothing past due · ${formatINRCompact(
+                    data.money.outstandingPaise,
+                  )} outstanding`
+            }
+            href={can.readFees ? fees.dues : undefined}
+            tone="paper"
+          />
+          <StatCard
+            label={`Active ${membersOther}`}
+            value={data.activeMemberCount}
+            hint={`${data.activeBatchCount} ${batchesOther} running`}
+            href={membersHref}
+            tone="paper"
+          />
+          <StatCard
+            label={`${titleCase(sessionsOther)} today`}
+            value={sessionCount}
+            hint={
+              sessionCount === 0
+                ? "Nothing scheduled today"
+                : `${data.todayTotal} ${membersOther} enrolled`
+            }
+            href={can.viewSchedule ? scheduleHref : undefined}
+            tone="paper"
+          />
+        </div>
+
+        {/* 3 — one dominant shortcut. Money is the owner's authority, so
+            collecting a payment is the primary action and goes to the
+            real journey (Dues → open an invoice → record payment), never
+            to a history list. Secondary actions are quiet links. */}
+        <div
+          className="order-1 mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 lg:order-2"
+          style={{ columnGap: 20, rowGap: 4 }}
+        >
+          {can.recordPayment ? (
+            <Link
+              href={fees.dues}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-ctl bg-[var(--accent-strong)] px-4 text-[13.5px] font-semibold text-white"
+            >
+              <Receipt size={16} aria-hidden="true" />
+              Collect payment
+            </Link>
+          ) : null}
+          {can.addMember || can.captureEnquiry ? (
+            <span
+              aria-hidden="true"
+              className="hidden h-6 w-px flex-none bg-line lg:block"
+            />
+          ) : null}
           {can.addMember ? (
             <Link
               href="/owner/members/new"
-              className="flex min-h-[44px] items-center gap-2 rounded-ctl bg-[var(--accent-strong)] px-3.5 text-[13.5px] font-semibold text-white"
+              style={{ gap: 8 }}
+              className="inline-flex min-h-[44px] items-center text-[13.5px] font-medium text-ink-2"
             >
-              <UserPlus size={16} aria-hidden="true" />
-              Add {resolveTerm(terminology, "member", 1)}
-            </Link>
-          ) : null}
-          {can.recordPayment ? (
-            <Link
-              href="/owner/fees?tab=transactions"
-              className="flex min-h-[44px] items-center gap-2 rounded-ctl border border-line bg-paper px-3.5 text-[13.5px] font-medium"
-            >
-              <Receipt size={16} className="text-ink-3" aria-hidden="true" />
-              Record payment
+              <UserPlus size={16} className="text-ink-3" aria-hidden="true" />
+              Add {memberOne}
             </Link>
           ) : null}
           {can.captureEnquiry ? (
             <Link
               href="/owner/enquiries"
-              className="flex min-h-[44px] items-center gap-2 rounded-ctl border border-line bg-paper px-3.5 text-[13.5px] font-medium"
+              style={{ gap: 8 }}
+              className="inline-flex min-h-[44px] items-center text-[13.5px] text-ink-2"
             >
               <ClipboardList size={16} className="text-ink-3" aria-hidden="true" />
-              Capture enquiry
+              Capture {enquiryOne}
             </Link>
           ) : null}
         </div>
-      ) : null}
-
-      {/* The operational links the four-item bottom nav does not carry
-          (Fees, Enquiries, Programs, Staff). The audit found them
-          BELOW several summary sections on a phone, so they sit
-          directly under the actions where a phone can reach them. On
-          the desktop the sidebar already carries them. */}
-      <div className="mt-3 grid grid-cols-2 gap-2 lg:hidden">
-        {[
-          { href: "/owner/fees", label: "Fees & payments", icon: Receipt },
-          { href: "/owner/enquiries", label: "Enquiries", icon: ClipboardList },
-          { href: "/owner/programs", label: "Programs & sessions", icon: CalendarRange },
-          { href: "/owner/staff", label: "Staff", icon: Users },
-          ...(showOnboarding
-            ? [{ href: "/owner/onboarding", label: "Onboarding", icon: ListChecks }]
-            : []),
-        ].map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="flex items-center gap-2.5 rounded-ctl bg-paper border border-line px-3.5 min-h-[48px] py-2"
-          >
-            <link.icon size={16} className="text-ink-3 flex-none" aria-hidden="true" />
-            <span className="text-[13px] font-medium">{link.label}</span>
-          </Link>
-        ))}
       </div>
 
-      {/* 3 — what needs attention. At most three rows carry the
-          screen; the count chip says the real total, and anything
-          beyond the third stays one disclosure away so nothing is
-          hidden from the owner. */}
-      <SectionHeader
-        className="mt-7 mb-2.5"
-        title="Needs you today"
-        trailing={
-          attention.length > 0 ? (
-            <CountChip count={attention.length} tone="warn" />
-          ) : undefined
-        }
-      />
-      {attention.length === 0 ? (
-        <div className="rounded-ctl border border-line bg-paper px-4 py-5">
-          <p className="text-[13.5px] font-medium">Nothing needs attention right now.</p>
-          {showOnboarding ? (
-            <p className="mt-1 text-[12.5px] text-ink-3">
-              Setting the academy up is the next thing worth doing.
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          <ul>
-            {visibleAttention.map((item, i) => (
-              <li key={i} className="mb-2">
-                <AttentionRow
-                  icon={<AlertTriangle size={16} strokeWidth={2} />}
-                  title={item.title}
-                  detail={item.detail}
-                  href={item.href ?? undefined}
-                />
-              </li>
-            ))}
-          </ul>
-          {hiddenAttention.length > 0 ? (
-            <details className="mt-1">
-              <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium text-ink-2 marker:content-none">
-                {hiddenAttention.length} more need attention
-                <ChevronDown size={14} className="text-ink-3" aria-hidden="true" />
-              </summary>
-              <ul className="mt-1">
-                {hiddenAttention.map((item, i) => (
+      {/* 4 — desktop 60/40: the day's classes beside the exceptions.
+          On mobile the queue comes first so the actionable items are
+          reachable early; the day's classes follow. */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-5 lg:items-start">
+        <section className="order-2 min-w-0 lg:order-1 lg:col-span-3" aria-labelledby="today-heading">
+          <SectionHeader
+            className="mb-2"
+            title="Today"
+            subtitle={
+              sessionCount === 0
+                ? "Nothing scheduled today"
+                : data.todayTotal > 0
+                  ? `${data.todayMarked} of ${data.todayTotal} marked across ${sessionCount} ${sessionCount === 1 ? sessionsOne : sessionsOther}`
+                  : `${sessionCount} ${sessionCount === 1 ? sessionsOne : sessionsOther} scheduled · no ${membersOther} enrolled yet`
+            }
+            trailing={
+              sessionCount > 0 ? (
+                <CountChip count={sessionCount} label={titleCase(sessionsOther)} />
+              ) : undefined
+            }
+          />
+          {sessionCount === 0 ? (
+            <div className="rounded-card border border-line bg-paper px-4 py-4">
+              {data.nextClass ? (
+                <>
+                  <p className="text-[13.5px] font-medium">
+                    Next: {data.nextClass.batchName}
+                  </p>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+                    {formatWeekdayDateIST(data.nextClass.sessionDate)} at{" "}
+                    {formatWallTime12h(data.nextClass.startTime)}
+                    {data.nextClass.coachName
+                      ? ` · ${data.nextClass.coachName}`
+                      : ` · no ${coachOne} assigned`}{" "}
+                    · {data.nextClass.enrolled} of {data.nextClass.capacity} enrolled
+                  </p>
+                </>
+              ) : (
+                <p className="text-[13.5px] font-medium">
+                  Nothing scheduled today, and no class booked ahead.
+                </p>
+              )}
+            </div>
+          ) : (
+            <ul className="divide-y divide-line rounded-card border border-line bg-paper">
+              {data.todaysLanes.map((lane) => {
+                const register = registerState(lane);
+                const overBy = lane.capacity > 0 ? lane.enrolled - lane.capacity : 0;
+                const overCapacity = overBy > 0;
+                const fillPct =
+                  lane.capacity > 0
+                    ? Math.min(100, Math.round((lane.enrolled / lane.capacity) * 100))
+                    : 0;
+                return (
+                  <li key={lane.sessionId} className="px-4 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="min-w-0 truncate text-[14px] font-medium">
+                        {`${formatWallTime12h(lane.startTime)} · ${lane.batchName}`}
+                      </p>
+                      <span
+                        className={`flex-none text-[12px] tabular-nums ${
+                          overCapacity ? "font-semibold text-late" : "text-ink-3"
+                        }`}
+                      >
+                        {lane.enrolled} / {lane.capacity}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-[12px] text-ink-3">
+                      {lane.programName}
+                      {lane.coachName ? ` · ${lane.coachName}` : ` · no ${coachOne} assigned`}
+                    </p>
+                    <div className="mt-2">
+                      <ProgressBar
+                        value={lane.enrolled}
+                        max={lane.capacity}
+                        tone={overCapacity ? "late" : fillPct < 50 ? "warn" : "water"}
+                        label={`${lane.batchName} capacity`}
+                      />
+                    </div>
+                    {overCapacity ? (
+                      <p className="mt-1.5 text-[11.5px] font-semibold text-late">
+                        Over capacity by {overBy} — {lane.enrolled} enrolled against{" "}
+                        {lane.capacity} places
+                      </p>
+                    ) : null}
+                    <p className={`mt-1.5 text-[11.5px] font-medium ${register.className}`}>
+                      {register.text}
+                    </p>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="order-1 min-w-0 lg:order-2 lg:col-span-2" aria-labelledby="attention-heading">
+          <SectionHeader
+            className="mb-2"
+            title="Needs you today"
+            trailing={
+              attention.length > 0 ? (
+                <CountChip count={attention.length} tone="warn" />
+              ) : undefined
+            }
+          />
+          {attention.length === 0 ? (
+            <div className="rounded-card border border-line bg-paper px-4 py-4">
+              <p className="text-[13.5px] font-medium">
+                Nothing needs attention right now.
+              </p>
+              {showOnboarding ? (
+                <p className="mt-1 text-[12.5px] text-ink-3">
+                  Setting the academy up is the next thing worth doing.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <ul>
+                {visibleAttention.map((item, i) => (
                   <li key={i} className="mb-2">
                     <AttentionRow
                       icon={<AlertTriangle size={16} strokeWidth={2} />}
                       title={item.title}
                       detail={item.detail}
                       href={item.href ?? undefined}
+                      tone={item.title === "Overdue fees" ? "late" : "warn"}
                     />
                   </li>
                 ))}
               </ul>
-            </details>
-          ) : null}
-        </>
-      )}
-
-      {/* 4 — today's classes. A quiet day gets one calm line and the
-          next scheduled class, so the space says something instead of
-          repeating that nothing is scheduled. */}
-      <SectionHeader className="mt-7 mb-2.5" title="Today’s classes" />
-      {data.todaysLanes.length === 0 ? (
-        <div className="rounded-ctl border border-line bg-paper px-4 py-5">
-          <p className="text-[13.5px] font-medium">Nothing scheduled today</p>
-          {data.nextClass ? (
-            <p className="mt-1 text-[12.5px] text-ink-3">
-              Next: {data.nextClass.batchName} at{" "}
-              {formatWallTime12h(data.nextClass.startTime)} on{" "}
-              {new Date(`${data.nextClass.sessionDate}T00:00:00`).toLocaleDateString("en-IN", {
-                weekday: "short",
-                day: "numeric",
-                month: "short",
-              })}
-              .
-            </p>
-          ) : (
-            <p className="mt-1 text-[12.5px] text-ink-3">
-              Nothing is scheduled for today, and there is no class booked ahead.
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          {data.todaysLanes.map((lane) => {
-            const fillPct =
-              lane.capacity > 0
-                ? Math.min(100, Math.round((lane.enrolled / lane.capacity) * 100))
-                : 0;
-            // water normally, warn under half full — DESIGN.md's lane
-            // strip rule ("water normally, warn when under-filled, late
-            // when a problem"); no "problem" state is detectable from
-            // today's schema (an overbooked batch can't happen, C-18
-            // enforces capacity at enrolment), so only the first two apply.
-            return (
-              <LaneStrip
-                key={lane.batchId}
-                time={formatWallTime12h(lane.startTime)}
-                title={lane.batchName}
-                subtitle={lane.programName}
-                started={lane.capacity}
-                ended={lane.enrolled}
-                tone={fillPct < 50 ? "warn" : "water"}
-                icon={<Clock size={13} className="text-ink-3" />}
-                testId="owner-lane"
-              />
-            );
-          })}
-        </div>
-      )}
-
-      {/* Register completion — the execution detail, below the classes
-          it belongs to. Null (not 0%) when nothing is scheduled today
-          at all; that's a different, truthful state, not a fabricated
-          zero.
-
-          F-2 (2026-09-13 Indian-user UX audit): the "nothing
-          scheduled" branch used to key off todayTotal (sum of
-          enrolments), so a day with a real session but no one enrolled
-          read "Nothing scheduled today" directly above a lane listing
-          that same session. "Is anything scheduled" is todayLanes,
-          full stop; enrolment is a separate fact stated in its own
-          branch. */}
-      {data.todaysLanes.length > 0 ? (
-        <div className="mt-3 rounded-card border border-line bg-paper px-5 py-4">
-          <p className="text-[12.5px] font-medium text-ink-3">Today&apos;s registers</p>
-          {data.todayTotal > 0 ? (
-            <>
-              <p className="mt-1.5 mb-1 font-display text-[26px] font-semibold tracking-tight leading-none tabular-nums">
-                {todayPct}%
-              </p>
-              <p className="text-[13px] text-ink-3">
-                {data.todayMarked} of {data.todayTotal} marked across {data.todaysLanes.length}{" "}
-                {data.todaysLanes.length === 1 ? sessionsOne : sessionsOther}
-              </p>
+              {hiddenAttention.length > 0 ? (
+                <details className="mt-1">
+                  <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium text-ink-2 marker:content-none">
+                    {hiddenAttention.length} more need attention
+                    <ChevronDown size={14} className="text-ink-3" aria-hidden="true" />
+                  </summary>
+                  <ul className="mt-1">
+                    {hiddenAttention.map((item, i) => (
+                      <li key={i} className="mb-2">
+                        <AttentionRow
+                          icon={<AlertTriangle size={16} strokeWidth={2} />}
+                          title={item.title}
+                          detail={item.detail}
+                          href={item.href ?? undefined}
+                          tone={item.title === "Overdue fees" ? "late" : "warn"}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
             </>
-          ) : (
-            <p className="mt-1.5 text-[15px] font-medium">
-              {data.todaysLanes.length}{" "}
-              {data.todaysLanes.length === 1 ? sessionsOne : sessionsOther} scheduled &middot; no{" "}
-              {membersOther} enrolled yet
-            </p>
           )}
-        </div>
-      ) : null}
-
-      {/* 5 — money, compact. The audit's finding was that the largest
-          area on the page held zeroes; the figures are unchanged (the
-          dashboard service's real daily-collections and fees-overview
-          reads) and each one links to the itemised view. The gross
-          captured total is titled "Payments recorded today"; the Fees
-          hub's per-period figure is net of reversals — the two
-          screens must not read as the same number.
-
-          Overdue switches to the late (red) money tone only when
-          there is something overdue — colour means money state, never
-          decoration. */}
-      <SectionHeader className="mt-7 mb-2.5" title="Money" subtitle="Today and what is owed" />
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <Link
-          href="/owner/fees?tab=transactions"
-          className="rounded-ctl border border-line bg-paper px-3.5 py-3"
-        >
-          {/* C02: this figure is the GROSS captured total, so it is
-              titled "Payments recorded today"; the Fees hub's
-              per-period figure is net of reversals, and the two
-              screens must not read as the same number. */}
-          <p className="text-[12px] text-ink-3">Payments recorded today</p>
-          <p className="mt-1 font-display text-[20px] font-semibold leading-none tabular-nums">
-            {formatINR(data.money.collectedTodayPaise)}
-          </p>
-          <p className="mt-1 text-[11.5px] text-ink-3">
-            {data.money.collectedTodayCount === 0
-              ? "No payments recorded today yet"
-              : `${data.money.collectedTodayCount} payment${
-                  data.money.collectedTodayCount === 1 ? "" : "s"
-                } recorded`}
-          </p>
-        </Link>
-        <Link
-          href="/owner/fees?tab=dues"
-          className="rounded-ctl border border-line bg-paper px-3.5 py-3"
-        >
-          <p className="text-[12px] text-ink-3">Outstanding</p>
-          <p className="mt-1 font-display text-[20px] font-semibold leading-none tabular-nums">
-            {formatINR(data.money.outstandingPaise)}
-          </p>
-          <p className="mt-1 text-[11.5px] text-ink-3">
-            {data.money.dueInvoiceCount === 0
-              ? "No dues outstanding"
-              : `${data.money.dueInvoiceCount} invoice${
-                  data.money.dueInvoiceCount === 1 ? "" : "s"
-                } with a balance`}
-          </p>
-        </Link>
-        <Link
-          href="/owner/fees?tab=dues"
-          className={`rounded-ctl border px-3.5 py-3 ${
-            hasOverdue ? "border-late/40 bg-late-soft" : "border-line bg-paper"
-          }`}
-        >
-          <p className={`text-[12px] ${hasOverdue ? "text-late" : "text-ink-3"}`}>Overdue</p>
-          <p
-            className={`mt-1 font-display text-[20px] font-semibold leading-none tabular-nums ${
-              hasOverdue ? "text-late" : ""
-            }`}
-          >
-            {formatINR(data.money.overduePaise)}
-          </p>
-          <p className={`mt-1 text-[11.5px] ${hasOverdue ? "text-late" : "text-ink-3"}`}>
-            {hasOverdue
-              ? `${overdueCount} past the due date`
-              : "Nothing past due"}
-          </p>
-        </Link>
+        </section>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <StatCard
-          label={`Active ${membersOther}`}
-          value={data.activeMemberCount}
-          href="/owner/members"
-          tone="paper"
-        />
-        <StatCard
-          label="Attendance this week"
-          value={data.attendanceThisWeekPct === null ? "—" : `${data.attendanceThisWeekPct}%`}
-          href="/owner/reports"
-          tone="paper"
-        />
-        <StatCard
-          label={`${titleCase(batchesOther)} running`}
-          value={data.activeBatchCount}
-          href="/owner/programs"
-          tone="paper"
-        />
-      </div>
+      {/* 5 — the chart band: one wide metric panel beside the payment
+          mix. Both are scoped to the selected period and facility. */}
+      <OwnerHomeCharts
+        data={chartsData ?? null}
+        metric={trend}
+        facility={facility}
+        canReadFees={can.readFees}
+      />
 
-      {/* 6 — the trend charts with their day-level drill-through.
-          Desktop uses the lazily loaded ECharts island; mobile keeps
-          server SVG so no chart library ships to a phone. */}
-      {charts ? (
-        <DashboardTrends attendance={charts.attendance} collections={charts.collections} />
-      ) : null}
-
-      {/* W1-6 — consolidated per-facility view, shown only when the
-          tenant has more than one facility. In the All-facilities view
-          this is the comparison the market's multi-location products
-          lead with. */}
+      {/* W1-6 — consolidated per-facility view, only for multi-site
+          tenants; a single site needs no comparison. */}
       {data.facilityBreakdown.length > 1 ? (
-        <section className="mt-7">
-          <h2 className="font-display text-[15px] font-semibold mb-2.5">
+        <section className="mt-4">
+          <h2 className="mb-2 font-display text-[15px] font-semibold">
             By {facilitiesOther}
           </h2>
           <ul className="divide-y divide-line rounded-card border border-line bg-paper">
@@ -474,6 +461,55 @@ export function OwnerDashboard({
           </ul>
         </section>
       ) : null}
+
+      {/* Phone access to the destinations the four-item bottom nav does
+          not carry. Desktop reaches them from the sidebar. */}
+      <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
+        {[
+          { href: "/owner/fees", label: "Fees & payments", icon: Receipt },
+          { href: "/owner/enquiries", label: titleCase(resolveTerm(terminology, "enquiry", "other")), icon: ClipboardList },
+          { href: "/owner/programs", label: `${titleCase(programsOther)} & ${batchesOther}`, icon: CalendarRange },
+          { href: "/owner/staff", label: "Staff", icon: Users },
+          ...(showOnboarding
+            ? [{ href: "/owner/onboarding", label: "Onboarding", icon: ListChecks }]
+            : []),
+        ].map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex min-h-[48px] items-center gap-2.5 rounded-ctl border border-line bg-paper px-3.5 py-2"
+          >
+            <link.icon size={16} className="flex-none text-ink-3" aria-hidden="true" />
+            <span className="text-[13px] font-medium">{link.label}</span>
+          </Link>
+        ))}
+      </div>
     </main>
   );
+}
+
+// Register state = COMPLETION (marks recorded out of the distinct
+// swimmers expected), never attendance. A mark of any status counts —
+// the register has been filled for that swimmer.
+function registerState(lane: TodaysLane): { text: string; className: string } {
+  const marked = Math.min(lane.marked, lane.enrolled);
+  if (lane.enrolled === 0) {
+    return { text: "No one enrolled yet", className: "text-ink-3" };
+  }
+  if (!lane.started) {
+    return { text: "Register opens when the session starts", className: "text-ink-3" };
+  }
+  if (marked === 0) {
+    return { text: "Register not started", className: "text-warn" };
+  }
+  if (marked < lane.enrolled) {
+    return {
+      text: `Register in progress — ${marked} of ${lane.enrolled} marked`,
+      className: "text-ink-2",
+    };
+  }
+  return {
+    text: `Register complete — ${marked} of ${lane.enrolled} marked`,
+    className: "text-good",
+  };
 }
