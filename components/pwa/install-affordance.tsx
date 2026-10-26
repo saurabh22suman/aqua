@@ -3,34 +3,50 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import {
+  INSTALL_CONFIRMATION_MS,
   INSTALL_DISMISSAL_KEY,
+  INSTALL_OFFER_DELAY_MS,
+  INSTALL_OFFER_SHOWN_KEY,
+  INSTALL_OFFER_VISIBLE_MS,
   installAvailability,
-  isInstallableSurface,
+  isInstallInvitationSurface,
+  offerShownThisSession,
   readInstallDismissal,
+  rememberOfferShown,
   writeInstallDismissal,
   type InstallAvailability,
   type InstallPromptEvent,
 } from "@/lib/offline/install-prompt";
 
-// The honest install offer.
+// The install offer.
 //
-// Rules this component keeps (docs/design-system/pwa.md):
-//   * it is an inline, dismissible banner — never a modal, never a
-//     focus trap, never on top of the sign-in form;
-//   * Chromium's own `beforeinstallprompt` event is the only thing that
-//     can produce a real install button;
-//   * iOS and iPadOS get accurate "Add to Home Screen" guidance, because
-//     no browser on iOS fires an install event;
-//   * a dismissal is remembered for a month, so nobody is nagged;
-//   * it never renders on the operator console or on a signed parent
-//     link — a parent link is a credential and must stay free of install
-//     metadata.
+// Rules this component keeps (docs/design-system/pwa.md), plus the
+// coordinator's browser review of 26 October 2026, which measured the
+// previous card at 138px tall covering three of the nine visible member
+// rows at 390x844:
+//
+//   * COMPACT — one row: the action and a dismissal. No paragraph, no
+//     card, nothing that reads like a modal.
+//   * NON-BLOCKING — the offer is pointer-transparent, so the page
+//     beneath it stays fully usable, and it sits in the shell's
+//     bottom-navigation gutter so it never covers the navigation.
+//   * APPROPRIATELY TIMED — it arrives after a short delay, it leaves
+//     again on its own, and it does not come back in the same session.
+//     It is a nudge, not something that waits to be dismissed.
+//   * CONTEXTUAL — Chromium's own `beforeinstallprompt` event is the
+//     only thing that can produce a real install button; iOS and
+//     iPadOS get accurate "Add to Home Screen" guidance, because no
+//     browser on iOS fires an install event.
+//   * NEVER A MODAL — no dialog role, no focus trap, no focus theft.
+//   * NOT NAGGING — an explicit dismissal is remembered for a month.
+//   * NEVER on the sign-in journey, the operator console, or a signed
+//     parent link.
 //
 // The decision itself lives in lib/offline/install-prompt.ts so it can be
 // tested without a browser.
 
 export type InstallAffordanceProps = {
-  /** The current path; the offer is suppressed on ops and parent links. */
+  /** The current path; the offer is suppressed on sign-in, ops and parent surfaces. */
   pathname: string;
 };
 
@@ -52,8 +68,11 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [online, setOnline] = useState(true);
+  const [offerVisible, setOfferVisible] = useState(false);
+  const [confirmationVisible, setConfirmationVisible] = useState(false);
 
-  const surfaceAllowed = isInstallableSurface(pathname);
+  const surfaceAllowed = isInstallInvitationSurface(pathname);
+  const offerable = availability === "browser-prompt" || availability === "ios-guide";
 
   const decide = useCallback(
     (browserPromptAvailable: boolean) => {
@@ -113,8 +132,35 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
     };
   }, [decide, surfaceAllowed]);
 
+  // The offer arrives late, so it never interrupts the first thing the
+  // person came to do.
+  useEffect(() => {
+    if (!offerable || !online || !surfaceAllowed) return;
+    if (offerShownThisSession(window.sessionStorage)) return;
+    const timer = setTimeout(() => {
+      setOfferVisible(true);
+      rememberOfferShown(window.sessionStorage);
+    }, INSTALL_OFFER_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [offerable, online, surfaceAllowed]);
+
+  // …and it leaves again on its own.
+  useEffect(() => {
+    if (!offerVisible) return;
+    const timer = setTimeout(() => setOfferVisible(false), INSTALL_OFFER_VISIBLE_MS);
+    return () => clearTimeout(timer);
+  }, [offerVisible]);
+
+  useEffect(() => {
+    if (!confirmationVisible) return;
+    const timer = setTimeout(() => setConfirmationVisible(false), INSTALL_CONFIRMATION_MS);
+    return () => clearTimeout(timer);
+  }, [confirmationVisible]);
+
   const dismiss = useCallback(() => {
     writeInstallDismissal(window.localStorage, Date.now());
+    rememberOfferShown(window.sessionStorage);
+    setOfferVisible(false);
     setAvailability("dismissed");
   }, []);
 
@@ -127,6 +173,7 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
       if (choice?.outcome === "accepted") {
         setInstalled(true);
         setAvailability("installed");
+        setConfirmationVisible(true);
         writeInstallDismissal(window.localStorage, Date.now());
         return;
       }
@@ -139,9 +186,9 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
   if (!surfaceAllowed || !online) return null;
 
   if (availability === "installed") {
-    if (!installed) return null;
+    if (!installed || !confirmationVisible) return null;
     return (
-      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4 pb-3">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 flex justify-start px-4 pb-3">
         <p className="pointer-events-auto rounded-pill bg-marine px-4 py-2 text-[13px] text-paper shadow-2">
           Aqua is installed.
         </p>
@@ -149,41 +196,38 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
     );
   }
 
-  if (availability !== "browser-prompt" && availability !== "ios-guide") return null;
+  if (!offerable || !offerVisible) return null;
 
   // The 64px offset is the shell's bottom-navigation gutter (the same
   // one components/ui/StickyActionBar.tsx uses): the offer must never
-  // cover the navigation.
+  // cover the navigation. The pill is bottom-LEFT and narrow, so it
+  // never covers the row actions on the right of a list.
   return (
     <section
       aria-label="Install Aqua"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4 pb-3"
+      className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 flex justify-start px-4 pb-3"
     >
-      <div className="flex w-full max-w-md flex-col gap-3 rounded-card border border-line bg-paper p-4 shadow-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[13px] leading-snug text-ink-2">
-          {availability === "ios-guide" ? (
-            <>
-              Add Aqua to your home screen for a faster start: tap{" "}
-              <span className="font-medium text-ink">Share</span>, then{" "}
-              <span className="font-medium text-ink">Add to Home Screen</span>.
-            </>
-          ) : (
-            "Install Aqua for a home-screen shortcut and offline attendance."
-          )}
-        </p>
-        <div className="pointer-events-auto flex shrink-0 items-center gap-2">
-          {availability === "browser-prompt" ? (
-            <Button variant="primary" size="sm" onClick={() => void install()}>
-              Install Aqua
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="sm" onClick={dismiss}>
-            Not now
+      <div className="pointer-events-auto flex w-fit max-w-[16rem] items-center gap-1 rounded-pill border border-line bg-paper py-1 pl-1 pr-1 shadow-2">
+        {availability === "browser-prompt" ? (
+          <Button variant="primary" size="sm" onClick={() => void install()}>
+            Install Aqua
           </Button>
-        </div>
+        ) : (
+          <span className="px-2 text-[13px] leading-tight text-ink-2">
+            Share ▸ Add to Home Screen
+          </span>
+        )}
+        <button
+          type="button"
+          aria-label="Not now"
+          onClick={dismiss}
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-pill text-[15px] text-ink-3 hover:bg-deck hover:text-ink-2"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
       </div>
     </section>
   );
 }
 
-export { INSTALL_DISMISSAL_KEY };
+export { INSTALL_DISMISSAL_KEY, INSTALL_OFFER_SHOWN_KEY };

@@ -18,9 +18,12 @@ import { compactPaiseINR } from "@/lib/dashboard-charts";
 // below that breakpoint the panels render their accessible data tables,
 // so a phone never downloads the chart engine (DESIGN.md §5).
 //
-// Colour carries data: Cash = water, Digital = marine, Other = muted
-// ink. The doughnut's centre states the selected period's total so the
-// ring does not need a separate legend to be understood.
+// Colour carries data, and a data colour is never a structural one:
+// the series wear the preset's chart tokens (--chart-1 cash,
+// --chart-2 digital, --chart-3 other), so the chart belongs to the
+// preset the reader is in. The doughnut's centre states the selected
+// period's total so the ring does not need a separate legend to be
+// understood.
 
 echarts.use([
   BarChart,
@@ -70,8 +73,13 @@ export default function OwnerChart(props: OwnerChartProps) {
     const el = ref.current;
     if (!el) return;
 
-    const water = tokenColor("--color-water", "#0e7c86");
-    const marine = tokenColor("--color-marine", "#0d3b36");
+    // The series colours come from the preset's chart tokens. The
+    // MEANING is fixed: cash is money, digital is digital, other is
+    // other — only the hue follows the preset.
+    const cash = tokenColor("--chart-1", "#1f5e3a");
+    const digital = tokenColor("--chart-2", "#0e7c86");
+    const other = tokenColor("--chart-3", "#8a5a00");
+    const attendance = tokenColor("--chart-2", "#0e7c86");
     const ink = tokenColor("--color-ink", "#0f1f1c");
     const ink3 = tokenColor("--color-ink-3", "#5b6f6b");
     const line = tokenColor("--color-line", "rgba(15,31,28,.10)");
@@ -127,9 +135,9 @@ export default function OwnerChart(props: OwnerChartProps) {
             },
           },
           series: [
-            stacked("Cash", "cash", water, paper, props.buckets),
-            stacked("Digital", "digital", marine, paper, props.buckets),
-            stacked("Other", "other", ink3, paper, props.buckets),
+            stacked("Cash", "cash", cash, paper, props.buckets),
+            stacked("Digital", "digital", digital, paper, props.buckets),
+            stacked("Other", "other", other, paper, props.buckets),
           ],
         });
       } else if (props.kind === "line") {
@@ -172,8 +180,8 @@ export default function OwnerChart(props: OwnerChartProps) {
               connectNulls: false,
               showSymbol: true,
               symbolSize: 5,
-              lineStyle: { color: water, width: 2 },
-              itemStyle: { color: water },
+              lineStyle: { color: attendance, width: 2 },
+              itemStyle: { color: attendance },
             },
           ],
         });
@@ -210,7 +218,7 @@ export default function OwnerChart(props: OwnerChartProps) {
                 value: group.paise,
                 itemStyle: {
                   color:
-                    group.key === "cash" ? water : group.key === "digital" ? marine : ink3,
+                    group.key === "cash" ? cash : group.key === "digital" ? digital : other,
                 },
               })),
             },

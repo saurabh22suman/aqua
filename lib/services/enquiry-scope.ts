@@ -1,0 +1,136 @@
+import { and, eq, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import type { TenantTx } from "@/db/tenant";
+import { enquiries, type EnquiryStage, type EnquirySource } from "@/db/schema/enquiries";
+import type { ActionCtx } from "@/lib/auth/context";
+import {
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
+import {
+  callerHasPermission,
+  callerIsLegacySystem,
+} from "@/lib/services/resource-access";
+import type { MemberId } from "@/lib/ids";
+
+// The enquiry visibility rule and the shared row vocabulary.
+//
+// R04 (2026-10-13 role-workflow audit) — enquiry visibility.
+//
+// An enquiry belongs to a site (location_id). Non-management callers
+// (reception) see and act on located enquiries within their allowed
+// locations only; an unresolved enquiry (location_id IS NULL, e.g. a
+// historical row the backfill could not place) is visible and
+// actionable only through the management review path
+// (settings.manage holders) — missing location never means
+// unrestricted access. Management still respects location-scoped
+// memberships for located rows and keeps the unresolved queue.
+//
+// Every enquiry read in this service family resolves its visibility
+// through THESE two functions, so the rule cannot drift between the
+// list, the detail, the follow-ups, the pipeline and the aggregate.
+
+export type EnquiryScope = { management: boolean; predicate: SQL | undefined };
+
+export async function enquiryScope(tx: TenantTx, ctx: ActionCtx): Promise<EnquiryScope> {
+  const management =
+    callerIsLegacySystem(ctx) ||
+    (await callerHasPermission(tx, ctx, "settings.manage"));
+  const access = await resolveLocationAccess(tx, ctx);
+
+  if (access.unrestricted) {
+    // Management keeps every located row plus the unresolved queue;
+    // a non-management unrestricted caller still never sees
+    // unresolved records.
+    return { management, predicate: management ? undefined : isNotNull(enquiries.locationId) };
+  }
+
+  const located =
+    access.locationIds.length > 0
+      ? inArray(enquiries.locationId, access.locationIds)
+      : sql`false`;
+  return {
+    management,
+    predicate: management
+      ? or(located, isNull(enquiries.locationId))
+      : and(isNotNull(enquiries.locationId), located),
+  };
+}
+
+export function enquiryConditions(ctx: ActionCtx, predicate: SQL | undefined, extra: SQL[] = []): SQL[] {
+  const conditions: SQL[] = [
+    eq(enquiries.tenantId, ctx.tenantId),
+    isNull(enquiries.deletedAt),
+    ...extra,
+  ];
+  if (predicate) conditions.push(predicate);
+  return conditions;
+}
+
+export type VisibleEnquiry = {
+  id: string;
+  stage: string;
+  memberId: MemberId | null;
+  trialBatchId: string | null;
+  fullName: string;
+  phone: string | null;
+  locationId: string | null;
+};
+
+export async function visibleEnquiry(
+  tx: TenantTx,
+  ctx: ActionCtx,
+  enquiryId: string,
+): Promise<VisibleEnquiry | null> {
+  const { predicate } = await enquiryScope(tx, ctx);
+  const [row] = await tx
+    .select({
+      id: enquiries.id,
+      stage: enquiries.stage,
+      memberId: enquiries.memberId,
+      trialBatchId: enquiries.trialBatchId,
+      fullName: enquiries.fullName,
+      phone: enquiries.phone,
+      locationId: enquiries.locationId,
+    })
+    .from(enquiries)
+    .where(and(...enquiryConditions(ctx, predicate, [eq(enquiries.id, enquiryId)])))
+    .limit(1);
+  return row ?? null;
+}
+
+// The row shape every enquiry read returns. The mapper lives here so
+// the capture path and the read paths cannot drift apart on what a
+// caller sees.
+export type EnquiryRow = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  source: EnquirySource;
+  stage: EnquiryStage;
+  memberId: MemberId | null;
+  locationId: string | null;
+  createdAt: Date;
+};
+
+type EnquiryRowSource = {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  source: string;
+  stage: string;
+  memberId: MemberId | null;
+  locationId: string | null;
+  createdAt: Date;
+};
+
+export function toEnquiryRow(row: EnquiryRowSource): EnquiryRow {
+  return {
+    id: row.id,
+    fullName: row.fullName,
+    phone: row.phone,
+    source: row.source as EnquirySource,
+    stage: row.stage as EnquiryStage,
+    memberId: row.memberId,
+    locationId: row.locationId,
+    createdAt: row.createdAt,
+  };
+}

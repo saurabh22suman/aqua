@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import type { OwnerChartProps } from "./echarts-owner";
+import { useTheme } from "@/components/theme/theme-provider";
 
 // Mount gate for the owner Home charts. The engine is pulled in only at
 // lg+; below that the panels keep their server-rendered data tables, so
@@ -17,6 +18,7 @@ const OwnerChart = dynamic(() => import("./echarts-owner"), {
 
 export function OwnerChartIsland(props: OwnerChartProps) {
   const [desktop, setDesktop] = useState(false);
+  const { theme } = useTheme();
 
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
@@ -28,5 +30,7 @@ export function OwnerChartIsland(props: OwnerChartProps) {
   }, []);
 
   if (!desktop) return null;
-  return <OwnerChart {...props} />;
+  // Canvas colours are resolved at draw time; remount when the preset
+  // changes so the canvas follows the same palette as the SVG and legend.
+  return <OwnerChart key={theme} {...props} />;
 }

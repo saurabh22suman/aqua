@@ -16,6 +16,26 @@ export const INSTALL_DISMISSAL_KEY = "aqua.pwa.install.dismissed";
 export const INSTALL_DISMISSAL_DAYS = 30;
 export const INSTALL_DISMISSAL_WINDOW_MS = INSTALL_DISMISSAL_DAYS * 24 * 60 * 60 * 1000;
 
+/**
+ * When the offer is remembered as "already shown" for this tab session.
+ * A dismissal (localStorage) survives a month; this one only stops the
+ * offer from ambushing the same person twice in one session.
+ */
+export const INSTALL_OFFER_SHOWN_KEY = "aqua.pwa.install.offered";
+
+/**
+ * The offer's timing. It arrives late enough that it does not ambush
+ * the first interaction, and it leaves again on its own so it never
+ * sits over the content waiting to be dismissed (the coordinator's
+ * browser review measured the old offer covering three of nine visible
+ * member rows at 390x844).
+ */
+export const INSTALL_OFFER_DELAY_MS = 4000;
+export const INSTALL_OFFER_VISIBLE_MS = 10000;
+
+/** How long the "installed" confirmation stays up. */
+export const INSTALL_CONFIRMATION_MS = 4000;
+
 export type InstallAvailability =
   | "browser-prompt" // Chromium offered its own install event
   | "ios-guide" // iOS/iPadOS: Add to Home Screen guidance
@@ -54,6 +74,46 @@ export function isInstallableSurface(pathname: string): boolean {
   if (pathname === "/ops" || pathname.startsWith("/ops/")) return false;
   if (pathname === "/p" || pathname.startsWith("/p/")) return false;
   return true;
+}
+
+/**
+ * Surfaces where the install OFFER (the visible invitation) makes
+ * sense. This is narrower than the surfaces that may carry the
+ * manifest link:
+ *
+ *   * the sign-in journey — a person who has not signed in yet is
+ *     trying to get in, not to install an app, and the offer must
+ *     never sit on the sign-in form;
+ *   * the operator console — not an installable app at all;
+ *   * the parent surfaces — a parent link is a credential, and the
+ *     signed-in parent home is a read-only view of one child.
+ */
+export function isInstallInvitationSurface(pathname: string): boolean {
+  if (!isInstallableSurface(pathname)) return false;
+  if (pathname === "/login" || pathname.startsWith("/login/")) return false;
+  if (pathname === "/set-pin" || pathname.startsWith("/set-pin/")) return false;
+  if (pathname === "/parent" || pathname.startsWith("/parent/")) return false;
+  return true;
+}
+
+/** Has the offer already been shown in this tab session? */
+export function offerShownThisSession(storage: Storage | null | undefined): boolean {
+  if (!storage) return false;
+  try {
+    return storage.getItem(INSTALL_OFFER_SHOWN_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/** Remember that the offer has been shown in this tab session. */
+export function rememberOfferShown(storage: Storage | null | undefined): void {
+  if (!storage) return;
+  try {
+    storage.setItem(INSTALL_OFFER_SHOWN_KEY, String(Date.now()));
+  } catch {
+    // Storage failures are not worth an error.
+  }
 }
 
 /** Has the dismissal aged out? */

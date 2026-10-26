@@ -21,6 +21,21 @@ import { join } from "node:path";
 const ROOT = process.cwd();
 const MIN_RATIO = 3;
 
+// The surfaces a control can be drawn on. The canvas and the raised
+// surface are required: a stylesheet without them cannot be checked.
+// The pastel owner surfaces (the desktop sidebar, the metric tiles) and
+// the shared late surface are checked when the stylesheet declares
+// them — a focus ring on a pastel tile still has to be visible.
+const REQUIRED_SURFACES = ["--color-deck", "--color-paper"];
+const OPTIONAL_SURFACES = [
+  "--color-sidebar",
+  "--color-tile-money",
+  "--color-tile-info",
+  "--color-tile-butter",
+  "--color-late-soft",
+];
+const CONTROL_SURFACES = [...REQUIRED_SURFACES, ...OPTIONAL_SURFACES];
+
 type Preset = {
   /** "default" for :root, or the data-theme value. */
   name: string;
@@ -230,14 +245,22 @@ export function checkFocusContrast(source: string): FocusContrastReport {
       continue;
     }
 
-    for (const surfaceToken of ["--color-deck", "--color-paper"]) {
-      const surfaceValue = preset.props.get(surfaceToken) ?? base.get(surfaceToken);
-      if (!surfaceValue) {
-        problems.push(
-          `preset "${preset.name}" has no ${surfaceToken} (neither in the preset nor in @theme) — the contrast cannot be evaluated`,
-        );
+    for (const surfaceToken of CONTROL_SURFACES) {
+      const declared = preset.props.get(surfaceToken) ?? base.get(surfaceToken);
+      if (!declared) {
+        // A required surface that the preset does not declare cannot be
+        // evaluated — that is a broken stylesheet, not an unused token.
+        if (REQUIRED_SURFACES.includes(surfaceToken)) {
+          problems.push(
+            `preset "${preset.name}" has no ${surfaceToken} (neither in the preset nor in @theme) — the contrast cannot be evaluated`,
+          );
+        }
+        // An optional surface (a pastel tile, the sidebar) that the
+        // stylesheet does not declare at all is simply not painted on
+        // that preset; there is nothing to compare.
         continue;
       }
+      const surfaceValue = declared;
       const surface = parseColour(surfaceValue);
       if (!surface) {
         problems.push(
