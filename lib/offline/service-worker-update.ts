@@ -51,8 +51,8 @@ export type UpdateWatcher = { dispose: () => void };
  *
  * The browser fires "updatefound" while the new worker is still
  * INSTALLING; the worker only becomes the waiting one afterwards. So
- * the installing worker's state is watched as well — "installed" and
- * "waiting" both mean an update is available.
+ * the installing worker's state is watched as well. An update is ready
+ * only when the registration actually exposes a waiting worker.
  *
  * `dispose` removes every listener this watcher added, from the exact
  * objects it added them to. A stale registration must not keep a
@@ -75,7 +75,7 @@ export function watchForUpdate(
       // activating → activated; the browser exposes the installed one as
       // the registration's `waiting` worker. "installed" is therefore the
       // moment an update becomes available.
-      if (installing.state === "installed" || installing.state === "activated") {
+      if (installing.state === "installed" && registration.waiting === installing) {
         onUpdateAvailable();
       }
     };
@@ -84,6 +84,8 @@ export function watchForUpdate(
   };
 
   registration.addEventListener("updatefound", onUpdateFound);
+  // updatefound may have fired before the page attached its watcher.
+  onUpdateFound();
 
   return {
     dispose: () => {

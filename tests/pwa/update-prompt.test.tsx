@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { UpdatePrompt } from "@/components/pwa/update-prompt";
 import { installFakeIndexedDB } from "../offline/fake-indexeddb";
@@ -166,6 +166,31 @@ describe("the update prompt", () => {
     sw.promoteToWaiting(installing);
 
     expect(await screen.findByText(/new version/i)).toBeTruthy();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("observes a worker that was already installing when the page mounted", async () => {
+    const sw = installFakeServiceWorker({ waiting: false });
+    const installing = sw.startUpdate();
+    render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+    await act(async () => sw.promoteToWaiting(installing));
+
+    expect(await screen.findByText(/new version/i)).toBeTruthy();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("does not advertise a worker that activates without waiting for an update", async () => {
+    const sw = installFakeServiceWorker({ waiting: false });
+    render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+    const installing = sw.startUpdate();
+    await act(async () => {
+      installing.setState("installed");
+      installing.setState("activated");
+    });
+
+    expect(screen.queryByText(/new version/i)).toBeNull();
     expect(reload).not.toHaveBeenCalled();
   });
 

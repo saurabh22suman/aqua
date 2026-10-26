@@ -34,8 +34,9 @@ split, recursive service scanner and CI-runtime optimization.
   wall-clock sensitivity; change test isolation, not the product booking policy.
 - Track load-sensitive integration setup/property-test timing explicitly; do not
   skip assertions to make CI green.
-- Extend update-lifecycle coverage to a worker already installing when the page
-  attaches its watcher. Verify first-install and update behavior separately.
+- Preserve update-lifecycle coverage for workers already installing at mount
+  and first installs that activate without waiting. Physical-device behavior
+  remains a separate verification task.
 - Decide the access-control entitlement/device-authentication contract before
   exposing the internal mock gate services through any endpoint. Keep the
   dedicated gate-secret provisioning requirement explicit.
