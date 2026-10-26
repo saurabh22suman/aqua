@@ -3,7 +3,7 @@
 `AGENTS.md` symlinks to this file; edit `CLAUDE.md` to update both.
 
 ## Read before changing
-- Execute `docs/implementation-plan.md` tasks in dependency order, one at a time;
+- Execute `docs/implementation-plan.md` tasks in dependency order, one at a time per session;
   use the existing `execute-task` skill for numbered tasks.
 - Read the task's sections in `docs/architecture.md`; use `docs/project-scope.md`
   for scope/pricing decisions and `DESIGN.md` for every UI task.
@@ -11,6 +11,16 @@
   Next.js is **15.5.24**; do not apply Next 16 cache-components/proxy guidance.
 - Setup, tooling provenance and OpenCode shortcuts: `docs/opencode-development.md`.
   Read `db/CLAUDE.md` before data-layer work.
+
+## Mandatory engineering method
+- Human requires strict red–green–refactor TDD, secure SDLC and SOLID for all
+  development. Read docs/engineering-standard.md and load aqua-tdd-secure BEFORE
+  implementation. Record actual intended RED before production edits, GREEN,
+  refactor verification and relevant negative/security cases. Do not fabricate
+  RED for inherited code or substitute import errors/green snapshots for it.
+- For the current redesign read docs/design-system/README.md and delivery.md.
+  Two light themes only; mobile-first except ops; no heavy motion library or
+  experimental framework migration. Preserve scoped offline security.
 
 ## Development and verification
 - Node **22** (`.nvmrc`), pnpm **11.22.0** (`packageManager`); install with
@@ -72,18 +82,35 @@
 - Verify owner at **390×844 and 1280×900**; coach/reception at **390×844**;
   ops at **1280×900**. Parent `/p/[token]` stays zero-JS: verify the production
   artifact with `pnpm e2e:parent-link-zero-js`, not a dev-server assertion.
-- Before trusting UI failures, unregister the offline service worker and clear
-  browser caches; cached chunks can survive sessions.
+- For UI implementation/review load `aqua-ui-quality` and follow
+  `docs/ui-quality-contract.md`. Verify long-page scrolling, short viewports,
+  shared-shell parity and actual rendered styles, not just JSX classes.
+- Diagnose stale assets using the served artifact and an isolated clean build.
+  Do not clear a user browser profile or service-worker/offline data as a routine
+  prerequisite; use an isolated test context and preserve unsynced user work.
 
 ## Workflow and stop conditions
-- Feature branch per change; no direct commits to `main`. PRs target `main`
-  and require green **ci + agent-protected-paths on the PR itself**.
-- **Human merges only.** Never self-apply `human-approved-merge`; the token can
-  technically do so, but that defeats the gate. The workflow is the source for
-  protected paths (including `tests/tier1/**`); agents must not write tier1 tests.
-- Ask before adding a dependency, an unplanned table/column, changing a completed
-  schema/architecture decision, or exceeding a bundle budget; also stop when
-  money, isolation, consent or children's-data requirements are ambiguous.
-- `DEMO_MODE` permits synthetic seeding/banner only, never service/DB branches.
-  Production serving rejects it. `pnpm db:reset` drops the schema; ask before
-  using it on a non-disposable DB or changing demo boot/seed/reset safeguards.
+- Active integration branch: **develop**. New feature/fix branches start from
+  the latest verified develop; feature PRs target develop. No direct work on
+  main or develop. See `docs/agent-workflow.md` and load `aqua-parallel-work`
+  before coordinating multiple sessions or integrating a branch.
+- Only the human promotes tested develop to main. Feature agents must not merge
+  their own PRs, enable auto-merge, self-apply approval labels or deploy. A
+  designated integrator merges to develop only when explicitly assigned and
+  after independent review and required checks; no approval bypasses.
+- Commit/push/PR creation require task authorization; a skill saying “commit”
+  is not authorization. Preserve unrelated dirty work and never use git add .
+- Parallel writers use separate worktrees, file ownership and isolated DBs,
+  build outputs and ports. Shared shell/tokens/primitives have one owner.
+- Required CI and agent-protected-paths apply to the PR itself. Preserve human
+  ownership of tests/tier1/** and existing protected paths. Instructions are
+  not GitHub branch protection; never claim enforcement without verifying it.
+- Ask before an unapproved dependency, schema/architecture decision or bundle
+  budget exception. Existing task authorization takes precedence over generic
+  skill stop levels; stop on unresolved money, isolation, consent or child-data
+  ambiguity, not merely because a file belongs to one of those domains.
+- DEMO_MODE permits synthetic seeding/banner only, never service/DB branches.
+  Never reset a non-disposable DB without explicit authorization.
+- Functional checks, visual acceptance and human design approval are separate.
+  Report CHANGES REQUIRED for visible shell/spacing/overflow failures even when
+  tests pass. Do not call uncommitted code “shipped” or “deployed”.

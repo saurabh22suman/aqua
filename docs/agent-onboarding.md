@@ -5,6 +5,14 @@ and pick back up with only what's on disk and in your task description.
 This file exists so that "no memory" still means "no dangerous
 mistakes" — read it before touching anything.
 
+## Current workflow precedence
+
+The latest human assignment and root AGENTS.md govern current scope, branch
+rules and authorization. New feature PRs target develop; only the human promotes
+tested develop to main. Historical task text saying “commit” or “merge” is not
+permission. Keep independent writers in separate worktrees with explicit file
+ownership. Do not start the next design phase during cleanup/tooling work.
+
 ## Read, in this order
 
 1. **This file.** All of it, before any tool call that changes state.
@@ -20,17 +28,16 @@ mistakes" — read it before touching anything.
 4. **The `execute-task` skill** (`.claude/skills/execute-task/SKILL.md`
    if you're Claude Code; otherwise ask how skills are invoked in your
    environment). It defines the stop levels (GREEN/AMBER/RED) and the
-   build-verify-commit loop. Follow it exactly; it is rigid by design.
-5. **`DESIGN.md`** and `docs/sports-club-ui-direction.html` — required
-   before writing or touching any UI, not optional background reading.
-   DESIGN.md itself says why both files, not just the token file, are
-   required.
+   build-verify-commit loop. Apply it within the current task authorization and root instructions.
+5. **`DESIGN.md`** and the current human-approved design brief — required
+   before UI work. `docs/sports-club-ui-direction.html` is historical visual
+   context, not a replacement for the selected Mint Garden/Lavender Club direction.
 6. **`db/CLAUDE.md`** — required before writing or touching any query.
    The single sanctioned accessor (`withTenant()`), what happens when
    scoping is wrong (zero rows, not an error), and the migration
    invariants.
-7. **`docs/testing-strategy.md` §"Tier 1"** — the fifteen named test
-   files you may never edit, and why mutation testing exists at all.
+7. **`docs/testing-strategy.md` §"Tier 1"** — protected safety contracts
+   and mutation evidence. All tests/tier1/** require human authorization.
 8. **`docs/review-checklist.md`** — what a human reviewer will actually
    check before merging your PR. If you can satisfy this yourself
    before opening the PR, do.
@@ -44,9 +51,9 @@ not always know you need them until after the mistake.
   (`pnpm db:new-migration <name>`, see `docs/agent-lanes.md` / M1).
 - **Never write a file under `db/migrations/` if you're not in the
   schema lane.** Not mechanically blocked — see the table below.
-- **Never edit the fifteen canonical Tier 1 test files** named in
-  `docs/testing-strategy.md`. Non-canonical files under `tests/tier1/`
-  (safety-net tests written by prior agents) are fine to edit.
+- **Never edit tests/tier1/** without explicit human authorization.
+  The directory is protected; an old list of fifteen canonical files is not
+  permission to change other files within it.
 - **Never import `@/db/client` (or a relative path that resolves to
   it) outside `db/`.** Mechanically enforced, see below.
 - **Never run a destructive git command
@@ -100,7 +107,7 @@ distinction is drawn from).
 | `--accent` never inside a status/state style | `tests/tier1/hardcoded-brand-color.test.ts` (vitest source-scan, NOT a lint rule — see DESIGN.md §1.2. F4 audit correction: the previous table said "dedicated lint rule"; it is a vitest test that scans `app/` and `components/` for Tailwind classes like `bg-mango` / `text-indigo`. Same mechanical guarantee as a lint rule, just running under `pnpm test` instead of `pnpm lint`. The misnaming stopped the next agent from looking.) |
 | A new tenant-scoped table without RLS | F-08a's catch-all query over `pg_class`, no per-table test needed |
 | No direct push to `main`; every change arrives by PR with `ci` and `agent-protected-paths` green | Repository ruleset `main protection` (active 2026-09-04), `strict_required_status_checks_policy: true`, `bypass_actors: []`. Covers the *mechanics* of merging only — see the memory-dependent table for what it does not cover |
-| A PR touching `db/migrations/**`, `lib/auth/**`, `lib/money/**` or consent paths cannot merge without a `human-approved-merge` label | `.github/workflows/agent-protected-paths.yml` (required status check) + `tests/tier1/agent-protected-paths.test.ts`. The agent's own token cannot apply the label, so this one is genuinely un-bypassable from the agent side |
+| A PR touching `db/migrations/**`, `lib/auth/**`, `lib/money/**` or consent paths cannot merge without a `human-approved-merge` label | `.github/workflows/agent-protected-paths.yml` (required status check) + `tests/tier1/agent-protected-paths.test.ts`. A shared token may technically apply the label; agents must never do so. This check is not an independent approval boundary |
 
 | Memory-dependent — discipline only | Why nothing catches it |
 |---|---|

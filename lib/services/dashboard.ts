@@ -7,6 +7,7 @@ import { memberFacilityOptins } from "@/db/schema/facility-optins";
 import { tenants } from "@/db/schema/tenants";
 import { batches, programs } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
+import { invoices } from "@/db/schema/invoices";
 import { todayInZone, addDays } from "@/lib/time/tz";
 import { listOverdueFollowUps } from "@/lib/services/enquiries";
 import { getDailyCollection } from "@/lib/services/reconciliation";
@@ -17,7 +18,7 @@ import {
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
-import { formatINR } from "@/lib/money/format";
+import { formatINR, formatINRCompact } from "@/lib/money/format";
 import type { ActionCtx } from "@/lib/auth/context";
 
 export type NeedsAttentionItem = {
@@ -27,13 +28,30 @@ export type NeedsAttentionItem = {
 };
 
 export type TodaysLane = {
+  sessionId: string;
   batchId: string;
   batchName: string;
   programName: string;
   startTime: string;
   enrolled: number;
   capacity: number;
+  // Who is taking it. The owner reviews the day; a class with no name
+  // against it is a class they cannot act on.
+  coachName: string | null;
+  // Register state for this session: how many swimmers were marked out
+  // of how many were expected. COMPLETION, not attendance — "marked"
+  // counts a mark of any status, and the denominator is the distinct
+  // swimmers enrolled. Labelling this as attendance would be a
+  // different (and wrong) claim.
+  marked: number;
+  started: boolean;
 };
+
+// The next class after now — the answer to "nothing today" that is
+// still useful. The owner wants to know WHEN they next see swimmers,
+// and with whom: a class with no coach or capacity stated is a class
+// they cannot plan around.
+
 
 // The next class after now — the answer to "nothing today" that is
 // still useful. The owner wants to know WHEN they next see swimmers.
@@ -44,6 +62,9 @@ export type NextClass = {
   startTime: string;
   startsAt: Date;
   sessionDate: string;
+  coachName: string | null;
+  enrolled: number;
+  capacity: number;
 };
 
 export type FacilityBreakdownRow = {
@@ -72,10 +93,17 @@ export type OwnerMoneySummary = {
   // The subset of those dues whose due date has already passed.
   overduePaise: number;
   overdueInvoiceCount: number;
+  // How long the oldest past-due invoice has been late — the age an
+  // attention row must state so "overdue" is not just a count.
+  oldestOverdueDays: number | null;
 };
 
 export type OwnerDashboardData = {
   tenantName: string;
+  // The facility the figures are narrowed to, named. Null means every
+  // location the caller may see (the header then says "All locations"
+  // only when there is more than one).
+  scopeLocationName: string | null;
   today: string; // ISO date, tenant-timezone "today" -- the same value every other query below is scoped to
   todayMarked: number;
   todayTotal: number;
@@ -193,7 +221,7 @@ export async function getOwnerDashboard(
       requestedLocationId ? { locationId: requestedLocationId } : {},
     ),
   ]);
-  const money: OwnerMoneySummary = {
+  const money: Omit<OwnerMoneySummary, "oldestOverdueDays"> = {
     collectedTodayPaise: dailyCollection.totalPaise,
     collectedTodayCount: dailyCollection.paymentCount,
     outstandingPaise: feesOverview.outstandingPaise,
@@ -204,6 +232,7 @@ export async function getOwnerDashboard(
 
   return withTenant(ctx.tenantId, async (tx) => {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
 
     // Every location-shaped read below intersects two predicates: the
     // caller's explicit facility choice (if any) and the enforced access
@@ -216,6 +245,27 @@ export async function getOwnerDashboard(
       if (accessPredicate) parts.push(accessPredicate);
       return parts.length === 0 ? undefined : and(...parts);
     };
+
+    // The age of the oldest past-due invoice — the attention row states
+    // it beside the amount so "overdue" carries when, not just how
+    // much. Same status/balance gates and location boundary as the
+    // Fees hub's dues figure, so the two cannot drift.
+    const [oldestOverdue] = await tx
+      .select({ dueOn: sql<string | null>`min(${invoices.dueOn})` })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.tenantId, ctx.tenantId),
+          inArray(invoices.status, ["issued", "partial"]),
+          sql`${invoices.totalPaise} > ${invoices.paidPaise}`,
+          sql`${invoices.dueOn} < ${today}`,
+          locationCondition(invoices.locationId),
+        ),
+      );
+    const oldestOverdueDays = oldestOverdue?.dueOn
+      ? Math.max(0, Math.round((Date.parse(today) - Date.parse(oldestOverdue.dueOn)) / 86_400_000))
+      : null;
+    const moneySummary: OwnerMoneySummary = { ...money, oldestOverdueDays };
 
     const memberOptinExists = (locationIds: string[]) =>
       exists(
@@ -296,6 +346,17 @@ export async function getOwnerDashboard(
         capacity: batches.capacity,
         marked: sql<number>`(select count(*)::int from ${attendance} a where a.session_id = ${sessions.id})`,
         enrolled: sql<number>`(select count(distinct e.member_id)::int from ${enrolments} e where e.batch_id = ${sessions.batchId} and e.tenant_id = ${ctx.tenantId})`,
+        // The coach's name, from the batch's assigned coach. A
+        // substitution changes the session's coach, so the session's
+        // own coach wins where it is set.
+        coachName: sql<string | null>`coalesce(
+          (select p.full_name from persons p
+             join staff st on st.person_id = p.id and st.tenant_id = ${ctx.tenantId}
+            where st.id = coalesce(${sessions.coachId}, ${batches.coachId})),
+          (select p.full_name from persons p
+             join staff st on st.person_id = p.id and st.tenant_id = ${ctx.tenantId}
+            where st.id = ${batches.coachId})
+        )`,
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
@@ -327,6 +388,16 @@ export async function getOwnerDashboard(
         startTime: batches.startTime,
         startsAt: sessions.startsAt,
         sessionDate: sessions.sessionDate,
+        capacity: batches.capacity,
+        enrolled: sql<number>`(select count(distinct e.member_id)::int from ${enrolments} e where e.batch_id = ${sessions.batchId} and e.tenant_id = ${ctx.tenantId})`,
+        coachName: sql<string | null>`coalesce(
+          (select p.full_name from persons p
+             join staff st on st.person_id = p.id and st.tenant_id = ${ctx.tenantId}
+            where st.id = coalesce(${sessions.coachId}, ${batches.coachId})),
+          (select p.full_name from persons p
+             join staff st on st.person_id = p.id and st.tenant_id = ${ctx.tenantId}
+            where st.id = ${batches.coachId})
+        )`,
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
@@ -350,6 +421,9 @@ export async function getOwnerDashboard(
           startTime: nextRow.startTime,
           startsAt: nextRow.startsAt,
           sessionDate: nextRow.sessionDate,
+          coachName: nextRow.coachName,
+          enrolled: nextRow.enrolled,
+          capacity: nextRow.capacity,
         }
       : null;
 
@@ -385,11 +459,17 @@ export async function getOwnerDashboard(
     // getFeesOverview the hub shows; the row states the amount and the
     // invoice count so the owner can decide, not just tally.
     if (money.overdueInvoiceCount > 0) {
+      // The row states the age as well as the amount: "overdue" is a
+      // decision only when the owner knows how late it is.
+      const lateAge =
+        oldestOverdueDays !== null
+          ? ` · oldest ${oldestOverdueDays} day${oldestOverdueDays === 1 ? "" : "s"} late`
+          : "";
       needsAttention.push({
         title: "Overdue fees",
-        detail: `${formatINR(money.overduePaise)} across ${money.overdueInvoiceCount} invoice${
+        detail: `${formatINRCompact(money.overduePaise)} across ${money.overdueInvoiceCount} invoice${
           money.overdueInvoiceCount === 1 ? "" : "s"
-        } past the due date`,
+        } past the due date${lateAge}`,
         href: "/owner/fees?tab=dues",
       });
     }
@@ -408,9 +488,10 @@ export async function getOwnerDashboard(
 
     for (const s of todaysSessions) {
       if (s.enrolled > 0 && s.marked === 0 && s.startsAt.getTime() < now) {
+        const minutesLate = Math.max(1, Math.floor((now - s.startsAt.getTime()) / 60_000));
         needsAttention.push({
           title: "Register not started",
-          detail: `${s.batchName} — session began, nothing marked yet`,
+          detail: `${s.batchName} — started ${minutesLate} min ago, nothing marked yet`,
           // PR3-C3 — every attention row links somewhere the owner can
           // look; the attendance report shows this batch's marks.
           href: "/owner/reports",
@@ -419,12 +500,16 @@ export async function getOwnerDashboard(
     }
 
     const todaysLanes: TodaysLane[] = todaysSessions.map((s) => ({
+      sessionId: s.sessionId,
       batchId: s.batchId,
       batchName: s.batchName,
       programName: s.programName,
       startTime: s.startTime,
       enrolled: s.enrolled,
       capacity: s.capacity,
+      coachName: s.coachName,
+      marked: s.marked,
+      started: s.startsAt.getTime() < now,
     }));
 
     // Attendance this week: present+late over total marks in the last
@@ -535,8 +620,15 @@ export async function getOwnerDashboard(
       };
     });
 
+    const scopeLocationName = requestedLocationId
+      ? (locationRows.find((l) => l.id === requestedLocationId)?.name ?? null)
+      : locationRows.length === 1
+        ? locationRows[0]!.name
+        : null;
+
     return {
       tenantName,
+      scopeLocationName,
       today,
       todayMarked,
       todayTotal,
@@ -544,9 +636,9 @@ export async function getOwnerDashboard(
       attendanceThisWeekPct,
       activeBatchCount,
       needsAttention,
-    nextClass,
       todaysLanes,
-      money,
+      nextClass,
+      money: moneySummary,
       facilityBreakdown,
     };
   });

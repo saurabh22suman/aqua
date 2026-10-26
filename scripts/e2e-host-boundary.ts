@@ -24,6 +24,10 @@
 //        - /parent          404
 //        - /p/anything      404
 //        - /check-in/…      404 (premises QR is a tenant surface)
+//        - /manifest.webmanifest 404 (the installable app's manifest
+//          is NOT served to the operator console — the console is not
+//          installable)
+//        - /icons/…         404 (same, for the manifest's icons)
 //
 //   2. From the apex:
 //        - /ops/login       404
@@ -31,6 +35,8 @@
 //        - /login           200 (or 307 to login)
 //        - /api/health      200
 //        - /check-in/…      200 (signed-out sign-in-first state)
+//        - /manifest.webmanifest 200 (the installable app's manifest)
+//        - /icons/…         200 (the manifest's icons)
 //
 //   3. The legacy `ops.<base>` shape still resolves to the platform
 //      surface — local development (ops.localhost) and any older
@@ -137,6 +143,11 @@ const PLATFORM_EXPECTATIONS: Expectation[] = [
   { path: "/api/offline/session", expect: 404, note: "offline identity NOT reachable" },
   { path: "/ops/api/whatsapp-auth", expect: 405, note: "ops OTP endpoint reachable, POST only" },
   { path: "/api/account/set-pin", expect: 404, note: "tenant set-PIN NOT reachable" },
+  // The installable tenant app: its manifest and its icons are public
+  // same-origin assets, and they must NOT be reachable from the
+  // operator console — the platform host is never installable.
+  { path: "/manifest.webmanifest", expect: 404, note: "install manifest NOT reachable on the platform host" },
+  { path: "/icons/aqua-192.png", expect: 404, note: "install icons NOT reachable on the platform host" },
 ];
 
 const APEX_EXPECTATIONS: Expectation[] = [
@@ -150,6 +161,10 @@ const APEX_EXPECTATIONS: Expectation[] = [
   { path: "/ops/api/whatsapp-auth", expect: 404, note: "ops OTP endpoint NOT reachable on apex" },
   { path: "/api/account/set-pin", expect: 405, note: "set-PIN reachable on apex (POST-only -> 405 on GET)" },
   { path: "/check-in/anything",   expect: 200, note: "premises check-in reachable on apex (signed-out sign-in-first state)" },
+  // The installable tenant app's manifest and icons must be reachable
+  // from the tenant apex, or the app can never be installed.
+  { path: "/manifest.webmanifest", expect: 200, note: "install manifest reachable on apex" },
+  { path: "/icons/aqua-192.png", expect: 200, note: "install icons reachable on apex" },
 ];
 
 // Both host shapes share the same dev server. The Host header is the

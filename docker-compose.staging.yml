@@ -1,0 +1,247 @@
+# Staging Compose deployment unit — a SEPARATE project on the same host.
+#
+# This file is the staging deployment unit for the Sportsip staging
+# environment. It is derived from docker-compose.dokploy.yml (the Dev
+# unit) and differs from it in exactly three ways: the project name, the
+# database volume name and the internal network name. Everything else —
+# the image reference, the required environment, the service set, the
+# wiring — is the same contract, so a staging deployment behaves like a
+# Dev deployment and fails the same way.
+#
+# WHY THE NAMES ARE PINNED (this is the whole point of this file):
+# two Compose projects on one Docker host share everything Docker
+# namespaces by NAME. If staging reused the Dev volume, a preview
+# deployment would silently write into the live pilot's database. So:
+#
+#   project name   sportsip-staging
+#   database volume sportsip-staging-pgdata   (never aqua-pgdata-dev)
+#   internal network sportsip-staging-internal (never aqua-dev-internal)
+#
+# Invariants enforced mechanically by
+# tests/scanner-fixtures/staging-isolation.test.ts:
+#   * the project, the volume and the network names collide with no other
+#     deployment unit in this repository;
+#   * the database is on the internal network only — never on Traefik's
+#     external network and never behind a published host port;
+#   * no host port is published at all; web is reached by Traefik over
+#     dokploy-network via `expose`;
+#   * the privileged migration URL reaches the one-shot migrate job and
+#     the manual backup profile only — never web, never worker, never db;
+#   * the image is the immutable GHCR reference, and a missing secret or
+#     a missing tag refuses the deploy instead of falling back.
+#
+# DEPLOYMENT NOTES
+#   * Configure it in Dokploy as its own "Docker Compose" service, with
+#     its own environment (start from docker-compose.staging.env.example).
+#   * Nothing publishes a host port, so there is no port to collide with
+#     anything else on the host.
+#   * WHATSAPP_CAPTURE_URL is REQUIRED here, unlike the Dev unit, which
+#     defaults it to the hosted mock. A staging deployment must not
+#     capture into another environment's mock inbox by accident; the
+#     coordinator sets the origin it actually wants.
+#   * The database starts empty. Use SEED_SPLASH_CLUB to seed the
+#     synthetic demo club — a demo reset means re-seeding this database,
+#     never resetting anyone else's.
+#
+# Every value below is referenced explicitly with ${VAR:?message}, so a
+# missing secret refuses the deploy instead of starting with a
+# placeholder. Never commit a real secret next to this file.
+
+name: sportsip-staging
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aqua
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: aqua
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aqua -d aqua"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # This volume is the staging database's only persistent state, and
+    # it is this project's own. It must never be the Dev volume.
+    volumes:
+      - sportsip-staging-pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+
+  # One-shot. Runs under the privileged `aqua` role: bootstrap roles,
+  # run migrations, ensure the pg-boss schema/queues/schedules, grant
+  # app_user. Exits 0 on success; web and worker wait for that exit.
+  # This is the ONLY place the privileged URL is meant to live (the
+  # manual backup profile below is the one other permitted holder).
+  migrate:
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "db/deploy.ts"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      # Synthetic demo club for a staging preview. The deploy step
+      # (migrate) seeds Splash Sports Club when this is true: owner,
+      # coach, receptionist, swimmers, a batch, a priced plan and a
+      # subscription. SEED_SPLASH_CLUB_PIN is the PIN the seeded staff
+      # sign in with — there is NO default, because a fixed credential
+      # on a reachable host is a credential everybody can use.
+      SEED_SPLASH_CLUB: ${SEED_SPLASH_CLUB:-false}
+      SEED_SPLASH_CLUB_PIN: ${SEED_SPLASH_CLUB_PIN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  web:
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node", "server.js"]
+    restart: unless-stopped
+    # Traefik reaches this port over dokploy-network; nothing is
+    # published on the host. `ports:` here would expose 3000 publicly.
+    expose:
+      - "3000"
+    environment:
+      # Next standalone binds HOSTNAME when set; without 0.0.0.0 the
+      # container binds its hostname only and the healthcheck below
+      # fails from inside the container.
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      # The platform (ops) host — the sibling of the staging apex that
+      # serves ONLY /ops/*. It is NOT a subdomain of the apex, so the app
+      # cannot infer it: name it here. It must differ from the apex host
+      # above and must not be any other environment's ops host.
+      OPS_HOST: ${OPS_HOST:?set OPS_HOST}
+      # The env operator door (db/platform-auth-env.ts): the platform
+      # login's email + password live in the deployment's environment,
+      # the session is created fully authenticated, and no TOTP or a
+      # registered operator phone is needed to get into /ops. Both must
+      # be set (lib/env.ts refuses one without the other), and the
+      # password needs at least 12 characters.
+      OPS_EMAIL: ${OPS_EMAIL:?set OPS_EMAIL}
+      OPS_PASSWORD: ${OPS_PASSWORD:?set OPS_PASSWORD}
+      NODE_ENV: production
+      DEMO_MODE: "false"
+      OFFLINE_SYNC_ENABLED: ""
+      # Mocked messaging only. The capture transport speaks the WhatsApp
+      # Cloud API shape against a mock origin, so no message is ever
+      # delivered to a real person. The preview stage makes the
+      # deployment SAY SO on every page instead of pretending messages
+      # were delivered.
+      #
+      # The capture ORIGIN is required (no default) so this deployment
+      # cannot capture into another environment's mock inbox by
+      # accident. Set it to the origin you actually want.
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-capture}
+      AQUA_DEPLOYMENT_STAGE: ${AQUA_DEPLOYMENT_STAGE:-preview}
+      WHATSAPP_CAPTURE_URL: ${WHATSAPP_CAPTURE_URL:?set WHATSAPP_CAPTURE_URL}
+      WHATSAPP_CAPTURE_AUTH_HEADER: ${WHATSAPP_CAPTURE_AUTH_HEADER:-}
+      WHATSAPP_CAPTURE_AUTH_VALUE: ${WHATSAPP_CAPTURE_AUTH_VALUE:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+      - dokploy-network
+
+  # Exactly one worker. pg-boss locks a job to one consumer, but retries
+  # can still redeliver work. Do not add deploy.replicas, scale, or
+  # Swarm mode here.
+  worker:
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "worker/index.ts"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      AUDIT_CHECKPOINT_SECRET: ${AUDIT_CHECKPOINT_SECRET:?set AUDIT_CHECKPOINT_SECRET}
+      NODE_ENV: production
+      # The worker is what actually delivers tenant notifications, so it
+      # needs the same messaging configuration as web. Without it the
+      # worker resolves the production default (disabled) and every
+      # queued notification fails.
+      WHATSAPP_PROVIDER: ${WHATSAPP_PROVIDER:-capture}
+      AQUA_DEPLOYMENT_STAGE: ${AQUA_DEPLOYMENT_STAGE:-preview}
+      WHATSAPP_CAPTURE_URL: ${WHATSAPP_CAPTURE_URL:?set WHATSAPP_CAPTURE_URL}
+      WHATSAPP_CAPTURE_AUTH_HEADER: ${WHATSAPP_CAPTURE_AUTH_HEADER:-}
+      WHATSAPP_CAPTURE_AUTH_VALUE: ${WHATSAPP_CAPTURE_AUTH_VALUE:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+  # Run only from the tracked host timer or an operator's explicit
+  # `docker compose --profile backup run --rm backup`. Not started by a
+  # normal deploy. The privileged URL never reaches web/worker.
+  #
+  # The backup holds the privileged connection because pg_dump needs a
+  # privileged role to dump the whole database; scripts/db-backup.ts
+  # documents that requirement. It is a dormant, one-shot, operator-run
+  # job — never a long-running service.
+  backup:
+    profiles: [backup]
+    image: ghcr.io/saurabh22suman/aqua:${AQUA_IMAGE_TAG:?set AQUA_IMAGE_TAG}
+    pull_policy: always
+    command: ["node_modules/.bin/tsx", "scripts/db-backup.ts", "--retain", "30"]
+    restart: "no"
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://aqua:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/aqua
+      DATABASE_URL: postgresql://app_login:${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}@db:5432/aqua
+      APP_LOGIN_PASSWORD: ${APP_LOGIN_PASSWORD:?set APP_LOGIN_PASSWORD}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:?set BETTER_AUTH_URL}
+      PARENT_LINK_SECRET: ${PARENT_LINK_SECRET:?set PARENT_LINK_SECRET}
+      R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:?set R2_ACCOUNT_ID}
+      R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:?set R2_ACCESS_KEY_ID}
+      R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:?set R2_SECRET_ACCESS_KEY}
+      R2_BUCKET: ${R2_BUCKET:?set R2_BUCKET}
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+volumes:
+  # Named volume, pinned so Dokploy project naming can never rename it
+  # and so it can never collide with another deployment unit's volume.
+  # This is the database's only persistent state.
+  sportsip-staging-pgdata:
+    name: sportsip-staging-pgdata
+
+networks:
+  # Application-internal network: db/migrate/worker/web talk here. It
+  # belongs to this project alone — no other unit's network name.
+  internal:
+    name: sportsip-staging-internal
+  # Dokploy's existing Traefik network. web joins it so the Compose
+  # Domains tab can inject routing labels; db, migrate, worker and
+  # backup stay off it.
+  dokploy-network:
+    external: true

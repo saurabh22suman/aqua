@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Aqua screen previews — wireframes of the screen contracts</title>
+<!--
+  Self-contained wireframe preview for the screen-contracts lane.
+
+  Not shipped product code. It lives in docs/ and is never served by the
+  application. No JavaScript, no network requests, no external fonts: the
+  file must render identically offline.
+
+  The colours below are COPIES of the values in app/globals.css, which is
+  the source of truth. They are not a new palette. Every block is labelled
+  instead of filled with a value: a preview never invents tenant data.
+-->
+<style>
+  :root {
+    --deck: #EDF0EC;
+    --paper: #FFFFFF;
+    --ink: #0F1F1C;
+    --ink-2: #3C534F;
+    --ink-3: #5B6F6B;
+    --marine: #0D3B36;
+    --water: #0E7C86;
+    --water-soft: #E3F1F2;
+    --line: rgba(15, 31, 28, 0.1);
+    --good: #1F7A43;
+    --good-soft: #E4F4EA;
+    --late: #B2332B;
+    --late-soft: #FCE9E7;
+    --warn: #8F5400;
+    --warn-soft: #FDF0DC;
+    --accent: #FF7A18;
+    --accent-soft: #FFEEE1;
+    --accent-ink: #B84E00;
+    --radius-card: 20px;
+    --radius-ctl: 14px;
+    --radius-pill: 9999px;
+    --shadow-1: 0 1px 2px rgba(15, 31, 28, 0.05);
+    --shadow-2: 0 2px 6px rgba(15, 31, 28, 0.05), 0 14px 32px rgba(15, 31, 28, 0.08);
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px 24px 96px;
+    background: var(--deck);
+    color: var(--ink);
+    font: 14px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  h2 { font-size: 18px; margin: 0 0 2px; }
+  h3 { font-size: 13px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); }
+  p  { margin: 0 0 10px; }
+  .lede { color: var(--ink-2); max-width: 78ch; }
+  .warn {
+    margin: 16px 0 32px; padding: 12px 14px; max-width: 96ch;
+    background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-ctl);
+  }
+
+  .preview {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card);
+    padding: 20px; margin: 0 0 28px; box-shadow: var(--shadow-1);
+  }
+  .preview > header { margin-bottom: 14px; }
+  .route { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+  .frames { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .frame { margin: 0; min-width: 0; max-width: 100%; }
+  .frame > figcaption {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: var(--ink-3); margin-bottom: 6px;
+  }
+  .viewport {
+    overflow-x: auto; background: var(--deck); border: 1px solid var(--line);
+    border-radius: var(--radius-ctl); padding: 14px; max-width: 100%;
+  }
+
+  /* --- the screens ---------------------------------------------------- */
+  .screen {
+    background: var(--deck); color: var(--ink); overflow: hidden; position: relative;
+  }
+  .w390 { width: 390px; min-height: 844px; border-radius: 18px; }
+  .w1280 { width: 1280px; min-height: 900px; border-radius: 12px; }
+
+  .pad { padding: 16px; }
+  .pad-lg { padding: 24px 32px; }
+
+  .blk {
+    position: relative; background: var(--paper); border: 1px solid var(--line);
+    border-radius: var(--radius-ctl); padding: 10px 12px; margin-bottom: 10px;
+    color: var(--ink-2); font-size: 12px;
+  }
+  .blk:last-child { margin-bottom: 0; }
+  .t { color: var(--ink); font-weight: 600; display: block; margin-bottom: 2px; }
+  .s { display: block; font-size: 11px; color: var(--ink-3); }
+  .blk.accent { background: var(--accent-ink); color: #fff; border-color: var(--accent-ink); }
+  .blk.accent .t, .blk.accent .s { color: #fff; }
+  .blk.dark { background: var(--marine); color: #fff; border-color: var(--marine); }
+  .blk.dark .t { color: #fff; }
+  .blk.dark .s { color: rgba(255,255,255,.75); }
+  .blk.soft { background: var(--water-soft); border-color: transparent; }
+  .blk.warnb { background: var(--warn-soft); border-color: transparent; color: var(--warn); }
+  .blk.goodb { background: var(--good-soft); border-color: transparent; color: var(--good); }
+  .blk.lateb { background: var(--late-soft); border-color: transparent; color: var(--late); }
+
+  .row { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .divided > .row { padding: 9px 0; }
+  .strip { height: 6px; border-radius: var(--radius-pill); background: var(--deck); margin-top: 6px; overflow: hidden; }
+  .strip > i { display: block; height: 100%; background: var(--water); }
+  .strip.warn > i { background: var(--warn); }
+  .strip.late > i { background: var(--late); }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .split60 { display: grid; grid-template-columns: minmax(0,3fr) minmax(0,2fr); gap: 14px; align-items: start; }
+  .split40 { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,3fr); gap: 14px; align-items: start; }
+
+  .topbar {
+    background: var(--paper); border-bottom: 1px solid var(--line);
+    padding: 12px 16px 12px 26px; font-size: 12px; color: var(--ink-3);
+  }
+  .bottomnav {
+    position: absolute; left: 0; right: 0; bottom: 0; background: var(--paper);
+    border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4,1fr);
+    padding: 10px 0 14px; text-align: center; font-size: 11px; color: var(--ink-3);
+  }
+  .bottomnav b { display: block; color: var(--accent-ink); font-weight: 600; }
+  .bottomnav .on { color: var(--accent-ink); font-weight: 600; }
+
+  .sidebar {
+    width: 240px; flex: none; background: var(--paper); border-right: 1px solid var(--line);
+    padding: 16px 12px; font-size: 12px; color: var(--ink-2);
+  }
+  .sidebar.dark { background: var(--marine); color: rgba(255,255,255,.8); border-right-color: rgba(255,255,255,.12); }
+  .sidebar .grp { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-3); margin: 14px 8px 4px; }
+  .sidebar.dark .grp { color: rgba(255,255,255,.5); }
+  .sidebar .it { padding: 10px 8px; border-radius: var(--radius-ctl); }
+  .sidebar .it.on { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+  .sidebar.dark .it.on { background: rgba(255,255,255,.1); color: #fff; }
+  .shell { display: flex; min-height: 900px; }
+  .main { flex: 1; min-width: 0; padding: 20px 32px 32px; }
+
+  .parentpage { width: 560px; background: var(--deck); padding: 24px 16px 40px; }
+  .parentpage .card { position: relative; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-card); padding: 20px; margin-bottom: 14px; }
+
+  /* --- callouts ------------------------------------------------------- */
+  .n {
+    position: absolute; top: -7px; left: -7px; width: 17px; height: 17px; border-radius: 50%;
+    background: var(--marine); color: #fff; font-size: 10px; line-height: 17px; text-align: center;
+    font-weight: 700; border: 2px solid var(--paper);
+  }
+  .notes { flex: 1 1 320px; min-width: 300px; }
+  .notes dl { margin: 0; }
+  .notes dt {
+    font-weight: 600; font-size: 12px; margin-top: 8px; display: flex; gap: 6px; align-items: baseline;
+  }
+  .notes dt i {
+    font-style: normal; background: var(--marine); color: #fff; border-radius: 50%;
+    width: 16px; height: 16px; font-size: 10px; line-height: 16px; text-align: center; flex: none;
+  }
+  .notes dd { margin: 2px 0 0 22px; color: var(--ink-2); font-size: 12px; }
+  .tag {
+    display: inline-block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+    border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 2px 8px; color: var(--ink-3);
+    margin-right: 6px;
+  }
+  .kbd { font-family: var(--mono); font-size: 11px; background: var(--deck); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Aqua screen previews</h1>
+  <p class="lede">
+    Wireframes of the screens specified in <code>docs/design-system/screens.md</code>.
+    They show composition, order and proportion — the block that dominates, what is a row,
+    what is a sheet, where the scroll is. They are not final styling, and they are not
+    evidence that a screen has been implemented.
+  </p>
+  <div class="warn">
+    Every block is labelled instead of filled with a value. A preview never invents a count,
+    an amount, a trend or a percentage, and it never borrows an avatar, a gradient or a
+    chart label from the reference boards. The mobile frames are 390&nbsp;px and the desktop
+    frames are 1280&nbsp;px — the real contract viewports.
+  </div>
+
+  <!-- ============================ OWNER HOME ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Owner Home</h2>
+      <p class="route">/owner</p>
+      <p class="lede">Owner and administrator only. The accountant is redirected to the fees screen.
+        Gate: <code>dashboard.view</code>. One dominant action. At most three attention rows.</p>
+    </header>
+    <div class="frames">
+
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Academy mark · name</span><span class="s">scoped location, full date, account control</span></div>
+              <div class="blk accent"><span class="n">2</span><span class="t">Collect payment</span><span class="s">the one dominant action — opens the dues list</span></div>
+              <div class="grid2">
+                <div class="blk"><span class="n">3</span><span class="t">Collected today</span><span class="s">summary tile</span></div>
+                <div class="blk"><span class="t">Overdue</span><span class="s">summary tile</span></div>
+                <div class="blk"><span class="t">Active members</span><span class="s">summary tile</span></div>
+                <div class="blk"><span class="t">Sessions today</span><span class="s">summary tile</span></div>
+              </div>
+              <div class="blk warnb"><span class="n">4</span><span class="t">Needs you today</span><span class="s">one attention row: what · why now · where to act</span></div>
+              <div class="blk divided">
+                <span class="n">5</span>
+                <div class="row"><span class="t">Today's classes</span><span class="s">register completion</span></div>
+                <div class="row"><span>time · batch · coach</span><span class="s">occupancy bar</span></div>
+                <div class="row"><span>time · batch · coach</span><span class="s">occupancy bar</span></div>
+                <div class="row"><span>time · batch · coach</span><span class="s">occupancy bar</span></div>
+              </div>
+              <div class="blk soft"><span class="n">6</span><span class="t">Trends</span><span class="s">one metric panel + one payment-mix panel</span></div>
+              <div class="blk"><span class="n">7</span><span class="t">Quick links</span><span class="s">fees · enquiries · programs · staff</span></div>
+            </div>
+            <div class="bottomnav"><div class="on">Home</div><div>Members</div><div>Reports</div><div>Settings</div></div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="frame">
+        <figcaption>Desktop — 1280×900</figcaption>
+        <div class="viewport">
+          <div class="screen w1280">
+            <div class="shell">
+              <aside class="sidebar">
+                <div class="grp">Main</div>
+                <div class="it on">Home</div>
+                <div class="it">Members</div>
+                <div class="grp">Operations</div>
+                <div class="it">Fees &amp; payments</div>
+                <div class="it">Enquiries</div>
+                <div class="it">Announcements</div>
+                <div class="it">Staff</div>
+                <div class="grp">Scheduling</div>
+                <div class="it">Programs &amp; batches</div>
+                <div class="it">Sessions</div>
+                <div class="it">Schedule</div>
+                <div class="grp">Insights</div>
+                <div class="it">Reports</div>
+                <div class="grp">Account</div>
+                <div class="it">Settings</div>
+              </aside>
+              <div class="main">
+                <div class="topbar"><span class="n">8</span> record search · facility switcher</div>
+                <div class="blk"><span class="t">Academy mark · name · scoped location · full date</span><span class="s">identity header</span></div>
+                <div class="grid4">
+                  <div class="blk"><span class="t">Collected today</span><span class="s">tile + drill-down</span></div>
+                  <div class="blk"><span class="t">Overdue</span><span class="s">tile + drill-down</span></div>
+                  <div class="blk"><span class="t">Active members</span><span class="s">tile + drill-down</span></div>
+                  <div class="blk"><span class="t">Sessions today</span><span class="s">tile + drill-down</span></div>
+                </div>
+                <div class="blk accent"><span class="t">Collect payment</span><span class="s">one dominant action</span></div>
+                <div class="split60">
+                  <div class="blk divided">
+                    <span class="n">5</span>
+                    <div class="row"><span class="t">Today</span><span class="s">marks recorded across sessions</span></div>
+                    <div class="row"><span>time · batch · programme · coach</span><span class="s">occupancy + register state</span></div>
+                    <div class="row"><span>time · batch · programme · coach</span><span class="s">occupancy + register state</span></div>
+                  </div>
+                  <div class="blk warnb"><span class="n">4</span><span class="t">Needs you today</span><span class="s">at most three rows, count chip for the total</span></div>
+                </div>
+                <div class="split40">
+                  <div class="blk soft"><span class="t">Trends</span><span class="s">metric panel, period in the URL</span></div>
+                  <div class="blk"><span class="t">Payment mix</span><span class="s">legend lists cash · digital · other</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Identity header</dt><dd>Academy mark and name, the scoped location, the full date, the account control. The record search stays in the shell, never duplicated in the page.</dd>
+          <dt><i>2</i>One dominant action</dt><dd>Collect payment, only with <code>payments.record</code>, and it lands on the dues list where an invoice can actually be settled. Add member and capture enquiry are quiet links.</dd>
+          <dt><i>3</i>Summary tiles</dt><dd>Four, never five. Each label states its basis, each hint says what is included, each drill-down keeps the facility and period. Unavailable is a dash with the reason, never a zero.</dd>
+          <dt><i>4</i>Attention queue</dt><dd>At most three rows. Each row states what, why now (the age) and where to act. No "View all" unless a real list exists. An empty queue is one quiet sentence.</dd>
+          <dt><i>5</i>Today</dt><dd>Register state is completion — "12 of 12 marked" — and is never called attendance. Occupancy over capacity is its own late-toned warning.</dd>
+          <dt><i>6</i>Chart band</dt><dd>One wide metric panel and one payment-mix panel. Both have a keyboard-reachable data table. Below the desktop breakpoint the same figures render as an accessible table, so a phone never downloads the chart engine.</dd>
+          <dt><i>7</i>Quick links</dt><dd>The phone access path for the desktop-only destinations. Never a fifth bottom-navigation item.</dd>
+          <dt><i>8</i>Shell</dt><dd>Viewport-bound sidebar, sticky top bar, content capped at 1280px, one vertical scroll owner.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States</h3>
+        <dl>
+          <dt><i>·</i>Quiet day</dt><dd>The day names the next class with coach, date, time and occupancy. Never an empty block.</dd>
+          <dt><i>·</i>New academy</dt><dd>The onboarding hint appears only when no checklist step is complete.</dd>
+          <dt><i>·</i>Chart unavailable</dt><dd>The chart band degrades to a stated panel; the rest of the page is unaffected.</dd>
+          <dt><i>·</i>Keyboard</dt><dd>Search first, then tiles, rows and the data table. Focus is never hidden by the sticky top bar.</dd>
+          <dt><i>·</i>Offline</dt><dd>No offline writes here. A failed read keeps the shell and names the block that failed.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ OWNER MEMBERS ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Owner Members</h2>
+      <p class="route">/owner/members</p>
+      <p class="lede">The long page. Gate: <code>members.read</code>; changing a record needs
+        <code>members.write</code>. Filters and search are URL state.</p>
+    </header>
+    <div class="frames">
+
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Search members</span><span class="s">filters the list as the person types</span></div>
+              <div class="blk"><span class="n">2</span><span class="t">Add member</span><span class="s">quiet action, never a floating button over the last row</span></div>
+              <div class="blk divided">
+                <span class="n">3</span>
+                <div class="row"><span class="t">Name · member code</span><span class="s">status pill</span></div>
+                <div class="row"><span>plan · batch · next session</span><span class="s">supporting line</span></div>
+                <div class="row"><span class="t">Name · member code</span><span class="s">status pill</span></div>
+                <div class="row"><span>plan · batch · next session</span><span class="s">supporting line</span></div>
+                <div class="row"><span class="t">Name · member code</span><span class="s">status pill</span></div>
+              </div>
+              <div class="blk goodb"><span class="n">4</span><span class="t">Empty academy</span><span class="s">names the state, says what is true, offers the verb</span></div>
+            </div>
+            <div class="bottomnav"><div>Home</div><div class="on">Members</div><div>Reports</div><div>Settings</div></div>
+          </div>
+        </div>
+      </figure>
+
+      <figure class="frame">
+        <figcaption>Desktop — 1280×900</figcaption>
+        <div class="viewport">
+          <div class="screen w1280">
+            <div class="shell">
+              <aside class="sidebar">
+                <div class="grp">Main</div>
+                <div class="it">Home</div>
+                <div class="it on">Members</div>
+                <div class="grp">Operations</div>
+                <div class="it">Fees &amp; payments</div>
+                <div class="it">Enquiries</div>
+                <div class="grp">Scheduling</div>
+                <div class="it">Programs &amp; batches</div>
+                <div class="grp">Insights</div>
+                <div class="it">Reports</div>
+              </aside>
+              <div class="main">
+                <div class="topbar">record search · facility switcher</div>
+                <div class="blk"><span class="t">Members</span><span class="s">search, filters and the count that describes the filtered set</span></div>
+                <div class="blk divided">
+                  <span class="n">5</span>
+                  <div class="row"><span class="t">Identity (the row destination)</span><span class="s">status · dates</span></div>
+                  <div class="row"><span class="t">Identity (the row destination)</span><span class="s">status · dates</span></div>
+                  <div class="row"><span class="t">Identity (the row destination)</span><span class="s">status · dates</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Search</dt><dd>First focusable control. Filters as the person types and is URL state, so Back restores the previous filter set and a shared link opens the same view.</dd>
+          <dt><i>2</i>Add member</dt><dd>A quiet action above the list. It is absent when the role holds no <code>members.write</code>.</dd>
+          <dt><i>3</i>Divided list</dt><dd>A long working list is one container with dividers, never a card per row. On a phone the row is two lines: identity and status first, supporting metadata second.</dd>
+          <dt><i>4</i>Empty state</dt><dd>Name the state, say what is true, offer the verb that changes it. An empty block with no words is a bug.</dd>
+          <dt><i>5</i>Working table</dt><dd>Aligned columns, money right-aligned, stable row height, the identity column is the destination.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States</h3>
+        <dl>
+          <dt><i>·</i>No results</dt><dd>One sentence plus the verb, describing the filtered set rather than the whole academy.</dd>
+          <dt><i>·</i>Loading</dt><dd>Skeletons that match the row geometry, so the layout does not shift when the rows arrive.</dd>
+          <dt><i>·</i>Error</dt><dd>The list stays, the failure names itself, the search text is kept and the retry sits beside the failure.</dd>
+          <dt><i>·</i>Keyboard</dt><dd>Tab reaches every row; Enter opens the record. A long name truncates; an amount never collides with a status pill.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ OWNER FEES ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Owner Fees and payments</h2>
+      <p class="route">/owner/fees</p>
+      <p class="lede">Gate: <code>reports.financial</code>. Inside: <code>invoices.read</code>,
+        <code>invoices.write</code>, <code>payments.record</code>, <code>payments.read</code>,
+        <code>payments.refund</code>; voiding needs <code>settings.manage</code>.
+        Money is exact paise here.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Dues · Invoices · Transactions</span><span class="s">tabs are URL state; the selected content renders once its data is ready</span></div>
+              <div class="blk divided">
+                <span class="n">2</span>
+                <div class="row"><span class="t">Invoice number · member</span><span class="s">amount due</span></div>
+                <div class="row"><span class="s">due date · age</span><span class="s">status pill</span></div>
+                <div class="row"><span class="t">Invoice number · member</span><span class="s">amount due</span></div>
+              </div>
+              <div class="blk"><span class="n">3</span><span class="t">Record a payment</span><span class="s">full page — a sheet would hide the fields</span></div>
+              <div class="blk soft"><span class="n">4</span><span class="t">Invoice summary pinned</span><span class="s">amount · method · reference</span></div>
+              <div class="blk accent"><span class="n">5</span><span class="t">Save payment</span><span class="s">one dominant action</span></div>
+            </div>
+            <div class="bottomnav"><div>Home</div><div class="on">Members</div><div>Reports</div><div>Settings</div></div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Tabs</dt><dd>URL state, so a shared link opens the same view. The drill-down from Home arrives here with the facility and period preserved.</dd>
+          <dt><i>2</i>Rows</dt><dd>Two lines on a phone. Exact paise, right-aligned, tabular figures. A voided invoice stays readable and is struck through.</dd>
+          <dt><i>3</i>Record a payment</dt><dd>A full page, not a sheet. The control is absent — not disabled and broken — when the role holds no <code>payments.record</code>.</dd>
+          <dt><i>4</i>Pinned summary</dt><dd>The invoice being settled stays visible while the amount is entered, so nobody records against the wrong invoice.</dd>
+          <dt><i>5</i>Save</dt><dd>One dominant action. Disabled while the save is in flight, re-enabled on failure with every entered value still in place.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States and recovery</h3>
+        <dl>
+          <dt><i>·</i>Empty</dt><dd>"Nothing due right now" is a real statement. A figure that could not be read is a dash with the reason, never a zero.</dd>
+          <dt><i>·</i>Reversal</dt><dd>Ledger-only and stated beside the total. It is never netted into the collected figure.</dd>
+          <dt><i>·</i>Offline</dt><dd>Money never goes offline. The save is refused with a plain "needs a connection" message, and a partial save says "check before retrying".</dd>
+          <dt><i>·</i>Keyboard</dt><dd>The tab strip is a tablist with arrow-key movement; the amount field is 16px and right-aligned; focus moves to the first invalid field.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ OWNER SETTINGS ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Owner Settings</h2>
+      <p class="route">/owner/settings</p>
+      <p class="lede">Gate: <code>settings.manage</code>. Six categories, each with a one-line
+        summary. Opening a category shows only that category's destinations.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Settings</span><span class="s">one line of orientation</span></div>
+              <div class="blk warnb"><span class="n">2</span><span class="t">Onboarding checklist</span><span class="s">shown once, until the checklist is complete</span></div>
+              <div class="blk"><span class="n">3</span><span class="t">Academy</span><span class="s">profile · sites · opening hours · closures</span></div>
+              <div class="blk"><span class="t">Programs &amp; facilities</span><span class="s">activities · levels · batches</span></div>
+              <div class="blk"><span class="t">Fees &amp; payments</span><span class="s">plans · QR codes · café menu</span></div>
+              <div class="blk"><span class="t">Team &amp; access</span><span class="s">staff and what each role may do</span></div>
+              <div class="blk"><span class="t">Communications</span><span class="s">absence alerts · announcements</span></div>
+              <div class="blk"><span class="n">4</span><span class="t">Appearance &amp; advanced</span><span class="s">branding · vocabulary · configuration requests</span></div>
+              <div class="blk"><span class="n">5</span><span class="t">Account</span><span class="s">name · phone · personal appearance · sign out</span></div>
+            </div>
+            <div class="bottomnav"><div>Home</div><div>Members</div><div>Reports</div><div class="on">Settings</div></div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Orientation</dt><dd>One line, not a paragraph. The category summary carries the detail.</dd>
+          <dt><i>2</i>Setup row</dt><dd>Only while the checklist is unfinished. It is not a standing nag for one unfinished item.</dd>
+          <dt><i>3</i>Categories</dt><dd>Six, in the order an owner thinks in. Each row is 56px with an icon, a label, a summary and a chevron. A category the academy does not use — the skill ladder — is not offered.</dd>
+          <dt><i>4</i>Appearance</dt><dd>The personal Appearance and motion preference live in the account block, not as an academy category. It is a personal preference, never tenant branding, and it never leaks between accounts on a shared device.</dd>
+          <dt><i>5</i>Account</dt><dd>Identity and sign-out. A role without <code>settings.manage</code> has no Settings destination at all, so the shell carries a sign-out instead — the session must always be endable.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States</h3>
+        <dl>
+          <dt><i>·</i>Category open</dt><dd>The hub is replaced by that category's destinations, with a back link that keeps focus.</dd>
+          <dt><i>·</i>Single site</dt><dd>The location destination stays singular in its wording until a second location exists.</dd>
+          <dt><i>·</i>Failed save</dt><dd>The entered value and the field focus survive; the failure sits beside the field.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ COACH TODAY ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Coach Today</h2>
+      <p class="route">/coach</p>
+      <p class="lede">Gate: <code>attendance.read</code>; marking needs <code>attendance.mark</code>.
+        Mobile only. One dominant element: today's sessions.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Today</span><span class="s">heading and the session count</span></div>
+              <div class="blk">
+                <span class="n">2</span>
+                <span class="t">Session · batch · time</span>
+                <span class="s">enrolled and marked counts</span>
+                <div class="strip"><i style="width:62%"></i></div>
+                <span class="s">Open register</span>
+              </div>
+              <div class="blk">
+                <span class="n">3</span>
+                <span class="t">Session · batch · time</span>
+                <span class="s">enrolled and marked counts</span>
+                <div class="strip warn"><i style="width:24%"></i></div>
+                <span class="s">Open register</span>
+              </div>
+              <div class="blk dark"><span class="n">4</span><span class="t">Up next</span><span class="s">nothing today, but a session within the week</span></div>
+            </div>
+            <div class="bottomnav"><div class="on">Today</div><div>Schedule</div><div>Members</div><div>Me</div></div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Heading</dt><dd>One line. The week belongs to the schedule tab and the roster to the members tab; Today is for acting now.</dd>
+          <dt><i>2</i>Session card</dt><dd>Time, batch, enrolled and marked counts, and the lane strip. The strip colour carries meaning: normal, under-filled, or a problem.</dd>
+          <dt><i>3</i>Under-filled strip</dt><dd>Amber when under-filled. The state is also written in words — colour is never the only carrier.</dd>
+          <dt><i>4</i>Up next</dt><dd>Offer "Open register" only when the next session is today or tomorrow; further out, offer the schedule. Nothing today and nothing this week is one quiet sentence, not an empty block.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States</h3>
+        <dl>
+          <dt><i>·</i>No one enrolled</dt><dd>The card says "No one enrolled" rather than showing a zero over zero.</dd>
+          <dt><i>·</i>Keyboard</dt><dd>Cards are links, reachable by Tab and activated by Enter.</dd>
+          <dt><i>·</i>Recovery</dt><dd>A failed load keeps the Today framing and offers a retry beside it.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ COACH REGISTER ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Coach Register</h2>
+      <p class="route">/coach/register/[sessionId]</p>
+      <p class="lede">Gate: <code>attendance.read</code>, marking <code>attendance.mark</code>.
+        The approved offline queue applies here and nowhere else for student attendance.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">← Today</span><span class="s">a 44px back target, reachable one-handed</span></div>
+              <div class="blk"><span class="t">Time · batch</span><span class="s">session heading</span></div>
+              <div class="blk warnb"><span class="n">2</span><span class="t">You're offline</span><span class="s">the queue is on: marks are saved on the device</span></div>
+              <div class="blk divided">
+                <span class="n">3</span>
+                <div class="row"><span class="t">Swimmer name</span><span class="s">present</span></div>
+                <div class="row"><span class="t">Swimmer name</span><span class="s">late</span></div>
+                <div class="row"><span class="t">Swimmer name</span><span class="s">unmarked</span></div>
+              </div>
+              <div class="blk"><span class="n">4</span><span class="t">offline — saved on device</span><span class="s">strip state; pending count when marks are queued</span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Back link</dt><dd>A real link with a 44px target. The register is used mid-session, one-handed, in sunlight.</dd>
+          <dt><i>2</i>Offline banner</dt><dd>Only when the approved queue is enabled for this identity. It never appears for a role whose tenant has the queue off — that state says it cannot save offline and refuses the write.</dd>
+          <dt><i>3</i>Register rows</dt><dd>One tap to mark. The state is a word, not colour alone, and the row is a real control with an accessible name.</dd>
+          <dt><i>4</i>Sync state</dt><dd>"offline — saved on device", "syncing N…" or "offline — can't save". A failed sync states how many marks could not be sent and keeps them.</dd>
+        </dl>
+        <h3 style="margin-top:18px">Security and recovery</h3>
+        <dl>
+          <dt><i>·</i>Identity</dt><dd>The offline identity is scoped, expires and is purged on logout. An expired or revoked identity stops working offline and says so.</dd>
+          <dt><i>·</i>Logout</dt><dd>Unsynced marks are never silently discarded: the count is stated before the sign-out completes.</dd>
+          <dt><i>·</i>Failed mark</dt><dd>The register stays open and names the swimmer whose mark failed. The mark is not silently dropped.</dd>
+          <dt><i>·</i>Session not found</dt><dd>"Session not found" with a way back to Today, using the tenant's own vocabulary for the word.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ RECEPTION TODAY ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Reception Today</h2>
+      <p class="route">/reception</p>
+      <p class="lede">Gate: the surface itself. Each task row is hidden unless its permission and
+        entitlement are both present — the list never offers a tap that would be refused.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Today</span><span class="s">heading and the session count</span></div>
+              <div class="blk accent"><span class="n">2</span><span class="t">Collect payment</span><span class="s">the dominant task at the counter</span></div>
+              <div class="blk"><span class="n">3</span><span class="t">Close day</span><span class="s">count the cash and close the counter</span></div>
+              <div class="blk"><span class="t">Dues</span><span class="s">pending payments, overdue first</span></div>
+              <div class="blk"><span class="t">Find a member</span><span class="s">search by name, phone or code</span></div>
+              <div class="blk"><span class="t">Café</span><span class="s">only with the café entitlement</span></div>
+              <div class="blk divided">
+                <span class="n">4</span>
+                <div class="row"><span class="t">Session · batch · time</span><span class="s">check in</span></div>
+                <div class="row"><span class="t">Session · batch · time</span><span class="s">check in</span></div>
+              </div>
+              <div class="blk"><span class="n">5</span><span class="t">Staff attendance</span><span class="s">present only with the staff attendance grant</span></div>
+            </div>
+            <div class="bottomnav"><div class="on">Today</div><div>Add member</div><div>Enquiries</div><div>Me</div></div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Heading</dt><dd>The session count beside it, so the desk knows the day before it starts.</dd>
+          <dt><i>2</i>Collect payment</dt><dd>The dominant task. Present with <code>payments.record</code> and the billing entitlement; absent — not greyed — when either is missing.</dd>
+          <dt><i>3</i>Close day</dt><dd>Present with the same grant as collection. The close itself refuses an over-threshold count and names the limit.</dd>
+          <dt><i>4</i>Check-in panel</dt><dd>Degrades to read-only for a role without <code>attendance.mark</code> rather than offering a tap that would fail.</dd>
+          <dt><i>5</i>Staff board</dt><dd>Absent for a role without <code>staff.attendance</code>. A receptionist never sees staff pay.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States and recovery</h3>
+        <dl>
+          <dt><i>·</i>Quiet day</dt><dd>No sessions — say so in words and name what is available.</dd>
+          <dt><i>·</i>Offline</dt><dd>Only the approved attendance queue may work offline, under the same identity, expiry and entitlement rules as the coach register. Money never does.</dd>
+          <dt><i>·</i>Entitlement off</dt><dd>The row is absent, and the reason is not guessed at.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ RECEPTION COLLECT ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Reception Collect payment</h2>
+      <p class="route">/reception/collect-payment</p>
+      <p class="lede">Gate: <code>payments.record</code> plus the billing entitlement.
+        Two steps of one task on a phone: show the QR, record the payment.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="pad">
+              <div class="blk"><span class="n">1</span><span class="t">Collect payment</span><span class="s">one line of purpose</span></div>
+              <div class="blk soft"><span class="n">2</span><span class="t">Payment QR</span><span class="s">large and unambiguous, shown to the payer</span></div>
+              <div class="blk"><span class="n">3</span><span class="t">Invoice · member</span><span class="s">the invoice being settled</span></div>
+              <div class="blk"><span class="n">4</span><span class="t">Amount · Method</span><span class="s">16px amount field; method is a real radio group</span></div>
+              <div class="blk goodb"><span class="n">5</span><span class="t">Payment recorded</span><span class="s">confirmation states invoice, method and amount</span></div>
+              <div class="blk accent"><span class="t">Record payment</span><span class="s">one dominant action</span></div>
+            </div>
+            <div class="bottomnav"><div class="on">Today</div><div>Add member</div><div>Enquiries</div><div>Me</div></div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Purpose</dt><dd>One line. No tutorial.</dd>
+          <dt><i>2</i>QR</dt><dd>If no payment QR is active, the block says so and points at the owner's settings. It never shows a broken or empty QR.</dd>
+          <dt><i>3</i>Invoice</dt><dd>The invoice being settled is visible while the amount is entered, so nothing is recorded against the wrong invoice.</dd>
+          <dt><i>4</i>Amount and method</dt><dd>The amount field is 16px and numeric; the method is a real radio group with a visible focus ring.</dd>
+          <dt><i>5</i>Confirmation</dt><dd>States the invoice, the method and the amount. It appears only after the server has recorded the payment.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States and recovery</h3>
+        <dl>
+          <dt><i>·</i>No active QR</dt><dd>A named reason and a route to the owner, not an empty frame.</dd>
+          <dt><i>·</i>Failed save</dt><dd>The entered amount and method survive and the save is re-enabled.</dd>
+          <dt><i>·</i>Offline</dt><dd>Refused with a plain "needs a connection" message. Money is never optimistically recorded.</dd>
+          <dt><i>·</i>Partly applied</dt><dd>The message says "check before retrying" rather than inviting a second submit.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ PARENT ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Parent token page</h2>
+      <p class="route">/p/[token]</p>
+      <p class="lede">A signed link, no account and no session. Server-rendered markup with
+        <strong>zero client JavaScript</strong>, served <code>no-store</code>, <code>no-referrer</code>
+        and <code>noindex</code>. It never enters a cache, a manifest shortcut or an install prompt.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Mobile — 390×844</figcaption>
+        <div class="viewport">
+          <div class="screen w390">
+            <div class="parentpage" style="width:100%">
+              <div class="card"><span class="n">1</span><span class="t">Academy mark and name</span><span class="s">the child's own view</span></div>
+              <div class="card"><span class="n">2</span><span class="t">Child name and code</span><span class="s">one child only — never a total that mixes children</span></div>
+              <div class="card" style="background:var(--marine);border-color:var(--marine);color:#fff">
+                <span class="n">3</span><span class="t" style="color:#fff">Next session</span><span class="s" style="color:rgba(255,255,255,.75)">date · time · batch · coach · venue</span>
+              </div>
+              <div class="card"><span class="n">4</span><span class="t">This month</span><span class="s">attendance percentage and the recent list</span></div>
+              <div class="card"><span class="t">Plan</span><span class="s">runway: days left</span></div>
+              <div class="card"><span class="n">5</span><span class="t">Fees</span><span class="s">read-only: outstanding and payment history, with receipt links</span></div>
+              <div class="card"><span class="n">6</span><span class="t">Questions? Contact your academy</span><span class="s">never an invented phone number</span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Academy identity</dt><dd>The tenant's own branding and vocabulary. No theme script reaches this page, so it never renders a theme and a shared device cannot leak a prior account's appearance.</dd>
+          <dt><i>2</i>One child</dt><dd>The token names one person. Nothing on this page mixes children.</dd>
+          <dt><i>3</i>Next session</dt><dd>Date, time, batch, coach and venue — the venue is omitted, not invented, when the session has no location.</dd>
+          <dt><i>4</i>This month</dt><dd>Attendance percentage with the count beneath it, plus the recent list. Unmarked attendance is unknown, not zero.</dd>
+          <dt><i>5</i>Fees</dt><dd>Read-only and exact. A receipt link opens the token-scoped receipt, which stays on the same contract.</dd>
+          <dt><i>6</i>Contact</dt><dd>The academy is named rather than a phone number that may not exist.</dd>
+        </dl>
+        <h3 style="margin-top:18px">Security states</h3>
+        <dl>
+          <dt><i>·</i>Invalid token</dt><dd>One generic "This link is no longer valid" page, identical to the page shown when the member no longer exists — a probing caller learns nothing either way.</dd>
+          <dt><i>·</i>Footer</dt><dd>States that the link is unique to the child, expires in seven days and carries no tracking.</dd>
+          <dt><i>·</i>Verification</dt><dd>The production artifact, not a dev server: the zero-JavaScript end-to-end check plus the response headers.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================ OPS ============================ -->
+  <section class="preview">
+    <header>
+      <h2>Ops Overview</h2>
+      <p class="route">/ops</p>
+      <p class="lede">Desktop-first at 1280×900 on the platform host, with its own session
+        scheme. The needs-attention queue is the primary element; the KPI strip is context.</p>
+    </header>
+    <div class="frames">
+      <figure class="frame">
+        <figcaption>Desktop — 1280×900</figcaption>
+        <div class="viewport">
+          <div class="screen w1280">
+            <div class="shell">
+              <aside class="sidebar dark">
+                <div class="grp">Aqua operator</div>
+                <div class="it on">Overview</div>
+                <div class="it">Tenants</div>
+                <div class="it">Leads</div>
+                <div class="it">Feature catalogue</div>
+                <div class="it">Presets</div>
+                <div class="it">WhatsApp</div>
+                <div class="it">Activity log</div>
+                <div class="grp">Session</div>
+                <div class="it">Signed in as …</div>
+                <div class="it">Sign out</div>
+              </aside>
+              <div class="main">
+                <div class="blk"><span class="t">Overview</span><span class="s">signed in as … and the last refresh time in IST</span></div>
+                <div class="grid4">
+                  <div class="blk"><span class="t">Active tenants</span><span class="s">KPI</span></div>
+                  <div class="blk"><span class="t">On trial</span><span class="s">KPI</span></div>
+                  <div class="blk"><span class="t">At risk</span><span class="s">KPI</span></div>
+                  <div class="blk"><span class="t">Open ops tasks</span><span class="s">KPI</span></div>
+                </div>
+                <div class="split60">
+                  <div class="blk divided">
+                    <span class="n">1</span>
+                    <div class="row"><span class="t">Tenant name</span><span class="s">what needs attention · age · severity</span></div>
+                    <div class="row"><span class="t">Tenant name</span><span class="s">what needs attention · age · severity</span></div>
+                    <div class="row"><span class="t">Tenant name</span><span class="s">what needs attention · age · severity</span></div>
+                  </div>
+                  <div>
+                    <div class="blk"><span class="n">2</span><span class="t">Quick actions</span><span class="s">tenants · catalogue · presets · leads</span></div>
+                    <div class="blk"><span class="n">3</span><span class="t">Recent activity</span><span class="s">the newest platform records</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </figure>
+      <aside class="notes">
+        <h3>Callouts</h3>
+        <dl>
+          <dt><i>1</i>Attention queue</dt><dd>The primary element, not the KPI strip. Each row states the tenant, what is wrong, how old it is and a severity badge.</dd>
+          <dt><i>2</i>Quick actions</dt><dd>Where the operator goes next. The WhatsApp entry appears only while the mock provider is enabled.</dd>
+          <dt><i>3</i>Recent activity</dt><dd>A read of the platform activity log, with a link to the full log.</dd>
+        </dl>
+        <h3 style="margin-top:18px">States and rules</h3>
+        <dl>
+          <dt><i>·</i>No snapshot yet</dt><dd>The metrics job runs nightly. Until it has run once the page says so rather than showing zeros.</dd>
+          <dt><i>·</i>Empty queue</dt><dd>One quiet sentence: nothing needs attention.</dd>
+          <dt><i>·</i>Viewer</dt><dd>A read-only operator sees no write controls. The server refuses the writes anyway — hiding the control is supplementary, never the enforcement.</dd>
+          <dt><i>·</i>Audit</dt><dd>Every operator mutation writes its audit row in the same transaction as the change.</dd>
+          <dt><i>·</i>Paid services</dt><dd>The messaging console is a mock in this phase. No paid provider is activated to satisfy a screen.</dd>
+        </dl>
+      </aside>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

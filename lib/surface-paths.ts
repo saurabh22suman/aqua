@@ -79,6 +79,27 @@ export const APEX_ALLOWLIST = [
   // the page can't load from cache while offline. The SW is at the
   // root of the apex host (tenant surface), not on ops.
   "/sw.js",
+  // The installable tenant app (PWA): its web app manifest and its
+  // icons. Both are public, same-origin, static assets — the manifest
+  // carries no identity (its start_url is the bare entry point, which
+  // resolves to the caller's own role home) and the icons are the
+  // platform's artwork. Without these two entries the browser gets a
+  // 404 for the manifest and the app can never be installed.
+  //
+  // They are admitted on the APEX ONLY: the operator console is not
+  // an installable app and must never receive install metadata. That
+  // asymmetry is the same mechanism that keeps /sw.js off ops, and
+  // scripts/e2e-host-boundary.ts pins both sides of it.
+  //
+  // The files themselves are declared in lib/offline/pwa-manifest.ts
+  // and pinned against this list by tests/pwa/manifest.test.ts, so the
+  // route and the manifest cannot drift apart.
+  //
+  // "/icons/" is PLATFORM ARTWORK ONLY. A tenant-uploaded logo must
+  // never be written under it: this prefix is public, unauthenticated
+  // and unversioned. Tenant assets belong behind an authorised route.
+  "/manifest.webmanifest",
+  "/icons/",
 ] as const;
 
 // Paths the ops host always serves.

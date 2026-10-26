@@ -5,9 +5,9 @@ re-deriving the design. Queries assume `docker compose exec db psql -U aqua -d a
 
 ## 1. Commits and hygiene
 
-- [ ] Landed via a PR into `main` that merged with `ci` green, not a
-      direct push — check `git log --merges` / the PR itself, not just
-      that CI passed at some point.
+- [ ] Feature integration uses a reviewed PR into `develop`, with required
+      checks green on that PR/revision, not a direct push. Only the human
+      promotes tested develop to main; feature agents do not self-merge.
 - [ ] One commit per task, message prefixed with the task ID
       (`feat(B4):`, `docs(V-45):`).
 - [ ] Commit range shown in the batch report matches the tasks claimed.

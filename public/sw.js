@@ -3,6 +3,31 @@ const META_KEY = new URL("/__aqua_offline_state", self.location.origin).href;
 let generation = 0;
 let cacheMutation = Promise.resolve();
 function mutateCaches(work) { const next = cacheMutation.then(work); cacheMutation = next.catch(() => {}); return next; }
+
+// The routes this worker is allowed to serve offline, and the routes it
+// must never touch. The list is deliberately short: installability is
+// not universal offline capability, and the approved offline surface is
+// the coach's attendance register — nothing else.
+//
+//   OFFLINE_NAVIGATION — GET navigations whose HTML may be kept for
+//     offline use, partitioned by the signed-in identity.
+//   NEVER_CACHED      — paths that carry a credential, belong to the
+//     operator console, or are API traffic. They are never stored and
+//     never answered from a cache.
+const OFFLINE_NAVIGATION = /^\/coach(\/|$)/;
+const NEVER_CACHED = [/^\/api(\/|$)/, /^\/ops(\/|$)/, /^\/p(\/|$)/, /^\/login(\/|$)/, /^\/manifest/, /^\/icons\//];
+
+// Bounded, expiring storage. A cached register is useful for one
+// working day; it is never a second copy of the tenant's data.
+//
+// The shell cache holds public, fingerprinted build assets only. It is
+// capped as well: a device that stays signed in for months would
+// otherwise collect every build's chunks for ever.
+const MAX_CACHED_PAGES = 12;
+const CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const MAX_SHELL_ENTRIES = 300;
+const SHELL_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const CACHED_AT_HEADER = "x-aqua-cached-at";
 const offlinePage = () => new Response(`<!doctype html><html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Connect to sign in</title>
 <style>body{margin:0;padding:56px 24px;background:#EDF0EC;color:#0F1F1C;font:15px system-ui}
@@ -98,7 +123,7 @@ async function cachePage(request, response, identity) {
     if (await shell.match(asset, { ignoreSearch: true })) continue;
     const dependency = await fetch(asset);
     if (!dependency.ok) return;
-    await shell.put(asset, dependency);
+    await shell.put(asset, stamped(dependency, Date.now()));
   }
   // Verify the cookie/session did not change while HTML was being fetched.
   const current = await refreshIdentity();
@@ -108,14 +133,85 @@ async function cachePage(request, response, identity) {
     if (generation !== authorizedGeneration || latest.identity?.scope !== current.scope || !valid(latest.identity)) {
       return;
     }
-    await (await caches.open(privateName(current))).put(request, response.clone());
+    const cache = await caches.open(privateName(current));
+    await cache.put(request, stamped(response.clone(), Date.now()));
+    await prunePages(cache);
   });
 }
-self.addEventListener("install", event => { self.skipWaiting(); event.waitUntil(caches.open(META)); });
+
+// Every cached page carries the moment it was stored, so the worker can
+// expire it instead of serving a stale register for ever.
+function stamped(response, at) {
+  const headers = new Headers(response.headers);
+  headers.set(CACHED_AT_HEADER, String(at));
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function prunePages(cache) {
+  const keys = await cache.keys();
+  for (const key of keys.slice(0, Math.max(0, keys.length - MAX_CACHED_PAGES))) await cache.delete(key);
+}
+
+// The cached page, if it is still inside the offline window.
+async function freshPage(cache, request) {
+  const hit = await cache.match(request, { ignoreVary: true });
+  if (!hit) return null;
+  const at = Number(hit.headers.get(CACHED_AT_HEADER));
+  if (!Number.isFinite(at) || Date.now() - at > CACHE_MAX_AGE_MS) { await cache.delete(request); return null; }
+  return hit;
+}
+
+// Drop pages that outlived the window when a new worker version takes
+// over — the previous version may have stored them without a timestamp.
+async function pruneExpiredPages() {
+  for (const name of await caches.keys()) {
+    if (!name.startsWith("aqua-private-")) continue;
+    const cache = await caches.open(name);
+    for (const key of await cache.keys()) {
+      const hit = await cache.match(key, { ignoreVary: true });
+      const at = Number(hit?.headers.get(CACHED_AT_HEADER));
+      if (!hit || !Number.isFinite(at) || Date.now() - at > CACHE_MAX_AGE_MS) await cache.delete(key);
+    }
+  }
+}
+
+// The shell cache holds public build assets. Build leftovers are useless
+// after a while and must not pile up, but a live asset is never evicted
+// while a cached page could still need it — so old entries go first and
+// only then the hard cap applies.
+async function pruneShell() {
+  const cache = await caches.open(SHELL);
+  const keys = await cache.keys();
+  const now = Date.now();
+  const alive = [];
+  for (const key of keys) {
+    const hit = await cache.match(key, { ignoreSearch: true });
+    const at = Number(hit?.headers.get(CACHED_AT_HEADER));
+    if (!hit || !Number.isFinite(at) || now - at > SHELL_MAX_AGE_MS) await cache.delete(key);
+    else alive.push(key);
+  }
+  for (const key of alive.slice(0, Math.max(0, alive.length - MAX_SHELL_ENTRIES))) await cache.delete(key);
+}
+
+self.addEventListener("install", event => {
+  event.waitUntil((async () => {
+    await caches.open(META);
+    // A FIRST install has no worker to displace, so it may take over at
+    // once. An UPDATE must wait: taking over would swap the worker
+    // under a page that may hold unsaved input or queued attendance.
+    // The page asks for the handover (see the "aqua-activate-update"
+    // message) only after it has checked that nothing would be lost.
+    if (!self.registration.active) await self.skipWaiting();
+  })());
+});
 self.addEventListener("activate", event => { event.waitUntil((async () => {
-  await caches.delete("aqua-shell-v1"); await self.clients.claim();
+  await caches.delete("aqua-shell-v1"); await pruneExpiredPages(); await pruneShell(); await self.clients.claim();
 })()); });
 self.addEventListener("message", event => {
+  if (event.data?.type === "aqua-activate-update") {
+    event.waitUntil(self.skipWaiting().catch(() => {}));
+    return;
+  }
   if (event.data?.type === "aqua-clear-offline") event.waitUntil(clear(event.data.scope)
     .finally(() => event.ports[0]?.postMessage({ done: true })));
   if (event.data?.type === "aqua-refresh-offline") event.waitUntil((async () => {
@@ -143,7 +239,8 @@ self.addEventListener("fetch", event => {
     event.respondWith((async () => { await clear(); return fetch(request); })()); return;
   }
   if (request.method !== "GET" || url.pathname.startsWith("/api/")) return;
-  if (request.mode === "navigate" && /^\/coach(\/|$)/.test(url.pathname)) {
+  if (NEVER_CACHED.some(pattern => pattern.test(url.pathname))) return;
+  if (request.mode === "navigate" && OFFLINE_NAVIGATION.test(url.pathname)) {
     event.respondWith((async () => {
       const identity = await refreshIdentity();
       try {
@@ -154,7 +251,8 @@ self.addEventListener("fetch", event => {
         // This cache contains only full HTML, partitioned by authenticated
         // scope and exact URL. Transport/RSC Vary headers must not prevent a
         // prefetched document matching a real offline navigation.
-        return identity ? await (await caches.open(privateName(identity))).match(request, { ignoreVary: true }) ?? offlinePage() : offlinePage();
+        const cache = identity ? await caches.open(privateName(identity)) : null;
+        return (cache ? await freshPage(cache, request) : null) ?? offlinePage();
       }
     })()); return;
   }
@@ -162,7 +260,12 @@ self.addEventListener("fetch", event => {
   if (url.pathname.startsWith("/_next/static/") || /\.woff2?$/.test(url.pathname)) {
     event.respondWith((async () => {
       const cache = await caches.open(SHELL), hit = await cache.match(request, { ignoreSearch: true });
-      try { const response = await fetch(request); if (response.ok) event.waitUntil(cache.put(request, response.clone())); return response; }
+      try { const response = await fetch(request); if (response.ok) {
+        event.waitUntil((async () => {
+          await cache.put(request, stamped(response.clone(), Date.now()));
+          if ((await cache.keys()).length > MAX_SHELL_ENTRIES) await pruneShell();
+        })());
+      } return response; }
       catch { return hit ?? Response.error(); }
     })());
   }

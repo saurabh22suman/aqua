@@ -133,6 +133,13 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getRetentionViewAction: "reports.operational",
   getCoachLoadAction: "reports.operational",
   attendanceReportCsvAction: "reports.operational",
+  // Owner insights (chart-gallery02 "Attendance by batch" and
+  // chart-gallery05 "Enquiries by current stage"). The two read models
+  // ride the SAME operational-reports grant as the Reports page, so the
+  // chart and the report it summarises answer to one permission — and
+  // the reports module's feature entitlement covers both.
+  getOwnerInsightsAttendanceAction: "reports.operational",
+  getOwnerInsightsEnquiryStagesAction: "reports.operational",
 
   // U-05 — global search. `members.read` is the coarse gate the whole
   // search surface rides on (the box lives in the owner shell); the
@@ -142,6 +149,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
 
   // Owner dashboard
   getOwnerDashboardAction: "dashboard.view",
+  getOwnerChartsAction: "dashboard.view",
   getOnboardingChecklistAction: "members.read",
 
   // Staff

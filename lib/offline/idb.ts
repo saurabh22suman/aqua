@@ -1,13 +1,21 @@
 import type { OfflineIdentity } from "./identity";
+import {
+  QUEUE_ENTRY_REFUSED,
+  offlineQueueEntrySchema,
+  type OfflineQueueEntry,
+} from "./queue-schema";
 
 const DB_NAME = "aqua-offline";
 const DB_VERSION = 2;
 const QUEUE = "queue", KV = "kv", IDENTITY = "identity";
 
-export type QueueEntry = {
-  clientId: string; sessionId: string; memberId: string; status: "present" | "absent" | "late";
-  savedAt: number; attempts: number; scope?: string; expiresAt?: number;
-};
+/**
+ * One queued attendance mark. The shape is validated with Zod before it
+ * is stored: the offline queue may hold nothing but attendance, so a
+ * forged or malformed entry is refused at the door instead of becoming
+ * a second, offline copy of something else.
+ */
+export type QueueEntry = OfflineQueueEntry;
 type StoredIdentity = { active?: OfflineIdentity; blockedScope?: string };
 
 function open(): Promise<IDBDatabase> {
@@ -84,15 +92,18 @@ export async function clearOfflineStorage(expectedScope?: string | null): Promis
 }
 
 export async function enqueueMark(entry: QueueEntry): Promise<void> {
+  const parsed = offlineQueueEntrySchema.safeParse(entry);
+  if (!parsed.success) throw new Error(QUEUE_ENTRY_REFUSED);
+  const mark = parsed.data;
   await transaction<void>([QUEUE, KV], "readwrite", (tx, done, fail) => {
     const request = tx.objectStore(KV).get(IDENTITY);
     request.onsuccess = () => {
       const identity = (request.result as StoredIdentity | undefined)?.active;
-      if (!identity || identity.scope !== entry.scope || identity.expiresAt <= Date.now() ||
-        !entry.expiresAt || entry.expiresAt <= Date.now()) {
+      if (!identity || identity.scope !== mark.scope || identity.expiresAt <= Date.now() ||
+        mark.expiresAt <= Date.now()) {
         fail(new Error("Your offline session ended. Sign in again before marking.")); return;
       }
-      tx.objectStore(QUEUE).put(entry); done(undefined);
+      tx.objectStore(QUEUE).put(mark); done(undefined);
     };
   });
 }

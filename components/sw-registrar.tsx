@@ -4,6 +4,10 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { activateOfflineIdentity, storedOfflineIdentity } from "@/lib/offline/idb";
 import { clearOfflineData, localOfflineScope, readOfflineSessionState, runOfflineLifecycle } from "@/lib/offline/client-session";
+import { ConnectionBanner } from "@/components/pwa/connection-banner";
+import { InstallAffordance } from "@/components/pwa/install-affordance";
+import { ManifestLink } from "@/components/pwa/manifest-link";
+import { UpdatePrompt } from "@/components/pwa/update-prompt";
 
 export function ServiceWorkerRegistrar() {
   const pathname = usePathname();
@@ -20,6 +24,19 @@ export function ServiceWorkerRegistrar() {
     // without any build-time configuration.
     if (!("serviceWorker" in navigator) || pathname.startsWith("/ops")) return;
     let revision = 0, disposed = false;
+    // Registering the worker is what makes the tenant app installable:
+    // Chromium only offers installation when a worker with a fetch
+    // handler is registered for the origin. The worker itself caches
+    // nothing without an offline identity, so a signed-in role without
+    // one (owner, reception) gets an installable app and no offline
+    // copy of anything.
+    async function registerWorker() {
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      registration.active?.postMessage({ type: "aqua-refresh-offline" });
+      void navigator.serviceWorker.ready.then(ready => {
+        if (!disposed) ready.active?.postMessage({ type: "aqua-refresh-offline" });
+      });
+    }
     async function refresh() {
       const request = ++revision;
       await runOfflineLifecycle(async () => { try {
@@ -33,7 +50,14 @@ export function ServiceWorkerRegistrar() {
         if (!state.identity) {
           if (!await clearOfflineData(previousScope)) return;
           window.dispatchEvent(new CustomEvent("aqua-offline-identity", { detail: { scope: null } }));
-          if (!state.authenticated && window.location.pathname.startsWith("/coach")) window.location.replace("/login");
+          if (!state.authenticated) {
+            if (window.location.pathname.startsWith("/coach")) window.location.replace("/login");
+            return;
+          }
+          // Signed in, but this role has no offline attendance scope.
+          // The worker still registers so the app stays installable; it
+          // holds no identity and caches nothing.
+          await registerWorker();
           return;
         }
         if (!await activateOfflineIdentity(state.identity, previousScope)) {
@@ -42,11 +66,7 @@ export function ServiceWorkerRegistrar() {
           return;
         }
         window.dispatchEvent(new CustomEvent("aqua-offline-identity", { detail: { scope: state.identity.scope } }));
-        const registration = await navigator.serviceWorker.register("/sw.js");
-        registration.active?.postMessage({ type: "aqua-refresh-offline" });
-        void navigator.serviceWorker.ready.then(ready => {
-          if (!disposed) ready.active?.postMessage({ type: "aqua-refresh-offline" });
-        });
+        await registerWorker();
       } catch {
         // An outage retains only the already-authorized, unexpired scope.
         // Expired/revoked sessions are cleared on the next successful check.
@@ -68,5 +88,17 @@ export function ServiceWorkerRegistrar() {
       document.removeEventListener("visibilitychange", visible);
       navigator.serviceWorker.removeEventListener("message", message); };
   }, [pathname]);
-  return null;
+  // The installable-app surfaces ride with the worker: the manifest
+  // link that makes the tenant surface installable, the offer to
+  // install, the notice when a new version is ready, and the plain
+  // truth about the connection. Each one refuses the operator console
+  // and a signed parent link on its own (see components/pwa/**).
+  return (
+    <>
+      <ManifestLink pathname={pathname} />
+      <InstallAffordance pathname={pathname} />
+      <UpdatePrompt pathname={pathname} />
+      <ConnectionBanner pathname={pathname} />
+    </>
+  );
 }

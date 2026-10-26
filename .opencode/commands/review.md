@@ -1,7 +1,7 @@
 ---
 description: Request a read-only Aqua code review of specified files or a supplied diff
 agent: aqua-review
-subtask: true
+subagent: true
 ---
 
 Review $ARGUMENTS against Aqua's repository instructions. Identify concrete bugs,

@@ -1343,7 +1343,7 @@ or content (branding, terminology) in the registry.
 ### O-05 · Audited platform mutation wrapper and scan
 **Depends:** —
 **Lane:** schema + tests
-**Read first:** ops-platform-design.md §5; `docs/status-report-2026-09-13.md`
+**Read first:** ops-platform-design.md §5; `docs/archive/status-report-2026-09-13.md`
 §4 on `TODO(tenant-audit-log)`.
 **Build:** One `opsAction` wrapper all platform mutations go through:
 closed union of scopes, platform permission assertion, `platform_audit_log`
@@ -1598,13 +1598,12 @@ the Never list — no invented values. Backend contract is B6–B8.
 
 # Release 1 extensions — multi-sport, café, events, UI closure
 
-**UI follow-up (2026-09-21):** the U-series records functional delivery, not
-visual parity with the target boards. The user selected UI redesign as the
-next workstream after PR #187. Follow
-[`ui-redesign-implementation-plan.md`](ui-redesign-implementation-plan.md),
-starting at UR-01 and continuing in order. It is the execution companion for
-target fidelity and runtime/UI defects; this document remains the product
-scope/dependency register. Payroll V-28 onward is still pending.
+**Historical UI follow-up (2026-09-21):** the U-series recorded functional
+work separately from target-board fidelity. The [September acceptance plan](archive/ui-redesign-implementation-plan.md)
+is retained as evidence, not an instruction to restart UR-01. For newly assigned
+UI work use the [current design entry point](ui-redesign-implementation-plan.md),
+DESIGN.md and the latest human brief. This document remains the product
+scope/dependency register. Payroll V-28 onward remains separately scoped.
 
 **Scope decision — 2026-09-18.** Café moves out of Phase 5 into Release 1 as a
 module on the existing billing spine. Expanded parent surfaces stay **out**: the

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { syncBeforeLogout } from "@/lib/offline/logout";
 import { clearOfflineData, runOfflineLifecycle } from "@/lib/offline/client-session";
+import { clearFacilityCookie } from "@/lib/facility";
+import { clearThemeCookie } from "@/lib/theme/storage";
 import { Button } from "@/components/ui/Button";
 
 export function TenantSignOut({ className = "mt-6" }: { className?: string }) {
@@ -19,6 +21,18 @@ export function TenantSignOut({ className = "mt-6" }: { className?: string }) {
         if (remaining) { setDrafts(remaining); return; }
       }
       await runOfflineLifecycle(() => clearOfflineData());
+      // The display preferences on this device belong to the account
+      // that is ending: the appearance preset and the facility scope
+      // choice. They are device-scoped cookies, so without this the next
+      // person to sign in inherits them.
+      //
+      // They are cleared HERE — as part of the sign-out intent, before
+      // the server call — because the server action redirects, so the
+      // code after it may never run on this device. The deferred path
+      // above (unsynced attendance waiting) returns before this line,
+      // so a sign-out that was called off keeps the preferences.
+      clearThemeCookie();
+      clearFacilityCookie();
       await logoutTenantAction();
     } catch {
       setError("Could not finish signing out. Retry when connected; local offline data must be cleared first.");

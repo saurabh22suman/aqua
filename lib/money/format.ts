@@ -27,6 +27,16 @@ export function formatINR(paise: number | bigint): string {
     part.type === "fraction" ? String(exact % 100n).padStart(2, "0") : part.value).join("");
 }
 
+// Display-only companion to formatINR for summary figures where paise
+// are immaterial (DESIGN.md §4: "no decimals unless paise are
+// meaningful"). It trims the exact string formatINR produced from the
+// same bigint paise — no extra arithmetic, so a value with real paise
+// still shows them and grouping stays en-IN.
+export function formatINRCompact(paise: number | bigint): string {
+  const exact = formatINR(paise);
+  return exact.endsWith(".00") ? exact.slice(0, -3) : exact;
+}
+
 export function parsePaise(formatted: string): number {
   // Strip the currency symbol/label and any whitespace Intl may have
   // inserted (some ICU data emits a non-breaking space after ₹).

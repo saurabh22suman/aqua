@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { enquiries, enquiryFollowUps, type EnquiryStage, type EnquirySource } from "@/db/schema/enquiries";
 import { locations } from "@/db/schema/locations";
@@ -559,5 +559,58 @@ export async function conversionRateBySource(ctx: ActionCtx): Promise<SourceConv
       converted: r.converted,
       ratePct: r.total > 0 ? Math.round((r.converted / r.total) * 100) : 0,
     }));
+  });
+}
+
+// The aggregate read behind the owner-insights enquiry chart
+// (chart-gallery05): the CURRENT stage of the enquiries CREATED inside
+// a window, counted once each.
+//
+// It exists so a dashboard chart never pulls the whole live enquiry
+// list — with names and phones — into the service process. The
+// visibility rule is NOT re-implemented: it is the same
+// `enquiryScope` predicate and the same `enquiryConditions` filter the
+// list uses, so the chart can never disagree with the Enquiries page.
+//
+// The window is a half-open instant range already resolved in the
+// TENANT's timezone by the caller; the cohort is "created inside the
+// window".
+export type EnquiryStageCount = { stage: EnquiryStage; count: number };
+
+export type EnquiryStageCounts = {
+  /** Enquiries in the cohort — each counted exactly once. */
+  total: number;
+  byStage: EnquiryStageCount[];
+};
+
+export async function countEnquiriesByCurrentStage(
+  ctx: ActionCtx,
+  window: { fromUtc: Date; toUtc: Date },
+  options: { locationId?: string } = {},
+): Promise<EnquiryStageCounts> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const { predicate } = await enquiryScope(tx, ctx);
+    const extra: SQL[] = [
+      gte(enquiries.createdAt, window.fromUtc),
+      lt(enquiries.createdAt, window.toUtc),
+    ];
+    // A requested location can only NARROW the cohort — the same
+    // predicate the list read applies, one more AND.
+    if (options.locationId) extra.push(eq(enquiries.locationId, options.locationId));
+
+    const rows = await tx
+      .select({ stage: enquiries.stage, count: sql<number>`count(*)::int` })
+      .from(enquiries)
+      .where(and(...enquiryConditions(ctx, predicate, extra)))
+      .groupBy(enquiries.stage);
+
+    const byStage = rows.map((row) => ({
+      stage: row.stage as EnquiryStage,
+      count: Number(row.count),
+    }));
+    return {
+      total: byStage.reduce((sum, row) => sum + row.count, 0),
+      byStage,
+    };
   });
 }

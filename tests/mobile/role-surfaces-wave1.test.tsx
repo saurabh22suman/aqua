@@ -42,6 +42,7 @@ const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 
 const DASHBOARD: OwnerDashboardData = {
   tenantName: "Aqua Worli",
+    scopeLocationName: null,
   today: "2026-09-12",
   todayMarked: 0,
   todayTotal: 0,
@@ -55,6 +56,7 @@ const DASHBOARD: OwnerDashboardData = {
     dueInvoiceCount: 0,
     overduePaise: 0,
     overdueInvoiceCount: 0,
+      oldestOverdueDays: null,
   },
   needsAttention: [],
   todaysLanes: [],
@@ -105,21 +107,28 @@ describe("W1-3 parent explainer (not a bare stub)", () => {
 });
 
 describe("W1-4 owner Home quick links (F26)", () => {
-  it("surfaces Enquiries, Programs/Sessions, Staff and Onboarding", () => {
-    render(
+  it("surfaces Enquiries, Programs/Sessions and Staff; onboarding only for a new academy", () => {
+    const { rerender } = render(
       <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
     );
-    for (const href of [
-      "/owner/enquiries",
-      "/owner/programs",
-      "/owner/staff",
-      "/owner/onboarding",
-    ]) {
+    for (const href of ["/owner/enquiries", "/owner/programs", "/owner/staff"]) {
       expect(
         document.querySelector(`a[href="${href}"]`),
         `missing quick link ${href}`,
       ).toBeTruthy();
     }
+    // An established academy is not nagged with the setup checklist.
+    expect(document.querySelector('a[href="/owner/onboarding"]')).toBeNull();
+
+    rerender(
+      <OwnerDashboard
+        data={DASHBOARD}
+        branding={BRANDING}
+        terminology={TERMINOLOGY}
+        showOnboarding
+      />,
+    );
+    expect(document.querySelector('a[href="/owner/onboarding"]')).toBeTruthy();
   });
 });
 
