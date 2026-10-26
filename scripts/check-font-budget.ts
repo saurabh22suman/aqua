@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { requireBudgetBuild } from "./lib/budget-build-receipt";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -24,7 +25,10 @@ function runBuild(): void {
 }
 
 function main(): void {
-  runBuild();
+  const args = process.argv.slice(2);
+  if (args.length === 0) runBuild();
+  else if (args.length === 1 && args[0] === "--reuse-build") requireBudgetBuild();
+  else throw new Error("Usage: check-font-budget.ts [--reuse-build]");
 
   const files = readdirSync(MEDIA_DIR).filter((f) => f.endsWith(".woff2"));
   if (files.length === 0) {

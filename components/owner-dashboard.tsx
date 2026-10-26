@@ -1,13 +1,15 @@
 import Link from "next/link";
 import {
-  AlertTriangle,
+  CalendarDays,
   CalendarRange,
   ChevronDown,
   ClipboardList,
   ListChecks,
   Receipt,
+  TriangleAlert,
   UserPlus,
   Users,
+  Wallet,
 } from "lucide-react";
 import { AttentionRow } from "@/components/ui/AttentionRow";
 import { CountChip } from "@/components/ui/CountChip";
@@ -91,6 +93,7 @@ export function OwnerDashboard({
   const membersOther = resolveTerm(terminology, "member", "other");
   const memberOne = resolveTerm(terminology, "member", 1);
   const batchesOther = resolveTerm(terminology, "batch", "other");
+  const batchOne = resolveTerm(terminology, "batch", 1);
   const sessionsOther = resolveTerm(terminology, "session", "other");
   const sessionsOne = resolveTerm(terminology, "session", 1);
   const coachOne = resolveTerm(terminology, "coach", 1);
@@ -168,7 +171,9 @@ export function OwnerDashboard({
       <div className="flex flex-col">
         {/* 2 — Summary. Each label states its basis: today, current
             balance, or a count. A figure that could not be read is "—",
-            never ₹0. */}
+            never ₹0. The tiles are pastel surfaces with a state-coloured
+            icon chip (batch 4), so four figures can be scanned instead
+            of read as four identical white cards. */}
         <div className="order-2 mt-4 grid grid-cols-2 gap-2 lg:order-1 lg:grid-cols-4">
           <StatCard
             label="Collected today"
@@ -181,7 +186,8 @@ export function OwnerDashboard({
                   } recorded`
             }
             href={can.readFees ? fees.collected : undefined}
-            tone="paper"
+            tone="money"
+            icon={{ node: <Wallet size={17} strokeWidth={2} />, tone: "good" }}
           />
           <StatCard
             label="Overdue"
@@ -200,14 +206,23 @@ export function OwnerDashboard({
                   )} outstanding`
             }
             href={can.readFees ? fees.dues : undefined}
-            tone="paper"
+            // The late surface is for money that IS late. A quiet
+            // morning is a calm tile, not an alarm.
+            tone={hasOverdue ? "late" : "paper"}
+            icon={{
+              node: <TriangleAlert size={17} strokeWidth={2} />,
+              tone: hasOverdue ? "late" : "neutral",
+            }}
           />
           <StatCard
             label={`Active ${membersOther}`}
             value={data.activeMemberCount}
-            hint={`${data.activeBatchCount} ${batchesOther} running`}
+            hint={`${data.activeBatchCount} ${
+              data.activeBatchCount === 1 ? batchOne : batchesOther
+            } running`}
             href={membersHref}
-            tone="paper"
+            tone="info"
+            icon={{ node: <Users size={17} strokeWidth={2} />, tone: "water" }}
           />
           <StatCard
             label={`${titleCase(sessionsOther)} today`}
@@ -218,7 +233,8 @@ export function OwnerDashboard({
                 : `${data.todayTotal} ${membersOther} enrolled`
             }
             href={can.viewSchedule ? scheduleHref : undefined}
-            tone="paper"
+            tone="butter"
+            icon={{ node: <CalendarDays size={17} strokeWidth={2} />, tone: "marine" }}
           />
         </div>
 
@@ -390,7 +406,7 @@ export function OwnerDashboard({
                 {visibleAttention.map((item, i) => (
                   <li key={i} className="mb-2">
                     <AttentionRow
-                      icon={<AlertTriangle size={16} strokeWidth={2} />}
+                      icon={<TriangleAlert size={16} strokeWidth={2} />}
                       title={item.title}
                       detail={item.detail}
                       href={item.href ?? undefined}
@@ -409,7 +425,7 @@ export function OwnerDashboard({
                     {hiddenAttention.map((item, i) => (
                       <li key={i} className="mb-2">
                         <AttentionRow
-                          icon={<AlertTriangle size={16} strokeWidth={2} />}
+                          icon={<TriangleAlert size={16} strokeWidth={2} />}
                           title={item.title}
                           detail={item.detail}
                           href={item.href ?? undefined}
@@ -432,6 +448,7 @@ export function OwnerDashboard({
         metric={trend}
         facility={facility}
         canReadFees={can.readFees}
+        today={data.today}
       />
 
       {/* W1-6 — consolidated per-facility view, only for multi-site

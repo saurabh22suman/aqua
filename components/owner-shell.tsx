@@ -66,10 +66,15 @@ export function OwnerShell({
     >
       <aside
         data-testid="owner-sidebar"
-        className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-60 lg:flex-none lg:flex-col lg:overflow-hidden lg:border-r lg:border-line lg:bg-paper print:hidden"
+        // The sidebar is a PASTEL surface (batch 4), not a white
+        // column: the mint direction paints it pale mint, the
+        // lavender direction pale lilac. It stays a light surface in
+        // both presets, so the ink tokens and the focus ring keep
+        // their contrast on it.
+        className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-60 lg:flex-none lg:flex-col lg:overflow-hidden lg:border-r lg:border-line lg:bg-sidebar print:hidden"
       >
         <div className="flex-none border-b border-line px-5 py-6">
-          <p className="font-display text-[17px] font-semibold text-marine">
+          <p className="font-display text-[17px] font-semibold text-[var(--accent-ink)]">
             Aqua
           </p>
           <p className="mt-0.5 text-[12px] text-ink-3">Owner console</p>

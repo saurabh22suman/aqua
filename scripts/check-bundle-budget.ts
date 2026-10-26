@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { recordBudgetBuild } from "./lib/budget-build-receipt";
 
 // DESIGN.md §5: "First-load JS, gzipped: 150 KB — build fails above." No
 // bundlesize/size-limit dependency: `next build`'s own summary table is
@@ -63,6 +64,7 @@ function main(): void {
     );
     process.exit(1);
   }
+  recordBudgetBuild();
   console.log(`\nAll ${rows.length} routes within budget.`);
 }
 

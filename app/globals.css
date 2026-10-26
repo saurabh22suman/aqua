@@ -42,6 +42,21 @@
   --color-water-soft: #E3F1F2;
   --color-line: rgba(15, 31, 28, 0.1);
 
+  /* ── Pastel surfaces (owner home, batch 4) ─────────────────────────
+   * The desktop sidebar and the four summary tiles are PASTEL surfaces,
+   * not white cards on a grey canvas: the mint direction paints the
+   * sidebar pale mint, the lavender direction pale lilac. They stay
+   * light in both presets, so the ink tokens and the focus ring keep
+   * their contrast on them — the contract in
+   * tests/foundation/owner-surface-tokens.test.ts holds ink-3 at AA
+   * (4.5:1) and the focus ring at 3:1 on every one of these surfaces.
+   * A pastel is a SURFACE colour; the meaning stays in the ink and in
+   * the status tokens. */
+  --color-sidebar: #E7F2EA;
+  --color-tile-money: #E7F4EE;
+  --color-tile-info: #E9F0F9;
+  --color-tile-butter: #F8F1DE;
+
   /* SEMANTIC — reserved meanings, never decorative */
   --color-good: #1F7A43;
   --color-good-soft: #E4F4EA;
@@ -92,6 +107,9 @@
   --surface-raised: var(--color-paper);
   --surface-elevated: var(--color-paper);
   --surface-sunken: color-mix(in srgb, var(--color-deck) 55%, var(--color-paper));
+  /* The owner desktop sidebar is a pastel surface in both presets, so
+   * it follows the base palette instead of being copied per preset. */
+  --surface-sidebar: var(--color-sidebar);
   /* Dark structural surface. Reserved for the approved desktop sidebar
    * direction — not applied yet: the coloured sidebar is still pending
    * human design selection (docs/ui-quality-contract.md). */
@@ -119,7 +137,13 @@
   --tint-powder: #E4EEF7;
 
   /* Chart series — data colours, one per series, distinct inside a
-   * chart and readable on both canvases. Never decorative. */
+   * chart and readable on both canvases. Never decorative.
+   *
+   * The first three series carry a FIXED meaning on the owner's
+   * payment charts: 1 = cash (money), 2 = digital, 3 = other. Money
+   * stays money in both presets (the Lavender direction board keeps the
+   * money series green); the digital series takes the preset's second
+   * colour. A series colour is data, never the structural palette. */
   --chart-1: #1F5E3A;
   --chart-2: #0E7C86;
   --chart-3: #8A5A00;
@@ -166,6 +190,14 @@
   --color-water-soft: #E3F1F2;
   --color-line: rgba(43, 27, 61, 0.12);
 
+  /* The lavender direction paints the same surfaces in lilac. Money
+   * stays green in both presets (the lavender direction board keeps
+   * the collected-money tile mint), because money is money. */
+  --color-sidebar: #F0ECFB;
+  --color-tile-money: #E7F4EE;
+  --color-tile-info: #F1EDFC;
+  --color-tile-butter: #F8F1DE;
+
   --accent: #4C2E93;
   --accent-soft: #EDE7FA;
   --accent-ink: #3A2170;
@@ -178,10 +210,14 @@
   --tint-butter: #F7EFD9;
   --tint-powder: #E7E4F7;
 
-  --chart-1: #4C2E93;
-  --chart-2: #0E7C86;
+  /* The chart series keep their MEANING in this preset: cash stays the
+   * money green (series 1), digital takes the preset's violet (series
+   * 2), other stays a muted rose (series 3). A chart must not change
+   * what a colour means just because the reader changed preset. */
+  --chart-1: #1F5E3A;
+  --chart-2: #4C2E93;
   --chart-3: #A6427E;
-  --chart-4: #1F5E3A;
+  --chart-4: #7E2B6E;
   --chart-5: #41525A;
 }
 

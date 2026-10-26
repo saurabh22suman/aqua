@@ -43,8 +43,11 @@ export function OwnerSideNav({
                     aria-current={isActive ? "page" : undefined}
                     className={`flex min-h-11 items-center gap-3 rounded-ctl px-3 text-[14px] font-medium transition-colors duration-150 ${
                       isActive
-                        ? "bg-[var(--accent-soft)] text-[var(--accent-ink)]"
-                        : "text-ink-2 hover:bg-deck"
+                        ? // The selected row is a white pill on the
+                          // pastel sidebar — the strongest, clearest
+                          // active state the direction uses.
+                          "bg-paper text-[var(--accent-ink)]"
+                        : "text-ink-2 hover:bg-paper/70"
                     }`}
                   >
                     <Icon

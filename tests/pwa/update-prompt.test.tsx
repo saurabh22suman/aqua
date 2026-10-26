@@ -7,9 +7,14 @@ import { OFFLINE_IDENTITY } from "../offline/fixture-identity";
 
 // The update contract (docs/design-system/pwa.md):
 //   * a new worker version is offered, never forced;
+//   * an update that installs while the page stays open is OFFERED —
+//     the browser fires "updatefound" before the new worker becomes the
+//     waiting one, so the installing worker's state has to be watched;
 //   * nothing is reloaded while attendance is pending or a form holds
 //     unsaved input;
-//   * the person decides — "later" is a real answer.
+//   * the person decides — "later" is a real answer;
+//   * the listeners are removed when the page is left, so a stale
+//     registration cannot keep them attached.
 //
 // Agent-owned file (tests/pwa/**).
 
@@ -19,21 +24,59 @@ vi.mock("@/lib/offline/service-worker-update", async importOriginal => {
   return { ...actual, reloadAfterUpdate: reload };
 });
 
-type FakeWorker = { postMessage: ReturnType<typeof vi.fn>; state: string };
+type FakeWorker = {
+  postMessage: ReturnType<typeof vi.fn>;
+  state: string;
+  listeners: Set<(event: Event) => void>;
+  addEventListener: (type: string, listener: (event: Event) => void) => void;
+  removeEventListener: (type: string, listener: (event: Event) => void) => void;
+  setState: (state: string) => void;
+};
+
+function createFakeWorker(state = "installed"): FakeWorker {
+  const listeners = new Set<(event: Event) => void>();
+  const worker: FakeWorker = {
+    postMessage: vi.fn(),
+    state,
+    listeners,
+    addEventListener: (type, listener) => {
+      if (type === "statechange") listeners.add(listener);
+    },
+    removeEventListener: (type, listener) => {
+      if (type === "statechange") listeners.delete(listener);
+    },
+    setState: next => {
+      worker.state = next;
+      for (const listener of listeners) listener(new Event("statechange"));
+    },
+  };
+  return worker;
+}
+
+type FakeRegistration = {
+  waiting: FakeWorker | null;
+  installing: FakeWorker | null;
+  listeners: Set<(event: Event) => void>;
+  addEventListener: (type: string, listener: (event: Event) => void) => void;
+  removeEventListener: (type: string, listener: (event: Event) => void) => void;
+  listenerCount: () => number;
+};
 
 function installFakeServiceWorker(options: { waiting: boolean }) {
-  const worker: FakeWorker = { postMessage: vi.fn(), state: "installed" };
+  const worker = createFakeWorker();
   const registrationListeners = new Set<(event: Event) => void>();
   const controllerListeners = new Set<(event: Event) => void>();
-  const registration = {
+  const registration: FakeRegistration = {
     waiting: options.waiting ? worker : null,
     installing: null,
-    addEventListener: (type: string, listener: (event: Event) => void) => {
+    listeners: registrationListeners,
+    addEventListener: (type, listener) => {
       if (type === "updatefound") registrationListeners.add(listener);
     },
-    removeEventListener: (type: string, listener: (event: Event) => void) => {
+    removeEventListener: (type, listener) => {
       if (type === "updatefound") registrationListeners.delete(listener);
     },
+    listenerCount: () => registrationListeners.size,
   };
   const serviceWorker = {
     controller: { state: "activated" },
@@ -49,8 +92,24 @@ function installFakeServiceWorker(options: { waiting: boolean }) {
     configurable: true,
     value: serviceWorker,
   });
+
   return {
     worker,
+    registration,
+    /** The browser starts a new worker: "updatefound" fires now, while
+     *  the new worker is still installing. */
+    startUpdate() {
+      const installing = createFakeWorker("installing");
+      registration.installing = installing;
+      for (const listener of registrationListeners) listener(new Event("updatefound"));
+      return installing;
+    },
+    /** The new worker finished installing and is now the waiting one. */
+    promoteToWaiting(installing: FakeWorker) {
+      registration.waiting = installing;
+      installing.setState("installed");
+      installing.setState("waiting");
+    },
     fireControllerChange: () => {
       for (const listener of controllerListeners) listener(new Event("controllerchange"));
     },
@@ -84,6 +143,65 @@ describe("the update prompt", () => {
     await Promise.resolve();
     expect(container.textContent?.trim()).toBe("");
     expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("watches the active registration even when no worker is waiting yet", async () => {
+    // The registration exists and is active; there is no waiting worker
+    // yet. The prompt must still be listening, or an update that
+    // installs while this page stays open is never offered.
+    const sw = installFakeServiceWorker({ waiting: false });
+    render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+  });
+
+  it("offers an update when a new worker installs while the page stays open", async () => {
+    const sw = installFakeServiceWorker({ waiting: false });
+    render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+
+    // The browser fires "updatefound" while the new worker is still
+    // installing; it only becomes the waiting worker afterwards.
+    const installing = sw.startUpdate();
+    installing.setState("installed");
+    sw.promoteToWaiting(installing);
+
+    expect(await screen.findByText(/new version/i)).toBeTruthy();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("hands the handover to the worker that just installed", async () => {
+    const sw = installFakeServiceWorker({ waiting: false });
+    render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+
+    const installing = sw.startUpdate();
+    installing.setState("installed");
+    sw.promoteToWaiting(installing);
+    fireEvent.click(await screen.findByRole("button", { name: /update now/i }));
+
+    await waitFor(() =>
+      expect(installing.postMessage).toHaveBeenCalledWith({ type: "aqua-activate-update" }),
+    );
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("removes its listeners when the page is left", async () => {
+    const sw = installFakeServiceWorker({ waiting: false });
+    const { unmount } = render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+
+    unmount();
+    expect(sw.registration.listenerCount()).toBe(0);
+  });
+
+  it("does not leave a stale listener behind when the page navigates", async () => {
+    const sw = installFakeServiceWorker({ waiting: false });
+    const { rerender } = render(<UpdatePrompt pathname="/owner" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+
+    rerender(<UpdatePrompt pathname="/owner/members" />);
+    await waitFor(() => expect(sw.registration.listenerCount()).toBe(1));
+    expect(sw.registration.listenerCount()).toBe(1);
   });
 
   it("refuses to update while attendance is waiting to sync", async () => {

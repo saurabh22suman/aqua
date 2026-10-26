@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/Button";
 import { isSafeToReload, pendingOfflineWork, pendingWorkMessage } from "@/lib/offline/update-safety";
 import {
   activateWaitingWorker,
-  findWaitingRegistration,
+  findRegistrationToWatch,
   reloadAfterUpdate,
+  watchForUpdate,
+  type UpdateWatcher,
 } from "@/lib/offline/service-worker-update";
 
 // The update notice.
@@ -15,6 +17,19 @@ import {
 // and the handover only happens when nothing would be lost by it.
 // Nothing here reloads on its own, and nothing appears on the operator
 // console (the platform host does not even run this worker).
+//
+// Two things this has to get right, both found in review:
+//
+//   * the page must watch the registration even when no new worker is
+//     waiting yet — otherwise an update that installs while the page
+//     stays open is never offered;
+//   * the browser fires "updatefound" while the new worker is still
+//     installing, so the installing worker's state is what tells us
+//     that an update is ready.
+//
+// Every listener is removed from the exact object it was added to when
+// the page is left, so a stale registration cannot keep a listener
+// attached.
 
 export type UpdatePromptProps = {
   /** The current path. The notice never appears on the ops surface. */
@@ -22,34 +37,30 @@ export type UpdatePromptProps = {
 };
 
 export function UpdatePrompt({ pathname }: UpdatePromptProps) {
-  const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const handoverRequested = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const registration = useRef<ServiceWorkerRegistration | null>(null);
 
   const opsSurface = pathname === "/ops" || pathname.startsWith("/ops/");
 
   useEffect(() => {
     if (opsSurface) return;
     let disposed = false;
-    let registrationListener: ((event: Event) => void) | null = null;
+    let watcher: UpdateWatcher | null = null;
 
-    const watch = async () => {
-      const waiting = await findWaitingRegistration();
-      if (disposed) return;
-      setRegistration(waiting);
-      if (!waiting) return;
-      // A worker that installs while the page is open shows up here.
-      registrationListener = () => {
-        void findWaitingRegistration().then((next) => {
-          if (!disposed && next) setRegistration(next);
-        });
-      };
-      waiting.addEventListener("updatefound", registrationListener);
+    const attach = (target: ServiceWorkerRegistration) => {
+      if (disposed || watcher) return;
+      registration.current = target;
+      watcher = watchForUpdate(target, () => {
+        if (!disposed) setUpdateAvailable(true);
+      });
+      if (target.waiting) setUpdateAvailable(true);
     };
 
-    void watch();
+    void findRegistrationToWatch(attach, () => !disposed);
 
     const onControllerChange = () => {
       if (!handoverRequested.current) return;
@@ -63,32 +74,34 @@ export function UpdatePrompt({ pathname }: UpdatePromptProps) {
 
     return () => {
       disposed = true;
+      watcher?.dispose();
+      watcher = null;
       if (timer.current) clearTimeout(timer.current);
-      if (registrationListener) registration?.removeEventListener("updatefound", registrationListener);
       if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
         navigator.serviceWorker.removeEventListener("controllerchange", onControllerChange);
       }
     };
-  }, [opsSurface, registration]);
+  }, [opsSurface, pathname]);
 
   const update = useCallback(async () => {
-    if (!registration) return;
+    const target = registration.current;
+    if (!target) return;
     const work = await pendingOfflineWork();
     if (!isSafeToReload(work)) {
       setNotice(pendingWorkMessage(work));
       return;
     }
     handoverRequested.current = true;
-    activateWaitingWorker(registration);
+    activateWaitingWorker(target);
     // If the new worker never takes control, say so instead of leaving
     // the person with a banner that does nothing.
     timer.current = setTimeout(() => {
       handoverRequested.current = false;
       setNotice("The update did not finish. Close the app and open it again.");
     }, 15_000);
-  }, [registration]);
+  }, []);
 
-  if (opsSurface || dismissed || !registration) return null;
+  if (opsSurface || dismissed || !updateAvailable) return null;
 
   return (
     <section

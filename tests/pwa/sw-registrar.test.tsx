@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installFakeIndexedDB } from "../offline/fake-indexeddb";
 
@@ -14,6 +14,7 @@ const { pathnameRef } = vi.hoisted(() => ({ pathnameRef: { current: "/coach" } }
 vi.mock("next/navigation", () => ({ usePathname: () => pathnameRef.current }));
 
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
+import { INSTALL_OFFER_DELAY_MS } from "@/lib/offline/install-prompt";
 
 const register = vi.fn(async () => ({ active: { postMessage: vi.fn() } }));
 
@@ -60,6 +61,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.unstubAllGlobals();
   vi.resetModules();
@@ -102,16 +104,25 @@ describe("the service worker registrar", () => {
   });
 
   it("mounts the install offer and the offline truth with the worker", async () => {
+    vi.useFakeTimers();
     installFakeSession(true);
     render(<ServiceWorkerRegistrar />);
 
-    // The browser offers an install…
+    // The browser offers an install… the offer itself arrives after a
+    // short delay, so that it never interrupts the first thing the
+    // person came to do.
     fireEvent(window, new Event("beforeinstallprompt"));
-    expect(await screen.findByRole("button", { name: /^install aqua$/i })).toBeTruthy();
+    await act(async () => {
+      vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
+    });
+    expect(screen.getByRole("button", { name: /^install aqua$/i })).toBeTruthy();
 
     // …and when the connection drops, the page says so.
     Object.defineProperty(window.navigator, "onLine", { configurable: true, value: false });
     fireEvent(window, new Event("offline"));
-    expect(await screen.findByText(/you are offline/i)).toBeTruthy();
+    await act(async () => {
+      vi.advanceTimersByTime(10);
+    });
+    expect(screen.getByText(/you are offline/i)).toBeTruthy();
   });
 });
