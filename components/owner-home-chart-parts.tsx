@@ -106,6 +106,7 @@ export function ChartTable({
 export function ChartLegend() {
   return (
     <ul
+      aria-label="Payment groups"
       className="mt-2 flex flex-wrap items-center text-[12px] text-ink-3"
       style={{ columnGap: 16, rowGap: 4 }}
     >

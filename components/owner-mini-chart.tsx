@@ -49,9 +49,10 @@ const PLOT = 112;
 const H = PLOT + 18;
 const AXIS = PLOT + 13;
 
-const CASH = "var(--color-water)";
-const DIGITAL = "var(--color-marine)";
-const OTHER = "var(--color-ink-3)";
+const CASH = "var(--chart-1)";
+const DIGITAL = "var(--chart-2)";
+const OTHER = "var(--chart-3)";
+const ATTENDANCE = "var(--chart-2)";
 const LINE = "var(--color-line)";
 
 /**
@@ -223,7 +224,7 @@ export function MiniLine({
         <polyline
           key={`run-${runIndex}`}
           fill="none"
-          stroke={CASH}
+          stroke={ATTENDANCE}
           strokeWidth="2"
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -245,7 +246,7 @@ export function MiniLine({
             cx={x}
             cy={y(bucket.pct ?? 0)}
             r="2.5"
-            fill={CASH}
+            fill={ATTENDANCE}
           />
         );
       })}

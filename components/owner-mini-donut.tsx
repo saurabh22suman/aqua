@@ -11,9 +11,9 @@ import { formatINRCompact } from "@/lib/money/format";
 // to be read, and the segments use the same colours as the desktop
 // doughnut: one category, one colour on every surface.
 
-const CASH = "var(--color-water)";
-const DIGITAL = "var(--color-marine)";
-const OTHER = "var(--color-ink-3)";
+const CASH = "var(--chart-1)";
+const DIGITAL = "var(--chart-2)";
+const OTHER = "var(--chart-3)";
 const LINE = "var(--color-line)";
 
 export type MiniSlice = {

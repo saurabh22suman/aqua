@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Owner Home — the charts must belong to the preset.
@@ -50,6 +50,8 @@ vi.mock("@/components/charts/echarts-owner", () => ({
 
 import { OwnerChartIsland } from "@/components/charts/owner-chart-island";
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import { ThemeProvider } from "@/components/theme/theme-provider";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 
 const GLOBALS = readFileSync(join(process.cwd(), "app", "globals.css"), "utf8");
@@ -111,6 +113,7 @@ function charts(): OwnerChartsData {
 afterEach(() => {
   cleanup();
   chartRenders.length = 0;
+  delete document.documentElement.dataset.theme;
 });
 
 describe("owner charts — the series belong to the preset", () => {
@@ -124,8 +127,8 @@ describe("owner charts — the series belong to the preset", () => {
         today="2026-10-26"
       />,
     );
-    const cash = screen.getByText("Cash");
-    const dot = cash.previousElementSibling as HTMLElement | null;
+    const cash = within(screen.getByRole("list", { name: "Payment groups" })).getByText("Cash");
+    const dot = cash.querySelector("span[aria-hidden]");
     expect(dot?.className ?? "").toContain("var(--chart-1)");
   });
 
@@ -147,8 +150,10 @@ describe("owner charts — the series belong to the preset", () => {
   });
 
   it("keeps money green in the second preset and gives digital the preset colour", () => {
-    const lavender = GLOBALS.slice(GLOBALS.indexOf('[data-theme="lavender"]'));
-    const block = lavender.slice(0, lavender.indexOf("}"));
+    // The selector is also mentioned in a comment; parse its actual rule.
+    const css = GLOBALS.replace(/\/\*[\s\S]*?\*\//g, "");
+    const block = css.match(/\[data-theme="lavender"\]\s*\{([^}]+)\}/)?.[1] ?? "";
+    expect(block).not.toBe("");
     const chart1 = block.match(/--chart-1:\s*(#[0-9A-Fa-f]{6})/)?.[1];
     const chart2 = block.match(/--chart-2:\s*(#[0-9A-Fa-f]{6})/)?.[1];
     expect(chart1, "cash stays money in the second preset").toBe("#1F5E3A");
@@ -172,19 +177,24 @@ describe("owner charts — the series belong to the preset", () => {
 
     try {
       render(
-        <OwnerChartIsland
-          kind="doughnut"
-          ariaLabel="Payment mix"
-          groups={[{ key: "cash", label: "Cash", paise: 100 }]}
-          totalPaise={100}
-        />,
+        <ThemeProvider theme="mint">
+          <ThemeToggle />
+          <OwnerChartIsland
+            kind="doughnut"
+            ariaLabel="Payment mix"
+            groups={[{ key: "cash", label: "Cash", paise: 100 }]}
+            totalPaise={100}
+          />
+        </ThemeProvider>,
       );
       await waitFor(() => {
         expect(chartRenders.length).toBeGreaterThan(0);
       });
       const before = chartRenders.length;
 
-      document.documentElement.dataset.theme = "lavender";
+      fireEvent.click(screen.getByRole("button", {
+        name: "Theme: Mint Garden. Switch to Lavender Club",
+      }));
       await waitFor(() => {
         expect(chartRenders.length).toBeGreaterThan(before);
       });
