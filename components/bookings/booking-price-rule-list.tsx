@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { InlineFeedback } from "@/components/ui/InlineFeedback";
 import { setBookingPriceRuleActiveAction } from "@/lib/actions/booking-price-admin";
 import { formatINRCompact } from "@/lib/money/format";
 import {
@@ -63,22 +64,14 @@ export function BookingPriceRuleList({
         Configured prices
       </h2>
       {error ? (
-        <p
-          role="alert"
-          className="mt-3 rounded-ctl border border-line bg-warn-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="price-rule-error"
-        >
-          {error}
-        </p>
+        <div className="mt-3" data-testid="price-rule-error">
+          <InlineFeedback tone="error">{error}</InlineFeedback>
+        </div>
       ) : null}
       {notice ? (
-        <p
-          role="status"
-          className="mt-3 rounded-ctl bg-good-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="price-rule-notice"
-        >
-          {notice}
-        </p>
+        <div className="mt-3" data-testid="price-rule-notice">
+          <InlineFeedback tone="success">{notice}</InlineFeedback>
+        </div>
       ) : null}
       <ul className="mt-3 divide-y divide-line" data-testid="price-rule-list">
         {rules.map((rule) => (

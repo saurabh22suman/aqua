@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { InlineFeedback } from "@/components/ui/InlineFeedback";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { saveBookingPriceRuleAction } from "@/lib/actions/booking-price-admin";
@@ -235,22 +236,14 @@ export function BookingPriceRuleForm({
       </label>
 
       {error ? (
-        <p
-          role="alert"
-          className="rounded-ctl border border-line bg-warn-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="price-rule-error"
-        >
-          {error}
-        </p>
+        <div data-testid="price-rule-error">
+          <InlineFeedback tone="error">{error}</InlineFeedback>
+        </div>
       ) : null}
       {notice ? (
-        <p
-          role="status"
-          className="rounded-ctl bg-good-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="price-rule-notice"
-        >
-          {notice}
-        </p>
+        <div data-testid="price-rule-notice">
+          <InlineFeedback tone="success">{notice}</InlineFeedback>
+        </div>
       ) : null}
 
       <div className="flex flex-wrap gap-2">

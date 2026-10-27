@@ -8,6 +8,7 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { BookingScreen } from "@/components/booking-screen";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { InlineFeedback } from "@/components/ui/InlineFeedback";
 import { todayInZone } from "@/lib/time/tz";
 import type { BookableFacility } from "@/lib/services/bookings";
 
@@ -91,45 +92,36 @@ export default async function OwnerBookingsPage() {
       </p>
 
       {pricesError ? (
-        <p
-          role="alert"
-          className="mt-4 rounded-ctl border border-line bg-warn-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="owner-bookings-price-error"
-        >
-          {pricesError}
-        </p>
+        <div className="mt-4" data-testid="owner-bookings-price-error">
+          <InlineFeedback tone="error">{pricesError}</InlineFeedback>
+        </div>
       ) : null}
 
       {activePrices === 0 ? (
-        <p
-          className="mt-4 rounded-ctl border border-line bg-warn-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="owner-bookings-no-price"
-        >
-          No price is configured for any slot yet, so every booking will
-          be refused.
-          {canManagePrices ? (
-            <>
-              {" "}
-              <Link
-                href="/owner/settings/booking-prices"
-                className="font-medium underline underline-offset-2"
-              >
-                Set the prices
-              </Link>{" "}
-              first.
-            </>
-          ) : null}
-        </p>
+        <div className="mt-4" data-testid="owner-bookings-no-price">
+          <InlineFeedback tone="neutral">
+            No price is configured for any slot yet, so every booking will
+            be refused.
+            {canManagePrices ? (
+              <>
+                {" "}
+                <Link
+                  href="/owner/settings/booking-prices"
+                  className="font-medium underline underline-offset-2"
+                >
+                  Set the prices
+                </Link>{" "}
+                first.
+              </>
+            ) : null}
+          </InlineFeedback>
+        </div>
       ) : null}
 
       {facilitiesError ? (
-        <p
-          role="alert"
-          className="mt-4 rounded-ctl border border-line bg-warn-soft px-3 py-2 text-[13px] text-ink"
-          data-testid="owner-bookings-facilities-error"
-        >
-          {facilitiesError}
-        </p>
+        <div className="mt-4" data-testid="owner-bookings-facilities-error">
+          <InlineFeedback tone="error">{facilitiesError}</InlineFeedback>
+        </div>
       ) : null}
 
       {facilities.length === 0 && !facilitiesError ? (
