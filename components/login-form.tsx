@@ -1,38 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { homeForSessionAction } from "@/lib/actions/auth-ui";
 import { formatPhoneIN, normaliseToE164 } from "@/lib/phone";
 import { syncBeforeLogout } from "@/lib/offline/logout";
 import { clearOfflineData, runOfflineLifecycle } from "@/lib/offline/client-session";
+import { BrandLockup } from "@/components/auth/sports-mark";
+import { PhoneField } from "@/components/auth/phone-field";
+import { PinField } from "@/components/auth/pin-field";
+import { Button } from "@/components/ui/Button";
 
-// 2026-09-11 auth feature: phone + PIN login.
+// Phone + PIN login.
 //
-// The first login is always a magic link, which shows the set-PIN
-// screen. From then on this form is the door: the mobile number plus
-// the 6-12 digit PIN. The OTP endpoints still exist in the codebase
-// (better-auth phone plugin) and will light up unchanged once an SMS
-// channel lands; they are deliberately not surfaced here because
-// nothing is delivered.
+// The first login is a magic link that shows the set-PIN screen; from
+// then on this form is the door. The OTP endpoints exist but are not
+// surfaced — nothing is delivered.
 //
-// Errors are deliberately coarse: one message for "wrong number or
-// PIN" (the API is a generic 401 for wrong PIN, unknown number and
-// locked account alike), one for a paused club, one for "no club on
+// Errors are deliberately coarse: one message for "wrong number or PIN"
+// (the API returns a generic 401 for a wrong PIN, an unknown number and
+// a locked account alike), one for a paused club, one for "no club on
 // this number". Nothing here is an oracle for which case fired.
+//
+// The 2026-10-26 restyle changed the presentation, not the
+// authentication: the same normalisation helper, the same 6–12 digit
+// rule, the same POST /api/login/pin, the same role routing, the same
+// WhatsApp recovery route, and unsynced attendance drafts still hold
+// the sign-in until the person chooses to sync or discard them.
+
+const PIN_RULE = /^\d{6,12}$/;
+
 export function LoginForm() {
   const router = useRouter();
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
+  const [pinRevealed, setPinRevealed] = useState(false);
+  const [pinBlurred, setPinBlurred] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState(0);
 
-  // F-1 (2026-09-13 Indian-user UX audit): the same shared helper the
-  // service uses, so what the client sends is exactly what the server
-  // looks up. Typing a bare 10-digit mobile now works; the on-blur
-  // format shows the user the canonical +91 form before they submit.
+  // The same shared helper the service uses, so what the client sends
+  // is exactly what the server looks up (F-1, Indian-user UX audit). A
+  // bare 10-digit mobile works; the on-blur format shows the canonical
+  // +91 form before the person submits.
   function normalise(v: string) {
     return normaliseToE164(v);
   }
@@ -43,7 +55,18 @@ export function LoginForm() {
     );
   }
 
-  const canSubmit = phone.length > 0 && /^\d{6,12}$/.test(pin) && !busy;
+  const pinValid = PIN_RULE.test(pin);
+  // The rule is only complained about once the field has been left —
+  // telling somebody their PIN is wrong while they are still typing the
+  // first digit is noise.
+  const pinError =
+    pinBlurred && pin.length > 0 && !pinValid
+      ? "Your PIN needs 6 to 12 digits."
+      : null;
+
+  // Unsynced drafts hold the sign-in, so the primary action stays
+  // closed until the person has dealt with them.
+  const canSubmit = phone.length > 0 && pinValid && !busy && drafts === 0;
 
   async function submit(discard = false) {
     if (busy) return;
@@ -87,70 +110,115 @@ export function LoginForm() {
     }
   }
 
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) return;
+    void submit();
+  }
+
+  // Enter in a credential field goes through the form's own submit event.
+  //
+  // The handler sits on the two fields, never on the form: a form-wide
+  // keydown handler also sees Enter aimed at the PIN reveal control and
+  // swallows the button's own activation. Preventing the key's default
+  // action keeps the browser's implicit submission from firing a second
+  // request, so the form's submit handler stays the only place that
+  // decides whether a request goes out. An IME composition is not a
+  // submission and is left alone.
+  function onEnter(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    if (event.nativeEvent.isComposing) return;
+    const form = event.currentTarget.form;
+    if (!form) return;
+    event.preventDefault();
+    form.requestSubmit();
+  }
+
   return (
-    <div className="px-5 pt-16 max-w-md mx-auto">
-      <h1 className="font-display text-[22px] font-semibold text-marine">Sign in</h1>
-      <p className="mt-2 text-[14px] text-ink-2">
-        Use your mobile number and PIN. If you have never joined, ask your club for a login link.
+    <div>
+      {/* On a phone the panel is gone, so the brand moves into the form
+          column. */}
+      <div className="mb-7 lg:hidden">
+        <BrandLockup size="sm" />
+      </div>
+
+      <h1 className="font-display text-[26px] font-semibold leading-tight text-ink">
+        Sign in
+      </h1>
+      <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
+        Use your mobile number and PIN. If you have never joined, ask your
+        club for a login link.
       </p>
 
-      <label className="mt-8 block">
-        <span className="block text-[13px] font-medium text-ink-2">Mobile number</span>
-        <input
+      <form onSubmit={onSubmit} aria-busy={busy} className="mt-7 space-y-5">
+        <PhoneField
+          id="login-phone"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
+          onChange={setPhone}
           onBlur={showCanonical}
-          onKeyDown={(e) => e.key === "Enter" && canSubmit && submit()}
-          inputMode="tel"
-          autoComplete="tel"
-          aria-label="Mobile number"
-          placeholder="+91 98765 43210"
-          className="mt-1 w-full h-12 px-4 rounded-ctl bg-paper border border-line text-[16px]"
+          onKeyDown={onEnter}
         />
-        {/* F-1 contributing cause: a first-time user could not tell
-            whether the country code was required. It isn't — say so. */}
-        <span className="mt-1 block text-[12px] text-ink-3">
-          Any format works — 98765 43210 or +91 98765 43210. We add +91 for you.
-        </span>
-      </label>
 
-      <label className="mt-4 block">
-        <span className="block text-[13px] font-medium text-ink-2">PIN</span>
-        <input
+        <PinField
+          id="login-pin"
           value={pin}
-          type="password"
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-          onKeyDown={(e) => e.key === "Enter" && canSubmit && submit()}
-          inputMode="numeric"
-          autoComplete="current-password"
-          maxLength={12}
-          aria-label="PIN"
-          placeholder="••••••"
-          className="mt-1 w-full h-14 px-4 rounded-ctl bg-paper border border-line text-[20px] font-display tracking-[0.3em]"
+          onChange={setPin}
+          onBlur={() => setPinBlurred(true)}
+          onKeyDown={onEnter}
+          revealed={pinRevealed}
+          onToggleRevealed={() => setPinRevealed((current) => !current)}
+          invalid={pinError !== null}
+          error={pinError ?? undefined}
         />
-      </label>
 
-      {error ? (
-        <p className="mt-4 text-[13px] text-ink-3" role="alert">
-          {error}
-        </p>
+        {error ? (
+          <p role="alert" className="text-[13px] leading-relaxed text-ink-2">
+            {error}
+          </p>
+        ) : null}
+
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          pill
+          disabled={!canSubmit}
+          className="w-full disabled:opacity-40"
+        >
+          {busy ? "One moment…" : "Sign in"}
+        </Button>
+      </form>
+
+      {drafts > 0 ? (
+        <div className="mt-5 space-y-3 rounded-ctl border border-line bg-paper p-4">
+          <p role="alert" className="text-[14px] leading-relaxed text-ink">
+            {drafts} unsynced attendance marks remain on this device. Connect
+            to sync them, or discard them before signing in.
+          </p>
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={() => void submit(true)}
+            className="w-full"
+          >
+            Discard drafts and continue sign-in
+          </Button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => { setDrafts(0); setPin(""); }}
+            className="min-h-11 w-full text-[14px] text-ink-2 underline"
+          >
+            Cancel sign-in
+          </button>
+        </div>
       ) : null}
 
-      <button
-        onClick={() => void submit()}
-        disabled={!canSubmit}
-        className="mt-6 w-full h-14 rounded-pill text-white text-[15px] font-medium bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-40"
+      <Link
+        href="/login/reset"
+        className="mt-4 flex min-h-[44px] items-center justify-center text-[14px] text-ink-2 underline underline-offset-2"
       >
-        {busy ? "One moment…" : "Sign in"}
-      </button>
-      {drafts > 0 ? <div className="mt-4 space-y-3 rounded-ctl border border-line bg-paper p-4">
-        <p role="alert" className="text-[14px] text-ink">{drafts} unsynced attendance marks remain on this device. Connect to sync them, or discard them before signing in.</p>
-        <button type="button" disabled={busy} onClick={() => void submit(true)}
-          className="min-h-11 rounded-ctl border border-line px-3 text-[14px] text-ink">Discard drafts and continue sign-in</button>
-        <button type="button" disabled={busy} onClick={() => { setDrafts(0); setPin(""); }}
-          className="ml-2 min-h-11 text-[14px] text-ink-2 underline">Cancel sign-in</button>
-      </div> : null}
-      <Link href="/login/reset" className="mt-3 flex min-h-[44px] items-center justify-center text-[14px] text-ink-2 underline">
         Forgot PIN? Reset with WhatsApp
       </Link>
     </div>

@@ -724,3 +724,20 @@ Rules for every task above:
 - A task that needs a new route, a new permission or a new backend contract
   raises a change request to the lane that owns it.
 - No task may add a screen that does not exist in the route inventory above.
+
+## Owner booking workflow additions — 27 October 2026
+
+- `/owner/bookings`: staff booking workspace. Show facility/date selection,
+  availability, existing bookings and a scoped booking form. Require booking
+  read permission for reads and the existing write permission for mutations.
+  Pricing setup is linked only for users with settings management authority.
+  Cover loading, no facilities, no configured price, no available slots,
+  validation, conflict and success states. On mobile stack controls and keep
+  availability within its labelled scroll region. Customer self-service is a
+  separate, unfinished flow.
+- `/owner/settings/booking-prices`: owner/admin price administration. Require
+  settings management permission on reads and writes, check both original and
+  destination facility scope when editing, and audit every write transaction.
+  Explain an empty price list and offer the add-price action. Display validation
+  beside fields, pending state while saving, and explicit success/error feedback.
+  The mobile form remains one column with reachable save/cancel controls.

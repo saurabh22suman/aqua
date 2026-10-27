@@ -102,12 +102,16 @@ export function ChartTable({
 /**
  * The cash/digital/other legend. The colour is data, so the words carry
  * the meaning and the swatch only repeats it.
+ *
+ * On a desktop the ECharts canvas draws its own legend (painted from
+ * the same chart tokens), so this HTML legend is the phone's legend and
+ * is hidden above the chart breakpoint.
  */
-export function ChartLegend() {
+export function ChartLegend({ className = "" }: { className?: string }) {
   return (
     <ul
       aria-label="Payment groups"
-      className="mt-2 flex flex-wrap items-center text-[12px] text-ink-3"
+      className={`mt-2 flex flex-wrap items-center text-[12px] text-ink-3 ${className}`}
       style={{ columnGap: 16, rowGap: 4 }}
     >
       <li className="flex items-center gap-1.5">

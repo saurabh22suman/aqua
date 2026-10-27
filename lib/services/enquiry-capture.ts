@@ -8,6 +8,7 @@ import {
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { toEnquiryRow, type EnquiryRow } from "@/lib/services/enquiry-scope";
+import { auditEnquiryCreated } from "@/lib/services/enquiry-audit";
 
 // C-12 — enquiry capture.
 //
@@ -66,6 +67,14 @@ export async function createEnquiry(
         updatedBy: ctx.userId,
       })
       .returning();
+    // The capture's audit row goes in the SAME transaction as the
+    // insert: a captured enquiry can never exist without its record.
+    await auditEnquiryCreated(tx, ctx, {
+      id: row.id,
+      source: row.source,
+      stage: row.stage,
+      locationId: row.locationId,
+    });
     return toEnquiryRow(row);
   });
 }

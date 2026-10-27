@@ -38,10 +38,16 @@ let otherTenantId: TenantId = asTenantId("");
 let locationA = "";
 let locationB = "";
 
+// The actors of this file. The enquiry audit trail names its actor
+// through audit_log.actor_id, which references users(id) -- a caller id
+// that is not a real users row cannot be recorded, so the actor is
+// seeded below like the other rows of this fixture.
+const actorUserId = asUserId(randomUUID());
+
 // A management caller: every location, and the unresolved queue.
 const manager = () => ({
   tenantId,
-  userId: asUserId(randomUUID()),
+  userId: actorUserId,
   roleKey: "owner",
   allLocations: true,
   locationIds: [] as string[],
@@ -52,7 +58,7 @@ const manager = () => ({
 // its own facility).
 const scopedManager = () => ({
   tenantId,
-  userId: asUserId(randomUUID()),
+  userId: actorUserId,
   roleKey: "admin",
   allLocations: false,
   locationIds: [locationA],
@@ -63,7 +69,7 @@ const scopedManager = () => ({
 // queue is not its to see.
 const scopedNonManager = () => ({
   tenantId,
-  userId: asUserId(randomUUID()),
+  userId: actorUserId,
   roleKey: "receptionist",
   allLocations: false,
   locationIds: [locationA],
@@ -122,6 +128,12 @@ beforeAll(async () => {
   locationA = await insertLocation(tenantId, "Scope A", true);
   locationB = await insertLocation(tenantId, "Scope B", false);
   const otherLocation = await insertLocation(otherTenantId, "Other Site", true);
+
+  // The actor of every caller context in this file.
+  await admin.query("insert into users (id, phone) values ($1, $2)", [
+    actorUserId,
+    "+919900000901",
+  ]);
 
   // E1 — located, visible. E2 — located elsewhere. E3 — unresolved
   // (no location: the management review queue). E4 — soft deleted.

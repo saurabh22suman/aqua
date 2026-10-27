@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "./client";
 import { withPlatform } from "./scope";
@@ -21,6 +21,35 @@ export type TenantAccess = {
   roleId: string;
   allLocations: boolean;
 };
+
+// The tenant statuses that still serve the tenant app.
+//
+// A tenant the operator has suspended or churned must stop serving its
+// staff and members IMMEDIATELY — including for sessions that were
+// minted BEFORE the transition. A login-time gate is not a revocation:
+// the login resolver already knew how to say "your club is paused",
+// but an already-signed-in session kept rendering the owner surface
+// (200, tenant heading, "Collect payment") because the request-time
+// resolvers filtered on the MEMBERSHIP's status and never on the
+// TENANT's.
+//
+// This constant is the single list, applied by every request-time
+// resolver below, so the guard reaches both page renders and Server
+// Actions: every tenant action builds its context from
+// requireDefaultCtx() / resolveCtxFor(), and both of those resolve
+// through this module.
+//
+// It is deliberately the same set the login-time resolver already
+// treated as operational (trial/active), so the request-time and
+// login-time answers cannot disagree.
+export const OPERATIONAL_TENANT_STATUSES = ["trial", "active"] as const;
+
+function operationalTenantFilter() {
+  return inArray(
+    tenants.status,
+    [...OPERATIONAL_TENANT_STATUSES],
+  );
+}
 
 // Identity is global and RLS-exempt by design (db/CLAUDE.md) — no scope
 // needed beyond withPlatform to map better-auth's id to the internal
@@ -64,6 +93,10 @@ export async function resolveTenantAccessBySlug(
           eq(tenantMemberships.status, "active"),
           isNull(tenantMemberships.deletedAt),
           eq(tenants.slug, slug),
+          // Tenant availability guard — a suspended/churned tenant does
+          // not serve its members, even to a session minted before the
+          // transition.
+          operationalTenantFilter(),
         ),
       )
       .limit(1);
@@ -165,6 +198,10 @@ export async function resolveHomePath(
       .select({ homePath: roles.homePath })
       .from(tenantMemberships)
       .innerJoin(
+        tenants,
+        and(eq(tenants.id, tenantMemberships.tenantId)),
+      )
+      .innerJoin(
         roles,
         and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
       )
@@ -173,6 +210,9 @@ export async function resolveHomePath(
           eq(tenantMemberships.userId, userId),
           eq(tenantMemberships.status, "active"),
           isNull(tenantMemberships.deletedAt),
+          // Tenant availability guard — a paused club has no role home to
+          // land on.
+          operationalTenantFilter(),
         ),
       )
       .orderBy(roles.homeOrdinal)
@@ -205,6 +245,10 @@ export async function resolveDefaultMembership(
       })
       .from(tenantMemberships)
       .innerJoin(
+        tenants,
+        and(eq(tenants.id, tenantMemberships.tenantId)),
+      )
+      .innerJoin(
         roles,
         and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
       )
@@ -213,6 +257,11 @@ export async function resolveDefaultMembership(
           eq(tenantMemberships.userId, userId),
           eq(tenantMemberships.status, "active"),
           isNull(tenantMemberships.deletedAt),
+          // Tenant availability guard — the default membership is only
+          // ever a membership in a club that still serves. A paused club
+          // never becomes the caller's default tenant, and a user whose
+          // only club is paused resolves nothing at all.
+          operationalTenantFilter(),
         ),
       )
       .orderBy(roles.homeOrdinal)
@@ -287,8 +336,13 @@ export async function resolveSessionForLogin(
     // that's the destination; suspended/churned ones are filtered
     // out from the home decision without dropping the
     // membership — owners may come back.
-    const operational = rows.filter(
-      (r) => r.tenantStatus === "trial" || r.tenantStatus === "active",
+    //
+    // The operational set is the SAME constant the request-time
+    // resolvers filter on, so the login-time answer and the
+    // request-time answer can never disagree about what "serving"
+    // means.
+    const operational = rows.filter((r) =>
+      (OPERATIONAL_TENANT_STATUSES as readonly string[]).includes(r.tenantStatus),
     );
     if (operational.length > 0) {
       return { kind: "ok", path: operational[0]!.homePath };

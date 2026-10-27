@@ -454,3 +454,15 @@ What a page task may **not** change:
 - The money representation, the date representation or the timezone.
 - The zero-JavaScript, no-store contract of the parent token page.
 - The offline identity, expiry and logout-purge model.
+
+### `components/ui/menu-bounds.ts`
+
+Internal Menu geometry helper. Intersects the visible viewport with a clipping
+ancestor, chooses above/below placement, and bounds the menu's height and width.
+Pages consume Menu rather than calling this helper to build another dropdown.
+
+### `components/ui/menu-name.ts`
+
+Internal Menu accessible-name helper. Preserves a trigger's own readable label
+and supplies the explicit fallback for icon-only triggers. Pages must provide a
+meaningful label; geometry and naming helpers do not add another visual system.

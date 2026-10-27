@@ -18,6 +18,12 @@ const config = [
       // finding and flags their generated next-env.d.ts. CI never has
       // this directory; excluding it keeps `pnpm lint` truthful locally.
       ".claude/**",
+      // Playwright MCP session artifacts and the local approved
+      // reference boards that are provisioned into a worktree are
+      // git-ignored local files, never repo content. CI never has
+      // this directory; linting the reference's own helper scripts
+      // would report findings about files the product does not ship.
+      ".playwright-mcp/**",
     ],
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),

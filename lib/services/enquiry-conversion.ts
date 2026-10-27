@@ -17,6 +17,7 @@ import {
   enquiryScope,
   visibleEnquiry,
 } from "@/lib/services/enquiry-scope";
+import { auditEnquiryStateChanged, enquiryAuditState } from "@/lib/services/enquiry-audit";
 
 // C-14/C-15 — turning an enquiry into a member: booking a trial,
 // converting, and the conversion rate by source.
@@ -97,8 +98,8 @@ export async function bookTrial(
     if (!created.ok) return created;
 
     await enrolMember(ctx, { memberId: created.memberId, batchId: input.batchId });
-    await withTenant(ctx.tenantId, (tx) =>
-      tx
+    await withTenant(ctx.tenantId, async (tx) => {
+      await tx
         .update(enquiries)
         .set({
           memberId: created.memberId,
@@ -110,8 +111,23 @@ export async function bookTrial(
           updatedAt: new Date(),
           updatedBy: ctx.userId,
         })
-        .where(eq(enquiries.id, input.enquiryId)),
-    );
+        .where(eq(enquiries.id, input.enquiryId));
+      // The enquiry's own audit row goes in the SAME transaction as
+      // its update. The member's creation and the enrolment keep their
+      // own rows — this one is about what happened to the enquiry.
+      await auditEnquiryStateChanged(tx, ctx, {
+        action: "enquiry.trial_book",
+        id: input.enquiryId,
+        before: enquiryAuditState(enquiry),
+        after: {
+          ...enquiryAuditState(enquiry),
+          stage: "trial_scheduled",
+          memberId: created.memberId,
+          trialBatchId: input.batchId,
+          locationId: enquiry.locationId ?? input.details.locationId,
+        },
+      });
+    });
     return { ok: true, memberId: created.memberId };
   }
   return { ok: false, error: "Could not generate a unique member code. Try again." };
@@ -149,12 +165,18 @@ export async function convertEnquiry(
     });
     if (!result.ok) return result;
 
-    await withTenant(ctx.tenantId, (tx) =>
-      tx
+    await withTenant(ctx.tenantId, async (tx) => {
+      await tx
         .update(enquiries)
         .set({ stage: "converted", updatedAt: new Date(), updatedBy: ctx.userId })
-        .where(eq(enquiries.id, input.enquiryId)),
-    );
+        .where(eq(enquiries.id, input.enquiryId));
+      await auditEnquiryStateChanged(tx, ctx, {
+        action: "enquiry.convert",
+        id: input.enquiryId,
+        before: enquiryAuditState(enquiry),
+        after: { ...enquiryAuditState(enquiry), stage: "converted" },
+      });
+    });
     return { ok: true, memberId: enquiry.memberId };
   }
 
@@ -186,8 +208,8 @@ export async function convertEnquiry(
     }
     if (!created.ok) return created;
 
-    await withTenant(ctx.tenantId, (tx) =>
-      tx
+    await withTenant(ctx.tenantId, async (tx) => {
+      await tx
         .update(enquiries)
         .set({
           memberId: created.memberId,
@@ -198,8 +220,19 @@ export async function convertEnquiry(
           updatedAt: new Date(),
           updatedBy: ctx.userId,
         })
-        .where(eq(enquiries.id, input.enquiryId)),
-    );
+        .where(eq(enquiries.id, input.enquiryId));
+      await auditEnquiryStateChanged(tx, ctx, {
+        action: "enquiry.convert",
+        id: input.enquiryId,
+        before: enquiryAuditState(enquiry),
+        after: {
+          ...enquiryAuditState(enquiry),
+          stage: "converted",
+          memberId: created.memberId,
+          locationId: enquiry.locationId ?? input.newMember!.locationId,
+        },
+      });
+    });
     return { ok: true, memberId: created.memberId };
   }
   return { ok: false, error: "Could not generate a unique member code. Try again." };

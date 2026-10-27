@@ -822,6 +822,62 @@ over marks recorded — unmarked is unknown, not 0%.
   schema (subscription rows are not renewal events), so a renewal series
   would be invented. Reported as a data gap.
 
+### Lavender Club — Option B (human approved, 27 October 2026)
+
+The human approved a specific Owner Home composition and palette. This
+amendment supersedes the "design pending" note for the OWNER HOME and
+the OWNER SHELL only. Every other rule in this file — the security,
+budget, accessibility and truthfulness rules above — still stands.
+
+- **Palette.** Lavender Club is now **Option B**: a pale lilac canvas
+  (`#F8F7FC`) and sidebar (`#EFEBF7`), a plum action family
+  (`#634889`) and an aubergine ink (`#292136`). The muted ink is
+  `#6B5A85` — one shade darker than the board's `#756C83`, which lands
+  at 4.23:1 on the pale lilac sidebar and would fail AA.
+- **One markup, two presets.** The owner home and the owner shell never
+  branch on the preset. The difference is carried by the token layer:
+  the shared semantic layer (`--surface-*`, `--text-*`, `--border-*`,
+  `--action-*`) is declared once and follows the base palette, and
+  every token whose VALUE differs per preset (`--selected-*`,
+  `--surface-featured`, `--surface-attention*`, `--chart-*`,
+  `--illustration-*`) is declared in BOTH presets.
+- **The sidebar** carries the product mark and the academy above the
+  navigation, and the account row and the exit control below it, so all
+  three stay reachable when the navigation is taller than a short
+  screen. The selected row is the preset's selection pill, not a
+  hard-coded white card.
+- **The header** is a compact 56px sticky row: a breadcrumb derived
+  from the same navigation list the sidebar renders, the record search
+  and the appearance control.
+- **Owner Home composition.** The rest of §7 stands, with these
+  changes:
+  1. the screen opens with the **day, the academy and the location the
+     figures cover**, with a small piece of club artwork beside the
+     heading;
+  2. **four figures on a desktop**; on a phone the two money figures
+     stay as cards and the member and session counts collapse into one
+     compact line;
+  3. one dominant action (collect a payment) and quiet secondary
+     actions — unchanged;
+  4. the day's sessions are a **timeline** with the real occupancy and
+     a truthful current/next distinction (a session is only called
+     "in progress" when the register says so). The attention queue is
+     beside it: every item stays reachable, and a money-late item is
+     never the one folded away behind a disclosure;
+  5. **"Money at a glance"** — the collections panel and the payment mix
+     on ONE shared Day/Week/Month control placed above both panels, so
+     the two always describe the same period;
+  6. the insights preview — unchanged.
+- **The artwork** is original SVG drawn from the semantic illustration
+  tokens. It is chosen from the club's OWN programme names (never from
+  a list the product does not have), it is stable for the visit, it is
+  static first (no idle loop) and a reduced-motion reader sees a still
+  picture.
+- **The product name stays "Aqua".** The approved board used a working
+  brand; renaming the product — and with it the cookies, env vars, PWA
+  ids and deploy infrastructure — is a coordinated decision outside
+  this work.
+
 ### Verification criteria
 
 - 1280×900 and 390×844 with the seeded owner, plus one intermediate width

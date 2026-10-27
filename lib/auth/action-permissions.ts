@@ -354,6 +354,16 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   requestBookingBillAction: "payments.record",
   readBookingBillAction: "payments.record",
 
+  // Batch 6 — booking price administration. Pricing is management
+  // authority: `settings.manage` is owner/admin only, so the
+  // receptionist role does not gain it. The booking screen's
+  // "is any price configured?" read rides bookings.read and returns
+  // counts only.
+  listBookingPriceRulesAction: "settings.manage",
+  getBookingPriceStatusAction: "bookings.read",
+  saveBookingPriceRuleAction: "settings.manage",
+  setBookingPriceRuleActiveAction: "settings.manage",
+
   // V-08 — facility utilisation on /owner/reports.
   getFacilityUtilisationAction: "reports.operational",
 

@@ -16,6 +16,14 @@ import { OWNER_SIDEBAR_GROUPS, type OwnerSidebarGroup } from "@/lib/nav";
 // the Accountant's finance-shaped frame; when no list is supplied
 // (component tests, any future owner-only caller) the full contract
 // renders unchanged.
+//
+// Owner Lavender B (27 October 2026) — the selected row is now a PILL
+// painted with the preset's own selection tokens
+// (`--selected-surface` / `--selected-ink`). It used to be a hard-coded
+// white card, which read as a white hole on the pale lilac sidebar.
+// The tokens are declared in BOTH presets, so the same markup is a mint
+// pill in Mint Garden and a lilac pill in Lavender Club — no theme
+// branch, no second component.
 export function OwnerSideNav({
   groups = OWNER_SIDEBAR_GROUPS,
 }: {
@@ -43,11 +51,10 @@ export function OwnerSideNav({
                     aria-current={isActive ? "page" : undefined}
                     className={`flex min-h-11 items-center gap-3 rounded-ctl px-3 text-[14px] font-medium transition-colors duration-150 ${
                       isActive
-                        ? // The selected row is a white pill on the
-                          // pastel sidebar — the strongest, clearest
-                          // active state the direction uses.
-                          "bg-paper text-[var(--accent-ink)]"
-                        : "text-ink-2 hover:bg-paper/70"
+                        ? // The selected row is the preset's selection
+                          // pill — a tinted surface, not a white card.
+                          "bg-[var(--selected-surface)] text-[var(--selected-ink)]"
+                        : "text-ink-2 hover:bg-[var(--surface-nav-hover)]"
                     }`}
                   >
                     <Icon

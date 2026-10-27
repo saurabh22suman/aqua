@@ -80,8 +80,44 @@ export async function visibleEnquiry(
   ctx: ActionCtx,
   enquiryId: string,
 ): Promise<VisibleEnquiry | null> {
+  return readEnquiry(tx, ctx, enquiryId, false);
+}
+
+// The same read, but it LOCKS the row (FOR UPDATE) for the rest of
+// the transaction.
+//
+// Use it when the decision to mutate depends on the row's CURRENT
+// state — the stage graph decides from the stage the row holds now.
+// With the lock, "read the state, decide, write" is one atomic step:
+// two concurrent callers cannot both decide against the same stale
+// state, so the second one cannot apply a transition the graph
+// forbids (a converted enquiry reopened to "lost") or overwrite the
+// first one's stage while its audit row claims a before-state that
+// never was.
+//
+// The lock is taken INSIDE the same tenant + location scope as the
+// read: a caller that cannot SEE the row never locks it. The lock can
+// therefore not be used to stall, or to probe for, another tenant's
+// or another location's enquiry — an out-of-scope caller gets
+// "Enquiry not found." without waiting for anybody.
+export async function lockVisibleEnquiry(
+  tx: TenantTx,
+  ctx: ActionCtx,
+  enquiryId: string,
+): Promise<VisibleEnquiry | null> {
+  return readEnquiry(tx, ctx, enquiryId, true);
+}
+
+// The one query behind both reads, so the visibility rule cannot
+// drift between them.
+async function readEnquiry(
+  tx: TenantTx,
+  ctx: ActionCtx,
+  enquiryId: string,
+  lock: boolean,
+): Promise<VisibleEnquiry | null> {
   const { predicate } = await enquiryScope(tx, ctx);
-  const [row] = await tx
+  const query = tx
     .select({
       id: enquiries.id,
       stage: enquiries.stage,
@@ -94,7 +130,9 @@ export async function visibleEnquiry(
     .from(enquiries)
     .where(and(...enquiryConditions(ctx, predicate, [eq(enquiries.id, enquiryId)])))
     .limit(1);
-  return row ?? null;
+  // Drizzle emits `... limit 1 for update`, which is valid PostgreSQL.
+  const rows = lock ? await query.for("update") : await query;
+  return rows[0] ?? null;
 }
 
 // The row shape every enquiry read returns. The mapper lives here so

@@ -323,14 +323,23 @@ describe("review dashboard location scope (A07)", () => {
 // honesty contracts survive: the money figure is today's captured
 // total and says so, register state is never called attendance, and
 // the phantom "Today's facilities" heading stays gone.
+//
+// Owner Lavender B (27 October 2026): the screen opens with the day,
+// the academy and the scope, and the sections were split into the
+// components/owner-home/ modules. The scan follows the composition:
+// the ORDER is still read from the dashboard's own JSX (the block
+// markers below), and the wording guards read the file that owns the
+// wording.
 describe("owner Home composition and labels", () => {
-  it("leads with the summary, then the dominant action, then the workspace, then one trend panel", () => {
+  it("leads with the context, then the summary, then the dominant action, then the workspace, then one trend panel", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
-    const summary = src.indexOf("Collected today");
-    const action = src.indexOf("Collect payment");
-    const attention = src.indexOf("Needs you today");
+    const context = src.indexOf("<OwnerHomeHeader");
+    const summary = src.indexOf("<OwnerHomeMetrics");
+    const action = src.indexOf("<OwnerHomeActions");
+    const attention = src.indexOf("<OwnerHomeAttention");
     const trend = src.indexOf("<OwnerHomeCharts");
-    expect(summary).toBeGreaterThan(-1);
+    expect(context).toBeGreaterThan(-1);
+    expect(summary).toBeGreaterThan(context);
     expect(action).toBeGreaterThan(summary);
     expect(attention).toBeGreaterThan(action);
     expect(trend).toBeGreaterThan(attention);
@@ -338,7 +347,11 @@ describe("owner Home composition and labels", () => {
     expect(src).not.toContain("Payments recorded today");
     expect(src).not.toContain("Today's facilities");
     // Completion is stated as marks recorded, never as attendance.
-    expect(src).toContain("Register complete");
-    expect(src).not.toContain("Attendance\u2019s");
+    const sessionState = readFileSync(
+      "components/owner-home/session-state.ts",
+      "utf8",
+    );
+    expect(sessionState).toContain("Register complete");
+    expect(sessionState).not.toContain("Attendance\u2019s");
   });
 });

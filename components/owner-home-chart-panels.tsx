@@ -105,7 +105,9 @@ export function CollectionsPanel({
               ariaLabel={`Collections by payment group for ${period.tabLabel}, ${period.currentLabel}, in rupees. Cash, digital and other are stacked per bucket.`}
             />
           </div>
-          <ChartLegend />
+          {/* The phone legend. Above lg the ECharts canvas draws its
+              own legend, painted from the same chart tokens. */}
+          <ChartLegend className="lg:hidden" />
           <ChartTable
             caption={`Collections, ${period.tabLabel} (${period.currentLabel})`}
             mobile

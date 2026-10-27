@@ -42,6 +42,33 @@ function tokenColor(name: string, fallback: string): string {
   return value || fallback;
 }
 
+/**
+ * The chart's own palette, read from the preset's tokens.
+ *
+ * Every colour the canvas draws comes from here — the series, the
+ * axis, the grid lines, the legend and the tooltip — so the chart
+ * belongs to the preset the reader is in instead of keeping colours
+ * that only the page around it follows. The tokens are declared in
+ * BOTH presets, so switching the preset repaints the whole canvas.
+ */
+function chartTheme() {
+  return {
+    // The series colours carry MEANING and keep it across presets.
+    cash: tokenColor("--chart-1", "#1f5e3a"),
+    digital: tokenColor("--chart-2", "#0e7c86"),
+    other: tokenColor("--chart-3", "#8a5a00"),
+    attendance: tokenColor("--chart-2", "#0e7c86"),
+    // The chrome around the data.
+    ink: tokenColor("--color-ink", "#0f1f1c"),
+    axis: tokenColor("--chart-axis", "#5b6f6b"),
+    grid: tokenColor("--chart-grid", "#e7ece9"),
+    tooltipSurface: tokenColor("--chart-tooltip-surface", "#ffffff"),
+    tooltipInk: tokenColor("--chart-tooltip-ink", "#0f1f1c"),
+    tooltipBorder: tokenColor("--chart-tooltip-border", "#e4e9e6"),
+    paper: tokenColor("--color-paper", "#ffffff"),
+  };
+}
+
 export type OwnerBar = {
   label: string;
   fullLabel: string;
@@ -76,14 +103,32 @@ export default function OwnerChart(props: OwnerChartProps) {
     // The series colours come from the preset's chart tokens. The
     // MEANING is fixed: cash is money, digital is digital, other is
     // other — only the hue follows the preset.
-    const cash = tokenColor("--chart-1", "#1f5e3a");
-    const digital = tokenColor("--chart-2", "#0e7c86");
-    const other = tokenColor("--chart-3", "#8a5a00");
-    const attendance = tokenColor("--chart-2", "#0e7c86");
-    const ink = tokenColor("--color-ink", "#0f1f1c");
-    const ink3 = tokenColor("--color-ink-3", "#5b6f6b");
-    const line = tokenColor("--color-line", "rgba(15,31,28,.10)");
-    const paper = tokenColor("--color-paper", "#ffffff");
+    const theme = chartTheme();
+    const cash = theme.cash;
+    const digital = theme.digital;
+    const other = theme.other;
+    const attendance = theme.attendance;
+    const ink = theme.ink;
+    const ink3 = theme.axis;
+    const line = theme.grid;
+    const paper = theme.paper;
+    const tooltip = {
+      backgroundColor: theme.tooltipSurface,
+      borderColor: theme.tooltipBorder,
+      borderWidth: 1,
+      padding: [8, 10] as [number, number],
+      textStyle: { color: theme.tooltipInk, fontSize: 12 },
+      extraCssText: "box-shadow: 0 6px 24px rgba(0,0,0,.12); border-radius: 10px;",
+    };
+    const legend = {
+      show: true,
+      top: 0,
+      right: 0,
+      itemWidth: 10,
+      itemHeight: 8,
+      itemGap: 14,
+      textStyle: { color: ink3, fontSize: 11 },
+    };
     const reduceMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -100,8 +145,10 @@ export default function OwnerChart(props: OwnerChartProps) {
           animation,
           animationDuration,
           aria: { enabled: true, description: props.ariaLabel },
-          grid: { top: 8, right: 8, bottom: 26, left: 50 },
+          grid: { top: 26, right: 8, bottom: 26, left: 50 },
+          legend,
           tooltip: {
+            ...tooltip,
             trigger: "axis",
             confine: true,
             formatter: (params: unknown) => {
@@ -147,6 +194,7 @@ export default function OwnerChart(props: OwnerChartProps) {
           aria: { enabled: true, description: props.ariaLabel },
           grid: { top: 8, right: 10, bottom: 26, left: 38 },
           tooltip: {
+            ...tooltip,
             trigger: "axis",
             confine: true,
             formatter: (params: unknown) => {
@@ -199,6 +247,7 @@ export default function OwnerChart(props: OwnerChartProps) {
             subtextStyle: { color: ink3, fontSize: 11 },
           },
           tooltip: {
+            ...tooltip,
             trigger: "item",
             confine: true,
             formatter: (params: unknown) => {

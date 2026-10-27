@@ -8,7 +8,7 @@ import type { ChartMetric } from "@/lib/services/owner-home-charts";
 // Owner Home chart band — the composition: two panels, one period.
 //
 //   * a wide Collections / Attendance panel (one metric at a time, URL
-//     state), with the period control and the DoD/WoW/MoM comparison;
+//     state), with the DoD/WoW/MoM comparison;
 //   * a smaller payment-mix doughnut for the selected period.
 //
 // The panels themselves live in components/owner-home-chart-panels.tsx;
@@ -25,6 +25,12 @@ import type { ChartMetric } from "@/lib/services/owner-home-charts";
 //   * a phone gets a chart as well as a table: the ECharts island is
 //     `lg+` only, so below `lg` the panels carry a server-rendered SVG
 //     of the same numbers (components/owner-mini-chart.tsx).
+//
+// Owner Lavender B (27 October 2026) — the band is now "Money at a
+// glance" and the Day / Week / Month control sits ABOVE both panels,
+// so the collections panel and the payment mix always describe the
+// same period. The control keeps the metric and the facility scope in
+// the URL, so a period change never widens what the owner may read.
 
 const METRIC_LABEL: Record<ChartMetric, string> = {
   collections: "Collections",
@@ -51,7 +57,10 @@ export function OwnerHomeCharts({
 }) {
   if (!data) {
     return (
-      <section className="mt-4 rounded-card border border-line bg-paper px-4 py-4">
+      <section
+        data-testid="owner-home-money"
+        className="mt-5 rounded-card border border-line bg-paper px-4 py-4"
+      >
         <p className="text-[13.5px] font-medium">Charts are unavailable right now</p>
         <p className="mt-1 text-[12.5px] text-ink-3">
           The figures above are unchanged; reload to try the charts again.
@@ -78,63 +87,75 @@ export function OwnerHomeCharts({
 
   return (
     <section
-      className="mt-4 grid gap-3 lg:grid-cols-3 lg:items-start"
-      aria-label="Trends and payment mix"
+      data-testid="owner-home-money"
+      className="mt-5"
+      aria-label="Money at a glance"
     >
-      <article className="min-w-0 rounded-card border border-line bg-paper p-4 lg:col-span-2">
-        <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-          <div className="min-w-0">
-            <h2 className="font-display text-[15px] font-semibold">Trends</h2>
-            <p className="mt-0.5 text-[12.5px] text-ink-3">
-              {METRIC_LABEL[metric]} · {data.period.tabLabel} · {data.period.currentLabel}{" "}
-              (Asia/Kolkata)
-            </p>
-            <HistoryLink
-              isMonth={data.period.key === "month"}
-              href={scope({ trend: metric, period: "month" })}
-              monthRange={monthRange(today)}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-ink-3">
-                Metric
-              </span>
-              <Segmented
-                label="Metric"
-                items={(["collections", "attendance"] as ChartMetric[]).map((key) => ({
-                  key,
-                  label: METRIC_LABEL[key],
-                  href: scope({ trend: key, period: data.period.key }),
-                  active: metric === key,
-                }))}
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="font-display text-[17px] font-semibold">Money at a glance</h2>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            Collections and how members paid
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-ink-3">
+            Period
+          </span>
+          <Segmented
+            label="Period"
+            items={(["day", "week", "month"] as const).map((key) => ({
+              key,
+              label: PERIOD_LABEL[key],
+              href: scope({ trend: metric, period: key }),
+              active: data.period.key === key,
+            }))}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3 lg:items-start">
+        <article className="min-w-0 rounded-card border border-line bg-paper p-4 lg:col-span-2">
+          <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+            <div className="min-w-0">
+              <h3 className="font-display text-[15px] font-semibold">Trends</h3>
+              <p className="mt-0.5 text-[12.5px] text-ink-3">
+                {METRIC_LABEL[metric]} · {data.period.tabLabel} ·{" "}
+                {data.period.currentLabel} (Asia/Kolkata)
+              </p>
+              <HistoryLink
+                isMonth={data.period.key === "month"}
+                href={scope({ trend: metric, period: "month" })}
+                monthRange={monthRange(today)}
               />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-medium uppercase tracking-wider text-ink-3">
-                Period
-              </span>
-              <Segmented
-                label="Period"
-                items={(["day", "week", "month"] as const).map((key) => ({
-                  key,
-                  label: PERIOD_LABEL[key],
-                  href: scope({ trend: metric, period: key }),
-                  active: data.period.key === key,
-                }))}
-              />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-3">
+                  Metric
+                </span>
+                <Segmented
+                  label="Metric"
+                  items={(["collections", "attendance"] as ChartMetric[]).map((key) => ({
+                    key,
+                    label: METRIC_LABEL[key],
+                    href: scope({ trend: key, period: data.period.key }),
+                    active: metric === key,
+                  }))}
+                />
+              </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        {metric === "collections" ? (
-          <CollectionsPanel data={data} feesLink={canReadFees ? feesLink : null} />
-        ) : (
-          <AttendancePanel data={data} facility={facility} />
-        )}
-      </article>
+          {metric === "collections" ? (
+            <CollectionsPanel data={data} feesLink={canReadFees ? feesLink : null} />
+          ) : (
+            <AttendancePanel data={data} facility={facility} />
+          )}
+        </article>
 
-      <PaymentMixPanel data={data} feesLink={canReadFees ? feesLink : null} />
+        <PaymentMixPanel data={data} feesLink={canReadFees ? feesLink : null} />
+      </div>
     </section>
   );
 }

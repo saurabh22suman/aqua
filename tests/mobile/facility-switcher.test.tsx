@@ -78,6 +78,19 @@ vi.mock("@/lib/auth/surface-access", () => ({
   canAccessSurface: () => true,
   SURFACE_OWNER: "owner",
 }));
+// Owner Lavender B (27 October 2026): the owner layout now also reads
+// the academy's branding, so the shell can name the club in its
+// sidebar. It is the same cheap single-row read the Home page makes.
+vi.mock("@/lib/services/branding", () => ({
+  getBranding: async () => ({
+    displayName: "Aqua Worli",
+    shortName: "AW",
+    accent: "mango",
+    fallbackDisplayName: "Aqua Worli",
+    fallbackShortName: "AW",
+    initials: "AW",
+  }),
+}));
 vi.mock("@/lib/services/people", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/services/people")>();
   return { ...actual, listLocations: async () => LOCATIONS };
