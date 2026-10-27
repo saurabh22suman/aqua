@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -31,8 +34,6 @@ import {
 // instead of pretending a tenant-level text field can edit it.
 // Display helpers live in components/settings/owner-config-values.ts.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
   const router = useRouter();
@@ -159,7 +160,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                     Current value
                   </span>
                   {valueType(item) === "boolean" ? (
-                    <select
+                    <Select
                       value={drafts[item.key] ?? "false"}
                       onChange={(e) =>
                         setDrafts((prev) => ({
@@ -167,13 +168,13 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                           [item.key]: e.target.value,
                         }))
                       }
-                      className={inputClass}
+                      
                     >
                       <option value="true">On</option>
                       <option value="false">Off</option>
-                    </select>
+                    </Select>
                   ) : (
-                    <input
+                    <Input
                       type={
                         valueType(item) === "integer" ||
                         valueType(item) === "number"
@@ -190,18 +191,20 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                           [item.key]: e.target.value,
                         }))
                       }
-                      className={inputClass}
+                      
                     />
                   )}
                 </label>
-                <button
-                  type="button"
+                <Button
+            variant="primary"
+            size="md"
+            className="inline-flex items-center justify-center"
+            type="button"
                   disabled={pending && pendingKey === item.key}
                   onClick={() => save(item)}
-                  className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-                >
+          >
                   {pending && pendingKey === item.key ? "Saving…" : "Save"}
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="mt-3">
@@ -239,7 +242,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                       <span className="block text-[12px] font-medium text-ink-2 mb-1">
                         What should it be?
                       </span>
-                      <input
+                      <Input
                         value={requestValues[item.key] ?? ""}
                         onChange={(e) =>
                           setRequestValues((prev) => ({
@@ -247,14 +250,14 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                             [item.key]: e.target.value,
                           }))
                         }
-                        className={inputClass}
+                        
                       />
                     </label>
                     <label className="block">
                       <span className="block text-[12px] font-medium text-ink-2 mb-1">
                         Why? (optional)
                       </span>
-                      <input
+                      <Input
                         value={requestNotes[item.key] ?? ""}
                         onChange={(e) =>
                           setRequestNotes((prev) => ({
@@ -262,7 +265,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                             [item.key]: e.target.value,
                           }))
                         }
-                        className={inputClass}
+                        
                       />
                     </label>
                     <button

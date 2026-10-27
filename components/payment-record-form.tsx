@@ -9,15 +9,15 @@ import { formatINR } from "@/lib/money/format";
 import { formatDateIST } from "@/lib/time/tz";
 import type { InvoiceRow } from "@/lib/services/invoices";
 import type { MemberListRow } from "@/lib/services/people";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
 // PR2-C3 — the counter recording half of /reception/collect-payment.
 // A receptionist finds the member, picks an open invoice and records
 // cash or UPI through the existing recordPayment service (no parallel
 // money path). UPI requires its reference; the server's refusal is
 // shown verbatim.
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 function openInvoices(invoices: InvoiceRow[]): InvoiceRow[] {
   return invoices.filter(
@@ -135,29 +135,30 @@ export function PaymentRecordForm() {
       </div>
 
       <div>
-        <label className="block" htmlFor="payment-member-search">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Find member
-          </span>
-          <div className="flex gap-2">
-            <input
-              id="payment-member-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Name, phone or member code"
-              className={inputClass}
-              data-testid="payment-member-search"
-            />
-            <button
-              type="button"
-              onClick={() => void search()}
-              disabled={busy || query.trim().length === 0}
-              className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
-            >
-              Search
-            </button>
-          </div>
-        </label>
+        {/* Owner redesign (C2) — the shared labelled controls. The
+            journey (search → choose a member → choose an invoice →
+            record) and the test ids are unchanged. */}
+        <Field id="payment-member-search" label="Find member">
+          {() => (
+            <div className="flex gap-2">
+              <Input
+                id="payment-member-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Name, phone or member code"
+                data-testid="payment-member-search"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void search()}
+                disabled={busy || query.trim().length === 0}
+              >
+                Search
+              </Button>
+            </div>
+          )}
+        </Field>
 
         {results ? (
           results.length === 0 ? (
@@ -235,19 +236,17 @@ export function PaymentRecordForm() {
 
       {selectedInvoice ? (
         <div className="space-y-3 border-t border-line pt-3">
-          <label className="block" htmlFor="payment-amount">
-            <span className="block text-[12px] font-medium text-ink-2 mb-1">
-              Amount (₹)
-            </span>
-            <input
-              id="payment-amount"
-              value={amountText}
-              onChange={(event) => setAmountText(event.target.value)}
-              inputMode="decimal"
-              className={inputClass}
-              data-testid="payment-amount"
-            />
-          </label>
+          <Field id="payment-amount" label="Amount (₹)">
+            {() => (
+              <Input
+                id="payment-amount"
+                value={amountText}
+                onChange={(event) => setAmountText(event.target.value)}
+                inputMode="decimal"
+                data-testid="payment-amount"
+              />
+            )}
+          </Field>
 
           <fieldset>
             <legend className="text-[12px] font-medium text-ink-2 mb-1">
@@ -276,28 +275,27 @@ export function PaymentRecordForm() {
           </fieldset>
 
           {method === "upi" ? (
-            <label className="block" htmlFor="payment-reference">
-              <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                UPI reference (UTR / transaction id)
-              </span>
-              <input
-                id="payment-reference"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                className={inputClass}
-                data-testid="payment-reference"
-              />
-            </label>
+            <Field id="payment-reference" label="UPI reference (UTR / transaction id)">
+              {() => (
+                <Input
+                  id="payment-reference"
+                  value={reference}
+                  onChange={(event) => setReference(event.target.value)}
+                  data-testid="payment-reference"
+                />
+              )}
+            </Field>
           ) : null}
 
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={submit}
             disabled={busy}
-            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            className="w-full"
           >
             {busy ? "Recording…" : "Record payment"}
-          </button>
+          </Button>
         </div>
       ) : null}
 

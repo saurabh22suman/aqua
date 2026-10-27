@@ -51,7 +51,7 @@ export default async function SessionsPage() {
 
   return (
     <main className="px-5 pt-6 pb-8">
-      <BackLink href="/owner/programs" label="Programs" />
+      {hasPermission(ctx, "programs.read") ? <BackLink href="/owner/programs" label="Programs" /> : null}
 
       <div className="flex items-center gap-2">
         <UserCog size={20} className="text-ink-2" />
@@ -63,7 +63,7 @@ export default async function SessionsPage() {
         reads who actually ran the session.
       </p>
 
-      <Link
+      {hasPermission(ctx, "attendance.read") ? <Link
         href="/owner/schedule"
         className="mt-4 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
       >
@@ -77,7 +77,7 @@ export default async function SessionsPage() {
           </span>
         </span>
         <span className="text-[13px] text-ink-3">→</span>
-      </Link>
+      </Link> : null}
 
       <UpcomingSessionsList
         initialSessions={upcoming}

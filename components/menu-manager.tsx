@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -20,8 +22,6 @@ import type { LocationOption } from "@/lib/services/people";
 // actions, which enforce settings.manage server-side. The manager
 // never mutates without the action returning ok.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
   const router = useRouter();
@@ -66,12 +66,12 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           Category name
         </span>
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Beverages"
           maxLength={120}
-          className={inputClass}
+          
           data-testid="menu-category-name"
         />
       </label>
@@ -80,10 +80,10 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Facility
           </span>
-          <select
+          <Select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
-            className={inputClass}
+            
             data-testid="menu-category-location"
           >
             {locations.map((location) => (
@@ -91,7 +91,7 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
                 {location.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       ) : null}
       <div className="flex items-center gap-3">

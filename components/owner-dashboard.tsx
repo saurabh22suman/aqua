@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
-import { OwnerHomeActions } from "@/components/owner-home/owner-home-actions";
+import { OwnerHomeActions } from "@/components/owner-ui/owner-home-actions";
 import { OwnerAccountControl } from "@/components/owner-home/owner-account-control";
 import { OwnerHomeAttention } from "@/components/owner-home/owner-home-attention";
 import type { OwnerAttentionRow } from "@/components/owner-home/owner-home-attention";
@@ -432,7 +432,7 @@ export function OwnerDashboard({
           <Link
             key={link.href}
             href={link.href}
-            className="flex min-h-[48px] items-center gap-2.5 rounded-ctl border border-line bg-paper px-3.5 py-2"
+            className="flex min-h-12 items-center gap-2.5 rounded-ctl border border-[var(--control-border)] bg-paper px-4 py-2 motion-fast transition-colors hover:border-[var(--control-border-hover)]"
           >
             <link.icon size={16} className="flex-none text-ink-3" aria-hidden="true" />
             <span className="text-[13px] font-medium">{link.label}</span>

@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import type { ShiftTemplateRow } from "@/lib/services/shifts";
 import type { StaffRow } from "@/lib/services/staff";
 
@@ -78,80 +81,91 @@ export function AddShiftForm({
     <section className="mt-5 rounded-card border border-line bg-paper p-4">
       <h2 className="font-display text-[15px] font-semibold">Add a shift</h2>
       <div className="mt-3 grid gap-3">
-        <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-3">Staff</span>
-          <select
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-          >
-            {staff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.fullName} · {s.staffType}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div>
+          <Field id="add-shift-staff" label="Staff">
+            {(field) => (
+              <Select
+                {...field}
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+              >
+                {staff.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.fullName} · {s.staffType}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <label className="block min-w-0">
             <span className="mb-1 block text-[11px] text-ink-3">Date</span>
             <DateField value={shiftDate} onChange={setShiftDate} />
           </label>
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">
-              Template (optional)
-            </span>
-            <select
-              value={templateId}
-              onChange={(e) => applyTemplate(e.target.value)}
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            >
-              <option value="">Custom times</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="min-w-0">
+            <Field id="add-shift-template" label="Template (optional)">
+              {(field) => (
+                <Select
+                  {...field}
+                  value={templateId}
+                  onChange={(e) => applyTemplate(e.target.value)}
+                >
+                  <option value="">Custom times</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">Start</span>
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            />
-          </label>
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">End</span>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            />
-          </label>
+          <div className="min-w-0">
+            <Field id="add-shift-start" label="Start">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              )}
+            </Field>
+          </div>
+          <div className="min-w-0">
+            <Field id="add-shift-end" label="End">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                />
+              )}
+            </Field>
+          </div>
         </div>
         {locations.length > 1 ? (
-          <label className="block">
-            <span className="mb-1 block text-[11px] text-ink-3">
-              Location of this shift
-            </span>
-            <select
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            >
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <Field id="add-shift-location" label="Location of this shift">
+              {(field) => (
+                <Select
+                  {...field}
+                  value={locationId}
+                  onChange={(e) => setLocationId(e.target.value)}
+                >
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </div>
         ) : null}
         <Button
           variant="primary"

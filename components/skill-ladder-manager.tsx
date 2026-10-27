@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useState } from "react";
 import {
   updateSkillLevelAction,
@@ -46,8 +47,11 @@ function LevelCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
         />
       </label>
       {canEdit ? (
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-2"
+            type="button"
           disabled={busy || name.trim().length === 0}
           onClick={() => {
             setBusy(true);
@@ -61,10 +65,9 @@ function LevelCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
               setBusy(false);
             })();
           }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          >
           {busy ? "Saving…" : "Save level"}
-        </button>
+        </Button>
       ) : (
         <p className="mt-2 text-[12px] text-ink-3">
           Read only. Curriculum editing is delegated to the academy’s
@@ -132,8 +135,11 @@ function SkillCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
         </div>
       </details>
       {canEdit ? (
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-2"
+            type="button"
           disabled={busy || name.trim().length === 0}
           onClick={() => {
             setBusy(true);
@@ -148,10 +154,9 @@ function SkillCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
               setBusy(false);
             })();
           }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          >
           {busy ? "Saving…" : "Save skill"}
-        </button>
+        </Button>
       ) : null}
       {message ? (
         <p role="status" className="mt-1.5 text-[12px] text-ink-3">

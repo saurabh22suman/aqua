@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useState, useTransition } from "react";
 import { updateTenantProfileAction } from "@/lib/actions/tenant-profile";
 
@@ -15,8 +17,6 @@ type ProfileState = {
   gstin: string;
 };
 
-const inputClass =
-  "mt-1 min-h-11 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
   const [state, setState] = useState<ProfileState>(initial);
@@ -55,17 +55,17 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
         <span className="block text-[13px] font-medium text-ink-2">
           Academy name
         </span>
-        <input id="academy-name" type="text" {...field("name")} className={inputClass} />
+        <Input id="academy-name" type="text" {...field("name")}  />
       </label>
 
       <label className="block" htmlFor="academy-currency">
         <span className="block text-[13px] font-medium text-ink-2">Currency</span>
-        <input
+        <Input
           id="academy-currency"
           type="text"
           maxLength={3}
           {...field("currency")}
-          className={inputClass}
+          
         />
         <span className="mt-1 block text-[12px] text-ink-3">
           ISO 4217, three uppercase letters.
@@ -74,7 +74,7 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
 
       <label className="block" htmlFor="academy-timezone">
         <span className="block text-[13px] font-medium text-ink-2">Time zone</span>
-        <input id="academy-timezone" type="text" {...field("timezone")} className={inputClass} />
+        <Input id="academy-timezone" type="text" {...field("timezone")}  />
         <span className="mt-1 block text-[12px] text-ink-3">
           IANA identifier, e.g. Asia/Kolkata.
         </span>
@@ -84,12 +84,12 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
         <span className="block text-[13px] font-medium text-ink-2">
           GSTIN (optional)
         </span>
-        <input
+        <Input
           id="academy-gstin"
           type="text"
           maxLength={15}
           {...field("gstin")}
-          className={inputClass}
+          
         />
         <span className="mt-1 block text-[12px] text-ink-3">
           Changing this affects future invoices only — already-issued documents
@@ -107,14 +107,15 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
       ) : null}
 
       <div className="flex items-center gap-3">
-        <button
+        <Button
+          variant="primary"
+          size="md"
+          className="inline-flex items-center justify-center"
           type="button"
           onClick={submit}
-          disabled={pending}
-          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
-          {pending ? "Saving…" : "Save"}
-        </button>
+          disabled={pending}>
+        {pending ? "Saving…" : "Save"}
+      </Button>
         {savedAt ? (
           <p role="status" className="text-[12.5px] text-ink-2">
             Saved.

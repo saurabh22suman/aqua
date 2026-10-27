@@ -9,15 +9,33 @@ import {
   StatusBadge,
   ENQUIRY_STAGE_TONE,
 } from "@/components/ui/StatusBadge";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { formatPhoneIN } from "@/lib/phone";
 
 const SOURCES = ["walk-in", "phone", "referral", "online", "other"] as const;
+
+/**
+ * Which surface this board is serving.
+ *
+ * `front-desk` — reception's own capture-first board. This is the
+ * default so the reception journey is unchanged.
+ *
+ * `oversight` — the owner's board. Owner oversight leads (the current
+ * enquiries first, with their drill-down) and the routine capture is
+ * secondary, available when the owner is covering reception.
+ */
+export type EnquiriesBoardVariant = "front-desk" | "oversight";
 
 export function EnquiriesBoard({
   initialEnquiries,
   detailHrefPrefix = "/owner/enquiries",
   locations,
   canWrite,
+  variant = "front-desk",
 }: {
   initialEnquiries: EnquiryRow[];
   detailHrefPrefix?: string;
@@ -25,6 +43,7 @@ export function EnquiriesBoard({
   // the caller's allowed locations come from the server page.
   locations: Array<{ id: string; name: string }>;
   canWrite: boolean;
+  variant?: EnquiriesBoardVariant;
 }) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
   const [fullName, setFullName] = useState("");
@@ -33,6 +52,7 @@ export function EnquiriesBoard({
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(variant === "front-desk");
 
   async function submit() {
     if (!fullName.trim() || !locationId) return;
@@ -73,54 +93,139 @@ export function EnquiriesBoard({
     );
   }
 
+  const capture = (
+    <CaptureCard
+      fullName={fullName}
+      phone={phone}
+      source={source}
+      locationId={locationId}
+      locations={locations}
+      error={error}
+      busy={busy}
+      onFullName={setFullName}
+      onPhone={setPhone}
+      onSource={setSource}
+      onLocationId={setLocationId}
+      onSubmit={() => void submit()}
+    />
+  );
+
+  if (variant === "oversight") {
+    // Owner oversight leads; the routine capture stays secondary.
+    return (
+      <div className="space-y-4">
+        <EnquiryList enquiries={enquiries} detailHrefPrefix={detailHrefPrefix} />
+        <div>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setCaptureOpen((open) => !open)}
+            aria-expanded={captureOpen}
+            aria-controls="enquiry-capture"
+          >
+            {captureOpen
+              ? "Close enquiry capture"
+              : "Capture an enquiry when covering reception"}
+          </Button>
+          {captureOpen ? (
+            <div id="enquiry-capture" className="mt-3">
+              {capture}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="rounded-card border border-line bg-paper p-3.5 space-y-2">
-        <p className="text-[13px] font-medium">Quick capture</p>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Name</span>
-          <input
+      {capture}
+      <EnquiryList enquiries={enquiries} detailHrefPrefix={detailHrefPrefix} />
+    </div>
+  );
+}
+
+function CaptureCard({
+  fullName,
+  phone,
+  source,
+  locationId,
+  locations,
+  error,
+  busy,
+  onFullName,
+  onPhone,
+  onSource,
+  onLocationId,
+  onSubmit,
+}: {
+  fullName: string;
+  phone: string;
+  source: (typeof SOURCES)[number];
+  locationId: string;
+  locations: Array<{ id: string; name: string }>;
+  error: string | null;
+  busy: boolean;
+  onFullName: (value: string) => void;
+  onPhone: (value: string) => void;
+  onSource: (value: (typeof SOURCES)[number]) => void;
+  onLocationId: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="rounded-card border border-line bg-paper p-3.5 space-y-3">
+      <p className="text-[13px] font-medium">Quick capture</p>
+
+      {/* Owner redesign (C2) — shared labelled controls. The capture
+          card uses the primitives' own tints: a neutral entry field and
+          the shared picker surface. No page-local surface override is
+          added on top of them. */}
+      <Field id="enquiry-capture-name-field" label="Name">
+        {(field) => (
+          <Input
+            {...field}
             type="text"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Name"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            onChange={(e) => onFullName(e.target.value)}
             data-testid="enquiry-capture-name"
           />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
-          <input
+        )}
+      </Field>
+
+      <Field id="enquiry-capture-phone-field" label="Phone (optional)">
+        {(field) => (
+          <Input
+            {...field}
             type="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (optional)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            onChange={(e) => onPhone(e.target.value)}
           />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Source</span>
-          <select
+        )}
+      </Field>
+
+      <Field id="enquiry-capture-source-field" label="Source">
+        {(field) => (
+          <Select
+            {...field}
             value={source}
-            onChange={(e) => setSource(e.target.value as (typeof SOURCES)[number])}
-            aria-label="Source"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            onChange={(e) => onSource(e.target.value as (typeof SOURCES)[number])}
           >
             {SOURCES.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
-        </label>
-        {locations.length > 1 ? (
-          <label className="block">
-            <span className="block text-[12px] text-ink-3 mb-1">Site</span>
-            <select
+          </Select>
+        )}
+      </Field>
+
+      {locations.length > 1 ? (
+        <Field id="enquiry-capture-location-field" label="Site">
+          {(field) => (
+            <Select
+              {...field}
               value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-              aria-label="Site"
-              className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+              onChange={(e) => onLocationId(e.target.value)}
               data-testid="enquiry-capture-location"
             >
               {locations.map((l) => (
@@ -128,26 +233,27 @@ export function EnquiriesBoard({
                   {l.name}
                 </option>
               ))}
-            </select>
-          </label>
-        ) : null}
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || !fullName.trim() || !locationId}
-          className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
-          data-testid="enquiry-capture-submit"
-        >
-          {busy ? "Saving…" : "Capture enquiry"}
-        </button>
-        {error ? (
-          <p role="alert" className="text-[12px] text-ink-2">
-            {error}
-          </p>
-        ) : null}
-      </div>
+            </Select>
+          )}
+        </Field>
+      ) : null}
 
-      <EnquiryList enquiries={enquiries} detailHrefPrefix={detailHrefPrefix} />
+      <Button
+        variant="primary"
+        size="md"
+        onClick={onSubmit}
+        disabled={busy || !fullName.trim() || !locationId}
+        className="w-full"
+        data-testid="enquiry-capture-submit"
+      >
+        {busy ? "Saving…" : "Capture enquiry"}
+      </Button>
+
+      {error ? (
+        <p role="alert" className="text-[12px] text-ink-2">
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -162,11 +268,11 @@ function EnquiryList({
   return (
     <ul data-testid="enquiries-list">
       {enquiries.length === 0 ? (
-        <li className="rounded-ctl border border-line bg-paper px-4 py-8 text-center">
-          <p className="text-[14px] font-medium">No enquiries yet</p>
-          <p className="mt-1 text-[12.5px] text-ink-3">
-            Capture a walk-in, phone call, or online lead above — name and source only at first contact.
-          </p>
+        <li className="rounded-ctl border border-line bg-paper list-none">
+          <EmptyState
+            title="No enquiries yet"
+            body="Capture a walk-in, phone call or online lead — name and source only at first contact."
+          />
         </li>
       ) : (
         enquiries.map((e) => (

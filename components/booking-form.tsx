@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CafeMemberPicker } from "@/components/cafe-member-picker";
 import { createBookingAction, quoteBookingAction } from "@/lib/actions/bookings";
-import { inputClass } from "@/components/cafe-order-shared";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { SLOT_STARTS, slotEnd } from "@/components/booking-shared";
 import { formatINR } from "@/lib/money/format";
 import { zonedWallTimeToInstant } from "@/lib/time/tz";
@@ -42,6 +43,7 @@ export function BookingForm({
   onDateChange: (date: string) => void;
   onCreated: () => void;
 }) {
+  const fieldId = useId();
   const [subUnitId, setSubUnitId] = useState("");
   const [slotStart, setSlotStart] = useState(SLOT_STARTS[9]!);
   const [mode, setMode] = useState<"member" | "walk-in">("member");
@@ -128,13 +130,13 @@ export function BookingForm({
   return (
     <section className="rounded-card border border-line bg-paper p-4 space-y-4">
       <div>
-        <label className="block text-[12px] font-medium text-ink-2 mb-1">
+        <label htmlFor={`${fieldId}-facility`} className="block text-[12px] font-medium text-ink-2 mb-1">
           {titleCase(resolveTerm(terminology, "facility", 1))}
         </label>
-        <select
+        <Select
           value={facilityId}
           onChange={(event) => onFacilityChange(event.target.value)}
-          className={inputClass}
+          id={`${fieldId}-facility`}
           data-testid="booking-facility"
         >
           {facilities.map((option) => (
@@ -142,18 +144,18 @@ export function BookingForm({
               {option.name} · {option.locationName}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-1">
+          <label htmlFor={`${fieldId}-subunit`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Lane / court
           </label>
-          <select
+          <Select
             value={subUnitId}
             onChange={(event) => setSubUnitId(event.target.value)}
-            className={inputClass}
+            id={`${fieldId}-subunit`}
             data-testid="booking-subunit"
           >
             <option value="">
@@ -164,33 +166,32 @@ export function BookingForm({
                 {unit.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-1">
+          <label htmlFor={`${fieldId}-date`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Date
           </label>
-          <input
+          <Input
             type="date"
             lang="en-IN"
-            placeholder="dd/mm/yyyy"
             value={date}
             min={today}
             onChange={(event) => onDateChange(event.target.value)}
-            className={inputClass}
+            id={`${fieldId}-date`}
             data-testid="booking-date"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-[12px] font-medium text-ink-2 mb-1">
+        <label htmlFor={`${fieldId}-slot`} className="block text-[12px] font-medium text-ink-2 mb-1">
           Time slot
         </label>
-        <select
+        <Select
           value={slotStart}
           onChange={(event) => setSlotStart(event.target.value)}
-          className={inputClass}
+          id={`${fieldId}-slot`}
           data-testid="booking-slot"
         >
           {SLOT_STARTS.map((start) => (
@@ -198,13 +199,13 @@ export function BookingForm({
               {start}–{slotEnd(start)}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
-      <div>
-        <p className="block text-[12px] font-medium text-ink-2 mb-2">
+      <fieldset>
+        <legend className="block text-[12px] font-medium text-ink-2 mb-2">
           Who is it for?
-        </p>
+        </legend>
         <div className="grid grid-cols-2 gap-2">
           {(["member", "walk-in"] as const).map((option) => (
             <button
@@ -223,7 +224,7 @@ export function BookingForm({
             </button>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       {mode === "member" ? (
         <CafeMemberPicker
@@ -234,14 +235,14 @@ export function BookingForm({
         />
       ) : (
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-1">
+          <label htmlFor={`${fieldId}-walkin-name`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Walk-in name
           </label>
-          <input
+          <Input
             value={walkInName}
             onChange={(event) => setWalkInName(event.target.value)}
-            className={inputClass}
             placeholder="Name at the desk"
+            id={`${fieldId}-walkin-name`}
             data-testid="booking-walkin-name"
           />
           <p className="mt-1.5 text-[11px] text-ink-3">

@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import {
   createLocationAction,
@@ -15,8 +18,6 @@ import { BusinessHoursEditor } from "@/components/settings/business-hours-editor
 // concept — just the academy's own details and a quiet path to add a
 // second site.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 const KINDS: Array<{ value: "club" | "cafe" | "mixed"; label: string }> = [
   { value: "club", label: "Club / academy" },
@@ -116,27 +117,27 @@ function LocationCard({
       <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">Name</span>
-          <input
+          <Input
             value={name}
             disabled={!canWrite}
             onChange={(e) => setName(e.target.value)}
-            className={inputClass}
+            
           />
         </label>
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">Kind</span>
-          <select
+          <Select
             value={kind}
             disabled={!canWrite}
             onChange={(e) => setKind(e.target.value as LocationAdminRow["kind"])}
-            className={inputClass}
+            
           >
             {KINDS.map((k) => (
               <option key={k.value} value={k.value}>
                 {k.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -156,15 +157,18 @@ function LocationCard({
                 <span className="mb-0.5 block text-[11px] text-ink-3">
                   {label}
                 </span>
-                <input
+                <Input
                   value={(address ?? {})[field] ?? ""}
                   onChange={(e) => setField(field, e.target.value)}
-                  className={inputClass}
+                  
                 />
               </label>
             ))}
           </div>
-          <button
+          <Button
+            variant="primary"
+            size="md"
+            className="mt-3"
             type="button"
             disabled={busy || name.trim().length === 0}
             onClick={() => {
@@ -182,10 +186,9 @@ function LocationCard({
                 setBusy(false);
               })();
             }}
-            className="mt-3 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
           >
             {busy ? "Saving…" : "Save location"}
-          </button>
+          </Button>
         </>
       ) : null}
 
@@ -229,30 +232,32 @@ function CreateLocationForm({
         <span className="mb-0.5 block text-[11px] text-ink-3">
           New location name
         </span>
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className={inputClass}
+          
           placeholder="Andheri West"
         />
       </label>
       <label className="mt-2 block">
         <span className="mb-0.5 block text-[11px] text-ink-3">Kind</span>
-        <select
+        <Select
           value={kind}
           onChange={(e) => setKind(e.target.value as "club" | "cafe" | "mixed")}
-          className={inputClass}
+          
         >
           {KINDS.map((k) => (
             <option key={k.value} value={k.value}>
               {k.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="mt-2 flex gap-2">
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            type="button"
           disabled={busy || name.trim().length === 0}
           onClick={() => {
             setBusy(true);
@@ -269,10 +274,9 @@ function CreateLocationForm({
               setBusy(false);
             })();
           }}
-          className="min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          >
           {busy ? "Saving…" : "Create"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={() => setOpen(false)}

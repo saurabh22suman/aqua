@@ -4,6 +4,7 @@ import { Plus, Upload } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MembersBoard } from "@/components/members-board";
+import { buttonClasses } from "@/components/ui/Button";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
@@ -34,31 +35,38 @@ export default async function MembersPage({
 
   return (
     <main className="px-5 pt-10 pb-8">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-[19px] font-semibold">
-          {titleCase(resolveTerm(terminology, "member", "other"))}
-        </h1>
-        <div className="flex items-center gap-2">
-          {canWriteMembers ? (
-            <>
-              <Link
-                href="/owner/members/import"
-                className="flex min-h-11 items-center gap-1.5 rounded-ctl border border-line px-3.5 py-2 text-[13px] font-medium text-ink-2 hover:text-ink"
-                data-testid="members-import-link"
-              >
-                <Upload size={15} strokeWidth={2.2} />
-                Import
-              </Link>
-              <Link
-                href="/owner/members/new"
-                className="flex min-h-11 items-center gap-1.5 rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white"
-              >
-                <Plus size={16} strokeWidth={2.4} />
-                Add
-              </Link>
-            </>
-          ) : null}
+      {/* Owner redesign (C2) — one dominant action per workflow: "Add"
+          is the primary control beside the title and "Import" is the
+          secondary one. Both are the shared button classes, so their
+          height, radius and tints stay with the foundation owner. */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[19px] font-semibold">
+            {titleCase(resolveTerm(terminology, "member", "other"))}
+          </h1>
+          <p className="mt-1 text-[12.5px] text-ink-3">
+            Find a person and continue their work.
+          </p>
         </div>
+        {canWriteMembers ? (
+          <div className="flex flex-none items-center gap-2">
+            <Link
+              href="/owner/members/import"
+              className={buttonClasses({ variant: "secondary", size: "md" })}
+              data-testid="members-import-link"
+            >
+              <Upload size={15} strokeWidth={2.2} aria-hidden="true" />
+              Import
+            </Link>
+            <Link
+              href="/owner/members/new"
+              className={buttonClasses({ variant: "primary", size: "md" })}
+            >
+              <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
+              Add
+            </Link>
+          </div>
+        ) : null}
       </div>
       {members.length === 0 ? (
         canWriteMembers ? (

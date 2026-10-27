@@ -9,12 +9,19 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { formatDateTimeIST } from "@/lib/time/tz";
 import { BackLink } from "@/components/ui/BackLink";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AnnouncementComposer } from "@/components/announcements/announcement-composer";
 import { NotificationInbox } from "@/components/announcements/notification-inbox";
 
 // U-06 — owner announcements surface: compose + sent history +
 // the signed-in user's in-app inbox. In-app only; the WhatsApp
 // provider remains the C-40a mock.
+//
+// Owner redesign (C2) — the three surfaces stay distinct: compose and
+// the sent history are the academy-wide work (side by side on a
+// desktop), and the personal inbox is its own full-width section
+// below them. The history states the state of each announcement in a
+// word, so "created" and "sent" can be told apart at a glance.
 
 const AUDIENCE_LABELS: Record<string, string> = {
   all: "Everyone",
@@ -43,7 +50,7 @@ export default async function AnnouncementsPage() {
         and selected student contacts. The local demo captures messages in the mock viewer.
       </p>
 
-      <div className="mt-4 space-y-4">
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         {hasPermission(ctx, "messaging.send") ? (
           <AnnouncementComposer
             batches={batches}
@@ -52,8 +59,6 @@ export default async function AnnouncementsPage() {
             guardianLabel={resolveTerm(terminology, "guardian", "other")}
           />
         ) : null}
-
-        <NotificationInbox initial={notifications} />
 
         <section className="rounded-card border border-line bg-paper p-4">
           <h2 className="font-display text-[15px] font-semibold">Sent</h2>
@@ -69,13 +74,18 @@ export default async function AnnouncementsPage() {
                     <span className="text-[13.5px] font-medium text-ink">
                       {announcement.title}
                     </span>
-                    <span className="text-[11.5px] text-ink-3">
-                      {announcement.sentAt
-                        ? formatDateTimeIST(announcement.sentAt)
-                        : "Not sent"}
+                    <span data-testid="announcement-state">
+                      <StatusBadge tone="neutral">
+                        {announcement.sentAt ? "Sent" : "Not sent"}
+                      </StatusBadge>
                     </span>
                   </div>
-                  <p className="mt-0.5 whitespace-pre-wrap text-[12.5px] text-ink-2">
+                  <p className="mt-0.5 text-[11.5px] text-ink-3">
+                    {announcement.sentAt
+                      ? formatDateTimeIST(announcement.sentAt)
+                      : "No send time recorded"}
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-ink-2">
                     {announcement.body}
                   </p>
                   <p className="mt-1 text-[11.5px] text-ink-3">
@@ -89,6 +99,10 @@ export default async function AnnouncementsPage() {
             </ul>
           )}
         </section>
+      </div>
+
+      <div className="mt-4">
+        <NotificationInbox initial={notifications} />
       </div>
     </main>
   );

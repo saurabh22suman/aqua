@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   confirmCashCountAction,
@@ -38,8 +40,6 @@ import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
 const REVIEW_THRESHOLD_PAISE = 50_000; // ₹500
 const OWNER_CLOSE_THRESHOLD_PAISE = 200_000; // ₹2,000
 
-const inputClass =
-  "min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 type ReportState = { scope: string; data: DailyCollection };
 
@@ -250,30 +250,30 @@ export function CollectionsReport({
       <div className="flex flex-wrap items-end gap-2">
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">Date</span>
-          <input
+          <Input
             type="date"
             lang="en-IN"
             placeholder="dd/mm/yyyy"
             value={onDate}
             onChange={(e) => setOnDate(e.target.value)}
-            className={inputClass}
+            
           />
         </label>
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">
             {facilityLabel}
           </span>
-          <select
+          <Select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
-            className={inputClass}
+            
           >
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -431,11 +431,11 @@ export function CollectionsReport({
                         <span className="mb-0.5 block text-[11px] text-ink-3">
                           Reason for reopening (required)
                         </span>
-                        <input
+                        <Input
                           value={reopenReason}
                           disabled={busy}
                           onChange={(e) => setReopenReason(e.target.value)}
-                          className={`${inputClass} w-full`}
+                          className="w-full"
                           placeholder="Reason for reopening"
                         />
                       </label>
@@ -490,11 +490,11 @@ export function CollectionsReport({
                         <span className="mb-0.5 block text-[11px] text-ink-3">
                           Counted cash (₹)
                         </span>
-                        <input
+                        <Input
                           inputMode="decimal"
                           value={counted}
                           onChange={(e) => setCounted(e.target.value)}
-                          className={inputClass}
+                          
                           placeholder="0.00"
                         />
                       </label>
@@ -504,10 +504,10 @@ export function CollectionsReport({
                             ? "Reason (required)"
                             : "Reason (optional)"}
                         </span>
-                        <input
+                        <Input
                           value={note}
                           onChange={(e) => setNote(e.target.value)}
-                          className={`${inputClass} w-full`}
+                          className="w-full"
                           placeholder={
                             varianceNeedsReason
                               ? "Why the cash differs"

@@ -71,13 +71,20 @@ export default async function StaffDetailPage({
 
       <div className="mt-5 bg-paper border border-line rounded-card overflow-hidden">
         <div className="grid grid-cols-3 px-4 py-3 border-b border-line last:border-b-0">
-          <p className="text-[13px] text-ink-3">Status</p>
+          {/* Owner redesign (C2) + P2 (independent review) — the
+              profile states login access in the same words as the staff
+              directory, and it states only what it knows: a linked
+              identity is not an active login, because a revoked
+              invitation leaves the link in place. */}
+          <p className="text-[13px] text-ink-3">Login access</p>
           <div className="col-span-2">
-            <p className="text-[14px]">{staff.userId ? "Has login" : "No login"}</p>
+            <p className="text-[14px]">
+              {staff.userId ? "Linked" : "Not linked"}
+            </p>
             <p className="text-[12px] text-ink-3 mt-0.5">
               {staff.userId
-                ? "They sign in with their phone number — no separate password."
-                : "No phone-based login yet. Send an invite from the invitations surface to wire one up."}
+                ? "A phone-based login is linked to this record — they sign in with their phone number and PIN, no separate password. The Invitations surface holds the current access state."
+                : "No login is linked to this record. Send an invite from the invitations surface to add one."}
             </p>
           </div>
         </div>

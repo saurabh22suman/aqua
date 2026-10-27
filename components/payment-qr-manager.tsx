@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useActionState } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -18,8 +20,6 @@ import type {
 // these through the same service (the collect screen), never edits.
 
 // 16px per DESIGN.md §2: anything smaller triggers iOS zoom-on-focus.
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function AddUpiForm() {
   const [state, formAction, isPending] = useActionState(createPaymentQrAction, {
@@ -34,29 +34,25 @@ function AddUpiForm() {
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Nickname
           </span>
-          <input name="nickname" required maxLength={60} placeholder="Office account" className={inputClass} />
+          <Input name="nickname" required maxLength={60} placeholder="Office account"  />
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             UPI ID
           </span>
-          <input name="upiId" required maxLength={120} placeholder="club@okhdfcbank" className={inputClass} />
+          <Input name="upiId" required maxLength={120} placeholder="club@okhdfcbank"  />
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Payee name
           </span>
-          <input name="payeeName" required maxLength={120} placeholder="Sharma Sports" className={inputClass} />
+          <Input name="payeeName" required maxLength={120} placeholder="Sharma Sports"  />
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" size="md" pill disabled={isPending}>
           {isPending ? "Saving…" : "Add UPI QR"}
-        </button>
+        </Button>
         {!state.ok && state.error ? (
           <span role="alert" className="text-[12px] text-ink-2">
             {state.error}
@@ -85,29 +81,25 @@ function AddImageForm() {
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Nickname
           </span>
-          <input name="nickname" required maxLength={60} placeholder="Bank QR" className={inputClass} />
+          <Input name="nickname" required maxLength={60} placeholder="Bank QR"  />
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             QR image (PNG, JPEG or WebP, max 256 KB)
           </span>
-          <input
+          <Input
             type="file"
             name="image"
             accept="image/png,image/jpeg,image/webp"
             required
-            className="block min-h-11 w-full text-[16px] text-ink-2"
+            className="block w-full text-ink-2"
           />
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" size="md" pill disabled={isPending}>
           {isPending ? "Saving…" : "Add image QR"}
-        </button>
+        </Button>
         {!state.ok && state.error ? (
           <span role="alert" className="text-[12px] text-ink-2">
             {state.error}
@@ -225,7 +217,7 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Nickname
             </span>
-            <input value={nickname} onChange={(e) => setNickname(e.target.value)} className={inputClass} />
+            <Input value={nickname} onChange={(e) => setNickname(e.target.value)}  />
           </label>
           {qr.kind === "upi" ? (
             <>
@@ -233,13 +225,13 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   UPI ID
                 </span>
-                <input value={upiId} onChange={(e) => setUpiId(e.target.value)} className={inputClass} />
+                <Input value={upiId} onChange={(e) => setUpiId(e.target.value)}  />
               </label>
               <label className="block">
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Payee name
                 </span>
-                <input value={payeeName} onChange={(e) => setPayeeName(e.target.value)} className={inputClass} />
+                <Input value={payeeName} onChange={(e) => setPayeeName(e.target.value)}  />
               </label>
             </>
           ) : (
@@ -248,14 +240,17 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
             </p>
           )}
         </div>
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="md"
+          pill
           disabled={pending}
           onClick={save}
-          className="mt-3 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          className="mt-3"
         >
           {pending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </details>
 
       {message ? (

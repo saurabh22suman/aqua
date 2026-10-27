@@ -34,11 +34,21 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 afterEach(cleanup);
 
 describe("Input and Textarea", () => {
-  it("keeps 16px text (no iOS zoom on focus) and a 44px touch target", () => {
+  it("keeps 16px text (no iOS zoom on focus) and the 48px standard control height", () => {
+    // Owner redesign, 27 October 2026: the human approved ONE standard
+    // control — "Standard action buttons, text fields, selects, date and
+    // time pickers share a 48px height, 10px radius, 16px control text
+    // and consistent horizontal padding. Long actions may wrap and
+    // grow; do not clip them to meet a numeric height. Compact
+    // table/tertiary controls retain at least 44px effective targets."
+    //
+    // This assertion therefore MOVED from the 44px floor to the 48px
+    // standard. It is stricter, not weaker: the input may no longer
+    // render below 48px, and the 16px text rule is unchanged.
     render(<Input aria-label="Phone" />);
     const input = screen.getByLabelText("Phone");
     expect(input.className).toContain("text-[16px]");
-    expect(input.className).toContain("min-h-11");
+    expect(input.className).toContain("min-h-12");
   });
 
   it("marks an invalid input for assistive technology", () => {

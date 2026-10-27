@@ -25,6 +25,7 @@ import { TenantSignOut } from "@/components/tenant-sign-out";
 import { listAdminLocationsAction } from "@/lib/actions/locations";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
+import CalendarDays from "lucide-react/dist/esm/icons/calendar-days.mjs";
 
 // Owner UX audit (2026-10-24): Settings was fourteen equal-weight
 // links under one heading, with Configuration and the specialist
@@ -68,7 +69,11 @@ type SettingCategory = {
 // the skill ladder is only offered when the module is on (V-09), and a
 // single-site tenant never sees the concept of multiple locations
 // (U-07).
-function categories(flags: { ladderEnabled: boolean; multiLocation: boolean }): SettingCategory[] {
+function categories(flags: {
+  ladderEnabled: boolean;
+  multiLocation: boolean;
+  canReadBookings: boolean;
+}): SettingCategory[] {
   return [
   {
     key: "academy",
@@ -125,6 +130,20 @@ function categories(flags: { ladderEnabled: boolean; multiLocation: boolean }): 
         detail: "Create the programs you run and the batches inside them.",
         icon: ClipboardList,
       },
+      // The booking desk is only offered to a caller who can actually
+      // open it: the route needs bookings.read and the pool.booking
+      // entitlement, and it 404s for anyone else. A hidden link is not
+      // security — the route guard stays authoritative.
+      ...(flags.canReadBookings
+        ? [
+            {
+              href: "/owner/bookings",
+              label: "Bookings",
+              detail: "Book a facility slot and manage the day's bookings.",
+              icon: CalendarDays,
+            },
+          ]
+        : []),
     ],
   },
   {
@@ -137,6 +156,14 @@ function categories(flags: { ladderEnabled: boolean; multiLocation: boolean }): 
         label: "Membership plans",
         detail: "The priced plans a member can subscribe to.",
         icon: CreditCard,
+      },
+      // The price catalogue sits under this page's own settings.manage
+      // authority, which is exactly the authority its destination needs.
+      {
+        href: "/owner/settings/booking-prices",
+        label: "Booking prices",
+        detail: "Set facility slot prices before taking bookings.",
+        icon: Receipt,
       },
       {
         href: "/owner/settings/payment-qrs",
@@ -238,7 +265,15 @@ export default async function Page({
   const checklist = await getOnboardingChecklistAction().catch(() => null);
   const setupComplete = checklist ? checklist.items.every((item) => item.complete) : false;
 
-  const CATEGORIES = categories({ ladderEnabled, multiLocation });
+  const CATEGORIES = categories({
+    ladderEnabled,
+    multiLocation,
+    // The booking desk needs bookings.read AND the pool.booking
+    // entitlement; without either the route does not exist for the
+    // caller, so the link is withheld rather than offered and broken.
+    canReadBookings:
+      ctx.permissions.has("bookings.read") && ctx.features.has("pool.booking"),
+  });
   const active = CATEGORIES.find((c) => c.key === params.category);
 
   return (

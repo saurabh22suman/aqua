@@ -1,8 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateAbsenceAlertThresholdAction } from "@/lib/actions/absence-alerts";
+import { Input } from "@/components/ui/Input";
 
 // R.8 — owner setting for the low-attendance alert threshold.
 // Default 50%; the monthly alert also requires at least 4 recorded
@@ -48,14 +50,14 @@ export function AlertSettingsForm({
         <label className="block text-[12px] text-ink-3 mb-1">
           Alert when monthly attendance is below (%)
         </label>
-        <input
+        <Input
           type="number"
           min={0}
           max={100}
           inputMode="numeric"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="min-h-11 w-28 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+          className="w-28 border text-[16px]"
           data-testid="alert-threshold"
           aria-label="Attendance alert threshold percent"
         />
@@ -64,14 +66,14 @@ export function AlertSettingsForm({
         Needs at least 4 marked sessions this month, so a single miss
         never alerts. Three consecutive absences always alert.
       </p>
-      <button
+      <Button
+          variant="primary"
+          size="md"
         type="button"
         onClick={save}
-        disabled={busy}
-        className="rounded-ctl bg-[var(--accent-strong)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
-      >
+        disabled={busy}>
         {busy ? "Saving…" : "Save"}
-      </button>
+      </Button>
       {status === "saved" ? (
         <p className="text-[12px] text-ink-2">Saved.</p>
       ) : null}
