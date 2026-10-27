@@ -9,7 +9,8 @@ import {
   mintDrillIdentity,
   removeDrillContainer,
 } from "@/scripts/lib/disposable-restore/lifecycle";
-import { assertDisposableTarget, assertDistinctTargets } from "@/scripts/lib/disposable-restore/target";
+import { assertDisposableTarget, assertDistinctTargets, type DisposableTargetRole } from "@/scripts/lib/disposable-restore/target";
+import { buildContainerName } from "@/scripts/lib/disposable-restore/containers";
 import { provisionDestinationRoles, provisionSourceDatabase } from "@/scripts/lib/disposable-restore/provision";
 
 // B6 — the drill's negative cases.
@@ -51,43 +52,116 @@ function forceRemoveExact(containerName: string): void {
   }
 }
 
+/**
+ * Runs a drill that is expected to fail, and returns the EXACT
+ * container names that invocation created.
+ *
+ * The drill mints its own identities, so the test cannot know their
+ * names unless it supplies them. Injecting the identity factory is
+ * what makes "this invocation leaked nothing" an assertion about THIS
+ * drill's containers — rather than about the host's whole inventory of
+ * drill containers, which another lane running its own drill at the
+ * same moment changes without either drill leaking anything.
+ */
+async function runFailingDrill(
+  options: Parameters<typeof runDisposableRestoreDrill>[0],
+): Promise<{ ownContainers: string[]; error: unknown }> {
+  const ownContainers: string[] = [];
+  const identityFactory = (role: DisposableTargetRole) => {
+    const identity = mintDrillIdentity();
+    ownContainers.push(buildContainerName(identity, role));
+    return identity;
+  };
+
+  let error: unknown;
+  try {
+    await runDisposableRestoreDrill({ ...options, identityFactory });
+  } catch (err) {
+    error = err;
+  }
+  return { ownContainers, error };
+}
+
 describe("a corrupt archive is refused before anything is written", () => {
   it("fails the drill and removes every container it created", async () => {
-    const before = listDrillContainers();
+    const { ownContainers, error } = await runFailingDrill({
+      sourceDump: new TextEncoder().encode(
+        "PGDMP this is not a real archive, it is truncated",
+      ),
+    });
 
-    await expect(
-      runDisposableRestoreDrill({
-        sourceDump: new TextEncoder().encode(
-          "PGDMP this is not a real archive, it is truncated",
-        ),
-      }),
-    ).rejects.toThrow(/could not read|end of file|not in pg_dump custom format/i);
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(
+      /could not read|end of file|not in pg_dump custom format/i,
+    );
 
     // The drill removes exactly what it created — it does not leave a
-    // published port and a Postgres instance behind on failure.
-    expect(listDrillContainers().sort()).toEqual(before.sort());
+    // published port and a Postgres instance behind on failure. The
+    // assertion is about THESE containers: another lane's drill
+    // containers are none of this drill's business.
+    expect(ownContainers).toHaveLength(2);
+    for (const name of ownContainers) {
+      expect(
+        listDrillContainers(),
+        `the failed drill must have removed ${name}`,
+      ).not.toContain(name);
+    }
   }, 600_000);
 
   it("fails the drill for an empty archive", async () => {
-    const before = listDrillContainers();
+    const { ownContainers, error } = await runFailingDrill({
+      sourceDump: new Uint8Array(0),
+    });
 
-    await expect(
-      runDisposableRestoreDrill({ sourceDump: new Uint8Array(0) }),
-    ).rejects.toThrow(/empty/i);
-
-    expect(listDrillContainers().sort()).toEqual(before.sort());
+    expect((error as Error).message).toMatch(/empty/i);
+    expect(ownContainers).toHaveLength(2);
+    for (const name of ownContainers) {
+      expect(
+        listDrillContainers(),
+        `the failed drill must have removed ${name}`,
+      ).not.toContain(name);
+    }
   }, 600_000);
 
   it("fails the drill for bytes that are not an archive at all", async () => {
-    const before = listDrillContainers();
+    const { ownContainers, error } = await runFailingDrill({
+      sourceDump: new TextEncoder().encode("this is plain text, not a dump"),
+    });
 
-    await expect(
-      runDisposableRestoreDrill({
-        sourceDump: new TextEncoder().encode("this is plain text, not a dump"),
-      }),
-    ).rejects.toThrow(/PGDMP/i);
+    expect((error as Error).message).toMatch(/PGDMP/i);
+    expect(ownContainers).toHaveLength(2);
+    for (const name of ownContainers) {
+      expect(
+        listDrillContainers(),
+        `the failed drill must have removed ${name}`,
+      ).not.toContain(name);
+    }
+  }, 600_000);
 
-    expect(listDrillContainers().sort()).toEqual(before.sort());
+  it("leaves another lane's drill containers alone", async () => {
+    // A container that carries the drill label but was NOT created by
+    // this invocation — exactly what another lane's drill looks like
+    // from here. The failed drill must remove its own two and leave
+    // this one running: cleanup that swept the label would take another
+    // session's work with it.
+    const otherLane = await createDrillContainer({
+      identity: mintDrillIdentity(),
+      role: "source",
+    });
+    drillContainers.push(otherLane.containerName);
+
+    const { ownContainers, error } = await runFailingDrill({
+      sourceDump: new TextEncoder().encode("not a dump at all"),
+    });
+
+    expect((error as Error).message).toMatch(/PGDMP/i);
+    for (const name of ownContainers) {
+      expect(listDrillContainers()).not.toContain(name);
+    }
+    expect(
+      listDrillContainers(),
+      "the drill must not remove a container it did not create",
+    ).toContain(otherLane.containerName);
   }, 600_000);
 });
 

@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { env } from "@/lib/env";
+import { privilegedFixturePool as admin } from "../../db/privileged-fixture";
+//
+// The privileged pool is the SANCTIONED fixture helper
+// (tests/db/privileged-fixture.ts): a privileged connection for FIXTURE
+// SETUP only — seeding the tenants/locations/facilities/members the
+// tables under FORCE RLS hide from the application pool. Every
+// assertion in this file still runs against the application's own
+// services, which connect as `app_login` under tenant RLS. The
+// credential is named in exactly one place; this file never names it.
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import { addDays, todayInZone, zonedWallTimeToInstant } from "@/lib/time/tz";
 
@@ -25,7 +32,6 @@ import { addDays, todayInZone, zonedWallTimeToInstant } from "@/lib/time/tz";
 // granularity (whole-facility vs sub-unit) so the coordinator has
 // executable evidence of it rather than a description.
 
-const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 

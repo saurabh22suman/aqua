@@ -30,6 +30,7 @@ import {
   assertDistinctTargets,
   assertDisposableTarget,
   type DisposableTarget,
+  type DisposableTargetRole,
 } from "./target";
 import {
   createDrillContainer,
@@ -65,6 +66,17 @@ export type DrillOptions = {
    */
   appPoolTarget?: "source" | "destination";
   /**
+   * Mints the identities of the drill's two targets.
+   *
+   * Injectable so a caller can know the EXACT container names the drill
+   * will create, and therefore assert that those are gone afterwards.
+   * The alternative — comparing the host's whole inventory of drill
+   * containers before and after — is not this drill's to own: another
+   * lane running its own drill at the same time changes that inventory
+   * without either drill leaking anything.
+   */
+  identityFactory?: (role: DisposableTargetRole) => string;
+  /**
    * Restore THIS archive instead of dumping the source database. The
    * drill still seeds the source, provisions the destination and
    * verifies the result — but the bytes that arrive are the ones
@@ -93,8 +105,10 @@ export async function runDisposableRestoreDrill(
   const report = options.onProgress ?? (() => {});
   const created: string[] = [];
 
-  const sourceIdentity = mintDrillIdentity();
-  const destinationIdentity = mintDrillIdentity();
+  const sourceIdentity = (options.identityFactory ?? mintDrillIdentity)("source");
+  const destinationIdentity = (options.identityFactory ?? mintDrillIdentity)(
+    "destination",
+  );
 
   try {
     report("Creating the disposable source container...");

@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
-import { env } from "@/lib/env";
+import { privilegedFixturePool as admin } from "../../db/privileged-fixture";
+//
+// The privileged pool is the SANCTIONED fixture helper
+// (tests/db/privileged-fixture.ts): a privileged connection for FIXTURE
+// SETUP only — seeding the tenants/locations/facilities/members the
+// tables under FORCE RLS hide from the application pool. Every
+// assertion in this file still runs against the application's own
+// services, which connect as `app_login` under tenant RLS. The
+// credential is named in exactly one place; this file never names it.
 import { asTenantId, asUserId } from "@/lib/ids";
 
 // Batch 6 — the authorization boundary of the booking price actions.
@@ -33,7 +40,6 @@ vi.mock("@/lib/auth/context", () => ({
   requireDefaultCtx: async () => mocks.ctx,
 }));
 
-const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 
 const tenant = asTenantId(uuidv7());
