@@ -6,8 +6,8 @@ export function LoginCharacter({ compact = false }: { compact?: boolean }) {
     <div aria-hidden="true" className={compact ? styles.compact : styles.scene}>
       {/* Pre-optimised local asset; no request-time image processing. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img data-login-character src="/login/art/badminton.webp" alt="" width={640} height={673} decoding="async" loading="lazy" className={styles.player} />
-      <span className={styles.shuttle}>✦</span>
+      <img data-login-character src="/login/art/welcome-coach.webp" alt="" width={720} height={480} decoding="async" loading="eager" className={styles.player} />
+
     </div>
   );
 }

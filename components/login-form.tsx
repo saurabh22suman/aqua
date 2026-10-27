@@ -7,8 +7,6 @@ import { homeForSessionAction } from "@/lib/actions/auth-ui";
 import { formatPhoneIN, normaliseToE164 } from "@/lib/phone";
 import { syncBeforeLogout } from "@/lib/offline/logout";
 import { clearOfflineData, runOfflineLifecycle } from "@/lib/offline/client-session";
-import { BrandLockup } from "@/components/auth/sports-mark";
-import { LoginCharacter } from "@/components/auth/login-character";
 import { PhoneField } from "@/components/auth/phone-field";
 import { PinField } from "@/components/auth/pin-field";
 import { Button } from "@/components/ui/Button";
@@ -137,19 +135,11 @@ export function LoginForm() {
 
   return (
     <div className="relative">
-      {/* On a phone the panel is gone, so the brand moves into the form
-          column. */}
-      <div className="mb-7 lg:hidden">
-        <BrandLockup size="sm" />
-      </div>
-
-      <LoginCharacter compact />
       <h1 className="font-display text-[26px] font-semibold leading-tight text-ink">
         Sign in
       </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
-        Use your mobile number and PIN. If you have never joined, ask your
-        club for a login link.
+        Welcome back. Your club is ready when you are.
       </p>
 
       <form onSubmit={onSubmit} aria-busy={busy} className="mt-7 space-y-5">

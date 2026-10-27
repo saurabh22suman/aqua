@@ -263,12 +263,12 @@ describe("tenant login redesign", () => {
 
   // ── RED 6 — a branded club entry ───────────────────────────────────────
 
-  it("RED: presents the entry with a brand lockup and a club editorial panel", () => {
+  it("RED: presents the entry with a brand lockup and an overlapping sign-in panel", () => {
     render(<LoginPage />);
 
     expect(screen.getAllByText("Aqua").length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("complementary", { name: /about aqua/i }),
+      screen.getByRole("region", { name: /club sign in/i }),
     ).toBeTruthy();
     expect(
       screen.getByRole("heading", { level: 1, name: /sign in/i }),
@@ -279,7 +279,7 @@ describe("tenant login redesign", () => {
     const { container } = render(<LoginPage />);
 
     const artwork = [...container.querySelectorAll("img")];
-    expect(artwork).toHaveLength(2);
+    expect(artwork).toHaveLength(1);
     expect(artwork.every((image) => image.hasAttribute("data-login-character") && image.alt === "")).toBe(true);
     expect(container.querySelectorAll("svg").length).toBeGreaterThan(0);
     // No third-party sign-in, no pricing, no social proof.

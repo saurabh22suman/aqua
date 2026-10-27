@@ -1,0 +1,16 @@
+.page { min-height: 100dvh; padding: 40px 20px 24px; background: var(--color-deck); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.card { width: min(100%, 440px); border-radius: 28px; background: var(--color-paper); box-shadow: 0 16px 48px color-mix(in srgb, var(--color-ink) 9%, transparent); overflow: hidden; }
+.hero { position: relative; height: 230px; background: var(--accent); overflow: hidden; }
+.brand { position: relative; z-index: 2; padding: 22px 26px; }
+.brand :global(.text-ink), .brand :global(.text-ink-3) { color: var(--color-paper); }
+.art { position: absolute; width: 260px; left: 50%; bottom: 21px; transform: translateX(-50%); }
+.contours { position: absolute; width: 230px; height: 230px; border: 1px solid color-mix(in srgb, var(--color-paper) 18%, transparent); border-radius: 45%; left: -165px; top: 80px; box-shadow: 0 0 0 16px color-mix(in srgb, var(--color-paper) 6%, transparent), 0 0 0 32px color-mix(in srgb, var(--color-paper) 4%, transparent); transform: rotate(25deg); }
+.formPanel { position: relative; z-index: 3; margin-top: -27px; border-radius: 28px 28px 0 0; padding: 28px 28px 30px; background: var(--color-paper); }
+.formPanel h1 { text-align: center; font-size: 25px; }
+.formPanel h1 + p { text-align: center; max-width: 31ch; margin: 8px auto 0; color: var(--color-ink-2); }
+.formPanel form { margin-top: 24px; }
+.footer { margin-top: 18px; color: var(--color-ink-3); text-align: center; font-size: 12px; }
+@media (max-width: 600px) { .page { padding: 0; justify-content: flex-start; background: var(--color-paper); } .card { width: 100%; border-radius: 0; box-shadow: none; } .hero { height: 224px; } .formPanel { padding: 27px 24px 24px; } .footer { margin: 2px 16px 20px; } }
+@media (max-height: 700px) { .page { justify-content: flex-start; } .hero { height: 185px; } .art { width: 210px; bottom: 14px; } }
+
+@media (max-width: 360px) { .hero { height: 220px; } .art { width: 190px; left: 58%; bottom: 10px; } }
