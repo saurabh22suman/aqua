@@ -68,6 +68,14 @@
   --font-display: "Bricolage Grotesque", system-ui, sans-serif;
   --font-sans: "Instrument Sans", system-ui, sans-serif;
 
+  /* A named breakpoint for the owner home's four-across summary row
+   * and the session timeline's fourth column. The approved board is a
+   * 1280 layout, and a 1280 window with a scrollbar is 1265 CSS
+   * pixels wide — so the tailwind `xl` breakpoint (1280) does not
+   * reach it. 1180px is the width at which four summary figures and a
+   * four-column timeline read properly. */
+  --breakpoint-wide: 1180px;
+
   --radius-card: 20px;
   --radius-ctl: 14px;
   --radius-pill: 9999px;
@@ -129,8 +137,55 @@
   --action-soft: var(--accent-soft);
   --action-ink: var(--accent-ink);
 
-  --selected-surface: var(--accent-soft);
-  --selected-ink: var(--accent-ink);
+  --selected-surface: #DFEEE3;
+  --selected-ink: #0F3220;
+
+  /* The hover state of an unselected navigation row: a shade deeper
+   * than the sidebar, so a pointer target is visible in both presets
+   * without the row pretending to be selected. */
+  --surface-nav-hover: #D9E8DC;
+
+  /* ── Owner Home surfaces (approved Lavender Option B) ────────────
+   * Two extra surfaces the approved owner home needs, declared in
+   * BOTH presets so the page markup never branches on the theme:
+   *
+   *   --surface-featured  — the one row that is the current/next
+   *                         session and the highlighted figure. It is
+   *                         a tinted surface, never a status colour.
+   *   --surface-attention — the "needs you" panel. A quiet warm
+   *                         surface that says "look here" without
+   *                         inventing a state meaning.
+   */
+  --surface-featured: #EAF3EC;
+  --surface-attention: #FBF3EC;
+  --surface-attention-border: #F0E1D2;
+
+  /* ── Chart surface tokens ─────────────────────────────────────────
+   * The ECharts canvas is painted from CSS variables, not from baked
+   * hex values, so the tooltip, the axis, the grid lines and the
+   * legend follow the preset the reader is in. The series colours
+   * (--chart-1..5) keep their MEANING across presets; these are the
+   * surfaces around them.
+   */
+  --chart-axis: #5B6F6B;
+  --chart-grid: #E7ECE9;
+  --chart-tooltip-surface: #FFFFFF;
+  --chart-tooltip-ink: #0F1F1C;
+  --chart-tooltip-border: #E4E9E6;
+
+  /* ── Illustration tokens ──────────────────────────────────────────
+   * The small sport artwork beside the owner header is drawn from
+   * these, so it belongs to the theme instead of carrying its own
+   * colours. They are ART colours, not text colours: the artwork is
+   * decorative and sits beside a text heading, so no text is ever
+   * painted in them.
+   */
+  --illustration-ink: #23443A;
+  --illustration-primary: #2F7A63;
+  --illustration-secondary: #8FC7B4;
+  --illustration-water: #86C4D6;
+  --illustration-surface: #E6F1EC;
+  --illustration-accent: #E9B563;
 
   /* Restrained secondary tints — surfaces, never text. */
   --tint-butter: #F7EFD9;
@@ -167,6 +222,18 @@
   --z-overlay: 40;
   --z-toast: 50;
 
+  /* ── The sticky offset ────────────────────────────────────────────
+   * The height of the app chrome that sits ABOVE the shell's own
+   * sticky elements — today the demo banner, which is sticky at the
+   * top of the viewport. A sticky element at top:0 would slide
+   * underneath it (the sidebar's brand was clipped by the banner's
+   * height on every scrolled screen).
+   *
+   * The banner measures itself and publishes its height here; it is
+   * 0px when there is no banner, so the shell's sticky chrome starts
+   * at the top of the viewport as usual. */
+  --app-sticky-offset: 0px;
+
   /* ── Motion primitives ─────────────────────────────────────────────
    * CSS first, no motion library (docs/design-system/motion.md):
    * hover/press feedback only, no entrance animation. */
@@ -177,45 +244,80 @@
 }
 
 /* ── Lavender Club — the second (and only other) preset ─────────────── */
+/* Lavender Club, Option B (human approved, 27 October 2026). A pale
+ * lilac canvas and sidebar, a plum action family and an aubergine
+ * ink — one layout, the same markup as Mint Garden, and the
+ * difference carried entirely by these tokens.
+ *
+ * The muted ink is a shade darker than the board's #756C83 so that it
+ * still clears WCAG AA (4.5:1) on the pale lilac sidebar, where the
+ * board's value lands at 4.23:1. */
 [data-theme="lavender"] {
-  --color-deck: #F6F3FB;
+  --color-deck: #F8F7FC;
   --color-paper: #FFFFFF;
-  --color-ink: #2B1B3D;
-  --color-ink-2: #4A3A63;
+  --color-ink: #292136;
+  --color-ink-2: #584866;
   --color-ink-3: #6B5A85;
   /* Structural dark surface. Deliberately unchanged: the platform
    * console keeps its marine identity in both presets. */
   --color-marine: #0D3B36;
   --color-water: #0E7C86;
   --color-water-soft: #E3F1F2;
-  --color-line: rgba(43, 27, 61, 0.12);
+  --color-line: #EAE5F0;
 
   /* The lavender direction paints the same surfaces in lilac. Money
    * stays green in both presets (the lavender direction board keeps
    * the collected-money tile mint), because money is money. */
-  --color-sidebar: #F0ECFB;
+  --color-sidebar: #EFEBF7;
   --color-tile-money: #E7F4EE;
   --color-tile-info: #F1EDFC;
   --color-tile-butter: #F8F1DE;
 
-  --accent: #4C2E93;
+  --accent: #634889;
   --accent-soft: #EDE7FA;
-  --accent-ink: #3A2170;
-  --accent-strong: #4C2E93;
-  --focus-ring: #4C2E93;
+  --accent-ink: #4C326F;
+  --accent-strong: #634889;
+  --focus-ring: #634889;
 
-  --action-surface-hover: #3A2170;
+  --action-surface-hover: #523874;
   --surface-inverse: #2E1B4D;
 
   --tint-butter: #F7EFD9;
   --tint-powder: #E7E4F7;
 
+  /* The selected navigation row is a lilac pill on the pale lilac
+   * sidebar — the same role the Mint preset gives it as a mint one. */
+  --selected-surface: #DED4ED;
+  --selected-ink: #4C326F;
+  --surface-nav-hover: #E4DCF2;
+
+  /* Owner Home surfaces — declared in both presets so the page markup
+   * never branches on the theme. */
+  --surface-featured: #F2EDF9;
+  --surface-attention: #FCF5F5;
+  --surface-attention-border: #F2E2E5;
+
+  /* Chart surfaces. */
+  --chart-axis: #6B5A85;
+  --chart-grid: #EEE9F6;
+  --chart-tooltip-surface: #FFFFFF;
+  --chart-tooltip-ink: #292136;
+  --chart-tooltip-border: #EAE5F0;
+
+  /* Illustration art. */
+  --illustration-ink: #33224A;
+  --illustration-primary: #634889;
+  --illustration-secondary: #B9A3D6;
+  --illustration-water: #9BC6D8;
+  --illustration-surface: #EFE8FA;
+  --illustration-accent: #E3A857;
+
   /* The chart series keep their MEANING in this preset: cash stays the
-   * money green (series 1), digital takes the preset's violet (series
+   * money green (series 1), digital takes the preset's plum (series
    * 2), other stays a muted rose (series 3). A chart must not change
    * what a colour means just because the reader changed preset. */
   --chart-1: #1F5E3A;
-  --chart-2: #4C2E93;
+  --chart-2: #634889;
   --chart-3: #A6427E;
   --chart-4: #7E2B6E;
   --chart-5: #41525A;
@@ -268,6 +370,35 @@ html {
   * {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+  }
+}
+
+/* Illustration art — static first, gentle and event driven.
+ *
+ * The small sport artwork beside the owner heading is a still picture
+ * until the reader interacts with it. There is no idle loop, no
+ * entrance animation and no money animation: the artwork explains
+ * continuity, it never reports a result.
+ *
+ * The motion is a short, small transform on pointer hover and on
+ * keyboard focus, and it is removed entirely for a reader who asked
+ * for reduced motion (docs/design-system/motion.md). */
+.illustration-motion .illustration-drift {
+  transition: transform var(--motion-duration-slow) var(--motion-ease-standard);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .illustration-motion:hover .illustration-drift,
+  .illustration-motion:focus-within .illustration-drift {
+    transform: translateY(-1.5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .illustration-motion .illustration-drift {
+    transition: none !important;
+    transform: none !important;
+    animation: none !important;
   }
 }
 

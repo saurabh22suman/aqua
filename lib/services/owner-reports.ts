@@ -2,15 +2,19 @@ import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
-import { batches, programs } from "@/db/schema/programs";
 import { members } from "@/db/schema/people";
 import { enquiries } from "@/db/schema/enquiries";
 import { todayInZone } from "@/lib/time/tz";
-import { locationPredicate, resolveLocationAccess } from "@/lib/services/location-access";
 import type { ActionCtx } from "@/lib/auth/context";
+import type { BatchAttendanceReportRow } from "./attendance-report-query";
 
 // Re-export coach load so the existing import path keeps working.
 export { getCoachLoad, type CoachLoadRow } from "./coach-load";
+
+// Re-export the attendance report so the existing import path keeps
+// working. Its query — and the attendance-eligibility rule it
+// applies — lives in ./attendance-report-query.ts.
+export { getAttendanceReport, type BatchAttendanceReportRow } from "./attendance-report-query";
 
 // Phase 4 — owner reports (attendance by batch, enquiry funnel,
 // retention, coach load) sharing one module and filter shape.
@@ -20,75 +24,10 @@ export { getCoachLoad, type CoachLoadRow } from "./coach-load";
 
 export type ReportPeriod = { from: string; to: string };
 
-// 4.3 — attendance by batch. One attendance row per (session,
-// member); "total marks" equals sessions × enrolled for the period.
-// A batch with no sessions returns sessionCount=0 and pct=null.
-export type BatchAttendanceReportRow = {
-  batchId: string;
-  batchName: string;
-  programName: string;
-  sessionCount: number;
-  presentMarks: number;
-  totalMarks: number;
-  pct: number | null;
-};
-
-export async function getAttendanceReport(
-  ctx: ActionCtx,
-  period: ReportPeriod,
-  options: { locationId?: string } = {},
-): Promise<BatchAttendanceReportRow[]> {
-  return withTenant(ctx.tenantId, async (tx) => {
-    // O-08 — restricted callers see/export only their locations; the
-    // requested locationId can only narrow further.
-    const access = await resolveLocationAccess(tx, ctx);
-    const accessPredicate = locationPredicate(batches.locationId, access);
-    const rows = await tx
-      .select({
-        batchId: batches.id,
-        batchName: batches.name,
-        programName: programs.name,
-        sessionCount: sql<number>`count(distinct ${sessions.id})::int`,
-        presentMarks: sql<number>`count(*) filter (where ${attendance.status} in ('present', 'late'))::int`,
-        totalMarks: sql<number>`count(${attendance.id})::int`,
-      })
-      .from(batches)
-      .leftJoin(programs, eq(programs.id, batches.programId))
-      .leftJoin(
-        sessions,
-        and(
-          eq(sessions.batchId, batches.id),
-          eq(sessions.tenantId, ctx.tenantId),
-          gte(sessions.sessionDate, period.from),
-          lt(sessions.sessionDate, period.to),
-        ),
-      )
-      .leftJoin(
-        attendance,
-        and(eq(attendance.sessionId, sessions.id), eq(attendance.tenantId, ctx.tenantId)),
-      )
-      .where(
-        and(
-          eq(batches.tenantId, ctx.tenantId),
-          sql`${batches.deletedAt} is null`,
-          ...(options.locationId ? [eq(batches.locationId, options.locationId)] : []),
-          ...(accessPredicate ? [accessPredicate] : []),
-        ),
-      )
-      .groupBy(batches.id, batches.name, programs.name)
-      .orderBy(batches.name);
-
-    return rows.map((r) => ({
-      batchId: r.batchId,
-      batchName: r.batchName,
-      programName: r.programName ?? "",
-      sessionCount: Number(r.sessionCount),
-      presentMarks: Number(r.presentMarks),
-      totalMarks: Number(r.totalMarks),
-      pct: r.totalMarks > 0 ? Math.round((Number(r.presentMarks) / Number(r.totalMarks)) * 100) : null,
-    }));
-  });
-}
+// 4.3 — attendance by batch lives in ./attendance-report-query.ts
+// (the eligibility rule, the period semantics and the location
+// scope are documented there). The CSV shape below is the part that
+// stays with the report module.
 
 // 4.3 CSV — canonical field names, NOT tenant terminology.
 // A club that calls its members "swimmers" still sees

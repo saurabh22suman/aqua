@@ -81,6 +81,39 @@ and 200% zoom for shell changes. Do not let viewport emulation leak to user tabs
    returns PASS / CHANGES REQUIRED / BLOCKED; “modern/polished” is not established
    by typecheck, screenshots without inspection, or the builder's own claim.
 
+## Approved owner direction — Lavender Club Option B (27 October 2026)
+
+The human approved a specific owner palette and composition. The
+reference-direction section below is superseded for the OWNER HOME and
+the OWNER SHELL only; everything else in this contract still applies.
+
+- **One markup, two presets.** Lavender Club (Option B) and Mint Garden
+  render the SAME owner home and the SAME owner shell. No theme branch,
+  no duplicated page, no duplicated component. The difference is
+  carried by the token layer, and a token whose value differs per
+  preset is declared in both.
+- **The palette.** Option B is a pale lilac canvas and sidebar, a plum
+  action family and an aubergine ink. The muted ink is one shade darker
+  than the board's, because the board's value fails AA on the pale
+  lilac sidebar (4.23:1).
+- **The shell.** Viewport-bound sidebar; the brand and the academy
+  above the navigation, the account row and the exit control below it;
+  only the navigation region scrolls; a compact sticky header with a
+  breadcrumb derived from the same navigation list.
+- **The composition.** The day, the academy and the scope first; four
+  figures on a desktop and two plus a compact line on a phone; one
+  dominant action; a truthful session timeline with the real occupancy;
+  an attention queue where every item stays reachable and a money-late
+  item is never folded away; "Money at a glance" with ONE shared
+  Day/Week/Month control above the collections panel and the payment
+  mix.
+- **The artwork.** Small, original, SVG-native, drawn from the semantic
+  illustration tokens, chosen from the club's own programme names,
+  stable for the visit, static first, and a still picture under
+  `prefers-reduced-motion`.
+
+DESIGN.md §7 carries the full amendment.
+
 ## Reference direction pending design selection
 
 Human references: https://in.pinterest.com/saurabh25031996/_pins/

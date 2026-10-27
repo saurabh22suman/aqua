@@ -40,7 +40,7 @@ describe("LoginForm (phone + PIN)", () => {
 
   it("renders a phone field and a PIN field", () => {
     render(<LoginForm />);
-    expectInDocument(screen.getByPlaceholderText("+91 98765 43210"));
+    expectInDocument(screen.getByLabelText("Mobile number"));
     expectInDocument(screen.getByLabelText("PIN"));
   });
 
@@ -52,7 +52,7 @@ describe("LoginForm (phone + PIN)", () => {
     homeForSessionAction.mockResolvedValue({ kind: "ok", path: "/owner" });
 
     render(<LoginForm />);
-    fireEvent.change(screen.getByPlaceholderText("+91 98765 43210"), {
+    fireEvent.change(screen.getByLabelText("Mobile number"), {
       target: { value: "+91 98765-43210" },
     });
     fireEvent.change(screen.getByLabelText("PIN"), {
@@ -79,13 +79,13 @@ describe("LoginForm (phone + PIN)", () => {
     homeForSessionAction.mockResolvedValue({ kind: "ok", path: "/owner" });
 
     render(<LoginForm />);
-    const phoneInput = screen.getByPlaceholderText("+91 98765 43210");
+    const phoneInput = screen.getByLabelText("Mobile number");
     fireEvent.change(phoneInput, { target: { value: "9876543210" } });
     // The on-blur canonical form is the visible confirmation that a
     // bare number is understood — the F-1 contributing cause was that
     // the user could not tell what would be submitted.
     fireEvent.blur(phoneInput);
-    expect((phoneInput as HTMLInputElement).value).toBe("+91 98765 43210");
+    expect((phoneInput as HTMLInputElement).value).toBe("98765 43210");
     fireEvent.change(screen.getByLabelText("PIN"), {
       target: { value: "123456" },
     });
@@ -110,7 +110,7 @@ describe("LoginForm (phone + PIN)", () => {
       ),
     );
     render(<LoginForm />);
-    fireEvent.change(screen.getByPlaceholderText("+91 98765 43210"), {
+    fireEvent.change(screen.getByLabelText("Mobile number"), {
       target: { value: "9876543210" },
     });
     fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "000000" } });
@@ -132,7 +132,7 @@ describe("LoginForm (phone + PIN)", () => {
       tenantSlugs: ["demo-academy"],
     });
     render(<LoginForm />);
-    fireEvent.change(screen.getByPlaceholderText("+91 98765 43210"), {
+    fireEvent.change(screen.getByLabelText("Mobile number"), {
       target: { value: "9876543210" },
     });
     fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "123456" } });
@@ -149,7 +149,7 @@ describe("LoginForm (phone + PIN)", () => {
     );
     homeForSessionAction.mockResolvedValue({ kind: "none" });
     render(<LoginForm />);
-    fireEvent.change(screen.getByPlaceholderText("+91 98765 43210"), {
+    fireEvent.change(screen.getByLabelText("Mobile number"), {
       target: { value: "9876543210" },
     });
     fireEvent.change(screen.getByLabelText("PIN"), { target: { value: "123456" } });

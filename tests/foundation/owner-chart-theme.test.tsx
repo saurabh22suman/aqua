@@ -157,7 +157,14 @@ describe("owner charts — the series belong to the preset", () => {
     const chart1 = block.match(/--chart-1:\s*(#[0-9A-Fa-f]{6})/)?.[1];
     const chart2 = block.match(/--chart-2:\s*(#[0-9A-Fa-f]{6})/)?.[1];
     expect(chart1, "cash stays money in the second preset").toBe("#1F5E3A");
-    expect(chart2, "digital takes the preset colour").toBe("#4C2E93");
+    // The human approved "Lavender Club — Option B" on 27 October 2026:
+    // the preset's own plum (#634889) replaces the earlier violet
+    // (#4C2E93) as the action colour, and the digital series — which
+    // takes the preset's colour by this very rule — follows it.
+    expect(chart2, "digital takes the preset colour").toBe("#634889");
+    // And the preset's action colour IS that plum, so the series and
+    // the buttons belong to the same palette.
+    expect(block.match(/--accent-strong:\s*(#[0-9A-Fa-f]{6})/)?.[1]).toBe("#634889");
   });
 
   it("repaints the chart when the preset changes", async () => {

@@ -41,7 +41,15 @@ export async function getAttendanceReportAction(raw: unknown): Promise<BatchAtte
   const parsed = periodWithFacilitySchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getAttendanceReport({ tenantId: ctx.tenantId }, parsed, {
+  // The FULL authenticated context, not a narrowed `{ tenantId }`
+  // literal: requireDefaultCtx() has already resolved the caller's
+  // identity, role, permission set and LOCATION SCOPE. Rebuilding a
+  // narrow context here drops the location scope before the service
+  // can apply it, and the O-08 gate in the service cannot see what
+  // this adapter threw away — a location-restricted caller would be
+  // served the wrong rows instead of an error. Same contract as the
+  // owner-insights action (lib/actions/owner-insights.ts).
+  return getAttendanceReport(ctx, parsed, {
     locationId: parsed.locationId,
   });
 }
@@ -84,10 +92,15 @@ export async function attendanceReportCsvAction(raw: unknown): Promise<CsvEnvelo
   // facility scope the on-screen report displays; the service applies
   // the caller's location predicate on top, so a restricted caller
   // cannot export records outside their access.
+  //
+  // The same full context as the screen read (see
+  // getAttendanceReportAction): the export must show the caller
+  // exactly the rows the screen shows them, or the CSV becomes a
+  // wider or narrower view of the same report than the one on screen.
   const parsed = periodWithFacilitySchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  const rows = await getAttendanceReport({ tenantId: ctx.tenantId }, parsed, {
+  const rows = await getAttendanceReport(ctx, parsed, {
     locationId: parsed.locationId,
   });
   return {

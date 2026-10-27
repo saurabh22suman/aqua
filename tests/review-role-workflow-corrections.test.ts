@@ -41,6 +41,12 @@ const adminUser = asUserId(randomUUID());
 const coachUser = asUserId(randomUUID());
 const revivedUser = asUserId(randomUUID());
 const ownerTargetUser = asUserId(randomUUID());
+// The two location-scoped callers are actors too: the enquiry audit
+// trail names its actor through audit_log.actor_id, which references
+// users(id) -- a caller id that is not a real users row cannot be
+// recorded. Seeded below, like every other actor in this file.
+const scopedReceptionUser = asUserId(randomUUID());
+const scopedManagerUser = asUserId(randomUUID());
 const locA = randomUUID();
 const locB = randomUUID();
 
@@ -76,7 +82,7 @@ const adminCtx: ActionCtx = {
 };
 const scopedReception: ActionCtx = {
   tenantId,
-  userId: randomUUID() as never,
+  userId: scopedReceptionUser,
   roleKey: "receptionist",
   allLocations: false,
   locationIds: [locA],
@@ -84,7 +90,7 @@ const scopedReception: ActionCtx = {
 };
 const scopedManager: ActionCtx = {
   tenantId,
-  userId: randomUUID() as never,
+  userId: scopedManagerUser,
   roleKey: "admin",
   allLocations: false,
   locationIds: [locA],
@@ -163,6 +169,8 @@ beforeAll(async () => {
   await seedUser(coachUser, "+919000007003");
   await seedUser(revivedUser, "+919000007004");
   await seedUser(ownerTargetUser, "+919000007005");
+  await seedUser(scopedReceptionUser, "+919000007006");
+  await seedUser(scopedManagerUser, "+919000007007");
 
   await admin.query(
     "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true),($5,$2,$6,$7,'active',true),($8,$2,$9,$10,'active',true)",
