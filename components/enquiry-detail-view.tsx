@@ -17,7 +17,11 @@ import type { BatchWithProgramName } from "@/lib/services/programs";
 import type { EnquiryStage } from "@/db/schema/enquiries";
 import type { NewMemberDetails } from "@/lib/services/enquiries";
 import type { TerminologyState } from "@/lib/terminology/keys";
-import { formatDateTimeIST } from "@/lib/time/tz";
+import { formatDateTimeIST, zonedWallTimeToInstant } from "@/lib/time/tz";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 
 export function EnquiryDetailView({
   enquiry,
@@ -44,12 +48,15 @@ export function EnquiryDetailView({
   const [followUpDue, setFollowUpDue] = useState("");
   const [followUpNote, setFollowUpNote] = useState("");
 
-  const [showBookTrial, setShowBookTrial] = useState(false);
+  // Owner redesign (C2) — one workflow at a time. The trial form and
+  // the conversion form are alternative next actions, so opening one
+  // closes the other: "Trial and conversion forms should not be
+  // expanded together."
+  const [openWorkflow, setOpenWorkflow] = useState<"trial" | "convert" | null>(null);
   const [batchId, setBatchId] = useState(batches[0]?.id ?? "");
   const [trialDetails, setTrialDetails] = useState<NewMemberDetails | null>(null);
   const [trialValid, setTrialValid] = useState(false);
 
-  const [showConvertNoTrial, setShowConvertNoTrial] = useState(false);
   const [convertDetails, setConvertDetails] = useState<NewMemberDetails | null>(null);
   const [convertValid, setConvertValid] = useState(false);
   const [convertReason, setConvertReason] = useState("");
@@ -80,7 +87,9 @@ export function EnquiryDetailView({
     try {
       await addFollowUpAction({
         enquiryId: enquiry.id,
-        dueAt: new Date(followUpDue).toISOString(),
+        dueAt: zonedWallTimeToInstant(
+          followUpDue.slice(0, 10), followUpDue.slice(11, 16), "Asia/Kolkata",
+        ).toISOString(),
         note: followUpNote.trim() || undefined,
       });
       setFollowUpDue("");
@@ -106,7 +115,7 @@ export function EnquiryDetailView({
         setError(result.error);
         return;
       }
-      setShowBookTrial(false);
+      setOpenWorkflow(null);
       router.refresh();
     } finally {
       setBusy(false);
@@ -126,7 +135,7 @@ export function EnquiryDetailView({
         setError(result.error);
         return;
       }
-      setShowConvertNoTrial(false);
+      setOpenWorkflow(null);
       router.push(`${memberDetailBasePath}/${result.memberId}`);
     } finally {
       setBusy(false);
@@ -153,7 +162,9 @@ export function EnquiryDetailView({
           {ENQUIRY_STAGE_TRANSITIONS[enquiry.stage].includes("trial_scheduled") && !enquiry.memberId ? (
             <button
               type="button"
-              onClick={() => setShowBookTrial((v) => !v)}
+              onClick={() =>
+                setOpenWorkflow((open) => (open === "trial" ? null : "trial"))
+              }
               className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-water bg-water-soft px-3 py-1.5 text-[12.5px] text-water"
               data-testid="show-book-trial"
             >
@@ -163,7 +174,9 @@ export function EnquiryDetailView({
           {ENQUIRY_STAGE_TRANSITIONS[enquiry.stage].includes("converted") ? (
             <button
               type="button"
-              onClick={() => setShowConvertNoTrial((v) => !v)}
+              onClick={() =>
+                setOpenWorkflow((open) => (open === "convert" ? null : "convert"))
+              }
               className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-good bg-good-soft px-3 py-1.5 text-[12.5px] text-good"
               data-testid="show-convert"
             >
@@ -174,51 +187,64 @@ export function EnquiryDetailView({
         {error ? <p className="mt-2 text-[12px] text-late">{error}</p> : null}
       </div>
 
-      {showBookTrial ? (
+      {openWorkflow === "trial" ? (
         <section className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
           <h2 className="text-[13px] font-semibold">Book a trial</h2>
-          <select
-            value={batchId}
-            onChange={(e) => setBatchId(e.target.value)}
-            aria-label="Batch"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          >
-            {batches.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name} — {b.programName}
-              </option>
-            ))}
-          </select>
+          <Field id="enquiry-trial-batch" label="Trial batch">
+            {(field) => (
+              <Select
+                {...field}
+                value={batchId}
+                onChange={(e) => setBatchId(e.target.value)}
+              >
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} — {b.programName}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
           <EnquiryNewMemberFields
             locations={locations}
             onChange={setTrialDetails}
             onValidityChange={setTrialValid}
             terminology={terminology}
           />
-          <button
+          {/* Owner redesign (C2) — the workflow's dominant action is the
+              shared STANDARD control (48px, the 10px radius, 16px
+              text). The onClick, the disabled rule, the pending label
+              and the test id are unchanged. */}
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             onClick={submitBookTrial}
             disabled={busy || !trialValid || !batchId}
-            className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+            className="w-full"
             data-testid="submit-book-trial"
           >
             {busy ? "Booking…" : "Confirm trial booking"}
-          </button>
+          </Button>
         </section>
       ) : null}
 
-      {showConvertNoTrial ? (
+      {openWorkflow === "convert" ? (
         <section className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
           <h2 className="text-[13px] font-semibold">
             {enquiry.memberId ? "Convert to active member" : "Convert without a trial"}
           </h2>
-          <input
-            type="text"
-            value={convertReason}
-            onChange={(e) => setConvertReason(e.target.value)}
-            placeholder="Reason (e.g. paid and enrolled)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          />
+          <Field id="enquiry-convert-reason" label="Reason (e.g. paid and enrolled)">
+            {(field) => (
+              <Input
+                {...field}
+                type="text"
+                value={convertReason}
+                onChange={(e) => setConvertReason(e.target.value)}
+                placeholder="Reason (e.g. paid and enrolled)"
+              />
+            )}
+          </Field>
           {!enquiry.memberId ? (
             <EnquiryNewMemberFields
               locations={locations}
@@ -227,15 +253,22 @@ export function EnquiryDetailView({
               terminology={terminology}
             />
           ) : null}
-          <button
+          {/* The conversion's dominant action is the shared standard
+              control too. Its old green was a STATUS tint on an action
+              (DESIGN.md §1.2: the accent is the action colour, never a
+              status colour); the conversion's meaning stays in the
+              label and in the stage pill. */}
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             onClick={submitConvert}
             disabled={busy || (!enquiry.memberId && !convertValid)}
-            className="min-h-11 w-full rounded-ctl bg-good py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+            className="w-full"
             data-testid="submit-convert"
           >
             {busy ? "Converting…" : "Confirm conversion"}
-          </button>
+          </Button>
         </section>
       ) : null}
 
@@ -254,42 +287,51 @@ export function EnquiryDetailView({
                 {f.doneAt ? (
                   <span className="text-[11px] text-good flex-none">Done</span>
                 ) : (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={() => markFollowUpDone(f.id)}
-                    className="text-[11px] text-water flex-none"
+                    className="flex-none"
                   >
                     Mark done
-                  </button>
+                  </Button>
                 )}
               </li>
             ))
           )}
         </ul>
-        <div className="mt-2.5 rounded-card border border-line bg-paper p-3 space-y-2">
-          <input
-            type="datetime-local"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy, hh:mm"
-            value={followUpDue}
-            onChange={(e) => setFollowUpDue(e.target.value)}
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          />
-          <input
-            type="text"
-            value={followUpNote}
-            onChange={(e) => setFollowUpNote(e.target.value)}
-            placeholder="Note (optional)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          />
-          <button
+        <div className="mt-2.5 rounded-card border border-line bg-paper p-3 space-y-3">
+          <Field id="enquiry-follow-up-due" label="Due date and time (IST)">
+            {(field) => (
+              <Input
+                {...field}
+                type="datetime-local"
+                lang="en-IN"
+                value={followUpDue}
+                onChange={(e) => setFollowUpDue(e.target.value)}
+              />
+            )}
+          </Field>
+          <Field id="enquiry-follow-up-note" label="Note (optional)">
+            {(field) => (
+              <Input
+                {...field}
+                type="text"
+                value={followUpNote}
+                onChange={(e) => setFollowUpNote(e.target.value)}
+                placeholder="Note (optional)"
+              />
+            )}
+          </Field>
+          <Button
             type="button"
+            variant="primary"
             onClick={submitFollowUp}
             disabled={busy || !followUpDue}
-            className="inline-flex min-h-11 items-center justify-center rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
             Add follow-up
-          </button>
+          </Button>
         </div>
       </section>
     </div>

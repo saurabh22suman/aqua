@@ -8,6 +8,11 @@ import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { DateField } from "@/components/ui/DateField";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import { MemberConsentChoices } from "@/components/member-consent-choices";
 import {
   resolveTerm,
@@ -191,88 +196,94 @@ export function MemberCreateForm({
     // both. Everything stays visible and reachable.
     <div className="space-y-5 pb-[calc(10.5rem+env(safe-area-inset-bottom))] lg:pb-32">
       <section className="space-y-2.5">
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Full name</span>
-          <input
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Full name"
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-            data-testid="member-full-name"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (optional)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          />
-        </label>
-        <div>
-          <label
-            htmlFor="member-dob"
-            className="block text-[12px] text-ink-3 mb-1"
-          >
-            Date of birth
-          </label>
-          <DateField
-            id="member-dob"
-            value={dateOfBirth}
-            onChange={setDateOfBirth}
-            data-testid="member-dob"
-          />
-        </div>
-        <div>
-          <label
-            htmlFor="member-joined-on"
-            className="block text-[12px] text-ink-3 mb-1"
-          >
-            Joined on (optional — defaults to today)
-          </label>
-          <DateField
-            id="member-joined-on"
-            value={joinedOn}
-            onChange={setJoinedOn}
-            data-testid="member-joined-on"
-          />
-        </div>
-        <select
-          value={gender}
-          onChange={(e) => setGender(e.target.value)}
-          aria-label="Gender"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        >
-          <option value="">Gender (optional)</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="other">Other</option>
-        </select>
-        <select
-          value={locationId}
-          onChange={(e) => setLocationId(e.target.value)}
-          aria-label="Location"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        >
-          {locations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Medical notes (optional)</span>
-          <textarea
-            value={medicalNotes}
-            onChange={(e) => setMedicalNotes(e.target.value)}
-            placeholder="Medical notes (optional)"
-            rows={2}
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          />
-        </label>
+        {/* Owner redesign (C2) — the shared labelled controls. The
+            labels are associated with their control by id, the metrics
+            (16px text, the 44px floor, the focus ring) belong to the
+            shared primitives, and no page-local surface override is
+            added on top of them. */}
+        <Field id="member-full-name-field" label="Full name">
+          {(field) => (
+            <Input
+              {...field}
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Full name"
+              data-testid="member-full-name"
+            />
+          )}
+        </Field>
+        <Field id="member-phone-field" label="Phone (optional)">
+          {(field) => (
+            <Input
+              {...field}
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone (optional)"
+            />
+          )}
+        </Field>
+        <Field id="member-dob" label="Date of birth">
+          {() => (
+            <DateField
+              id="member-dob"
+              value={dateOfBirth}
+              onChange={setDateOfBirth}
+              data-testid="member-dob"
+            />
+          )}
+        </Field>
+        <Field id="member-joined-on" label="Joined on (optional — defaults to today)">
+          {() => (
+            <DateField
+              id="member-joined-on"
+              value={joinedOn}
+              onChange={setJoinedOn}
+              data-testid="member-joined-on"
+            />
+          )}
+        </Field>
+        <Field id="member-gender-field" label="Gender (optional)">
+          {(field) => (
+            <Select
+              {...field}
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+            >
+              <option value="">Not specified</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </Select>
+          )}
+        </Field>
+        <Field id="member-location-field" label="Location">
+          {(field) => (
+            <Select
+              {...field}
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+            >
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field id="member-medical-notes-field" label="Medical notes (optional)">
+          {(field) => (
+            <Textarea
+              {...field}
+              value={medicalNotes}
+              onChange={(e) => setMedicalNotes(e.target.value)}
+              placeholder="Medical notes (optional)"
+              rows={2}
+            />
+          )}
+        </Field>
       </section>
 
       {minor === true ? (
@@ -294,19 +305,21 @@ export function MemberCreateForm({
             </div>
           ) : (
             <>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">
-                  Search existing {resolveTerm(terminology, "guardian", "other")}
-                </span>
-                <input
-                  type="text"
-                  value={guardianQuery}
-                  onChange={(e) => runGuardianSearch(e.target.value)}
-                  placeholder="Search an existing guardian by name or phone"
-                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="guardian-search"
-                />
-              </label>
+              <Field
+                id="guardian-search-field"
+                label={`Search existing ${resolveTerm(terminology, "guardian", "other")}`}
+              >
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="text"
+                    value={guardianQuery}
+                    onChange={(e) => runGuardianSearch(e.target.value)}
+                    placeholder="Search an existing guardian by name or phone"
+                    data-testid="guardian-search"
+                  />
+                )}
+              </Field>
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
                   {guardianResults.map((r) => (
@@ -330,47 +343,47 @@ export function MemberCreateForm({
               <p className="text-[12px] text-ink-3">
                 Not found? Enter the {resolveTerm(terminology, "guardian", 1)}&apos;s details below.
               </p>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">
-                  Guardian full name
-                </span>
-                <input
-                  type="text"
-                  value={guardianName}
-                  onChange={(e) => setGuardianName(e.target.value)}
-                  placeholder="Guardian full name"
-                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="guardian-new-name"
-                />
-              </label>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">
-                  Guardian phone (optional)
-                </span>
-                <input
-                  type="tel"
-                  value={guardianPhone}
-                  onChange={(e) => setGuardianPhone(e.target.value)}
-                  placeholder="Guardian phone (optional)"
-                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                />
-              </label>
+              <Field id="guardian-new-name-field" label="Guardian full name">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="text"
+                    value={guardianName}
+                    onChange={(e) => setGuardianName(e.target.value)}
+                    placeholder="Guardian full name"
+                    data-testid="guardian-new-name"
+                  />
+                )}
+              </Field>
+              <Field id="guardian-new-phone-field" label="Guardian phone (optional)">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="tel"
+                    value={guardianPhone}
+                    onChange={(e) => setGuardianPhone(e.target.value)}
+                    placeholder="Guardian phone (optional)"
+                  />
+                )}
+              </Field>
             </>
           )}
 
-          <label className="block">
-            <span className="block text-[12px] text-ink-3 mb-1">
-              Relationship to {resolveTerm(terminology, "member", 1)}
-            </span>
-            <input
-              type="text"
-              value={relationship}
-              onChange={(e) => setRelationship(e.target.value)}
-              placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
-              className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              data-testid="guardian-relationship"
-            />
-          </label>
+          <Field
+            id="guardian-relationship-field"
+            label={`Relationship to ${resolveTerm(terminology, "member", 1)}`}
+          >
+            {(field) => (
+              <Input
+                {...field}
+                type="text"
+                value={relationship}
+                onChange={(e) => setRelationship(e.target.value)}
+                placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
+                data-testid="guardian-relationship"
+              />
+            )}
+          </Field>
 
           {guardianMissing ? (
             <div className="flex items-start gap-2 rounded-ctl bg-warn-soft px-3 py-2.5">
@@ -411,15 +424,17 @@ export function MemberCreateForm({
               : `A ${resolveTerm(terminology, "guardian", 1)} is required before saving.`}
           </p>
         ) : null}
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="lg"
           onClick={submit}
           disabled={busy}
-          className="w-full rounded-ctl bg-[var(--accent-strong)] py-3 min-h-[48px] text-[15px] font-semibold text-white disabled:opacity-50"
+          className="w-full"
           data-testid="submit-member"
         >
           {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}
-        </button>
+        </Button>
       </div>
     </div>
   );

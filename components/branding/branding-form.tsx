@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useState, useTransition } from "react";
 import { Loader2, Save } from "lucide-react";
 import { updateBrandingAction } from "@/lib/actions/branding";
@@ -92,7 +94,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
       <div className="space-y-4">
         <label className="block">
           <span className="block text-[12.5px] font-medium mb-1.5">Display name</span>
-          <input
+          <Input
             type="text"
             value={state.displayName}
             onChange={(e) => {
@@ -101,7 +103,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
             }}
             placeholder="Salt Lake Aquatics"
             maxLength={200}
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            className="w-full border"
             data-testid="branding-display-name"
           />
           <span className="block mt-1 text-[12px] text-ink-3">
@@ -111,7 +113,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
 
         <label className="block">
           <span className="block text-[12.5px] font-medium mb-1.5">Short name</span>
-          <input
+          <Input
             type="text"
             value={state.shortName}
             onChange={(e) => {
@@ -120,7 +122,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
             }}
             placeholder="SLA"
             maxLength={40}
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
+            className="w-full border"
             data-testid="branding-short-name"
           />
           <span className="block mt-1 text-[12px] text-ink-3">
@@ -175,16 +177,18 @@ export function BrandingForm({ initial }: { initial: FormState }) {
         </p>
       ) : null}
 
-      <button
-        type="button"
+      <Button
+            variant="primary"
+            size="md"
+            className="mt-6 w-full flex items-center justify-center gap-2"
+            type="button"
         onClick={submit}
         disabled={pending}
-        className="mt-6 w-full rounded-pill py-4 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)] transition-colors duration-150 flex items-center justify-center gap-2 disabled:opacity-70"
         data-testid="branding-save"
-      >
+          >
         {pending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
         {pending ? "Saving…" : "Save changes"}
-      </button>
+      </Button>
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { formatDateIST } from "@/lib/time/tz";
 
 // Roster publication panel — its own scope state, deliberately
@@ -44,24 +46,25 @@ export function RosterPublishPanel({
         to staff after publishing.
       </p>
       {locations.length > 1 ? (
-        <label className="mt-2 block">
-          <span className="mb-1 block text-[11px] text-ink-3">
-            Publication scope
-          </span>
-          <select
-            value={publishLocationId}
-            onChange={(e) => setPublishLocationId(e.target.value)}
-            className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            data-testid="roster-publish-scope"
-          >
-            <option value="">All locations</option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="mt-2">
+          <Field id="roster-publish-scope" label="Publication scope">
+            {(field) => (
+              <Select
+                {...field}
+                value={publishLocationId}
+                onChange={(e) => setPublishLocationId(e.target.value)}
+                data-testid="roster-publish-scope"
+              >
+                <option value="">All locations</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
       ) : null}
       <div className="mt-2">
         <Button

@@ -79,36 +79,61 @@ export function BookingDayList({
             </div>
 
             {!cancelled ? (
-              <div className="mt-2 flex gap-2">
-                {row.memberId ? (
-                  <Button
-                    variant={paid ? "ghost" : "secondary"}
-                    size="sm"
-                    disabled={busyId === row.bookingId}
-                    onClick={() => onBill(row)}
-                    data-testid="booking-bill-button"
-                  >
-                    {paid
-                      ? "View bill"
-                      : row.invoiceId
-                        ? "Collect"
-                        : "Request bill"}
-                  </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busyId === row.bookingId}
-                  onClick={() => onCancel(row)}
-                  data-testid="booking-cancel-button"
-                >
-                  Cancel
-                </Button>
-              </div>
+              <BookingRowActions
+                row={row}
+                busyId={busyId}
+                onCancel={onCancel}
+                onBill={onBill}
+              />
             ) : null}
           </li>
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * The two counter actions for a live booking.
+ *
+ * Exported so the calendar's detail panel offers the SAME actions —
+ * a booking opened from the calendar is the same booking, and it must
+ * not be a read-only version of it.
+ */
+export function BookingRowActions({
+  row,
+  busyId,
+  onCancel,
+  onBill,
+}: {
+  row: BookingDayRow;
+  busyId: string | null;
+  onCancel: (row: BookingDayRow) => void;
+  onBill: (row: BookingDayRow) => void;
+}) {
+  const paid = row.invoiceId !== null && row.amountDuePaise === 0;
+  return (
+    <div className="mt-2 flex gap-2">
+      {row.memberId ? (
+        <Button
+          variant={paid ? "ghost" : "secondary"}
+          size="sm"
+          disabled={busyId === row.bookingId}
+          onClick={() => onBill(row)}
+          data-testid="booking-bill-button"
+        >
+          {paid ? "View bill" : row.invoiceId ? "Collect" : "Request bill"}
+        </Button>
+      ) : null}
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={busyId === row.bookingId}
+        onClick={() => onCancel(row)}
+        data-testid="booking-cancel-button"
+      >
+        Cancel
+      </Button>
+    </div>
   );
 }

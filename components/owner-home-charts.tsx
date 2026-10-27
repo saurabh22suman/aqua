@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AttendancePanel, CollectionsPanel } from "@/components/owner-home-chart-panels";
-import { PaymentMixPanel } from "@/components/owner-home-payment-mix";
+import { OwnerPaymentMix } from "@/components/owner-ui/owner-payment-mix";
 import { addDays, formatDateIST } from "@/lib/time/tz";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 import type { ChartMetric } from "@/lib/services/owner-home-charts";
@@ -114,8 +114,19 @@ export function OwnerHomeCharts({
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3 lg:items-start">
-        <article className="min-w-0 rounded-card border border-line bg-paper p-4 lg:col-span-2">
+      {/* The money band. The split is 60/40 (3 of 5 columns), the ratio
+          the approved composition shows: the payment mix needs room for
+          the donut AND its legend side by side. At the earlier 2/3-1/3
+          split the mix card had roughly 270px of inner width at 1280px,
+          and the approved pairing could not fit — it always wrapped. */}
+      <div
+        data-testid="owner-home-money-band"
+        className="grid gap-3 lg:grid-cols-5 lg:items-start"
+      >
+        <article
+          data-testid="owner-home-money-trends"
+          className="min-w-0 rounded-card border border-line bg-paper p-4 lg:col-span-3"
+        >
           <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h3 className="font-display text-[15px] font-semibold">Trends</h3>
@@ -154,7 +165,11 @@ export function OwnerHomeCharts({
           )}
         </article>
 
-        <PaymentMixPanel data={data} feesLink={canReadFees ? feesLink : null} />
+        <OwnerPaymentMix
+          data={data}
+          feesLink={canReadFees ? feesLink : null}
+          className="lg:col-span-2"
+        />
       </div>
     </section>
   );

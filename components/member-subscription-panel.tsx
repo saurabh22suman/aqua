@@ -13,6 +13,9 @@ import { listPlansAction } from "@/lib/actions/membership-plans";
 import type { SubscriptionRow } from "@/lib/services/subscriptions";
 import type { PlanRow } from "@/lib/services/membership-plans";
 import { formatINR } from "@/lib/money/format";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { RunwayStrip } from "@/components/ui/RunwayStrip";
 import { formatDateIST } from "@/lib/time/tz";
 
@@ -24,9 +27,6 @@ import { formatDateIST } from "@/lib/time/tz";
 // invoices panel can refresh its own client-side copy (a
 // router.refresh() re-renders the server tree but keeps client state).
 export const SUBSCRIPTIONS_CHANGED_EVENT = "aqua:subscriptions-changed";
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function statusTone(status: SubscriptionRow["status"]): string {
   if (status === "active") return "bg-marine/10 text-marine";
@@ -264,55 +264,59 @@ export function MemberSubscriptionPanel({
             Start a subscription
           </p>
           <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <label className="block sm:col-span-1">
-              <span className="block text-[11px] text-ink-3 mb-0.5">Plan</span>
-              <select
-                value={planId}
-                onChange={(e) => setPlanId(e.target.value)}
-                className={inputClass}
-              >
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name} · {formatINR(plan.amountPaise)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-ink-3 mb-0.5">
-                Starts (optional)
-              </span>
-              <input
-                type="date"
-                lang="en-IN"
-                placeholder="dd/mm/yyyy"
-                value={startsOn}
-                onChange={(e) => setStartsOn(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-ink-3 mb-0.5">
-                Ends (optional)
-              </span>
-              <input
-                type="date"
-                lang="en-IN"
-                placeholder="dd/mm/yyyy"
-                value={endsOn}
-                onChange={(e) => setEndsOn(e.target.value)}
-                className={inputClass}
-              />
-            </label>
+            <div className="sm:col-span-1">
+              <Field id="member-subscription-plan" label="Plan">
+                {(field) => (
+                  <Select
+                    {...field}
+                    value={planId}
+                    onChange={(e) => setPlanId(e.target.value)}
+                  >
+                    {plans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} · {formatINR(plan.amountPaise)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            </div>
+            <Field id="member-subscription-starts" label="Starts (optional)">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="date"
+                  lang="en-IN"
+                  placeholder="dd/mm/yyyy"
+                  value={startsOn}
+                  onChange={(e) => setStartsOn(e.target.value)}
+                />
+              )}
+            </Field>
+            <Field id="member-subscription-ends" label="Ends (optional)">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="date"
+                  lang="en-IN"
+                  placeholder="dd/mm/yyyy"
+                  value={endsOn}
+                  onChange={(e) => setEndsOn(e.target.value)}
+                />
+              )}
+            </Field>
           </div>
-          <label className="mt-2 flex items-center gap-2 text-[12px] text-ink-2">
+          <div className="mt-2 flex items-center gap-2 text-[12px] text-ink-2">
             <input
+              id="member-subscription-auto-renew"
               type="checkbox"
               checked={autoRenew}
               onChange={(e) => setAutoRenew(e.target.checked)}
             />
-            Raise the next invoice automatically (payments stay manual)
-          </label>
+            <label htmlFor="member-subscription-auto-renew">
+              Raise the next invoice automatically (payments stay manual)
+            </label>
+          </div>
           <button
             type="button"
             disabled={busy || plans.length === 0}

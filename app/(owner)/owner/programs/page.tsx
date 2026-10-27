@@ -1,3 +1,4 @@
+import { buttonClasses } from "@/components/ui/Button";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { Calendar, CalendarDays } from "lucide-react";
@@ -34,25 +35,25 @@ export default async function ProgramsPage({
 
   return (
     <main className="px-5 pt-10">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-display text-[19px] font-semibold">Programs</h1>
         <div className="flex items-center gap-2">
-          <Link
+          {ctx.permissions.has("attendance.read") ? <Link
             href="/owner/schedule"
-            className="inline-flex items-center gap-1.5 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] font-medium text-ink-2"
+            className={buttonClasses()}
             data-testid="link-schedule"
           >
             <CalendarDays size={14} className="text-ink-3" />
             Schedule
-          </Link>
-          <Link
+          </Link> : null}
+          {ctx.permissions.has("programs.write") ? <Link
             href="/owner/sessions"
-            className="inline-flex items-center gap-1.5 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] font-medium text-ink-2"
+            className={buttonClasses()}
             data-testid="link-sessions"
           >
             <Calendar size={14} className="text-ink-3" />
             Sessions
-          </Link>
+          </Link> : null}
         </div>
       </div>
       <div className="mt-4">

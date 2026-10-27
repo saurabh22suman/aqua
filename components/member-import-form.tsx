@@ -7,6 +7,9 @@ import {
 } from "@/lib/actions/member-import";
 import { memberImportErrorsCsv } from "@/lib/services/member-import-csv";
 import { StickyActionBar } from "@/components/ui/StickyActionBar";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 import type {
   MemberImportCommitResult,
   MemberImportPreview,
@@ -231,26 +234,43 @@ export function MemberImportForm() {
 
       {preview && preview.rows.length > 0 ? (
         <StickyActionBar>
-          <label className="mb-3 flex gap-3 text-[13px] text-ink">
-            <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} className="h-11 w-11 shrink-0" />
-            <span>{IMPORT_ATTESTATION}</span>
-          </label>
-          <label className="mb-3 block text-[13px] text-ink-2">
-            Evidence reference (optional)
-            <input type="text" maxLength={500} value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink" />
-          </label>
-          <button
+          <div className="mb-3 flex gap-3 text-[13px] text-ink">
+            <input
+              id="member-import-attestation"
+              type="checkbox"
+              checked={attested}
+              onChange={(event) => setAttested(event.target.checked)}
+              className="h-11 w-11 shrink-0"
+            />
+            <label htmlFor="member-import-attestation">{IMPORT_ATTESTATION}</label>
+          </div>
+          <div className="mb-3">
+            <Field id="member-import-evidence" label="Evidence reference (optional)">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="text"
+                  maxLength={500}
+                  value={evidenceNote}
+                  onChange={(event) => setEvidenceNote(event.target.value)}
+                />
+              )}
+            </Field>
+          </div>
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             onClick={commit}
             disabled={busy || !attested}
-            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            className="w-full"
           >
             {busy
               ? "Importing…"
               : `Import ${preview.rows.length} member${
                   preview.rows.length === 1 ? "" : "s"
                 } from ${active?.fileName ?? "the selected file"}`}
-          </button>
+          </Button>
         </StickyActionBar>
       ) : null}
 

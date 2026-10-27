@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { sendAnnouncementAction } from "@/lib/actions/announcements";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 
 // In-app notifications and consent-checked WhatsApp outbox delivery.
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+//
+// Owner redesign (C2) — the composer is a native <form>: Enter in a
+// field submits it, and a screen reader announces the real control.
+// The fields are the shared primitives, so their metrics and tints stay
+// with the foundation owner.
 
 export function AnnouncementComposer({
   batches,
@@ -31,8 +38,45 @@ export function AnnouncementComposer({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  async function send() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await sendAnnouncementAction({
+        title,
+        body,
+        audience,
+        ...(audience === "batch" ? { batchId } : {}),
+      });
+      setMessage(
+        result.ok
+          ? `Sent in-app to ${result.recipientCount} account${
+              result.recipientCount === 1 ? "" : "s"
+            }. WhatsApp queued for ${result.whatsappRecipientCount ?? 0} number${
+              result.whatsappRecipientCount === 1 ? "" : "s"
+            }.`
+          : result.error,
+      );
+      if (result.ok) {
+        setTitle("");
+        setBody("");
+        router.refresh();
+      }
+    } catch {
+      setMessage("Could not confirm the announcement. Refresh the sent list before retrying.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <section className="rounded-card border border-line bg-paper p-4">
+    <form
+      className="rounded-card border border-line bg-paper p-4"
+      onSubmit={(event: FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        void send();
+      }}
+    >
       <h2 className="font-display text-[15px] font-semibold">
         Send an announcement
       </h2>
@@ -43,48 +87,51 @@ export function AnnouncementComposer({
       </p>
 
       <div className="mt-3 space-y-3">
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Title</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={160}
-            className={inputClass}
-            placeholder="Pool closed on Saturday"
-          />
-        </label>
+        <Field id="announcement-title" label="Title">
+          {(field) => (
+            <Input
+              {...field}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={160}
+              placeholder="Pool closed on Saturday"
+            />
+          )}
+        </Field>
 
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Message</span>
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            rows={4}
-            maxLength={4000}
-            className={inputClass}
-            placeholder="Maintenance work means the 7am batch moves to Sunday."
-          />
-        </label>
+        <Field id="announcement-message" label="Message">
+          {(field) => (
+            <Textarea
+              {...field}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={4}
+              maxLength={4000}
+              placeholder="Maintenance work means the 7am batch moves to Sunday."
+            />
+          )}
+        </Field>
 
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Audience</span>
-          <select
-            value={audience}
-            onChange={(e) =>
-              setAudience(e.target.value as "all" | "batch" | "parents")
-            }
-            className={inputClass}
-          >
-            <option value="all">Everyone — staff and linked accounts</option>
-            <option value="batch">
-              One {batchLabel.toLowerCase()}&apos;s {memberLabel.toLowerCase()} and{" "}
-              {guardianLabel.toLowerCase()}
-            </option>
-            <option value="parents">
-              Parents and {guardianLabel.toLowerCase()} only
-            </option>
-          </select>
-        </label>
+        <Field id="announcement-audience" label="Audience">
+          {(field) => (
+            <Select
+              {...field}
+              value={audience}
+              onChange={(e) =>
+                setAudience(e.target.value as "all" | "batch" | "parents")
+              }
+            >
+              <option value="all">Everyone — staff and linked accounts</option>
+              <option value="batch">
+                One {batchLabel.toLowerCase()}&apos;s {memberLabel.toLowerCase()} and{" "}
+                {guardianLabel.toLowerCase()}
+              </option>
+              <option value="parents">
+                Parents and {guardianLabel.toLowerCase()} only
+              </option>
+            </Select>
+          )}
+        </Field>
 
         {audience === "batch" ? (
           batches.length === 0 ? (
@@ -92,74 +139,45 @@ export function AnnouncementComposer({
               No batches exist yet — create one before announcing to a batch.
             </p>
           ) : (
-            <label className="block">
-              <span className="mb-0.5 block text-[11px] text-ink-3">
-                {batchLabel}
-              </span>
-              <select
-                value={batchId}
-                onChange={(e) => setBatchId(e.target.value)}
-                className={inputClass}
-              >
-                {batches.map((batch) => (
-                  <option key={batch.id} value={batch.id}>
-                    {batch.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Field id="announcement-batch" label={batchLabel}>
+              {(field) => (
+                <Select
+                  {...field}
+                  value={batchId}
+                  onChange={(e) => setBatchId(e.target.value)}
+                >
+                  {batches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
           )
         ) : null}
       </div>
 
-      <button
-        type="button"
+      <Button
+        type="submit"
+        variant="primary"
+        size="md"
         disabled={
           busy ||
           title.trim().length === 0 ||
           body.trim().length === 0 ||
           (audience === "batch" && !batchId)
         }
-        onClick={() => {
-          setBusy(true);
-          setMessage(null);
-          void (async () => {
-            try {
-              const result = await sendAnnouncementAction({
-              title,
-              body,
-              audience,
-              ...(audience === "batch" ? { batchId } : {}),
-            });
-            setMessage(
-              result.ok
-                ? `Sent in-app to ${result.recipientCount} account${
-                    result.recipientCount === 1 ? "" : "s"
-                   }. WhatsApp queued for ${result.whatsappRecipientCount ?? 0} number${result.whatsappRecipientCount === 1 ? "" : "s"}.`
-                : result.error,
-            );
-            if (result.ok) {
-              setTitle("");
-              setBody("");
-              router.refresh();
-            }
-            } catch {
-              setMessage("Could not confirm the announcement. Refresh the sent list before retrying.");
-            } finally {
-              setBusy(false);
-            }
-          })();
-        }}
-        className="mt-3 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
+        className="mt-3"
       >
         {busy ? "Sending…" : "Send announcement"}
-      </button>
+      </Button>
 
       {message ? (
         <p role="status" className="mt-2 text-[12px] text-ink-2">
           {message}
         </p>
       ) : null}
-    </section>
+    </form>
   );
 }

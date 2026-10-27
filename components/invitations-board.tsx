@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Check, ChevronRight, Copy, Loader2, RotateCcw, X } from "lucide-react";
 import {
   reactivateInvitationAction,
@@ -10,6 +9,8 @@ import {
 } from "@/lib/actions/staff-invitations";
 import { issueLoginLinkAction } from "@/lib/actions/invite-link";
 import { LinkQr } from "@/components/link-qr";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { ListInvitationsRow } from "@/lib/services/staff-invitations";
 import { formatDateTimeIST } from "@/lib/time/tz";
 import { formatPhoneIN } from "@/lib/phone";
@@ -40,26 +41,20 @@ const STATUS_LABEL: Record<ListInvitationsRow["status"], string> = {
   revoked: "Revoked",
 };
 
-const STATUS_TONE: Record<ListInvitationsRow["status"], string> = {
-  invited: "bg-deck text-ink-2",
-  active: "bg-deck text-ink-2",
-  revoked: "bg-deck text-ink-3",
-};
-
 export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-ctl border border-line bg-paper px-5 py-10 text-center">
-        <p className="text-[15px] font-medium">No staff on the roster</p>
-        <p className="mt-1 text-[13px] text-ink-3">
-          Active and pending staff appear here. Add a coach or receptionist to start.
-        </p>
-        <Link
-          href="/owner/staff/invitations/new"
-          className="mt-5 inline-flex items-center justify-center rounded-pill px-5 py-3 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)]"
-        >
-          Invite your first staff member
-        </Link>
+      <div className="rounded-ctl border border-line bg-paper">
+        {/* Owner redesign (C2) — the shared empty state, so every list
+            in the owner surface has one empty shape. */}
+        <EmptyState
+          title="No staff on the roster"
+          body="Active and pending staff appear here. Add a coach or receptionist to start."
+          action={{
+            label: "Invite your first staff member",
+            href: "/owner/staff/invitations/new",
+          }}
+        />
       </div>
     );
   }
@@ -164,9 +159,10 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
     <li className="bg-paper border border-line rounded-ctl mb-2 last:mb-0 p-4">
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-mono text-[13.5px] text-ink truncate">{formatPhoneIN(row.phone)}</p>
-        <span className={`text-[11px] font-medium px-2.5 py-1 rounded-pill ${STATUS_TONE[row.status]}`}>
-          {STATUS_LABEL[row.status]}
-        </span>
+        {/* Owner redesign (C2) — the shared status pill. The state
+            stays NEUTRAL (F4: invitation state is neither money nor
+            attendance), but the pill shape is now the shared one. */}
+        <StatusBadge tone="neutral">{STATUS_LABEL[row.status]}</StatusBadge>
       </div>
       <p className="text-[12.5px] text-ink-3 mt-1">
         {row.roleKey}

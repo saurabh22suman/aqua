@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { OwnerShell, ownerRoleLabel } from "@/components/owner-shell";
+import { ownerSidebarGroupsWithBookings } from "@/components/owner-ui/owner-navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { listLocations } from "@/lib/services/people";
@@ -47,10 +48,24 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   // are permission-filtered: the Accountant gets Home (→ Fees),
   // Members, Fees & payments and Reports; Owner/Admin hold every gate
   // and see the full contract unchanged.
+  //
+  // Owner redesign (27 October 2026) — the booking desk joins the
+  // desktop Scheduling group, but only for a caller who may read
+  // bookings AND whose tenant is entitled to the booking feature. That
+  // is the same pair of gates the BOOKINGS ROUTE enforces
+  // (app/(owner)/owner/bookings/page.tsx), so the sidebar never offers
+  // a destination that would answer 404. The mobile bottom nav keeps
+  // its four items (DESIGN.md §2); the phone reaches the booking desk
+  // through Settings, and the Operations lane owns those links.
+  const sidebarGroups = ownerSidebarGroupsWithBookings(
+    ownerSidebarGroupsForPermissions(ctx.permissions),
+    ctx.permissions,
+    ctx.features,
+  );
   return (
     <OwnerShell
       navItems={ownerNavForPermissions(ctx.permissions)}
-      sidebarGroups={ownerSidebarGroupsForPermissions(ctx.permissions)}
+      sidebarGroups={sidebarGroups}
       locations={locations}
       clubName={branding.displayName ?? branding.fallbackDisplayName}
       clubInitials={branding.initials}

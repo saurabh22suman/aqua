@@ -61,7 +61,7 @@ export default async function OwnerBookingsPage() {
   }
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <main className="px-5 pt-6 pb-8">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
         <Link
           href="/owner"

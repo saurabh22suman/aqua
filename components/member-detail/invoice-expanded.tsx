@@ -20,6 +20,11 @@ import { formatINR } from "@/lib/money/format";
 import { parseRupeesToPaise } from "@/lib/payment-qr";
 import { gstDocumentLabel, placeOfSupplyForGstin } from "@/lib/gst";
 import { formatDateIST } from "@/lib/time/tz";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 
 // C-32/C-33/C-39 — one invoice, expanded: lines with the CGST/SGST
 // split, recorded payments with receipt links, the record-payment
@@ -27,15 +32,25 @@ import { formatDateIST } from "@/lib/time/tz";
 // (settings.manage — owner/admin, R01); other invoice writers see an
 // ask-the-owner note instead.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+// Owner redesign (C2) — the invoice state is a readable word in the
+// shared status pill, not the raw database value in a hand-rolled chip.
+// The tone map lives here; the token strings stay in the shared
+// primitive.
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  issued: "Issued",
+  partial: "Partially paid",
+  paid: "Paid",
+  void: "Void",
+};
 
-function statusTone(status: InvoiceDetail["status"]): string {
-  if (status === "paid") return "bg-marine/10 text-marine";
-  if (status === "void") return "bg-deck text-ink-3 line-through";
-  if (status === "partial") return "bg-deck text-ink-2";
-  return "bg-deck text-ink-2";
-}
+const INVOICE_STATUS_TONE: Record<string, StatusTone> = {
+  draft: "neutral",
+  issued: "warn",
+  partial: "warn",
+  paid: "good",
+  void: "neutral",
+};
 
 function methodLabel(method: PaymentRow["method"]): string {
   if (method === "cash") return "Cash";
@@ -165,10 +180,13 @@ export function InvoiceExpanded({
         <span className="text-[12px] font-medium text-ink-2">
           {gstDocumentLabel(detail.documentKind)} · {detail.invoiceNumber}
         </span>
-        <span
-          className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${statusTone(detail.status)}`}
-        >
-          {detail.status}
+        <span data-testid="invoice-expanded-status">
+          <StatusBadge
+            tone={INVOICE_STATUS_TONE[detail.status] ?? "neutral"}
+            className={detail.status === "void" ? "line-through" : ""}
+          >
+            {INVOICE_STATUS_LABEL[detail.status] ?? detail.status}
+          </StatusBadge>
         </span>
       </div>
       <p className="mt-0.5 text-[12px] text-ink-3">
@@ -288,30 +306,28 @@ export function InvoiceExpanded({
 
                 {canRefund && reverseFor === payment.id ? (
                   <div className="mt-1.5 rounded-ctl border border-line p-2">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-0.5 block text-[11px] text-ink-3">
-                          Amount (₹)
-                        </span>
-                        <input
-                          inputMode="decimal"
-                          value={reverseAmount}
-                          onChange={(e) => setReverseAmount(e.target.value)}
-                          className={inputClass}
-                          data-testid="reverse-amount"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-0.5 block text-[11px] text-ink-3">
-                          Reason
-                        </span>
-                        <input
-                          value={reverseReason}
-                          onChange={(e) => setReverseReason(e.target.value)}
-                          className={inputClass}
-                          data-testid="reverse-reason"
-                        />
-                      </label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Field id="invoice-reverse-amount" label="Amount (₹)">
+                        {(field) => (
+                          <Input
+                            {...field}
+                            inputMode="decimal"
+                            value={reverseAmount}
+                            onChange={(e) => setReverseAmount(e.target.value)}
+                            data-testid="reverse-amount"
+                          />
+                        )}
+                      </Field>
+                      <Field id="invoice-reverse-reason" label="Reason">
+                        {(field) => (
+                          <Input
+                            {...field}
+                            value={reverseReason}
+                            onChange={(e) => setReverseReason(e.target.value)}
+                            data-testid="reverse-reason"
+                          />
+                        )}
+                      </Field>
                     </div>
                     {reverseError ? (
                       <p role="alert" className="mt-1 text-[11.5px] text-ink-2">
@@ -374,48 +390,53 @@ export function InvoiceExpanded({
       ) : null}
 
       {paymentAllowed ? (
-        <div className="mt-2 rounded-ctl border border-line p-2">
+        <div className="mt-2 rounded-ctl border border-line p-3">
           <p className="text-[12px] font-medium text-ink-2">Record a payment</p>
-          <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <label className="block">
-              <span className="mb-0.5 block text-[11px] text-ink-3">
-                Amount (₹)
-              </span>
-              <input
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-0.5 block text-[11px] text-ink-3">Method</span>
-              <select
-                value={method}
-                onChange={(e) => setMethod(e.target.value as PaymentRow["method"])}
-                className={inputClass}
-              >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank transfer</option>
-              </select>
-            </label>
-            {method !== "cash" ? (
-              <label className="block">
-                <span className="mb-0.5 block text-[11px] text-ink-3">
-                  Reference (UTR)
-                </span>
-                <input
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  className={inputClass}
-                  placeholder="UTR / transaction id"
+          {/* Owner redesign (C2) — the shared labelled controls, so the
+              collection decision uses the same metrics and association
+              as the rest of the owner surface. The invoice context
+              (total, paid, outstanding) stays directly above it. */}
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field id="invoice-payment-amount" label="Amount (₹)">
+              {(field) => (
+                <Input
+                  {...field}
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
                 />
-              </label>
+              )}
+            </Field>
+            <Field id="invoice-payment-method" label="Method">
+              {(field) => (
+                <Select
+                  {...field}
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value as PaymentRow["method"])}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank transfer</option>
+                </Select>
+              )}
+            </Field>
+            {method !== "cash" ? (
+              <Field id="invoice-payment-reference" label="Reference (UTR)">
+                {(field) => (
+                  <Input
+                    {...field}
+                    value={reference}
+                    onChange={(e) => setReference(e.target.value)}
+                    placeholder="UTR / transaction id"
+                  />
+                )}
+              </Field>
             ) : null}
           </div>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             disabled={busy}
             onClick={() => {
               const paise = parseRupeesToPaise(amount);
@@ -432,10 +453,10 @@ export function InvoiceExpanded({
                 }),
               );
             }}
-            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            className="mt-3"
           >
             {busy ? "Saving…" : "Record payment"}
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -443,32 +464,34 @@ export function InvoiceExpanded({
         <div className="mt-2">
           {showVoid ? (
             <div className="flex flex-wrap items-center gap-2">
-              <input
+              <Input
                 value={voidReason}
                 onChange={(e) => setVoidReason(e.target.value)}
                 placeholder="Reason for voiding"
                 aria-label="Reason for voiding"
-                className={`${inputClass} max-w-xs`}
+                className="max-w-xs"
               />
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 disabled={busy}
                 onClick={() =>
                   run(() => voidInvoiceAction({ invoiceId, reason: voidReason }))
                 }
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
               >
                 Confirm void
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setShowVoid(true)}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-3 hover:text-ink"
             >
               Void invoice
-            </button>
+            </Button>
           )}
         </div>
       ) : canWrite && detail.status !== "void" && detail.paidPaise === 0 ? (

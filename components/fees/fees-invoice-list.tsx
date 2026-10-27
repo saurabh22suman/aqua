@@ -8,6 +8,8 @@ import type { HubInvoiceRow } from "@/lib/services/fees-hub";
 import { formatINR } from "@/lib/money/format";
 import { formatDateIST } from "@/lib/time/tz";
 import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
+import { Button } from "@/components/ui/Button";
+import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 
 // U-02 — the dues and invoice lists. Dues are collectible in place
 // (the existing InvoiceExpanded carries the record-payment form);
@@ -23,6 +25,25 @@ import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
 // response cannot replace a newer one (request sequence).
 
 type RowsState = { scope: string; rows: HubInvoiceRow[] };
+
+// Invoice lifecycle → a readable word and a status tone. `issued` and
+// `partial` mean money is still owed (the needs-attention tone),
+// `paid` means settled, `draft` and `void` carry no urgency.
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  issued: "Issued",
+  partial: "Partially paid",
+  paid: "Paid",
+  void: "Void",
+};
+
+const INVOICE_STATUS_TONE: Record<string, StatusTone> = {
+  draft: "neutral",
+  issued: "warn",
+  partial: "warn",
+  paid: "good",
+  void: "neutral",
+};
 
 export function FeesInvoiceList({
   initial,
@@ -144,30 +165,34 @@ export function FeesInvoiceList({
               {formatDateIST(invoice.issuedOn)} · due {formatDateIST(invoice.dueOn)}
             </p>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
-              <span className="rounded-pill bg-deck px-2 py-0.5 text-[11px] font-medium text-ink-2">
-                {invoice.status}
+              {/* Owner redesign (C2) — the invoice state is a readable
+                  word in the shared status pill, not the raw database
+                  value in a bare chip. The tone map lives here (not in
+                  the shared primitive) so the token strings stay in
+                  their one home. */}
+              <span data-testid="invoice-status">
+                <StatusBadge tone={INVOICE_STATUS_TONE[invoice.status] ?? "neutral"}>
+                  {INVOICE_STATUS_LABEL[invoice.status] ?? invoice.status}
+                </StatusBadge>
               </span>
-              {overdue ? (
-                <span className="rounded-pill bg-late-soft px-2 py-0.5 text-[11px] font-medium text-late">
-                  Overdue
-                </span>
-              ) : null}
+              {overdue ? <StatusBadge tone="late">Overdue</StatusBadge> : null}
               {invoice.outstandingPaise > 0 ? (
                 <span className="text-[12px] text-ink-2 tabular-nums">
                   {formatINR(invoice.outstandingPaise)} outstanding
                 </span>
               ) : (
-                <span className="text-[12px] text-good">Settled</span>
+                <span className="text-[12px] text-ink-3">Nothing outstanding</span>
               )}
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() =>
                   setExpandedId(expandedId === invoice.id ? null : invoice.id)
                 }
-                className="ml-auto inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2 hover:text-ink"
+                className="ml-auto"
               >
                 {expandedId === invoice.id ? "Hide" : "Open"}
-              </button>
+              </Button>
             </div>
             {expandedId === invoice.id ? (
               <InvoiceExpanded

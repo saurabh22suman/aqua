@@ -1,12 +1,12 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Input } from "@/components/ui/Input";
 // K-07 — shared menu-item form fields and their parsing. The
 // conversions are integer arithmetic: rupees → paise via the shared
 // parseRupeesToPaise (never parseFloat), percent → basis points by
 // string split, never a float multiply.
 
-export const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function parseTaxBp(raw: string): number | null {
   const text = raw.trim();
@@ -61,12 +61,12 @@ export function ItemFields({
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           Name
         </span>
-        <input
+        <Input
           name="name"
           defaultValue={defaults?.name}
           placeholder="Masala chai"
           maxLength={120}
-          className={inputClass}
+          
           data-testid={`${testPrefix}-name`}
         />
       </label>
@@ -74,12 +74,12 @@ export function ItemFields({
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           Price (₹)
         </span>
-        <input
+        <Input
           name="price"
           defaultValue={defaults?.price}
           inputMode="decimal"
           placeholder="250"
-          className={inputClass}
+          
           data-testid={`${testPrefix}-price`}
         />
       </label>
@@ -87,12 +87,12 @@ export function ItemFields({
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           GST rate (%)
         </span>
-        <input
+        <Input
           name="tax"
           defaultValue={defaults?.tax}
           inputMode="decimal"
           placeholder="5"
-          className={inputClass}
+          
           data-testid={`${testPrefix}-tax`}
         />
       </label>
@@ -100,25 +100,22 @@ export function ItemFields({
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           SAC code
         </span>
-        <input
+        <Input
           name="sac"
           defaultValue={defaults?.sac}
           inputMode="numeric"
           placeholder="996331"
-          className={inputClass}
+          
           data-testid={`${testPrefix}-sac`}
         />
       </label>
-      <label className="flex items-center gap-2 min-h-[44px]">
-        <input
-          type="checkbox"
-          name="veg"
-          defaultChecked={defaults?.veg}
-          className="h-5 w-5"
-          data-testid={`${testPrefix}-veg`}
-        />
-        <span className="text-[14px] text-ink">Veg item</span>
-      </label>
+      <Checkbox
+        name="veg"
+        defaultChecked={defaults?.veg}
+        data-testid={`${testPrefix}-veg`}
+      >
+        Veg item
+      </Checkbox>
     </div>
   );
 }

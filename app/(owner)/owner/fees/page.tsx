@@ -22,6 +22,7 @@ import {
   isPaymentMethod,
 } from "@/lib/money/payment-groups";
 import { BackLink } from "@/components/ui/BackLink";
+import { buttonClasses } from "@/components/ui/Button";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
 import { DataTable } from "@/components/ui/DataTable";
@@ -121,22 +122,29 @@ export default async function FeesPage({
 
       {tab === "overview" ? (
         <section className="mt-4 space-y-3">
-          <div className="rounded-card border border-line bg-paper p-4">
-            <p className="text-[12px] font-medium text-ink-3">Collected this period</p>
-            <p className="kpi mt-1 text-[30px] font-semibold">
-              {formatINR(overview.collectedPaise)}
-            </p>
-            <p className="mt-1 text-[12.5px] text-ink-3">
-              {overview.paymentCount} payment
-              {overview.paymentCount === 1 ? "" : "s"} recorded at the counter
-              {overview.reversedPaise > 0
-                ? `, net of ${formatINR(overview.reversedPaise)} reversed (${overview.reversalCount})`
-                : ""}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          {/* Owner redesign (C2) — four figures in one row (2×2 on a
+              phone), each stating its basis. The period collections
+              are named as a period and the current balances say "now",
+              so a historical collection is never read as a live
+              balance. */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
-              label="Outstanding"
+              label="Collected in this period"
+              value={formatINR(overview.collectedPaise)}
+              hint={`${overview.paymentCount} payment${
+                overview.paymentCount === 1 ? "" : "s"
+              } recorded at the counter${
+                overview.reversedPaise > 0
+                  ? `, net of ${formatINR(overview.reversedPaise)} reversed (${overview.reversalCount})`
+                  : ""
+              }`}
+              href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
+                facility ? `&facility=${facility}` : ""
+              }`}
+              tone="money"
+            />
+            <StatCard
+              label="Outstanding now"
               value={formatINR(overview.outstandingPaise)}
               hint={`${overview.dueInvoiceCount} invoice${
                 overview.dueInvoiceCount === 1 ? "" : "s"
@@ -147,7 +155,7 @@ export default async function FeesPage({
               tone="paper"
             />
             <StatCard
-              label="Overdue"
+              label="Overdue now"
               value={
                 <span className={overview.overduePaise > 0 ? "text-late" : undefined}>
                   {formatINR(overview.overduePaise)}
@@ -158,7 +166,51 @@ export default async function FeesPage({
               )}`}
               tone="paper"
             />
+            <StatCard
+              label="Payments in this period"
+              value={overview.paymentCount}
+              hint={
+                overview.reversalCount > 0
+                  ? `${overview.reversalCount} reversal${
+                      overview.reversalCount === 1 ? "" : "s"
+                    } recorded`
+                  : "Recorded payments in the selected period"
+              }
+              href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
+                facility ? `&facility=${facility}` : ""
+              }`}
+              tone="deck"
+            />
           </div>
+
+          {/* One action leads into the invoice collection journey. */}
+          {overview.dueInvoiceCount > 0 ? (
+            <div className="rounded-card border border-line bg-paper p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-display text-[15px] font-semibold">
+                    Collect what is due
+                  </h2>
+                  <p className="mt-0.5 text-[12.5px] text-ink-3">
+                    {overview.dueInvoiceCount} invoice
+                    {overview.dueInvoiceCount === 1 ? "" : "s"} with a balance
+                    {overview.overduePaise > 0
+                      ? ` · ${formatINR(overview.overduePaise)} past the due date`
+                      : ""}
+                    . Open an invoice to record what the counter collected.
+                  </p>
+                </div>
+                <Link
+                  href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}${
+                    facility ? `&facility=${facility}` : ""
+                  }`}
+                  className={buttonClasses({ variant: "primary", size: "md" })}
+                >
+                  Review dues
+                </Link>
+              </div>
+            </div>
+          ) : null}
           {overview.overdueInvoiceCount > 0 ? (
             <div className="rounded-card border border-line bg-paper p-4">
               <h3 className="font-display text-[15px] font-semibold">Overdue ageing</h3>

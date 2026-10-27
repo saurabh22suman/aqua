@@ -55,7 +55,7 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
     // label changed.
     label: "Scheduling",
     items: [
-      { href: "/owner/programs", label: "Programs & batches", iconName: "calendar-days" },
+      { href: "/owner/programs", label: "Programs & batches", iconName: "calendar-days", activePrefixes: ["/owner/batches"] },
       // R10 (2026-10-13 role-workflow audit) — scheduling management and
       // the read-only grid were reachable only by drilling through
       // Programs. They stay owner/admin-only (Programs gate is

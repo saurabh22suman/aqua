@@ -9,6 +9,9 @@ import {
 } from "@/lib/actions/shifts";
 import { addDays, todayInZone, weekdayOf } from "@/lib/time/tz";
 import { BackLink } from "@/components/ui/BackLink";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { StaffRosterBoard } from "@/components/staff-roster-board";
 
 // V-23 — the owner's weekly roster builder. Draft shifts are built
@@ -106,27 +109,28 @@ export default async function StaffRosterPage({
       {locations.length > 1 ? (
         <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
           <input type="hidden" name="week" value={weekStart} />
-          <label className="block">
-            <span className="mb-0.5 block text-[11px] text-ink-3">Location</span>
-            <select
-              name="location"
-              defaultValue={locationId ?? ""}
-              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
-            >
-              <option value="">All locations</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
-          >
+          <Field id="roster-location" label="Location">
+            {() => (
+              <Select
+                id="roster-location"
+                name="location"
+                defaultValue={locationId ?? ""}
+              >
+                <option value="">All locations</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          {/* P2 (independent review) — a standard form action beside a
+              shared control is the shared STANDARD control (48px, the
+              10px radius, 16px text), not the old 44px pill. */}
+          <Button type="submit" variant="primary" size="md" data-testid="roster-apply">
             Apply
-          </button>
+          </Button>
         </form>
       ) : null}
 
