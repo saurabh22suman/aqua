@@ -22,8 +22,8 @@ export async function loginAsCoach(
   const page = await context.newPage();
   await page.goto(`${base}/login`);
   await page.waitForLoadState("networkidle");
-  await page.getByPlaceholder("+91 98765 43210").fill(coachPhone);
-  await page.getByLabel("PIN").fill(DEMO_PIN);
+  await page.getByLabel("Mobile number", { exact: true }).fill(coachPhone);
+  await page.getByLabel("PIN", { exact: true }).fill(DEMO_PIN);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/coach", { timeout: 60_000 });
   return page;

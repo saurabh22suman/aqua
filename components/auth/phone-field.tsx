@@ -32,23 +32,32 @@ export function PhoneField({
     <div>
       <Label htmlFor={id}>Mobile number</Label>
       <p id={descriptionId} className="mt-1 text-[12px] text-balance text-ink-3">
-        Any format works — 98765 43210 or +91 98765 43210. We add +91 for
-        you.
+        Enter your 10-digit mobile number
       </p>
-      <Input
-        id={id}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        type="tel"
-        inputMode="tel"
-        autoComplete="tel"
-        aria-describedby={descriptionId}
-        aria-required="true"
-        placeholder="+91 98765 43210"
-        className="mt-1.5 min-h-[var(--control-height-lg)]"
-      />
+      <div className="relative mt-1.5">
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 z-10 text-[16px] text-ink-2"
+          style={{ top: "50%", transform: "translateY(-50%)" }}
+        >
+          +91
+        </span>
+        <Input
+          id={id}
+          value={value.replace(/^\+91[\s-]*/, "")}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
+          onKeyDown={onKeyDown}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          aria-describedby={descriptionId}
+          aria-required="true"
+          placeholder="98765 43210"
+          className="min-h-[var(--control-height-lg)]"
+          style={{ paddingInlineStart: "3.5rem" }}
+        />
+      </div>
     </div>
   );
 }

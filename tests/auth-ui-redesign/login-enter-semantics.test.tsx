@@ -56,7 +56,7 @@ vi.mock("@/lib/offline/client-session", () => ({
 import { LoginForm } from "@/components/login-form";
 
 function phoneInput(): HTMLInputElement {
-  return screen.getByPlaceholderText("+91 98765 43210") as HTMLInputElement;
+  return screen.getByPlaceholderText("98765 43210") as HTMLInputElement;
 }
 
 function pinInput(): HTMLInputElement {

@@ -62,7 +62,7 @@ import LoginPage from "@/app/(auth)/login/page";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-const PHONE_PLACEHOLDER = "+91 98765 43210";
+const PHONE_PLACEHOLDER = "98765 43210";
 
 function phoneInput(): HTMLInputElement {
   return screen.getByPlaceholderText(PHONE_PLACEHOLDER) as HTMLInputElement;
@@ -366,12 +366,12 @@ describe("tenant login redesign", () => {
     });
   });
 
-  it("keeps the canonical +91 form visible after the field loses focus", () => {
+  it("keeps the national number visible beside the fixed +91 prefix after blur", () => {
     render(<LoginForm />);
     fireEvent.change(phoneInput(), { target: { value: "9876543210" } });
     fireEvent.blur(phoneInput());
 
-    expect(phoneInput().value).toBe("+91 98765 43210");
+    expect(phoneInput().value).toBe("98765 43210");
   });
 
   it("keeps the PIN numeric and the action locked until it is usable", () => {

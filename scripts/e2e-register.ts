@@ -55,8 +55,8 @@ async function main() {
   try {
     await page.goto(`${BASE}/login`);
     // 2026-09-11 auth feature: phone + PIN (pnpm seed sets the PIN).
-    await page.getByPlaceholder("+91 98765 43210").fill("+91 90000 00002");
-    await page.getByLabel("PIN").fill(DEMO_PIN);
+    await page.getByLabel("Mobile number", { exact: true }).fill("+91 90000 00002");
+    await page.getByLabel("PIN", { exact: true }).fill(DEMO_PIN);
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL("**/coach", { timeout: 15_000 });
 
