@@ -2,7 +2,7 @@ import ClipboardCheck from "lucide-react/dist/esm/icons/clipboard-check.mjs";
 import MessageCircle from "lucide-react/dist/esm/icons/message-circle.mjs";
 import ReceiptIndianRupee from "lucide-react/dist/esm/icons/receipt-indian-rupee.mjs";
 import { BrandLockup } from "./sports-mark";
-import { LaneMotif } from "./lane-motif";
+import { LoginCharacter } from "./login-character";
 
 // The desktop side panel of the tenant entry.
 //
@@ -52,7 +52,7 @@ export function ClubEditorialPanel() {
           Attendance, fees and parent messages — for coaches, reception and
           owners.
         </p>
-        <LaneMotif className="mt-9 hidden w-[300px] xl:block" />
+        <LoginCharacter />
       </div>
 
       <ul className="space-y-2.5">

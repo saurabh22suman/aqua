@@ -278,7 +278,9 @@ describe("tenant login redesign", () => {
   it("RED: keeps the sports identity restrained — no photo, no dashboard cards", () => {
     const { container } = render(<LoginPage />);
 
-    expect(container.querySelectorAll("img")).toHaveLength(0);
+    const artwork = [...container.querySelectorAll("img")];
+    expect(artwork).toHaveLength(2);
+    expect(artwork.every((image) => image.hasAttribute("data-login-character") && image.alt === "")).toBe(true);
     expect(container.querySelectorAll("svg").length).toBeGreaterThan(0);
     // No third-party sign-in, no pricing, no social proof.
     expect(screen.queryByText(/free trial|subscription|pricing|per month/i)).toBeNull();

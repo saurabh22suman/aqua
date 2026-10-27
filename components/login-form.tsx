@@ -8,6 +8,7 @@ import { formatPhoneIN, normaliseToE164 } from "@/lib/phone";
 import { syncBeforeLogout } from "@/lib/offline/logout";
 import { clearOfflineData, runOfflineLifecycle } from "@/lib/offline/client-session";
 import { BrandLockup } from "@/components/auth/sports-mark";
+import { LoginCharacter } from "@/components/auth/login-character";
 import { PhoneField } from "@/components/auth/phone-field";
 import { PinField } from "@/components/auth/pin-field";
 import { Button } from "@/components/ui/Button";
@@ -135,13 +136,14 @@ export function LoginForm() {
   }
 
   return (
-    <div>
+    <div className="relative">
       {/* On a phone the panel is gone, so the brand moves into the form
           column. */}
       <div className="mb-7 lg:hidden">
         <BrandLockup size="sm" />
       </div>
 
+      <LoginCharacter compact />
       <h1 className="font-display text-[26px] font-semibold leading-tight text-ink">
         Sign in
       </h1>

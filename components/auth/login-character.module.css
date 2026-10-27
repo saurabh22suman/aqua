@@ -1,0 +1,10 @@
+.scene { position: relative; width: min(280px, 100%); margin: 24px auto 0; }
+.compact { position: absolute; top: -8px; right: 0; width: 84px; height: 88px; }
+.player { display: block; width: 100%; height: auto; animation: arrive 650ms ease-out both; }
+.shuttle { position: absolute; top: 15%; right: 4%; color: var(--accent-strong); font-size: 22px; animation: serve 900ms ease-out both; }
+@keyframes arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes serve { from { opacity: 0; transform: translate(-18px, 12px) rotate(-20deg); } to { opacity: 1; transform: none; } }
+@media (min-width: 1024px) { .compact { display: none; } }
+@media (max-height: 740px) and (min-width: 1024px) { .scene { width: 180px; margin-top: 12px; } }
+@media (max-height: 650px) and (max-width: 1023px) { .compact { width: 56px; height: 59px; } }
+@media (prefers-reduced-motion: reduce) { .player, .shuttle { animation: none; } }
