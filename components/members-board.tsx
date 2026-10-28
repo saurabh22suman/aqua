@@ -5,8 +5,12 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import type { MemberListRow } from "@/lib/services/people";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
+import { ListToolbar, ToolbarField } from "@/components/member-list-toolbar";
 import { formatPhoneIN } from "@/lib/phone";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
@@ -88,44 +92,74 @@ export function MembersBoard({
   return (
     <div>
       {error ? <div role="alert" className="mb-3 text-[13px] text-ink-2">
-        <p>{error}</p><button type="button" onClick={() => refetch({})} disabled={isPending}
-          className="min-h-11 underline">{`Retry ${resolveTerm(terminology, "member", 1)} search`}</button>
-      </div> : null}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            refetch({ search: e.target.value });
-          }}
-          placeholder="Search by name or phone"
-          aria-label="Search members"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper py-2.5 pl-9 pr-3 text-[16px]"
-          data-testid="members-search"
-        />
-      </div>
-
-      <div className="mt-2.5 flex gap-2">
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            refetch({ status: e.target.value });
-          }}
-          aria-label="Status"
-          className="min-h-11 rounded-ctl border border-line bg-paper px-2.5 py-2 text-[16px]"
-          data-testid="members-status-filter"
+        <p>{error}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => refetch({})}
+          disabled={isPending}
+          className="mt-1.5"
         >
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
+          {`Retry ${resolveTerm(terminology, "member", 1)} search`}
+        </Button>
+      </div> : null}
+
+      {/* Owner redesign (C2) — the search entry and the lifecycle
+          filter share ONE toolbar so their control bottoms align; the
+          search takes the flexible width and the picker stays bounded.
+          Both are shared primitives, so their metrics and tints stay
+          with the foundation owner. */}
+      <ListToolbar label={`${resolveTerm(terminology, "member", 1)} filters`}>
+        <ToolbarField
+          id="members-search"
+          label="Search members"
+          width="flexible"
+        >
+          {(field) => (
+            <div className="relative">
+              <Search
+                size={16}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
+              />
+              <Input
+                {...field}
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  refetch({ search: e.target.value });
+                }}
+                placeholder="Name or phone number"
+                aria-label="Search members"
+                className="pl-9"
+                data-testid="members-search"
+              />
+            </div>
+          )}
+        </ToolbarField>
+
+        <ToolbarField id="members-status" label="Status">
+          {(field) => (
+            <Select
+              {...field}
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                refetch({ status: e.target.value });
+              }}
+              data-testid="members-status-filter"
+            >
+              <option value="">All statuses</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </ToolbarField>
+      </ListToolbar>
 
       {/* PR3-C3/C4 — desktop column header; the rows below share the
           same grid so the roster scans and compares at 1280px while the
@@ -165,25 +199,45 @@ export function MembersBoard({
         ) : (
           members.map((m) => (
             <li key={m.memberId} className="border-b border-line last:border-0">
+              {/* Owner redesign (C2) — the directory row reads
+                  identity → lifecycle state → supporting metadata. On a
+                  phone the name and the status share the first line and
+                  the metadata sits under them; from md the same DOM
+                  places the phone and the status in their own columns
+                  beside the member. The DOM order is the reading
+                  order in both layouts. */}
               <Link
                 href={`/owner/members/${m.memberId}`}
-                className="flex items-center gap-3 py-3 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] md:gap-3"
+                data-testid="member-row"
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 py-3 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] md:gap-3"
               >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium">
-                    {m.fullName}
-                    {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 md:truncate">
-                    {m.memberCode} · {m.locationName}
-                  </p>
-                </div>
-                <p className="shrink-0 text-[12.5px] text-ink-2 tabular-nums md:block">
+                <p
+                  data-testid="member-row-name"
+                  className="col-start-1 row-start-1 min-w-0 text-[14px] font-medium break-words"
+                >
+                  {m.fullName}
+                  {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
+                </p>
+                <span
+                  data-testid="member-row-status"
+                  className="col-start-2 row-start-1 flex justify-self-end md:col-start-3 md:row-start-1"
+                >
+                  <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
+                    {STATUS_LABELS[m.status]}
+                  </StatusBadge>
+                </span>
+                <p
+                  data-testid="member-row-meta"
+                  className="col-start-1 row-start-2 truncate text-[12px] text-ink-3 md:col-start-1 md:row-start-2"
+                >
+                  {m.memberCode} · {m.locationName}
+                </p>
+                <p
+                  data-testid="member-row-phone"
+                  className="col-start-2 row-start-2 text-[12.5px] text-ink-2 tabular-nums md:col-start-2 md:row-start-1"
+                >
                   {m.phone ? formatPhoneIN(m.phone) : "—"}
                 </p>
-                <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
-                  {STATUS_LABELS[m.status]}
-                </StatusBadge>
               </Link>
             </li>
           ))

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Trash2 } from "lucide-react";
@@ -8,6 +9,7 @@ import type { HolidayRow } from "@/lib/services/holidays";
 import { formatDateIST } from "@/lib/time/tz";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DateField } from "@/components/ui/DateField";
+import { Input } from "@/components/ui/Input";
 
 // R.3 (docs/five-day-work-guide.md) — owner holiday/closure editor.
 // The session generator already skips these dates; this is the surface
@@ -92,12 +94,12 @@ export function HolidaysBoard({
           <span className="block text-[12px] text-ink-3 mb-1">
             Holiday name
           </span>
-          <input
+          <Input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Founder's Day"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="w-full border text-[16px]"
             data-testid="holiday-name"
           />
         </label>
@@ -125,14 +127,15 @@ export function HolidaysBoard({
           />
           Repeats every year on this date
         </label>
-        <button
+        <Button
+          variant="primary"
+          size="md"
+          className="w-full"
           type="button"
           onClick={submit}
-          disabled={busy || !name.trim() || !holidayDate}
-          className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
-        >
-          Add holiday
-        </button>
+          disabled={busy || !name.trim() || !holidayDate}>
+        Add holiday
+      </Button>
         {error ? (
           <p role="alert" className="text-[12px] text-ink-2">
             {error}

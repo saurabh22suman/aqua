@@ -6,6 +6,14 @@ import {
   upsertTenantFeatureAction,
   type UpsertTenantFeatureResult,
 } from "@/lib/actions/platform-features";
+import { Button } from "@/components/ui/Button";
+import {
+  OpsCardFlush,
+  OpsEmptyState,
+} from "@/components/ops/ops-primitives";
+import {
+  OpsStatusPill,
+} from "@/components/ops/ops-display";
 
 // Phase 1.8 — per-tenant feature toggle inline editor.
 //
@@ -13,6 +21,13 @@ import {
 // rather than onSubmit. Pre-hydration submit goes via POST to the
 // action endpoint; the action value (force-on / force-off / reset-to-plan)
 // never appears as a query string.
+//
+// Ops redesign (28 October 2026): the rows are the shared Ops frame
+// and the buttons are the SHARED Button, so an entitlement row and a
+// tenant filter button are the same control. The write permission is
+// resolved on the server from the session role: a viewer sees the
+// resolved entitlement and the reason it cannot change it, never a
+// toggle that would fail on submit.
 
 type FeatureSource = "plan" | "tenant_override" | "denied";
 
@@ -27,15 +42,16 @@ const SOURCE_LABEL: Record<FeatureSource, string> = {
 // warn / late / water stay reserved for the runtime data layer
 // (DESIGN.md §1.1). The label is the source of truth; colourblind
 // readers see the same story.
-const SOURCE_TONE: Record<FeatureSource, string> = {
-  plan: "bg-deck text-ink-2",
-  tenant_override: "bg-paper border border-[var(--accent-strong)] text-ink",
-  denied: "bg-ink-2/15 text-ink-2 line-through",
+const SOURCE_TONE: Record<FeatureSource, "neutral" | "good" | "late"> = {
+  plan: "neutral",
+  tenant_override: "good",
+  denied: "late",
 };
 
 export function TenantFeatureToggles({
   tenantId,
   initial,
+  canWrite,
 }: {
   tenantId: string;
   initial: ReadonlyArray<{
@@ -43,34 +59,40 @@ export function TenantFeatureToggles({
     source: FeatureSource;
     expiresAt?: Date;
   }>;
+  /** Resolved on the server from the session role. */
+  canWrite: boolean;
 }) {
   if (initial.length === 0) {
     return (
-      <div className="rounded-card bg-paper border border-line px-5 py-8 text-center">
-        <p className="text-[14px] font-medium text-ink">No features on this plan</p>
-        <p className="mt-2 text-[13px] text-ink-3">
-          The tenant&apos;s plan has no GA features attached. The
-          catalogue is editable at /ops/features; per-tenant
-          overrides land only on features the plan already carries
-          (or that the operator first enables via the catalogue).
-        </p>
-      </div>
+      <OpsEmptyState
+        className="mt-3"
+        title="No features on this plan"
+        body={
+          <>
+            The tenant&apos;s plan has no GA features attached. The catalogue is
+            editable at /ops/features; per-tenant overrides land only on
+            features the plan already carries (or that the operator first
+            enables via the catalogue).
+          </>
+        }
+      />
     );
   }
 
   return (
-    <div className="rounded-card bg-paper border border-line overflow-hidden">
+    <OpsCardFlush className="mt-3">
       <ul>
-        {initial.map((f, idx) => (
-          <li
-            key={f.key}
-            className={`px-4 py-3 ${idx > 0 ? "border-t border-line" : ""}`}
-          >
-            <TenantFeatureRow tenantId={tenantId} feature={f} />
+        {initial.map((f) => (
+          <li key={f.key} className="border-b border-line px-4 py-3 last:border-b-0">
+            <TenantFeatureRow
+              tenantId={tenantId}
+              feature={f}
+              canWrite={canWrite}
+            />
           </li>
         ))}
       </ul>
-    </div>
+    </OpsCardFlush>
   );
 }
 
@@ -79,15 +101,18 @@ export function TenantFeatureToggles({
 function TenantFeatureRow({
   tenantId,
   feature,
+  canWrite,
 }: {
   tenantId: string;
   feature: { key: string; source: FeatureSource; expiresAt?: Date };
+  canWrite: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   if (!editing) {
     return (
       <TenantFeatureViewRow
         feature={feature}
+        canWrite={canWrite}
         onEdit={() => setEditing(true)}
       />
     );
@@ -105,16 +130,16 @@ function TenantFeatureRow({
 function TenantFeatureViewRow({
   feature,
   onEdit,
+  canWrite,
 }: {
   feature: { key: string; source: FeatureSource; expiresAt?: Date };
   onEdit: () => void;
+  canWrite: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-[14px] font-medium text-ink font-mono">
-          {feature.key}
-        </p>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="font-mono text-[14px] font-medium text-ink">{feature.key}</p>
         {feature.expiresAt ? (
           <p className="mt-0.5 text-[12px] text-ink-3">
             Override expires{" "}
@@ -122,18 +147,14 @@ function TenantFeatureViewRow({
           </p>
         ) : null}
       </div>
-      <span
-        className={`text-[11px] font-medium px-3 py-1 rounded-pill ${SOURCE_TONE[feature.source]}`}
-      >
+      <OpsStatusPill tone={SOURCE_TONE[feature.source]}>
         {SOURCE_LABEL[feature.source]}
-      </span>
-      <button
-        type="button"
-        onClick={onEdit}
-        className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck transition-colors duration-150"
-      >
-        Edit
-      </button>
+      </OpsStatusPill>
+      {canWrite ? (
+        <Button type="button" variant="secondary" size="sm" onClick={onEdit}>
+          Edit
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -187,10 +208,12 @@ function TenantFeatureEditRow({
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="submit"
           name="mode"
           value="override"
+          variant="primary"
+          size="sm"
           // H1: enabled vs disabled is a separate form field. The
           // action reads enabled from formData. A boolean false
           // becomes "false" string. Use a hidden input rather than
@@ -203,14 +226,15 @@ function TenantFeatureEditRow({
             }
           }}
           disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
         >
           Force on
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           name="mode"
           value="override"
+          variant="secondary"
+          size="sm"
           onClick={(e) => {
             const form = e.currentTarget.form;
             if (form) {
@@ -219,29 +243,29 @@ function TenantFeatureEditRow({
             }
           }}
           disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck disabled:opacity-60 transition-colors duration-150"
         >
           Force off
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           name="mode"
           value="clear"
+          variant="secondary"
+          size="sm"
           disabled={isPending || currentSource === "plan"}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck disabled:opacity-40 transition-colors duration-150"
         >
           Reset to plan
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onCancel}
           disabled={isPending}
-          className="rounded-pill px-3 py-2 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline disabled:opacity-60"
         >
           Cancel
-        </button>
+        </Button>
       </div>
-      <input type="hidden" name="enabled" value="true" />
     </form>
   );
 }

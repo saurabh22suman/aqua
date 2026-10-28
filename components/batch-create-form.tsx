@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { createBatchAction } from "@/lib/actions/programs";
@@ -11,6 +12,8 @@ import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs"
 import type { LocationOption } from "@/lib/services/people";
 import type { Program } from "@/db/schema/programs";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -111,24 +114,22 @@ export function BatchCreateForm({
 
   return (
     <div className="mt-3 space-y-2 rounded-card border border-line p-3">
-      <select
+      <Select
         value={programId}
         onChange={(e) => setProgramId(e.target.value)}
         aria-label="Program"
-        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
       >
         {programs.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
           </option>
         ))}
-      </select>
+      </Select>
       {locations.length > 1 ? (
-        <select
+        <Select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
           aria-label="Location"
-          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="batch-location-picker"
         >
           {locations.map((l) => (
@@ -136,7 +137,7 @@ export function BatchCreateForm({
               {l.name}
             </option>
           ))}
-        </select>
+        </Select>
       ) : null}
       <label className="block">
         {/* The tenant's own word for a batch (L3: never hardcode the
@@ -144,12 +145,11 @@ export function BatchCreateForm({
         <span className="block text-[12px] text-ink-3 mb-1">
           {titleCase(resolveTerm(terminology, "batch", 1))} name
         </span>
-        <input
+        <Input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Batch name"
-          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
         />
       </label>
       {/* Owner UX audit (2026-10-24): the two time inputs had no
@@ -159,32 +159,31 @@ export function BatchCreateForm({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <label className="block">
           <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
-          <input
+          <Input
             type="number"
             min={1}
             value={capacity}
             onChange={(e) => setCapacity(e.target.value)}
-            className="min-h-11 w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
             aria-label="Capacity"
           />
         </label>
         <label className="block">
           <span className="block text-[12px] text-ink-3 mb-1">Start time</span>
-          <input
+          <Input
             type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="min-h-11 w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="min-w-0"
             aria-label="Start time"
           />
         </label>
         <label className="block">
           <span className="block text-[12px] text-ink-3 mb-1">End time</span>
-          <input
+          <Input
             type="time"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            className="min-h-11 w-full min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
+            className="min-w-0"
             aria-label="End time"
           />
         </label>
@@ -193,11 +192,10 @@ export function BatchCreateForm({
         <span className="block text-[12px] text-ink-3 mb-1">
           {resolveTerm(terminology, "coach", 1)}
         </span>
-        <select
+        <Select
           value={coachId}
           onChange={(e) => setCoachId(e.target.value)}
           aria-label={resolveTerm(terminology, "coach", 1)}
-          className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           data-testid="batch-coach-picker"
         >
         <option value="">No {resolveTerm(terminology, "coach", 1)} assigned</option>
@@ -206,7 +204,7 @@ export function BatchCreateForm({
               {c.fullName}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="flex gap-1.5">
         {DAY_LABELS.map((label, day) => (
@@ -240,14 +238,15 @@ export function BatchCreateForm({
         </div>
       ) : null}
       {error ? <p className="text-[12px] text-late">{error}</p> : null}
-      <button
+      <Button
+          variant="primary"
+          size="md"
+          className="inline-flex items-center justify-center"
         type="button"
         onClick={submit}
-        disabled={busy || !name.trim() || days.length === 0}
-        className="inline-flex min-h-11 items-center justify-center rounded-ctl bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
-      >
+        disabled={busy || !name.trim() || days.length === 0}>
         Add batch
-      </button>
+      </Button>
     </div>
   );
 }

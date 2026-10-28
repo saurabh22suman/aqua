@@ -20,6 +20,11 @@ import {
 // ISO `yyyy-mm-dd` string so no caller has to know about the display
 // format. Invalid complete dates (31/02/…) never emit and set
 // aria-invalid so the surrounding form can show its own message.
+//
+// Owner redesign (27 October 2026) — the date field is the product's
+// DATE PICKER, so it wears the standard control metrics (48px, the 10px
+// control radius, 16px control text) and the very lightly tinted picker
+// surface: a date is a choice, and it should not read as free text.
 
 export function isoToDisplay(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -142,9 +147,9 @@ export function DateField({
         disabled={disabled}
         aria-label={ariaLabel}
         aria-invalid={invalid || undefined}
-        className={`w-full min-h-11 rounded-ctl border px-3 py-2.5 text-[16px] ${
-          tone === "deck" ? "bg-deck" : "bg-paper"
-        } ${invalid ? "border-ink-2" : "border-line"} ${className}`}
+        className={`w-full min-h-12 rounded-ctl border px-4 py-2.5 text-[16px] ${
+          tone === "deck" ? "bg-deck" : "bg-[var(--control-surface-picker)]"
+        } ${invalid ? "border-ink-2" : "border-[var(--control-border)]"} ${className}`}
         data-testid={testId}
       />
       {invalid ? (

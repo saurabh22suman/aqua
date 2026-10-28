@@ -9,6 +9,9 @@ import type { NewMemberDetails } from "@/lib/services/enquiries";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { formatPhoneIN } from "@/lib/phone";
 import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 function looksLikeMinor(dateOfBirth: string): boolean | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
@@ -97,48 +100,51 @@ export function EnquiryNewMemberFields({
 
   return (
     <div className="space-y-2.5">
-      <div>
-        <label
-          htmlFor="enquiry-member-dob"
-          className="block text-[12px] text-ink-3 mb-1"
-        >
-          Date of birth
-        </label>
-        <DateField
-          id="enquiry-member-dob"
-          value={dateOfBirth}
-          onChange={setDateOfBirth}
-          tone="deck"
-          data-testid="enquiry-member-dob"
-        />
-      </div>
-      <select
-        value={gender}
-        onChange={(e) => {
-          setGender(e.target.value);
-        }}
-        aria-label="Gender"
-        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-      >
-        <option value="">Gender (optional)</option>
-        <option value="male">Male</option>
-        <option value="female">Female</option>
-        <option value="other">Other</option>
-      </select>
-      <select
-        value={locationId}
-        onChange={(e) => {
-          setLocationId(e.target.value);
-        }}
-        aria-label="Location"
-        className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-      >
-        {locations.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </select>
+      {/* Owner redesign (C2) — the shared labelled controls. The
+          guardian and consent requirements are unchanged. */}
+      <Field id="enquiry-member-dob" label="Date of birth">
+        {() => (
+          <DateField
+            id="enquiry-member-dob"
+            value={dateOfBirth}
+            onChange={setDateOfBirth}
+            data-testid="enquiry-member-dob"
+          />
+        )}
+      </Field>
+      <Field id="enquiry-member-gender" label="Gender (optional)">
+        {(field) => (
+          <Select
+            {...field}
+            value={gender}
+            onChange={(e) => {
+              setGender(e.target.value);
+            }}
+          >
+            <option value="">Not specified</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </Select>
+        )}
+      </Field>
+      <Field id="enquiry-member-location" label="Location">
+        {(field) => (
+          <Select
+            {...field}
+            value={locationId}
+            onChange={(e) => {
+              setLocationId(e.target.value);
+            }}
+          >
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
 
       {minor === true ? (
         <div className="rounded-ctl border border-line bg-paper p-3 space-y-2">
@@ -153,20 +159,24 @@ export function EnquiryNewMemberFields({
                 onClick={() => {
                   setGuardian({ mode: "none" });
                 }}
-                className="text-[11px] text-ink-3 underline"
+                className="inline-flex min-h-11 items-center text-[11px] text-ink-3 underline"
               >
                 Change
               </button>
             </div>
           ) : (
             <>
-              <input
-                type="text"
-                value={guardianQuery}
-                onChange={(e) => runGuardianSearch(e.target.value)}
-                placeholder="Search existing guardian"
-                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              />
+              <Field id="enquiry-guardian-search" label="Search existing guardian">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="text"
+                    value={guardianQuery}
+                    onChange={(e) => runGuardianSearch(e.target.value)}
+                    placeholder="Search existing guardian"
+                  />
+                )}
+              </Field>
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
                   {guardianResults.map((r) => (
@@ -186,35 +196,47 @@ export function EnquiryNewMemberFields({
                   ))}
                 </ul>
               ) : null}
-              <input
-                type="text"
-                value={guardianName}
-                onChange={(e) => {
-                  setGuardianName(e.target.value);
-                }}
-                placeholder="Or: guardian full name"
-                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              />
-              <input
-                type="tel"
-                value={guardianPhone}
-                onChange={(e) => {
-                  setGuardianPhone(e.target.value);
-                }}
-                placeholder="Guardian phone (optional)"
-                className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              />
+              <Field id="enquiry-guardian-name" label="Or: guardian full name">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="text"
+                    value={guardianName}
+                    onChange={(e) => {
+                      setGuardianName(e.target.value);
+                    }}
+                    placeholder="Or: guardian full name"
+                  />
+                )}
+              </Field>
+              <Field id="enquiry-guardian-phone" label="Guardian phone (optional)">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="tel"
+                    value={guardianPhone}
+                    onChange={(e) => {
+                      setGuardianPhone(e.target.value);
+                    }}
+                    placeholder="Guardian phone (optional)"
+                  />
+                )}
+              </Field>
             </>
           )}
-          <input
-            type="text"
-            value={relationship}
-            onChange={(e) => {
-              setRelationship(e.target.value);
-            }}
-            placeholder="Relationship (e.g. mother)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          />
+          <Field id="enquiry-guardian-relationship" label="Relationship (e.g. mother)">
+            {(field) => (
+              <Input
+                {...field}
+                type="text"
+                value={relationship}
+                onChange={(e) => {
+                  setRelationship(e.target.value);
+                }}
+                placeholder="Relationship (e.g. mother)"
+              />
+            )}
+          </Field>
           {guardianMissing() ? (
             <div className="flex items-start gap-2 rounded-ctl bg-warn-soft px-3 py-2">
               <AlertTriangle size={14} className="text-warn flex-none mt-0.5" />
@@ -226,8 +248,9 @@ export function EnquiryNewMemberFields({
         </div>
       ) : null}
 
-      <label className="flex items-start gap-2">
+      <div className="flex items-start gap-2">
         <input
+          id="enquiry-consent"
           type="checkbox"
           checked={consentGiven}
           onChange={(e) => {
@@ -236,12 +259,12 @@ export function EnquiryNewMemberFields({
           className="mt-0.5"
           data-testid="enquiry-consent-checkbox"
         />
-        <span className="text-[11.5px] text-ink-2">
+        <label htmlFor="enquiry-consent" className="text-[11.5px] text-ink-2">
           {minor === true
             ? "The guardian above has agreed to data processing, per the current privacy notice."
             : "This person has agreed to data processing, per the current privacy notice."}
-        </span>
-      </label>
+        </label>
+      </div>
     </div>
   );
 }

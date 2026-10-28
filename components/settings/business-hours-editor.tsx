@@ -1,5 +1,8 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Input } from "@/components/ui/Input";
 import { useCallback, useEffect, useState } from "react";
 import {
   getBusinessHoursAction,
@@ -25,8 +28,6 @@ const DAYS = [
 type Day = (typeof DAYS)[number] | string;
 type DayHours = { day: string; closed: boolean; open: string; close: string };
 
-const inputClass =
-  "min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function fullWeek(loaded: DayHours[]): DayHours[] {
   return DAYS.map(
@@ -108,37 +109,36 @@ export function BusinessHoursEditor({
         {days.map((d) => (
           <li key={d.day} className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="w-[72px] capitalize text-ink-2">{d.day}</span>
-            <label className="flex min-h-[44px] items-center gap-1.5">
-              <input
-                type="checkbox"
+            {/* A neutral wrapper: the shared Checkbox renders its own
+                label, and a label inside a label is not valid. */}
+            <span className="flex min-h-[44px] items-center gap-1.5">
+              <Checkbox
                 checked={!d.closed}
                 disabled={!canWrite}
-                onChange={(e) => update(d.day, { closed: !e.target.checked })}
+                onCheckedChange={(checked) => update(d.day, { closed: !checked })}
                 aria-label={`${d.day} open`}
-                className="h-4 w-4"
-              />
-              <span className="text-[12px] text-ink-3">
+              >
                 {d.closed ? "Closed" : "Open"}
-              </span>
-            </label>
+              </Checkbox>
+            </span>
             {!d.closed ? (
               <span className="flex items-center gap-1.5">
-                <input
+                <Input
                   type="time"
                   value={d.open}
                   disabled={!canWrite}
                   onChange={(e) => update(d.day, { open: e.target.value })}
                   aria-label={`${d.day} opening time`}
-                  className={`${inputClass} min-w-0`}
+                  className="min-w-0"
                 />
                 <span className="text-ink-3">–</span>
-                <input
+                <Input
                   type="time"
                   value={d.close}
                   disabled={!canWrite}
                   onChange={(e) => update(d.day, { close: e.target.value })}
                   aria-label={`${d.day} closing time`}
-                  className={`${inputClass} min-w-0`}
+                  className="min-w-0"
                 />
               </span>
             ) : null}
@@ -147,8 +147,11 @@ export function BusinessHoursEditor({
       </ul>
 
       {canWrite ? (
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-2"
+            type="button"
           disabled={busy}
           onClick={() => {
             setBusy(true);
@@ -169,10 +172,9 @@ export function BusinessHoursEditor({
               }
             })();
           }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          >
           {busy ? "Saving…" : "Save hours"}
-        </button>
+        </Button>
       ) : null}
 
       {message ? (

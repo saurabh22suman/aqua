@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 import { createShiftTemplateAction } from "@/lib/actions/shifts";
 import type { ShiftTemplateRow } from "@/lib/services/shifts";
 
@@ -60,34 +62,43 @@ export function ShiftTemplateEditor({
         Shift templates ({templates.length})
       </summary>
       <div className="mt-3 grid gap-3">
-        <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-3">Name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Morning shift"
-            className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-          />
-        </label>
+        <div>
+          <Field id="shift-template-name" label="Name">
+            {(field) => (
+              <Input
+                {...field}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Morning shift"
+              />
+            )}
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">Start</span>
-            <input
-              type="time"
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            />
-          </label>
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">End</span>
-            <input
-              type="time"
-              value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            />
-          </label>
+          <div className="min-w-0">
+            <Field id="shift-template-start" label="Start">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              )}
+            </Field>
+          </div>
+          <div className="min-w-0">
+            <Field id="shift-template-end" label="End">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="time"
+                  value={endTime}
+                  onChange={(e) => setEndTime(e.target.value)}
+                />
+              )}
+            </Field>
+          </div>
         </div>
         <fieldset>
           <legend className="mb-1 text-[11px] text-ink-3">Days</legend>

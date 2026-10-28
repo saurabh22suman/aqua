@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useState } from "react";
 import Link from "next/link";
 import { Pencil, Trash2, X, Check } from "lucide-react";
@@ -17,6 +18,7 @@ import type { BatchWithProgramName, CoachOption } from "@/lib/services/programs"
 import type { LocationOption } from "@/lib/services/people";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { formatWallTime12h } from "@/lib/time/tz";
+import { Input } from "@/components/ui/Input";
 
 // O-D5 (2026-09-13 audit) — the row prefixes the coach term, but real
 // (and seed) names can already lead with it ("Coach Aanya Rao"),
@@ -159,11 +161,10 @@ export function ProgramsBatchesBoard({
           {programs.map((p) => (
             <li key={p.id} className="py-2 flex items-center gap-2">
               {editingProgram === p.id ? (
-                <input
+                <Input
                   type="text"
                   value={editingProgramName}
                   onChange={(e) => setEditingProgramName(e.target.value)}
-                  className="min-h-11 flex-1 rounded-ctl border border-line bg-deck px-2.5 py-1.5 text-[16px]"
                   data-testid={`edit-program-input-${p.id}`}
                 />
               ) : (
@@ -242,21 +243,21 @@ export function ProgramsBatchesBoard({
           ))}
         </ul>
         <div className="mt-3 flex gap-2">
-          <input
+          <Input
             type="text"
             value={programName}
             onChange={(e) => setProgramName(e.target.value)}
             placeholder="New program name"
-            className="min-h-11 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
           />
-          <button
+          <Button
+          variant="primary"
+          size="md"
+          className="inline-flex items-center justify-center"
             type="button"
             onClick={submitProgram}
-            disabled={busyProgram || !programName.trim()}
-            className="inline-flex min-h-11 items-center justify-center rounded-ctl bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
-          >
-            Add
-          </button>
+            disabled={busyProgram || !programName.trim()}>
+        Add
+      </Button>
         </div>
         {programError ? <p className="mt-1 text-[12px] text-ink-3">{programError}</p> : null}
       </section>

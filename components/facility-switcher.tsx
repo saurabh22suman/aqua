@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 import { MapPin } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -81,14 +82,25 @@ export function FacilitySwitcher({
       <label htmlFor="facility-switcher" className="sr-only">
         Facility
       </label>
-      <div className="flex items-center gap-2 rounded-ctl border border-line bg-paper px-3 min-h-[44px]">
-        <MapPin size={14} className="text-ink-3 flex-none" aria-hidden="true" />
+      {/* A PICKER, so it wears the standard control metrics: 48px tall,
+          the 10px control radius, 16px control text and the very lightly
+          tinted picker surface. The SELECT is the control — it carries
+          the border, the radius and the surface — so what the reader
+          sees is what the control paints. The native select keeps the
+          platform picker on a phone and its own keyboard behaviour. */}
+      <div className="relative">
+        <MapPin
+          size={14}
+          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-3"
+          aria-hidden="true"
+        />
         <select
           id="facility-switcher"
           data-testid="facility-switcher"
           value={current}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 bg-transparent text-[16px] min-h-[44px]"
+          aria-label="Facility"
+          className="min-h-12 w-full appearance-none rounded-ctl border border-[var(--control-border)] bg-[var(--control-surface-picker)] py-2 pl-10 pr-9 text-[16px] text-ink motion-fast transition-colors hover:border-[var(--control-border-hover)] focus:border-[var(--accent-strong)]"
         >
           <option value="all">All facilities</option>
           {locations.map((l) => (
@@ -97,6 +109,17 @@ export function FacilitySwitcher({
             </option>
           ))}
         </select>
+        {/* The dropdown affordance. `appearance-none` removes the
+            browser's own arrow, so the picker has to say that it is a
+            choice — the same decorative chevron the shared Select
+            draws. */}
+        <ChevronDown
+          size={16}
+          strokeWidth={1.8}
+          data-testid="facility-switcher-chevron"
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-3"
+        />
       </div>
     </div>
   );

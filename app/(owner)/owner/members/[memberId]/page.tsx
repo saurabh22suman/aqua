@@ -31,6 +31,8 @@ import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { BackLink } from "@/components/ui/BackLink";
+import { buttonClasses } from "@/components/ui/Button";
+import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { requireUuidParam } from "@/lib/params";
 import { getNotificationDestinationsAction } from "@/lib/actions/notification-destinations";
 import { MemberNotificationDestinations } from "@/components/member-notification-destinations";
@@ -132,18 +134,27 @@ export default async function MemberDetailPage({
         </div>
       ) : null}
 
-      <div className="mt-6 flex items-start justify-between">
-        <div>
-          <h1 className="font-display text-[19px] font-semibold">
-            <InlineEditField
-              value={member.fullName}
-              field="fullName"
-              memberId={member.memberId}
-              type="text"
-              snapshot={member}
-              valueClassName="font-display text-[19px] font-semibold text-ink"
-            />
-          </h1>
+      <div className="mt-6 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          {/* Owner redesign (C2) — the identity line carries the
+              lifecycle state, the same way the member directory row
+              does, so the state is readable without scrolling to the
+              participation card. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="font-display text-[19px] font-semibold">
+              <InlineEditField
+                value={member.fullName}
+                field="fullName"
+                memberId={member.memberId}
+                type="text"
+                snapshot={member}
+                valueClassName="font-display text-[19px] font-semibold text-ink"
+              />
+            </h1>
+            <StatusBadge tone={MEMBER_STATUS_TONE[member.status] ?? "neutral"}>
+              {MEMBER_STATUS_LABELS[member.status]}
+            </StatusBadge>
+          </div>
           <p className="mt-0.5 text-[12.5px] text-ink-3">
             {member.memberCode} · {member.locationName}
             {member.isMinor ? " · minor" : ""}
@@ -154,10 +165,10 @@ export default async function MemberDetailPage({
         </div>
         <Link
           href={`/owner/members/${member.memberId}/edit`}
-          className="flex min-h-[44px] items-center gap-1.5 rounded-ctl border border-line px-3 text-[13px]"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
-          <Pencil size={14} />
-          Edit
+          <Pencil size={14} aria-hidden="true" />
+          Edit details
         </Link>
       </div>
 

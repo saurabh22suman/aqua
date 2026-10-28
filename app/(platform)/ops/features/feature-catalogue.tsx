@@ -7,6 +7,12 @@ import {
   type UpdateFeatureFormInput,
 } from "@/lib/actions/platform-features";
 import type { Feature } from "@/db/schema/platform";
+import { Button } from "@/components/ui/Button";
+import type { StatusTone } from "@/components/ui/StatusBadge";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { OpsCardFlush, OpsEmptyState } from "@/components/ops/ops-primitives";
+import { OpsStatusPill } from "@/components/ops/ops-display";
 
 // Phase 1.7 — feature catalogue client. Receives the SSR-fetched
 // rows, owns per-row edit state.
@@ -17,6 +23,11 @@ import type { Feature } from "@/db/schema/platform";
 // puts form fields (name, category, status) in the URL. Per-row
 // useActionState surfaces errors inline; on success the row closes
 // edit mode and the action's revalidatePath() refreshes the SSR data.
+//
+// Ops redesign (28 October 2026): the row's controls are the SHARED
+// controls, and the write permission is resolved on the server from the
+// session role — a viewer sees the catalogue and the reason it cannot
+// be changed.
 
 const STATUS_LABEL: Record<string, string> = {
   ga: "GA",
@@ -24,16 +35,19 @@ const STATUS_LABEL: Record<string, string> = {
   internal: "Internal",
 };
 
-const STATUS_TONE: Record<string, string> = {
-  ga: "bg-good-soft text-good",
-  beta: "bg-warn-soft text-warn",
-  internal: "bg-deck text-ink-2",
-};
+const STATUS_TONE: Record<string, StatusTone> = {
+  ga: "good",
+  beta: "warn",
+  internal: "neutral",
+} as const;
 
 export function FeatureCatalogue({
   initial,
+  canWrite,
 }: {
   initial: ReadonlyArray<Feature>;
+  /** Resolved on the server from the session role. */
+  canWrite: boolean;
 }) {
   // Group by category for the visual order. Categories are
   // freeform text in the schema, so we sort alphabetically.
@@ -50,54 +64,62 @@ export function FeatureCatalogue({
     arr.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  if (initial.length === 0) {
+    return (
+      <OpsEmptyState
+        className="mt-6"
+        title="No features yet"
+        body={
+          <>
+            The catalogue is empty — <span className="font-mono">pnpm db:seed</span>{" "}
+            populates it from <span className="font-mono">db/seed-platform.ts</span>{" "}
+            on a fresh database.
+          </>
+        }
+      />
+    );
+  }
+
   return (
-    <>
-      {initial.length === 0 ? (
-        <div className="mt-8 rounded-card bg-paper border border-line px-5 py-12 text-center">
-          <p className="text-[15px] font-medium text-ink">No features yet</p>
-          <p className="mt-2 text-[13px] text-ink-3">
-            The catalogue is empty — `pnpm db:seed` populates it from
-            `db/seed-platform.ts` on a fresh database.
-          </p>
-          <code className="mt-4 inline-block rounded-ctl bg-deck px-3 py-1 text-[12px] font-mono text-ink-2">
-            pnpm db:seed
-          </code>
-        </div>
-      ) : (
-        <div className="mt-6 space-y-6">
-          {orderedCategories.map((cat) => (
-            <section key={cat}>
-              <h2 className="mb-2 text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-                {cat}
-              </h2>
-              <div className="rounded-card bg-paper border border-line overflow-hidden">
-                <ul>
-                  {(grouped.get(cat) ?? []).map((feature, idx) => (
-                    <li
-                      key={feature.key}
-                      className={`px-4 py-3 ${
-                        idx > 0 ? "border-t border-line" : ""
-                      }`}
-                    >
-                      <CatalogueRow feature={feature} />
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
-    </>
+    <div className="mt-6 space-y-6">
+      {orderedCategories.map((cat) => (
+        <section key={cat}>
+          <h2 className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
+            {cat}
+          </h2>
+          <OpsCardFlush>
+            <ul>
+              {(grouped.get(cat) ?? []).map((feature) => (
+                <li key={feature.key} className="border-b border-line px-4 py-3 last:border-b-0">
+                  <CatalogueRow feature={feature} canWrite={canWrite} />
+                </li>
+              ))}
+            </ul>
+          </OpsCardFlush>
+        </section>
+      ))}
+    </div>
   );
 }
 
 // Per-row component so each row owns its own edit toggle and (when
 // editing) its own pending/error state via useActionState.
-function CatalogueRow({ feature }: { feature: Feature }) {
+function CatalogueRow({
+  feature,
+  canWrite,
+}: {
+  feature: Feature;
+  canWrite: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   if (!editing) {
-    return <FeatureViewRow feature={feature} onEdit={() => setEditing(true)} />;
+    return (
+      <FeatureViewRow
+        feature={feature}
+        canWrite={canWrite}
+        onEdit={() => setEditing(true)}
+      />
+    );
   }
   return <FeatureEditRow feature={feature} onCancel={() => setEditing(false)} />;
 }
@@ -105,32 +127,26 @@ function CatalogueRow({ feature }: { feature: Feature }) {
 function FeatureViewRow({
   feature,
   onEdit,
+  canWrite,
 }: {
   feature: Feature;
   onEdit: () => void;
+  canWrite: boolean;
 }) {
   return (
-    <div className="flex items-center gap-4">
-      <div className="flex-1 min-w-0">
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-0 flex-1">
         <p className="text-[14px] font-medium text-ink">{feature.name}</p>
-        <p className="mt-0.5 text-[12px] text-ink-3 font-mono">
-          {feature.key}
-        </p>
+        <p className="mt-0.5 font-mono text-[12px] text-ink-3">{feature.key}</p>
       </div>
-      <span
-        className={`text-[11px] font-medium px-3 py-1 rounded-pill ${
-          STATUS_TONE[feature.status] ?? "bg-deck text-ink-2"
-        }`}
-      >
+      <OpsStatusPill tone={STATUS_TONE[feature.status] ?? "neutral"}>
         {STATUS_LABEL[feature.status] ?? feature.status}
-      </span>
-      <button
-        type="button"
-        onClick={onEdit}
-        className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck transition-colors duration-150"
-      >
-        Edit
-      </button>
+      </OpsStatusPill>
+      {canWrite ? (
+        <Button type="button" variant="secondary" size="sm" onClick={onEdit}>
+          Edit
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -171,45 +187,39 @@ function FeatureEditRow({
     // server-action forms (POST vs post).
     <form
       action={formAction} method="post" suppressHydrationWarning
-      className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end"
+      className="grid grid-cols-1 items-end gap-3 md:grid-cols-[1fr_1fr_1fr_auto]"
     >
       <input type="hidden" name="key" value={feature.key} />
       <div>
-        <label className="block">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Key (immutable)
-          </span>
-          <span className="block w-full rounded-ctl border border-line bg-deck px-3 py-2 text-[14px] font-mono text-ink-3">
-            {feature.key}
-          </span>
-        </label>
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">
+          Key (immutable)
+        </span>
+        <span className="block w-full rounded-ctl border border-line bg-deck px-4 py-2 font-mono text-[14px] text-ink-3">
+          {feature.key}
+        </span>
       </div>
       <label className="block">
-        <span className="block text-[12px] font-medium text-ink-2 mb-1">
-          Name
-        </span>
-        <input
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">Name</span>
+        <Input
           name="name"
           required
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         />
       </label>
       <label className="block">
-        <span className="block text-[12px] font-medium text-ink-2 mb-1">
+        <span className="mb-1 block text-[12px] font-medium text-ink-2">
           Category
         </span>
-        <input
+        <Input
           name="category"
           required
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         />
       </label>
       <div className="flex flex-wrap gap-2 md:justify-end">
-        <select
+        <Select
           name="status"
           value={status}
           onChange={(e) => {
@@ -218,33 +228,30 @@ function FeatureEditRow({
               setStatus(v);
             }
           }}
-          className="rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           aria-label="Status"
+          className="w-auto"
         >
           <option value="ga">GA</option>
           <option value="beta">Beta</option>
           <option value="internal">Internal</option>
-        </select>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
-        >
+        </Select>
+        <Button type="submit" variant="primary" size="sm" disabled={isPending}>
           {isPending ? "Saving…" : "Save"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onCancel}
           disabled={isPending}
-          className="rounded-pill px-3 py-2 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline disabled:opacity-60"
         >
           Cancel
-        </button>
+        </Button>
       </div>
       {error ? (
         <p
           role="alert"
-          className="md:col-span-4 rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2 md:col-span-4"
         >
           {error}
         </p>

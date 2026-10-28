@@ -1,6 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useState, useTransition } from "react";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { useRouter } from "next/navigation";
 import {
   addSubUnitAction,
@@ -20,8 +23,6 @@ import {
 // schema calls facilities — pool, court, table, café counter — under a
 // location (the site). Plans attach to activities next.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 type LocationOption = { id: string; name: string; isPrimary?: boolean };
 
@@ -80,10 +81,10 @@ export function ActivityManager({
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Facility
                 </span>
-                <select
+                <Select
                   value={locationId}
                   onChange={(e) => setLocationId(e.target.value)}
-                  className={inputClass}
+                  
                 >
                   {locations.map((location) => (
                     <option key={location.id} value={location.id}>
@@ -91,61 +92,64 @@ export function ActivityManager({
                       {location.isPrimary ? " (primary)" : ""}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="block">
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Name
                 </span>
-                <input
+                <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Swimming pool"
-                  className={inputClass}
+                  
                 />
               </label>
               <label className="block">
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Kind
                 </span>
-                <select
+                <Select
                   value={kind}
                   onChange={(e) => setKind(e.target.value as ActivityKind)}
-                  className={inputClass}
+                  
                 >
                   {ACTIVITY_KINDS.map((value) => (
                     <option key={value} value={value}>
                       {ACTIVITY_KIND_LABELS[value]}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="block">
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Capacity
                 </span>
-                <input
+                <Input
                   value={capacity}
                   onChange={(e) => setCapacity(e.target.value)}
                   inputMode="numeric"
-                  className={inputClass}
+                  
                 />
               </label>
               <label className="block sm:col-span-2">
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Sub-units (comma separated: lanes, tables)
                 </span>
-                <input
+                <Input
                   value={subUnits}
                   onChange={(e) => setSubUnits(e.target.value)}
                   placeholder="Lane 1, Lane 2, Lane 3"
-                  className={inputClass}
+                  
                 />
               </label>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
+              <Button
+            variant="primary"
+            size="md"
+            className="inline-flex items-center justify-center"
+            type="button"
                 disabled={pending || !name.trim()}
                 onClick={() =>
                   run("create", () =>
@@ -161,10 +165,9 @@ export function ActivityManager({
                     }),
                   )
                 }
-                className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-              >
+          >
                 {pending && pendingKey === "create" ? "Saving…" : "Add activity"}
-              </button>
+              </Button>
               {messages["create"] ? (
                 <span role="status" className="text-[12px] text-ink-2">
                   {messages["create"]}
@@ -269,11 +272,11 @@ function ActivityRowEditor({
       ) : null}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input
+        <Input
           value={newSubUnit}
           onChange={(e) => setNewSubUnit(e.target.value)}
           placeholder="Add sub-unit"
-          className={`${inputClass} max-w-[12rem]`}
+          className="max-w-[12rem]"
         />
         <button
           type="button"
@@ -298,42 +301,45 @@ function ActivityRowEditor({
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Name
             </span>
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={inputClass}
+              
             />
           </label>
           <label className="block">
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Kind
             </span>
-            <select
+            <Select
               value={kind}
               onChange={(e) => setKind(e.target.value as ActivityKind)}
-              className={inputClass}
+              
             >
               {ACTIVITY_KINDS.map((value) => (
                 <option key={value} value={value}>
                   {ACTIVITY_KIND_LABELS[value]}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="block">
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Capacity
             </span>
-            <input
+            <Input
               value={capacity}
               onChange={(e) => setCapacity(e.target.value)}
               inputMode="numeric"
-              className={inputClass}
+              
             />
           </label>
         </div>
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-3 inline-flex items-center justify-center"
+            type="button"
           disabled={pending}
           onClick={() =>
             onRun(() =>
@@ -345,10 +351,9 @@ function ActivityRowEditor({
               }),
             )
           }
-          className="mt-3 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
+          >
           {pending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </details>
 
       {message ? (

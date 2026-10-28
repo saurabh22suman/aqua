@@ -13,6 +13,9 @@ import { formatINR } from "@/lib/money/format";
 import { formatDateIST, todayInZone } from "@/lib/time/tz";
 import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
 import { SUBSCRIPTIONS_CHANGED_EVENT } from "@/components/member-subscription-panel";
+import { Field } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 
 // C-32 — a member's invoices: raise one from an active subscription
 // (the counter flow), then record payments and print receipts in the
@@ -174,14 +177,12 @@ export function MemberInvoicesPanel({
           <div className="mt-3 border-t border-line pt-3">
             <p className="text-[12px] font-medium text-ink-2">Raise an invoice</p>
             <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-0.5 block text-[11px] text-ink-3">
-                  Subscription
-                </span>
-                <select
+              <Field id="member-invoice-subscription" label="Subscription">
+                {(field) => (
+                <Select
+                  {...field}
                   value={subscriptionId}
                   onChange={(e) => setSubscriptionId(e.target.value)}
-                  className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
                 >
                   {subscriptions.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -189,11 +190,14 @@ export function MemberInvoicesPanel({
                       {formatDateIST(s.endsOn)}
                     </option>
                   ))}
-                </select>
-              </label>
+                </Select>
+                )}
+              </Field>
             </div>
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="md"
               disabled={busy || !subscriptionId || raisedToday}
               onClick={() => {
                 setBusy(true);
@@ -225,10 +229,11 @@ export function MemberInvoicesPanel({
                   }
                 })();
               }}
-              className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+              data-testid="raise-invoice"
+              className="mt-2"
             >
               {busy ? "Saving…" : "Raise invoice"}
-            </button>
+            </Button>
             {raisedToday ? (
               <p className="mt-1.5 text-[12px] text-ink-3">
                 An invoice for today already exists — collect against it above.

@@ -15,11 +15,16 @@ export default async function EnquiriesPage() {
   return (
     <main className="px-5 pt-10 pb-8">
       <h1 className="font-display text-[19px] font-semibold">Enquiries</h1>
+      <p className="mt-1 text-[12.5px] text-ink-3">
+        Current enquiries and where each one stands. Reception handles the
+        day-to-day follow-ups; you get the oversight and the drill-down.
+      </p>
       <div className="mt-4">
         <EnquiriesBoard
           initialEnquiries={enquiries}
           locations={locations}
           canWrite={hasPermission(ctx, "enquiries.write")}
+          variant="oversight"
         />
       </div>
     </main>

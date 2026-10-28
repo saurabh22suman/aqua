@@ -5,6 +5,7 @@ import { BottomNav, type NavItem } from "@/components/bottom-nav";
 import { ClubFooterArt } from "@/components/illustrations/club-footer-art";
 import { FacilitySwitcher } from "@/components/facility-switcher";
 import { GlobalSearch } from "@/components/global-search";
+import { OwnerChromeOffset } from "@/components/owner-chrome-offset";
 import { OwnerShellCrumb } from "@/components/owner-shell-crumb";
 import { OwnerSideNav } from "@/components/owner-side-nav";
 import { TenantSignOut } from "@/components/tenant-sign-out";
@@ -104,8 +105,9 @@ export function OwnerShell({
       // lg:items-start keeps the sticky sidebar at its own height
       // instead of stretching it to the full column, which is what
       // makes it stay put while the page scrolls.
-      className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))] lg:flex lg:items-start lg:pb-0"
+      className="min-h-[calc(100dvh-var(--app-sticky-offset))] pb-[calc(4rem+env(safe-area-inset-bottom))] lg:flex lg:items-start lg:pb-0"
     >
+      <OwnerChromeOffset />
       <aside
         data-testid="owner-sidebar"
         // The sidebar is a PASTEL surface (batch 4), not a white

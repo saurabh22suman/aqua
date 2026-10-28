@@ -42,7 +42,17 @@ afterEach(() => {
 });
 
 describe("Tenant detail — layout and tab bar", () => {
-  it("renders all six tabs with the correct hrefs", async () => {
+  // Ops redesign (28 October 2026): the tab bar grew a SEVENTH entry.
+  // The GST page (/ops/tenants/[tenantId]/tax) already existed and was
+  // already written, but it was reachable only from a sentence link
+  // inside the Configuration page — the tenant navigation did not
+  // carry it, so the screen was easy to miss. The human-approved fix
+  // is to make it a tab like every other tenant destination.
+  //
+  // The ORIGINAL six destinations are unchanged and still asserted
+  // here, in their original relative order; GST joins them after
+  // Configuration, because a tax rate is a configuration setting.
+  it("renders every tenant destination, GST included, with the correct hrefs", async () => {
     vi.doMock("next/navigation", () => ({
       usePathname: () => `/ops/tenants/${TENANT_ID}`,
       notFound: () => {
@@ -69,11 +79,39 @@ describe("Tenant detail — layout and tab bar", () => {
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       `/ops/tenants/${TENANT_ID}`,
       `/ops/tenants/${TENANT_ID}/configuration`,
+      `/ops/tenants/${TENANT_ID}/tax`,
       `/ops/tenants/${TENANT_ID}/entitlements`,
       `/ops/tenants/${TENANT_ID}/locations`,
       `/ops/tenants/${TENANT_ID}/messaging`,
       `/ops/tenants/${TENANT_ID}/audit`,
     ]);
+  });
+
+  it("carries the GST destination as a named tab, not only as a raw id", async () => {
+    vi.doMock("next/navigation", () => ({
+      usePathname: () => `/ops/tenants/${TENANT_ID}`,
+      notFound: () => {
+        throw new Error("unexpected notFound");
+      },
+      redirect: (path: string) => {
+        throw new Error(`unexpected redirect: ${path}`);
+      },
+    }));
+    vi.resetModules();
+    const { default: FreshLayout } = await import(
+      "@/app/(platform)/ops/tenants/[tenantId]/layout"
+    );
+
+    render(
+      await FreshLayout({
+        params: Promise.resolve({ tenantId: TENANT_ID }),
+        children: <p>tab content</p>,
+      }),
+    );
+
+    const nav = screen.getByRole("navigation", { name: "Tenant" });
+    const gst = within(nav).getByText("GST").closest("a");
+    expect(gst?.getAttribute("href")).toBe(`/ops/tenants/${TENANT_ID}/tax`);
   });
 
   it("marks the current route's tab active via aria-current", async () => {

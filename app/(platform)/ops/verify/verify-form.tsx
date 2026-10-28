@@ -6,6 +6,8 @@ import {
   verifyPlatformTotpAction,
   type PlatformVerifyResult,
 } from "@/lib/actions/platform-auth";
+import { Button } from "@/components/ui/Button";
+import { OpsPanel } from "@/components/ops/ops-primitives";
 
 // H1 — pre-hydration submit goes to the server action endpoint via
 // POST (no TOTP code in the URL). useActionState surfaces errors
@@ -16,6 +18,12 @@ import {
 // refactor by calling formRef.current.requestSubmit() — the canonical
 // way to trigger a <form action> programmatically. The button is
 // kept for keyboard users (Enter) and as a no-op fallback.
+//
+// Ops redesign (28 October 2026): the code field keeps its own
+// presentation — a wide-tracked, centred numeric field — but wears the
+// shared control metrics (the neutral entry surface, the 10px radius,
+// 16px+ control text) so it is the same control family as the sign-in
+// screen.
 export function PlatformVerifyForm() {
   const [state, formAction, isPending] = useActionState(verifyPlatformTotpAction, {
     kind: "error",
@@ -50,7 +58,7 @@ export function PlatformVerifyForm() {
       className="space-y-4"
     >
       <label className="block">
-        <span className="block text-[13px] font-medium text-ink-2">
+        <span className="mb-1 block text-[13px] font-medium text-ink-2">
           6-digit code
         </span>
         <input
@@ -67,30 +75,24 @@ export function PlatformVerifyForm() {
             setCode(next);
             if (next.length === 6) {
               // requestSubmit fires the form's action handler. With JS
-              // off, the user falls back to clicking Verify (still
-              // works — the button is a normal submit).
+              // still hydrating, native validation and the Verify button
+              // submit the same POST without depending on React state.
               formRef.current?.requestSubmit();
             }
           }}
           required
-          className="mt-1 w-full rounded-ctl border border-line bg-paper px-4 py-3 text-[24px] tracking-[0.3em] text-center text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+          className="min-h-14 w-full rounded-ctl border border-[var(--control-border)] bg-[var(--control-surface)] px-4 py-3 text-center font-mono text-[24px] tracking-[0.3em] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         />
       </label>
       {error ? (
-        <p
-          role="alert"
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-        >
+        <OpsPanel tone="error" role="alert">
           {error}
-        </p>
+        </OpsPanel>
       ) : null}
-      <button
-        type="submit"
-        disabled={isPending || code.length !== 6}
-        className="w-full rounded-pill py-3 text-[15px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
-      >
+      {/* Native required/pattern validation also works before hydration. */}
+      <Button type="submit" variant="primary" className="w-full" disabled={isPending}>
         {isPending ? "Verifying…" : "Verify"}
-      </button>
+      </Button>
     </form>
   );
 }

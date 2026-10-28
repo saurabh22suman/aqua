@@ -30,10 +30,6 @@ export const EXEMPTIONS: Record<string, string> = {
     "read-only: resolves the current platform role; no mutation",
   "lib/actions/platform-tax.ts#getTenantTaxConfigAction":
     "read-only: returns resolved GST rates per scope for the ops console",
-  "lib/actions/platform-login-link.ts#issueOwnerLoginLinkAction":
-    "credential issuance: follow-up to route through opsAction when messaging lands (O-11); the token is single-purpose and short-lived",
-  "lib/actions/platform-login-link.ts#issueOwnerResetLinkAction":
-    "credential issuance: follow-up to route through opsAction when messaging lands (O-11); the token is single-purpose and short-lived",
 };
 
 // R03 (2026-10-13 role-workflow audit) — admin-guard exemptions. Every

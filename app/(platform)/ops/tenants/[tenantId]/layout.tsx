@@ -22,6 +22,10 @@ const STATUS_LABEL: Record<string, string> = {
 // calling that page's function directly (tests/mobile/invalid-id-pages.test.ts
 // does the latter for the Overview tab), so the guard can't live only
 // here.
+//
+// Ops redesign (28 October 2026): the header is the shared Ops frame —
+// a back link, the tenant's name with its status pill, and the tab bar
+// that carries every tenant destination (GST included).
 export default async function TenantDetailLayout({
   params,
   children,
@@ -38,16 +42,16 @@ export default async function TenantDetailLayout({
   if (!header) notFound();
 
   return (
-    <div className="max-w-5xl">
+    <div className="mx-auto w-full max-w-[1080px]">
       <Link
         href="/ops/tenants"
-        className="text-[13px] text-ink-3 hover:text-ink underline-offset-2 hover:underline"
+        className="inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 transition-colors duration-150 hover:text-ink"
       >
         ← All tenants
       </Link>
 
-      <div className="mt-3 flex items-baseline gap-4">
-        <h1 className="font-display text-[28px] font-semibold text-marine">
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <h1 className="font-display text-[28px] font-semibold leading-tight text-marine">
           {header.name}
         </h1>
         <StatusBadge tone={TENANT_STATUS_TONE[header.status] ?? "neutral"}>

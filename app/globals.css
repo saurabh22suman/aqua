@@ -77,7 +77,12 @@
   --breakpoint-wide: 1180px;
 
   --radius-card: 20px;
-  --radius-ctl: 14px;
+  /* The CONTROL radius — the human-approved 10px (owner redesign,
+   * 27 October 2026). Every control the owner presses or types in wears
+   * it: action buttons, text fields, selects, date and time pickers.
+   * Cards keep their own radius (--radius-card, 20px) and the pill
+   * keeps its own, so the three never blur into one. */
+  --radius-ctl: 10px;
   --radius-pill: 9999px;
 
   --shadow-1: 0 1px 2px rgba(15, 31, 28, 0.05);
@@ -216,6 +221,58 @@
   --icon-size-lg: 20px;
   --icon-stroke: 1.8;
   --icon-stroke-active: 2.2;
+
+  /* ── The shared control contract (owner redesign, 27 October 2026) ──
+   * The human approved ONE control system for both presets:
+   *
+   *   "Standard action buttons, text fields, selects, date and time
+   *    pickers share a 48px height, 10px radius, 16px control text and
+   *    consistent horizontal padding. Long actions may wrap and grow;
+   *    do not clip them to meet a numeric height. Compact table and
+   *    tertiary controls retain at least 44px effective targets."
+   *
+   * and the tint rule:
+   *
+   *   "Neutral entry/search fields; very lightly tinted pickers; a
+   *    slightly stronger theme tint for secondary action buttons; solid
+   *    theme colour for the primary action."
+   *
+   * The three surfaces below are `color-mix()` expressions over
+   * `--accent-strong`, so they follow the preset (Mint Garden or
+   * Lavender Club) without being restated per preset — the same rule
+   * the semantic surface layer already follows. The tints are SURFACE
+   * colours: meaning stays in the ink and in the reserved status
+   * tokens, and colour is never the only cue.
+   *
+   * --control-height-sm / --control-height-md are the Tailwind
+   * `min-h-11` / `min-h-12` scale values; --radius-ctl (10px) is the
+   * `rounded-ctl` utility every control wears. */
+  --control-text: 16px;
+  --control-padding-x: 16px;
+  /* The neutral entry/search border. An ordinary text field is PAPER
+   * ON PAPER, so its border is the only persistent visible outline:
+   * it has to carry the 3:1 that DESIGN.md §1 requires of the
+   * non-text information that identifies a control. The independent
+   * review (27 October 2026) measured the first derivation — 24% of
+   * the accent — at 1.47:1 / 1.54:1, which is below that floor.
+   *
+   * The boundary is therefore derived from the INK at 55%, which is a
+   * neutral hairline (not a coloured block) and clears 3:1 against
+   * paper, the canvas and the tinted picker surface in BOTH presets.
+   * The hover state is stronger still, and the focused state is the
+   * theme's accent. No new colour is introduced: the mix names two
+   * tokens that already exist. */
+  --control-border: color-mix(in srgb, var(--color-ink) 55%, var(--color-paper));
+  --control-border-hover: color-mix(in srgb, var(--color-ink) 68%, var(--color-paper));
+  /* The entry/search surface itself stays neutral (paper). */
+  --control-surface: var(--color-paper);
+  /* A picker (a select, a date/time field) is tinted very lightly so
+   * it reads as a choice, not as free text. */
+  --control-surface-picker: color-mix(in srgb, var(--accent-strong) 5%, var(--color-paper));
+  /* A secondary action button wears a slightly stronger theme tint —
+   * clearly quieter than the solid primary, clearly present. */
+  --control-surface-action: color-mix(in srgb, var(--accent-strong) 10%, var(--color-paper));
+  --control-surface-action-hover: color-mix(in srgb, var(--accent-strong) 16%, var(--color-paper));
 
   --z-nav: 30;
   --z-sticky: 30;

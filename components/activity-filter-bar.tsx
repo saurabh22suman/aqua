@@ -1,7 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useState, useTransition } from "react";
 import { Filter, Loader2 } from "lucide-react";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 
 // Phase 3.9 — platform activity filter bar. Server component
 // renders the form; the form submits its own query (changing
@@ -54,10 +57,10 @@ export function ActivityFilterBar({
     <div className="bg-paper border border-line rounded-card p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
       <label className="block">
         <span className="block text-[12px] text-ink-3 mb-1">Action</span>
-        <select
+        <Select
           value={action}
           onChange={(e) => setAction(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+          className="w-full border"
         >
           <option value="">Any</option>
           {actions.map((a) => (
@@ -65,58 +68,60 @@ export function ActivityFilterBar({
               {a}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label className="block">
         <span className="block text-[12px] text-ink-3 mb-1">Tenant id</span>
-        <input
+        <Input
           type="text"
           value={tenantId}
           onChange={(e) => setTenantId(e.target.value)}
           placeholder="optional uuid"
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px] font-mono"
+          className="w-full border font-mono"
         />
       </label>
       <label className="block">
         <span className="block text-[12px] text-ink-3 mb-1">Since</span>
-        <input
+        <Input
           type="date"
           lang="en-IN"
           placeholder="dd/mm/yyyy"
           value={since}
           onChange={(e) => setSince(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+          className="w-full border"
         />
       </label>
       <label className="block">
         <span className="block text-[12px] text-ink-3 mb-1">Until</span>
-        <input
+        <Input
           type="date"
           lang="en-IN"
           placeholder="dd/mm/yyyy"
           value={until}
           onChange={(e) => setUntil(e.target.value)}
-          className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+          className="w-full border"
         />
       </label>
       <div className="md:col-span-4 flex gap-2 justify-end">
-        <button
+        <Button
+          variant="secondary"
+          size="md"
+          className="bg-deck text-ink-2"
           type="button"
           onClick={reset}
-          disabled={pending}
-          className="rounded-pill px-4 py-3 min-h-[44px] text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50"
-        >
-          Reset
-        </button>
-        <button
+          disabled={pending}>
+        Reset
+      </Button>
+        <Button
+          variant="primary"
+          size="md"
+          className="flex items-center gap-1.5"
           type="button"
           onClick={apply}
-          disabled={pending}
-          className="rounded-pill px-4 py-3 min-h-[44px] text-[13px] font-semibold text-paper bg-[var(--accent-strong)] disabled:opacity-70 flex items-center gap-1.5"
-        >
-          {pending ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
+          disabled={pending}>
+        {pending ? <Loader2 size={14} className="animate-spin" /> : <Filter size={14} />}
           Apply
-        </button>
+      </Button>
       </div>
     </div>
   );

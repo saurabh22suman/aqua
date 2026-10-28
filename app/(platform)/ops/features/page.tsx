@@ -3,38 +3,51 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listFeatures } from "@/db/platform-features";
 import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { FeatureCatalogue } from "./feature-catalogue";
+import { OpsPage, OpsPageHeader } from "@/components/ops/ops-primitives";
+import { OpsReadOnlyNote } from "@/components/ops/ops-display";
 
 // Phase 1.7 — feature catalogue screen. The platform sidebar has
 // linked `/ops/features` since 1.2; this is the page that
 // lives there. Server-rendered: auth-gated, fetches the catalogue,
 // hands the snapshot to a small client island that handles per-
 // row edit/save.
-
+//
+// Ops redesign (28 October 2026): the write permission is resolved on
+// the server from the session role, so a viewer reads the catalogue
+// and is told why it cannot be changed.
 export default async function FeaturesPage() {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
+  const canWrite = status.role === "admin";
 
   // X-D4 (2026-09-13 audit, see lib/feature-artifacts.ts) — filter the
   // test-fixture rows before they cross the RSC boundary, so neither
   // the UI nor the serialized payload carries them.
   const features = withoutTestArtifactFeatureKeys(await listFeatures());
   return (
-    <div className="max-w-4xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        Catalogue
-      </p>
-      <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
-        Feature catalogue
-      </h1>
-      <p className="mt-1 text-[14px] text-ink-2">
-        Every feature Aqua ships, grouped by category. The
-        <span className="px-1.5 mx-1 rounded-pill bg-deck text-[12px] font-mono text-ink-2">key</span>
-        is the immutable analytics key — renaming it would
-        invalidate every per-tenant override (Phase 1.8) and every
-        preset reference. Editable: name, category, status.
-      </p>
-
-      <FeatureCatalogue initial={features} />
-    </div>
+    <OpsPage>
+      <OpsPageHeader
+        eyebrow="Catalogue"
+        title="Feature catalogue"
+        lede={
+          <>
+            Every feature Aqua ships, grouped by category. The{" "}
+            <span className="rounded-pill bg-deck px-2 py-0.5 font-mono text-[12px] text-ink-2">
+              key
+            </span>{" "}
+            is the immutable analytics key — renaming it would invalidate
+            every per-tenant override and every preset reference. Editable:
+            name, category, status.
+          </>
+        }
+      />
+      {!canWrite ? (
+        <OpsReadOnlyNote className="mt-5">
+          Read-only: this account can browse, not change, platform data. The
+          feature catalogue is edited by an administrator.
+        </OpsReadOnlyNote>
+      ) : null}
+      <FeatureCatalogue initial={features} canWrite={canWrite} />
+    </OpsPage>
   );
 }

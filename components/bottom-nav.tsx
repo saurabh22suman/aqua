@@ -58,6 +58,8 @@ export type NavItem = {
   // Section tabs (Members, Settings…) keep prefix matching so their
   // own children stay lit.
   exact?: boolean;
+  /** Child routes whose parent destination uses a different URL prefix. */
+  activePrefixes?: readonly string[];
   // Sub-PR 3: optional feature gate. When set, the nav item is
   // hidden when ctx.features does NOT contain this key — the
   // owner/reports tile hides when an operator has turned the
@@ -88,7 +90,8 @@ export function findActiveHref(pathname: string, items: NavItem[]): string | nul
   let best: { href: string; exact: boolean } | null = null;
   for (const item of items) {
     const exact = pathname === item.href;
-    const prefix = exact || (!item.exact && pathname.startsWith(item.href + "/"));
+    const prefix = exact || (!item.exact && [item.href, ...(item.activePrefixes ?? [])]
+      .some(href => pathname === href || pathname.startsWith(href + "/")));
     if (!prefix) continue;
     const better =
       best === null ||
