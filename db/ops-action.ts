@@ -28,6 +28,8 @@ export const OPS_SCOPES = [
   "tenant.suspend",
   "tenant.churn",
   "tenant.invite_owner",
+  "tenant.owner_login_link.issue",
+  "tenant.owner_reset_link.issue",
   "tenant.remove_sample_data",
   "tenant.preset.apply",
   "config.set",
@@ -71,6 +73,10 @@ const opsContext = new AsyncLocalStorage<OpsContext>();
 
 export function currentOpsScope(): OpsScope | null {
   return opsContext.getStore()?.scope ?? null;
+}
+
+export function currentOpsActorId(): UserId | null {
+  return opsContext.getStore()?.actorId ?? null;
 }
 
 // Wraps a mutation. Validation is strict: an unknown scope or a

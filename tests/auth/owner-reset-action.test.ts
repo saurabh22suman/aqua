@@ -2,7 +2,7 @@
 //
 // Slice 11 — ops-issued owner reset action.
 //
-// Thin wrapper: parse -> platform-session check -> service. The
+// Thin wrapper: parse -> admin session -> audited Ops pipeline -> service. The
 // service itself is covered by tests/auth/owner-reset-link.test.ts;
 // this pins the action's guards and forwarding.
 
@@ -26,6 +26,12 @@ vi.mock("@/lib/actions/platform-auth", () => ({
   },
 }));
 
+const opsAction = vi.fn(async (_input: unknown, run: () => Promise<unknown>) => run());
+vi.mock("@/db/ops-action", () => ({
+  opsAction: (input: unknown, run: () => Promise<unknown>) => opsAction(input, run),
+}));
+// This unit test checks forwarding. Real actor rechecks and transaction/audit
+// rollback are covered by tests/ops-security/credential-audit.test.ts.
 const issueOwnerResetLinkForPhone = vi.fn();
 vi.mock("@/lib/services/invite-link", () => ({
   issueOwnerResetLinkForPhone: (...args: unknown[]) => issueOwnerResetLinkForPhone(...args),
@@ -33,10 +39,12 @@ vi.mock("@/lib/services/invite-link", () => ({
 
 import { issueOwnerResetLinkAction } from "@/lib/actions/platform-login-link";
 
+const OPS_ACTOR_ID = "22222222-2222-7222-8222-222222222222";
 const TENANT_ID = "11111111-1111-7111-8111-111111111111";
 
 describe("issueOwnerResetLinkAction", () => {
   beforeEach(() => {
+    opsAction.mockClear();
     platformAuthStatusAction.mockReset();
     issueOwnerResetLinkForPhone.mockReset();
   });
@@ -58,10 +66,17 @@ describe("issueOwnerResetLinkAction", () => {
     expect(issueOwnerResetLinkForPhone).not.toHaveBeenCalled();
   });
 
+  it("refuses viewers before the Ops pipeline or service", async () => {
+    platformAuthStatusAction.mockResolvedValue({ kind: "authenticated", userId: OPS_ACTOR_ID, role: "viewer" });
+    expect((await issueOwnerResetLinkAction({ tenantId: TENANT_ID, phone: "+919000000001" })).kind).toBe("error");
+    expect(opsAction).not.toHaveBeenCalled();
+    expect(issueOwnerResetLinkForPhone).not.toHaveBeenCalled();
+  });
+
   it("forwards tenant + phone to the service when authenticated", async () => {
     platformAuthStatusAction.mockResolvedValue({
       kind: "authenticated",
-      userId: "u1",
+      userId: OPS_ACTOR_ID,
       role: "admin",
     });
     issueOwnerResetLinkForPhone.mockResolvedValue({
@@ -79,6 +94,9 @@ describe("issueOwnerResetLinkAction", () => {
       phone: "+919000000001",
     });
     expect(r.kind).toBe("ok");
+    expect(opsAction).toHaveBeenCalledWith(expect.objectContaining({
+      actorId: OPS_ACTOR_ID, tenantId: TENANT_ID, scope: "tenant.owner_reset_link.issue",
+    }), expect.any(Function));
     expect(issueOwnerResetLinkForPhone).toHaveBeenCalledTimes(1);
     expect(issueOwnerResetLinkForPhone.mock.calls[0]![0]).toBe(TENANT_ID);
     expect(issueOwnerResetLinkForPhone.mock.calls[0]![1]).toBe("+919000000001");
@@ -87,7 +105,7 @@ describe("issueOwnerResetLinkAction", () => {
   it("propagates the service error (e.g. not_owner) unchanged", async () => {
     platformAuthStatusAction.mockResolvedValue({
       kind: "authenticated",
-      userId: "u1",
+      userId: OPS_ACTOR_ID,
       role: "admin",
     });
     issueOwnerResetLinkForPhone.mockResolvedValue({

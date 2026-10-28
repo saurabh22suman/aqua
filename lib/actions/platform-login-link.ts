@@ -7,7 +7,8 @@ import {
   issueOwnerResetLinkForPhone,
   type IssueLoginLinkResult,
 } from "@/lib/services/invite-link";
-import { asTenantId } from "@/lib/ids";
+import { asTenantId, asUserId } from "@/lib/ids";
+import { opsAction } from "@/db/ops-action";
 
 // Platform-side login-link minting for tenant owners. The operator
 // is not tenant management, so this cannot reuse the tenant-side
@@ -43,7 +44,10 @@ export async function issueOwnerLoginLinkAction(
     };
   }
   // (3) service
-  return issueLoginLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone);
+  return opsAction({
+    scope: "tenant.owner_login_link.issue", actorId: asUserId(status.userId),
+    tenantId: parsed.data.tenantId,
+  }, () => issueLoginLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone));
 }
 
 // 2026-09-11 auth feature: owner PIN reset. Same guard shape as the
@@ -77,5 +81,8 @@ export async function issueOwnerResetLinkAction(
     };
   }
   // (3) service
-  return issueOwnerResetLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone);
+  return opsAction({
+    scope: "tenant.owner_reset_link.issue", actorId: asUserId(status.userId),
+    tenantId: parsed.data.tenantId,
+  }, () => issueOwnerResetLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone));
 }

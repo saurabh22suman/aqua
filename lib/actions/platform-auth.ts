@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import {
   platformLogin,
+  platformVerifyTotp,
   lookupPlatformSession,
   platformLogout,
   PlatformAuthError,
@@ -13,7 +14,7 @@ import {
   writePlatformSessionCookie,
   clearPlatformSessionCookie,
 } from "@/lib/auth/platform-cookie";
-import { env } from "@/lib/env";
+import { platformRequestMeta } from "@/lib/auth/platform-request-meta";
 
 // Every action opens with (1) parse, (2) — here the second line is the
 // permission check, which lives in the platform scope itself
@@ -51,27 +52,10 @@ export async function loginPlatformAction(
   if (!parsed.success) {
     return { kind: "error", message: "Enter a valid email and password." };
   }
-  // Without the env operator door there is no password door. The
-  // platform signs in with a WhatsApp code sent to a registered phone
-  // (lib/auth/whatsapp-route.ts), and the email + password form is
-  // not rendered in that configuration either
-  // (app/(platform)/ops/login/page.tsx). Saying so here keeps a
-  // stale client from believing a password would ever work.
-  if (env.OPS_EMAIL === undefined || env.OPS_PASSWORD === undefined) {
-    return {
-      kind: "error",
-      message: "Use your registered phone and WhatsApp code to sign in.",
-    };
-  }
-  // The env operator door (db/platform-auth-env.ts): the credentials
-  // live in the deployment's environment, they are compared in
-  // constant time, and the session comes back fully authenticated — no
-  // TOTP, no registered phone. platformLogin routes there whenever
-  // the pair is set, so this is exactly the door the operator
-  // configured.
+  // Both configured-env and database passwords require the authenticator.
   let fullyAuthenticated = false;
   try {
-    const result = await platformLogin(parsed.data);
+    const result = await platformLogin(parsed.data, await platformRequestMeta());
     // The cookie is host-scoped: it is written without a Domain
     // attribute, so the platform session never reaches the tenant
     // apex and the tenant session never reaches the platform host.
@@ -93,9 +77,7 @@ export async function loginPlatformAction(
     }
     throw err;
   }
-  // redirect() throws a framework signal and must stay outside the
-  // try/catch above. The env door authenticates fully, so this
-  // lands on the control plane and not on a second-factor challenge.
+  // redirect() is a framework signal; keep it outside the catch.
   redirect(fullyAuthenticated ? "/ops" : "/ops/verify");
 }
 
@@ -112,8 +94,18 @@ export async function verifyPlatformTotpAction(
   if (!parsed.success) {
     return { kind: "error", message: "Enter the 6-digit code from your authenticator." };
   }
-  await clearPlatformSessionCookie();
-  redirect("/ops/login");
+  const token = await readPlatformSessionToken();
+  if (!token) redirect("/ops/login");
+  try {
+    const result = await platformVerifyTotp({ sessionToken: token, code: parsed.data.code }, await platformRequestMeta());
+    await writePlatformSessionCookie(result.sessionToken);
+  } catch (err) {
+    if (err instanceof PlatformAuthError) {
+      return { kind: "error", message: "Invalid or expired code. Try again later or start sign-in again." };
+    }
+    throw err;
+  }
+  redirect("/ops");
 }
 
 export type PlatformLogoutResult = { kind: "ok" };

@@ -67,8 +67,8 @@ export function PlatformVerifyForm() {
             setCode(next);
             if (next.length === 6) {
               // requestSubmit fires the form's action handler. With JS
-              // off, the user falls back to clicking Verify (still
-              // works — the button is a normal submit).
+              // still hydrating, native validation and the Verify button
+              // submit the same POST without depending on React state.
               formRef.current?.requestSubmit();
             }
           }}
@@ -84,9 +84,10 @@ export function PlatformVerifyForm() {
           {error}
         </p>
       ) : null}
+      {/* Native required/pattern validation also works before hydration. */}
       <button
         type="submit"
-        disabled={isPending || code.length !== 6}
+        disabled={isPending}
         className="w-full rounded-pill py-3 text-[15px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
       >
         {isPending ? "Verifying…" : "Verify"}
