@@ -83,7 +83,6 @@ export function OpsOverviewMetrics({
         surface={riskPositive ? "late" : "paper"}
         icon={<TriangleAlert size={18} strokeWidth={1.8} />}
         chipTone={riskPositive ? "late" : "neutral"}
-        valueTone={riskPositive ? "late" : undefined}
         extraNote={riskPositive ? null : "No tenant is at risk."}
       />
       <KpiCard
@@ -103,7 +102,6 @@ function KpiCard({
   surface,
   icon,
   chipTone,
-  valueTone,
   extraNote,
 }: {
   label: string;
@@ -114,8 +112,6 @@ function KpiCard({
   icon: ReactNode;
   /** The chip's ink. */
   chipTone: OpsKpiChipTone;
-  /** The figure's ink, when the figure itself is a real problem. */
-  valueTone?: "late";
   /** An extra line under the delta — e.g. a calm zero's wording. */
   extraNote?: ReactNode;
 }) {
@@ -126,7 +122,6 @@ function KpiCard({
       surface={surface}
       icon={icon}
       chipTone={chipTone}
-      valueTone={valueTone}
       note={
         <>
           <DeltaLine label={label} delta={delta} />

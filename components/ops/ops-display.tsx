@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
+import {
+  StatusBadge,
+  TONE_SURFACE_CLASS,
+  type StatusTone,
+} from "@/components/ui/StatusBadge";
 import { cn } from "@/components/ui/cn";
 
 // Ops redesign (28 October 2026) — the Ops data-display primitives.
@@ -70,14 +74,23 @@ const KPI_SURFACE_CLASS: Record<OpsKpiSurface, string> = {
   money: "bg-tile-money",
   butter: "bg-tile-butter",
   info: "bg-tile-info",
-  late: "bg-late-soft",
+  // The risk surface and its ink come from the SHARED status map
+  // (components/ui/StatusBadge.tsx), which is the sanctioned home of the
+  // lifecycle tones. Writing the token utilities here would be the
+  // copy-paste the semantic-token rule exists to stop — the shared map
+  // renders exactly the same colours.
+  late: TONE_SURFACE_CLASS.late,
 };
 
 const KPI_CHIP_CLASS: Record<OpsKpiChipTone, string> = {
-  good: "bg-good-soft text-good",
-  late: "bg-late-soft text-late",
-  warn: "bg-warn-soft text-warn",
-  water: "bg-water-soft text-water",
+  // The lifecycle tones are the SHARED map's, not local copies.
+  good: TONE_SURFACE_CLASS.good,
+  late: TONE_SURFACE_CLASS.late,
+  warn: TONE_SURFACE_CLASS.warn,
+  water: TONE_SURFACE_CLASS.water,
+  // The marine chip is the Ops trial context's own ink — not one of the
+  // reserved money/attendance tones — and the neutral chip is the
+  // quiet surface for a calm figure.
   marine: "bg-marine text-paper",
   neutral: "bg-deck text-ink-2",
 };
@@ -102,7 +115,6 @@ export function OpsKpi({
   surface = "paper",
   icon,
   chipTone = "neutral",
-  valueTone,
 }: {
   label: string;
   value: ReactNode;
@@ -113,8 +125,6 @@ export function OpsKpi({
   icon?: ReactNode;
   /** The chip's ink. */
   chipTone?: OpsKpiChipTone;
-  /** The FIGURE's ink, when the figure itself is a real problem. */
-  valueTone?: "late";
 }) {
   return (
     <div
@@ -142,7 +152,12 @@ export function OpsKpi({
       <p
         className={cn(
           "mt-1 font-display text-[28px] font-semibold leading-tight tabular-nums",
-          valueTone === "late" ? "text-late" : "text-marine",
+          // The figure INHERITS the tile's ink. The risk surface
+          // carries the reserved ink, so a positive risk count is the
+          // late ink it always was; every other surface keeps the
+          // marine figure ink. No local copy of a reserved token is
+          // written here.
+          surface === "late" ? undefined : "text-marine",
         )}
       >
         {value}
