@@ -56,7 +56,7 @@ export default async function TenantMessagingPage({
         />
         <DescriptionRow
           label="Last message sent"
-          value={summary.lastSentAt ? DATETIME_FMT.format(summary.lastSentAt) : "—"}
+          value={summary.lastSentAt ? `${DATETIME_FMT.format(summary.lastSentAt)} IST` : "—"}
         />
         <DescriptionRow
           label="Sent, last 7 days"

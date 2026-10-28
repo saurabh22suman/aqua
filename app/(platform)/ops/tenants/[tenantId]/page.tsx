@@ -77,7 +77,7 @@ export default async function PlatformTenantDetailPage({
           />
           <DescriptionRow
             label="Created"
-            value={`${DATE_FMT.format(detail.createdAt)} · updated ${DATETIME_FMT.format(detail.updatedAt)}`}
+            value={`${DATE_FMT.format(detail.createdAt)} · updated ${DATETIME_FMT.format(detail.updatedAt)} IST`}
           />
         </div>
       </section>

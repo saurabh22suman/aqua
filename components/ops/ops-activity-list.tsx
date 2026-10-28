@@ -9,11 +9,16 @@ import { OpsEmptyState } from "@/components/ops/ops-primitives";
 // below it, the same shape the tenant detail page's recentActivity
 // uses.
 
+// The zone is NAMED, not inherited: the deployed container runs in
+// UTC, and an inherited zone rendered the audit trail in the wrong
+// clock (the staging finding: "02:41 pm" here against "8:11 pm IST"
+// on the Overview for the SAME instant).
 const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   day: "2-digit",
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "Asia/Kolkata",
 });
 
 export function OpsActivityList({ rows }: { rows: PlatformActivityRow[] }) {
@@ -31,7 +36,9 @@ export function OpsActivityList({ rows }: { rows: PlatformActivityRow[] }) {
         <li key={r.id} className="border-b border-line px-4 py-3 last:border-b-0">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <p className="font-mono text-[14px] text-ink">{r.action}</p>
-            <p className="text-[12px] text-ink-3">{DATE_FMT.format(r.createdAt)}</p>
+            <p className="text-[12px] text-ink-3">
+              {DATE_FMT.format(r.createdAt)} IST
+            </p>
           </div>
           <p className="mt-0.5 text-[12px] text-ink-3">
             {r.tenantName ? (

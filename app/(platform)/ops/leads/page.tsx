@@ -167,7 +167,7 @@ export default async function LeadsPage({
                 <p className="mt-0.5 text-[12px] text-ink-3">
                   {lead.contactName} · {lead.phone}
                   {lead.city ? ` · ${lead.city}` : ""} · via {lead.source} ·{" "}
-                  {DATE_FMT.format(lead.createdAt)}
+                  {DATE_FMT.format(lead.createdAt)} IST
                 </p>
               </Link>
             </OpsListRow>

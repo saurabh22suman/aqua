@@ -202,7 +202,7 @@ export default async function EffectiveConfigurationPage({
                 <span className="ml-2 text-ink-3">
                   {feature.source}
                   {feature.expiresAt
-                    ? ` · expires ${DATETIME_FMT.format(new Date(feature.expiresAt))}`
+                    ? ` · expires ${DATETIME_FMT.format(new Date(feature.expiresAt))} IST`
                     : ""}
                 </span>
               </span>

@@ -53,10 +53,13 @@ const HEALTH_TONE: Record<TenantHealthStatus, StatusTone> = {
   at_risk: "late",
 };
 
+// The zone is NAMED: the deployed container runs in UTC, and an
+// inherited zone put a created date on the wrong day.
 const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   day: "2-digit",
   month: "short",
   year: "numeric",
+  timeZone: "Asia/Kolkata",
 });
 
 export function StatusPill({ status }: { status: string }) {

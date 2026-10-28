@@ -47,7 +47,7 @@ export default async function TenantAuditPage({
               >
                 <p className="font-mono text-[14px] text-ink">{event.action}</p>
                 <p className="mt-0.5 text-[12px] text-ink-3">
-                  {DATETIME_FMT.format(event.createdAt)}
+                  {DATETIME_FMT.format(event.createdAt)} IST
                 </p>
                 <ActivityDetail detail={event.detail} />
               </li>
