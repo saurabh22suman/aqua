@@ -43,14 +43,15 @@ COPY --from=build /app/public ./public
 
 # Full service source + node_modules: the worker, migration and one-shot
 # backup run through tsx rather than the Next standalone server. Only the
-# backup CLI and its pure helper are copied from scripts/; reset/seed
-# utilities are deliberately absent from the runtime image.
+# reviewed backup and Ops enrolment CLIs and the backup helper are copied
+# from scripts/; reset/seed utilities remain absent from the runtime image.
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/db ./db
 COPY --from=build /app/lib ./lib
 COPY --from=build /app/worker ./worker
 COPY --from=build /app/scripts/db-backup.ts ./scripts/db-backup.ts
 COPY --from=build /app/scripts/lib/db-backup.ts ./scripts/lib/db-backup.ts
+COPY --from=build /app/scripts/enrol-ops-authenticator.ts ./scripts/enrol-ops-authenticator.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
 

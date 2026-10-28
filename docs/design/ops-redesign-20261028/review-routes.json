@@ -1,0 +1,151 @@
+{
+  "note": "The twenty approved console routes, resolved against the synthetic review fixture in the DISPOSABLE database (aqua_test_*). The paths are concrete; the ids belong to synthetic records only. The source fingerprint is the sha256 prefix over app/(platform)/layout.tsx, app/(platform)/ops/**, components/ops/**, components/ui/** and app/globals.css.",
+  "origin": "http://ops.review-20261028.localhost:3187 (the console host rule; the preview serves 127.0.0.1:3187)",
+  "sourceFingerprint": "8935ad5e296e204c",
+  "routes": [
+    {
+      "route": "/ops",
+      "path": "/ops",
+      "title": "Overview",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants",
+      "path": "/ops/tenants",
+      "title": "All tenants",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/new",
+      "path": "/ops/tenants/new",
+      "title": "New tenant",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11",
+      "title": "Tenant overview",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]/configuration",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11/configuration",
+      "title": "Tenant configuration",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]/entitlements",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11/entitlements",
+      "title": "Tenant entitlements",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]/locations",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11/locations",
+      "title": "Tenant locations",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]/messaging",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11/messaging",
+      "title": "Tenant messaging",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]/tax",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11/tax",
+      "title": "Tenant GST rates",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/tenants/[tenantId]/audit",
+      "path": "/ops/tenants/01a181a5-3955-7028-8e57-f2692ec48b11/audit",
+      "title": "Tenant audit",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/leads",
+      "path": "/ops/leads",
+      "title": "Leads",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/leads/new",
+      "path": "/ops/leads/new",
+      "title": "New lead",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/leads/[leadId]",
+      "path": "/ops/leads/01a181a5-39e0-74ba-8219-eb7ac16c9279",
+      "title": "Lead detail",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/features",
+      "path": "/ops/features",
+      "title": "Feature catalogue",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/presets",
+      "path": "/ops/presets",
+      "title": "Preset catalogue",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/presets/[key]",
+      "path": "/ops/presets/badminton",
+      "title": "Preset detail",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/whatsapp",
+      "path": "/ops/whatsapp",
+      "title": "WhatsApp mock",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/activity",
+      "path": "/ops/activity",
+      "title": "Activity log",
+      "auth": "operator"
+    },
+    {
+      "route": "/ops/login",
+      "path": "/ops/login",
+      "title": "Sign in",
+      "auth": "public"
+    },
+    {
+      "route": "/ops/verify",
+      "path": "/ops/verify",
+      "title": "Authenticator code",
+      "auth": "pending challenge"
+    }
+  ],
+  "fixture": {
+    "credentialFile": "/home/soloengine/.local/state/aqua-harness/ops-redesign-20261028/fixture.json",
+    "mode": "0600",
+    "database": "aqua_test_056ab0e552 (disposable)",
+    "operator": "synthetic admin (role: admin) \u2014 email and password in the credential file",
+    "viewer": "synthetic viewer (role: viewer) \u2014 same file",
+    "freshCodeCommand": "python3 .opencode/scripts/lane_job.py exec bash -c 'set -a; . ./.env.aqua-harness-test.local; set +a; pnpm exec tsx e2e/ops-redesign/ops-review-code.ts'",
+    "freshCodeFile": "/home/soloengine/.local/state/aqua-harness/ops-redesign-20261028/review-code.txt (mode 0600; the code is never printed)"
+  },
+  "dataset": {
+    "clubs": "three synthetic clubs \u2014 one trial, one active, one suspended",
+    "lead": "one synthetic lead with qualification answers",
+    "changeRequest": "one pending configuration change request on the review tenant",
+    "metrics": "today's platform metrics snapshot, written by the EXISTING job (runPlatformMetricsSnapshotJob), dated 2026-10-28 IST",
+    "note": "The first Overview capture showed the honest no-snapshot empty state; that capture is preserved as the empty-state evidence."
+  },
+  "sourceFingerprintHistory": {
+    "e349fdabb2cf7ff6": "the freeze the root reviewed (before the R2/R3/R5/R6 fixes)",
+    "be4269872638d667": "after the R2/R3/R5/R6 fixes \u2014 the current source",
+    "c9b10c9273a32ec3": "after the header-gap fix \u2014 the current source",
+    "731b35c46b4ad9c8": "after the comment-only scanner correction \u2014 the current source; the runtime code is identical to c9b10c9273a32ec3",
+    "b6f154a3075b2578": "after the summary tiles' pastel language \u2014 the current source",
+    "8935ad5e296e204c": "after the two copy fixes \u2014 the current source"
+  }
+}

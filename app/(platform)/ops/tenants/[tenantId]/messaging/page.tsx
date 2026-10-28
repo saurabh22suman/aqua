@@ -5,6 +5,7 @@ import { getTenantMessagingSummary } from "@/db/platform-tenant-messaging";
 import { asTenantId } from "@/lib/ids";
 import { requireUuidParam } from "@/lib/params";
 import { SectionHeader, DescriptionRow, DATETIME_FMT } from "../tenant-detail-shared";
+import { OpsCardFlush, OpsPanel } from "@/components/ops/ops-primitives";
 
 const PROVIDER_LABEL: Record<string, string> = {
   mock: "Non-production mock",
@@ -18,6 +19,12 @@ const PROVIDER_LABEL: Record<string, string> = {
 // "connected" here means "has sent at least one message" via
 // whichever provider actually handled it — not a stored connection
 // flag, because no such flag exists to read.
+//
+// Ops redesign (28 October 2026): the page shows ONLY the data that
+// exists. It does not invent a provider connection, a message count
+// the platform does not have, or a credential state. The panel says
+// what "connected" actually means here, so an operator does not read
+// a live metric that is really a proxy.
 export default async function TenantMessagingPage({
   params,
 }: {
@@ -38,7 +45,7 @@ export default async function TenantMessagingPage({
         title="Messaging"
         subtitle="WhatsApp connection state for this tenant. No credentials or message content are shown here."
       />
-      <div className="rounded-card bg-paper border border-line overflow-hidden">
+      <OpsCardFlush className="mt-3">
         <DescriptionRow
           label="Provider"
           value={
@@ -59,7 +66,12 @@ export default async function TenantMessagingPage({
           label="Failed, last 7 days"
           value={String(summary.failedCount7d)}
         />
-      </div>
+      </OpsCardFlush>
+      <OpsPanel tone="warn" className="mt-4" title="“Connected” means “has sent at least one message”">
+        There is no per-tenant WhatsApp account record yet, so this panel does
+        not read a stored connection flag. It reports whichever provider
+        actually handled the traffic.
+      </OpsPanel>
     </section>
   );
 }

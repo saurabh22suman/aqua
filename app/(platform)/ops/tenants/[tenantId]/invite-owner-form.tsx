@@ -12,6 +12,12 @@ import {
 } from "@/lib/actions/platform-login-link";
 import { LinkQr } from "@/components/link-qr";
 import { formatDateTimeIST } from "@/lib/time/tz";
+import {
+  OpsWriteGate,
+} from "@/components/ops/ops-display";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 // Phase 2.7 — "Invite the owner" client island. Lives on the
 // tenant detail page. The form takes a phone number, calls
@@ -32,7 +38,18 @@ import { formatDateTimeIST } from "@/lib/time/tz";
 // re-validate it against its zod schema (defends against a tampered
 // field addressing a different tenant).
 
-export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
+export function InviteOwnerForm({
+  tenantId,
+  canWrite,
+}: {
+  tenantId: string;
+  /**
+   * Resolved on the server from the session role. A viewer sees the
+   * panel's explanation and the read-only reason — never the mint
+   * controls. The actions still refuse a forged write.
+   */
+  canWrite: boolean;
+}) {
   const [state, formAction, isPending] = useActionState(inviteOwnerAction, {
     kind: "error",
     code: "invalid",
@@ -58,35 +75,43 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
   const err = status?.kind === "error" ? status.message : null;
 
   return (
-    // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
-    // suppress the case-only hydration warning React raises for
-    // server-action forms (POST vs post).
-    <form action={formAction} method="post" suppressHydrationWarning className="space-y-3">
-      <input type="hidden" name="tenantId" value={tenantId} />
+    <OpsWriteGate
+      canWrite={canWrite}
+      note={
+        <>
+          Read-only: this account can browse, not change, platform data. The
+          owner&apos;s membership and login link are issued by an administrator.
+        </>
+      }
+    >
+      {/* method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+          suppress the case-only hydration warning React raises for
+          server-action forms (POST vs post). */}
+      <form action={formAction} method="post" suppressHydrationWarning className="space-y-3">
+        <input type="hidden" name="tenantId" value={tenantId} />
       <p className="text-[13px] text-ink-2">
         Create the owner&apos;s membership for a phone number. Nothing is sent anywhere —
         after inviting, mint a login link below and share it with the owner yourself.
       </p>
       <div className="space-y-2">
         <label className="block">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">
             Owner name
           </span>
-          <input
+          <Input
             name="fullName"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Priya Iyer"
             autoComplete="name"
             required
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </label>
         <label className="block">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">
             Owner phone (+country code)
           </span>
-          <input
+          <Input
             ref={phoneInputRef}
             name="phone"
             value={phone}
@@ -95,35 +120,30 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
             inputMode="tel"
             autoComplete="tel"
             required
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] font-mono text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="font-mono"
           />
         </label>
         <label className="block">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
+          <span className="mb-1 block text-[12px] font-medium text-ink-2">
             Also on the staff roster? (optional)
           </span>
-          <select
+          <Select
             name="staffType"
             value={staffType}
             onChange={(e) => setStaffType(e.target.value)}
-            className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <option value="">— No, owner-only —</option>
             <option value="coach">Yes — also a coach (so they can be assigned to a batch)</option>
             <option value="receptionist">Yes — also a receptionist</option>
             <option value="worker">Yes — also a worker</option>
             <option value="accountant">Yes — also an accountant</option>
-          </select>
+          </Select>
         </label>
       </div>
       <div>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
-        >
+        <Button type="submit" variant="primary" size="sm" disabled={isPending}>
           {isPending ? "Inviting…" : "Invite owner"}
-        </button>
+        </Button>
       </div>
       {ok ? (
         <p
@@ -144,7 +164,8 @@ export function InviteOwnerForm({ tenantId }: { tenantId: string }) {
         </p>
       ) : null}
       <OwnerLoginLinkPanel tenantId={tenantId} phone={phone} />
-    </form>
+      </form>
+    </OpsWriteGate>
   );
 }
 
@@ -193,24 +214,26 @@ function OwnerLoginLinkPanel({ tenantId, phone }: { tenantId: string; phone: str
         this is also how a locked-out sole owner gets back in.
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="sm"
           onClick={() => mint(() => issueOwnerLoginLinkAction({ tenantId, phone }), setLink)}
           disabled={pending || phone.trim().length === 0}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           data-testid="owner-login-link-issue"
         >
           {pending ? "Minting…" : "Get login link"}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => mint(() => issueOwnerResetLinkAction({ tenantId, phone }), setResetLink)}
           disabled={pending || phone.trim().length === 0}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium bg-paper border border-line text-ink-2 disabled:opacity-60"
           data-testid="owner-reset-link-issue"
         >
           Reset owner PIN
-        </button>
+        </Button>
       </div>
       <p className="mt-1 text-[11px] text-ink-3">
         A reset link expires in 1 hour and signs the owner out of other devices.
@@ -258,14 +281,16 @@ function MintedLinkBlock({
         Works once, expires {link.expiresAt}.
         {kind === "reset" ? " The owner sets a new PIN when they open it." : ""}
       </p>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={onCopy}
-        className="mt-2 rounded-pill px-3 py-1.5 text-[12px] font-medium bg-paper border border-line text-ink-2"
+        className="mt-2"
         data-testid={`owner-${kind}-link-copy`}
       >
         {copied ? "Copied" : "Copy link"}
-      </button>
+      </Button>
       <div className="mt-3">
         <LinkQr url={link.url} />
       </div>

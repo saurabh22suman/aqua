@@ -343,6 +343,95 @@ presets, at 390×844, 1280×900, 1280×600, 1023×768 and 1024×768 — and
 also proves that the shell's controls share a bottom edge and that no
 viewport gains a sideways scroll.
 
+### 1.4b Subtle surfaces and purposeful placement (human direction, 28 October 2026)
+
+The owner summary row is the reference for the product's quiet colour language.
+Ops uses the same foundations and attention to detail, with desktop-first
+density. This is a design requirement, **not a statement that every consumer
+has been implemented or visually accepted**. Owner and Ops may use different
+compositions for their tasks; they must not look like unrelated products.
+
+**Summary surfaces.** Use the existing tokens below. Pastels group information
+and aid scanning; the label, value, explanatory text and any status icon carry
+the meaning. A coloured surface alone is never a status or an interaction cue.
+
+| Context | Surface token / utility | Meaning and supporting treatment |
+| --- | --- | --- |
+| Collected money; active platform context | `--color-tile-money` / `bg-tile-money` | Calm mint. Owner collections use a wallet with `good` ink; Ops active tenants use an appropriate tenant icon, not a money icon. An active count is not a claim that every tenant is healthy. |
+| People or general task information | `--color-tile-info` / `bg-tile-info` | Powder blue in Mint Garden, pale lilac in Lavender Club. Owner active members and Ops open tasks use their own meaningful labels/icons. An open-task count alone does not imply urgency. |
+| Sessions or trial context | `--color-tile-butter` / `bg-tile-butter` | Restrained butter surface. A calendar identifies sessions; trial context has a suitable trial/time label. Yellow is not automatically a warning. |
+| Confirmed overdue money or positive at-risk count | `--color-late-soft` / `bg-late-soft` | Soft red with `late` ink and an explicit overdue/risk label. Only use alarm treatment when the underlying condition exists. |
+| Neutral, unavailable or inapplicable information | Existing `paper` / `deck` surface | Explain the state. Do not manufacture a number, a healthy status or a pastel category merely to fill a row. |
+
+Owner reference order: **Collected today → Overdue → Active members → Sessions
+today**. Respect the sport's existing member/session terminology. Ops Overview
+order: **Active tenants → On trial → At risk → Open ops tasks**. These are
+context assignments, not a rotating palette based on a tile's array index.
+Keep each metric in the same position across theme changes and data refreshes.
+
+- **Calm zero:** zero collected stays mint with honest zero-payment copy;
+  zero overdue or zero at risk has a calm neutral/information treatment and
+  explicit zero-state wording, not red alarm ink. Missing data stays distinct
+  from zero. An absent Ops snapshot must not create four zero-valued cards.
+- **Text:** dark readable ink on pale surfaces; `late` value ink only for a
+  real problem. Keep numeric formatting and tabular numerals consistent.
+  Labels are quieter than values; the short explanatory line is quieter than
+  both. Do not shrink text or remove definitions to equalise card heights.
+- **Icons:** when present, use a consistent 32px chip, 10px chip radius,
+  18px icon and 8px icon-to-label gap. Use existing icon-size/stroke tokens and
+  individual Lucide imports. Decorative icons are hidden from assistive
+  technology; visible words retain the meaning. Use reserved `good`, `late`,
+  `warn`, `water`, `marine` or neutral chip treatments for the actual context.
+- **Geometry:** siblings share a radius, padding, label baseline and value
+  rhythm. Owner `StatCard` retains its existing compact geometry; Ops may
+  retain its larger display figure. Do not duplicate either component's
+  styles on individual pages or stretch all panels to an arbitrary height.
+  Owner keeps its 2×2 phone summary; Ops may stack metrics on a narrow screen
+  to preserve readable labels and snapshot notes instead of shrinking them.
+- **Interaction:** only a supported drill-down is a link. Carry the same
+  period/location filters to its destination. A non-interactive metric has
+  no pointer cursor, hover elevation or invented button affordance.
+
+**Controls and their small differences.** Consume the shared primitives from
+§1.4a, including ref, label, keyboard, pending and disabled behavior. The
+existing surface derivations are deliberate: entry/search is neutral;
+pickers mix 5% of `--accent-strong` into paper; secondary actions mix 10%
+(16% on hover); primary actions use the solid action token. Use
+`--control-surface-picker`, `--control-surface-action` and
+`--control-surface-action-hover`, not local colour literals or copied mixes.
+Selections, validation and destructive actions keep their own semantic tokens.
+Do not tint a search field to make it look as important as the primary action.
+
+**Placement and alignment.** Put the page title and context first, then the
+relevant summaries, then the work that needs attention. Group filters with
+the dataset they affect and actions with the task they complete. In a toolbar,
+labels sit above their fields and the input/select/action control bottoms
+align, even when an action has no label. Use one intended gap between groups;
+do not render empty header/action slots that leave phantom gaps. Give search
+the flexible width; keep short pickers bounded. Wrap related controls
+together, then stack them on a phone rather than clipping labels, native date
+segments, chevrons or buttons. Use the shared 4px spacing scale, not per-page
+pixel nudges. Do not force an unlabelled button into a field-label row.
+
+**Every state is designed.** Include populated, real zero, missing data,
+filtered-empty, loading, error/retry, selected, disabled/pending and
+permission-limited states where applicable. Keep the page's structure and
+control geometry stable. A viewer's limit is stated in words; it is never
+conveyed only by faded colour. Theme preference must not alter data, scope,
+permissions or the meaning of a status. Preserve reduced-motion behavior.
+
+**Finish gate for these details.** Inspect actual computed backgrounds, ink
+contrast, icon geometry, field/button heights, label alignment and overflow
+after hydration in **both presets**. Standard controls are 48px high with
+16px text and 10px radius; compact actions explicitly retain the 44px floor.
+Check Owner at 390×844 and 1280×900; check Ops at 1280×900 plus narrow reflow
+at 390×844. Apply §2.1's extended matrix when shell/scroll behavior changes.
+Verify text contrast (4.5:1 ordinary, 3:1 large) and applicable control/focus
+contrast (3:1) on the actual tinted surfaces. Record functional acceptance
+separately from visual acceptance; a class name or passing build is not proof
+that the browser painted the right colour. Save measurable intended RED
+before a visual implementation change, then GREEN and independent review.
+
 ### 1.5 Motion
 
 150ms, on hover and press only. No entrance animations, no scroll effects, no stagger. Respect `prefers-reduced-motion` — disable all transitions under it.
@@ -516,7 +605,7 @@ One primary action per screen. Everything else is secondary or a plain link.
 ### Action hierarchy
 
 Purpose: tell the reader what the screen is *for* without a row of equal
-buttons. **One dominant action** — accent-filled, 44px, the only one on the
+buttons. **One dominant action** — accent-filled, standard 48px (§1.4a), the only one on the
 screen. Everything else is **secondary** (quiet bordered control or plain
 link) or **tertiary** (plain link, muted). A destructive action never sits
 beside the dominant one as an equal.
@@ -530,7 +619,10 @@ swimmer and Capture enquiry are quiet secondary/tertiary links.
 ### Summary metric
 
 Purpose: answer one standing question at a glance and lead to its evidence.
-Use: four (never more than five) tiles in one row on desktop, 2×2 on a phone.
+Use: four (never more than five) tiles in one row on desktop, 2×2 on an owner
+phone. Ops may stack at narrow widths as specified in §1.4b.
+Apply §1.4b's subtle surfaces, icon treatment, calm-zero rules and consistent
+geometry; plain white tiles are not the default substitute for that direction.
 Every tile carries:
 
 1. a label that states its **basis** — "today", a **current balance**, or a

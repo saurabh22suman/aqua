@@ -8,13 +8,14 @@ import {
   parsePercentToBasisPoints,
 } from "@/lib/tax";
 import type { TaxScopeRow } from "@/lib/services/tax";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { OpsCardFlush, OpsEmptyState, OpsSection } from "@/components/ops/ops-primitives";
+import { OpsWriteGate } from "@/components/ops/ops-display";
 
 // GST rates per tenant / facility / activity. Money semantics:
 // ops-only. Each row shows the resolved rate and where it came from,
 // and edits the rate at its own scope.
-
-const inputClass =
-  "w-24 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 function scopeLabel(row: TaxScopeRow): string {
   if (row.source.scopeType === "default") return "platform default";
@@ -49,26 +50,27 @@ function RateRow({
           </span>
         </span>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             value={value}
             onChange={(e) => setValue(e.target.value)}
             inputMode="decimal"
             aria-label={`GST percent for ${row.label}`}
-            className={inputClass}
+            className="w-24"
           />
           <span className="text-[12px] text-ink-3">%</span>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             disabled={pending}
             onClick={() => {
               const rateBp = parsePercentToBasisPoints(value);
               if (rateBp === null) return;
               onRun(row, rateBp);
             }}
-            className="rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {pending ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </div>
       </div>
       {message ? (
@@ -83,9 +85,12 @@ function RateRow({
 export function TaxRates({
   tenantId,
   config,
+  canWrite,
 }: {
   tenantId: string;
   config: { tenant: TaxScopeRow; locations: TaxScopeRow[]; activities: TaxScopeRow[] };
+  /** Resolved on the server from the session role. */
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -123,44 +128,44 @@ export function TaxRates({
   };
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-card bg-paper border border-line overflow-hidden">
-        <RateRow {...rowProps(config.tenant)} />
-      </section>
+    <OpsWriteGate
+      canWrite={canWrite}
+      note={
+        <>
+          Read-only: this account can browse, not change, platform data. An
+          administrator sets the GST rate.
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <OpsCardFlush>
+          <RateRow {...rowProps(config.tenant)} />
+        </OpsCardFlush>
 
-      <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Per facility
-        </h2>
-        {config.locations.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-3 text-[13px] text-ink-3">
-            No facilities.
-          </p>
-        ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
-            {config.locations.map((row) => (
-              <RateRow key={row.scopeId} {...rowProps(row)} />
-            ))}
-          </div>
-        )}
-      </section>
+        <OpsSection title="Per facility">
+          {config.locations.length === 0 ? (
+            <OpsEmptyState title="No facilities" />
+          ) : (
+            <OpsCardFlush>
+              {config.locations.map((row) => (
+                <RateRow key={row.scopeId} {...rowProps(row)} />
+              ))}
+            </OpsCardFlush>
+          )}
+        </OpsSection>
 
-      <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Per activity
-        </h2>
-        {config.activities.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-3 text-[13px] text-ink-3">
-            No activities yet.
-          </p>
-        ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
-            {config.activities.map((row) => (
-              <RateRow key={row.scopeId} {...rowProps(row)} />
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+        <OpsSection title="Per activity">
+          {config.activities.length === 0 ? (
+            <OpsEmptyState title="No activities yet" />
+          ) : (
+            <OpsCardFlush>
+              {config.activities.map((row) => (
+                <RateRow key={row.scopeId} {...rowProps(row)} />
+              ))}
+            </OpsCardFlush>
+          )}
+        </OpsSection>
+      </div>
+    </OpsWriteGate>
   );
 }

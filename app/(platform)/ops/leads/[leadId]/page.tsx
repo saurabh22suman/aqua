@@ -4,16 +4,47 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getLead } from "@/db/platform-leads";
 import { presetForQualification } from "@/db/platform-lead-conversion";
 import { listPresets } from "@/db/platform-presets";
+import type { StatusTone } from "@/components/ui/StatusBadge";
 import { LeadActions } from "./lead-actions";
+import {
+  OpsCardFlush,
+  OpsEmptyState,
+  OpsPage,
+  OpsPageHeader,
+} from "@/components/ops/ops-primitives";
+import { OpsStatusPill } from "@/components/ops/ops-display";
 
 // O-10 (docs/ops-platform-design.md §7) — one lead: the qualification
 // record, the lifecycle controls and the conversion action.
+//
+// Ops redesign (28 October 2026): the page is the shared Ops frame, and
+// the write permission is resolved on the server from the session role.
 
 const DATETIME_FMT = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
   timeStyle: "short",
   timeZone: "Asia/Kolkata",
 });
+
+const STATUS_LABEL: Record<string, string> = {
+  lead: "Lead",
+  qualified: "Qualified",
+  demo_booked: "Demo booked",
+  trial: "Trial",
+  converted: "Converted",
+  lapsed: "Lapsed",
+  lost: "Lost",
+};
+
+const STATUS_TONE: Record<string, StatusTone> = {
+  lead: "neutral",
+  qualified: "water",
+  demo_booked: "water",
+  trial: "water",
+  converted: "good",
+  lapsed: "neutral",
+  lost: "late",
+} as const;
 
 function slugify(value: string): string {
   return value
@@ -31,6 +62,7 @@ export default async function LeadDetailPage({
 }) {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
+  const canWrite = status.role === "admin";
 
   const { leadId } = await params;
   const lead = await getLead(leadId);
@@ -47,69 +79,73 @@ export default async function LeadDetailPage({
   );
 
   return (
-    <div className="max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link href="/ops/leads" className="hover:text-ink underline-offset-2 hover:underline">
-          Leads
-        </Link>
-        {" / "}
-        {lead.businessName}
-      </p>
-      <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
-        {lead.businessName}
-      </h1>
-      <p className="mt-1 text-[14px] text-ink-2">
-        {lead.contactName} · {lead.phone}
-        {lead.email ? ` · ${lead.email}` : ""}
-        {lead.city ? ` · ${lead.city}` : ""} · via {lead.source}
-      </p>
+    <OpsPage className="max-w-[760px]">
+      <OpsPageHeader
+        eyebrow={`Leads / ${lead.businessName}`}
+        title={lead.businessName}
+        lede={
+          <>
+            {lead.contactName} · {lead.phone}
+            {lead.email ? ` · ${lead.email}` : ""}
+            {lead.city ? ` · ${lead.city}` : ""} · via {lead.source}
+          </>
+        }
+        actions={
+          <OpsStatusPill tone={STATUS_TONE[lead.status] ?? "neutral"}>
+            {STATUS_LABEL[lead.status] ?? lead.status}
+          </OpsStatusPill>
+        }
+      />
 
-      <section className="mt-6 rounded-card bg-paper border border-line px-4 py-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <span className="text-[13px] text-ink">
-            Status: <span className="font-medium">{lead.status}</span>
-          </span>
-          <span className="text-[12px] text-ink-3">
+      <OpsCardFlush className="mt-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line px-4 py-3">
+          <span className="text-[13px] text-ink-2">
             Added {DATETIME_FMT.format(lead.createdAt)} IST
           </span>
         </div>
         {lead.lostReason ? (
-          <p className="mt-1 text-[12px] text-ink-3">
-            Lost reason: {lead.lostReason}
-          </p>
+          <div className="border-b border-line px-4 py-3">
+            <span className="text-[12px] text-ink-3">Lost reason: {lead.lostReason}</span>
+          </div>
         ) : null}
         {lead.trialExpiresAt ? (
-          <p className="mt-1 text-[12px] text-ink-3">
-            Trial expires {DATETIME_FMT.format(lead.trialExpiresAt)} IST
-          </p>
+          <div className="border-b border-line px-4 py-3">
+            <span className="text-[12px] text-ink-3">
+              Trial expires {DATETIME_FMT.format(lead.trialExpiresAt)} IST
+            </span>
+          </div>
         ) : null}
         {lead.convertedTenantId ? (
-          <p className="mt-1 text-[12px] text-ink-3">
-            Tenant:{" "}
-            <Link
-              href={`/ops/tenants/${lead.convertedTenantId}`}
-              className="text-[var(--accent-ink)] underline underline-offset-2"
-            >
-              {lead.convertedTenantId}
-            </Link>
-          </p>
+          <div className="px-4 py-3">
+            <span className="text-[12px] text-ink-3">
+              Tenant:{" "}
+              <Link
+                href={`/ops/tenants/${lead.convertedTenantId}`}
+                className="text-[var(--accent-ink)] underline underline-offset-2"
+              >
+                {lead.convertedTenantId}
+              </Link>
+            </span>
+          </div>
         ) : null}
-      </section>
+      </OpsCardFlush>
 
       <section className="mt-8">
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+        <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
           Qualification answers
         </h2>
         {qualification.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-3 text-[13px] text-ink-3">
-            Nothing captured. The preset will fall back to start-from-scratch.
-          </p>
+          <OpsEmptyState
+            className="mt-2"
+            title="Nothing captured"
+            body="The preset will fall back to start-from-scratch."
+          />
         ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
+          <OpsCardFlush className="mt-2">
             {qualification.map(([key, value]) => (
               <div
                 key={key}
-                className="flex items-baseline justify-between gap-3 border-b border-line last:border-b-0 px-4 py-2.5"
+                className="flex items-baseline justify-between gap-3 border-b border-line px-4 py-2.5 last:border-b-0"
               >
                 <span className="text-[12px] text-ink-3">{key}</span>
                 <span className="text-[13px] font-medium text-ink">
@@ -117,7 +153,7 @@ export default async function LeadDetailPage({
                 </span>
               </div>
             ))}
-          </div>
+          </OpsCardFlush>
         )}
       </section>
 
@@ -129,8 +165,9 @@ export default async function LeadDetailPage({
           defaultLocationName={lead.city ?? "Main Location"}
           defaultPreset={defaultPreset}
           presetOptions={presetOptions}
+          canWrite={canWrite}
         />
       </div>
-    </div>
+    </OpsPage>
   );
 }

@@ -2,6 +2,10 @@
 
 import { useActionState } from "react";
 import { removeSampleDataAction } from "@/lib/actions/platform-remove-sample-data";
+import {
+  OpsWriteGate,
+} from "@/components/ops/ops-display";
+import { Button } from "@/components/ui/Button";
 
 // Phase 2.3 — "Remove sample data" button on the tenant detail
 // page. H1 — form uses <form action={removeSampleDataAction}>; the
@@ -11,8 +15,11 @@ import { removeSampleDataAction } from "@/lib/actions/platform-remove-sample-dat
 
 export function RemoveSampleDataButton({
   tenantId,
+  canWrite,
 }: {
   tenantId: string;
+  /** Resolved on the server from the session role. */
+  canWrite: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(
     removeSampleDataAction,
@@ -30,35 +37,46 @@ export function RemoveSampleDataButton({
 
   return (
     <div className="mt-2">
-      {/* method="post" is pinned by scripts/e2e-platform-form-leak.ts;
-          suppress the case-only hydration warning React raises for
-          server-action forms (POST vs post). */}
-      <form action={formAction} method="post" suppressHydrationWarning className="flex items-center gap-3">
-        <input type="hidden" name="tenantId" value={tenantId} />
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-pill px-4 py-2 text-[13px] font-medium text-ink-2 border border-line hover:bg-deck disabled:opacity-60 transition-colors duration-150"
-        >
-          {isPending ? "Removing…" : "Remove sample data"}
-        </button>
-        {error ? (
-          <p
-            role="alert"
-            className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+      <OpsWriteGate
+        canWrite={canWrite}
+        note={
+          <>
+            Read-only: this account can browse, not change, platform data. An
+            administrator can remove the seeded sample rows.
+          </>
+        }
+      >
+        {/* method="post" is pinned by scripts/e2e-platform-form-leak.ts;
+            suppress the case-only hydration warning React raises for
+            server-action forms (POST vs post). */}
+        <form action={formAction} method="post" suppressHydrationWarning className="flex items-center gap-3">
+          <input type="hidden" name="tenantId" value={tenantId} />
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={isPending}
           >
-            {error}
-          </p>
-        ) : null}
-        {done ? (
-          <p
-            role="status"
-            className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-          >
-            Removed {Object.values(done.counts).reduce((a, b) => a + b, 0)} sample rows.
-          </p>
-        ) : null}
-      </form>
+            {isPending ? "Removing…" : "Remove sample data"}
+          </Button>
+          {error ? (
+            <p
+              role="alert"
+              className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+            >
+              {error}
+            </p>
+          ) : null}
+          {done ? (
+            <p
+              role="status"
+              className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+            >
+              Removed {Object.values(done.counts).reduce((a, b) => a + b, 0)} sample rows.
+            </p>
+          ) : null}
+        </form>
+      </OpsWriteGate>
     </div>
   );
 }
