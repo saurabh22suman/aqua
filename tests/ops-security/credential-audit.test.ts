@@ -77,7 +77,17 @@ describe("Ops credential issuance — real session, permission and database audi
     expect(JSON.stringify([...platform, ...tenant])).not.toContain(result.urlPath);
   });
 
-  it("refuses viewer, unauthenticated and guessed other-tenant targets without issuance audits", async () => {
+  it("refuses viewer, unauthenticated and guessed other-tenant targets without issuance audits, and traces the refusal", async () => {
+    // The credential issuance rows are the ones that claim a credential
+    // exists. A refusal must not add one.
+    const issuanceActions = ["tenant.owner_login_link.issue", "tenant.owner_reset_link.issue"];
+    const countIssuance = async (): Promise<number> =>
+      (await admin.query(
+        "select count(*)::int n from platform_audit_log where action = any($1::text[])",
+        [issuanceActions],
+      )).rows[0]!.n;
+    const before = await countIssuance();
+
     cookies.set("platform_session", sessions.get(viewer)!);
     expect((await issueOwnerLoginLinkAction({ tenantId: tenantA, phone: phoneA })).kind).toBe("error");
     cookies.clear();
@@ -86,8 +96,63 @@ describe("Ops credential issuance — real session, permission and database audi
     expect((await issueOwnerLoginLinkAction({ tenantId: tenantA, phone: phoneB })).kind).toBe("error");
     expect((await issueOwnerResetLinkAction({ tenantId: tenantA, phone: phoneC })).kind).toBe("error");
     expect((await issueOwnerResetLinkAction({ tenantId: "invalid", phone: phoneA })).kind).toBe("error");
-    const rows = await admin.query("select 1 from platform_audit_log where actor_id=$1", [viewer]);
-    expect(rows.rows).toHaveLength(0);
+
+    // NO issuance audit was written for any of the five refusals: the
+    // count of credential issuance rows is unchanged.
+    expect(await countIssuance()).toBe(before);
+
+    // And no credential audit reached the tenant trail either: the
+    // guessed other-tenant owner and the non-owner coach are not audit
+    // targets of a refusal.
+    const tenantRows = await admin.query(
+      "select 1 from audit_log where entity_id = any($1::uuid[]) and action = any($2::text[])",
+      [[ownerB, coachA], issuanceActions],
+    );
+    expect(tenantRows.rows).toHaveLength(0);
+    const platformTargets = await admin.query(
+      "select 1 from platform_audit_log where target_id = any($1::uuid[]) and action = any($2::text[])",
+      [[ownerB, coachA], issuanceActions],
+    );
+    expect(platformTargets.rows).toHaveLength(0);
+
+    // The REFUSAL is traced, not silent: an identified operator's refusal
+    // leaves exactly ONE bounded row that names the operation and the
+    // outcome, and no credential.
+    const viewerRows = await admin.query<{ action: string; detail: { outcome?: string } }>(
+      "select action, detail from platform_audit_log where actor_id = $1",
+      [viewer],
+    );
+    expect(viewerRows.rows).toHaveLength(1);
+    expect(viewerRows.rows[0]!.action).toBe("ops.operation.tenant.owner_login_link.issue");
+    expect(viewerRows.rows[0]!.detail).toMatchObject({ outcome: "denied" });
+
+    // The ANONYMOUS refusal leaves nothing: an unauthenticated caller is
+    // not an Ops operation and cannot write to the audit log.
+    const anonymous = await admin.query(
+      "select 1 from platform_audit_log where action = 'ops.operation.tenant.owner_reset_link.issue' and actor_id is null",
+    );
+    expect(anonymous.rows).toHaveLength(0);
+
+    // The admin's own refusals are traced too, with the outcome that
+    // describes them: the guessed other-tenant target and the non-owner
+    // are ERRORS, the malformed tenant id is INVALID.
+    const actorTraces = await admin.query<{ action: string; detail: { outcome?: string } }>(
+      "select action, detail from platform_audit_log where actor_id = $1 and action like 'ops.operation.%'",
+      [actor],
+    );
+    expect(actorTraces.rows).toHaveLength(3);
+    expect(actorTraces.rows.map((row) => row.detail.outcome).sort()).toEqual([
+      "error",
+      "error",
+      "invalid",
+    ]);
+
+    // No credential material in any of them.
+    const payload = JSON.stringify([...viewerRows.rows, ...actorTraces.rows]);
+    expect(payload.includes(phoneA)).toBe(false);
+    expect(payload.includes(phoneB)).toBe(false);
+    expect(payload.includes(phoneC)).toBe(false);
+    expect(payload.includes("login/link/")).toBe(false);
   });
 
   it("returns no bearer credential when audit persistence fails and rolls back both channels", async () => {

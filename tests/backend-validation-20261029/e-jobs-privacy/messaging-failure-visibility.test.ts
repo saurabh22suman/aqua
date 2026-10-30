@@ -1,27 +1,32 @@
 // Backend validation 2026-10-29 — lane E (jobs, integrations and privacy).
 //
-// F4 and F7 — EVIDENCE ONLY. Two concrete, measured facts about the
-// messaging ledger, so the proposals that follow rest on evidence
-// rather than on an inference from a service signature.
+// F4 and F7 — the visibility of a failed tenant notification and the
+// attribution of a ledger row.
 //
-// F4 — a permanently failed tenant notification leaves no trace on any
-// operator surface. The dispatch job records the failure on the OUTBOX
-// row, but the only messaging surface the product has
-// (app/(platform)/ops/whatsapp/page.tsx) lists the message_log. When
-// the provider is absent — the PRODUCTION default, since
-// lib/messaging/provider.ts resolves an unset WHATSAPP_PROVIDER to
-// "disabled" in production — the dispatch writes no message_log row at
-// all, so the failure is invisible.
+// F4 — a permanently failed tenant notification is VISIBLE. The dispatch
+// records the failure on the outbox row AND on the metered ledger row the
+// operator surfaces read, so no failure is invisible. The ledger row for a
+// definite no-provider failure is MINIMISED: nothing was transmitted, so it
+// carries no phone and no body (the tenant-scoped outbox row still holds
+// them) and its error is a fixed code rather than prose. The platform
+// projection over those rows returns a MASKED phone, NO body and the
+// CLASSIFIED reason — never the provider's own text, which can echo the
+// recipient's number.
 //
-// F7 — message_log carries no consent_class and no person_id.
+// F7 — message_log carries consent_class and person_id, as
 // docs/architecture.md:1611-1625 requires: "message_log.consent_class
 // records whether the message was essential or suppressible, making
 // suppression queryable and auditable rather than implicit in template
-// names." The column does not exist, so a metered message cannot be
-// told apart from a suppressed one after the fact.
+// names." The DDL block in the same section lists person_id, so a message
+// can be attributed to a person for export or erasure. Both are populated
+// from the claim, so the label is carried, not inferred.
 //
-// Both need a schema or product decision this lane is not authorised
-// to take; the proposals are in the lane HANDOFF.
+// Both were EVIDENCE-ONLY findings when this file was written; the approved
+// jobs change (db/migrations/20261030062319_whatsapp_outbox_claim_state.sql,
+// db/migrations/20261030062320_message_log_failure_visibility.sql and the
+// dispatch rework in lib/jobs/whatsapp-notifications-*) made the ledger
+// write unconditional and added the columns, so the two cases below now pin
+// the APPROVED behaviour.
 //
 // Agent-owned file.
 
@@ -45,7 +50,11 @@ vi.mock("@/lib/messaging/provider", async (importOriginal) => {
 const { runWhatsAppNotificationsJob } = await import("@/lib/jobs/whatsapp-notifications-job");
 const { enqueueMemberNotification } = await import("@/lib/messaging/notification-enqueue");
 const { withTenant } = await import("@/db/tenant");
-const { listRecentMessages } = await import("@/db/platform-messages");
+const { listFailedMessages, listRecentMessages } = await import("@/db/platform-messages");
+// The RESOLVED provider name — "disabled" in production, "mock" outside it.
+// The ledger names the resolved provider, so the assertion follows the
+// environment instead of hard-coding one of the two.
+const { resolveProviderName } = await import("@/lib/messaging/provider");
 
 const RUN = Date.now().toString(36);
 const tenantId = asTenantId(uuidv7());
@@ -104,8 +113,8 @@ afterAll(async () => {
   await client.pool.end().catch(() => {});
 });
 
-describe("F4 — a failed tenant notification is invisible to every operator surface", () => {
-  it("the failure is recorded on the outbox row and nowhere else", async () => {
+describe("F4 — a failed tenant notification is visible to the operator surfaces", () => {
+  it("the failure is recorded on the outbox row AND on a minimised ledger row", async () => {
     const queued = await withTenant(tenantId, async (tx) =>
       enqueueMemberNotification(
         tx,
@@ -117,40 +126,81 @@ describe("F4 — a failed tenant notification is invisible to every operator sur
 
     await runWhatsAppNotificationsJob(tenantId);
 
+    // The outbox row records the failed attempt and the CLASSIFIED reason.
     const outbox = await privilegedFixturePool.query<{
       status: string;
       attempts: number;
       error: string | null;
+      failure_reason: string | null;
     }>(
-      "select status, attempts, error from whatsapp_notification_outbox where tenant_id = $1::uuid",
+      "select status, attempts, error, failure_reason from whatsapp_notification_outbox where tenant_id = $1::uuid",
       [tenantId],
     );
     expect(outbox.rows[0]!.status).toBe("failed");
     expect(outbox.rows[0]!.attempts).toBe(1);
     expect(outbox.rows[0]!.error).toBeTruthy();
+    expect(outbox.rows[0]!.failure_reason).toBe("no_provider");
 
-    // The metered ledger has NO row: the dispatch only writes one when
-    // a provider object exists (lib/jobs/whatsapp-notifications-job.ts
-    // guards the insert with `if (provider)`).
-    const logged = await privilegedFixturePool.query<{ n: number }>(
-      "select count(*)::int as n from message_log where tenant_id = $1::uuid",
+    // The metered ledger carries the failure too: the row is ALWAYS
+    // written, so a failed send is invisible to no operator surface.
+    const ledger = await privilegedFixturePool.query<{
+      provider: string;
+      to_phone: string | null;
+      body: string | null;
+      status: string;
+      error: string | null;
+      category: string;
+      cost_paise: string;
+      consent_class: string | null;
+      person_id: string | null;
+      failure_reason: string | null;
+    }>(
+      "select provider, to_phone, body, status, error, category, cost_paise, consent_class, person_id, failure_reason from message_log where tenant_id = $1::uuid",
       [tenantId],
     );
-    expect(logged.rows[0]!.n).toBe(0);
+    expect(ledger.rows).toHaveLength(1);
+    const row = ledger.rows[0]!;
+    // Nothing was transmitted (there is no provider), so the row is
+    // MINIMISED: no phone and no body — the tenant-scoped outbox row
+    // still holds them — and its error is a FIXED code, never prose.
+    expect(row.to_phone).toBeNull();
+    expect(row.body).toBeNull();
+    expect(row.error).toBe("no_provider");
+    expect(row.failure_reason).toBe("no_provider");
+    expect(row.status).toBe("failed");
+    expect(row.category).toBe("utility");
+    expect(row.cost_paise).toBe("0");
+    // The provider named is the RESOLVED one.
+    expect(row.provider).toBe(resolveProviderName());
 
-    // And the only messaging surface the product has — the ops
-    // WhatsApp console, which reads message_log — therefore shows
-    // nothing about this failure.
-    const opsRows = (await listRecentMessages(50)).filter(
-      (row) => row.tenantId === tenantId,
+    // The MASKED platform surface shows the failure: a masked phone, no
+    // body and the classified reason.
+    const failed = (await listFailedMessages(50)).filter(
+      (entry) => entry.tenantId === tenantId,
     );
-    expect(opsRows).toEqual([]);
+    expect(failed).toHaveLength(1);
+    expect(failed[0]!.status).toBe("failed");
+    expect(failed[0]!.failureReason).toBe("no_provider");
+    // Nothing was transmitted, so there is no phone to mask.
+    expect(failed[0]!.phoneMasked).toBeNull();
+
+    // And the ops console's own list — which reads message_log — shows it
+    // too. That row carries no phone and no body, so nothing leaks.
+    const opsRows = (await listRecentMessages(50)).filter(
+      (entry) => entry.tenantId === tenantId,
+    );
+    expect(opsRows).toHaveLength(1);
+    expect(opsRows[0]!.status).toBe("failed");
+    expect(opsRows[0]!.toPhone).toBeNull();
+    expect(opsRows[0]!.body).toBeNull();
   });
 
   it("no surface reads the outbox table", async () => {
     // The mechanical half: the outbox is written by the enqueue path
     // and the dispatch job, and read by neither the ops console nor
-    // any tenant page.
+    // any tenant page. The approved jobs change adds a MASKED platform
+    // PROJECTION (a SECURITY DEFINER function over the table), not a raw
+    // table read, so this still holds.
     const { readFileSync, readdirSync, statSync } = await import("node:fs");
     const { join } = await import("node:path");
     const offenders: string[] = [];
@@ -177,20 +227,78 @@ describe("F4 — a failed tenant notification is invisible to every operator sur
   });
 });
 
-describe("F7 — message_log carries no consent_class and no person_id", () => {
-  it("the columns the architecture requires are absent", async () => {
+describe("F7 — message_log carries consent_class and person_id", () => {
+  it("the columns the architecture requires are present", async () => {
     const columns = await privilegedFixturePool.query<{ column_name: string }>(
       "select column_name from information_schema.columns where table_schema = 'public' and table_name = 'message_log'",
     );
     const names = columns.rows.map((r) => r.column_name);
     // docs/architecture.md:1611-1625 — consent_class records whether
     // the message was essential or suppressible.
-    expect(names).not.toContain("consent_class");
+    expect(names).toContain("consent_class");
     // The same DDL block lists person_id, so a message can be
     // attributed to a person for export or erasure.
-    expect(names).not.toContain("person_id");
+    expect(names).toContain("person_id");
     // What IS there.
     expect(names).toContain("category");
     expect(names).toContain("cost_paise");
+  });
+
+  it("a suppressible message is labelled suppressible and attributed to its person", async () => {
+    // The notification the F4 case queued was NOT essential, so the
+    // ledger row says so: the label is carried on the claim, never
+    // inferred from a template name.
+    const queued = await privilegedFixturePool.query<{
+      recipient_person_id: string | null;
+      essential: boolean;
+    }>(
+      "select recipient_person_id, essential from whatsapp_notification_outbox where tenant_id = $1::uuid",
+      [tenantId],
+    );
+    expect(queued.rows[0]!.essential).toBe(false);
+    const ledger = await privilegedFixturePool.query<{
+      consent_class: string | null;
+      person_id: string | null;
+    }>(
+      "select consent_class, person_id from message_log where tenant_id = $1::uuid",
+      [tenantId],
+    );
+    expect(ledger.rows).toHaveLength(1);
+    expect(ledger.rows[0]!.consent_class).toBe("suppressible");
+    expect(ledger.rows[0]!.person_id).toBe(queued.rows[0]!.recipient_person_id);
+  });
+
+  it("an essential message is labelled essential — the label distinguishes the two", async () => {
+    const queued = await withTenant(tenantId, async (tx) =>
+      enqueueMemberNotification(
+        tx,
+        {
+          tenantId,
+          eventKey: `essential:${RUN}`,
+          body: "Essential visibility",
+          essential: true,
+        },
+        memberId,
+      ),
+    );
+    expect(queued).toBe(1);
+
+    await runWhatsAppNotificationsJob(tenantId);
+
+    const ledger = await privilegedFixturePool.query<{
+      consent_class: string | null;
+      person_id: string | null;
+    }>(
+      "select consent_class, person_id from message_log where tenant_id = $1::uuid",
+      [tenantId],
+    );
+    // The essential notification produced exactly ONE row labelled
+    // 'essential'; the earlier suppressible one is still labelled
+    // 'suppressible', so the label really does distinguish the two.
+    const essential = ledger.rows.filter((r) => r.consent_class === "essential");
+    expect(essential).toHaveLength(1);
+    expect(ledger.rows.filter((r) => r.consent_class === "suppressible").length).toBeGreaterThan(0);
+    // Every ledger row is attributed to a person.
+    for (const row of ledger.rows) expect(row.person_id).not.toBeNull();
   });
 });

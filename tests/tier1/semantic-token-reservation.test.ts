@@ -209,6 +209,37 @@ const WHITELIST = new Set([
   "components/booking-day-list.tsx",
   "components/booking-form.tsx",
   "components/booking-screen.tsx",
+
+  // payment-recovery-notice.tsx — the shared payment/reversal recovery
+  // notice. `warn-soft` marks the two money states the operator has to
+  // act on: a FAILED recovery read (the server could not say whether
+  // money was recorded) and an UNFINISHED attempt on the document
+  // ("No money had been recorded at that point. If it has since
+  // completed, discarding will be refused."). Both are money
+  // outcome-uncertainty on a payment/reversal document, so warn = needs
+  // attention is the correct reservation (DESIGN.md §1.1) — the same
+  // money/needs-attention state as the K-07/K-08 café notes and the
+  // V-04 booking counter's refusal already whitelisted above.
+  "components/payment-recovery-notice.tsx",
+
+  // cafe-payment-recovery-form.tsx — the café counter's payment
+  // recovery form, on the K-07 counter money surface (cafe-payment-panel
+  // and cafe-order-screen are already whitelisted for their own
+  // warn-soft money notes). Its error alert carries the money
+  // outcome-uncertainty messages only: an ambiguous earlier payment on
+  // this bill, the server's refusal to start a new one, and "The
+  // request did not complete. It may already have been recorded —
+  // check the bill before recording another payment." The money
+  // outcome is unknown, so warn = needs attention (DESIGN.md §1.1).
+  "components/cafe-payment-recovery-form.tsx",
+
+  // member-detail/invoice-closed-recovery.tsx — the member invoice's
+  // closed-invoice recovery. `warn-soft` marks the unfinished attempt on
+  // a closed invoice: "an earlier prepared attempt on this closed
+  // invoice had recorded no money. If it has since committed, discarding
+  // will be refused and the payment will appear below" — a money outcome
+  // the operator must resolve, not a form error.
+  "components/member-detail/invoice-closed-recovery.tsx",
 ]);
 
 function findSemanticTokenMisuse(): Occurrence[] {

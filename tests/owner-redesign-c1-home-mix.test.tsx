@@ -21,6 +21,18 @@ import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 // RED status at the time of writing: the mix panel had no side-by-side
 // donut/legend composition, no legend colour swatch and no "total
 // collected" wording in the centre.
+//
+// AMENDMENT (release-combined 65e91ab, the approved donut fix): the
+// approved composition above says "total in its centre", and that stays
+// true for a total the ring's hole can hold. The hole holds six
+// characters; "₹18,200" is seven. So the amount is now printed IN FULL
+// next to the ring (components/owner-mini-donut.tsx, the
+// `owner-mini-donut-amount` element) and the hole keeps only the
+// ring's own caption. The case below is updated to that approved
+// behaviour — the amount is still stated exactly, never truncated and
+// never rounded. The original RED note above is kept as the historical
+// evidence of how this suite was written; this amendment is a
+// correction of a stale expectation, not a new RED.
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -113,13 +125,21 @@ function renderMix(data: OwnerChartsData, facility: string | null = "loc-1") {
 }
 
 describe("the approved Home payment mix", () => {
-  it("states the captured total in the centre of the donut", () => {
+  it("states the captured total in full outside the donut's hole", () => {
     renderMix(chartData());
     const donut = screen.getByTestId("owner-mini-donut");
     expect(donut.getAttribute("role")).toBe("img");
-    expect(donut.textContent).toContain("₹18,200");
-    // The centre says what the number is, so the ring is readable on its
-    // own.
+    // The exact captured total is still stated, in full: the fixture's
+    // 1820000 paise is "₹18,200", unchanged.
+    const amount = screen.getByTestId("owner-mini-donut-amount");
+    expect(amount.textContent).toBe("₹18,200");
+    // It is printed OUTSIDE the ring, because the hole holds six
+    // characters and this total has seven: the amount never paints over
+    // the band, and it is never truncated or rounded to fit.
+    expect(donut.contains(amount)).toBe(false);
+    expect(donut.textContent).not.toContain("₹18,200");
+    // The ring still says what the number is, so the ring is readable on
+    // its own.
     expect(donut.textContent).toContain("collected");
   });
 
@@ -226,6 +246,9 @@ describe("the approved Home payment mix", () => {
     };
     renderMix(empty);
     expect(screen.queryByTestId("owner-mini-donut")).toBeNull();
+    // … and no amount is printed outside the ring either: a period with
+    // no captured payments states no total.
+    expect(screen.queryByTestId("owner-mini-donut-amount")).toBeNull();
     expect(screen.getByTestId("owner-home-money").textContent).toContain(
       "No collections in this period",
     );

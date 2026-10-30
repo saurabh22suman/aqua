@@ -9,8 +9,37 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// The tenant read is audit-required: the operation row is written before
+// the read result leaves the server, so the actor needs a real id and one
+// of the two platform roles.
+const { auditEvents, OPS_ACTOR_ID, faults } = vi.hoisted(() => ({
+  auditEvents: [] as { operation: string; outcome: string; actorId: string }[],
+  OPS_ACTOR_ID: "22222222-2222-4222-8222-222222222222",
+  faults: { auditStoreFails: false },
+}));
+
 vi.mock("@/lib/actions/platform-auth", () => ({
-  platformAuthStatusAction: async () => ({ kind: "authenticated", role: "operator" }),
+  platformAuthStatusAction: async () => ({
+    kind: "authenticated",
+    userId: OPS_ACTOR_ID,
+    role: "admin",
+  }),
+}));
+
+// The audit STORE is the only thing this test replaces. The canonical
+// boundary (lib/auth/ops-operation.ts) stays real, so a read whose
+// operation row cannot be written still fails closed.
+vi.mock("@/db/ops-operation-writer", () => ({
+  appendOpsBoundaryEvent: async (
+    operation: string,
+    outcome: string,
+    actorId: string,
+  ) => {
+    if (faults.auditStoreFails) {
+      throw new Error("synthetic audit store failure");
+    }
+    auditEvents.push({ operation, outcome, actorId });
+  },
 }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -41,7 +70,11 @@ import TenantMessagingPage from "@/app/(platform)/ops/tenants/[tenantId]/messagi
 
 const TENANT_ID = "11111111-1111-7111-8111-111111111111";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  auditEvents.length = 0;
+  faults.auditStoreFails = false;
+});
 
 describe("messaging panel names outbound attempts, not delivery", () => {
   it("keeps every value and the mock/provider disclosure", async () => {
@@ -58,5 +91,20 @@ describe("messaging panel names outbound attempts, not delivery", () => {
     expect(screen.getByText("1")).toBeDefined();
     expect(screen.getByText(/Non-production mock/)).toBeDefined();
     expect(screen.getByText(/an outbound attempt has been logged/)).toBeDefined();
+
+    // The panel is rendered from an audit-required read: the operation row
+    // is written before the result leaves the server.
+    expect(auditEvents).toHaveLength(1);
+    expect(auditEvents[0]?.operation).toBe("tenant.messaging.summary");
+    expect(auditEvents[0]?.outcome).toBe("success");
+    expect(auditEvents[0]?.actorId).toBe(OPS_ACTOR_ID);
+  });
+
+  it("refuses the read when the operation row cannot be written", async () => {
+    faults.auditStoreFails = true;
+
+    await expect(
+      TenantMessagingPage({ params: Promise.resolve({ tenantId: TENANT_ID }) }),
+    ).rejects.toThrow(/Ops audit unavailable/);
   });
 });

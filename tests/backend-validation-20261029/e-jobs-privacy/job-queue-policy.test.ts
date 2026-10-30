@@ -1,26 +1,31 @@
 // Backend validation 2026-10-29 — lane E (jobs, integrations and privacy).
 //
-// F3 — EVIDENCE ONLY. The RETRY POLICY the deployed pg-boss queues
-// actually carry, read from the queue metadata in the disposable
-// database — not from the library's defaults, and not from a source
-// comment.
+// F3 — the RETRY POLICY the deployed pg-boss queues actually carry, read
+// from the queue metadata in the disposable database — not from the
+// library's defaults, and not from a source comment.
 //
-// The gap: docs/architecture.md:1408 says "Retries use exponential
-// backoff, three attempts, then dead-letter with an alert", and
-// :1785 lists "job dead-letter" as a paging alert. The application
-// configures no retry option anywhere: db/queue.ts's
-// createAppScopedBoss() passes only the drizzle adapter, and
-// worker/index.ts's boss.work() calls pass no per-queue options
-// either. db/deploy.ts creates every queue with boss.createQueue(name)
-// — no options.
+// The gap this file measured: docs/architecture.md:1408 says "Retries use
+// exponential backoff, three attempts, then dead-letter with an alert", and
+// :1785 lists "job dead-letter" as a paging alert, but the application
+// configured no retry option anywhere: db/queue.ts's
+// createAppScopedBoss() passed only the drizzle adapter, worker/index.ts's
+// boss.work() calls passed no per-queue options either, and db/deploy.ts
+// created every queue with boss.createQueue(name) — no options. The
+// deployed policy was therefore pg-boss v12's schema default (retry_limit
+// 2, retry_delay 0, retry_backoff false, retry_delay_max null,
+// expire_seconds 900, dead_letter null): three attempts, NO delay between
+// them, and no dead-letter queue anywhere.
 //
-// So the deployed policy is whatever pg-boss v12's schema default is.
-// This file reads that policy from pgboss.queue so the claim is
-// evidence, not an inference.
+// The approved jobs change implements the rule in ONE place —
+// db/deploy.ts's QUEUE_POLICY — and applies it with createQueue AND
+// updateQueue, because createQueue() is ON CONFLICT DO NOTHING inside
+// pg-boss's create_queue() function, so an EXISTING queue keeps the
+// schema default without the update.
 //
-// NOTE: this file pins the CURRENT deployed values on purpose. When
-// the retry/dead-letter policy is implemented, this file is updated in
-// the same change (and the architecture rule becomes true).
+// NOTE: this file pinned the CURRENT (library-default) values on purpose.
+// The retry/dead-letter policy is now implemented, so the assertions
+// below pin the APPROVED deployed values and the architecture rule
+// becomes true.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { privilegedFixturePool } from "../../db/privileged-fixture";
@@ -51,6 +56,9 @@ const APP_QUEUES = [
   "whatsapp.notifications",
 ];
 
+/** The ONE dead-letter queue every terminally failed job routes into. */
+const DEAD_LETTER_QUEUE = "dead.letter";
+
 let rows: QueueRow[] = [];
 
 beforeAll(async () => {
@@ -74,40 +82,65 @@ describe("F3 — the deployed pg-boss retry policy", () => {
     }
   });
 
-  it("carries the library default: two retries, no delay, no backoff, no dead-letter", () => {
-    // The deployed values, read from the queue metadata. pg-boss v12's
-    // schema default (node_modules/pg-boss/dist/plans.js) is
-    // retry_limit 2, retry_delay 0, retry_backoff false, no dead
-    // letter — because the application configures none of them.
-    //
-    // Against docs/architecture.md:1408 ("exponential backoff, three
+  it("carries the APPROVED policy: three attempts, exponential backoff from 60s, capped at an hour", () => {
+    // The deployed values, read from the queue metadata — the evidence,
+    // not an inference from the library's defaults. Against
+    // docs/architecture.md:1408 ("Retries use exponential backoff, three
     // attempts, then dead-letter with an alert"):
-    //   * three attempts        -> OK (one try + two retries);
-    //   * exponential backoff   -> MISSING (retry_delay 0,
-    //                              retry_backoff false);
-    //   * dead-letter + alert   -> MISSING (dead_letter is null and
-    //                              no dead-letter queue exists).
-    for (const row of rows) {
-      expect(row.retry_limit).toBe(2);
-      expect(row.retry_delay).toBe(0);
-      expect(row.retry_backoff).toBe(false);
-      expect(row.retry_delay_max).toBeNull();
-      expect(row.dead_letter).toBeNull();
+    //   * three attempts        -> retry_limit 2 (one try + two retries);
+    //   * exponential backoff   -> retry_delay 60 and retry_backoff true
+    //                              (60s, doubling);
+    //   * a capped backoff      -> retry_delay_max 3600 (an hour);
+    //   * a job timeout         -> expire_seconds 900 (15 minutes);
+    //   * dead-letter           -> dead_letter names the ONE queue.
+    for (const queue of APP_QUEUES) {
+      const row = rows.find((r) => r.name === queue);
+      expect(row, `queue ${queue} is missing`).toBeDefined();
+      expect(row!.retry_limit, `${queue} retry_limit`).toBe(2);
+      expect(row!.retry_delay, `${queue} retry_delay`).toBe(60);
+      expect(row!.retry_backoff, `${queue} retry_backoff`).toBe(true);
+      expect(row!.retry_delay_max, `${queue} retry_delay_max`).toBe(3600);
+      expect(row!.expire_seconds, `${queue} expire_seconds`).toBe(900);
+      expect(row!.dead_letter, `${queue} dead_letter`).toBe(DEAD_LETTER_QUEUE);
     }
   });
 
-  it("has no dead-letter queue to dead-letter into", () => {
-    const deadLetterQueues = rows.filter((r) => r.name.endsWith(".dlq"));
-    expect(deadLetterQueues).toEqual([]);
+  it("routes every terminally failed job into ONE dead-letter queue", () => {
+    // There is exactly one dead-letter queue, and it is the one every
+    // application queue names. No other ".dlq"-style queue exists.
+    const dlqRows = rows.filter((r) => r.name.endsWith(".dlq"));
+    expect(dlqRows).toEqual([]);
+    const deadLetterQueues = rows.filter((r) => r.dead_letter !== null);
+    const targets = new Set(deadLetterQueues.map((r) => r.dead_letter));
+    expect([...targets]).toEqual([DEAD_LETTER_QUEUE]);
+
+    const dlq = rows.find((r) => r.name === DEAD_LETTER_QUEUE);
+    expect(dlq, "the dead-letter queue itself must exist").toBeDefined();
+    // The dead-letter queue carries the SAME retry policy and does NOT
+    // dead-letter itself: pg-boss refuses a queue that names itself
+    // ("deadLetter cannot be itself"), and a dead-lettered job must not
+    // be dead-lettered a second time.
+    expect(dlq!.retry_limit).toBe(2);
+    expect(dlq!.retry_delay).toBe(60);
+    expect(dlq!.retry_backoff).toBe(true);
+    expect(dlq!.retry_delay_max).toBe(3600);
+    expect(dlq!.expire_seconds).toBe(900);
+    expect(dlq!.dead_letter).toBeNull();
   });
 
-  it("the application configures no retry option anywhere", async () => {
-    // The mechanical half: the policy above comes from the library
-    // default because nothing in the application sets one.
+  it("the application configures the policy in exactly one place, and applies it", async () => {
+    // The mechanical half: the policy above comes from db/deploy.ts, not
+    // from the library default. It is applied with updateQueue as well as
+    // createQueue — without the update the whole change is a silent
+    // no-op on every database whose queues already exist.
     const { readFileSync } = await import("node:fs");
-    for (const file of ["db/queue.ts", "worker/index.ts"]) {
-      const source = readFileSync(file, "utf8");
-      expect(source).not.toMatch(/retryLimit|retryDelay|retryBackoff|deadLetter/);
-    }
+    const deploy = readFileSync("db/deploy.ts", "utf8");
+    expect(deploy).toMatch(/retryLimit:\s*2\b/);
+    expect(deploy).toMatch(/retryDelay:\s*60\b/);
+    expect(deploy).toMatch(/retryBackoff:\s*true\b/);
+    expect(deploy).toMatch(/retryDelayMax:\s*3600\b/);
+    expect(deploy).toMatch(/expireInSeconds:\s*900\b/);
+    expect(deploy).toMatch(/deadLetter:\s*DEAD_LETTER_QUEUE\b/);
+    expect(deploy).toMatch(/updateQueue\(queue,\s*QUEUE_POLICY\)/);
   });
 });

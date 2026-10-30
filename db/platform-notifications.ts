@@ -41,6 +41,17 @@ export type OpsNotificationAttentionRow = {
   createdAt: string;
 };
 
+// A RAW projection read returns the server's TEXT for a timestamptz.
+// Drizzle's node-postgres driver overrides pg's date/time type parsers
+// (node_modules/drizzle-orm/node-postgres/session.js), and a raw sql
+// template has no fields to re-map, so the value arrives as the rendered
+// timestamptz rather than as a Date. It is an INSTANT rendered in the
+// session time zone, so it is parsed as an instant — never as a wall
+// clock — and returned as the exact ISO form the callers expect.
+function toIso(value: Date | string): string {
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
+
 export async function listNotificationsNeedingAttention(
   limit = 50,
 ): Promise<OpsNotificationAttentionRow[]> {
@@ -69,8 +80,10 @@ export async function listNotificationsNeedingAttention(
       event_kind: string | null;
       phone_masked: string | null;
       failure_reason: string | null;
-      claimed_at: Date | null;
-      created_at: Date;
+      // The raw projection read returns the server's TEXT for a timestamptz
+      // (see toIso above), so the types are widened at this boundary.
+      claimed_at: Date | string | null;
+      created_at: Date | string;
     };
     const rows = (result as unknown as { rows: RowShape[] }).rows;
     return rows.map((row) => ({
@@ -82,8 +95,8 @@ export async function listNotificationsNeedingAttention(
       eventKind: row.event_kind,
       phoneMasked: row.phone_masked,
       failureReason: row.failure_reason,
-      claimedAt: row.claimed_at ? row.claimed_at.toISOString() : null,
-      createdAt: row.created_at.toISOString(),
+      claimedAt: row.claimed_at ? toIso(row.claimed_at) : null,
+      createdAt: toIso(row.created_at),
     }));
   });
 }

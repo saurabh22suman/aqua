@@ -14,8 +14,12 @@
 //         platform-side credential/session work. A failure downstream
 //         leaves the link spent.
 //
-//   F12 — the invitation notification is enqueued in a SECOND
-//         transaction, after the issuance (and its audit) has committed.
+//   F12 — the invitation notification is queued in the ISSUANCE'S OWN
+//         transaction (the service's `notify` option). A failed enqueue
+//         therefore rolls the issuance back with it: no credential, no
+//         issuance audit and no token survive — and exactly ONE bounded
+//         failure trace is written afterwards, so the attempt is never
+//         silent.
 //
 // Each case injects a REAL database failure (a trigger), not a mock, and
 // asserts the observable end state.
@@ -251,8 +255,8 @@ describe("F11 — a downstream failure after the link is consumed", () => {
   });
 });
 
-describe("F12 — the invitation notification is committed in a second transaction", () => {
-  it("the issuance audit stands while the outbox enqueue fails", async () => {
+describe("F12 — the invitation notification is queued in the issuance's own transaction", () => {
+  it("a failed enqueue rolls the issuance back: no credential, no issuance audit, one bounded trace", async () => {
     // The action is exercised with an injected tenant context: the
     // authorization boundary (requireDefaultCtx + requirePermission) is
     // proven by the existing suites, and this file is about the
@@ -272,12 +276,17 @@ describe("F12 — the invitation notification is committed in a second transacti
       "a_auth_outbox_fault",
       "a_auth_outbox_fault",
     );
-    let failed = false;
+    // The bounded result, or the marker that the action THREW. A throw is
+    // a defect: the contract is a bounded `notification_failed` result.
+    let outcome: { kind: string; code?: string } | null = null;
     try {
       const result = await issueLoginLinkAction(coachMembershipId);
-      failed = result.kind === "error";
+      outcome =
+        result.kind === "error"
+          ? { kind: result.kind, code: result.code }
+          : { kind: result.kind };
     } catch {
-      failed = true;
+      outcome = { kind: "threw" };
     } finally {
       await disarmTrigger(
         "whatsapp_notification_outbox",
@@ -287,20 +296,44 @@ describe("F12 — the invitation notification is committed in a second transacti
       vi.doUnmock("@/lib/auth/context");
       vi.resetModules();
     }
-    expect(failed).toBe(true);
 
-    // The issuance committed (with its audit) even though the
-    // notification could not be enqueued: the credential exists and is
-    // unreported in the outbox.
-    const audit = await admin.query<{ n: number }>(
+    // The bounded result stands, and it says the link was NOT created.
+    expect(outcome?.kind).toBe("error");
+    expect(outcome?.code).toBe("notification_failed");
+
+    // NOTHING of the issuance survived: the credential, its audit and the
+    // token were rolled back with the failed enqueue. The error branch
+    // carries no token field by construction.
+    const issued = await admin.query<{ n: number }>(
       "select count(*)::int as n from audit_log where tenant_id = $1::uuid and action = 'staff.login_link_issued'",
       [tenantId],
     );
-    expect(audit.rows[0]!.n).toBeGreaterThan(0);
+    expect(issued.rows[0]!.n).toBe(0);
     const outbox = await admin.query<{ n: number }>(
       "select count(*)::int as n from whatsapp_notification_outbox where tenant_id = $1",
       [tenantId],
     );
     expect(outbox.rows[0]!.n).toBe(0);
+
+    // The attempt is NOT silent: EXACTLY ONE bounded trace, written after
+    // the rollback in its own transaction, with a FIXED code and the actor.
+    const traces = await admin.query<{ id: string; after: unknown; actor_id: string | null }>(
+      "select id, after, actor_id from audit_log where tenant_id = $1::uuid and action = 'staff.login_link_notification_failed'",
+      [tenantId],
+    );
+    expect(traces.rows).toHaveLength(1);
+    expect(traces.rows[0]!.actor_id).toBe(coachUserId);
+    expect(traces.rows[0]!.after).toEqual({
+      code: "notification_not_queued",
+      rolledBack: true,
+    });
+
+    // No credential material leaked into the trace: no phone, no token,
+    // no link path and no cause. Compare booleans so a failure never
+    // prints the value.
+    const payload = JSON.stringify(traces.rows);
+    expect(payload.includes(phone("01"))).toBe(false);
+    expect(payload.includes("login/link/")).toBe(false);
+    expect(payload.includes("a-auth downstream fault")).toBe(false);
   });
 });

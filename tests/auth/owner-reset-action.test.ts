@@ -5,6 +5,12 @@
 // Thin wrapper: parse -> admin session -> audited Ops pipeline -> service. The
 // service itself is covered by tests/auth/owner-reset-link.test.ts;
 // this pins the action's guards and forwarding.
+//
+// A REFUSAL is now an audited operation too: every Ops operation writes a
+// boundary row, so a malformed input or a refused role leaves a trace
+// instead of vanishing. The trace needs the ACTOR, so the session is read
+// for the trace — that read is not an issuance and it never reaches the
+// service.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -30,6 +36,20 @@ const opsAction = vi.fn(async (_input: unknown, run: () => Promise<unknown>) => 
 vi.mock("@/db/ops-action", () => ({
   opsAction: (input: unknown, run: () => Promise<unknown>) => opsAction(input, run),
 }));
+// The boundary writer is the audit sink for every Ops operation. It is
+// mocked here so the refusal trace can be asserted WITHOUT a database.
+// The double is TYPED, not implemented with an ignored rest argument:
+// `vi.fn<(...args: unknown[]) => Promise<void>>` keeps the writer's call
+// signature — so `mock.calls` stays an `unknown[]` the assertions below
+// destructure — while the implementation itself names no parameter. A
+// mock records the arguments it is called with either way, and an
+// unused rest binding is a lint error (`eslint . --max-warnings=0`).
+const appendOpsBoundaryEvent = vi.fn<(...args: unknown[]) => Promise<void>>(
+  async (): Promise<void> => undefined,
+);
+vi.mock("@/db/ops-operation-writer", () => ({
+  appendOpsBoundaryEvent: (...args: unknown[]) => appendOpsBoundaryEvent(...args),
+}));
 // This unit test checks forwarding. Real actor rechecks and transaction/audit
 // rollback are covered by tests/ops-security/credential-audit.test.ts.
 const issueOwnerResetLinkForPhone = vi.fn();
@@ -47,13 +67,51 @@ describe("issueOwnerResetLinkAction", () => {
     opsAction.mockClear();
     platformAuthStatusAction.mockReset();
     issueOwnerResetLinkForPhone.mockReset();
+    appendOpsBoundaryEvent.mockClear();
   });
 
-  it("rejects malformed input without calling the service", async () => {
+  it("rejects malformed input without calling the service, and traces the refusal", async () => {
+    platformAuthStatusAction.mockResolvedValue({
+      kind: "authenticated",
+      userId: OPS_ACTOR_ID,
+      role: "admin",
+    });
+
+    const r = await issueOwnerResetLinkAction({ tenantId: "nope", phone: "" });
+    expect(r.kind).toBe("error");
+
+    // No issuance: the service never ran and the audited mutation
+    // pipeline never started.
+    expect(issueOwnerResetLinkForPhone).not.toHaveBeenCalled();
+    expect(opsAction).not.toHaveBeenCalled();
+
+    // The refusal is NOT silent. The session was read ONCE — for the
+    // actor of the refusal trace, not for a credential — and exactly ONE
+    // boundary row was written, naming the operation and the outcome.
+    expect(platformAuthStatusAction).toHaveBeenCalledTimes(1);
+    expect(appendOpsBoundaryEvent).toHaveBeenCalledTimes(1);
+    const [operation, outcome, actorId, correlationId, tenantId, origin] =
+      appendOpsBoundaryEvent.mock.calls[0]!;
+    expect(operation).toBe("tenant.owner_reset_link.issue");
+    expect(outcome).toBe("invalid");
+    expect(actorId).toBe(OPS_ACTOR_ID);
+    expect(correlationId).toEqual(expect.any(String));
+    // The MALFORMED tenant id never reaches the writer.
+    expect(tenantId).toBeUndefined();
+    expect(origin).toBe("server_action");
+  });
+
+  it("writes no trace for an anonymous caller with malformed input", async () => {
+    platformAuthStatusAction.mockResolvedValue({ kind: "not_found" });
+
     const r = await issueOwnerResetLinkAction({ tenantId: "nope", phone: "" });
     expect(r.kind).toBe("error");
     expect(issueOwnerResetLinkForPhone).not.toHaveBeenCalled();
-    expect(platformAuthStatusAction).not.toHaveBeenCalled();
+    expect(opsAction).not.toHaveBeenCalled();
+
+    // An anonymous caller is not an Ops operation: no row, so an
+    // unauthenticated caller cannot write to the audit log.
+    expect(appendOpsBoundaryEvent).not.toHaveBeenCalled();
   });
 
   it("refuses when there is no authenticated platform session", async () => {

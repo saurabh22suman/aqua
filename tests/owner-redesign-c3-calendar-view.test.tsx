@@ -22,6 +22,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 //     clashes — two batches sharing a location is not a clash,
 //   * opening an event shows a focused detail panel that closes on
 //     Escape and gives focus back.
+//
+// DISPLAY AMENDMENT (release-combined, the approved app-wide 12-hour
+// display): the calendar prints wall times in the product's 12-hour
+// form — `formatWallTime12h` (lib/time/tz.ts) — so 07:00 reads
+// "7:00 am", 23:00 reads "11:00 pm" and midnight reads "12:00 am".
+// The cases below are corrected to those exact labels. The CANONICAL
+// data stays 24-hour and unchanged (the ISO instants, the minute
+// arithmetic, `data-top`/`data-height`, the "+1d" overnight marker and
+// the clamping rule); only the human-readable text moved. The
+// expectations stay exact — never a generic "any digits" match.
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -227,7 +237,9 @@ describe("owner schedule calendar", () => {
     const agenda = container.querySelector('[data-testid="calendar-agenda"]');
     expect(agenda).toBeTruthy();
     expect(agenda!.textContent).toContain("Junior 7am");
-    expect(agenda!.textContent).toMatch(/07:00/);
+    // The session starts at 07:00 IST and the app prints 12-hour times:
+    // the agenda row says "7:00 am", not "07:00".
+    expect(agenda!.textContent).toContain("7:00 am");
   });
 
   it("says so when the range holds no sessions", () => {
@@ -253,8 +265,8 @@ describe("owner schedule calendar", () => {
 
   it("labels a session that runs past midnight with the next day's time", () => {
     // 23:00 IST on 14 Sep to 01:00 IST on 15 Sep. The block is two
-    // hours tall, so the label must agree with it: the end is 01:00,
-    // and it says which day that is.
+    // hours tall, so the label must agree with it: the end is 01:00
+    // (printed as "1:00 am"), and it says which day that is.
     const { container } = renderGrid([
       session({
         id: "s-1",
@@ -263,8 +275,9 @@ describe("owner schedule calendar", () => {
       }),
     ]);
     const block = container.querySelector('[data-testid="calendar-event"]')!;
-    expect(block.textContent).toContain("23:00");
-    expect(block.textContent).toContain("01:00");
+    // 12-hour display: 23:00 is "11:00 pm" and 01:00 is "1:00 am".
+    expect(block.textContent).toContain("11:00 pm");
+    expect(block.textContent).toContain("1:00 am");
     // A clamped "24:00" is not a time of day.
     expect(block.textContent).not.toMatch(/24:/);
     // And the reader is told the end is on the next day.
@@ -281,8 +294,10 @@ describe("owner schedule calendar", () => {
     ]);
     const ruler = container.querySelector('[data-testid="calendar-ruler"]')!;
     expect(ruler.textContent).not.toMatch(/24:00/);
-    // The hour after midnight is labelled as the hour it is.
-    expect(ruler.textContent).toContain("00:00");
+    // The hour after midnight is labelled as the hour it is: in the
+    // 12-hour display, midnight reads "12:00 am" — never a clamped
+    // "24:00" and never a bare "00:00".
+    expect(ruler.textContent).toContain("12:00 am");
   });
 
   it("closes the detail panel when the event it shows is gone", async () => {
@@ -356,9 +371,12 @@ describe("owner schedule calendar", () => {
     );
     const agenda = container.querySelector('[data-testid="calendar-agenda"]')!;
     expect(agenda.textContent).toContain("Late Squad");
-    // Its true time range, with the next-day context.
-    expect(agenda.textContent).toMatch(/23:00/);
-    expect(agenda.textContent).toMatch(/00:30/);
+    // Its true time range, with the next-day context: 23:00 is
+    // "11:00 pm" and the 00:30 end is "12:30 am" on the next day.
+    expect(agenda.textContent).toContain("11:00 pm");
+    expect(agenda.textContent).toContain("12:30 am");
+    // The row says which day the end belongs to.
+    expect(agenda.textContent).toContain("(+1d)");
   });
 
   it("lets the owner pick another day from the phone strip", () => {

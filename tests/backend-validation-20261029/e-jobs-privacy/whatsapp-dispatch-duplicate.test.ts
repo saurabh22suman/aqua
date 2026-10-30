@@ -1,33 +1,36 @@
 // Backend validation 2026-10-29 — lane E (jobs, integrations and privacy).
 //
-// F2 — EVIDENCE ONLY. The duplicate-delivery window in the WhatsApp
-// dispatch job, reproduced with the MOCK transport and a deterministic
-// partial failure. No production change is proposed here; the fix
-// needs a delivery/locking decision this lane is not authorised to
-// take. See the proposal in the lane HANDOFF.
+// F2 — the duplicate-delivery window in the WhatsApp dispatch job.
 //
-// The window: lib/jobs/whatsapp-notifications-job.ts calls the
-// provider INSIDE the database transaction that records the delivery.
-// If the provider sends and the transaction then rolls back, the
-// outbox row returns to 'pending' with its attempts counter
-// unchanged — and the next minute's run sends the SAME message
-// again.
+// The window this file was written to characterise: the dispatch used to
+// call the provider INSIDE the database transaction that records the
+// delivery. If the provider sent and the transaction then rolled back, the
+// outbox row returned to 'pending' with its attempts counter unchanged —
+// and the next minute's run sent the SAME message again.
+//
+// The approved jobs change closed it: the claim is committed on its own,
+// the provider call happens outside every transaction, and the outcome
+// write is fenced by the claim token. A send whose outcome write fails
+// therefore leaves the row CLAIMED ('sending'), which the next run never
+// selects — so each claim results in AT MOST ONE provider call. The
+// outcome stays honestly uncertain: a claim nobody finalised becomes
+// 'unknown', it is never resent automatically, and a human resolves it.
 //
 // The reproduction is deterministic and touches no real transport:
 //   * the provider is the in-process mock (WHATSAPP_CAPTURE_URL and
 //     WHATSAPP_MOCK_URL are unset, so createMockProvider() answers
 //     in-process — no network, no message leaves the machine);
-//   * the partial failure is a revoked INSERT privilege on
-//     message_log, so the failure happens AFTER the provider call and
-//     on the application's own request path.
+//   * the partial failure is a BEFORE INSERT trigger on message_log
+//     restricted to this fixture tenant, so the failure happens AFTER the
+//     provider call, on the application's own request path, without
+//     revoking a privilege every other lane shares.
 //
 // Agent-owned file.
 //
-// NOTE: this file pins the CURRENT (defective) behaviour on purpose.
-// It is a defect-characterisation test, not an acceptance test: the
-// first test below asserts that the message IS sent twice. When the
-// dispatch is fixed, this file is inverted in the same change — the
-// assertion becomes "the message is sent once".
+// NOTE: this file pinned the CURRENT (defective) behaviour on purpose. The
+// dispatch is now fixed, so the assertion is inverted in the same change:
+// the message is sent ONCE, and the uncertainty is surfaced instead of
+// being retried.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { v7 as uuidv7 } from "uuid";
@@ -143,8 +146,8 @@ async function disarmMessageLogFault(): Promise<void> {
   await privilegedFixturePool.query("drop function if exists e_dup_message_log_fault()");
 }
 
-describe("F2 — the WhatsApp dispatch can deliver the same message twice", () => {
-  it("a rollback after a successful provider send leaves the message to be sent again", async () => {
+describe("F2 — the WhatsApp dispatch delivers each claim to the provider at most once", () => {
+  it("a failed outcome write leaves the row CLAIMED, so the next run does not send again", async () => {
     providerCalls.bodies.length = 0;
 
     const queued = await withTenant(tenantId, async (tx) =>
@@ -167,26 +170,33 @@ describe("F2 — the WhatsApp dispatch can deliver the same message twice", () =
       await disarmMessageLogFault();
     }
 
-    // The provider WAS called, and the outbox row rolled back with the
-    // transaction: still pending, still with no attempt recorded.
+    // The provider WAS called — ONCE. The claim was committed in its own
+    // transaction, so the row is CLAIMED: not pending (never selectable
+    // again), and not sent (the outcome was never recorded).
     expect(providerCalls.bodies).toEqual(["Duplicate evidence"]);
     const afterFailure = await privilegedFixturePool.query<{
       status: string;
       attempts: number;
       sent_at: Date | null;
+      claim_token: string | null;
+      claimed_at: Date | null;
     }>(
-      "select status, attempts, sent_at from whatsapp_notification_outbox where tenant_id = $1::uuid",
+      "select status, attempts, sent_at, claim_token, claimed_at from whatsapp_notification_outbox where tenant_id = $1::uuid",
       [tenantId],
     );
-    expect(afterFailure.rows[0]!.status).toBe("pending");
-    expect(afterFailure.rows[0]!.attempts).toBe(0);
+    expect(afterFailure.rows[0]!.status).toBe("sending");
+    expect(afterFailure.rows[0]!.attempts).toBe(1);
     expect(afterFailure.rows[0]!.sent_at).toBeNull();
+    // The fence token identifies THIS claim, and the claim is timed.
+    expect(afterFailure.rows[0]!.claim_token).not.toBeNull();
+    expect(afterFailure.rows[0]!.claimed_at).not.toBeNull();
 
-    // --- run 2: the same queued message goes out again ---------------
+    // --- run 2: the claimed row is never selected again -------------
     await runWhatsAppNotificationsJob(tenantId);
 
-    expect(providerCalls.bodies).toEqual(["Duplicate evidence", "Duplicate evidence"]);
-
+    // The provider was NOT called a second time: one claim, at most one
+    // provider call.
+    expect(providerCalls.bodies).toEqual(["Duplicate evidence"]);
     const afterSecond = await privilegedFixturePool.query<{
       status: string;
       attempts: number;
@@ -194,13 +204,43 @@ describe("F2 — the WhatsApp dispatch can deliver the same message twice", () =
       "select status, attempts from whatsapp_notification_outbox where tenant_id = $1::uuid",
       [tenantId],
     );
-    expect(afterSecond.rows[0]!.status).toBe("sent");
+    // The outcome is still unknown, and the attempt bound did not advance
+    // because nothing was sent again.
+    expect(afterSecond.rows[0]!.status).toBe("sending");
     expect(afterSecond.rows[0]!.attempts).toBe(1);
+  });
+
+  it("a claim nobody finalised is surfaced as 'unknown' and is never resent", async () => {
+    // The claim is now older than the dispatcher's claim timeout, so the
+    // outcome was never recorded: the message MAY have been delivered.
+    // It is surfaced for a human and it is never sent again.
+    await privilegedFixturePool.query(
+      "update whatsapp_notification_outbox set claimed_at = now() - interval '30 minutes' where tenant_id = $1::uuid",
+      [tenantId],
+    );
+    providerCalls.bodies.length = 0;
+
+    await runWhatsAppNotificationsJob(tenantId);
+
+    // The reaper turned the stale claim into an honest 'unknown'.
+    const reaped = await privilegedFixturePool.query<{
+      status: string;
+      failure_reason: string | null;
+      claim_token: string | null;
+    }>(
+      "select status, failure_reason, claim_token from whatsapp_notification_outbox where tenant_id = $1::uuid",
+      [tenantId],
+    );
+    expect(reaped.rows[0]!.status).toBe("unknown");
+    expect(reaped.rows[0]!.failure_reason).toBe("outcome_unknown");
+    expect(reaped.rows[0]!.claim_token).toBeNull();
+    // And it was not resent: no provider call at all.
+    expect(providerCalls.bodies).toEqual([]);
   });
 
   it("the transport was the in-process mock — no message left the machine", async () => {
     // The mock answers in-process (no capture URL is configured), so
-    // the two sends above cost nothing and reached nobody.
+    // the send above cost nothing and reached nobody.
     const { env } = await import("@/lib/env");
     expect(env.WHATSAPP_CAPTURE_URL).toBeUndefined();
     expect(env.WHATSAPP_MOCK_URL).toBeUndefined();

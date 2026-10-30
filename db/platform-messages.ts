@@ -52,6 +52,17 @@ export type OpsFailedMessageRow = {
   createdAt: string;
 };
 
+// A RAW projection read returns the server's TEXT for a timestamptz.
+// Drizzle's node-postgres driver overrides pg's date/time type parsers
+// (node_modules/drizzle-orm/node-postgres/session.js), and a raw sql
+// template has no fields to re-map, so the value arrives as the rendered
+// timestamptz rather than as a Date. It is an INSTANT rendered in the
+// session time zone, so it is parsed as an instant — never as a wall
+// clock — and returned as the exact ISO form the callers expect.
+function toIso(value: Date | string): string {
+  return (value instanceof Date ? value : new Date(value)).toISOString();
+}
+
 export async function listFailedMessages(limit = 50): Promise<OpsFailedMessageRow[]> {
   const safeLimit = Math.min(Math.max(limit, 1), 200);
   return withPlatformAdmin(async (tx) => {
@@ -79,7 +90,9 @@ export async function listFailedMessages(limit = 50): Promise<OpsFailedMessageRo
       category: string;
       consent_class: string | null;
       failure_reason: string | null;
-      created_at: Date;
+      // The raw projection read returns the server's TEXT for a timestamptz
+      // (see toIso above), so the type is widened at this boundary.
+      created_at: Date | string;
     };
     const rows = (result as unknown as { rows: RowShape[] }).rows;
     return rows.map((row) => ({
@@ -92,7 +105,7 @@ export async function listFailedMessages(limit = 50): Promise<OpsFailedMessageRo
       category: row.category,
       consentClass: row.consent_class,
       failureReason: row.failure_reason,
-      createdAt: row.created_at.toISOString(),
+      createdAt: toIso(row.created_at),
     }));
   });
 }
