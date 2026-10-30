@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import {
   approveLeaveRequestAction,
   listUncoveredSessionsAction,
@@ -121,10 +122,9 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
         <span className="mb-1 block text-[11px] text-ink-3">
           Note (shown to the staff member)
         </span>
-        <input
+        <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
         />
       </label>
 

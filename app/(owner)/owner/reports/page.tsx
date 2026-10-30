@@ -20,8 +20,12 @@ import {
   PlanRevenueCard,
 } from "@/components/reports/analytics-cards";
 import { ReportCardError } from "@/components/reports/report-card-error";
+import { buttonClasses } from "@/components/ui/Button";
+import { cn } from "@/components/ui/cn";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import Link from "next/link";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
 
 // Phase 4 — owner reports surface. Four cards (4.2 / 4.3 /
 // 4.4 / 4.5 / 4.6), one dominant element on each. Period
@@ -90,174 +94,153 @@ export default async function ReportsPage({
 
   const attendanceRows = settled(attendance, "Attendance by batch");
   const enquiryRows = settled(enquiry, "Enquiry funnel");
-  const retentionReport = settled(retention, "Retention");
+  const retentionReport = settled(retention, "Attendance records");
   const coachLoadRows = settled(coachLoad, "Coach load");
   const utilisationReport = settled(utilisation, "Facility utilisation");
   const operationalData = settled(operational, "Attendance and member mix");
   const moneyData = settled(money, "Collections and plan revenue");
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">Reports</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        {isDefaultMonth ? "This calendar month: " : "Period: "}
-        <span className="font-mono">
-          {formatPeriodRangeIST(period.from, period.to)}
-        </span>{" "}
-        ({timezone}).
-      </p>
+    <OwnerPage>
+      <PageHeader
+        title="Reports"
+        purpose={
+          <>
+            {isDefaultMonth ? "This calendar month: " : "Period: "}
+            <span className="font-mono">
+              {formatPeriodRangeIST(period.from, period.to)}
+            </span>{" "}
+            ({timezone}){facility ? ` · ${facilityName ?? "one facility"}` : ""}.
+          </>
+        }
+      />
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          href="/owner/reports/collections"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
+        >
+          Daily collections
+        </Link>
+        <Link
+          href="/owner/fees"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
+        >
+          Fees &amp; payments
+        </Link>
+      </div>
 
       {facility ? (
         <p
           data-testid="reports-facility-note"
-          className="mt-3 rounded-ctl border border-line bg-paper px-3.5 py-2.5 text-[12.5px] text-ink-2"
+          className="mt-4 rounded-card border border-line bg-paper px-4 py-3 text-[12.5px] text-ink-2"
         >
           Showing <span className="font-medium">{facilityName ?? "one facility"}</span>.
           Attendance, collections and utilisation are scoped to it. Enquiry,
-          retention and coach-load reports are tenant-wide and are hidden while
-          a facility is selected.
+          attendance-record and coach-load reports are tenant-wide and are
+          hidden while a facility is selected.
         </p>
       ) : null}
 
-      <Link
-        href="/owner/reports/collections"
-        className="mt-4 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
+      {/* Key reports — two independent stacks for the same reason as
+          the section below: a grid row takes the height of its tallest
+          card, so the short coach-load card left a large hole under the
+          tall enquiry funnel at 1280x900. The first stack carries the
+          two figures an owner checks first (money, attendance); the
+          second carries the demand behind them and the team that
+          delivers it. The order is the same on the phone and on the
+          desktop. When a facility is selected the tenant-wide cards
+          are hidden, and then the section is one column rather than a
+          column with a hole in it. */}
+      <section
+        aria-label="Key reports"
+        data-report-key
+        className={cn(
+          "mt-5 grid items-start gap-5",
+          facility ? "" : "lg:grid-cols-2",
+        )}
       >
-        <span>
-          <span className="block text-[14px] font-medium text-ink">
-            Daily collections
-          </span>
-          <span className="block text-[12px] text-ink-3">
-            Counter payments by method and staff, with the cash count.
-          </span>
-        </span>
-        <span className="text-[13px] text-ink-3">→</span>
-      </Link>
-
-      <Link
-        href="/owner/fees"
-        className="mt-2 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
-      >
-        <span>
-          <span className="block text-[14px] font-medium text-ink">
-            Fees &amp; payments
-          </span>
-          <span className="block text-[12px] text-ink-3">
-            Dues, transactions, invoices and plans in one hub.
-          </span>
-        </span>
-        <span className="text-[13px] text-ink-3">→</span>
-      </Link>
-
-      {/* Owner UX audit (2026-10-24): the page stacked nine sections
-          with no index, so the owner scrolled past several empty ones
-          to find the one they wanted. The index below names what the
-          page answers, and the cards sit under the same four headings
-          so a report is findable by what it is about. */}
-      <nav
-        aria-label="Report index"
-        className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4"
-      >
-        {[
-          { href: "#attendance", label: "Attendance" },
-          { href: "#money", label: "Money" },
-          { href: "#people", label: "People" },
-          { href: "#enquiries", label: "Enquiries" },
-        ].map((entry) => (
-          <a
-            key={entry.href}
-            href={entry.href}
-            className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3.5 text-[13px] font-medium"
-          >
-            {entry.label}
-          </a>
-        ))}
-      </nav>
-
-      <h2 id="attendance" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
-        Attendance
-      </h2>
-      <div className="space-y-3">
-        {attendanceRows ? (
-          <AttendanceReportCard
-            rows={attendanceRows}
-            period={period}
-            locationId={facility}
-          />
-        ) : (
-          <ReportCardError title="Attendance by batch" />
-        )}
-        {operationalData ? (
-          <AttendanceTrendCard points={operationalData.attendanceTrend} />
-        ) : (
-          <ReportCardError title="Attendance trend" />
-        )}
-        {utilisationReport ? (
-          <UtilisationCard report={utilisationReport} />
-        ) : (
-          <ReportCardError title="Facility utilisation" />
-        )}
-      </div>
-
-      <h2 id="money" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
-        Money
-      </h2>
-      <div className="space-y-3">
-        {moneyData ? (
-          <CollectionsExpensesCard series={moneyData.collections} />
-        ) : (
-          <ReportCardError title="Collections" />
-        )}
-        {moneyData ? (
-          <PlanRevenueCard rows={moneyData.planRevenue} />
-        ) : (
-          <ReportCardError title="Revenue by plan" />
-        )}
-      </div>
-
-      <h2 id="people" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
-        People
-      </h2>
-      <div className="space-y-3">
-        {operationalData ? (
-          <MemberMixCard
-            slices={operationalData.memberMix}
-            memberLabel={resolveTerm(terminology, "member", "other")}
-          />
-        ) : (
-          <ReportCardError title="Members by status" />
-        )}
-        {!facility && retentionReport ? (
-          <RetentionCard
-            report={retentionReport}
-            memberLabel={resolveTerm(terminology, "member", "other")}
-            memberLabelOne={resolveTerm(terminology, "member", 1)}
-          />
-        ) : !facility ? (
-          <ReportCardError title="Retention" />
-        ) : null}
-        {!facility && coachLoadRows ? (
-          <CoachLoadCard rows={coachLoadRows} />
-        ) : !facility ? (
-          <ReportCardError title="Coach load" />
-        ) : null}
-      </div>
-
-      {!facility ? (
-        <>
-          <h2 id="enquiries" className="font-display text-[15px] font-semibold mt-7 mb-2.5 scroll-mt-24">
-            Enquiries
-          </h2>
-          <div className="space-y-3">
+        <div className="space-y-5">
+          {moneyData ? (
+            <CollectionsExpensesCard series={moneyData.collections} />
+          ) : (
+            <ReportCardError title="Collections" />
+          )}
+          {attendanceRows ? (
+            <AttendanceReportCard
+              rows={attendanceRows}
+              period={period}
+              locationId={facility}
+            />
+          ) : (
+            <ReportCardError title="Attendance by batch" />
+          )}
+        </div>
+        {!facility ? (
+          <div className="space-y-5">
             {enquiryRows ? (
               <EnquiryFunnelCard rows={enquiryRows} />
             ) : (
               <ReportCardError title="Enquiry funnel" />
             )}
+            {coachLoadRows ? (
+              <CoachLoadCard rows={coachLoadRows} />
+            ) : (
+              <ReportCardError title="Coach load" />
+            )}
           </div>
-        </>
-      ) : null}
-    </main>
+        ) : null}
+      </section>
+
+      <SectionHeading title="More reports" className="mt-7" />
+      {/* Two independent stacks instead of one grid of five cards.
+          A grid row takes the height of its tallest card, so every
+          shorter card left a hole under it — 87px under the member mix
+          and 68px under the revenue card at 1280x900, against a
+          declared 20px gap. The stacks flow on their own, grouped by
+          the question they answer: attendance over time and attendance
+          per member in the first, the club's people, revenue and spaces
+          in the second. One markup, so the phone reads the same two
+          groups in the same order. */}
+      <div data-report-more className="mt-3 grid items-start gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          {operationalData ? (
+            <AttendanceTrendCard points={operationalData.attendanceTrend} />
+          ) : (
+            <ReportCardError title="Attendance trend" />
+          )}
+          {!facility && retentionReport ? (
+            <RetentionCard
+              report={retentionReport}
+              memberLabel={resolveTerm(terminology, "member", "other")}
+              memberLabelOne={resolveTerm(terminology, "member", 1)}
+            />
+          ) : !facility ? (
+            <ReportCardError title="Attendance records" />
+          ) : null}
+        </div>
+        <div className="space-y-5">
+          {operationalData ? (
+            <MemberMixCard
+              slices={operationalData.memberMix}
+              memberLabel={resolveTerm(terminology, "member", "other")}
+            />
+          ) : (
+            <ReportCardError title="Members by status" />
+          )}
+          {moneyData ? (
+            <PlanRevenueCard rows={moneyData.planRevenue} />
+          ) : (
+            <ReportCardError title="Revenue by plan" />
+          )}
+          {utilisationReport ? (
+            <UtilisationCard report={utilisationReport} />
+          ) : (
+            <ReportCardError title="Facility utilisation" />
+          )}
+        </div>
+      </div>
+    </OwnerPage>
   );
 }
 

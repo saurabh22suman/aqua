@@ -126,6 +126,22 @@ These exist today. Their APIs are stable; a page task consumes them.
 - **Rules:** the heading baseline is shared across surfaces so Members, Fees,
   Programs and Settings line up. It is a heading, not a decorative eyebrow.
 
+### `components/ui/PageHeader.tsx`
+
+- **Purpose:** the owner page-heading primitive: a 22px display title, an
+  optional purpose/context line and one action slot. The same file exports
+  `SectionHeading`, a 16px section title with an optional trailing slot.
+- **Props:** `title`, optional `purpose`, optional `eyebrow`, optional
+  `action`, and `className`; `SectionHeading` takes `title`, optional
+  `subtitle`, optional `trailing`, and `className`.
+- **Rules:** use it for a page opening instead of hand-rolling a 19/24/28px
+  title; the caller supplies an already-authorized action. Do not duplicate
+  a second heading system or put the account/search controls in the page.
+  Long titles and purpose text wrap; the action slot never squeezes them
+  below readable width.
+- **Mobile:** the heading keeps the 22px title and 13px purpose rhythm and
+  wraps deliberately rather than clipping.
+
 ### `components/ui/SegmentedTabs.tsx`
 
 - **Purpose:** a small set of mutually exclusive sections.
@@ -186,6 +202,34 @@ These exist today. Their APIs are stable; a page task consumes them.
   locale — setting the language alone does not control what the browser
   renders. The input is 16px.
 
+### `components/ui/TimeField.tsx`
+
+- **Purpose:** the shared 12-hour time control: one labelled fieldset with
+  explicit hour (1–12), minutes (00–59) and AM/PM shared Select controls.
+- **Props:** `id`, `label`, canonical `value`/`onChange`, optional `name`,
+  `description`, `error`, `required`, `disabled`, `className`, per-part labels,
+  the usual `aria-*`/`data-testid` forwarding and optional
+  `onValidityChange(valid)`.
+- **Value contract:** the controlled value and emitted value are always
+  canonical 24-hour `HH:mm`, or `""` while entry is empty/partial/invalid.
+  `12 AM → 00`, `12 PM → 12`; all 60 minutes are available. A supplied `name`
+  serializes through a hidden input with the canonical value.
+- **Optional validity:** a fully empty optional window is valid; any partial
+  hour/minute/period entry is invalid and emits `""` (never an implied
+  all-day value). An empty required window is invalid. When partial/required/
+  invalid, the three shared Select controls are conditionally `required`, so a native
+  form's `checkValidity()`/submit refuses it. An imperative submit must track
+  `onValidityChange` and guard/disable the action (and call
+  `form.reportValidity()` where available).
+- **Rules:** one understandable group, persistent help, Select/Field tokens,
+  48px/16px/10px geometry, no calendar/widget/dependency and no booking
+  interval. `min`/`max`/`step` are deliberately not accepted; no current
+  consumer uses them, and migrating a constrained native input requires an
+  explicit API decision rather than dropping the constraint.
+- **Mobile:** three shared Select controls use `minmax(0,1fr)` columns with `min-w-0`
+  so they fit a 320px form without horizontal overflow; visual/device
+  acceptance remains with the combined Chrome review.
+
 ### `components/ui/StickyActionBar.tsx`
 
 - **Purpose:** the sticky action row for a long form or a long list.
@@ -224,12 +268,17 @@ components/ui/Input.tsx | UI foundation | the 16px text input with an invalid st
 components/ui/Label.tsx | UI foundation | the label with the required marker
 components/ui/Menu.tsx | UI foundation | a dropdown of row actions with a trigger, an icon slot and disabled items
 components/ui/Pagination.tsx | UI foundation | paged list navigation with a stated total
-components/ui/Select.tsx | UI foundation | the styled native select
+components/ui/Select.tsx | UI foundation | the native select and the dropdown the foundation draws for it
 components/ui/Switch.tsx | UI foundation | a boolean setting with a visible label
 components/ui/Tabs.tsx | UI foundation | a controlled in-page tablist
 components/ui/Textarea.tsx | UI foundation | the multi-line input with an invalid state and a forwarded ref
 components/ui/Toast.tsx | UI foundation | ToastProvider and useToast: the transient confirmation of a completed action
 components/ui/cn.ts | UI foundation | the class merge helper: a caller's className overrides a primitive's own classes
+components/ui/select-popup.tsx | UI foundation | the open listbox of the shared select: option semantics, a drawn tick on the chosen option
+components/ui/use-select-popup.ts | UI foundation | the controller of the open listbox: the highlight, the bounds, the open and close
+components/ui/select-geometry.ts | UI foundation | where the open listbox may sit and how big it may be
+components/ui/select-options.ts | UI foundation | reads the control's own options and its name
+components/ui/select-keyboard.ts | UI foundation | the popup's keyboard decisions: the key model, the movement, the typeahead
 -->
 
 ### `components/ui/Input.tsx` and `components/ui/Textarea.tsx`
@@ -264,10 +313,48 @@ components/ui/cn.ts | UI foundation | the class merge helper: a caller's classNa
 
 ### `components/ui/Select.tsx`
 
-- **Purpose:** the styled native `<select>`.
-- **Rules:** a native control is used wherever it can do the job — the
-  platform's keyboard and mobile behaviour is correct for free. A
-  combobox is a separate decision, and it is not this component.
+- **Purpose:** the native `<select>` and the dropdown the foundation
+  draws for it.
+- **Rules:** the control IS the native element — the same `<option>`
+  children, the same forwarded ref, the same form value — so a page
+  never has to think about the difference. The OPEN menu is ours
+  (`components/ui/select-popup.tsx`), because the operating system's own
+  dropdown does not wear the product's CSS. A choice is a real `change`
+  on the real element, so the consumer's `onChange` receives the control
+  itself. A multiple or tall select keeps the native list box.
+
+### `components/ui/select-popup.tsx`
+
+- **Purpose:** the open listbox of the shared select.
+- **Rules:** listbox/option semantics, never menu semantics. The chosen
+  option carries a drawn tick, not only a colour. The rows are at least
+  44px tall and a long label wraps.
+
+### `components/ui/use-select-popup.ts`
+
+- **Purpose:** the controller behind the open listbox — which option is
+  highlighted, where the popup may sit, when it opens and closes.
+- **Rules:** it never invents a value: a choice is a real `change` on the
+  control.
+
+### `components/ui/select-geometry.ts`
+
+- **Purpose:** where the open popup may sit and how big it may be.
+- **Rules:** pure — rectangles in, a decision out. A popup never grows
+  past the room it has; it flips above the control when there is none
+  below.
+
+### `components/ui/select-options.ts`
+
+- **Purpose:** reading the control's own options and the control's name.
+- **Rules:** the popup reads the real options, so it can never disagree
+  with the control about what is selected or disabled.
+
+### `components/ui/select-keyboard.ts`
+
+- **Purpose:** the popup's keyboard decisions — the key model, the
+  movement, the typeahead.
+- **Rules:** pure — a key and the state in, a decision out.
 
 ### `components/ui/Checkbox.tsx`
 

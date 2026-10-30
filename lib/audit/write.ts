@@ -1,5 +1,6 @@
 import { auditLog, type AuditActorType, type AuditSource } from "@/db/schema/audit";
 import type { TenantTx } from "@/db/tenant";
+import type { ActionCtx } from "@/lib/auth/context";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // E-01 — the one audit writer. Every tenant-side mutation goes
@@ -26,6 +27,32 @@ export type AuditWriteInput = {
   source?: AuditSource;
   requestId?: string | null;
 };
+
+// The actor model for a tenant-side mutation.
+//
+// A REQUEST-SCOPED caller (one carrying a resolved role or permission
+// set) is a "user", attributed to its actor id. A legacy/internal
+// caller (no resolved role, no permission set) is a "system" actor with
+// NO actor id — the same rule lib/services/makeup.ts applies: such a
+// caller may carry a synthetic user id that resolves to no users row,
+// and audit_log.actor_id is a foreign key to users.
+export function auditActor(
+  ctx: Pick<ActionCtx, "userId" | "roleKey" | "permissions">,
+): { actorId: string | null; actorType: AuditActorType } {
+  const legacy = !ctx.roleKey && !ctx.permissions;
+  if (!ctx.userId || legacy) return { actorId: null, actorType: "system" };
+  return { actorId: ctx.userId, actorType: "user" };
+}
+
+// The actor + request attribution for a tenant-side mutation.
+export function auditActorOf(ctx: ActionCtx): {
+  actorId: string | null;
+  actorType: AuditActorType;
+  requestId: string | null;
+} {
+  const actor = auditActor(ctx);
+  return { ...actor, requestId: ctx.requestId ?? null };
+}
 
 export async function writeAudit(
   tx: TenantTx,

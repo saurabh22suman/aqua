@@ -3,6 +3,7 @@
 import {
   useEffect,
   useId,
+  useRef,
   useState,
   type ChangeEvent,
   type KeyboardEvent,
@@ -20,6 +21,11 @@ import {
 // ISO `yyyy-mm-dd` string so no caller has to know about the display
 // format. Invalid complete dates (31/02/…) never emit and set
 // aria-invalid so the surrounding form can show its own message.
+//
+// Owner redesign (27 October 2026) — the date field is the product's
+// DATE PICKER, so it wears the standard control metrics (48px, the 10px
+// control radius, 16px control text) and the very lightly tinted picker
+// surface: a date is a choice, and it should not read as free text.
 
 export function isoToDisplay(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -74,8 +80,38 @@ export type DateFieldProps = {
   // the enquiry capture card is deck-toned, so its fields are too.
   tone?: "paper" | "deck";
   "aria-label"?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean;
+  "aria-required"?: boolean;
+  required?: boolean;
+  /**
+   * The persistent day-first guidance. Visible by default; an inline
+   * editor may keep it screen-reader-only, and a caller that already
+   * renders equivalent persistent guidance may opt out. It is never
+   * conveyed by the disappearing placeholder alone.
+   */
+  formatHint?: "visible" | "sr-only" | "none";
   "data-testid"?: string;
+  /**
+   * Reports the field's validity for an imperative submit button.
+   *
+   * A fully blank optional date is valid. Nonempty partial text, an
+   * impossible date and a blank required date are invalid. Native forms
+   * get the same answer from `required` plus the input's custom validity,
+   * so `form.checkValidity()` refuses it. Keep this boolean in the
+   * consumer's disabled/guard state; never turn an invalid visible date
+   * into a deliberate blank.
+   */
+  onValidityChange?: (valid: boolean) => void;
 };
+
+function assignRef(
+  ref: Ref<HTMLInputElement> | undefined,
+  node: HTMLInputElement | null,
+) {
+  if (typeof ref === "function") ref(node);
+  else if (ref) (ref as { current: HTMLInputElement | null }).current = node;
+}
 
 export function DateField({
   value,
@@ -89,11 +125,21 @@ export function DateField({
   inputRef,
   tone = "paper",
   "aria-label": ariaLabel,
+  "aria-describedby": describedByProp,
+  "aria-invalid": ariaInvalidProp,
+  "aria-required": ariaRequiredProp,
+  required = false,
+  formatHint = "visible",
   "data-testid": testId,
+  onValidityChange,
 }: DateFieldProps) {
   const generatedId = useId();
   const inputId = id ?? generatedId;
+  const formatId = `${inputId}-format`;
+  const internalErrorId = `${inputId}-date-error`;
   const [text, setText] = useState(() => isoToDisplay(value));
+  const inputNode = useRef<HTMLInputElement | null>(null);
+  const lastValid = useRef<boolean | null>(null);
 
   // Sync from the canonical ISO prop only when it disagrees with what
   // the current text already means. Typing a partial date (which
@@ -105,7 +151,48 @@ export function DateField({
   }, [value]);
 
   const complete = text.length === 10;
-  const invalid = complete && displayToIso(text) === null;
+  const completeInvalid = complete && displayToIso(text) === null;
+  const empty = text.length === 0;
+  const incomplete = !empty && !complete;
+  const missingRequired = Boolean((required || ariaRequiredProp) && empty);
+  // The visible error stays on a complete impossible date; partial text is
+  // invalid for submission without turning the field into an error while
+  // the reader is still typing.
+  const invalid = completeInvalid;
+  const valid = !(
+    incomplete ||
+    completeInvalid ||
+    missingRequired ||
+    ariaInvalidProp
+  );
+
+  useEffect(() => {
+    const input = inputNode.current;
+    if (!input) return;
+    input.setCustomValidity(
+      incomplete || completeInvalid
+        ? "Enter a real date in DD/MM/YYYY format."
+        : "",
+    );
+  }, [completeInvalid, incomplete]);
+
+  useEffect(() => {
+    if (lastValid.current === valid) return;
+    lastValid.current = valid;
+    onValidityChange?.(valid);
+  }, [onValidityChange, valid]);
+
+  const describedBy = Array.from(
+    new Set(
+      [
+        describedByProp,
+        formatHint === "none" ? null : formatId,
+        invalid ? internalErrorId : null,
+      ]
+        .filter((value): value is string => Boolean(value))
+        .flatMap((value) => value.split(/\s+/)),
+    ),
+  ).join(" ") || undefined;
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const raw = e.target.value;
@@ -127,7 +214,10 @@ export function DateField({
   return (
     <div>
       <input
-        ref={inputRef}
+        ref={(node) => {
+          inputNode.current = node;
+          assignRef(inputRef, node);
+        }}
         id={inputId}
         type="text"
         inputMode="numeric"
@@ -141,15 +231,34 @@ export function DateField({
         placeholder={placeholder}
         disabled={disabled}
         aria-label={ariaLabel}
-        aria-invalid={invalid || undefined}
-        className={`w-full min-h-11 rounded-ctl border px-3 py-2.5 text-[16px] ${
-          tone === "deck" ? "bg-deck" : "bg-paper"
-        } ${invalid ? "border-ink-2" : "border-line"} ${className}`}
+        aria-describedby={describedBy}
+        aria-invalid={invalid || ariaInvalidProp || undefined}
+        aria-required={ariaRequiredProp || required || undefined}
+        required={required || ariaRequiredProp || undefined}
+        className={`w-full min-h-12 rounded-ctl border px-4 py-2.5 text-[16px] ${
+          tone === "deck" ? "bg-deck" : "bg-[var(--control-surface-picker)]"
+        } ${invalid ? "border-ink-2" : "border-[var(--control-border)]"} ${className}`}
         data-testid={testId}
       />
+      {formatHint !== "none" ? (
+        <p
+          id={formatId}
+          className={
+            formatHint === "sr-only"
+              ? "sr-only"
+              : "mt-1 text-[11.5px] text-ink-3"
+          }
+        >
+          Format: DD/MM/YYYY
+        </p>
+      ) : null}
       {invalid ? (
-        <p className="mt-1 text-[11.5px] text-ink-2">
-          Enter a real date as dd/mm/yyyy.
+        <p
+          id={internalErrorId}
+          role="alert"
+          className="mt-1 text-[11.5px] text-ink-2"
+        >
+          Enter a real date in DD/MM/YYYY format.
         </p>
       ) : null}
     </div>

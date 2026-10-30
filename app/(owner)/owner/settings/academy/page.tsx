@@ -3,6 +3,8 @@ import { BackLink } from "@/components/ui/BackLink";
 import { AcademyProfileForm } from "@/components/settings/academy-profile-form";
 import { getTenantProfileAction } from "@/lib/actions/tenant-profile";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // PR2-C1 — owner academy profile. The GSTIN here is the one the
 // invoice spine snapshots at issue time; fixing a typo no longer
@@ -14,15 +16,15 @@ export default async function AcademySettingsPage() {
   if (!profile) notFound();
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/settings" label="Settings" />
 
-      <h1 className="font-display text-[19px] font-semibold">Academy profile</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        The name, currency, time zone and GSTIN the academy bills under.
-      </p>
+      <PageHeader
+        title={<>Academy profile</>}
+        purpose={<>Identity and billing details for future invoices.</>}
+      />
 
-      <div className="mt-6">
+      <div className="mt-5">
         <AcademyProfileForm
           initial={{
             name: profile.name,
@@ -32,6 +34,6 @@ export default async function AcademySettingsPage() {
           }}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

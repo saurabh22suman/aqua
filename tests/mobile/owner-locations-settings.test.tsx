@@ -61,10 +61,21 @@ describe("U-07 locations editor", () => {
     });
     render(<LocationManager initial={[WORLI, ANDHERI]} canWrite />);
     expect(document.body.textContent).toMatch(/add another location/i);
-    // One open day per location (Monday) = two time inputs each.
-    await waitFor(() =>
-      expect(document.querySelectorAll("li input[type='time']").length).toBe(4),
+    // One open day per location (Monday) = an opening and a closing time
+    // control each. The shared TimeField renders a labelled group of
+    // selects, not a native <input type="time">.
+    const timeGroups = () =>
+      Array.from(document.querySelectorAll("li fieldset")).filter((node) =>
+        /opening time|closing time/i.test(
+          node.querySelector("legend")?.textContent ?? "",
+        ),
+      );
+    await waitFor(() => expect(timeGroups()).toHaveLength(4));
+    const legends = timeGroups().map(
+      (node) => node.querySelector("legend")?.textContent ?? "",
     );
+    expect(legends.filter((text) => /opening time$/i.test(text))).toHaveLength(2);
+    expect(legends.filter((text) => /closing time$/i.test(text))).toHaveLength(2);
   });
 
   it("read-only staff see the data but no save controls", async () => {

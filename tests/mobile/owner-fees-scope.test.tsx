@@ -18,6 +18,26 @@ vi.mock("@/lib/actions/payments", () => ({
   listInvoicePaymentsAction: vi.fn(),
   recordPaymentAction: vi.fn(),
 }));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelPaymentRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
+  listReversalRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelReversalRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));

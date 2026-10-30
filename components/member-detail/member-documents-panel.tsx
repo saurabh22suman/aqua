@@ -8,7 +8,7 @@ import { FileText } from "lucide-react";
 export function MemberDocumentsPanel() {
   return (
     <section className="mt-4 rounded-card border border-line bg-paper p-4">
-      <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
+      <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold">
         <FileText size={15} className="text-ink-3" />
         Documents
       </h2>

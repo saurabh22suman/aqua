@@ -1,5 +1,9 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
+import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   confirmCashCountAction,
@@ -38,8 +42,6 @@ import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
 const REVIEW_THRESHOLD_PAISE = 50_000; // ₹500
 const OWNER_CLOSE_THRESHOLD_PAISE = 200_000; // ₹2,000
 
-const inputClass =
-  "min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 type ReportState = { scope: string; data: DailyCollection };
 
@@ -248,32 +250,33 @@ export function CollectionsReport({
   return (
     <div className="mt-4 space-y-4">
       <div className="flex flex-wrap items-end gap-2">
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Date</span>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
-            value={onDate}
-            onChange={(e) => setOnDate(e.target.value)}
-            className={inputClass}
-          />
-        </label>
+        <div className="min-w-[10rem]">
+          <Field id="collections-date" label="Date" required>
+            {(field) => (
+              <DateField
+                {...field}
+                value={onDate}
+                onChange={setOnDate}
+                data-testid="collections-date"
+              />
+            )}
+          </Field>
+        </div>
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">
             {facilityLabel}
           </span>
-          <select
+          <Select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
-            className={inputClass}
+            
           >
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -298,8 +301,18 @@ export function CollectionsReport({
         </p>
       ) : (
         <>
-          <div className="rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] text-ink-3">
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <section
+            aria-labelledby="payment-evidence-heading"
+            className="min-w-0 rounded-card border border-line bg-paper p-5"
+          >
+            <h2
+              id="payment-evidence-heading"
+              className="font-display text-[16px] font-semibold text-ink"
+            >
+              Payment evidence
+            </h2>
+            <p className="mt-1 text-[12px] text-ink-3">
               Collected on {report.onDate} · {report.paymentCount} payment
               {report.paymentCount === 1 ? "" : "s"}
             </p>
@@ -340,10 +353,8 @@ export function CollectionsReport({
                 )}
               </tbody>
             </table>
-          </div>
 
-          <div className="rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] font-medium text-ink-2">By staff</p>
+            <h3 className="mt-4 text-[13px] font-medium text-ink-2">By staff</h3>
             <table className="mt-2 w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">
@@ -374,11 +385,19 @@ export function CollectionsReport({
                 )}
               </tbody>
             </table>
-          </div>
+          </section>
 
-          <div className="rounded-card border border-line bg-paper p-3.5">
+          <section
+            aria-labelledby="cash-count-heading"
+            className="min-w-0 rounded-card border border-line bg-paper p-5"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[12px] font-medium text-ink-2">Cash count</p>
+              <h2
+                id="cash-count-heading"
+                className="font-display text-[16px] font-semibold text-ink"
+              >
+                Count the cash
+              </h2>
               {report.cashCount ? (
                 <StatusBadge
                   tone={report.cashCount.needsReview ? "warn" : "good"}
@@ -431,11 +450,11 @@ export function CollectionsReport({
                         <span className="mb-0.5 block text-[11px] text-ink-3">
                           Reason for reopening (required)
                         </span>
-                        <input
+                        <Input
                           value={reopenReason}
                           disabled={busy}
                           onChange={(e) => setReopenReason(e.target.value)}
-                          className={`${inputClass} w-full`}
+                          className="w-full"
                           placeholder="Reason for reopening"
                         />
                       </label>
@@ -490,11 +509,11 @@ export function CollectionsReport({
                         <span className="mb-0.5 block text-[11px] text-ink-3">
                           Counted cash (₹)
                         </span>
-                        <input
+                        <Input
                           inputMode="decimal"
                           value={counted}
                           onChange={(e) => setCounted(e.target.value)}
-                          className={inputClass}
+                          
                           placeholder="0.00"
                         />
                       </label>
@@ -504,10 +523,10 @@ export function CollectionsReport({
                             ? "Reason (required)"
                             : "Reason (optional)"}
                         </span>
-                        <input
+                        <Input
                           value={note}
                           onChange={(e) => setNote(e.target.value)}
-                          className={`${inputClass} w-full`}
+                          className="w-full"
                           placeholder={
                             varianceNeedsReason
                               ? "Why the cash differs"
@@ -540,6 +559,7 @@ export function CollectionsReport({
                 {message}
               </p>
             ) : null}
+          </section>
           </div>
         </>
       )}

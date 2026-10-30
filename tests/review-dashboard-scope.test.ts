@@ -316,33 +316,33 @@ describe("review dashboard location scope (A07)", () => {
 // Owner Home composition, pinned as a source scan (the same shape the
 // repo's kpi-label-size and date-display-sweep guards use).
 //
-// Superseded 2026-10-25 by the approved owner redesign. The first
-// screen now leads with the figures (each label stating its basis),
-// then the one dominant shortcut, then the 60/40 workspace (today's
-// classes beside the exceptions), then the single trend panel. The
-// honesty contracts survive: the money figure is today's captured
-// total and says so, register state is never called attendance, and
-// the phantom "Today's facilities" heading stays gone.
-//
-// Owner Lavender B (27 October 2026): the screen opens with the day,
-// the academy and the scope, and the sections were split into the
-// components/owner-home/ modules. The scan follows the composition:
-// the ORDER is still read from the dashboard's own JSX (the block
-// markers below), and the wording guards read the file that owns the
-// wording.
+// Current approved composition (Owner OpenPen): context header → one
+// unified money surface with the dominant action → decision queue beside
+// it → today/capacity work band → trend/payment-mix band. The honesty
+// contracts survive: money is the real captured/outstanding/overdue read,
+// register state is never called attendance, and the phantom facilities
+// heading stays gone.
 describe("owner Home composition and labels", () => {
-  it("leads with the context, then the summary, then the dominant action, then the workspace, then one trend panel", () => {
+  it("leads with the context, unified money surface, decision queue, work band and trend panel", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
     const context = src.indexOf("<OwnerHomeHeader");
-    const summary = src.indexOf("<OwnerHomeMetrics");
-    const action = src.indexOf("<OwnerHomeActions");
+    const money = src.indexOf("<OwnerHomeMoney");
     const attention = src.indexOf("<OwnerHomeAttention");
+    const timeline = src.indexOf("<OwnerHomeTimeline");
+    const capacity = src.indexOf("<OwnerHomeCapacity");
     const trend = src.indexOf("<OwnerHomeCharts");
     expect(context).toBeGreaterThan(-1);
-    expect(summary).toBeGreaterThan(context);
-    expect(action).toBeGreaterThan(summary);
-    expect(attention).toBeGreaterThan(action);
-    expect(trend).toBeGreaterThan(attention);
+    expect(money).toBeGreaterThan(context);
+    expect(attention).toBeGreaterThan(money);
+    expect(timeline).toBeGreaterThan(attention);
+    expect(capacity).toBeGreaterThan(timeline);
+    expect(trend).toBeGreaterThan(capacity);
+    expect(src).not.toContain("<OwnerHomeMetrics");
+    // The dominant action is part of the money surface, not a detached
+    // shortcut row competing with it.
+    expect(
+      readFileSync("components/owner-home/owner-home-money.tsx", "utf8"),
+    ).toContain("<OwnerHomeActions");
     // The old gross-only label and the phantom facilities heading are gone.
     expect(src).not.toContain("Payments recorded today");
     expect(src).not.toContain("Today's facilities");

@@ -7,6 +7,7 @@ import {
   type RemoveSampleDataResult,
 } from "@/db/preset-sample-data";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
 
 // Phase 2.3 — server action for the "Remove sample data" button.
@@ -30,6 +31,7 @@ export async function removeSampleDataAction(
     tenantId: String(formData.get("tenantId") ?? ""),
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("tenant.remove_sample_data", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -40,6 +42,7 @@ export async function removeSampleDataAction(
   // (2) platform-session permission check
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tenant.remove_sample_data", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -63,9 +66,15 @@ export async function removeSampleDataAction(
       removeSampleData(surface.data.tenantId as never, {
         actorId: status.userId as never,
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tenant.remove_sample_data", error, { tenantId: surface.data.tenantId });
+    throw error;
+  });
   if (result.kind === "ok") {
     revalidatePath(`/ops/tenants/${surface.data.tenantId}`);
+  }
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("tenant.remove_sample_data", "error", { tenantId: surface.data.tenantId });
   }
   return result;
 }

@@ -7,6 +7,8 @@ import { resolveTerm } from "@/lib/terminology/keys";
 import { todayInZone } from "@/lib/time/tz";
 import { CollectionsReport } from "@/components/reports/collections-report";
 import { BackLink } from "@/components/ui/BackLink";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // C-34 — daily collections: what came in, by method and by the person
 // who took it, with the cash count confirmation. Accountant-grade
@@ -26,16 +28,12 @@ export default async function CollectionsPage() {
   const defaultDate = todayInZone(timezone);
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/reports" label="Reports" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Daily collections
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Payments recorded at the counter, grouped by method and by the person
-        who took them. Count the physical cash at close and confirm it here —
-        a variance is shown, never adjusted away.
-      </p>
+      <PageHeader
+        title="Daily collections"
+        purpose="Payments recorded at the counter, grouped by method and by the person who took them. Count the physical cash at close and confirm it here — a variance is shown, never adjusted away."
+      />
       <CollectionsReport
         defaultDate={defaultDate}
         locations={locations}
@@ -43,6 +41,6 @@ export default async function CollectionsPage() {
         canConfirm={hasPermission(ctx, "payments.record")}
         canReopen={hasPermission(ctx, "settings.manage")}
       />
-    </main>
+    </OwnerPage>
   );
 }

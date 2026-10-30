@@ -9,14 +9,13 @@ import {
 } from "@/lib/actions/member-notes";
 import type { MemberNoteRow } from "@/lib/services/member-notes";
 import { formatDateTimeIST } from "@/lib/time/tz";
+import { Field } from "@/components/ui/Field";
+import { Textarea } from "@/components/ui/Textarea";
 
 // U-03 — member notes. Staff-internal; create, edit in place, and
 // archive (soft delete). The list reloads from the action after every
 // mutation so the surface never shows optimistic state the database
 // did not accept.
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function MemberNotesPanel({
   memberId,
@@ -67,26 +66,25 @@ export function MemberNotesPanel({
 
   return (
     <section className="mt-4 rounded-card border border-line bg-paper p-4">
-      <h2 className="font-display text-[15px] font-semibold">Notes</h2>
+      <h2 className="font-display text-[16px] font-semibold">Notes</h2>
       <p className="mt-1 text-[12.5px] text-ink-3">
         Internal notes for staff — they are never shown on the parent link.
       </p>
 
       {canWrite ? (
         <div className="mt-3">
-          <label className="block">
-            <span className="mb-0.5 block text-[11px] text-ink-3">
-              Add a note
-            </span>
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              rows={3}
-              maxLength={4000}
-              className={inputClass}
-              placeholder="Called about the missed session…"
-            />
-          </label>
+          <Field id="member-note-body" label="Add a note">
+            {(field) => (
+              <Textarea
+                {...field}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                rows={3}
+                maxLength={4000}
+                placeholder="Called about the missed session…"
+              />
+            )}
+          </Field>
           <button
             type="button"
             disabled={busy || body.trim().length === 0}
@@ -129,12 +127,13 @@ export function MemberNotesPanel({
             <li key={note.id} className="rounded-ctl border border-line p-3">
               {editingId === note.id ? (
                 <div>
-                  <textarea
+                  <Textarea
+                    id={`member-note-${note.id}-body`}
+                    aria-label="Note"
                     value={editBody}
                     onChange={(e) => setEditBody(e.target.value)}
                     rows={3}
                     maxLength={4000}
-                    className={inputClass}
                   />
                   <div className="mt-2 flex gap-2">
                     <button

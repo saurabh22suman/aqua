@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { ChevronRight, UserRound } from "lucide-react";
+import UserRound from "lucide-react/dist/esm/icons/user-round.mjs";
 import Link from "next/link";
 import { BottomNav, type NavItem } from "@/components/bottom-nav";
-import { ClubFooterArt } from "@/components/illustrations/club-footer-art";
 import { FacilitySwitcher } from "@/components/facility-switcher";
 import { GlobalSearch } from "@/components/global-search";
+import { OwnerChromeOffset } from "@/components/owner-chrome-offset";
+import { OwnerAccountControl } from "@/components/owner-home/owner-account-control";
 import { OwnerShellCrumb } from "@/components/owner-shell-crumb";
 import { OwnerSideNav } from "@/components/owner-side-nav";
 import { TenantSignOut } from "@/components/tenant-sign-out";
@@ -100,125 +101,115 @@ export function OwnerShell({
 
   return (
     <div
+      data-owner-surface
       data-testid="owner-shell"
       // lg:items-start keeps the sticky sidebar at its own height
       // instead of stretching it to the full column, which is what
       // makes it stay put while the page scrolls.
-      className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))] lg:flex lg:items-start lg:pb-0"
+      className="min-h-[calc(100dvh-var(--app-sticky-offset))] pb-[calc(4rem+env(safe-area-inset-bottom))] lg:flex lg:items-start lg:pb-0"
     >
+      <OwnerChromeOffset />
       <aside
         data-testid="owner-sidebar"
-        // The sidebar is a PASTEL surface (batch 4), not a white
-        // column: the mint direction paints it pale mint, the
-        // lavender direction pale lilac. It stays a light surface in
-        // both presets, so the ink tokens and the focus ring keep
-        // their contrast on it.
-        //
-        // The sticky offset and height follow the app chrome that sits
-        // above the shell (the demo banner publishes its height as
-        // --app-sticky-offset). Without it the sidebar slides under
-        // that chrome and its brand is clipped.
+        // Owner OpenPen (29 October 2026): the reference workspace has a
+        // 190px owner sidebar — deep plum in Lavender, pale green in
+        // Mint. It is still viewport-bound and sticky; only the nav
+        // region scrolls. The palette is owner-scoped (see globals.css),
+        // so Ops and the auth panel keep their existing pastel surface.
         style={{
           top: "var(--app-sticky-offset)",
           height: "calc(100dvh - var(--app-sticky-offset))",
         }}
-        className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-60 lg:flex-none lg:flex-col lg:overflow-hidden lg:border-r lg:border-line lg:bg-sidebar print:hidden"
+        className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[190px] lg:flex-none lg:flex-col lg:overflow-hidden lg:border-r lg:border-[var(--owner-nav-border)] lg:bg-[var(--owner-nav-surface)] lg:px-3.5 lg:pb-5 lg:pt-4 lg:text-[var(--owner-nav-ink)] [--focus-ring:var(--owner-nav-focus)] print:hidden"
       >
-        {/* The brand, above the navigation and outside its scroller:
-            the product mark and the academy the workspace belongs to.
-            The product name stays "Aqua" — the approved board used a
-            working brand, and renaming the product is a coordinated
-            decision outside this work (see the handoff). */}
+        {/* Brand, club and the account stay OUTSIDE the navigation
+            scroller, so a short screen never hides them. The product mark
+            is the reference's KhelSuite club workspace; login and Ops
+            keep their existing brand. */}
         <div
           data-testid="owner-shell-brand"
-          className="flex-none border-b border-line px-4 pb-4 pt-6"
+          className="flex-none px-2.5"
         >
-          <p className="px-1 font-display text-[19px] font-semibold leading-none text-[var(--accent-ink)]">
-            Aqua
+          <p className="font-display text-[25px] font-semibold leading-none tracking-[-1px] text-[var(--owner-nav-ink)]">
+            KhelSuite
           </p>
+          <span className="mt-1 block text-[11px] font-normal uppercase leading-[2] tracking-[2px] text-[var(--owner-nav-muted)]">
+            Club workspace
+          </span>
           {clubName ? (
-            <div className="mt-3 flex items-center gap-2.5 rounded-ctl border border-line bg-paper/70 px-2.5 py-2">
-              <span
-                aria-hidden="true"
-                className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-[var(--selected-surface)] font-display text-[13px] font-semibold text-[var(--selected-ink)]"
+            <div className="mt-3 border-b border-[var(--owner-nav-border)] pb-3">
+              <p
+                className="truncate text-[14px] font-medium text-[var(--owner-nav-ink)]"
+                title={clubName}
               >
-                {clubInitials || clubName.slice(0, 2).toUpperCase()}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[12.5px] font-medium text-ink">
-                  {clubName}
-                </span>
-                <span className="block truncate text-[11px] text-ink-3">
-                  Owner workspace
-                </span>
-              </span>
+                {clubName}
+              </p>
+              <p className="mt-0.5 text-[12px] text-[var(--owner-nav-muted)]">
+                Owner workspace
+              </p>
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-3 border-b border-[var(--owner-nav-border)] pb-4" />
+          )}
         </div>
 
         {/* The only independent scroller in the shell: the navigation
-            list. It keeps the <nav> landmark (the landmark and the
-            scroll owner are the same element), and min-h-0 lets it
-            shrink inside the flex column, so it scrolls instead of
-            pushing the exit control off a short screen. */}
+            list. min-h-0 lets it shrink inside the flex column, so it
+            scrolls instead of pushing the account off a short screen. */}
         <nav
           aria-label="Primary"
           data-testid="owner-side-nav-scroll"
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"
         >
           <OwnerSideNav groups={sidebarGroups} />
         </nav>
 
-        {/* A quiet closing piece of artwork, then the account row and
-            the exit control — both below the navigation scroller, so
-            they stay reachable on a short screen. */}
-        <div className="flex-none px-4 pt-3">
-          <ClubFooterArt />
-        </div>
-
         <div
           data-testid="owner-shell-account"
-          className="flex-none border-t border-line px-3 py-3"
+          className="flex-none border-t border-[var(--owner-nav-border)] px-2.5 pt-3"
         >
           {hasSettingsDestination ? (
             <Link
               href="/owner/settings"
-              className="flex min-h-11 items-center gap-2.5 rounded-ctl px-1.5 py-1.5 motion-fast transition-colors hover:bg-[var(--surface-nav-hover)]"
+              className="flex min-h-11 items-center gap-2.5 rounded-ctl px-1.5 py-1.5 motion-fast transition-colors hover:bg-[var(--owner-nav-hover)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--owner-nav-focus)]"
             >
               <span
                 aria-hidden="true"
-                className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[var(--selected-surface)] text-[var(--selected-ink)]"
+                className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-[var(--owner-nav-active)] font-display text-[11px] font-semibold text-[var(--owner-nav-active-ink)]"
               >
-                <UserRound size={16} strokeWidth={1.8} />
+                {clubInitials ? (
+                  clubInitials
+                ) : clubName ? (
+                  clubName.slice(0, 2).toUpperCase()
+                ) : (
+                  <UserRound size={16} strokeWidth={1.8} />
+                )}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12.5px] font-medium text-ink">
-                  {accountLabel}
-                </span>
-                <span className="block truncate text-[11px] text-ink-3">
-                  Account settings
-                </span>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--owner-nav-ink)]">
+                {accountLabel}
               </span>
-              <ChevronRight size={16} className="flex-none text-ink-3" aria-hidden="true" />
             </Link>
           ) : (
             <div className="flex items-center gap-2.5 px-1.5 py-1.5">
               <span
                 aria-hidden="true"
-                className="grid h-8 w-8 flex-none place-items-center rounded-full bg-[var(--selected-surface)] text-[var(--selected-ink)]"
+                className="grid h-8 w-8 flex-none place-items-center rounded-[10px] bg-[var(--owner-nav-active)] text-[var(--owner-nav-active-ink)]"
               >
-                <UserRound size={16} strokeWidth={1.8} />
+                {clubInitials ? (
+                  <span className="font-display text-[11px] font-semibold">
+                    {clubInitials}
+                  </span>
+                ) : (
+                  <UserRound size={16} strokeWidth={1.8} />
+                )}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12.5px] font-medium text-ink">
-                  {accountLabel}
-                </span>
-                <span className="block truncate text-[11px] text-ink-3">Signed in</span>
+              <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--owner-nav-ink)]">
+                {accountLabel}
               </span>
             </div>
           )}
           {!hasSettingsDestination ? (
-            <TenantSignOut className="mt-2" />
+            <TenantSignOut className="mt-2 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--owner-nav-focus)]" />
           ) : null}
         </div>
       </aside>
@@ -226,16 +217,19 @@ export function OwnerShell({
       <div className="min-w-0 flex-1">
         <header
           data-testid="owner-top-bar"
-          // Same offset as the sidebar: the app chrome above the shell
-          // (the demo banner) must not slide under the sticky header.
+          // Reference: a compact 62px sticky row with the breadcrumb, the
+          // record search, the appearance control and the account avatar.
           style={{ top: "var(--app-sticky-offset)" }}
-          className="sticky top-0 z-30 flex min-h-14 items-center gap-3 border-b border-line bg-paper px-4 lg:px-8"
+          className="sticky top-0 z-30 flex min-h-14 items-center gap-3 border-b border-line bg-paper px-4 lg:min-h-[62px] lg:px-6"
         >
           <OwnerShellCrumb items={crumbItems} />
-          <div className="min-w-0 flex-1 lg:max-w-md">
+          <div className="min-w-0 flex-1 lg:ml-auto lg:max-w-[300px]">
             <GlobalSearch />
           </div>
-          <ThemeToggle />
+          <ThemeToggle compact />
+          <div data-testid="owner-header-account" className="flex-none">
+            <OwnerAccountControl initials={clubInitials} />
+          </div>
         </header>
 
         {/* W1-6 — renders itself away for single-location tenants and
@@ -245,18 +239,15 @@ export function OwnerShell({
           <FacilitySwitcher locations={locations} />
         </div>
 
-        <div data-testid="owner-content" className="lg:px-8">
-          {/* Owner UX audit (2026-10-24): the desktop content ran the
-              full width of whatever window the owner had, so a form
-              stretched across the screen and a table's columns drifted
-              apart. The content is now capped at 1280px and centred
-              — the audit's 1120–1280px band. Forms cap further, on
-              their own pages. */}
+        <div data-testid="owner-content" className="min-w-0">
+          {/* Owner OpenPen: the page owns its explicit 16/28px inset via
+              OwnerPage. The shell adds no horizontal gutter, so the old
+              32+20 double inset cannot return. */}
           <div className="mx-auto w-full max-w-[1280px]">{children}</div>
         </div>
 
         {!hasSettingsDestination ? (
-          <div className="px-5 pb-4 lg:hidden">
+          <div className="px-4 pb-4 lg:hidden">
             <TenantSignOut className="mt-4" />
           </div>
         ) : null}

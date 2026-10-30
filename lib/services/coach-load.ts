@@ -3,6 +3,11 @@ import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { staff } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
+import { batches } from "@/db/schema/programs";
+import {
+  locationPredicate,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { ReportPeriod } from "./owner-reports";
 
@@ -29,6 +34,13 @@ export async function getCoachLoad(
   period: ReportPeriod,
 ): Promise<CoachLoadRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — the caller's location scope applies to this report too:
+    // the caller's access is applied FIRST and may only narrow the
+    // result (the same rule the sibling reports follow —
+    // lib/services/attendance-report-query.ts, lib/services/roster.ts).
+    // The batch's location is the one a session belongs to.
+    const access = await resolveLocationAccess(tx, ctx);
+    const accessPredicate = locationPredicate(batches.locationId, access);
     const sessionsRow = await tx
       .select({
         coachId: sessions.coachId,
@@ -36,6 +48,10 @@ export async function getCoachLoad(
         distinctMembers: sql<number>`count(distinct ${attendance.memberId})::int`,
       })
       .from(sessions)
+      .innerJoin(
+        batches,
+        and(eq(batches.id, sessions.batchId), eq(batches.tenantId, ctx.tenantId)),
+      )
       .leftJoin(attendance, eq(attendance.sessionId, sessions.id))
       .where(
         and(
@@ -43,6 +59,9 @@ export async function getCoachLoad(
           gte(sessions.sessionDate, period.from),
           lt(sessions.sessionDate, period.to),
           sql`${sessions.coachId} is not null`,
+          // History: a batch soft-deleted later must not remove the
+          // sessions a coach already taught from the load report.
+          ...(accessPredicate ? [accessPredicate] : []),
         ),
       )
       .groupBy(sessions.coachId);

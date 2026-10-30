@@ -94,6 +94,7 @@ export async function finalizeOrder(
         })),
       },
       actorId,
+      ctx.requestId ?? null,
     );
     if (!issued.ok) return { ok: false, error: issued.error };
 

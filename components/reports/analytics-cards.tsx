@@ -1,4 +1,4 @@
-import { formatINR } from "@/lib/money/format";
+import { formatINR, formatINRCompact } from "@/lib/money/format";
 import { formatDateIST } from "@/lib/time/tz";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import type {
@@ -12,6 +12,7 @@ import {
   Donut,
   HorizontalBars,
   LineTrend,
+  ReportDataTable,
   type DonutSlice,
 } from "@/components/charts";
 
@@ -23,16 +24,23 @@ export function AttendanceTrendCard({ points }: { points: TrendPoint[] }) {
   const present = points.reduce((sum, p) => sum + p.present, 0);
   const total = points.reduce((sum, p) => sum + p.total, 0);
   const pct = total > 0 ? Math.round((present / total) * 100) : null;
+  // A session with no mark is unknown, not zero. When the whole period
+  // is unrecorded there is nothing to plot, so the card says so
+  // instead of drawing an empty frame (DESIGN.md, "Never draw an empty
+  // chart frame").
+  const hasMarks = points.some((p) => p.total > 0);
+  const first = points[0]!;
+  const last = points[points.length - 1]!;
 
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           Attendance trend
         </h2>
         {pct !== null ? (
           <span className="text-[12px] text-ink-3 tabular-nums">
-            {pct}% present
+            {pct}% present or late
           </span>
         ) : null}
       </header>
@@ -40,12 +48,20 @@ export function AttendanceTrendCard({ points }: { points: TrendPoint[] }) {
         <p className="mt-2 text-[13px] text-ink-3">
           No sessions in this period, so there is no trend to draw.
         </p>
+      ) : !hasMarks ? (
+        <p className="mt-2 text-[13px] text-ink-3">
+          Sessions ran in this period, but no attendance mark was recorded.
+          Attendance here is unknown, not zero.
+        </p>
       ) : (
         <>
           <div className="mt-3">
             <LineTrend
               ariaLabel={`Attendance percentage by day, ${points.length} days`}
               maxValue={100}
+              formatValue={(value) => `${value}%`}
+              valueTitle="Percent present or late"
+              timeTitle="Date"
               points={points.map((p) => ({
                 label: p.date,
                 value: p.pct,
@@ -54,8 +70,26 @@ export function AttendanceTrendCard({ points }: { points: TrendPoint[] }) {
             />
           </div>
           <p className="mt-1 text-[12px] text-ink-3">
-            Present or late marks over marks recorded · {present} of {total}
+            {formatDateIST(first.date)} – {formatDateIST(last.date)} · Present
+            or late marks over marks recorded · {present} of {total}
           </p>
+          <ReportDataTable
+            summaryLabel="View data table"
+            regionLabel="Attendance by day table"
+            caption="Exact recorded attendance for each day"
+            columns={[
+              { label: "Date" },
+              { label: "Present or late", numeric: true },
+              { label: "Recorded marks", numeric: true },
+              { label: "Attendance", numeric: true },
+            ]}
+            rows={points.map((point) => [
+              formatDateIST(point.date),
+              String(point.present),
+              String(point.total),
+              point.pct === null ? "—" : `${point.pct}%`,
+            ])}
+          />
         </>
       )}
     </article>
@@ -70,7 +104,7 @@ export function CollectionsExpensesCard({
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">Collections</h2>
+        <h2 className="font-display text-[16px] font-semibold">Collections over time</h2>
         <span className="text-[12px] text-ink-3 tabular-nums">
           {formatINR(series.totalPaise)}
         </span>
@@ -80,10 +114,14 @@ export function CollectionsExpensesCard({
           No payments recorded in this period — nothing collected yet.
         </p>
       ) : (
+        <>
         <div className="mt-3">
           <ColumnChart
             ariaLabel={`Collections by day, ${series.byDay.length} days`}
             valueLabel={formatINR}
+            axisValueLabel={formatINRCompact}
+            valueTitle="INR collected"
+            timeTitle="Date"
             points={series.byDay.map((p) => ({
               label: p.date,
               value: p.paise,
@@ -91,6 +129,22 @@ export function CollectionsExpensesCard({
             }))}
           />
         </div>
+        <p className="mt-2 text-[12px] text-ink-3">
+          {formatDateIST(series.byDay[0]!.date)} –{" "}
+          {formatDateIST(series.byDay[series.byDay.length - 1]!.date)} · INR per
+          day. Each bar is that day&apos;s recorded collections.
+        </p>
+        <ReportDataTable
+          summaryLabel="View data table"
+          regionLabel="Collections by day table"
+          caption="Exact recorded collections for each day"
+          columns={[{ label: "Date" }, { label: "Collected", numeric: true }]}
+          rows={series.byDay.map((point) => [
+            formatDateIST(point.date),
+            formatINR(point.paise),
+          ])}
+        />
+        </>
       )}
       <p className="mt-2 text-[12px] text-ink-3">
         Expenses are not tracked in Aqua yet, so this chart shows collections
@@ -104,7 +158,7 @@ export function PlanRevenueCard({ rows }: { rows: PlanRevenueRow[] }) {
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           Revenue by plan
         </h2>
         {/* Owner UX audit (2026-10-24): "0 plans" in the header read as
@@ -123,6 +177,7 @@ export function PlanRevenueCard({ rows }: { rows: PlanRevenueRow[] }) {
         <div className="mt-3">
           <HorizontalBars
             ariaLabel="Collections by membership plan"
+            valueLabel={formatINR}
             rows={rows.map((r) => ({
               label: r.planName,
               value: r.paise,
@@ -173,7 +228,7 @@ export function MemberMixCard({
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           {memberLabel} mix
         </h2>
         <span className="text-[12px] text-ink-3 tabular-nums">{total}</span>

@@ -284,6 +284,28 @@ describe("O-08 location-scoped staff access", () => {
     expect(await people.getMemberDetail(ownerCtx, memberB)).not.toBeNull();
   });
 
+  it("denies missing identity, unknown membership and an empty location grant", async () => {
+    for (const ctx of [
+      { tenantId, allLocations: true, roleKey: "owner" },
+      { tenantId, userId: asUserId(uuidv7()), roleKey: "receptionist" },
+      { ...scopedReception, locationIds: [] },
+    ]) {
+      expect(await people.listMembers(ctx, {})).toEqual([]);
+      expect(await people.getMemberDetail(ctx, memberA)).toBeNull();
+      expect(await people.getMemberDetail(ctx, memberB)).toBeNull();
+      expect(await register.listTodaySessions(ctx, DATE)).toEqual([]);
+      expect(await register.getRosterForSession(ctx, sessionA)).toBeNull();
+    }
+  });
+
+  it("distinguishes an explicit background actor from an identified human", async () => {
+    const system = { tenantId, systemActor: true as const };
+    expect(await people.listMembers(system, {})).toHaveLength(2);
+    const human = { ...scopedReception, systemActor: true as const };
+    expect((await people.listMembers(human, {})).map(member => member.memberId)).toEqual([memberA]);
+    expect(await people.getMemberDetail(human, memberB)).toBeNull();
+  });
+
   it("mirrors invite locations onto the staff record for worker/accountant", async () => {
     const result = await invitations.inviteStaff(ownerCtx, {
       phone: `+9197${String(Date.now()).slice(-8)}`,

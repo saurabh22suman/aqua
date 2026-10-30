@@ -1,6 +1,6 @@
-// Current inventory: seven active forms. Live checks exercise the inert
-// WhatsApp phone form/native POST, actual code response and gated invite form.
-// The legacy password/TOTP component discussion below is historical context.
+// Current inventory: eight active password/authenticator and Ops mutation forms.
+// Live checks exercise native password POST, authenticator response and a gated
+// invite form. Pending/full fixture cookies are limited to this disposable test.
 // H1 — credential leak check for every pre-hydration form submit
 // in the platform surface. Spawns its own dev server (matching the
 // scripts/e2e-login.ts and scripts/e2e-offline.ts pattern) and
@@ -82,6 +82,7 @@ import { env } from "@/lib/env";
 import {
   provisionPlatformUser,
   markTotpEnrolled,
+  verifyTotp,
 } from "@/db/platform-auth";
 
 const PORT = 3220;
@@ -108,8 +109,8 @@ type FormTarget = {
 // tenants/[tenantId]/status-transitions.tsx` — zero matches).
 const FORM_TARGETS: FormTarget[] = [
   {
-    name: "platform login",
-    source: "components/whatsapp-auth-form.tsx",
+    name: "platform authenticator",
+    source: "app/(platform)/ops/verify/verify-form.tsx",
   },
   {
     // The env operator door (email + password). Re-rendered on the
@@ -207,7 +208,7 @@ async function anyActiveTenant(): Promise<string> {
   }
 }
 
-async function seedAuthedSessionCookie(): Promise<{ cookieValue: string }> {
+async function seedAuthedSessionCookie(passed = true): Promise<{ cookieValue: string; totpSecret: string }> {
   const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
   try {
     const email = `h1-tier1.5-${Date.now().toString(36)}@platform.test`;
@@ -227,10 +228,10 @@ async function seedAuthedSessionCookie(): Promise<{ cookieValue: string }> {
     await admin.query(
       `insert into platform_sessions
          (id, user_id, token_hash, second_factor_passed, expires_at)
-       values ($1::uuid, $2::uuid, $3, true, now() + interval '1 hour')`,
-      [sessionId, u.id, tokenHash],
+       values ($1::uuid, $2::uuid, $3, $4, now() + interval '1 hour')`,
+      [sessionId, u.id, tokenHash, passed],
     );
-    return { cookieValue: token };
+    return { cookieValue: token, totpSecret: u.totpSecret };
   } finally {
     await admin.end();
   }
@@ -285,8 +286,9 @@ async function run(): Promise<{ failures: string[]; total: number }> {
     browser = await chromium.launch({ headless: true });
     const loginCtx = await browser.newContext({
       viewport: { width: 1366, height: 900 },
-      javaScriptEnabled: false,
+      javaScriptEnabled: true,
     });
+    await loginCtx.route(url => url.pathname.includes("/_next/static/") && url.pathname.endsWith(".js"), route => route.abort());
     const loginPage = await loginCtx.newPage();
     loginPage.setDefaultTimeout(60_000);
     try {
@@ -296,34 +298,21 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       });
       await loginPage.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => undefined);
       await loginPage.waitForSelector("form", { timeout: 15_000, state: "attached" });
-      if (!await loginPage.locator('input[name="phone"]').isDisabled()) throw new Error("Pre-hydration phone form was not inert");
-      // Scope to the form that carries the phone field. The page can
-      // carry a second form — the env operator door (email +
-      // password) is rendered alongside the WhatsApp one whenever the
-      // deployment sets OPS_EMAIL + OPS_PASSWORD — and a bare
-      // locator("form") would then match more than one element and
-      // throw in strict mode.
-      const phoneForm = loginPage.locator("form").filter({
-        has: loginPage.locator('input[name="phone"]'),
-      });
-      const action = await phoneForm.getAttribute("action");
-      const method = await phoneForm.getAttribute("method");
-      if (method?.toLowerCase() !== "post") throw new Error("Native credential form would use GET");
-      // Force the native body format through the browser's request context,
-      // without enabling a JS-disabled field or relying on a destroyed eval
-      // context during navigation to an application/json response.
-      const native = await loginCtx.request.post(new URL(action ?? "", BASE).href, {
-        form: { intent: "request", phone: `${SENTINEL}_phone` }, headers: { origin: BASE }, timeout: 60_000,
-      });
-      const finalUrl = native.url();
-      const finalBody = await native.text();
+      await loginPage.getByLabel("Email", { exact: true }).fill(`${SENTINEL}@platform.test`);
+      await loginPage.getByLabel("Password", { exact: true }).fill(`${SENTINEL}_password`);
+      const passwordForm = loginPage.locator("form").filter({ has: loginPage.locator('input[name="password"]') });
+      if ((await passwordForm.getAttribute("method"))?.toLowerCase() !== "post") throw new Error("Native credential form would use GET");
+      await loginPage.getByRole("button", { name: "Continue", exact: true }).click();
+      await loginPage.getByRole("alert").waitFor();
+      const finalUrl = loginPage.url();
+      const finalBody = await loginPage.content();
       const loginLeaks: string[] = [];
-      for (const sentinel of [`${SENTINEL}_phone`]) {
+      for (const sentinel of [`${SENTINEL}@platform.test`, `${SENTINEL}_password`]) {
         if (finalUrl.includes(sentinel)) loginLeaks.push(`URL contains "${sentinel}"`);
         if (finalBody.includes(sentinel)) loginLeaks.push(`body contains "${sentinel}"`);
       }
       if (loginLeaks.length === 0) {
-        console.log(`\n  ✓ platform login (inert SSR + native-format POST): no credential leak in URL or body`);
+        console.log(`\n  ✓ platform password (before hydration, native POST): no credential leak in URL or body`);
       } else {
         for (const l of loginLeaks) failures.push(`platform login (live): ${l}`);
         console.log(`\n  ✗ platform login (live submit): ${loginLeaks.join(", ")}`);
@@ -333,22 +322,23 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       await loginCtx.close();
     }
 
-    // Exercise the active code form too: an unknown synthetic phone reaches
-    // the browser-bound challenge UI but can never authenticate. Inspect the
-    // API response, not the user's own filled input in the DOM.
+    // Active authenticator form: inject only a pending test fixture, never
+    // authenticated authority. The real two-step login is covered separately.
     const codeContext = await browser.newContext();
     const codePage = await codeContext.newPage();
     try {
-      await codePage.goto(`${BASE}/ops/login`); await codePage.waitForLoadState("networkidle");
-      await codePage.getByRole("textbox", { name: "Registered mobile number", exact: true }).fill("+919000009876");
-      await codePage.getByRole("button", { name: "Send WhatsApp code" }).click();
-      await codePage.getByRole("textbox", { name: "6-digit WhatsApp code" }).fill("927461");
-      const response = codePage.waitForResponse(request => request.url().endsWith("/ops/api/whatsapp-auth") && request.request().method() === "POST");
-      await codePage.getByRole("button", { name: "Verify code" }).click();
+      const pending = await seedAuthedSessionCookie(false);
+      await codeContext.addCookies([{ name: "platform_session", value: pending.cookieValue,
+        domain: "ops.localhost", path: "/", httpOnly: true, secure: false, sameSite: "Lax" }]);
+      await codePage.goto(`${BASE}/ops/verify`); await codePage.waitForLoadState("networkidle");
+      const wrong = ["927461", "000000", "111111"].find(code => !verifyTotp(pending.totpSecret, code))!;
+      const response = codePage.waitForResponse(response => response.url().includes("/ops/verify") && response.request().method() === "POST");
+      await codePage.getByLabel("6-digit code", { exact: true }).fill(wrong);
       const body = await (await response).text();
-      if (codePage.url().includes("927461") || body.includes("927461")) failures.push("WhatsApp code leaked in URL/API response");
-      if ((await codeContext.cookies()).some(cookie => cookie.name === "platform_session")) failures.push("Unknown phone obtained an ops session");
-      console.log("  ✓ active WhatsApp code form: no URL/response leak and unknown phone denied");
+      await codePage.getByRole("alert").filter({ hasText: "Invalid or expired code." }).waitFor();
+      if (codePage.url().includes(wrong) || body.includes(wrong)) failures.push("Authenticator code leaked in URL/action response");
+      if (!codePage.url().endsWith("/ops/verify")) failures.push("Wrong authenticator gained access");
+      console.log("  ✓ active authenticator form: no URL/response leak and wrong code denied");
     } finally { await codeContext.close(); }
 
     // Tier 1.5 — auth-gated form. JS enabled (so RSC redirects
@@ -473,7 +463,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
 run()
   .then(({ failures, total }) => {
     if (failures.length === 0) {
-      console.log(`\n✓ H1 credential-leak check passed for all ${total} forms (live submit × 2 + source).`);
+      console.log(`\n✓ H1 credential-leak check passed for all ${total} forms (native password + authenticator response + gated invite + source).`);
       process.exit(0);
     } else {
       console.error(`\n✗ H1 credential-leak check failed (${failures.length} of ${total} forms):`);

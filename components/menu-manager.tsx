@@ -1,8 +1,11 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { SectionHeading } from "@/components/ui/PageHeader";
 import {
   AddItemForm,
   MenuItemEditor,
@@ -20,8 +23,6 @@ import type { LocationOption } from "@/lib/services/people";
 // actions, which enforce settings.manage server-side. The manager
 // never mutates without the action returning ok.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
   const router = useRouter();
@@ -66,12 +67,12 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           Category name
         </span>
-        <input
+        <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Beverages"
           maxLength={120}
-          className={inputClass}
+          
           data-testid="menu-category-name"
         />
       </label>
@@ -80,10 +81,10 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Facility
           </span>
-          <select
+          <Select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
-            className={inputClass}
+            
             data-testid="menu-category-location"
           >
             {locations.map((location) => (
@@ -91,7 +92,7 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
                 {location.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       ) : null}
       <div className="flex items-center gap-3">
@@ -234,19 +235,18 @@ export function MenuManager({
   locations: LocationOption[];
 }) {
   return (
-    <div className="space-y-8">
-      <AddCategoryForm locations={locations} />
-
+    <div className="space-y-5">
       <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Categories
-        </h2>
+        <SectionHeading
+          title="Menu catalogue"
+          subtitle="Categories and the items the counter sells, with price, GST and SAC."
+        />
         {categories.length === 0 ? (
           <p
             className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3"
             data-testid="menu-empty"
           >
-            No categories yet. Add the first category above, then items
+            No categories yet. Add the first category below, then items
             under it.
           </p>
         ) : (
@@ -265,6 +265,8 @@ export function MenuManager({
           </div>
         )}
       </section>
+
+      <AddCategoryForm locations={locations} />
     </div>
   );
 }

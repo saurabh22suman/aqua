@@ -1,24 +1,21 @@
 import Link from "next/link";
-import {
-  CalendarRange,
-  ClipboardList,
-  ListChecks,
-  Receipt,
-  TriangleAlert,
-  Users,
-  Wallet,
-} from "lucide-react";
+import CalendarRange from "lucide-react/dist/esm/icons/calendar-range.mjs";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import Receipt from "lucide-react/dist/esm/icons/receipt.mjs";
+import UserPlus from "lucide-react/dist/esm/icons/user-plus.mjs";
+import Users from "lucide-react/dist/esm/icons/users.mjs";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
-import { OwnerHomeActions } from "@/components/owner-home/owner-home-actions";
-import { OwnerAccountControl } from "@/components/owner-home/owner-account-control";
 import { OwnerHomeAttention } from "@/components/owner-home/owner-home-attention";
 import type { OwnerAttentionRow } from "@/components/owner-home/owner-home-attention";
+import { OwnerHomeCapacity } from "@/components/owner-home/owner-home-capacity";
 import { OwnerHomeHeader } from "@/components/owner-home/owner-home-header";
 import { OwnerHomeIllustration } from "@/components/owner-home/owner-home-illustration";
-import { OwnerHomeMetrics } from "@/components/owner-home/owner-home-metrics";
+import { OwnerHomeMoney } from "@/components/owner-home/owner-home-money";
 import { OwnerHomeTimeline } from "@/components/owner-home/owner-home-timeline";
 import type { RegisterTone } from "@/components/owner-home/session-state";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 import {
   OwnerInsightsHome,
   type OwnerInsightsHomeData,
@@ -30,7 +27,6 @@ import type {
 } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
-import { formatINRCompact } from "@/lib/money/format";
 import { addDays } from "@/lib/time/tz";
 
 // Owner Home — the daily oversight workspace (composition contract in
@@ -42,14 +38,15 @@ import { addDays } from "@/lib/time/tz";
 //
 // Order, top to bottom on desktop:
 //   1. the day, the club and the location the figures cover, with a
-//      small piece of club artwork beside the heading
-//   2. Summary — four figures whose labels state whether they are
-//      today's, a current balance, or a count
-//   3. one dominant shortcut (collect money) + quiet secondary actions
-//   4. today's classes | the attention queue
-//   5. money at a glance — the collections and payment-mix panels on
+//      small piece of club artwork beside the 22px heading
+//   2. ONE money surface — collected today dominates, outstanding and
+//      overdue are the supporting balance pair, one dominant action —
+//      beside the decision queue (roughly 60/40)
+//   3. today's classes beside the batch-capacity panel derived from the
+//      same lanes
+//   4. money at a glance — the collections and payment-mix panels on
 //      one shared period
-//   6. the insights preview — attendance by batch and enquiries by
+//   5. the insights preview — attendance by batch and enquiries by
 //      current stage, one line each, detail a disclosure away
 //
 // Every figure is a real read from lib/services/dashboard; zeroes say
@@ -69,15 +66,6 @@ type Can = {
   // caller that does not need the insights drill-down can leave it
   // unset — the link is simply not offered.
   readEnquiries?: boolean;
-};
-
-// The reserved money/attention tokens live in this file — the one the
-// semantic-token rule sanctions for the owner's attention list — so the
-// tone classes are chosen here and handed down. A new file may not
-// carry these tokens itself.
-const ATTENTION_ICON_CLASS: Record<"warn" | "late", string> = {
-  warn: "bg-warn-soft text-warn",
-  late: "bg-late-soft text-late",
 };
 
 const REGISTER_TONE_CLASS: Record<RegisterTone, string> = {
@@ -149,11 +137,8 @@ export function OwnerDashboard({
     data.scopeLocationName ??
     (data.facilityBreakdown.length > 1 ? "All locations" : null);
   const attention = data.needsAttention;
-  const hasOverdue = data.money.overdueInvoiceCount > 0;
   const sessionCount = data.todaysLanes.length;
 
-  const withFacility = (href: string) =>
-    facility ? `${href}${href.includes("?") ? "&" : "?"}facility=${facility}` : href;
   const scopeParams = (params: Record<string, string>) => {
     const query = new URLSearchParams(params);
     if (facility) query.set("facility", facility);
@@ -168,7 +153,6 @@ export function OwnerDashboard({
     }),
     dues: scopeParams({ tab: "dues" }),
   };
-  const membersHref = withFacility("/owner/members");
   const scheduleHref = facility
     ? `/owner/schedule?date=${data.today}&location=${facility}`
     : `/owner/schedule?date=${data.today}`;
@@ -185,16 +169,11 @@ export function OwnerDashboard({
     }
   }
   const attentionRows = (items: NeedsAttentionItem[]): OwnerAttentionRow[] =>
-    items.map((item) => {
-      const tone: "late" | "warn" = isMoneyLate(item) ? "late" : "warn";
-      return {
-        title: item.title,
-        detail: item.detail,
-        href: item.href,
-        tone,
-        iconClassName: ATTENTION_ICON_CLASS[tone],
-      };
-    });
+    items.map((item) => ({
+      title: item.title,
+      detail: item.detail,
+      href: item.href,
+    }));
 
   // The artwork is chosen from the club's own programme names.
   const programNames = [
@@ -203,138 +182,49 @@ export function OwnerDashboard({
   ].filter((name): name is string => typeof name === "string" && name.length > 0);
 
   return (
-    <main data-testid="owner-home" className="px-5 pt-5 pb-8">
+    <OwnerPage data-testid="owner-home">
       {/* 1 — the day, the club and the scope, with the club artwork. */}
       <OwnerHomeHeader
         displayName={displayName}
         scopeLabel={scopeLabel}
         today={data.today}
         illustration={
-          <div className="flex flex-none items-center gap-2">
-            {/* The phone's account control. On a desktop the same
-                affordance is the shell's sidebar account row, so the
-                two are never on screen together. */}
-            <OwnerAccountControl className="lg:hidden" />
-            <OwnerHomeIllustration
-              programNames={programNames}
-              seed={illustrationSeed ?? `${data.tenantName}|${data.today}`}
-            />
-          </div>
+          <OwnerHomeIllustration
+            programNames={programNames}
+            seed={illustrationSeed ?? `${data.tenantName}|${data.today}`}
+          />
         }
       />
 
-      {/* 2 — Summary. Each label states its basis: today, current
-          balance, or a count. A figure that could not be read is "—",
-          never ₹0. The tiles are pastel surfaces with a state-coloured
-          icon chip (batch 4), so four figures can be scanned instead
-          of read as four identical white cards. A phone keeps the two
-          money figures as cards and the other two as one compact line. */}
-      <OwnerHomeMetrics
-        cards={[
-          {
-            key: "collected",
-            label: "Collected today",
-            value: formatINRCompact(data.money.collectedTodayPaise),
-            hint:
-              data.money.collectedTodayCount === 0
-                ? "No payments recorded today yet"
-                : `${data.money.collectedTodayCount} payment${
-                    data.money.collectedTodayCount === 1 ? "" : "s"
-                  } recorded`,
-            href: can.readFees ? fees.collected : undefined,
-            tone: "money",
-            icon: { node: <Wallet size={17} strokeWidth={2} />, tone: "good" },
-          },
-          {
-            key: "overdue",
-            label: "Overdue",
-            value: (
-              <span className={hasOverdue ? "text-late" : undefined}>
-                {formatINRCompact(data.money.overduePaise)}
-              </span>
-            ),
-            hint:
-              hasOverdue
-                ? `${data.money.overdueInvoiceCount} invoice${
-                    data.money.overdueInvoiceCount === 1 ? "" : "s"
-                  } past due · ${formatINRCompact(data.money.outstandingPaise)} outstanding`
-                : `Nothing past due · ${formatINRCompact(
-                    data.money.outstandingPaise,
-                  )} outstanding`,
-            href: can.readFees ? fees.dues : undefined,
-            // The late surface is for money that IS late. A quiet
-            // morning is a calm tile, not an alarm.
-            tone: hasOverdue ? "late" : "paper",
-            icon: {
-              node: <TriangleAlert size={17} strokeWidth={2} />,
-              tone: hasOverdue ? "late" : "neutral",
-            },
-          },
-          {
-            key: "members",
-            label: `Active ${membersOther}`,
-            value: data.activeMemberCount,
-            hint: `${data.activeBatchCount} ${
-              data.activeBatchCount === 1 ? batchOne : batchesOther
-            } running`,
-            href: membersHref,
-            tone: "info",
-            icon: { node: <Users size={17} strokeWidth={2} />, tone: "water" },
-            compactOnly: true,
-          },
-          {
-            key: "sessions",
-            label: `${titleCase(sessionsOther)} today`,
-            value: sessionCount,
-            hint:
-              sessionCount === 0
-                ? "Nothing scheduled today"
-                : `${data.todayTotal} ${membersOther} enrolled`,
-            href: can.viewSchedule ? scheduleHref : undefined,
-            tone: "butter",
-            icon: {
-              node: <CalendarRange size={17} strokeWidth={2} />,
-              tone: "marine",
-            },
-            compactOnly: true,
-          },
-        ]}
-        compactSummary={`${data.activeMemberCount} active ${membersOther} · ${data.activeBatchCount} ${
-          data.activeBatchCount === 1 ? batchOne : batchesOther
-        } · ${sessionCount} ${sessionCount === 1 ? sessionsOne : sessionsOther} today`}
-      />
-
-      {/* 3 — one dominant shortcut. Money is the owner's authority, so
-          collecting a payment is the primary action and goes to the
-          real journey (Dues → open an invoice → record payment), never
-          to a history list. Secondary actions are quiet. */}
-      <OwnerHomeActions
-        collectHref={can.recordPayment ? fees.dues : null}
-        addMemberHref={can.addMember ? "/owner/members/new" : null}
-        captureEnquiryHref={can.captureEnquiry ? "/owner/enquiries" : null}
-        memberLabel={memberOne}
-        enquiryLabel={enquiryOne}
-      />
-
-      {/* 4 — desktop 60/40: the day's classes beside the exceptions.
-          On mobile the queue comes first so the actionable items are
-          reachable early; the day's classes follow. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-5 lg:items-start">
-        <div className="order-2 min-w-0 lg:order-1 lg:col-span-3">
-          <OwnerHomeTimeline
-            lanes={data.todaysLanes}
-            marked={data.todayMarked}
-            enrolled={data.todayTotal}
-            membersLabel={membersOther}
-            coachLabel={coachOne}
-            sessionsLabel={sessionCount === 1 ? sessionsOne : sessionsOther}
-            registerToneClass={(tone) => REGISTER_TONE_CLASS[tone]}
-            scheduleHref={can.viewSchedule ? scheduleHref : null}
-            nextClass={data.nextClass}
+      {/* 2 — the reference lead: ONE tinted money surface on the left
+          (collected figure, outstanding/overdue pair, one dominant
+          action, compact counts) and the decision queue beside it
+          (roughly 60/40). */}
+      <div
+        data-testid="owner-home-lead"
+        className="mt-5 grid gap-5 lg:grid-cols-5 lg:items-start"
+      >
+        <div className="min-w-0 lg:col-span-3">
+          <OwnerHomeMoney
+            money={data.money}
+            context={{
+              activeMemberCount: data.activeMemberCount,
+              activeBatchCount: data.activeBatchCount,
+              sessionCount,
+              membersLabel: membersOther,
+              batchesLabel: data.activeBatchCount === 1 ? batchOne : batchesOther,
+              sessionsLabel: sessionCount === 1 ? sessionsOne : sessionsOther,
+            }}
+            collectedHref={can.readFees ? fees.collected : null}
+            collectHref={can.recordPayment ? fees.dues : null}
+            addMemberHref={can.addMember ? "/owner/members/new" : null}
+            captureEnquiryHref={can.captureEnquiry ? "/owner/enquiries" : null}
+            memberLabel={memberOne}
+            enquiryLabel={enquiryOne}
           />
         </div>
 
-        <div className="order-1 min-w-0 lg:order-2 lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <OwnerHomeAttention
             rows={attentionRows(visibleAttention)}
             hiddenRows={attentionRows(hiddenAttention)}
@@ -356,6 +246,42 @@ export function OwnerDashboard({
           />
         </div>
       </div>
+
+      {/* 4 — the work that follows: the day's sessions beside the real
+          batch capacity derived from the same lanes (never a second
+          read, never an invented capacity number). */}
+      <div
+        data-testid="owner-home-work"
+        className="mt-5 grid gap-5 lg:grid-cols-5 lg:items-start"
+      >
+        <div className="min-w-0 lg:col-span-3">
+          <OwnerHomeTimeline
+            lanes={data.todaysLanes}
+            marked={data.todayMarked}
+            enrolled={data.todayTotal}
+            membersLabel={membersOther}
+            coachLabel={coachOne}
+            sessionsLabel={sessionCount === 1 ? sessionsOne : sessionsOther}
+            registerToneClass={(tone) => REGISTER_TONE_CLASS[tone]}
+            scheduleHref={can.viewSchedule ? scheduleHref : null}
+            nextClass={data.nextClass}
+          />
+        </div>
+        <div className="min-w-0 lg:col-span-2">
+          <OwnerHomeCapacity lanes={data.todaysLanes} />
+        </div>
+      </div>
+
+      {/* Phone-only supporting context: keeping it out of the money card
+          lets the first decision row stay visible above the fixed nav. */}
+      <p
+        data-testid="owner-home-compact-summary"
+        className="mt-2.5 text-[12px] text-ink-3 lg:hidden"
+      >
+        {data.activeMemberCount} active {membersOther} · {data.activeBatchCount}{" "}
+        {data.activeBatchCount === 1 ? batchOne : batchesOther} · {sessionCount}{" "}
+        {sessionCount === 1 ? sessionsOne : sessionsOther} today
+      </p>
 
       {/* 5 — money at a glance: the collections panel and the payment
           mix on ONE shared period, scoped to the selected facility and
@@ -383,16 +309,16 @@ export function OwnerDashboard({
       {/* W1-6 — consolidated per-facility view, only for multi-site
           tenants; a single site needs no comparison. */}
       {data.facilityBreakdown.length > 1 ? (
-        <section className="mt-4">
+        <section className="mt-5">
           <SectionHeader
-            className="mb-2"
+            className="mb-3"
             title={`By ${facilitiesOther}`}
           />
           <ul className="divide-y divide-line rounded-card border border-line bg-paper">
             {data.facilityBreakdown.map((row) => (
               <li
                 key={row.locationId}
-                className="flex items-center justify-between gap-3 px-3.5 py-3"
+                className="flex items-center justify-between gap-3 px-5 py-3.5"
               >
                 <span className="min-w-0 truncate text-[13.5px] font-medium">
                   {row.locationName}
@@ -411,8 +337,17 @@ export function OwnerDashboard({
 
       {/* Phone access to the destinations the four-item bottom nav does
           not carry. Desktop reaches them from the sidebar. */}
-      <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
+      <div className="mt-5 grid grid-cols-2 gap-2.5 lg:hidden">
         {[
+          ...(can.addMember
+            ? [
+                {
+                  href: "/owner/members/new",
+                  label: `New ${memberOne}`,
+                  icon: UserPlus,
+                },
+              ]
+            : []),
           { href: "/owner/fees", label: "Fees & payments", icon: Receipt },
           {
             href: "/owner/enquiries",
@@ -432,13 +367,13 @@ export function OwnerDashboard({
           <Link
             key={link.href}
             href={link.href}
-            className="flex min-h-[48px] items-center gap-2.5 rounded-ctl border border-line bg-paper px-3.5 py-2"
+            className="flex min-h-12 items-center gap-2.5 rounded-ctl border border-[var(--control-border)] bg-paper px-4 py-2 motion-fast transition-colors hover:border-[var(--control-border-hover)]"
           >
             <link.icon size={16} className="flex-none text-ink-3" aria-hidden="true" />
             <span className="text-[13px] font-medium">{link.label}</span>
           </Link>
         ))}
       </div>
-    </main>
+    </OwnerPage>
   );
 }

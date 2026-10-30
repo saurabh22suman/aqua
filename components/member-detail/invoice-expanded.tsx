@@ -1,47 +1,31 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  getInvoiceAction,
-  voidInvoiceAction,
-} from "@/lib/actions/invoices";
-import {
-  listInvoicePaymentsAction,
-  recordPaymentAction,
-} from "@/lib/actions/payments";
-import {
-  listPaymentReversalsAction,
-  reversePaymentAction,
-} from "@/lib/actions/payment-reversals";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getInvoiceAction, voidInvoiceAction } from "@/lib/actions/invoices";
+import { listInvoicePaymentsAction } from "@/lib/actions/payments";
+import { listPaymentReversalsAction } from "@/lib/actions/payment-reversals";
 import type { PaymentReversalRow } from "@/lib/services/payment-reversals";
 import type { InvoiceDetail } from "@/lib/services/invoices";
 import type { PaymentRow } from "@/lib/services/payments";
-import { formatINR } from "@/lib/money/format";
-import { parseRupeesToPaise } from "@/lib/payment-qr";
-import { gstDocumentLabel, placeOfSupplyForGstin } from "@/lib/gst";
-import { formatDateIST } from "@/lib/time/tz";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { InvoiceSummary } from "@/components/member-detail/invoice-summary";
+import { InvoicePaymentList } from "@/components/member-detail/invoice-payment-list";
+import {
+  InvoiceClosedRecovery,
+  type InvoiceReloadResult,
+} from "@/components/member-detail/invoice-closed-recovery";
+import { InvoicePaymentForm } from "@/components/member-detail/invoice-payment-form";
 
 // C-32/C-33/C-39 — one invoice, expanded: lines with the CGST/SGST
-// split, recorded payments with receipt links, the record-payment
-// form, and void before money arrives. Void is management authority
+// split, recorded payments with receipt links, the record-payment form,
+// and void before money arrives. Void is management authority
 // (settings.manage — owner/admin, R01); other invoice writers see an
 // ask-the-owner note instead.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
-
-function statusTone(status: InvoiceDetail["status"]): string {
-  if (status === "paid") return "bg-marine/10 text-marine";
-  if (status === "void") return "bg-deck text-ink-3 line-through";
-  if (status === "partial") return "bg-deck text-ink-2";
-  return "bg-deck text-ink-2";
-}
-
-function methodLabel(method: PaymentRow["method"]): string {
-  if (method === "cash") return "Cash";
-  if (method === "upi") return "UPI";
-  return "Bank transfer";
-}
+type RunResult =
+  | { ok: true }
+  | { ok: false; error: string; conflict?: string };
 
 export function InvoiceExpanded({
   invoiceId,
@@ -65,24 +49,34 @@ export function InvoiceExpanded({
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<PaymentRow["method"]>("cash");
-  const [reference, setReference] = useState("");
   const [voidReason, setVoidReason] = useState("");
   const [showVoid, setShowVoid] = useState(false);
-  // PR2-C9 — reversals per payment, plus the open reverse form.
-  const [reversals, setReversals] = useState<Record<string, PaymentReversalRow[]>>({});
-  const [reverseFor, setReverseFor] = useState<string | null>(null);
-  const [reverseAmount, setReverseAmount] = useState("");
-  const [reverseReason, setReverseReason] = useState("");
-  const [reverseError, setReverseError] = useState<string | null>(null);
+  const [reversals, setReversals] = useState<Record<string, PaymentReversalRow[]>>(
+    {},
+  );
+  const activeInvoice = useRef(invoiceId);
+  const loadSeq = useRef(0);
 
-  const load = useCallback(async () => {
+  useEffect(() => {
+    activeInvoice.current = invoiceId;
+    setBusy(false);
+    setMessage(null);
+    setShowVoid(false);
+    setVoidReason("");
+  }, [invoiceId]);
+
+  const load = useCallback(async (): Promise<InvoiceReloadResult> => {
+    const seq = loadSeq.current + 1;
+    loadSeq.current = seq;
+    const target = invoiceId;
     try {
       const [invoice, pays] = await Promise.all([
         getInvoiceAction(invoiceId),
         listInvoicePaymentsAction(invoiceId),
       ]);
+      if (seq !== loadSeq.current || activeInvoice.current !== target) {
+        return "superseded";
+      }
       setDetail(invoice);
       setPayments(pays);
       if (canReadPayments) {
@@ -92,18 +86,21 @@ export function InvoiceExpanded({
             await listPaymentReversalsAction(payment.id),
           ] as const),
         );
+        if (seq !== loadSeq.current || activeInvoice.current !== target) {
+          return "superseded";
+        }
         setReversals(Object.fromEntries(reversalLists));
       } else {
         setReversals({});
       }
-      setAmount(
-        invoice && invoice.outstandingPaise > 0
-          ? String(invoice.outstandingPaise / 100)
-          : "",
-      );
       setFailed(false);
+      return "ok";
     } catch {
-      setFailed(true);
+      if (seq === loadSeq.current && activeInvoice.current === target) {
+        setFailed(true);
+        return "failed";
+      }
+      return "superseded";
     }
   }, [invoiceId, canReadPayments]);
 
@@ -111,28 +108,41 @@ export function InvoiceExpanded({
     void load();
   }, [load]);
 
-  function run(fn: () => Promise<{ ok: true } | { ok: false; error: string }>) {
+  function run(
+    fn: () => Promise<RunResult>,
+    onResult?: (result: RunResult) => Promise<string | void> | string | void,
+  ) {
+    const runInvoice = invoiceId;
     setBusy(true);
     setMessage(null);
     void (async () => {
       try {
         const result = await fn();
-        setMessage(result.ok ? "Saved." : result.error);
+        if (activeInvoice.current !== runInvoice) return;
+        const override = await onResult?.(result);
+        if (activeInvoice.current !== runInvoice) return;
+        setMessage(
+          typeof override === "string"
+            ? override
+            : result.ok
+              ? "Saved."
+              : result.error,
+        );
         if (result.ok) {
           await load();
+          if (activeInvoice.current !== runInvoice) return;
           onChanged();
         }
       } catch {
-        try {
-          await load();
-        } catch {
-          // load() already switched the panel to its failed state
-        }
+        if (activeInvoice.current !== runInvoice) return;
+        await onResult?.({ ok: false, error: "request_failed", conflict: "unknown" });
+        await load();
+        if (activeInvoice.current !== runInvoice) return;
         setMessage(
           "The request did not complete. The invoice was refreshed — check it before retrying, in case the change already went through.",
         );
       } finally {
-        setBusy(false);
+        if (activeInvoice.current === runInvoice) setBusy(false);
       }
     })();
   }
@@ -140,6 +150,14 @@ export function InvoiceExpanded({
   if (failed) {
     return (
       <div className="mt-2">
+        {message ? (
+          <p
+            role="status"
+            className="rounded-ctl border border-line bg-deck px-3 py-2 text-[12px] text-ink"
+          >
+            {message}
+          </p>
+        ) : null}
         <p className="text-[12px] text-ink-3">Could not load this invoice.</p>
         <button
           type="button"
@@ -155,320 +173,91 @@ export function InvoiceExpanded({
     return <p className="mt-2 text-[12px] text-ink-3">Loading invoice…</p>;
   }
 
-  const placeOfSupply = placeOfSupplyForGstin(detail.gstin);
   const paymentAllowed =
     canRecord && (detail.status === "issued" || detail.status === "partial");
+  // A closed target is the only place the discard-only recovery block
+  // belongs. An open invoice uses the normal Continue/New notice; a viewer
+  // without payments.record cannot discard anything, so the block is
+  // hidden rather than offering an action the server will deny.
+  const closedTarget = detail.status === "paid" || detail.status === "void";
+  // Only a CAPTURED payment moves the invoice's paid figure, so the
+  // comparison uses the captured rows alone: a visible pending or failed
+  // row must not manufacture the note.
+  const capturedTotalPaise = payments
+    .filter((payment) => payment.status === "captured")
+    .reduce((sum, payment) => sum + payment.amountPaise, 0);
 
   return (
     <div className="mt-2 border-t border-line pt-2">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-[12px] font-medium text-ink-2">
-          {gstDocumentLabel(detail.documentKind)} · {detail.invoiceNumber}
-        </span>
-        <span
-          className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${statusTone(detail.status)}`}
-        >
-          {detail.status}
-        </span>
-      </div>
-      <p className="mt-0.5 text-[12px] text-ink-3">
-        Issued {formatDateIST(detail.issuedOn)} · due {formatDateIST(detail.dueOn)}
-        {detail.gstin ? ` · GSTIN ${detail.gstin}` : ""}
-        {placeOfSupply ? ` · place of supply ${placeOfSupply}` : ""}
-      </p>
+      <InvoiceSummary
+        detail={detail}
+        capturedTotalPaise={capturedTotalPaise}
+        canReadPayments={canReadPayments}
+      />
 
-      <table className="mt-2 w-full text-[12px]">
-        <thead>
-          <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">
-            <th className="py-1 font-medium">Description</th>
-            <th className="py-1 font-medium">SAC</th>
-            <th className="py-1 text-right font-medium">Amount</th>
-            <th className="py-1 text-right font-medium">GST</th>
-          </tr>
-        </thead>
-        <tbody>
-          {detail.lines.map((line) => (
-            <tr key={line.id} className="border-t border-line">
-              <td className="py-1 pr-2 text-ink">{line.description}</td>
-              <td className="py-1 pr-2 font-mono text-ink-3">{line.sacCode}</td>
-              <td className="py-1 pr-2 text-right font-mono text-ink">
-                {formatINR(line.amountPaise)}
-              </td>
-              <td className="py-1 text-right font-mono text-ink-2">
-                {line.taxPaise === 0
-                  ? "—"
-                  : `CGST ${formatINR(line.cgstPaise)} + SGST ${formatINR(line.sgstPaise)}`}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <InvoicePaymentList
+        payments={payments}
+        reversals={reversals}
+        canRefund={canRefund}
+        busy={busy}
+        setBusy={setBusy}
+        onReload={load}
+        onChanged={onChanged}
+        onMessage={setMessage}
+      />
 
-      <p className="mt-1 text-right text-[12px] text-ink-2">
-        Taxable {formatINR(detail.subtotalPaise)} + GST{" "}
-        {formatINR(detail.taxPaise)} ={" "}
-        <span className="font-semibold text-ink">
-          {formatINR(detail.totalPaise)}
-        </span>
-      </p>
-      <p className="text-right text-[12px] text-ink-3">
-        Paid {formatINR(detail.paidPaise)} · outstanding{" "}
-        {formatINR(detail.outstandingPaise)}
-      </p>
-
-      {payments.length > 0 ? (
-        <ul className="mt-2 space-y-1">
-          {payments.map((payment) => {
-            const paymentReversals = reversals[payment.id] ?? [];
-            const reversedPaise = paymentReversals.reduce(
-              (sum, row) => sum + row.amountPaise,
-              0,
-            );
-            const remainingPaise = payment.amountPaise - reversedPaise;
-            return (
-              <li
-                key={payment.id}
-                className="rounded-ctl border border-line px-2 py-1.5 text-[12px]"
-              >
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-ink">
-                    {formatINR(payment.amountPaise)} ·{" "}
-                    {methodLabel(payment.method)}
-                    <span className="ml-2 text-ink-3">
-                      {formatDateIST(payment.receivedAt)}
-                      {payment.reference ? ` · ${payment.reference}` : ""}
-                      {payment.receivedByName
-                        ? ` · ${payment.receivedByName}`
-                        : ""}
-                    </span>
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <a
-                      href={`/api/receipts/${payment.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-2 text-[11px] text-ink-2 hover:text-ink"
-                    >
-                      Receipt
-                    </a>
-                    {canRefund && remainingPaise > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReverseFor(
-                            reverseFor === payment.id ? null : payment.id,
-                          );
-                          setReverseAmount(String(remainingPaise / 100));
-                          setReverseReason("");
-                          setReverseError(null);
-                        }}
-                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-2 text-[11px] text-ink-2 hover:text-ink"
-                      >
-                        Reverse
-                      </button>
-                    ) : null}
-                  </span>
-                </div>
-
-                {reversedPaise > 0 ? (
-                  <p className="mt-0.5 text-[11.5px] text-ink-3">
-                    {formatINR(reversedPaise)} reversed
-                  </p>
-                ) : null}
-                {paymentReversals.length > 0 ? (
-                  <ul className="mt-1 space-y-0.5">
-                    {paymentReversals.map((row) => (
-                      <li key={row.id} className="text-[11.5px] text-ink-3">
-                        −{formatINR(row.amountPaise)} · {row.reason} ·{" "}
-                        {formatDateIST(row.reversedAt)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-
-                {canRefund && reverseFor === payment.id ? (
-                  <div className="mt-1.5 rounded-ctl border border-line p-2">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-0.5 block text-[11px] text-ink-3">
-                          Amount (₹)
-                        </span>
-                        <input
-                          inputMode="decimal"
-                          value={reverseAmount}
-                          onChange={(e) => setReverseAmount(e.target.value)}
-                          className={inputClass}
-                          data-testid="reverse-amount"
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="mb-0.5 block text-[11px] text-ink-3">
-                          Reason
-                        </span>
-                        <input
-                          value={reverseReason}
-                          onChange={(e) => setReverseReason(e.target.value)}
-                          className={inputClass}
-                          data-testid="reverse-reason"
-                        />
-                      </label>
-                    </div>
-                    {reverseError ? (
-                      <p role="alert" className="mt-1 text-[11.5px] text-ink-2">
-                        {reverseError}
-                      </p>
-                    ) : null}
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        const paise = parseRupeesToPaise(reverseAmount);
-                        if (paise === null || paise <= 0n) {
-                          setReverseError("Enter an amount like 2500 or 2500.50.");
-                          return;
-                        }
-                        if (reverseReason.trim().length < 3) {
-                          setReverseError("Give a reason (3-300 characters).");
-                          return;
-                        }
-                        setBusy(true);
-                        setReverseError(null);
-                        void (async () => {
-                          try {
-                            const result = await reversePaymentAction({
-                              paymentId: payment.id,
-                              amountPaise: Number(paise),
-                              reason: reverseReason.trim(),
-                            });
-                            if (!result.ok) {
-                              setReverseError(result.error);
-                            } else {
-                              setReverseFor(null);
-                              await load();
-                              onChanged();
-                            }
-                          } catch {
-                            try {
-                              await load();
-                            } catch {
-                              // load() already switched the panel to its failed state
-                            }
-                            setReverseError(
-                              "The request did not complete. The payment was refreshed — check it before retrying, in case the reversal already went through.",
-                            );
-                          } finally {
-                            setBusy(false);
-                          }
-                        })();
-                      }}
-                      className="mt-1.5 inline-flex min-h-11 items-center justify-center rounded-pill px-3.5 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-                    >
-                      Confirm reversal
-                    </button>
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+      {closedTarget ? (
+        <InvoiceClosedRecovery
+          invoiceId={invoiceId}
+          canRecord={canRecord}
+          onReload={load}
+          onMessage={setMessage}
+        />
       ) : null}
 
       {paymentAllowed ? (
-        <div className="mt-2 rounded-ctl border border-line p-2">
-          <p className="text-[12px] font-medium text-ink-2">Record a payment</p>
-          <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <label className="block">
-              <span className="mb-0.5 block text-[11px] text-ink-3">
-                Amount (₹)
-              </span>
-              <input
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="mb-0.5 block text-[11px] text-ink-3">Method</span>
-              <select
-                value={method}
-                onChange={(e) => setMethod(e.target.value as PaymentRow["method"])}
-                className={inputClass}
-              >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank_transfer">Bank transfer</option>
-              </select>
-            </label>
-            {method !== "cash" ? (
-              <label className="block">
-                <span className="mb-0.5 block text-[11px] text-ink-3">
-                  Reference (UTR)
-                </span>
-                <input
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  className={inputClass}
-                  placeholder="UTR / transaction id"
-                />
-              </label>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              const paise = parseRupeesToPaise(amount);
-              if (paise === null) {
-                setMessage("Enter the amount in rupees, like 2500 or 2500.00.");
-                return;
-              }
-              run(() =>
-                recordPaymentAction({
-                  invoiceId,
-                  amountPaise: Number(paise),
-                  method,
-                  ...(method === "cash" ? {} : { reference: reference.trim() }),
-                }),
-              );
-            }}
-            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-          >
-            {busy ? "Saving…" : "Record payment"}
-          </button>
-        </div>
+        <InvoicePaymentForm
+          invoiceId={invoiceId}
+          invoiceNumber={detail.invoiceNumber}
+          outstandingPaise={detail.outstandingPaise}
+          busy={busy}
+          setMessage={setMessage}
+          run={run}
+        />
       ) : null}
 
       {canVoid && detail.status !== "void" && detail.paidPaise === 0 ? (
         <div className="mt-2">
           {showVoid ? (
             <div className="flex flex-wrap items-center gap-2">
-              <input
+              <Input
                 value={voidReason}
                 onChange={(e) => setVoidReason(e.target.value)}
                 placeholder="Reason for voiding"
                 aria-label="Reason for voiding"
-                className={`${inputClass} max-w-xs`}
+                className="max-w-xs"
               />
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 disabled={busy}
                 onClick={() =>
                   run(() => voidInvoiceAction({ invoiceId, reason: voidReason }))
                 }
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
               >
                 Confirm void
-              </button>
+              </Button>
             </div>
           ) : (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setShowVoid(true)}
-              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-3 hover:text-ink"
             >
               Void invoice
-            </button>
+            </Button>
           )}
         </div>
       ) : canWrite && detail.status !== "void" && detail.paidPaise === 0 ? (

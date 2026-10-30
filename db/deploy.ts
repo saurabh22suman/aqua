@@ -76,9 +76,72 @@ type ScheduleFn = (
 // the next time pg-boss itself changes schema version. Its own start()
 // IS the migration step for its own schema: idempotent, safe to run on
 // every deploy, and it self-upgrades on version bumps.
+// F09 — the queue policy. Every queue this application schedules gets
+// the same explicit policy, and every queue routes its terminally
+// failed jobs to ONE dead-letter queue.
+//
+// The deployed policy was pg-boss v12's SCHEMA DEFAULT, because every
+// queue was created with `boss.createQueue(queue)` and no options:
+//   retry_limit = 2, retry_delay = 0, retry_backoff = false,
+//   retry_delay_max = null, expire_seconds = 900, dead_letter = null
+// — three attempts, NO delay between them, and no dead-letter queue
+// anywhere in pgboss.queue (measured in the disposable database, not
+// read from the library). docs/architecture.md §9 requires the
+// opposite: "Retries use exponential backoff, three attempts, then
+// dead-letter with an alert", and the alert table lists "job
+// dead-letter" among the alerts that page.
+//
+// The units are SECONDS in pg-boss v12 (node_modules/pg-boss/dist/
+// types.d.ts documents retryDelay as seconds; the milliseconds reading
+// belongs to the v9 era).
+const DEAD_LETTER_QUEUE = "dead.letter";
+
+const QUEUE_POLICY = {
+  // One try plus two retries = the three attempts the architecture
+  // requires.
+  retryLimit: 2,
+  // 60 seconds before the first retry, doubling, capped at an hour.
+  retryDelay: 60,
+  retryBackoff: true,
+  retryDelayMax: 3600,
+  // A job that cannot finish inside 15 minutes is failed out (this is
+  // the value the schema default already produced).
+  expireInSeconds: 900,
+  deadLetter: DEAD_LETTER_QUEUE,
+};
+
+// The dead-letter queue gets the SAME retry policy but NO deadLetter of
+// its own: pg-boss refuses a queue that names itself as its dead
+// letter ("deadLetter cannot be itself"), and a dead-lettered job must
+// not be dead-lettered a second time.
+const DEAD_LETTER_POLICY = {
+  retryLimit: QUEUE_POLICY.retryLimit,
+  retryDelay: QUEUE_POLICY.retryDelay,
+  retryBackoff: QUEUE_POLICY.retryBackoff,
+  retryDelayMax: QUEUE_POLICY.retryDelayMax,
+  expireInSeconds: QUEUE_POLICY.expireInSeconds,
+};
+
 async function ensurePgBossQueues(boss: PgBoss): Promise<void> {
+  // The dead-letter queue is created FIRST: pg-boss resolves the
+  // deadLetter target while creating a queue, so a queue that names it
+  // cannot be created before it exists.
+  await boss.createQueue(DEAD_LETTER_QUEUE, DEAD_LETTER_POLICY);
+  // The dead-letter queue is UPDATEd too. createQueue() is ON CONFLICT
+  // DO NOTHING inside pg-boss's create_queue() function, so an
+  // EXISTING dead.letter queue would keep the schema default
+  // (retry_delay 0, no backoff) — the same trap this function exists to
+  // close for the other queues.
+  await boss.updateQueue(DEAD_LETTER_QUEUE, DEAD_LETTER_POLICY);
   for (const queue of QUEUES) {
-    await boss.createQueue(queue);
+    await boss.createQueue(queue, QUEUE_POLICY);
+    // createQueue() is ON CONFLICT DO NOTHING inside pg-boss's
+    // create_queue() function, so it does NOT change the policy of a
+    // queue that already exists. On every deployed database the
+    // queues already exist with the schema default, so the policy has
+    // to be applied with updateQueue() as well — without this line the
+    // whole change is a silent no-op on every existing deployment.
+    await boss.updateQueue(queue, QUEUE_POLICY);
   }
 }
 

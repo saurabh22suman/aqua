@@ -15,6 +15,7 @@ import type {
   MakeupSessionOption,
 } from "@/lib/services/makeup";
 import { formatDateIST } from "@/lib/time/tz";
+import { Select } from "@/components/ui/Select";
 
 // R.7 (docs/five-day-work-guide.md) — makeup credits on the member
 // detail page. Grant from an excused absence; redeem against another
@@ -139,19 +140,22 @@ export function MakeupCreditsPanel({
           {canGrant ? (
             sources.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={sourcePick}
-                  onChange={(e) => setSourcePick(e.target.value)}
-                  className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="makeup-source"
-                  aria-label="Excused absence"
-                >
-                  {sources.map((s) => (
-                    <option key={s.sessionId} value={s.sessionId}>
-                      {formatDateIST(s.sessionDate)} — {s.batchName}
-                    </option>
-                  ))}
-                </select>
+                {/* P2 (independent review) — the flex sizing lives on a
+                    lane-owned wrapper around the shared primitive. */}
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={sourcePick}
+                    onChange={(e) => setSourcePick(e.target.value)}
+                    data-testid="makeup-source"
+                    aria-label="Excused absence"
+                  >
+                    {sources.map((s) => (
+                      <option key={s.sessionId} value={s.sessionId}>
+                        {formatDateIST(s.sessionDate)} — {s.batchName}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
                 <button
                   type="button"
                   onClick={() =>
@@ -182,19 +186,20 @@ export function MakeupCreditsPanel({
           {available.length > 0 && targets.length > 0 ? (
             canRedeem ? (
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={targetPick}
-                  onChange={(e) => setTargetPick(e.target.value)}
-                  className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="makeup-target"
-                  aria-label="Makeup session"
-                >
-                  {targets.map((t) => (
-                    <option key={t.sessionId} value={t.sessionId}>
-                      {formatDateIST(t.sessionDate)} — {t.batchName}
-                    </option>
-                  ))}
-                </select>
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={targetPick}
+                    onChange={(e) => setTargetPick(e.target.value)}
+                    data-testid="makeup-target"
+                    aria-label="Makeup session"
+                  >
+                    {targets.map((t) => (
+                      <option key={t.sessionId} value={t.sessionId}>
+                        {formatDateIST(t.sessionDate)} — {t.batchName}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
                 <button
                   type="button"
                   onClick={() =>

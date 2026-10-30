@@ -6,6 +6,8 @@ import { transitionMemberStatusAction } from "@/lib/actions/people";
 import { MEMBER_STATUS_LABELS, MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
 import type { MemberStatus } from "@/db/schema/people";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
 export function MemberStatusPanel({
   memberId,
@@ -64,16 +66,21 @@ export function MemberStatusPanel({
           <p className="text-[13px] font-medium">
             Move to {MEMBER_STATUS_LABELS[target]} — why?
           </p>
-          <label htmlFor={reasonId} className="block text-[13px] text-ink-2">Reason for status change</label>
-          <input id={reasonId} disabled={busy}
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-            data-testid="status-reason"
-            autoFocus
-          />
+          <Field id={reasonId} label="Reason for status change">
+            {(field) => (
+              <Input
+                {...field}
+                id={reasonId}
+                disabled={busy}
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason"
+                data-testid="status-reason"
+                autoFocus
+              />
+            )}
+          </Field>
           {error ? <p role="alert" className="text-[12px] text-late">{error}</p> : null}
           <div className="flex gap-2">
             <Button

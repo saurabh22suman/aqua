@@ -2,11 +2,13 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { waitlistEntries } from "@/db/schema/waitlist-entries";
 import { members, persons } from "@/db/schema/people";
+import { batches } from "@/db/schema/programs";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { z } from "zod";
 import { enqueueWaitlistPromotion } from "@/lib/messaging/notification-events";
 import { visibleBatch, visibleMember } from "@/lib/services/resource-access";
+import { auditActorOf, writeAudit } from "@/lib/audit/write";
 
 // Waitlist promotion queues consent-checked WhatsApp notifications.
 // It remains a promotion pending enrolment, not a booked-place guarantee.
@@ -56,6 +58,22 @@ export async function addToWaitlist(
     if (!(await visibleMember(tx, ctx, parsed.data.memberId))) {
       return { kind: "error", code: "not_found", message: "Member not found." };
     }
+
+    // The queue for a batch is serialised on the BATCH row — a stable
+    // parent that always exists. Locking the queue's own rows cannot
+    // close the race: an EMPTY queue has nothing to lock and the next
+    // position is max(position) + 1, so two members could both take
+    // position 1. Add, cancel and promote all take this lock.
+    await tx
+      .select({ id: batches.id })
+      .from(batches)
+      .where(
+        and(
+          eq(batches.id, parsed.data.batchId),
+          eq(batches.tenantId, ctx.tenantId),
+        ),
+      )
+      .for("update");
 
     // Refuse if the member is already enrolled in the batch.
     // (The unique partial on (member, batch) where status='waiting'
@@ -122,6 +140,21 @@ export async function addToWaitlist(
         updatedBy: ctx.userId,
       })
       .returning({ id: waitlistEntries.id, position: waitlistEntries.position });
+    // E-02 — the audit row shares the transaction with the insert
+    // (docs/architecture.md:1330). A refusal above writes nothing.
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "waitlist.add",
+      entityType: "waitlist_entry",
+      entityId: row!.id,
+      after: {
+        memberId: parsed.data.memberId,
+        batchId: parsed.data.batchId,
+        position: nextPos,
+        status: "waiting",
+      },
+    });
     return { kind: "ok", entryId: row!.id, position: nextPos };
   });
 }
@@ -147,6 +180,18 @@ export async function cancelWaitlist(
     if (!(await visibleMember(tx, ctx, parsed.data.memberId))) {
       return { kind: "error", code: "not_found", message: "Member not found." };
     }
+    // The same batch lock the add path takes: the re-index below must
+    // not race an add that is choosing the next position.
+    await tx
+      .select({ id: batches.id })
+      .from(batches)
+      .where(
+        and(
+          eq(batches.id, parsed.data.batchId),
+          eq(batches.tenantId, ctx.tenantId),
+        ),
+      )
+      .for("update");
     const [entry] = await tx
       .update(waitlistEntries)
       .set({ status: "cancelled", cancelledAt: new Date(), updatedAt: new Date(), updatedBy: ctx.userId })
@@ -162,6 +207,15 @@ export async function cancelWaitlist(
     if (!entry) {
       return { kind: "error", code: "not_on_waitlist", message: "Not on the waitlist." };
     }
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "waitlist.cancel",
+      entityType: "waitlist_entry",
+      entityId: entry.id,
+      before: { status: "waiting", position: entry.position },
+      after: { status: "cancelled", position: 0 },
+    });
     // Re-index the queue: every waiting entry that was
     // behind the cancelled row slides up by one. We compute
     // the cancelled position inline (no correlated subquery
@@ -282,6 +336,19 @@ export async function promoteHead(
     if (!(await visibleBatch(tx, ctx, parsed.data.batchId))) {
       return { kind: "error", code: "not_found", message: "Batch not found." };
     }
+    // The same batch lock the add path takes: the promotion re-indexes
+    // the queue, so it must not race an add that is choosing the next
+    // position.
+    await tx
+      .select({ id: batches.id })
+      .from(batches)
+      .where(
+        and(
+          eq(batches.id, parsed.data.batchId),
+          eq(batches.tenantId, ctx.tenantId),
+        ),
+      )
+      .for("update");
     // Inline the head query — withTenant cannot nest (db/scope.ts),
     // so getWaitlistHead's own withTenant would throw from here.
     const headRow = await tx
@@ -318,6 +385,15 @@ export async function promoteHead(
         ),
       );
     await enqueueWaitlistPromotion(tx, ctx.tenantId, parsed.data.batchId, head.memberId, head.entryId);
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "waitlist.promote",
+      entityType: "waitlist_entry",
+      entityId: head.entryId,
+      before: { status: "waiting", position: head.position },
+      after: { status: "promoted", position: head.position, memberId: head.memberId },
+    });
     return { kind: "ok", entryId: head.entryId, position: head.position };
   });
 }

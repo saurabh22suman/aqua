@@ -4,7 +4,7 @@ import { sessions } from "@/db/schema/scheduling";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
 import type { ActionCtx } from "@/lib/auth/context";
 import { enqueueSessionNotification } from "@/lib/messaging/notification-events";
-import { writeAudit } from "@/lib/audit/write";
+import { auditActorOf, writeAudit } from "@/lib/audit/write";
 import {
   callerHasPermission,
   callerIsLegacySystem,
@@ -136,8 +136,8 @@ export async function cancelSession(
       .where(eq(sessions.id, sessionId));
 
     await enqueueSessionNotification(tx, ctx.tenantId, sessionId, "cancelled");
-    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, action: "session.cancel.notification",
-      entityType: "session", entityId: sessionId, after: { status: "cancelled" }, requestId: ctx.requestId });
+    await writeAudit(tx, { tenantId: ctx.tenantId, ...auditActorOf(ctx), action: "session.cancel.notification",
+      entityType: "session", entityId: sessionId, after: { status: "cancelled" } });
     return {
       kind: "ok",
       sessionId: s.id,
@@ -288,8 +288,8 @@ export async function rescheduleSession(
         .where(eq(sessions.id, input.sessionId));
     }
     await enqueueSessionNotification(tx, ctx.tenantId, input.sessionId, "rescheduled");
-    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, action: "session.reschedule.notification",
-      entityType: "session", entityId: input.sessionId, after: { sessionDate: input.newSessionDate }, requestId: ctx.requestId });
+    await writeAudit(tx, { tenantId: ctx.tenantId, ...auditActorOf(ctx), action: "session.reschedule.notification",
+      entityType: "session", entityId: input.sessionId, after: { sessionDate: input.newSessionDate } });
     return {
       kind: "ok",
       sessionId: s.id,

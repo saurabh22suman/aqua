@@ -11,6 +11,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InlineFeedback } from "@/components/ui/InlineFeedback";
 import { todayInZone } from "@/lib/time/tz";
 import type { BookableFacility } from "@/lib/services/bookings";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // Batch 6 — the authenticated owner booking desk.
 //
@@ -61,35 +63,22 @@ export default async function OwnerBookingsPage() {
   }
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Home
-        </Link>
-        {" / "}
-        bookings
-      </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">Bookings</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Take a booking for a member or a walk-in. The price shown is the
-        configured price for that slot; a booking keeps the price it was
-        quoted.
-        {canManagePrices ? (
-          <>
-            {" "}
-            <Link
-              href="/owner/settings/booking-prices"
-              className="font-medium underline underline-offset-2"
-              data-testid="owner-bookings-manage-prices"
-            >
-              Manage prices
-            </Link>
-          </>
-        ) : null}
-      </p>
+    <OwnerPage>
+      <PageHeader
+        title="Bookings"
+        purpose="Choose a slot on the day board, then confirm the quoted price and the customer in the selected slot."
+      />
+      {canManagePrices ? (
+        <p className="mt-2">
+          <Link
+            href="/owner/settings/booking-prices"
+            className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
+            data-testid="owner-bookings-manage-prices"
+          >
+            Manage booking prices
+          </Link>
+        </p>
+      ) : null}
 
       {pricesError ? (
         <div className="mt-4" data-testid="owner-bookings-price-error">
@@ -144,6 +133,6 @@ export default async function OwnerBookingsPage() {
           />
         </div>
       ) : null}
-    </main>
+    </OwnerPage>
   );
 }

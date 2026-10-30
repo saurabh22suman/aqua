@@ -1,40 +1,37 @@
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { Skeleton } from "@/components/skeleton";
 
-// Owner bookings cold-load. The page resolves the tenant timezone, the
-// terminology and the facility list before it can render anything, and
-// the facility list is a join across facilities, locations and
-// sub-units. Without this file the owner sees a blank document for
-// that window.
-//
-// The shape mirrors the real page: breadcrumb + heading, the price
-// prerequisite card, then the booking form and the day board.
+// Owner bookings cold-load. Mirrors the composed page: heading, the
+// price notice line, then the day board beside the selected slot.
 
 export default function Loading() {
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
-      <div className="flex items-center gap-2">
-        <Skeleton w={10} h={3} />
-        <Skeleton w={16} h={3} />
-      </div>
-      <Skeleton w={28} h={6} className="mt-3" />
+    <OwnerPage>
+      <Skeleton w={32} h={6} />
+      <Skeleton w={96} h={3} className="mt-3" />
 
-      <Skeleton w={80} h={10} rounded="rounded-card" className="mt-5" />
-
-      <div className="mt-4 rounded-card border border-line p-4">
-        <Skeleton w={32} h={5} />
-        <Skeleton w={64} h={11} className="mt-3" />
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Skeleton w={38} h={11} />
-          <Skeleton w={38} h={11} />
+      <div className="mt-5 grid gap-5 lg:grid-cols-5">
+        <div className="rounded-card border border-line bg-paper p-5 lg:col-span-3">
+          <Skeleton w={36} h={4} />
+          <Skeleton w={56} h={3} className="mt-2" />
+          <div className="mt-4 flex gap-2">
+            <Skeleton w={18} h={9} className="rounded-ctl" />
+            <Skeleton w={14} h={9} className="rounded-ctl" />
+          </div>
+          <Skeleton w={72} h={52} className="mt-4 rounded-card" />
         </div>
-        <Skeleton w={48} h={11} className="mt-3" />
+        <div className="lg:col-span-2">
+          <Skeleton w={36} h={4} />
+          <Skeleton w={56} h={3} className="mt-2" />
+          <div className="mt-3 rounded-card border border-line bg-paper p-4">
+            <Skeleton w={64} h={4} />
+            <Skeleton w={48} h={11} className="mt-3" />
+            <Skeleton w={40} h={4} className="mt-3" />
+            <Skeleton w={48} h={11} className="mt-3" />
+            <Skeleton w={56} h={11} className="mt-3" />
+          </div>
+        </div>
       </div>
-
-      <div className="mt-4 rounded-card border border-line p-4">
-        <Skeleton w={40} h={5} />
-        <Skeleton w={72} h={4} className="mt-3" />
-        <Skeleton w={64} h={4} className="mt-2" />
-      </div>
-    </main>
+    </OwnerPage>
   );
 }

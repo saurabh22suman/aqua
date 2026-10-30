@@ -91,9 +91,10 @@ describe("U-04 schedule grid", () => {
     expect(container.querySelectorAll(".min-w-\\[520px\\]").length).toBe(0);
   });
 
-  it("shows day-level empty states and the batch editor path when the week is empty", () => {
+  it("shows day-level empty states and the batch editor path for an owner with Programs access", () => {
     render(
       <OwnerScheduleGrid
+        canManagePrograms
         view="week"
         locations={[]}
         sessions={[]}

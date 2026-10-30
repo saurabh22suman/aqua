@@ -4,6 +4,9 @@ import { Plus, Upload } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MembersBoard } from "@/components/members-board";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { buttonClasses } from "@/components/ui/Button";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
@@ -33,33 +36,32 @@ export default async function MembersPage({
   ]);
 
   return (
-    <main className="px-5 pt-10 pb-8">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-[19px] font-semibold">
-          {titleCase(resolveTerm(terminology, "member", "other"))}
-        </h1>
-        <div className="flex items-center gap-2">
-          {canWriteMembers ? (
-            <>
+    <OwnerPage>
+      <PageHeader
+        title={titleCase(resolveTerm(terminology, "member", "other"))}
+        purpose="Find a person and continue their work."
+        action={
+          canWriteMembers ? (
+            <div className="flex flex-none items-center gap-2">
               <Link
                 href="/owner/members/import"
-                className="flex min-h-11 items-center gap-1.5 rounded-ctl border border-line px-3.5 py-2 text-[13px] font-medium text-ink-2 hover:text-ink"
+                className={buttonClasses({ variant: "secondary", size: "md" })}
                 data-testid="members-import-link"
               >
-                <Upload size={15} strokeWidth={2.2} />
+                <Upload size={15} strokeWidth={2.2} aria-hidden="true" />
                 Import
               </Link>
               <Link
                 href="/owner/members/new"
-                className="flex min-h-11 items-center gap-1.5 rounded-ctl bg-[var(--accent-strong)] px-3.5 py-2 text-[13px] font-medium text-white"
+                className={buttonClasses({ variant: "primary", size: "md" })}
               >
-                <Plus size={16} strokeWidth={2.4} />
+                <Plus size={16} strokeWidth={2.4} aria-hidden="true" />
                 Add
               </Link>
-            </>
-          ) : null}
-        </div>
-      </div>
+            </div>
+          ) : null
+        }
+      />
       {members.length === 0 ? (
         canWriteMembers ? (
           <p className="mt-3 text-[12.5px] text-ink-3">
@@ -84,8 +86,9 @@ export default async function MembersPage({
           initialMembers={members}
           terminology={terminology}
           initialLocationId={initialLocationId}
+          navigationNamespace={`${ctx.tenantId}:${ctx.userId}`}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

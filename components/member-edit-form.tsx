@@ -2,9 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { updateMemberAction } from "@/lib/actions/people";
 import type { LocationOption, MemberDetail } from "@/lib/services/people";
 import { DateField } from "@/components/ui/DateField";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 
 export function MemberEditForm({
   member,
@@ -56,90 +62,120 @@ export function MemberEditForm({
 
   return (
     <div className="space-y-2.5">
-      <label className="block">
-        <span className="block text-[12px] text-ink-3 mb-1">Full name</span>
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="Full name"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
-      </label>
-      <label className="block">
-        <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone (optional)"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
-      </label>
-      <div>
-        <label htmlFor="edit-dob" className="block text-[12px] text-ink-3 mb-1">
-          Date of birth
-        </label>
-        <DateField id="edit-dob" value={dateOfBirth} onChange={setDateOfBirth} />
+      {/* OpenPen owner reference — a bounded correction form: persistent
+          labels, paired fields at ≥sm, and Cancel beside Save. */}
+      <h2 className="font-display text-[16px] font-semibold">
+        Personal details
+      </h2>
+      <Field id="edit-full-name-field" label="Full name">
+        {(field) => (
+          <Input
+            {...field}
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Full name"
+          />
+        )}
+      </Field>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <Field id="edit-phone-field" label="Phone (optional)">
+          {(field) => (
+            <Input
+              {...field}
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone (optional)"
+            />
+          )}
+        </Field>
+        <Field id="edit-dob" label="Date of birth" required>
+          {(field) => (
+            <DateField
+              {...field}
+              value={dateOfBirth}
+              onChange={setDateOfBirth}
+              data-testid="member-dob"
+            />
+          )}
+        </Field>
+        <Field id="edit-joined-on" label="Joined on">
+          {(field) => (
+            <DateField
+              {...field}
+              value={joinedOn}
+              onChange={setJoinedOn}
+              data-testid="member-joined-on"
+            />
+          )}
+        </Field>
+        <Field id="edit-location-field" label="Location">
+          {(field) => (
+            <Select
+              {...field}
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+            >
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
-      <div>
-        <label
-          htmlFor="edit-joined-on"
-          className="block text-[12px] text-ink-3 mb-1"
+      <Field id="edit-gender-field" label="Gender (optional)">
+        {(field) => (
+          <Select
+            {...field}
+            value={gender}
+            onChange={(e) => setGender(e.target.value)}
+          >
+            <option value="">Not specified</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </Select>
+        )}
+      </Field>
+      <Field id="edit-medical-notes-field" label="Medical notes (optional)">
+        {(field) => (
+          <Textarea
+            {...field}
+            value={medicalNotes}
+            onChange={(e) => setMedicalNotes(e.target.value)}
+            placeholder="Medical notes (optional)"
+            rows={2}
+          />
+        )}
+      </Field>
+
+      {error ? (
+        <p role="alert" className="text-[13px] text-ink-2">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex gap-2 pt-1">
+        <Link
+          href={`/owner/members/${member.memberId}`}
+          className={`${buttonClasses({ variant: "secondary", size: "md" })} flex-1`}
         >
-          Joined on
-        </label>
-        <DateField
-          id="edit-joined-on"
-          value={joinedOn}
-          onChange={setJoinedOn}
-          data-testid="member-joined-on"
-        />
+          Cancel
+        </Link>
+        <Button
+          type="button"
+          variant="primary"
+          size="md"
+          onClick={submit}
+          disabled={busy}
+          className="flex-[2]"
+        >
+          {busy ? "Saving…" : "Save changes"}
+        </Button>
       </div>
-      <select
-        value={gender}
-        onChange={(e) => setGender(e.target.value)}
-        aria-label="Gender"
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      >
-        <option value="">Gender (optional)</option>
-        <option value="male">Male</option>
-        <option value="female">Female</option>
-        <option value="other">Other</option>
-      </select>
-      <select
-        value={locationId}
-        onChange={(e) => setLocationId(e.target.value)}
-        aria-label="Location"
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      >
-        {locations.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </select>
-      <label className="block">
-        <span className="block text-[12px] text-ink-3 mb-1">Medical notes (optional)</span>
-        <textarea
-          value={medicalNotes}
-          onChange={(e) => setMedicalNotes(e.target.value)}
-          placeholder="Medical notes (optional)"
-          rows={2}
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
-      </label>
-
-      {error ? <p className="text-[13px] text-ink-3">{error}</p> : null}
-
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy}
-        className="w-full rounded-ctl bg-[var(--accent-strong)] py-3 text-[14px] font-medium text-white disabled:opacity-50"
-      >
-        {busy ? "Saving…" : "Save changes"}
-      </button>
     </div>
   );
 }

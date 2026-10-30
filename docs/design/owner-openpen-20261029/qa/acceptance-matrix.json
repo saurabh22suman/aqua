@@ -1,0 +1,1040 @@
+{
+  "referencePages": [
+    {
+      "referenceId": "home",
+      "title": "Club overview",
+      "group": "Home",
+      "route": "/owner",
+      "lane": "system",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "members",
+      "title": "Swimmers",
+      "group": "Members",
+      "route": "/owner/members",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "new-member",
+      "title": "Add swimmer",
+      "group": "Members",
+      "route": "/owner/members/new",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "import",
+      "title": "Import swimmers",
+      "group": "Members",
+      "route": "/owner/members/import",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "member",
+      "title": "Member overview",
+      "group": "Members",
+      "route": "/owner/members/[memberId]",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "edit-member",
+      "title": "Edit member details",
+      "group": "Members",
+      "route": "/owner/members/[memberId]/edit",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "member-payments",
+      "title": "Member payments",
+      "group": "Members",
+      "route": "/owner/members/[memberId]?tab=payments",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "member-progress",
+      "title": "Member progress",
+      "group": "Members",
+      "route": "/owner/members/[memberId]?tab=progress",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "member-notes",
+      "title": "Member notes",
+      "group": "Members",
+      "route": "/owner/members/[memberId]?tab=notes",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "member-docs",
+      "title": "Member documents",
+      "group": "Members",
+      "route": "/owner/members/[memberId]?tab=documents",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "fees",
+      "title": "Dues",
+      "group": "Fees & payments",
+      "route": "/owner/fees?tab=dues",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "fees-overview",
+      "title": "Fees overview",
+      "group": "Fees & payments",
+      "route": "/owner/fees",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "fees-transactions",
+      "title": "Transactions",
+      "group": "Fees & payments",
+      "route": "/owner/fees?tab=transactions",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "fees-invoices",
+      "title": "Invoices",
+      "group": "Fees & payments",
+      "route": "/owner/fees?tab=invoices",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "fees-plans",
+      "title": "Plans catalogue",
+      "group": "Fees & payments",
+      "route": "/owner/fees?tab=plans",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "invoice",
+      "title": "Invoice detail",
+      "group": "Fees & payments",
+      "route": "/owner/fees \u00b7 selected invoice",
+      "lane": "people",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "reports",
+      "title": "Reports",
+      "group": "Reports",
+      "route": "/owner/reports",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "collections",
+      "title": "Daily collections",
+      "group": "Reports",
+      "route": "/owner/reports/collections",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "programs",
+      "title": "Programs & batches",
+      "group": "Scheduling",
+      "route": "/owner/programs",
+      "lane": "scheduling",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "batch",
+      "title": "Morning Squad",
+      "group": "Scheduling",
+      "route": "/owner/batches/[batchId]",
+      "lane": "scheduling",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "schedule",
+      "title": "Schedule",
+      "group": "Scheduling",
+      "route": "/owner/schedule",
+      "lane": "scheduling",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "sessions",
+      "title": "Session exceptions",
+      "group": "Scheduling",
+      "route": "/owner/sessions",
+      "lane": "scheduling",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "bookings",
+      "title": "Bookings",
+      "group": "Scheduling",
+      "route": "/owner/bookings",
+      "lane": "scheduling",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "enquiries",
+      "title": "Enquiry oversight",
+      "group": "Enquiries",
+      "route": "/owner/enquiries",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "enquiry",
+      "title": "Meera Nair",
+      "group": "Enquiries",
+      "route": "/owner/enquiries/[enquiryId]",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "announcements",
+      "title": "Announcements",
+      "group": "Communications",
+      "route": "/owner/announcements",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "staff",
+      "title": "Staff",
+      "group": "Team & access",
+      "route": "/owner/staff",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "new-staff",
+      "title": "Add staff record",
+      "group": "Team & access",
+      "route": "/owner/staff/new",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "staff-detail",
+      "title": "Aanya Rao",
+      "group": "Team & access",
+      "route": "/owner/staff/[staffId]",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "roster",
+      "title": "Staff roster",
+      "group": "Team & access",
+      "route": "/owner/staff/roster",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "leave",
+      "title": "Leave requests",
+      "group": "Team & access",
+      "route": "/owner/staff/leave",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "invitations",
+      "title": "Staff access",
+      "group": "Team & access",
+      "route": "/owner/staff/invitations",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "new-invite",
+      "title": "Invite staff",
+      "group": "Team & access",
+      "route": "/owner/staff/invitations/new",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "checkin",
+      "title": "Staff check-in poster",
+      "group": "Team & access",
+      "route": "/owner/staff/check-in-qr",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "settings",
+      "title": "Settings",
+      "group": "Settings",
+      "route": "/owner/settings",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "academy",
+      "title": "Academy profile",
+      "group": "Settings",
+      "route": "/owner/settings/academy",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "activities",
+      "title": "Activities & resources",
+      "group": "Settings",
+      "route": "/owner/settings/activities",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "alerts",
+      "title": "Absence alerts",
+      "group": "Settings",
+      "route": "/owner/settings/alerts",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "branding",
+      "title": "Club branding",
+      "group": "Settings",
+      "route": "/owner/settings/branding",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "configuration",
+      "title": "Academy rules",
+      "group": "Settings",
+      "route": "/owner/settings/configuration",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "holidays",
+      "title": "Holidays & closures",
+      "group": "Settings",
+      "route": "/owner/settings/holidays",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "locations",
+      "title": "Location & business hours",
+      "group": "Settings",
+      "route": "/owner/settings/locations",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "menu",
+      "title": "Caf\u00e9 menu",
+      "group": "Settings",
+      "route": "/owner/settings/menu",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "payment-qrs",
+      "title": "Payment QR codes",
+      "group": "Settings",
+      "route": "/owner/settings/payment-qrs",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "plans",
+      "title": "Membership plans",
+      "group": "Settings",
+      "route": "/owner/settings/plans",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "skills",
+      "title": "Skill framework \u00b7 owner context",
+      "group": "Settings",
+      "route": "/owner/settings/skills",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "terminology",
+      "title": "Vocabulary",
+      "group": "Settings",
+      "route": "/owner/settings/terminology",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "booking-prices",
+      "title": "Booking prices",
+      "group": "Settings",
+      "route": "/owner/settings/booking-prices",
+      "lane": "management",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    },
+    {
+      "referenceId": "onboarding",
+      "title": "Set up your first register",
+      "group": "Setup",
+      "route": "/owner/onboarding",
+      "lane": "scheduling",
+      "functional": "NOT TESTED THIS TASK",
+      "visual": "NOT REVIEWED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ]
+    }
+  ],
+  "additionalRealRoutes": [
+    {
+      "path": "app/(owner)/owner/announcements/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/batches/[batchId]/page.tsx",
+      "lane": "scheduling",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/bookings/page.tsx",
+      "lane": "scheduling",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/enquiries/[enquiryId]/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/enquiries/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/fees/page.tsx",
+      "lane": "people",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/members/[memberId]/edit/page.tsx",
+      "lane": "people",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/members/[memberId]/page.tsx",
+      "lane": "people",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/members/import/page.tsx",
+      "lane": "people",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/members/new/page.tsx",
+      "lane": "people",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/members/page.tsx",
+      "lane": "people",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/onboarding/page.tsx",
+      "lane": "scheduling",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/page.tsx",
+      "lane": "system",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/programs/page.tsx",
+      "lane": "scheduling",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/reports/collections/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/reports/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/schedule/page.tsx",
+      "lane": "scheduling",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/sessions/page.tsx",
+      "lane": "scheduling",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/academy/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/activities/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/alerts/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/booking-prices/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/branding/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/configuration/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/holidays/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/locations/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/menu/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/payment-qrs/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/plans/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/skills/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/settings/terminology/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/[staffId]/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/check-in-qr/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/invitations/new/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/invitations/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/leave/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/new/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    },
+    {
+      "path": "app/(owner)/owner/staff/roster/page.tsx",
+      "lane": "management",
+      "status": "MUST MAP"
+    }
+  ],
+  "policy": "Every mock view mapped to real route/state or explicitly unsupported; no unsupported capabilities built; all real owner routes reviewed. Functional and visual verdicts separate. Actual both-theme Chrome proof required before visual acceptance."
+}

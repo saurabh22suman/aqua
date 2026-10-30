@@ -1,26 +1,39 @@
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { randomBytes, randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "./client";
 import { withPlatform } from "./scope";
 import { env } from "@/lib/env";
 import {
   PLATFORM_SESSION_TTL_SECONDS,
+  PLATFORM_CHALLENGE_TTL_SECONDS,
   PlatformAuthError,
   constantTimeEqual,
   hashPassword,
   sha256,
 } from "./platform-auth-crypto";
+import { matchingTotpStep, generateTotpSecret } from "./platform-auth-totp";
+export { currentTotpCode, verifyTotp, generateTotpSecret } from "./platform-auth-totp";
 import { loginWithEnvOperator } from "./platform-auth-env";
+import {
+  classifyUnexpectedError,
+  opsIdentityHash,
+  recordUnauthEvent,
+  runPlatformLoginAttempt,
+} from "./platform-auth-attempt";
 import {
   platformUsers,
   platformSessions,
   platformAuditLog,
 } from "./schema";
 
-// Public surface kept stable: callers (lib/actions/platform-auth.ts,
-// tests) import PlatformAuthError from this module.
 export { PlatformAuthError, PLATFORM_SESSION_TTL_SECONDS } from "./platform-auth-crypto";
+export {
+  lookupPlatformSession,
+  platformLogout,
+  platformLogoutWithResult,
+} from "./platform-auth-session";
+export type { PlatformSessionLookup } from "./platform-auth-session";
 
 export const platformLoginInput = z.object({
   email: z.string().email(),
@@ -33,90 +46,6 @@ export const platformTotpInput = z.object({
   code: z.string().regex(/^\d{6}$/),
 });
 export type PlatformTotpInput = z.infer<typeof platformTotpInput>;
-
-function base32Decode(input: string): Buffer {
-  // RFC 4648 base32 decoder, no padding required. Node's Buffer does
-  // not ship with this encoding so we do it ourselves; only ~30 lines
-  // and zero deps. Returns the raw byte buffer.
-  const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const cleaned = input.replace(/=+$/g, "").toUpperCase();
-  const bytes: number[] = [];
-  let bits = 0;
-  let value = 0;
-  for (const ch of cleaned) {
-    const v = ALPHABET.indexOf(ch);
-    if (v < 0) throw new Error(`invalid base32 char: ${ch}`);
-    value = (value << 5) | v;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.push((value >>> bits) & 0xff);
-    }
-  }
-  return Buffer.from(bytes);
-}
-
-/**
- * Generate the current 6-digit TOTP code for a given secret. RFC 6238
- * with SHA-1, 30s step. The mirror of verifyTotp without the
- * constant-time compare — the caller already knows the secret, so
- * the code is for them; the verify path stays where it is. Used by
- * the demo seed and the demo-only `pnpm platform:code` convenience
- * script.
- */
-export function currentTotpCode(secret: string, now = Date.now()): string {
-  let secretBytes: Buffer;
-  try {
-    secretBytes = base32Decode(secret);
-  } catch {
-    return "000000";
-  }
-  if (secretBytes.length < 10) return "000000";
-  const counter = Math.floor(now / 1000 / 30);
-  const counterHex = counter.toString(16).padStart(16, "0");
-  const hmac = createHmac("sha1", secretBytes)
-    .update(Buffer.from(counterHex, "hex"))
-    .digest();
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const binary =
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff);
-  return (binary % 1_000_000).toString().padStart(6, "0");
-}
-
-/**
- * Verify a 6-digit TOTP code against the user's secret. RFC 6238 with
- * SHA-1, 30s step, ±1 step window (90s total) for clock skew. Constant
- * time on candidate comparison.
- */
-export function verifyTotp(secret: string, code: string, now = Date.now()): boolean {
-  if (!/^\d{6}$/.test(code)) return false;
-  let secretBytes: Buffer;
-  try {
-    secretBytes = base32Decode(secret);
-  } catch {
-    return false;
-  }
-  if (secretBytes.length < 10) return false;
-  const counter = Math.floor(now / 1000 / 30);
-  for (let i = -1; i <= 1; i++) {
-    const counterHex = (counter + i).toString(16).padStart(16, "0");
-    const hmac = createHmac("sha1", secretBytes)
-      .update(Buffer.from(counterHex, "hex"))
-      .digest();
-    const offset = hmac[hmac.length - 1] & 0x0f;
-    const binary =
-      ((hmac[offset] & 0x7f) << 24) |
-      ((hmac[offset + 1] & 0xff) << 16) |
-      ((hmac[offset + 2] & 0xff) << 8) |
-      (hmac[offset + 3] & 0xff);
-    const candidate = (binary % 1_000_000).toString().padStart(6, "0");
-    if (constantTimeEqual(candidate, code)) return true;
-  }
-  return false;
-}
 
 export type PlatformAuthResult =
   | { kind: "second_factor_required"; sessionToken: string }
@@ -132,14 +61,12 @@ export async function platformLogin(
   input: PlatformLoginInput,
   meta: { ipAddress?: string; userAgent?: string } = {},
 ): Promise<PlatformAuthResult> {
-  return withPlatform(async () => {
-    // Env-only door (2026-09-11 auth feature): when OPS_EMAIL +
-    // OPS_PASSWORD are configured they replace the DB credential
-    // check entirely, and the session is created fully authenticated
-    // (no TOTP). Removing the vars restores the DB+TOTP path below
-    // unchanged. The pair is validated at boot (lib/env.ts).
+  return runPlatformLoginAttempt<PlatformAuthResult>("password", input.email, meta, async (db) => {
+    // Preserve the configured password; an existing enrolled operator and
+    // a separate authenticator proof are required on both password paths.
     if (env.OPS_EMAIL !== undefined && env.OPS_PASSWORD !== undefined) {
-      return await loginWithEnvOperator(input, meta, env.OPS_EMAIL, env.OPS_PASSWORD);
+      const value = await loginWithEnvOperator(input, meta, env.OPS_EMAIL, env.OPS_PASSWORD, db);
+      return { value, actorId: value.userId };
     }
 
     const [user] = await db
@@ -154,19 +81,19 @@ export async function platformLogin(
       hashPassword(input.password, "decoy-salt-to-equal-real-cost");
       throw new PlatformAuthError("invalid_credentials", "invalid credentials");
     }
-    if (user.status !== "active") {
-      throw new PlatformAuthError("user_suspended", "user suspended");
-    }
     const candidate = hashPassword(input.password, user.passwordSalt);
     if (!constantTimeEqual(candidate, user.passwordHash)) {
       throw new PlatformAuthError("invalid_credentials", "invalid credentials");
+    }
+    if (user.status !== "active") {
+      throw new PlatformAuthError("user_suspended", "user suspended");
     }
     if (!user.totpEnrolled || !user.totpSecret) {
       throw new PlatformAuthError("no_totp", "platform user has no enrolled 2FA");
     }
     const sessionToken = randomBytes(32).toString("hex");
     const sessionId = randomUUID();
-    const expiresAt = new Date(Date.now() + PLATFORM_SESSION_TTL_SECONDS * 1000);
+    const expiresAt = new Date(Date.now() + PLATFORM_CHALLENGE_TTL_SECONDS * 1000);
     await db.insert(platformSessions).values({
       id: sessionId,
       userId: user.id,
@@ -176,7 +103,7 @@ export async function platformLogin(
       secondFactorPassed: false,
       expiresAt,
     });
-    return { kind: "second_factor_required", sessionToken };
+    return { value: { kind: "second_factor_required", sessionToken }, actorId: user.id };
   });
 }
 
@@ -184,7 +111,56 @@ export async function platformVerifyTotp(
   input: PlatformTotpInput,
   meta: { ipAddress?: string; userAgent?: string } = {},
 ): Promise<PlatformAuthResult> {
-  return withPlatform(async () => {
+  const tokenHash = sha256(input.sessionToken);
+  // The subject lookup runs BEFORE the attempt boundary, so an unexpected
+  // failure here would leave no evidence at all. Record it — through the
+  // bounded pre-auth policy, because an unauthenticated caller can reach
+  // it — and let the original error reach the caller.
+  let subject: { userId: string } | undefined;
+  try {
+    [subject] = await withPlatform(async () => await db.select({ userId: platformSessions.userId })
+      .from(platformSessions).where(eq(platformSessions.tokenHash, tokenHash)).limit(1));
+  } catch (error) {
+    await recordUnauthEvent({
+      action: "platform.login.error",
+      detail: {
+        phase: "totp",
+        errorCode: classifyUnexpectedError(error),
+      },
+      ipAddress: meta.ipAddress,
+      phase: "totp",
+      outcome: "unexpected_error",
+      // The session token is the only identity this pre-attempt path has;
+      // record it only as the same pseudonymous hash the attempt uses.
+      identityHash: opsIdentityHash("totp", input.sessionToken),
+      correlationId: randomUUID(),
+    });
+    throw error;
+  }
+  if (!subject) {
+    // The refusal passes through the attempt boundary so that it is
+    // COUNTED and CAPPED — but on the UNKNOWN-CHALLENGE budget, which is
+    // separate from the operator's budget. An unauthenticated caller
+    // therefore cannot spend the budget that protects a real operator's
+    // sign-in: the operator's own attempt is counted against
+    // `platform.login.failed`, this one against
+    // `platform.login.failed.unknown` — and this one is inside the
+    // pre-auth budget as well, because it is written by a caller with no
+    // valid session.
+    //
+    // The identity is the session token, recorded only as its
+    // pseudonymous hash: there is no account to key an account limit on.
+    return runPlatformLoginAttempt<PlatformAuthResult>(
+      "totp",
+      input.sessionToken,
+      meta,
+      async () => {
+        throw new PlatformAuthError("session_invalid", "session not found");
+      },
+      { budget: "unknown_challenge" },
+    );
+  }
+  return runPlatformLoginAttempt<PlatformAuthResult>("totp", subject.userId, meta, async (db) => {
     const tokenHash = sha256(input.sessionToken);
     const [session] = await db
       .select({
@@ -194,7 +170,7 @@ export async function platformVerifyTotp(
       .from(platformSessions)
       .innerJoin(platformUsers, eq(platformUsers.id, platformSessions.userId))
       .where(eq(platformSessions.tokenHash, tokenHash))
-      .limit(1);
+      .limit(1).for("update");
 
     if (!session) {
       throw new PlatformAuthError("session_invalid", "session not found");
@@ -202,96 +178,46 @@ export async function platformVerifyTotp(
     if (session.session.expiresAt.getTime() < Date.now()) {
       throw new PlatformAuthError("session_expired", "session expired");
     }
-    if (!session.user.totpSecret) {
+    if (session.session.secondFactorPassed) {
+      throw new PlatformAuthError("session_invalid", "challenge already completed");
+    }
+    if (!session.user.totpSecret || !session.user.totpEnrolled) {
       throw new PlatformAuthError("no_totp", "no enrolled 2FA");
     }
     if (session.user.status !== "active") {
       throw new PlatformAuthError("user_suspended", "user suspended");
     }
-    if (!verifyTotp(session.user.totpSecret, input.code)) {
-      throw new PlatformAuthError("invalid_totp", "invalid TOTP code");
-    }
+    const totpStep = matchingTotpStep(session.user.totpSecret, input.code);
+    if (totpStep === null) throw new PlatformAuthError("invalid_totp", "invalid TOTP code");
+    // The account attempt lock serializes this check with the success audit.
+    // Recording a non-secret counter enforces one-time use across challenges.
+    const [used] = await db.select({ id: platformAuditLog.id }).from(platformAuditLog)
+      .where(and(eq(platformAuditLog.actorId, session.user.id),
+        eq(platformAuditLog.action, "platform.login"),
+        sql`(${platformAuditLog.detail}->>'totpStep')::bigint >= ${totpStep}`)).limit(1);
+    if (used) throw new PlatformAuthError("invalid_totp", "authenticator step already used");
     await db
       .update(platformSessions)
       .set({
         secondFactorPassed: true,
         lastSeenAt: new Date(),
+        expiresAt: new Date(Date.now() + PLATFORM_SESSION_TTL_SECONDS * 1000),
       })
       .where(eq(platformSessions.id, session.session.id));
     await db
       .update(platformUsers)
       .set({ lastLoginAt: new Date() })
       .where(eq(platformUsers.id, session.user.id));
-    await db.insert(platformAuditLog).values({
+    return {
+      value: {
+        kind: "fully_authenticated",
+        sessionToken: input.sessionToken,
+        userId: session.user.id,
+        role: session.user.role as "admin" | "viewer",
+      },
       actorId: session.user.id,
-      action: "platform.login",
-      ipAddress: meta.ipAddress,
-    });
-    return {
-      kind: "fully_authenticated",
-      sessionToken: input.sessionToken,
-      userId: session.user.id,
-      role: session.user.role as "admin" | "viewer",
+      totpStep,
     };
-  });
-}
-
-export type PlatformSessionLookup =
-  | { kind: "not_found" }
-  | { kind: "expired" }
-  | { kind: "unauthenticated"; userId: string; role: "admin" | "viewer" }
-  | { kind: "authenticated"; userId: string; role: "admin" | "viewer" };
-
-export async function lookupPlatformSession(
-  sessionToken: string,
-): Promise<PlatformSessionLookup> {
-  if (!sessionToken) return { kind: "not_found" };
-  const tokenHash = sha256(sessionToken);
-  return withPlatform(async () => {
-    const [row] = await db
-      .select({
-        session: platformSessions,
-        user: platformUsers,
-      })
-      .from(platformSessions)
-      .innerJoin(platformUsers, eq(platformUsers.id, platformSessions.userId))
-      .where(eq(platformSessions.tokenHash, tokenHash))
-      .limit(1);
-    if (!row) return { kind: "not_found" } as const;
-    if (row.user.status !== "active") return { kind: "not_found" } as const;
-    if (row.session.expiresAt.getTime() < Date.now()) {
-      return { kind: "expired" } as const;
-    }
-    if (!row.session.secondFactorPassed) {
-      return {
-        kind: "unauthenticated",
-        userId: row.user.id,
-        role: row.user.role as "admin" | "viewer",
-      };
-    }
-    // Sliding window: refresh last_seen_at on every authenticated
-    // request. Cheap enough — one indexed PK update — and lets an
-    // active platform admin stay signed in for the day without
-    // re-logging in every TTL window.
-    await db
-      .update(platformSessions)
-      .set({ lastSeenAt: new Date() })
-      .where(eq(platformSessions.id, row.session.id));
-    return {
-      kind: "authenticated",
-      userId: row.user.id,
-      role: row.user.role as "admin" | "viewer",
-    };
-  });
-}
-
-export async function platformLogout(sessionToken: string): Promise<void> {
-  if (!sessionToken) return;
-  const tokenHash = sha256(sessionToken);
-  await withPlatform(async () => {
-    await db
-      .delete(platformSessions)
-      .where(eq(platformSessions.tokenHash, tokenHash));
   });
 }
 
@@ -341,27 +267,6 @@ export async function markTotpEnrolled(userId: string): Promise<void> {
       .set({ totpEnrolled: true, updatedAt: new Date() })
       .where(eq(platformUsers.id, userId));
   });
-}
-
-export function generateTotpSecret(): string {
-  // RFC 4648 base32, no padding, 32 chars. TOTP secret length is
-  // arbitrary in practice; 20 bytes / 160 bits is the spec-suggested
-  // minimum and 32 chars covers it.
-  const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const bytes = randomBytes(20);
-  let bits = 0;
-  let value = 0;
-  let out = "";
-  for (const b of bytes) {
-    value = (value << 8) | b;
-    bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      out += BASE32_ALPHABET[(value >>> bits) & 0x1f];
-    }
-  }
-  if (bits > 0) out += BASE32_ALPHABET[(value << (5 - bits)) & 0x1f];
-  return out.slice(0, 32);
 }
 
 // Re-exports for tests / scripts that need direct db access

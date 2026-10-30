@@ -16,7 +16,7 @@ export function CafeBillPanel({
   onPaid,
 }: {
   bill: CafeBill;
-  onPaid: (method: PaymentMethod) => void;
+  onPaid: (method: PaymentMethod, billId?: string) => void;
 }) {
   return (
     <section

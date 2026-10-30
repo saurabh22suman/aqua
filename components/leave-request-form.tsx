@@ -4,6 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { requestLeaveAction } from "@/lib/actions/leave";
 import type { LeaveTypeRow } from "@/lib/services/leave";
 
@@ -37,10 +40,9 @@ export function LeaveRequestForm({ types }: { types: LeaveTypeRow[] }) {
     <div className="mt-3 grid gap-3">
       <label className="block">
         <span className="mb-1 block text-[11px] text-ink-3">Type</span>
-        <select
+        <Select
           value={leaveTypeId}
           onChange={(e) => setLeaveTypeId(e.target.value)}
-          className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
         >
           {types.map((type) => (
             <option key={type.id} value={type.id}>
@@ -49,26 +51,31 @@ export function LeaveRequestForm({ types }: { types: LeaveTypeRow[] }) {
               {type.isPaid ? "" : " · unpaid"}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] text-ink-3">From</span>
-          <DateField value={fromDate} onChange={setFromDate} />
-        </label>
-        <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] text-ink-3">To</span>
-          <DateField value={toDate} onChange={setToDate} />
-        </label>
+        <Field id="leave-from-date" label="From" required>
+          {(field) => (
+            <DateField
+              {...field}
+              value={fromDate}
+              onChange={setFromDate}
+            />
+          )}
+        </Field>
+        <Field id="leave-to-date" label="To" required>
+          {(field) => (
+            <DateField {...field} value={toDate} onChange={setToDate} />
+          )}
+        </Field>
       </div>
       <label className="block">
         <span className="mb-1 block text-[11px] text-ink-3">
           Reason (optional)
         </span>
-        <input
+        <Input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
         />
       </label>
       <Button

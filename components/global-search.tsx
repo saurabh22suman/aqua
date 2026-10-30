@@ -15,6 +15,11 @@ import type {
 // caller may see (permission + tenant + location scope), this
 // component only renders what came back. Deep links come from the
 // action, so the box does not need to know the surface's base path.
+//
+// Owner redesign (27 October 2026) — the record search is a standard
+// control: 48px tall, the 10px control radius, 16px control text and
+// the neutral entry border. It stays a NEUTRAL field (no theme tint),
+// so the one accent on the screen is still the owner's action.
 
 const KIND_LABEL: Record<GlobalSearchKind, string> = {
   member: "Members",
@@ -67,17 +72,19 @@ export function GlobalSearch({
           <span className="sr-only">Search</span>
           <Search
             size={16}
-            className="pointer-events-none absolute left-3.5 top-[22px] -translate-y-1/2 text-ink-3"
+            className="pointer-events-none absolute left-4 top-[26px] -translate-y-1/2 text-ink-3"
             aria-hidden="true"
           />
           <input
-            type="search"
+            type="text"
+            inputMode="search"
+            enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search members, enquiries, payments"
             autoComplete="off"
             data-testid="global-search-input"
-            className="w-full min-h-[44px] rounded-ctl border border-line bg-paper pl-10 pr-11 text-[16px] text-ink"
+            className="w-full min-h-12 rounded-ctl border border-[var(--control-border)] bg-paper pl-10 pr-11 text-[16px] text-ink motion-fast transition-colors hover:border-[var(--control-border-hover)] focus:border-[var(--accent-strong)]"
           />
         </label>
         {query.length > 0 ? (
@@ -85,7 +92,7 @@ export function GlobalSearch({
             type="button"
             onClick={clear}
             aria-label="Clear search"
-            className="absolute right-0 top-0 grid h-11 w-11 place-items-center text-ink-3"
+            className="absolute right-0 top-0 grid h-12 w-12 place-items-center text-ink-3"
           >
             <X size={16} aria-hidden="true" />
           </button>

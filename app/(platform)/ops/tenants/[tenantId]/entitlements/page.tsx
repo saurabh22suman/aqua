@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsRead } from "@/lib/auth/ops-operation";
 import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { TenantFeatureToggles } from "../tenant-feature-toggles";
 import { SectionHeader } from "../tenant-detail-shared";
@@ -12,6 +12,11 @@ import { SectionHeader } from "../tenant-detail-shared";
 // Moved out of the Overview page's collapsed "Feature state" section
 // (2026-09-13 audit X-D6) — no longer collapsed by default, since it
 // now has a tab of its own rather than competing for scroll space.
+//
+// Ops redesign (28 October 2026): the write permission is resolved on
+// the server from the session role, so a viewer sees the resolved
+// entitlement and the reason it cannot change it — never a toggle that
+// would fail on submit.
 export default async function TenantEntitlementsPage({
   params,
 }: {
@@ -19,10 +24,15 @@ export default async function TenantEntitlementsPage({
 }) {
   const auth = await platformAuthStatusAction();
   if (auth.kind !== "authenticated") redirect("/ops/login");
+  const canWrite = auth.role === "admin";
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const detail = await getTenantDetail(asTenantId(tenantId));
+  const detail = await runOpsRead(
+    "tenant.detail",
+    tenantId,
+    () => getTenantDetail(asTenantId(tenantId)),
+    "ops_page",
+  );
   if (!detail) notFound();
 
   // X-D4 (2026-09-13 audit) — hide test-fixture feature keys that the
@@ -46,7 +56,11 @@ export default async function TenantEntitlementsPage({
         title="Entitlements"
         subtitle="Resolved from the plan; per-tenant overrides toggle each row on or off (and may carry an expiry)."
       />
-      <TenantFeatureToggles tenantId={detail.id} initial={featureRows} />
+      <TenantFeatureToggles
+        tenantId={detail.id}
+        initial={featureRows}
+        canWrite={canWrite}
+      />
     </section>
   );
 }

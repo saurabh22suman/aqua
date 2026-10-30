@@ -6,7 +6,11 @@ import {
   previewMemberImportAction,
 } from "@/lib/actions/member-import";
 import { memberImportErrorsCsv } from "@/lib/services/member-import-csv";
+import { formatDateIST } from "@/lib/time/tz";
 import { StickyActionBar } from "@/components/ui/StickyActionBar";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 import type {
   MemberImportCommitResult,
   MemberImportPreview,
@@ -143,7 +147,7 @@ export function MemberImportForm() {
               if (!file) return;
               void check(file);
             }}
-            className="mt-1.5 block w-full text-[16px] text-ink-2"
+            className="mt-1.5 block min-h-12 w-full rounded-ctl border border-[var(--control-border)] bg-[var(--control-surface-picker)] px-2 py-1 text-[16px] text-ink-2 file:mr-3 file:min-h-9 file:rounded-[8px] file:border-0 file:bg-[var(--control-surface-action)] file:px-3 file:text-[13px] file:font-medium file:text-ink-2 motion-fast transition-colors hover:border-[var(--control-border-hover)] focus:border-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
         <p className="mt-1.5 text-[12px] text-ink-3">
@@ -170,8 +174,11 @@ export function MemberImportForm() {
 
       {preview ? (
         <section className="rounded-card border border-line bg-paper p-4">
-          <p className="text-[12px] text-ink-3" data-testid="import-preview-file">
-            Previewing <span className="font-medium text-ink-2">{active?.fileName}</span>
+          <h2 className="font-display text-[16px] font-semibold">
+            Review {active?.fileName}
+          </h2>
+          <p className="mt-0.5 text-[12px] text-ink-3" data-testid="import-preview-file">
+            Nothing is saved until you confirm the checked rows.
           </p>
           {preview.fileError ? (
             <p role="alert" className="mt-2 text-[13px] text-ink-2">{preview.fileError}</p>
@@ -185,17 +192,60 @@ export function MemberImportForm() {
             </p>
           ) : (
             <>
-              <p className="mt-1 text-[13px] text-ink">
-                {preview.rows.length} of {preview.totalRows} row
-                {preview.totalRows === 1 ? "" : "s"} ready
-                {preview.errors.length > 0
-                  ? ` · ${preview.errors.length} need fixing`
-                  : ""}
-                .
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-pill bg-deck px-2.5 py-1 text-[11px] font-medium text-ink-2">
+                  {preview.rows.length} ready
+                </span>
+                {preview.errors.length > 0 ? (
+                  <span className="rounded-pill border border-line bg-paper px-2.5 py-1 text-[11px] font-medium text-ink-2">
+                    {preview.errors.length} need correction
+                  </span>
+                ) : null}
+                <span className="text-[12px] text-ink-3">
+                  {preview.totalRows} row{preview.totalRows === 1 ? "" : "s"} in
+                  the file
+                </span>
+              </div>
               <p className="mt-2 text-[13px] text-ink-2">
                 Preview makes no changes. Consent is recorded only after you confirm prior consent and import.
               </p>
+
+              {preview.rows.length > 0 ? (
+                <div className="mt-3 overflow-hidden rounded-ctl border border-line">
+                  <div className="hidden grid-cols-[3.5rem_minmax(0,1.4fr)_auto_minmax(0,1fr)] gap-2 border-b border-line bg-deck px-3 py-2 text-[11px] uppercase tracking-[0.08em] text-ink-3 md:grid">
+                    <span>CSV row</span>
+                    <span>Name</span>
+                    <span>Date of birth</span>
+                    <span>Location</span>
+                  </div>
+                  <ul>
+                    {preview.rows.slice(0, 8).map((row) => (
+                      <li
+                        key={row.rowNumber}
+                        className="grid grid-cols-1 gap-1 border-b border-line px-3 py-2.5 text-[12.5px] last:border-0 md:grid-cols-[3.5rem_minmax(0,1.4fr)_auto_minmax(0,1fr)] md:items-center md:gap-2"
+                      >
+                        <span className="text-[11px] text-ink-3 md:text-[12px]">
+                          Row {row.rowNumber}
+                        </span>
+                        <span className="font-medium text-ink">
+                          {row.fullName}
+                        </span>
+                        <span className="text-ink-2 tabular-nums">
+                          {formatDateIST(row.dateOfBirth)}
+                        </span>
+                        <span className="text-ink-3">{row.locationName}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {preview.totalRows > 8 ? (
+                    <p className="px-3 py-2 text-[12px] text-ink-3">
+                      Showing the first 8; {preview.rows.length - 8} more ready
+                      row{preview.rows.length - 8 === 1 ? "" : "s"} will be
+                      imported.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
 
               {preview.errors.length > 0 ? (
                 <>
@@ -231,26 +281,43 @@ export function MemberImportForm() {
 
       {preview && preview.rows.length > 0 ? (
         <StickyActionBar>
-          <label className="mb-3 flex gap-3 text-[13px] text-ink">
-            <input type="checkbox" checked={attested} onChange={(event) => setAttested(event.target.checked)} className="h-11 w-11 shrink-0" />
-            <span>{IMPORT_ATTESTATION}</span>
-          </label>
-          <label className="mb-3 block text-[13px] text-ink-2">
-            Evidence reference (optional)
-            <input type="text" maxLength={500} value={evidenceNote} onChange={(event) => setEvidenceNote(event.target.value)} className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink" />
-          </label>
-          <button
+          <div className="mb-3 flex gap-3 text-[13px] text-ink">
+            <input
+              id="member-import-attestation"
+              type="checkbox"
+              checked={attested}
+              onChange={(event) => setAttested(event.target.checked)}
+              className="h-11 w-11 shrink-0"
+            />
+            <label htmlFor="member-import-attestation">{IMPORT_ATTESTATION}</label>
+          </div>
+          <div className="mb-3">
+            <Field id="member-import-evidence" label="Evidence reference (optional)">
+              {(field) => (
+                <Input
+                  {...field}
+                  type="text"
+                  maxLength={500}
+                  value={evidenceNote}
+                  onChange={(event) => setEvidenceNote(event.target.value)}
+                />
+              )}
+            </Field>
+          </div>
+          <Button
             type="button"
+            variant="primary"
+            size="md"
             onClick={commit}
             disabled={busy || !attested}
-            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+            className="w-full"
           >
             {busy
               ? "Importing…"
               : `Import ${preview.rows.length} member${
                   preview.rows.length === 1 ? "" : "s"
                 } from ${active?.fileName ?? "the selected file"}`}
-          </button>
+          </Button>
         </StickyActionBar>
       ) : null}
 

@@ -7,6 +7,10 @@ import {
   type TransitionFormInput,
 } from "@/lib/actions/platform-tenants";
 import { buttonClasses } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
+import {
+  OpsWriteGate,
+} from "@/components/ops/ops-display";
 
 // Phase 1.6 — status transitions for the operator detail page. The
 // full detail page is server-rendered; this island owns the only
@@ -32,10 +36,21 @@ const TARGET_BY_BUTTON: Record<Action, Target> = {
 };
 
 const BUTTON_LABEL: Record<Action, string> = {
-  "tenant.activate": "Reactivate",
+  "tenant.activate": "Activate",
   "tenant.suspend": "Suspend",
   "tenant.churn": "Mark churned",
 };
+
+// The label depends on WHERE THE TENANT IS COMING FROM: a trial
+// tenant needs "Activate"; a SUSPENDED tenant needs "Reactivate",
+// because it was switched off. Offering "Reactivate" to a trial
+// tenant described an action the tenant had never been in.
+function buttonLabel(action: Action, currentStatus: string): string {
+  if (action === "tenant.activate") {
+    return currentStatus === "suspended" ? "Reactivate" : "Activate";
+  }
+  return BUTTON_LABEL[action];
+}
 
 function buttonClass(action: Action): string {
   // 2026-09-13 UI/UX audit §7.2 — "Mark churned" is destructive and
@@ -44,20 +59,27 @@ function buttonClass(action: Action): string {
   // stays a neutral secondary and reactivate is the accent primary.
   // The confirm dialog still gates churn/suspend behind a reason.
   if (action === "tenant.churn") {
-    return buttonClasses({ variant: "destructive", pill: true });
+    return buttonClasses({ variant: "destructive" });
   }
   if (action === "tenant.suspend") {
-    return buttonClasses({ variant: "secondary", pill: true });
+    return buttonClasses({ variant: "secondary" });
   }
-  return buttonClasses({ variant: "primary", pill: true });
+  return buttonClasses({ variant: "primary" });
 }
 
 export function StatusTransitionControls({
   tenantId,
   currentStatus,
+  canWrite,
 }: {
   tenantId: string;
   currentStatus: "trial" | "active" | "suspended" | "churned";
+  /**
+   * Resolved on the server from the session role. A viewer gets the
+   * state and the reason it cannot change it — never a control that
+   * would fail on submit. The action still refuses a forged write.
+   */
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -130,24 +152,34 @@ export function StatusTransitionControls({
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
-        {actions.map((a) => (
-          <button
-            key={a}
-            type="button"
-            disabled={isPending}
-            onClick={() => submit(a)}
-            className={buttonClass(a)}
-          >
-            {BUTTON_LABEL[a]}
-          </button>
-        ))}
-        {actions.length === 0 ? (
-          <span className="text-[13px] text-ink-3">
-            No transitions available — churned is terminal.
-          </span>
-        ) : null}
-      </div>
+      <OpsWriteGate
+        canWrite={canWrite}
+        note={
+          <>
+            Read-only: this account can browse, not change, platform data.
+            The tenant&apos;s status is {currentStatus}.
+          </>
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          {actions.map((a) => (
+            <button
+              key={a}
+              type="button"
+              disabled={isPending}
+              onClick={() => submit(a)}
+              className={buttonClass(a)}
+            >
+              {buttonLabel(a, currentStatus)}
+            </button>
+          ))}
+          {actions.length === 0 ? (
+            <span className="text-[13px] text-ink-3">
+              No transitions available — churned is terminal.
+            </span>
+          ) : null}
+        </div>
+      </OpsWriteGate>
 
       {error ? (
         <p
@@ -162,7 +194,7 @@ export function StatusTransitionControls({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={`Confirm ${BUTTON_LABEL[pendingAction]}`}
+          aria-label={`Confirm ${buttonLabel(pendingAction, currentStatus)}`}
           className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-marine/30 px-4 py-6"
           onClick={(e) => {
             if (e.currentTarget === e.target) reset();
@@ -170,7 +202,7 @@ export function StatusTransitionControls({
         >
           <div className="w-full max-w-md rounded-card bg-paper border border-line p-5">
             <p className="font-display text-[16px] font-semibold text-ink">
-              {BUTTON_LABEL[pendingAction]} — confirm
+              {buttonLabel(pendingAction, currentStatus)} — confirm
             </p>
             <p className="mt-1 text-[13px] text-ink-2">
               {pendingAction === "tenant.suspend"
@@ -181,14 +213,13 @@ export function StatusTransitionControls({
               <span className="block text-[13px] font-medium text-ink-2">
                 Reason
               </span>
-              <textarea
+              <Textarea
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 maxLength={500}
                 required
                 rows={3}
                 placeholder="What triggered this?"
-                className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               />
               <span className="mt-1 block text-[12px] text-ink-3">
                 Required. Saved on the platform audit log so the timeline
@@ -204,16 +235,14 @@ export function StatusTransitionControls({
                   variant:
                     pendingAction === "tenant.churn" ? "destructive" : "primary",
                   size: "md",
-                  pill: true,
-                  className: "font-semibold",
                 })}
               >
-                {isPending ? "Saving…" : `Confirm ${BUTTON_LABEL[pendingAction]}`}
+                {isPending ? "Saving…" : `Confirm ${buttonLabel(pendingAction, currentStatus)}`}
               </button>
               <button
                 type="button"
                 onClick={reset}
-                className="rounded-pill px-4 py-2.5 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
+                className={buttonClasses({ variant: "ghost", size: "sm" })}
               >
                 Cancel
               </button>

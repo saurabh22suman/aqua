@@ -39,6 +39,8 @@ describe("HolidaysBoard refresh reconciliation (P1)", () => {
     expect(screen.getByText("Founder's Day")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /remove/i }));
+    expect(removeHolidayAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /confirm removal/i }));
     await waitFor(() => expect(removeHolidayAction).toHaveBeenCalled());
 
     // The server re-render delivers an empty collection.

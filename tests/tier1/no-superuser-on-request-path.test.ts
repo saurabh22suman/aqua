@@ -337,6 +337,24 @@ const ALLOWLIST = new Set([
   // never imported by the app (the no-superuser test's own header
   // documents this exact class).
   "scripts/db-backup.ts",
+  // F08/F09 + OpenPen — three new TEST-ONLY fixtures, listed by EXACT
+  // path (no directory entry, no application entry). Same pattern as the
+  // entries above: the privileged pool is used for FIXTURE SETUP on
+  // tables under FORCE RLS — or points at the test's own disposable
+  // container — and never for the app's request path.
+  //   tests/owner-openpen-20261029/scheduling/mobile/calendar-companion-rendered.ts
+  //     Playwright driver script: seeds disposable tenant/program/batch/
+  //     session rows and removes its own rows; it never serves a request.
+  //   tests/staging-blockers-20261029/d-workflows/tenant-profile-currency-inr.test.ts
+  //     Seeds/asserts/cleans tenant fixtures through the privileged pool
+  //     (tenants has FORCE RLS); the behaviour under test runs through the
+  //     real action/service on the app-role connection.
+  //   tests/staging-blockers-20261029/e-jobs-privacy/invitation-notification-result.test.ts
+  //     Points MIGRATION_DATABASE_URL at its OWN disposable Testcontainer
+  //     admin URI before importing the modules under test.
+  "tests/owner-openpen-20261029/scheduling/mobile/calendar-companion-rendered.ts",
+  "tests/staging-blockers-20261029/d-workflows/tenant-profile-currency-inr.test.ts",
+  "tests/staging-blockers-20261029/e-jobs-privacy/invitation-notification-result.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

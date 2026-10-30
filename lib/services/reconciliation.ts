@@ -6,7 +6,7 @@ import { invoices } from "@/db/schema/invoices";
 import { cashCounts } from "@/db/schema/cash-counts";
 import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import {
   userLabel,
   userRoleNameFor,
@@ -455,7 +455,10 @@ export async function confirmCashCount(
       throw err;
     }
 
-    await tx.insert(auditLog).values({
+    // E-01 — the one audit writer: the cash-count close carries the
+    // request id, so the counter action can be joined to the request
+    // that caused it (architecture §8.11).
+    await writeAudit(tx, {
       tenantId: ctx.tenantId,
       actorId,
       action,
@@ -470,6 +473,7 @@ export async function confirmCashCount(
         needsReview,
         note: note ?? null,
       },
+      requestId: ctx.requestId ?? null,
     });
 
     return { ok: true, variancePaise, systemPaise, needsReview };

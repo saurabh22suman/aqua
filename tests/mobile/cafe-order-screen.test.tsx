@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+
+vi.stubGlobal("crypto", { randomUUID });
 
 // K-07/K-08 — reception café counter render tests.
 //   * empty menu state
@@ -32,6 +35,12 @@ const createOrderAction = vi.hoisted(() => vi.fn());
 const requestCafeBillAction = vi.hoisted(() => vi.fn());
 const recordPaymentAction = vi.hoisted(() => vi.fn());
 const listMembersAction = vi.hoisted(() => vi.fn());
+const listPaymentRecoveryAction = vi.hoisted(() =>
+  vi.fn(async () => ({ open: null, lastCommitted: null })),
+);
+const cancelPaymentRecoveryAction = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, intentId: "intent-1", replayed: false })),
+);
 
 vi.mock("@/lib/actions/orders", () => ({
   createOrderAction,
@@ -39,6 +48,14 @@ vi.mock("@/lib/actions/orders", () => ({
 }));
 vi.mock("@/lib/actions/payments", () => ({ recordPaymentAction }));
 vi.mock("@/lib/actions/people", () => ({ listMembersAction }));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction,
+  cancelPaymentRecoveryAction,
+}));
+
+vi.mock("@/lib/actions/payment-qrs", () => ({
+  listPaymentQrsAction: vi.fn(async () => []),
+}));
 
 import { CafeOrderScreen } from "@/components/cafe-order-screen";
 import type { MemberListRow } from "@/lib/services/people";
@@ -268,6 +285,13 @@ describe("CafeOrderScreen — request bill and collect payment", () => {
       "INV-2026-0001",
     );
 
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", {
+          name: /record payment/i,
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
 
     await screen.findByTestId("cafe-receipt");
@@ -275,6 +299,10 @@ describe("CafeOrderScreen — request bill and collect payment", () => {
       invoiceId: "inv1",
       amountPaise: 26250,
       method: "cash",
+      // F01 — the public action carries a one-time operation key, so a
+      // slow café payment cannot settle the bill twice.
+      idempotencyKey: expect.any(String),
+      observedIntentId: null,
     });
     expect(screen.getByTestId("cafe-receipt").textContent).toContain(
       "INV-2026-0001",
@@ -290,6 +318,13 @@ describe("CafeOrderScreen — request bill and collect payment", () => {
     renderScreen();
     await reachPaymentPhase();
 
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", {
+          name: /record payment/i,
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
 
     const alert = await screen.findByTestId("cafe-payment-error");

@@ -7,6 +7,7 @@ import { substituteCoachAction } from "@/lib/actions/coach-substitution";
 import type { CoachOption } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { formatWeekdayDateIST } from "@/lib/time/tz";
+import { Select } from "@/components/ui/Select";
 import { Tap } from "@/components/ui/Tap";
 
 // F3 (R.1) — substitution surface. Rendered once per upcoming
@@ -103,10 +104,10 @@ export function SessionSubstituteControl({
       <p className="text-[11.5px] text-ink-3">
         Substitute for {formatWeekdayDateIST(sessionDate)}, {startsAt}–{endsAt}
       </p>
-      <select
+      <Select
         value={picked}
         onChange={(e) => setPicked(e.target.value)}
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
+        className="w-full"
         data-testid={`substitute-coach-${sessionId}`}
       >
         <option value="">Choose {resolveTerm(terminology, "coach", 1)}…</option>
@@ -115,7 +116,7 @@ export function SessionSubstituteControl({
             {c.fullName}
           </option>
         ))}
-      </select>
+      </Select>
       {error ? (
         <div className="flex items-start gap-2 rounded-ctl bg-deck border border-line px-3 py-2" role="alert">
           <AlertTriangle size={14} className="text-ink-2 flex-none mt-0.5" />

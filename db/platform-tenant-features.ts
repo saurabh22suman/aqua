@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 import { withPlatformAdmin } from "./scope";
 import { withTenant } from "./tenant";
 import { tenants } from "./schema/tenants";
-import { recordOpsAudit } from "./ops-action";
+import { currentOpsScope, recordOpsAudit, recordOpsNoop } from "./ops-action";
 import { tenantFeatures } from "./schema/tenant-features";
 import { features } from "./schema/platform";
 import type { TenantId, UserId } from "@/lib/ids";
@@ -158,6 +159,18 @@ export async function upsertTenantFeature(
           targetType: "tenant_feature",
           targetId: null,
           detail: { featureKey: input.featureKey },
+        });
+      } else if (currentOpsScope()) {
+        // No-op evidence: the clear changed nothing, so its evidence is
+        // written in THIS transaction (never a post-commit write). Only
+        // inside the audited opsAction pipeline — a direct service call has
+        // no operation to evidence.
+        await recordOpsNoop(tx, {
+          correlationId: randomUUID(),
+          origin: "server_action",
+          scope: "tenant_feature.clear",
+          actorId: ctx.actorId,
+          tenantId,
         });
       }
       // No-op clear (no row to delete) returns ok with mode recorded;

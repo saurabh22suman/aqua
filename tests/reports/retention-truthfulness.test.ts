@@ -1,16 +1,21 @@
 // @vitest-environment node
 //
-// Retention must not claim risk it cannot support.
+// The retention view must not claim more than it knows.
 //
 // The owner UX audit (2026-10-24) found a freshly seeded club whose
 // Reports page said all eight swimmers were "at risk" — with no
 // attendance history at all, and nothing on Home to say otherwise.
 //
-// "At risk" is a claim about someone NOT doing something they had
-// every chance to do, so it needs two facts:
+// The human approved the factual records summary on 30 October 2026
+// (docs/audits/staging-blockers-20261029/d-workflows/dot-three-
+// 20261030/HUMAN-APPROVED-RETENTION-DEFINITION.md): the view counts
+// the active members who were here for the whole period and have NO
+// attendance record in it. A record is any mark — present, late or
+// absent; a member with no mark is unknown, never absent.
 //
-//   1. there was a chance — attendance-eligible sessions ran in the
-//      last 30 days; and
+// Counting needs two facts:
+//
+//   1. there was history — sessions ran in the last 30 days; and
 //   2. the member was around — they joined on or before the window
 //      started. A swimmer who joined yesterday had no chance to
 //      attend a session that happened before they joined.
@@ -148,9 +153,9 @@ afterAll(async () => {
   await db.stop();
 });
 
-describe("retention view — only claims risk it can support", () => {
+describe("retention view — only counts what it can support", () => {
   it("reports insufficient history when no session ran in the window", async () => {
-    // A club with nothing scheduled cannot have a retention problem.
+    // A club with nothing scheduled has no attendance history.
     const tenantId = await seedTenant({
       memberJoinedDaysAgo: 200,
       sessionsInWindow: 0,
@@ -164,8 +169,8 @@ describe("retention view — only claims risk it can support", () => {
 
   it("reports insufficient history when no member was around for the window", async () => {
     // The seeded-club case: the swimmers joined today, so they have
-    // had no chance to attend anything. Calling them at risk was the
-    // false alarm the audit found.
+    // had no chance to attend anything. Counting them was the false
+    // alarm the audit found.
     const tenantId = await seedTenant({
       memberJoinedDaysAgo: 0,
       sessionsInWindow: 3,
@@ -177,7 +182,7 @@ describe("retention view — only claims risk it can support", () => {
     expect(row.row.memberCountAtRisk).toBe(0);
   });
 
-  it("claims risk only for a member who was around and did not attend", async () => {
+  it("counts a member who was around and has no attendance record", async () => {
     const tenantId = await seedTenant({
       memberJoinedDaysAgo: 200,
       sessionsInWindow: 3,
@@ -189,7 +194,7 @@ describe("retention view — only claims risk it can support", () => {
     expect(row.row.memberCountAtRisk).toBe(1);
   });
 
-  it("does not claim risk for a member who did attend", async () => {
+  it("does not count a member who has an attendance record", async () => {
     const tenantId = await seedTenant({
       memberJoinedDaysAgo: 200,
       sessionsInWindow: 2,

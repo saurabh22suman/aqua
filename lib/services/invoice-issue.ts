@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { tenants } from "@/db/schema/tenants";
 import { invoices, invoiceLineItems } from "@/db/schema/invoices";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import { resolveConfigInTx } from "@/db/config";
 import { allocateInvoiceNumber } from "@/lib/services/invoice-numbering";
 import { GST_RATE_KEY } from "@/lib/services/tax";
@@ -81,6 +81,7 @@ export async function issueInvoiceInTx(
   tx: TenantTx,
   raw: IssueInvoiceInput,
   actorId: UserId | null,
+  requestId: string | null = null,
 ): Promise<IssueInvoiceResult> {
   const parsed = issueInvoiceInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -214,8 +215,9 @@ export async function issueInvoiceInTx(
   // A user-issued invoice carries the actor; a system-issued renewal
   // (the invoices.generate job) carries actor_type='system' with no
   // actor_id, which the old NOT NULL column made impossible (F-15
-  // job gap).
-  await tx.insert(auditLog).values({
+  // job gap). The request id joins the row to the request that caused
+  // it (architecture §8.11); a job has none, so it stays NULL.
+  await writeAudit(tx, {
     tenantId,
     actorType: actorId ? "user" : "system",
     actorId: actorId ?? null,
@@ -232,6 +234,7 @@ export async function issueInvoiceInTx(
       totalPaise,
       subscriptionId: input.subscriptionId ?? null,
     },
+    requestId,
   });
 
   await enqueueMemberNotification(tx, { tenantId, eventKey: `invoice:${invoice.id}`, essential: true,

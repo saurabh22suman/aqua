@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { useActionState } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -18,8 +20,6 @@ import type {
 // these through the same service (the collect screen), never edits.
 
 // 16px per DESIGN.md §2: anything smaller triggers iOS zoom-on-focus.
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function AddUpiForm() {
   const [state, formAction, isPending] = useActionState(createPaymentQrAction, {
@@ -34,29 +34,25 @@ function AddUpiForm() {
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Nickname
           </span>
-          <input name="nickname" required maxLength={60} placeholder="Office account" className={inputClass} />
+          <Input name="nickname" required maxLength={60} placeholder="Office account"  />
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             UPI ID
           </span>
-          <input name="upiId" required maxLength={120} placeholder="club@okhdfcbank" className={inputClass} />
+          <Input name="upiId" required maxLength={120} placeholder="club@okhdfcbank"  />
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Payee name
           </span>
-          <input name="payeeName" required maxLength={120} placeholder="Sharma Sports" className={inputClass} />
+          <Input name="payeeName" required maxLength={120} placeholder="Sharma Sports"  />
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" size="md" pill disabled={isPending}>
           {isPending ? "Saving…" : "Add UPI QR"}
-        </button>
+        </Button>
         {!state.ok && state.error ? (
           <span role="alert" className="text-[12px] text-ink-2">
             {state.error}
@@ -85,29 +81,25 @@ function AddImageForm() {
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Nickname
           </span>
-          <input name="nickname" required maxLength={60} placeholder="Bank QR" className={inputClass} />
+          <Input name="nickname" required maxLength={60} placeholder="Bank QR"  />
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             QR image (PNG, JPEG or WebP, max 256 KB)
           </span>
-          <input
+          <Input
             type="file"
             name="image"
             accept="image/png,image/jpeg,image/webp"
             required
-            className="block min-h-11 w-full text-[16px] text-ink-2"
+            className="block w-full text-ink-2"
           />
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" size="md" pill disabled={isPending}>
           {isPending ? "Saving…" : "Add image QR"}
-        </button>
+        </Button>
         {!state.ok && state.error ? (
           <span role="alert" className="text-[12px] text-ink-2">
             {state.error}
@@ -225,7 +217,7 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Nickname
             </span>
-            <input value={nickname} onChange={(e) => setNickname(e.target.value)} className={inputClass} />
+            <Input value={nickname} onChange={(e) => setNickname(e.target.value)}  />
           </label>
           {qr.kind === "upi" ? (
             <>
@@ -233,13 +225,13 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   UPI ID
                 </span>
-                <input value={upiId} onChange={(e) => setUpiId(e.target.value)} className={inputClass} />
+                <Input value={upiId} onChange={(e) => setUpiId(e.target.value)}  />
               </label>
               <label className="block">
                 <span className="block text-[12px] font-medium text-ink-2 mb-1">
                   Payee name
                 </span>
-                <input value={payeeName} onChange={(e) => setPayeeName(e.target.value)} className={inputClass} />
+                <Input value={payeeName} onChange={(e) => setPayeeName(e.target.value)}  />
               </label>
             </>
           ) : (
@@ -248,14 +240,17 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
             </p>
           )}
         </div>
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="md"
+          pill
           disabled={pending}
           onClick={save}
-          className="mt-3 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+          className="mt-3"
         >
           {pending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </details>
 
       {message ? (
@@ -268,45 +263,74 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
 }
 
 export function PaymentQrManager({ qrs }: { qrs: PaymentQrRow[] }) {
+  const [addOpen, setAddOpen] = useState(false);
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <section className="rounded-card bg-paper border border-line p-5">
         <h2 className="font-display text-[16px] font-semibold text-ink">
-          Add a UPI QR
+          Collection destinations
         </h2>
-        <p className="mt-1 mb-4 text-[12px] text-ink-3">
-          The app draws the QR from your UPI ID, so the collect screen can
-          put the amount straight into the payment request.
+        <p className="mt-1 text-[12.5px] text-ink-3">
+          A QR helps someone pay. The payment is still recorded by authorised
+          staff — a scan is not a confirmation.
         </p>
-        <AddUpiForm />
-      </section>
-
-      <section className="rounded-card bg-paper border border-line p-5">
-        <h2 className="font-display text-[16px] font-semibold text-ink">
-          Add an image QR
-        </h2>
-        <p className="mt-1 mb-4 text-[12px] text-ink-3">
-          For a bank or merchant QR that is already an image. The amount
-          cannot be pre-filled on these.
-        </p>
-        <AddImageForm />
-      </section>
-
-      <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Your QRs
-        </h2>
         {qrs.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
-            No payment QRs yet. Add one above to show it at reception.
+          <p className="mt-3 rounded-ctl bg-deck px-4 py-4 text-[13px] text-ink-3">
+            No payment QRs yet. Add one to show it at reception.
           </p>
         ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
+          <div className="mt-2 divide-y divide-line">
             {qrs.map((qr) => (
               <QrRow key={qr.id} qr={qr} />
             ))}
           </div>
         )}
+      </section>
+
+      <section className="rounded-card bg-paper border border-line p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-display text-[16px] font-semibold text-ink">
+              Add a payment QR
+            </h2>
+            <p className="mt-0.5 text-[12.5px] text-ink-3">
+              Generate one from a UPI ID, or upload a bank/merchant image.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            aria-expanded={addOpen}
+            aria-controls="payment-qr-add"
+            onClick={() => setAddOpen((open) => !open)}
+          >
+            {addOpen ? "Close" : "Add a payment QR"}
+          </Button>
+        </div>
+
+        {addOpen ? (
+          <div id="payment-qr-add" className="mt-4 space-y-5">
+            <div>
+              <h3 className="text-[14px] font-medium text-ink">
+                Generated UPI QR
+              </h3>
+              <p className="mb-3 mt-0.5 text-[12px] text-ink-3">
+                The app draws the QR from your UPI ID, so the collect screen can
+                put the amount straight into the payment request.
+              </p>
+              <AddUpiForm />
+            </div>
+            <div className="border-t border-line pt-4">
+              <h3 className="text-[14px] font-medium text-ink">Image QR</h3>
+              <p className="mb-3 mt-0.5 text-[12px] text-ink-3">
+                For a bank or merchant QR that is already an image. The amount
+                cannot be pre-filled on these.
+              </p>
+              <AddImageForm />
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

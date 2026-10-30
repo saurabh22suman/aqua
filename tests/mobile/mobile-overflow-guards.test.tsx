@@ -8,10 +8,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 //
 // jsdom cannot lay out, so these assertions pin the class contract the
 // fix is made of: the select must be allowed to shrink and wrap
-// (w-full min-w-0), the batch rows must wrap (flex-wrap), and the time
-// inputs must be allowed to shrink below their intrinsic width
-// (min-w-0). Mutation proof: remove any one class and the matching
-// assertion goes red.
+// (w-full min-w-0), the batch rows must wrap, and the time CONTROLS
+// must be allowed to shrink below their intrinsic width (min-w-0).
+// Mutation proof: remove any one class and the matching assertion goes
+// red.
 
 const listBatchesAction = vi.fn();
 const listMemberEnrolmentsAction = vi.fn();
@@ -55,13 +55,38 @@ afterEach(() => {
   checkCoachConflictsAction.mockReset();
 });
 
-function expectTimeInputsShrinkable(container: HTMLElement): void {
-  const timeInputs = container.querySelectorAll<HTMLInputElement>(
-    'input[type="time"]',
+// The shared time control (components/ui/TimeField.tsx) is a labelled
+// group of three selects, not a native <input type="time"> — so the
+// guard reads the group. The two facts it pins are the ones the native
+// inputs were checked for: the row WRAPS on a phone (one column until
+// the sm breakpoint) and every time control may SHRINK below its
+// intrinsic width, so a long option cannot push the layout wider than
+// the screen. Mutation proof: remove any one of these classes and the
+// matching assertion goes red.
+function expectTimeControlsShrinkable(container: HTMLElement): void {
+  const groups = Array.from(container.querySelectorAll("fieldset")).filter(
+    (node) => node.querySelector("legend") !== null,
   );
-  expect(timeInputs.length).toBe(2);
-  for (const input of timeInputs) {
-    expect(input.className).toContain("min-w-0");
+  expect(groups.length).toBe(2);
+
+  // Both groups share one row: a single column on a phone, two columns
+  // from the sm breakpoint.
+  const row = groups[0]?.parentElement;
+  expect(row?.className ?? "").toContain("grid-cols-1");
+  expect(row?.className ?? "").toContain("sm:grid-cols-2");
+
+  for (const group of groups) {
+    // The group itself may shrink below the width of its three controls.
+    expect(group.className).toContain("min-w-0");
+    // Each control sits in a min-w-0 cell, and the tracks are
+    // minmax(0,…) so a grid item may shrink below its intrinsic width.
+    const cells = group.querySelectorAll("label.min-w-0");
+    expect(cells.length).toBe(3);
+    const tracks = group.querySelector("div.grid");
+    expect(tracks?.className ?? "").toContain("minmax(0,");
+    for (const cell of cells) {
+      expect(cell.className).toContain("min-w-0");
+    }
   }
 }
 
@@ -85,11 +110,11 @@ describe("member detail enrolment select can wrap and shrink (F6)", () => {
 });
 
 describe("batch create capacity+time row wraps (F7)", () => {
-  // The row is a two-column grid on a phone (the audit asked for
-  // persistent visible labels, so each field is now a labelled cell).
-  // Two columns wrap by definition; the time inputs still have to be
+  // Capacity sits on its own full-width row. The two time fields share
+  // a row that is ONE column on a phone (two from the sm breakpoint),
+  // so the row wraps by definition; the time controls still have to be
   // shrinkable so they cannot push the row wider than the screen.
-  it("row wraps and both time inputs have min-w-0", () => {
+  it("row wraps and both time controls can shrink", () => {
     checkCoachConflictsAction.mockResolvedValue({ conflicts: [] });
 
     const { container } = render(
@@ -103,14 +128,15 @@ describe("batch create capacity+time row wraps (F7)", () => {
     );
 
     const capacity = screen.getByLabelText("Capacity");
-    // The field's wrapper is the labelled cell; the row is its parent.
-    expect(capacity.parentElement?.parentElement?.className).toContain("grid-cols-2");
-    expectTimeInputsShrinkable(container);
+    // Capacity is a full-width control on its own row, so it cannot
+    // widen the row it sits in.
+    expect(capacity.className).toContain("w-full");
+    expectTimeControlsShrinkable(container);
   });
 });
 
 describe("batch edit capacity+time row wraps (F7)", () => {
-  it("row wraps and both time inputs have min-w-0", () => {
+  it("row wraps and both time controls can shrink", () => {
     checkCoachConflictsAction.mockResolvedValue({ conflicts: [] });
 
     const { container } = render(
@@ -138,8 +164,9 @@ describe("batch edit capacity+time row wraps (F7)", () => {
     );
 
     const capacity = screen.getByLabelText("Capacity");
-    // The field's wrapper is the labelled cell; the row is its parent.
-    expect(capacity.parentElement?.parentElement?.className).toContain("grid-cols-2");
-    expectTimeInputsShrinkable(container);
+    // Capacity is a full-width control on its own row, so it cannot
+    // widen the row it sits in.
+    expect(capacity.className).toContain("w-full");
+    expectTimeControlsShrinkable(container);
   });
 });

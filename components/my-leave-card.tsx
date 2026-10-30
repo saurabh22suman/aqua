@@ -1,7 +1,7 @@
 import { Palmtree } from "lucide-react";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { CancelLeaveButton } from "@/components/cancel-leave-button";
-import { LeaveRequestForm } from "@/components/leave-request-form";
+import { DeferredLeaveRequest } from "@/components/deferred-leave-request";
 import { formatDateIST } from "@/lib/time/tz";
 import type {
   LeaveBalanceRow,
@@ -65,12 +65,7 @@ export function MyLeaveCard({
         ))}
       </ul>
 
-      <details className="mt-3 border-t border-line pt-3">
-        <summary className="min-h-11 cursor-pointer text-[13.5px] font-medium">
-          Request leave
-        </summary>
-        <LeaveRequestForm types={types} />
-      </details>
+      <DeferredLeaveRequest types={types} />
 
       {requests.length > 0 ? (
         <ul className="mt-3 border-t border-line pt-1">

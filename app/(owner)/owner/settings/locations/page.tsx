@@ -3,6 +3,8 @@ import { hasPermission } from "@/lib/auth/permission";
 import { listAdminLocationsAction } from "@/lib/actions/locations";
 import { BackLink } from "@/components/ui/BackLink";
 import { LocationManager } from "@/components/settings/location-manager";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // U-07 — owner locations and business hours. The schema's locations
 // table is the O-01 hierarchy's top node; this editor covers name,
@@ -22,21 +24,19 @@ export default async function LocationsSettingsPage() {
   const multiLocation = locations.length > 1;
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/settings" label="Settings" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        {multiLocation ? "Locations" : "Academy location"}
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        {multiLocation
+      <PageHeader
+        title={<>{multiLocation ? "Locations" : "Academy location"}</>}
+        purpose={<>{multiLocation
           ? "Each site's name, address and business hours. Staff and reports can be scoped per site."
-          : "Your academy's name, address and business hours. Everything in Aqua implies this site until you add another."}
-      </p>
+          : "Your academy's name, address and business hours. Everything in Aqua implies this site until you add another."}</>}
+      />
 
       <LocationManager
         initial={locations}
         canWrite={hasPermission(ctx, "settings.manage")}
       />
-    </main>
+    </OwnerPage>
   );
 }

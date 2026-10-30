@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { InstallRibbon } from "@/components/pwa/install-ribbon";
 import {
   INSTALL_CONFIRMATION_MS,
   INSTALL_DISMISSAL_KEY,
@@ -20,16 +20,14 @@ import {
 
 // The install offer.
 //
-// Rules this component keeps (docs/design-system/pwa.md), plus the
+// Rules this component keeps (docs/design-system/pwa.md) plus the
 // coordinator's browser review of 26 October 2026, which measured the
 // previous card at 138px tall covering three of the nine visible member
 // rows at 390x844:
 //
 //   * COMPACT — one row: the action and a dismissal. No paragraph, no
 //     card, nothing that reads like a modal.
-//   * NON-BLOCKING — the offer is pointer-transparent, so the page
-//     beneath it stays fully usable, and it sits in the shell's
-//     bottom-navigation gutter so it never covers the navigation.
+//   * NON-BLOCKING — the offer never blocks the page beneath it.
 //   * APPROPRIATELY TIMED — it arrives after a short delay, it leaves
 //     again on its own, and it does not come back in the same session.
 //     It is a nudge, not something that waits to be dismissed.
@@ -42,8 +40,17 @@ import {
 //   * NEVER on the sign-in journey, the operator console, or a signed
 //     parent link.
 //
-// The decision itself lives in lib/offline/install-prompt.ts so it can be
-// tested without a browser.
+// The presentation is the side ribbon (30 October 2026, human request
+// and docs/design/pwa-side-ribbon-20261030/ribbon-contract.md): a small
+// tab on the right edge that opens the install options and folds back
+// into the tab when the offer is over, instead of the offer simply
+// disappearing. The ribbon owns the expand, collapse and move
+// behaviour; this component owns the install POLICY, which has not
+// changed: the 4s delay, the 10s visible duration, the month-long
+// dismissal and the once-per-session marker all stay as they were.
+//
+// The decision itself lives in lib/offline/install-prompt.ts so it can
+// be tested without a browser.
 
 export type InstallAffordanceProps = {
   /** The current path; the offer is suppressed on sign-in, ops and parent surfaces. */
@@ -68,8 +75,9 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
   const [promptEvent, setPromptEvent] = useState<InstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
   const [online, setOnline] = useState(true);
-  const [offerVisible, setOfferVisible] = useState(false);
   const [confirmationVisible, setConfirmationVisible] = useState(false);
+  const [ribbonMounted, setRibbonMounted] = useState(false);
+  const ribbonMountedRef = useRef(false);
 
   const surfaceAllowed = isInstallInvitationSurface(pathname);
   const offerable = availability === "browser-prompt" || availability === "ios-guide";
@@ -134,22 +142,24 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
 
   // The offer arrives late, so it never interrupts the first thing the
   // person came to do.
+  //
+  // It arrives COLLAPSED. The independent Chrome review of 30 October
+  // 2026 found that an opening panel covered the page's filters, and
+  // that a collapsed ribbon which opened by itself also replayed that
+  // opening when the device came back online. The ribbon now opens only
+  // when the person asks for it.
   useEffect(() => {
     if (!offerable || !online || !surfaceAllowed) return;
-    if (offerShownThisSession(window.sessionStorage)) return;
+    const alreadyShown = offerShownThisSession(window.sessionStorage);
     const timer = setTimeout(() => {
-      setOfferVisible(true);
-      rememberOfferShown(window.sessionStorage);
+      if (!ribbonMountedRef.current) {
+        ribbonMountedRef.current = true;
+        setRibbonMounted(true);
+      }
+      if (!alreadyShown) rememberOfferShown(window.sessionStorage);
     }, INSTALL_OFFER_DELAY_MS);
     return () => clearTimeout(timer);
   }, [offerable, online, surfaceAllowed]);
-
-  // …and it leaves again on its own.
-  useEffect(() => {
-    if (!offerVisible) return;
-    const timer = setTimeout(() => setOfferVisible(false), INSTALL_OFFER_VISIBLE_MS);
-    return () => clearTimeout(timer);
-  }, [offerVisible]);
 
   useEffect(() => {
     if (!confirmationVisible) return;
@@ -160,7 +170,8 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
   const dismiss = useCallback(() => {
     writeInstallDismissal(window.localStorage, Date.now());
     rememberOfferShown(window.sessionStorage);
-    setOfferVisible(false);
+    setRibbonMounted(false);
+    ribbonMountedRef.current = false;
     setAvailability("dismissed");
   }, []);
 
@@ -196,37 +207,16 @@ export function InstallAffordance({ pathname }: InstallAffordanceProps) {
     );
   }
 
-  if (!offerable || !offerVisible) return null;
+  if (availability !== "browser-prompt" && availability !== "ios-guide") return null;
+  if (!ribbonMounted) return null;
 
-  // The 64px offset is the shell's bottom-navigation gutter (the same
-  // one components/ui/StickyActionBar.tsx uses): the offer must never
-  // cover the navigation. The pill is bottom-LEFT and narrow, so it
-  // never covers the row actions on the right of a list.
   return (
-    <section
-      aria-label="Install Aqua"
-      className="pointer-events-none fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom))] z-40 flex justify-start px-4 pb-3"
-    >
-      <div className="pointer-events-auto flex w-fit max-w-[16rem] items-center gap-1 rounded-pill border border-line bg-paper py-1 pl-1 pr-1 shadow-2">
-        {availability === "browser-prompt" ? (
-          <Button variant="primary" size="sm" onClick={() => void install()}>
-            Install Aqua
-          </Button>
-        ) : (
-          <span className="px-2 text-[13px] leading-tight text-ink-2">
-            Share ▸ Add to Home Screen
-          </span>
-        )}
-        <button
-          type="button"
-          aria-label="Not now"
-          onClick={dismiss}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-pill text-[15px] text-ink-3 hover:bg-deck hover:text-ink-2"
-        >
-          <span aria-hidden="true">✕</span>
-        </button>
-      </div>
-    </section>
+    <InstallRibbon
+      availability={availability}
+      onInstall={() => void install()}
+      onDismiss={dismiss}
+      visibleDurationMs={INSTALL_OFFER_VISIBLE_MS}
+    />
   );
 }
 

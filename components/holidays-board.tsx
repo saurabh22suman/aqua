@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarOff, Trash2 } from "lucide-react";
@@ -8,6 +9,9 @@ import type { HolidayRow } from "@/lib/services/holidays";
 import { formatDateIST } from "@/lib/time/tz";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { DateField } from "@/components/ui/DateField";
+import { Dialog } from "@/components/ui/Dialog";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
 // R.3 (docs/five-day-work-guide.md) — owner holiday/closure editor.
 // The session generator already skips these dates; this is the surface
@@ -30,6 +34,10 @@ export function HolidaysBoard({
   const [recurringYearly, setRecurringYearly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingRemove, setPendingRemove] = useState<HolidayRow | null>(null);
+  // MD-01 follow-up — the removal refusal must be visible in the active
+  // confirmation, not inside the separate (possibly closed) add editor.
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   useEffect(() => {
     // The server component re-renders after router.refresh(); adopting
@@ -66,80 +74,53 @@ export function HolidaysBoard({
     }
   }
 
-  async function remove(holidayId: string) {
+  async function remove(holidayId: string): Promise<boolean> {
     setBusy(true);
-    setError(null);
+    setRemoveError(null);
     try {
-      const res = await removeHolidayAction({ holidayId });
-      if (res.kind === "error") {
-        setError(res.message);
-        return;
+      // A structured result proves its own outcome. A THROWN result proves
+      // neither success nor failure: the server may have committed the
+      // removal before the response was lost.
+      let res: Awaited<ReturnType<typeof removeHolidayAction>>;
+      try {
+        res = await removeHolidayAction({ holidayId });
+      } catch {
+        setRemoveError(
+          "The result could not be confirmed — the holiday may or may not have been removed. Refresh the list before retrying, so a removal is not applied twice.",
+        );
+        return false;
       }
-      router.refresh();
-    } catch {
-      setError(
-        "The removal did not complete. The list was not changed — refresh and retry.",
+      if (res.kind === "error") {
+        setRemoveError(res.message);
+        return false;
+      }
+
+      // Confirmed removal: reflect the committed row locally. The refresh
+      // is a re-render, not part of the removal, so its failure must not
+      // rewrite this outcome.
+      setHolidays((current) =>
+        current.filter((holiday) => holiday.id !== holidayId),
       );
+      try {
+        router.refresh();
+      } catch {
+        // Keep the confirmed local state.
+      }
+      return true;
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">
-            Holiday name
-          </span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Founder's Day"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-            data-testid="holiday-name"
-          />
-        </label>
-        <div>
-          <label
-            htmlFor="holiday-date"
-            className="block text-[12px] text-ink-3 mb-1"
-          >
-            Date
-          </label>
-          <DateField
-            id="holiday-date"
-            value={holidayDate}
-            onChange={setHolidayDate}
-            tone="deck"
-            data-testid="holiday-date"
-          />
-        </div>
-        <label className="flex min-h-[44px] items-center gap-2 text-[13px] text-ink-2">
-          <input
-            type="checkbox"
-            checked={recurringYearly}
-            onChange={(e) => setRecurringYearly(e.target.checked)}
-            className="h-4 w-4"
-          />
-          Repeats every year on this date
-        </label>
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || !name.trim() || !holidayDate}
-          className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
-        >
-          Add holiday
-        </button>
-        {error ? (
-          <p role="alert" className="text-[12px] text-ink-2">
-            {error}
-          </p>
-        ) : null}
-      </div>
-
+    <div className="space-y-5">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
+        Holiday list
+      </h2>
+      <p className="max-w-[65ch] text-[12.5px] text-ink-3">
+        Session generation skips these dates. This does not cancel sessions
+        already generated.
+      </p>
       {holidays.length === 0 ? (
         <div className="rounded-ctl border border-line bg-paper">
           <EmptyState
@@ -163,7 +144,10 @@ export function HolidaysBoard({
               </div>
               <button
                 type="button"
-                onClick={() => remove(h.id)}
+                onClick={() => {
+                  setRemoveError(null);
+                  setPendingRemove(h);
+                }}
                 disabled={busy}
                 aria-label={`Remove ${h.name}`}
                 className="flex h-11 w-11 flex-none items-center justify-center rounded-ctl text-ink-3 disabled:opacity-50"
@@ -174,6 +158,112 @@ export function HolidaysBoard({
           ))}
         </ul>
       )}
+
+      <details className="rounded-card border border-line bg-paper p-5">
+        <summary className="flex min-h-11 cursor-pointer items-center font-display text-[16px] font-semibold text-ink">
+          Add holiday
+        </summary>
+        <div className="mt-3 space-y-2.5">
+        <label className="block">
+          <span className="block text-[12px] text-ink-3 mb-1">
+            Holiday name
+          </span>
+          <Input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Founder's Day"
+            className="w-full border text-[16px]"
+            data-testid="holiday-name"
+          />
+        </label>
+        <Field id="holiday-date" label="Date" required>
+          {(field) => (
+            <DateField
+              {...field}
+              value={holidayDate}
+              onChange={setHolidayDate}
+              tone="deck"
+              data-testid="holiday-date"
+            />
+          )}
+        </Field>
+        <label className="flex min-h-[44px] items-center gap-2 text-[13px] text-ink-2">
+          <input
+            type="checkbox"
+            checked={recurringYearly}
+            onChange={(e) => setRecurringYearly(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Repeats every year on this date
+        </label>
+        <Button
+          variant="primary"
+          size="md"
+          className="w-full"
+          type="button"
+          onClick={submit}
+          disabled={busy || !name.trim() || !holidayDate}>
+        Add holiday
+      </Button>
+        {error ? (
+          <p role="alert" className="text-[12px] text-ink-2">
+            {error}
+          </p>
+        ) : null}
+        </div>
+      </details>
+
+      <Dialog
+        open={pendingRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRemove(null);
+            setRemoveError(null);
+          }
+        }}
+        title="Remove this holiday?"
+        description={
+          pendingRemove
+            ? `${pendingRemove.name} · ${formatDateIST(pendingRemove.holidayDate)}. Removing this holiday allows future session generation for this date. Existing sessions are unchanged.`
+            : undefined
+        }
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setPendingRemove(null);
+                setRemoveError(null);
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => {
+                if (!pendingRemove) return;
+                void (async () => {
+                  const removed = await remove(pendingRemove.id);
+                  if (removed) setPendingRemove(null);
+                })();
+              }}
+            >
+              {busy ? "Removing…" : "Confirm removal"}
+            </Button>
+          </>
+        }
+      >
+        {removeError ? (
+          <p role="alert" className="text-[13px] text-ink-2">
+            {removeError}
+          </p>
+        ) : null}
+      </Dialog>
     </div>
   );
 }

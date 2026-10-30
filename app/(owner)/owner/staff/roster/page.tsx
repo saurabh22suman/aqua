@@ -7,9 +7,13 @@ import {
   listRosterWeekAction,
   listShiftTemplatesAction,
 } from "@/lib/actions/shifts";
-import { addDays, todayInZone, weekdayOf } from "@/lib/time/tz";
-import { BackLink } from "@/components/ui/BackLink";
+import { addDays, formatWeekdayDateIST, todayInZone, weekdayOf } from "@/lib/time/tz";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { StaffRosterBoard } from "@/components/staff-roster-board";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // V-23 — the owner's weekly roster builder. Draft shifts are built
 // here and published as a week; until publication they are invisible
@@ -59,85 +63,93 @@ export default async function StaffRosterPage({
     `/owner/staff/roster?week=${date}${locationId ? `&location=${locationId}` : ""}`;
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <BackLink href="/owner/staff" label="Staff" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">Roster</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Week of {weekStart} ({timezone}). Publish the week when it is
-        ready — staff see their shifts on the Me tab.
-      </p>
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Link
-          href="/owner/staff/check-in-qr"
-          className="inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
-        >
-          Premises check-in QR →
-        </Link>
-        <Link
-          href="/owner/staff/leave"
-          className="inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
-        >
-          Leave requests →
-        </Link>
-      </div>
+    <OwnerPage>
+      <PageHeader
+        title={<>Roster</>}
+        purpose={<>Build the week and publish it when it is ready. Staff see their
+        published shifts on the Me tab.</>}
+      />
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Link
           href={base(addDays(weekStart, -7))}
-          className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
-          ← Prev
+          Previous week
         </Link>
         <Link
           href={base(todayInZone(timezone))}
-          className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
           Today
         </Link>
         <Link
           href={base(addDays(weekStart, 7))}
-          className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
-          Next →
+          Next week
+        </Link>
+        <Link
+          href="/owner/staff/leave"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
+        >
+          Leave requests
+        </Link>
+        <Link
+          href="/owner/staff/check-in-qr"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
+        >
+          Check-in poster
         </Link>
       </div>
 
       {locations.length > 1 ? (
         <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
           <input type="hidden" name="week" value={weekStart} />
-          <label className="block">
-            <span className="mb-0.5 block text-[11px] text-ink-3">Location</span>
-            <select
-              name="location"
-              defaultValue={locationId ?? ""}
-              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
-            >
-              <option value="">All locations</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
-          >
+          <Field id="roster-location" label="Location">
+            {() => (
+              <Select
+                id="roster-location"
+                name="location"
+                defaultValue={locationId ?? ""}
+              >
+                <option value="">All locations</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          {/* P2 (independent review) — a standard form action beside a
+              shared control is the shared STANDARD control (48px, the
+              10px radius, 16px text), not the old 44px pill. */}
+          <Button type="submit" variant="primary" size="md" data-testid="roster-apply">
             Apply
-          </button>
+          </Button>
         </form>
       ) : null}
 
-      <StaffRosterBoard
-        weekStart={weekStart}
-        shifts={shifts}
-        templates={templates}
-        staff={staff}
-        locations={locations}
-        weekLocationId={locationId ?? null}
-      />
-    </main>
+      <section className="mt-5 rounded-card border border-line bg-paper p-5">
+        <h2 className="font-display text-[16px] font-semibold text-ink">
+          Working week
+        </h2>
+        <p className="mt-0.5 text-[12.5px] text-ink-3">
+          Week of {formatWeekdayDateIST(`${weekStart}T12:00:00Z`)} · {timezone}
+          {locationId
+            ? ` · ${locations.find((l) => l.id === locationId)?.name ?? "Selected location"}`
+            : ""}
+        </p>
+        <StaffRosterBoard
+          weekStart={weekStart}
+          shifts={shifts}
+          templates={templates}
+          staff={staff}
+          locations={locations}
+          weekLocationId={locationId ?? null}
+        />
+      </section>
+    </OwnerPage>
   );
 }

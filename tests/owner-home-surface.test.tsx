@@ -189,8 +189,8 @@ function charts(overrides: Partial<OwnerChartsData> = {}): OwnerChartsData {
 
 afterEach(cleanup);
 
-describe("owner Home — the summary tiles carry a visible hierarchy", () => {
-  it("paints the four tiles as pastel surfaces with a state-coloured icon chip", () => {
+describe("owner Home — the money surface carries a visible hierarchy", () => {
+  it("paints one tinted money surface with the real balance pair and late tone", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -199,23 +199,20 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
         can={ALL_CAN}
       />,
     );
-    const tiles = screen.getAllByTestId("stat-card");
-    expect(tiles).toHaveLength(4);
-    // Collected today — money in, on the pale money surface.
-    expect(tiles[0]!.className).toContain("bg-tile-money");
-    // Overdue — the late surface, because money is past due.
-    expect(tiles[1]!.className).toContain("bg-late-soft");
-    // Active members and sessions today — the two calm pastels.
-    expect(tiles[2]!.className).toContain("bg-tile-info");
-    expect(tiles[3]!.className).toContain("bg-tile-butter");
-
-    // Each tile states its meaning with an icon, not with colour alone.
-    const chip = within(tiles[0]!).getByTestId("stat-card-icon");
-    expect(chip.className).toContain("bg-good");
-    expect(chip.querySelector("svg")).toBeTruthy();
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.className).toContain("bg-[var(--surface-owner-money)]");
+    expect(money.textContent).toContain("Collected today");
+    expect(money.textContent).toContain("₹21,000");
+    expect(money.textContent).toContain("Outstanding now");
+    expect(money.textContent).toContain("₹1,26,000");
+    // Overdue ink is the semantic late tone because money is past due.
+    const overdue = within(money).getByText("Overdue now").parentElement!;
+    expect(overdue.textContent).toContain("₹1,26,000");
+    expect(overdue.querySelector(".text-late")).toBeTruthy();
+    expect(screen.queryAllByTestId("stat-card")).toHaveLength(0);
   });
 
-  it("does not paint an alert on a tile whose money is not late", () => {
+  it("does not paint an overdue alert when nothing is past due", () => {
     render(
       <OwnerDashboard
         data={dashboard({
@@ -234,12 +231,11 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
         can={ALL_CAN}
       />,
     );
-    const tiles = screen.getAllByTestId("stat-card");
-    const overdue = tiles[1]!;
-    expect(overdue.className).not.toContain("bg-late-soft");
-    // A calm surface, and the chip is neutral rather than an alarm.
-    expect(within(overdue).getByTestId("stat-card-icon").className).not.toContain("bg-late");
-    expect(document.body.textContent).toContain("Nothing past due");
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.className).not.toContain("bg-late-soft");
+    const overdue = within(money).getByText("Overdue now").parentElement!;
+    expect(overdue.querySelector(".text-late")).toBeNull();
+    expect(money.textContent).toContain("Nothing past due");
   });
 });
 

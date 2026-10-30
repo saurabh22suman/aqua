@@ -1,21 +1,20 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left.mjs";
 import { StaffCreateForm } from "@/components/staff-create-form";
+import { searchStaffCandidatesAction } from "@/lib/actions/staff";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
-// Phase 3.5 — staff create form. Single primary action, two
-// adjacent surface patterns: "new person" or "existing person
-// id" — the latter is the path when a member is being made
-// staff (a coach who happens to be enrolled).
+// Owner OpenPen management lane (29 October 2026).
 //
-// Add vs. invite are two surfaces for two intents: this page adds
-// a staff record with no login (e.g. a worker paid in cash who
-// doesn't need app access). The invitations surface sends a
-// phone-OTP invite; if the user is new, the invite creates both
-// the directory entry and the login in one step. Both cross-link
-// inline so the operator doesn't need to back out to navigate
-// between them.
+// Add vs. invite are two surfaces for two intents: this page adds a
+// staff record with no login (e.g. a worker paid in cash who does not
+// need app access). The invitations surface sends a phone-OTP invite;
+// if the user is new, the invite creates both the directory entry and
+// the login in one step. The notice below states that split before the
+// form, so a directory record is never read as a login grant.
 export default async function StaffCreatePage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "staff.write");
@@ -25,29 +24,37 @@ export default async function StaffCreatePage() {
   // renders "Instructor".
   const terminology = await getTerminologyAction();
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <Link
         href="/owner/staff"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
+        className="mb-4 inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 hover:text-ink"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={16} aria-hidden="true" />
         Staff
       </Link>
-      <h1 className="font-display text-[19px] font-semibold">Add staff</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Add a staff record without sending a login invite. Use this for
-        workers paid in cash who don&apos;t need app access.
-      </p>
-      <Link
-        href="/owner/staff/invitations/new"
-        className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
-      >
-        Want to send a login invite instead? Go to Invitations →
-      </Link>
+      <PageHeader
+        title={<>Add staff record</>}
+        purpose={<>Creates a directory record for someone who works here. It does not
+        create a login.</>}
+      />
 
-      <div className="mt-6">
-        <StaffCreateForm terminology={terminology} />
+      <div className="mt-4 max-w-[700px] border-l-[3px] border-[var(--accent)] bg-deck px-4 py-3 text-[13px] text-ink-2">
+        Login access is managed separately through{" "}
+        <Link
+          href="/owner/staff/invitations"
+          className="font-medium text-[var(--accent-ink)] underline underline-offset-2"
+        >
+          Invitations
+        </Link>
+        .
       </div>
-    </main>
+
+      <div className="mt-5 max-w-[700px]">
+        <StaffCreateForm
+          terminology={terminology}
+          searchCandidates={searchStaffCandidatesAction}
+        />
+      </div>
+    </OwnerPage>
   );
 }

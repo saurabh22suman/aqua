@@ -35,6 +35,7 @@ export * from "./account-entries";
 export * from "./bookings";
 export * from "./payments";
 export * from "./payment-reversals";
+export * from "./payment-intents";
 export * from "./receipts";
 export * from "./cash-counts";
 export * from "./daily-rollups";

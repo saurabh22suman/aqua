@@ -47,7 +47,10 @@ function deferred<T>() {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  // resetAllMocks (not clearAllMocks) also drops a queued "once"
+  // implementation, so a test that stops early cannot leave a stale
+  // response queued for the next test.
+  vi.resetAllMocks();
 });
 
 describe("CollectionsReport scope binding (P1)", () => {
@@ -101,9 +104,10 @@ describe("CollectionsReport scope binding (P1)", () => {
         canReopen={false}
       />,
     );
-    // Change the date while the first load is still pending.
-    fireEvent.change(screen.getByDisplayValue("2026-10-09"), {
-      target: { value: "2026-10-10" },
+    // Change the date while the first load is still pending. The date
+    // field is the shared day-first mask, so it DISPLAYS dd/mm/yyyy.
+    fireEvent.change(screen.getByDisplayValue("09/10/2026"), {
+      target: { value: "10/10/2026" },
     });
     await waitFor(() => expect(getDailyCollectionAction).toHaveBeenCalledTimes(2));
 

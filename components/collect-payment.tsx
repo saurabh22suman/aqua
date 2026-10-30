@@ -7,13 +7,13 @@ import {
   parseRupeesToPaise,
 } from "@/lib/payment-qr";
 import type { PaymentQrRow } from "@/lib/services/payment-qrs";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 // C-36 — reception's read-only collect screen: pick a QR by nickname,
 // optionally type an amount, show the QR large for the payer to scan.
 // Nothing here mutates: no create, edit or delete.
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function CollectPayment({ qrs }: { qrs: PaymentQrRow[] }) {
   const [selectedId, setSelectedId] = useState(qrs[0]?.id ?? "");
@@ -38,40 +38,46 @@ export function CollectPayment({ qrs }: { qrs: PaymentQrRow[] }) {
   return (
     <div className="space-y-6">
       <section className="rounded-card bg-paper border border-line p-5 space-y-4">
-        <label className="block">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Payment QR
-          </span>
-          <select
-            value={selected.id}
-            onChange={(e) => setSelectedId(e.target.value)}
-            className={inputClass}
-            data-testid="collect-qr-select"
-          >
-            {qrs.map((qr) => (
-              <option key={qr.id} value={qr.id}>
-                {qr.nickname}
-                {qr.kind === "image" ? " (image)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Owner redesign (C2) — the shared labelled controls, so the
+            counter screen uses the same metrics as the rest of the
+            product. The behaviour (read-only, nothing mutates) and the
+            test ids are unchanged. */}
+        <Field id="collect-qr-select-field" label="Payment QR">
+          {(field) => (
+            <Select
+              {...field}
+              value={selected.id}
+              onChange={(e) => setSelectedId(e.target.value)}
+              data-testid="collect-qr-select"
+            >
+              {qrs.map((qr) => (
+                <option key={qr.id} value={qr.id}>
+                  {qr.nickname}
+                  {qr.kind === "image" ? " (image)" : ""}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
 
-        <label className="block">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Amount (₹, optional
-            {selected.kind === "image" ? " — not supported by image QRs" : ""})
-          </span>
-          <input
-            value={amountText}
-            onChange={(e) => setAmountText(e.target.value)}
-            inputMode="decimal"
-            placeholder="2500"
-            disabled={selected.kind === "image"}
-            data-testid="collect-amount"
-            className={`${inputClass} disabled:opacity-50`}
-          />
-        </label>
+        <Field
+          id="collect-amount-field"
+          label={`Amount (₹, optional${
+            selected.kind === "image" ? " — not supported by image QRs" : ""
+          })`}
+        >
+          {(field) => (
+            <Input
+              {...field}
+              value={amountText}
+              onChange={(e) => setAmountText(e.target.value)}
+              inputMode="decimal"
+              placeholder="2500"
+              disabled={selected.kind === "image"}
+              data-testid="collect-amount"
+            />
+          )}
+        </Field>
         {amountInvalid ? (
           <p role="alert" className="text-[12px] text-ink-2">
             Enter an amount like 2500 or 2500.50.

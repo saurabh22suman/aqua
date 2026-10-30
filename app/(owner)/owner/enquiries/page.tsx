@@ -3,6 +3,8 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { EnquiriesBoard } from "@/components/enquiries-board";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default async function EnquiriesPage() {
   const ctx = await requireOwner();
@@ -13,15 +15,19 @@ export default async function EnquiriesPage() {
   ]);
 
   return (
-    <main className="px-5 pt-10 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">Enquiries</h1>
-      <div className="mt-4">
+    <OwnerPage>
+      <PageHeader
+        title="Enquiries"
+        purpose="Reception handles the day-to-day follow-ups. Review where each current enquiry stands, then open one to continue the conversation."
+      />
+      <div className="mt-5">
         <EnquiriesBoard
           initialEnquiries={enquiries}
           locations={locations}
           canWrite={hasPermission(ctx, "enquiries.write")}
+          variant="oversight"
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

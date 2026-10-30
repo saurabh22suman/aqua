@@ -11,7 +11,6 @@ import "@fontsource/instrument-sans/latin-500.css";
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import { DemoBanner } from "@/components/demo-banner";
 import { ThemeProvider } from "@/components/theme/theme-provider";
-import { env } from "@/lib/env";
 import { THEME_COOKIE, resolveThemeCookie } from "@/lib/theme/storage";
 import "./globals.css";
 
@@ -67,11 +66,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <body className="bg-deck text-ink font-sans antialiased">
         <ThemeProvider theme={theme}>
           <DemoBanner />
-          {env.AQUA_DEPLOYMENT_STAGE === "preview" ? <div role="status" className="bg-marine px-5 py-3 text-[13px] text-paper">
-            Synthetic preview. {env.WHATSAPP_PROVIDER === "capture"
-              ? "Messages are captured by a mock service, not delivered on WhatsApp."
-              : "Use synthetic records only; this is not a real-data production deployment."}
-          </div> : null}
           {children}
         </ThemeProvider>
         <ServiceWorkerRegistrar />
