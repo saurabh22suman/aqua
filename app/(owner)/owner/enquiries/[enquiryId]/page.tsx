@@ -8,6 +8,7 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 export default async function EnquiryDetailPage({
   params,
@@ -30,7 +31,7 @@ export default async function EnquiryDetailPage({
   if (!enquiry) notFound();
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/enquiries" label="Enquiries" />
       <h1 className="font-display text-[19px] font-semibold">{enquiry.fullName}</h1>
       <p className="mt-0.5 text-[12.5px] text-ink-3">
@@ -45,6 +46,6 @@ export default async function EnquiryDetailPage({
           terminology={terminology}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

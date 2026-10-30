@@ -93,18 +93,10 @@ export function PlanManager({
   }
 
   return (
-    <div className="space-y-8">
-      <ActivateTemplateForm
-        templates={templates}
-        plans={plans}
-        locations={locations}
-        activities={activities}
-        pending={pending}
-        pendingKey={pendingKey}
-        message={messages.activate ?? null}
-        onSubmit={(input) => run("activate", () => activatePlanFromShapeAction(input))}
-      />
-
+    <div className="space-y-5">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
+        Plans catalogue
+      </h2>
       {locations.map((location) => {
         const rows = byLocation.get(location.id) ?? [];
         return (
@@ -135,6 +127,20 @@ export function PlanManager({
           </section>
         );
       })}
+
+      <h2 className="mt-2 font-display text-[16px] font-semibold text-ink">
+        Add a plan
+      </h2>
+      <ActivateTemplateForm
+        templates={templates}
+        plans={plans}
+        locations={locations}
+        activities={activities}
+        pending={pending}
+        pendingKey={pendingKey}
+        message={messages.activate ?? null}
+        onSubmit={(input) => run("activate", () => activatePlanFromShapeAction(input))}
+      />
 
       <CustomPlanForm
         locations={locations}

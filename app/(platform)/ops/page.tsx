@@ -11,6 +11,7 @@ import {
   getNeedsAttentionQueue,
 } from "@/db/platform-overview";
 import { listPlatformActivity } from "@/db/platform-activity";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import {
   OpsCardFlush,
@@ -69,10 +70,27 @@ export default async function PlatformHome() {
   if (status.kind === "unauthenticated") redirect("/ops/verify");
 
   const [metrics, queue, activity] = await Promise.all([
-    getPlatformMetricsSummary(),
-    getNeedsAttentionQueue(11),
-    listPlatformActivity({ limit: 5 }),
+    runOpsGlobalRead(
+      "platform.metrics.summary",
+      () => getPlatformMetricsSummary(),
+      "ops_page",
+    ),
+    runOpsGlobalRead(
+      "tenant.health.queue",
+      () => getNeedsAttentionQueue(11),
+      "ops_page",
+    ),
+    runOpsGlobalRead(
+      "activity.list",
+      () => listPlatformActivity({ limit: 5 }),
+      "ops_page",
+    ),
   ]);
+  // A null global read means the actor was not authenticated at the
+  // boundary. This page already redirected above, so this is unreachable
+  // defence — never a silent empty dashboard.
+  if (!metrics || !queue) redirect("/ops/login");
+  const recent = activity?.rows ?? [];
 
   return (
     <OpsPage>
@@ -231,11 +249,11 @@ export default async function PlatformHome() {
                 <Activity size={12} strokeWidth={2} /> View all
               </Link>
             </div>
-            {activity.rows.length === 0 ? (
+            {recent.length === 0 ? (
               <OpsEmptyState title="No platform activity yet" />
             ) : (
               <OpsCardFlush>
-                {activity.rows.map((row) => (
+                {recent.map((row) => (
                   <div key={row.id} className="border-b border-line px-4 py-3 last:border-b-0">
                     <p className="text-[12px] text-ink">
                       {row.action}

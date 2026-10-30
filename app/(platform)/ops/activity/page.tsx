@@ -5,6 +5,7 @@ import {
   listKnownActionsAction,
 } from "@/lib/actions/platform-activity";
 import { listAllTenantsForSelector } from "@/db/platform-tenants";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { OpsActivityFilter } from "@/components/ops/ops-activity-filter";
 import { OpsActivityList } from "@/components/ops/ops-activity-list";
 import { OpsPage, OpsPageHeader } from "@/components/ops/ops-primitives";
@@ -46,8 +47,9 @@ export default async function PlatformActivityPage({
       until: params.until || undefined,
     }),
     listKnownActionsAction(),
-    listAllTenantsForSelector(),
+    runOpsGlobalRead("tenant.selector.list", () => listAllTenantsForSelector(), "ops_page"),
   ]);
+  if (!tenants) redirect("/ops/login");
 
   const hasFilters = Boolean(
     params.action || params.tenantId || params.since || params.until,

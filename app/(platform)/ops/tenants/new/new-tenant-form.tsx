@@ -16,19 +16,23 @@ import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
 // rather than onSubmit. Pre-hydration submit goes via POST to the
 // action endpoint; form fields (name, slug, timezone, currency,
 // GSTIN, locationName) never appear as query-string values.
+//
+// India-first (29 October 2026): NEW tenants are created with INR and IST. The
+// values are submitted as hidden fields so the existing server contract is
+// unchanged; the operator sees plain India context, not an ISO/IANA input.
+// Existing tenant records keep their stored currency and time zone.
 
 type Plan = { key: string; name: string; isDefault: boolean };
 type Preset = { key: string; name: string; description: string };
 
 export function NewTenantForm({
-  defaultTimezone,
-  defaultCurrency,
   defaultLocationName,
   plans,
   defaultPlanKey,
   presets,
   defaultPresetKey,
 }: {
+  // Kept for the page's create-tenant contract; the form no longer edits these.
   defaultTimezone: string;
   defaultCurrency: string;
   defaultLocationName: string;
@@ -64,16 +68,24 @@ export function NewTenantForm({
 
       <Section
         title="Settings"
-        subtitle="Defaults applied unless the operator overrides."
+        subtitle="New tenants are created with INR and Indian Standard Time."
       >
-        <Field
-          label="Time zone"
-          name="timezone"
-          required
-          defaultValue={defaultTimezone}
-          autoComplete="off"
-          hint="IANA identifier, e.g. Asia/Kolkata."
-        />
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] font-medium text-ink">Currency · INR</p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            This new tenant is created with Indian rupees.
+          </p>
+        </div>
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] font-medium text-ink">
+            Time zone · Indian Standard Time
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            This new tenant uses IST (UTC+05:30).
+          </p>
+        </div>
+        <input type="hidden" name="timezone" value="Asia/Kolkata" />
+        <input type="hidden" name="currency" value="INR" />
         <SelectField
           label="Plan"
           name="planKey"
@@ -84,21 +96,11 @@ export function NewTenantForm({
           }))}
         />
         <Field
-          label="Currency"
-          name="currency"
-          required
-          defaultValue={defaultCurrency}
-          autoComplete="off"
-          pattern="[A-Z]{3}"
-          maxLength={3}
-          hint="ISO 4217, three uppercase letters."
-        />
-        <Field
           label="GSTIN"
           name="gstin"
           autoComplete="off"
           maxLength={15}
-          hint="15-character GSTIN. Optional for non-India tenants."
+          hint="15-character GSTIN. Optional."
         />
       </Section>
 

@@ -4,10 +4,11 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { getScheduleGridAction } from "@/lib/actions/schedule-grid";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
-import { todayInZone, addDays, weekdayOf, formatDateIST } from "@/lib/time/tz";
+import { todayInZone, addDays, weekdayOf } from "@/lib/time/tz";
 import { resolveTerm } from "@/lib/terminology/keys";
-import { BackLink } from "@/components/ui/BackLink";
 import { OwnerScheduleGrid } from "@/components/owner-schedule-grid";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // U-04 — owner schedule surface.
 //
@@ -96,20 +97,21 @@ export default async function OwnerSchedulePage({
     }`;
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <BackLink href="/owner/sessions" label="Sessions" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">Schedule</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        {view === "month"
-          ? `Month of ${formatDateIST(days[0] ?? anchor)}`
-          : view === "day"
-            ? formatDateIST(days[0] ?? anchor)
-            : `Week of ${formatDateIST(days[0] ?? anchor)}`}
-        . Each bar is enrolled against the batch&apos;s capacity.
-      </p>
+    <OwnerPage>
+      <PageHeader
+        title="Schedule"
+        purpose={
+          view === "month"
+            ? "Scheduled batch sessions for the month."
+            : view === "day"
+              ? "Scheduled batch sessions for the selected day."
+              : "Scheduled batch sessions for the week. Exception management stays in Sessions."
+        }
+      />
 
       <OwnerScheduleGrid
         canManagePrograms={ctx.permissions.has("programs.read")}
+        canManageExceptions={ctx.permissions.has("programs.write")}
         view={view}
         anchor={anchor}
         locationId={locationId}
@@ -132,7 +134,7 @@ export default async function OwnerSchedulePage({
         categoryLabels={{ batch: resolveTerm(terminology, "batch", 1), booking: "Booking" }}
         coachIds={coachIds}
       />
-    </main>
+    </OwnerPage>
   );
 }
 

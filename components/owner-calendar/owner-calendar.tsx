@@ -21,6 +21,7 @@ import Link from "next/link";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
 import { CalendarEventDetail } from "./calendar-event-detail";
 import { OwnerCalendarAgenda } from "./owner-calendar-agenda";
 import { OwnerCalendarGrid } from "./owner-calendar-grid";
@@ -126,7 +127,7 @@ export function OwnerCalendar({
     <div className="mt-4" data-testid="owner-calendar">
       {days.length > 1 ? (
         <div
-          className="mt-3 flex flex-wrap gap-1.5 md:hidden"
+          className="mt-3 grid grid-cols-4 gap-1.5 md:hidden"
           data-testid="calendar-day-strip"
         >
           {days.map((day) => {
@@ -216,6 +217,23 @@ export function OwnerCalendar({
         </div>
       ) : (
         <>
+          {resolved.dayStartMinutes < 6 * 60 ? (
+            <div className="mt-3 hidden md:flex md:justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  document
+                    .querySelector<HTMLElement>(
+                      '[data-testid="calendar-working-start"]',
+                    )
+                    ?.scrollIntoView({ block: "start", behavior: "auto" });
+                }}
+              >
+                Jump to working hours
+              </Button>
+            </div>
+          ) : null}
           <div className="mt-4 hidden md:block">
             <OwnerCalendarGrid
               days={days}

@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+
+vi.stubGlobal("crypto", { randomUUID });
 
 // PR3-C7 — reception's counter surfaces: Today carries a session-count
 // chip and a search entry, the search route lists matches by
@@ -39,6 +42,26 @@ vi.mock("@/lib/actions/invoices", () => ({
 vi.mock("@/lib/actions/payments", () => ({
   recordPaymentAction: vi.fn(async () => ({ ok: true })),
   listInvoicePaymentsAction: vi.fn(async () => []),
+}));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelPaymentRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
+  listReversalRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelReversalRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
 }));
 
 import ReceptionTodayPage from "@/app/(reception)/reception/page";

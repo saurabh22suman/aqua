@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { getMemberDetailAction, listLocationsAction } from "@/lib/actions/people";
 import { MemberEditForm } from "@/components/member-edit-form";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { requireUuidParam } from "@/lib/params";
 
@@ -20,11 +23,16 @@ export default async function EditMemberPage({
   if (!member) notFound();
 
   return (
-    <main className="px-5 pt-10 pb-8 max-w-2xl">
-      <h1 className="font-display text-[19px] font-semibold">Edit {member.fullName}</h1>
-      <div className="mt-4">
+    <OwnerPage className="max-w-3xl">
+      <BackLink href={`/owner/members/${member.memberId}`} label="Member details" />
+      <PageHeader
+        className="mt-2"
+        title="Edit member details"
+        purpose={`${member.fullName} · ${member.memberCode} · ${member.locationName}`}
+      />
+      <div className="mt-4 rounded-card border border-line bg-paper p-4">
         <MemberEditForm member={member} locations={locations} />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

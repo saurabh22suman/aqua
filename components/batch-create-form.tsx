@@ -14,6 +14,7 @@ import type { Program } from "@/db/schema/programs";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { TimeField } from "@/components/ui/TimeField";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -49,6 +50,8 @@ export function BatchCreateForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [conflicts, setConflicts] = useState<CoachConflict[]>([]);
+  const [startValid, setStartValid] = useState(true);
+  const [endValid, setEndValid] = useState(true);
 
   function toggleDay(day: number) {
     setDays((d) => (d.includes(day) ? d.filter((x) => x !== day) : [...d, day].sort()));
@@ -82,7 +85,9 @@ export function BatchCreateForm({
   }, [coachId, days, startTime, endTime]);
 
   async function submit() {
-    if (!name.trim() || !programId || days.length === 0) return;
+    if (!name.trim() || !programId || days.length === 0 || !startValid || !endValid) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -156,37 +161,35 @@ export function BatchCreateForm({
           visible label AND no accessible name, so a time field read as
           "07:00" with nothing to say what it was. Persistent visible
           labels, and the tenant's own word for the coach. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
-          <Input
-            type="number"
-            min={1}
-            value={capacity}
-            onChange={(e) => setCapacity(e.target.value)}
-            aria-label="Capacity"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Start time</span>
-          <Input
-            type="time"
-            value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
-            className="min-w-0"
-            aria-label="Start time"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">End time</span>
-          <Input
-            type="time"
-            value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
-            className="min-w-0"
-            aria-label="End time"
-          />
-        </label>
+      <label className="block">
+        <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
+        <Input
+          type="number"
+          min={1}
+          value={capacity}
+          onChange={(e) => setCapacity(e.target.value)}
+          aria-label="Capacity"
+        />
+      </label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <TimeField
+          id="batch-create-start"
+          label="Start time"
+          value={startTime}
+          onChange={setStartTime}
+          onValidityChange={setStartValid}
+          required
+          data-testid="batch-create-start"
+        />
+        <TimeField
+          id="batch-create-end"
+          label="End time"
+          value={endTime}
+          onChange={setEndTime}
+          onValidityChange={setEndValid}
+          required
+          data-testid="batch-create-end"
+        />
       </div>
       <label className="block">
         <span className="block text-[12px] text-ink-3 mb-1">
@@ -244,7 +247,7 @@ export function BatchCreateForm({
           className="inline-flex items-center justify-center"
         type="button"
         onClick={submit}
-        disabled={busy || !name.trim() || days.length === 0}>
+        disabled={busy || !name.trim() || days.length === 0 || !startValid || !endValid}>
         Add batch
       </Button>
     </div>

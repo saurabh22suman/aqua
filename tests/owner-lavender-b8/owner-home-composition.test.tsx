@@ -129,7 +129,7 @@ describe("owner Home — the screen opens with the real context", () => {
 });
 
 describe("owner Home — the figures", () => {
-  it("leads with the day's money and keeps the member and session counts", () => {
+  it("leads with the real money surface and keeps the member and session counts", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -138,15 +138,22 @@ describe("owner Home — the figures", () => {
         can={ALL_CAN}
       />,
     );
-    const cards = screen.getAllByTestId("stat-card");
-    expect(cards).toHaveLength(4);
-    expect(within(cards[0]!).getByText("Collected today")).toBeTruthy();
-    expect(within(cards[1]!).getByText("Overdue")).toBeTruthy();
-    expect(within(cards[2]!).getByText(/Active members/)).toBeTruthy();
-    expect(within(cards[3]!).getByText(/Sessions today/)).toBeTruthy();
+    const money = screen.getByTestId("owner-home-money-surface");
+    const text = money.textContent ?? "";
+    // Real collected/outstanding/overdue values, not four competing tiles.
+    expect(text).toContain("Collected today");
+    expect(text).toContain("₹18,400");
+    expect(text).toContain("Outstanding now");
+    expect(text).toContain("₹6,200");
+    expect(text).toContain("Overdue now");
+    expect(text).toContain("₹4,200");
+    expect(text).toContain("128 active members");
+    expect(text).toContain("6 batches");
+    expect(text).toContain("0 sessions today");
+    expect(screen.queryAllByTestId("stat-card")).toHaveLength(0);
   });
 
-  it("gives a phone the two money figures and a compact real summary", () => {
+  it("keeps a compact real summary for a phone", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -160,6 +167,10 @@ describe("owner Home — the figures", () => {
     // Real numbers, not a placeholder.
     expect(text).toContain("128");
     expect(text).toContain("6");
+    expect(text).toContain("0 sessions today");
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("₹18,400");
+    expect(money.textContent).toContain("₹4,200");
   });
 });
 

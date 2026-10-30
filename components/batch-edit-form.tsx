@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { updateBatchAction } from "@/lib/actions/programs";
 import {
@@ -14,6 +14,7 @@ import type { Program } from "@/db/schema/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { TimeField } from "@/components/ui/TimeField";
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -32,6 +33,7 @@ export type BatchEditFormState = {
 export function BatchEditForm({
   batchId,
   initial,
+  onDraftChange,
   programs,
   coaches,
   locations,
@@ -42,7 +44,15 @@ export function BatchEditForm({
   terminology,
 }: {
   batchId: string;
+  /**
+   * The draft this form edits.
+   *
+   * When the parent passes `onDraftChange` it OWNS the draft: this component
+   * renders that value and reports every edit upward. Without it the form
+   * keeps the draft in its own state (a single mounted copy).
+   */
   initial: BatchEditFormState;
+  onDraftChange?: (draft: BatchEditFormState) => void;
   programs: Program[];
   coaches: CoachOption[];
   locations: LocationOption[];
@@ -53,9 +63,40 @@ export function BatchEditForm({
   // Closed-key vocab resolved by the parent server page (L3 audit).
   terminology: TerminologyState;
 }) {
-  const [form, setForm] = useState(initial);
+  // The programs board mounts TWO copies of this form for the same batch:
+  // the desktop table (hidden on a phone) and the phone list. A draft kept
+  // in one copy's local state is not in the other copy, so changing the
+  // viewport showed the other copy's values and the owner's edit vanished
+  // from the screen. With `onDraftChange` the parent owns the draft, both
+  // copies render the same value, and every edit is reported upward.
+  const [localDraft, setLocalDraft] = useState(initial);
+  const controlled = Boolean(onDraftChange);
+  const form = controlled ? initial : localDraft;
+
+  function update(patch: Partial<BatchEditFormState>) {
+    const next = { ...form, ...patch };
+    if (!controlled) setLocalDraft(next);
+    onDraftChange?.(next);
+  }
+
   const [saving, setSaving] = useState(false);
   const [conflicts, setConflicts] = useState<CoachConflict[]>([]);
+  const [startValid, setStartValid] = useState(true);
+  const [endValid, setEndValid] = useState(true);
+
+  // The programs board mounts TWO copies of this form for the same
+  // batch: the desktop table (hidden on a phone) and the phone list.
+  // Ids built from the batch id alone were therefore duplicated in the
+  // document, and a <label for> names the FIRST element carrying that
+  // id — so the phone copy's visible time controls were labelled by the
+  // HIDDEN desktop copy and carried no label association of their own.
+  //
+  // A per-instance namespace keeps every id this form generates — and
+  // the label, help and error references TimeField derives from it —
+  // unique per mounted copy. useId is stable across renders and unique
+  // per instance; the token is reduced to characters that are safe in
+  // an id and in a selector. The data test ids are unchanged.
+  const instanceId = useId().replace(/[^A-Za-z0-9_-]/g, "");
 
   // R.2 — when coach / time / days change, ask the server
   // whether the new assignment overlaps anything the same coach
@@ -91,20 +132,17 @@ export function BatchEditForm({
   }, [form.coachId, form.days, form.startTime, form.endTime, batchId]);
 
   function toggleDay(day: number) {
-    setForm((f) =>
-      f
-        ? {
-            ...f,
-            days: f.days.includes(day)
-              ? f.days.filter((x) => x !== day)
-              : [...f.days, day].sort(),
-          }
-        : f,
-    );
+    update({
+      days: form.days.includes(day)
+        ? form.days.filter((x) => x !== day)
+        : [...form.days, day].sort(),
+    });
   }
 
   async function save() {
-    if (!form.name.trim() || form.days.length === 0) return;
+    if (!form.name.trim() || form.days.length === 0 || !startValid || !endValid) {
+      return;
+    }
     setSaving(true);
     onError(null);
     try {
@@ -137,7 +175,7 @@ export function BatchEditForm({
     <div className="space-y-2 rounded-card border border-line p-3">
       <Select
         value={form.programId}
-        onChange={(e) => setForm({ ...form, programId: e.target.value })}
+        onChange={(e) => update({ programId: e.target.value })}
         aria-label="Program"
       >
         {programs.map((p) => (
@@ -149,49 +187,47 @@ export function BatchEditForm({
       <Input
         type="text"
         value={form.name}
-        onChange={(e) => setForm({ ...form, name: e.target.value })}
+        onChange={(e) => update({ name: e.target.value })}
         placeholder="Batch name"
         data-testid={`edit-batch-name-${batchId}`}
       />
       {/* Owner UX audit (2026-10-24): the two time inputs had no
           visible label AND no accessible name. Persistent visible
           labels, in the same shape as the create form. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
-          <Input
-            type="number"
-            min={1}
-            value={form.capacity}
-            onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-            aria-label="Capacity"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Start time</span>
-          <Input
-            type="time"
-            value={form.startTime}
-            onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-            className="min-w-0"
-            aria-label="Start time"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">End time</span>
-          <Input
-            type="time"
-            value={form.endTime}
-            onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-            className="min-w-0"
-            aria-label="End time"
-          />
-        </label>
+      <label className="block">
+        <span className="block text-[12px] text-ink-3 mb-1">Capacity</span>
+        <Input
+          type="number"
+          min={1}
+          value={form.capacity}
+          onChange={(e) => update({ capacity: e.target.value })}
+          aria-label="Capacity"
+        />
+      </label>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <TimeField
+          id={`batch-edit-start-${batchId}-${instanceId}`}
+          label="Start time"
+          value={form.startTime}
+          onChange={(value) => update({ startTime: value })}
+          onValidityChange={setStartValid}
+          required
+          data-testid={`edit-batch-start-${batchId}`}
+        />
+        <TimeField
+          id={`batch-edit-end-${batchId}-${instanceId}`}
+          label="End time"
+          value={form.endTime}
+          onChange={(value) => update({ endTime: value })}
+          onValidityChange={setEndValid}
+          required
+          data-testid={`edit-batch-end-${batchId}`}
+        />
       </div>
       {locations.length > 1 ? (
         <Select
           value={form.locationId}
-          onChange={(e) => setForm({ ...form, locationId: e.target.value })}
+          onChange={(e) => update({ locationId: e.target.value })}
           aria-label="Location"
           data-testid={`edit-batch-location-${batchId}`}
         >
@@ -204,7 +240,7 @@ export function BatchEditForm({
       ) : null}
       <Select
         value={form.coachId}
-        onChange={(e) => setForm({ ...form, coachId: e.target.value })}
+        onChange={(e) => update({ coachId: e.target.value })}
         aria-label={resolveTerm(terminology, "coach", 1)}
         data-testid={`edit-batch-coach-${batchId}`}
       >
@@ -256,7 +292,7 @@ export function BatchEditForm({
           className="inline-flex items-center justify-center flex-1"
           type="button"
           onClick={save}
-          disabled={saving || !form.name.trim() || form.days.length === 0}
+          disabled={saving || !form.name.trim() || form.days.length === 0 || !startValid || !endValid}
           data-testid={`save-batch-${batchId}`}>
         Save batch
       </Button>

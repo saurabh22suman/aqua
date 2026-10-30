@@ -1,42 +1,54 @@
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left.mjs";
 import { listLocationsAction } from "@/lib/actions/people";
 import { StaffInviteForm } from "@/components/staff-invite-form";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
-// Phase 3.6 — staff invite form. Phone + role + location
-// scope. Locations are read once on the server to render the
-// scope picker; the service re-validates any locationId on
-// submit.
+// Owner OpenPen management lane (29 October 2026).
+//
+// An invitation creates login access in one step, with an explicit role
+// and location scope. The link is created here and shared by the owner;
+// nothing is sent automatically, so the screen never claims delivery.
 export default async function StaffInvitePage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "staff.invite");
   const locations = await listLocationsAction();
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage>
       <Link
         href="/owner/staff/invitations"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
+        className="mb-4 inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 hover:text-ink"
       >
-        <ChevronLeft size={16} />
+        <ChevronLeft size={16} aria-hidden="true" />
         Invitations
       </Link>
-      <h1 className="font-display text-[19px] font-semibold">Invite staff</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Invite a coach or receptionist — the invite creates their login in one step. Then
-        copy the login link from the roster and share it yourself. Nothing is sent
-        automatically.
-      </p>
-      <Link
-        href="/owner/staff/new"
-        className="mt-2 inline-flex items-center gap-1 text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
-      >
-        Just adding someone with no login? Go to Add staff →
-      </Link>
+      <PageHeader
+        title={<>Invite staff</>}
+        purpose={<>Choose a login role and an explicit location scope. Then copy the login
+        link and share it yourself — nothing is sent automatically.</>}
+      />
 
-      <div className="mt-6">
+      <p className="mt-4 max-w-[700px] border-l-[3px] border-[var(--accent)] bg-deck px-4 py-3 text-[13px] text-ink-2">
+        Scope is the locations this person can work in. Review the role and
+        scope before creating access.
+      </p>
+
+      <div className="mt-5 max-w-[700px]">
         <StaffInviteForm locations={locations} />
       </div>
-    </main>
+
+      <p className="mt-4 text-[12.5px] text-ink-3">
+        Just adding someone with no login?{" "}
+        <Link
+          href="/owner/staff/new"
+          className="font-medium text-[var(--accent-ink)] underline underline-offset-2"
+        >
+          Add staff record
+        </Link>
+        .
+      </p>
+    </OwnerPage>
   );
 }

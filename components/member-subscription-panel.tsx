@@ -14,10 +14,10 @@ import type { SubscriptionRow } from "@/lib/services/subscriptions";
 import type { PlanRow } from "@/lib/services/membership-plans";
 import { formatINR } from "@/lib/money/format";
 import { Field } from "@/components/ui/Field";
-import { Input } from "@/components/ui/Input";
+import { DateField } from "@/components/ui/DateField";
 import { Select } from "@/components/ui/Select";
 import { RunwayStrip } from "@/components/ui/RunwayStrip";
-import { formatDateIST } from "@/lib/time/tz";
+import { formatDateIST, todayInZone } from "@/lib/time/tz";
 
 // C-30 — a member's plans over time. Start a subscription from an
 // active plan, pause/resume (pause extends the end date by the paused
@@ -33,6 +33,13 @@ function statusTone(status: SubscriptionRow["status"]): string {
   if (status === "paused") return "bg-deck text-ink-2";
   return "bg-deck text-ink-3";
 }
+
+const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionRow["status"], string> = {
+  active: "Active",
+  paused: "Paused",
+  expired: "Expired",
+  cancelled: "Cancelled",
+};
 
 function kindLabel(kind: string): string {
   if (kind === "duration") return "duration";
@@ -71,6 +78,13 @@ export function MemberSubscriptionPanel({
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [autoRenew, setAutoRenew] = useState(false);
+  const [startsValid, setStartsValid] = useState(true);
+  const [endsValid, setEndsValid] = useState(true);
+
+  // The academy's day, not the server's UTC day (staging blocker F15).
+  // Between 00:00 and 05:29 IST the UTC date is still yesterday, which
+  // under-counted the runway's used days by one.
+  const today = todayInZone("Asia/Kolkata");
 
   const load = useCallback(async () => {
     try {
@@ -79,12 +93,18 @@ export function MemberSubscriptionPanel({
         listPlansAction(),
       ]);
       setSubscriptions(rows);
-      setPlans(
-        planRows.filter((plan) =>
-          ["duration", "term", "sessions"].includes(plan.kind),
-        ),
+      // One eligible array drives both the picker and its default. An
+      // invoice-only or otherwise ineligible first row must never become the
+      // selected plan.
+      const eligible = planRows.filter((plan) =>
+        ["duration", "term", "sessions"].includes(plan.kind),
       );
-      setPlanId((current) => current || planRows[0]?.id || "");
+      setPlans(eligible);
+      setPlanId((current) =>
+        eligible.some((plan) => plan.id === current)
+          ? current
+          : (eligible[0]?.id ?? ""),
+      );
       setLoadError(false);
     } catch {
       setLoadError(true);
@@ -145,9 +165,9 @@ export function MemberSubscriptionPanel({
 
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
         Paid plan
-      </p>
+      </h2>
       <p className="mt-0.5 text-[12px] text-ink-3">
         Separate from academy participation — pausing one does not pause the
         other.
@@ -173,9 +193,10 @@ export function MemberSubscriptionPanel({
                   </span>
                 </span>
                 <span
+                  data-testid="subscription-status"
                   className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${statusTone(subscription.status)}`}
                 >
-                  {subscription.status}
+                  {SUBSCRIPTION_STATUS_LABEL[subscription.status]}
                 </span>
               </div>
               <p className="mt-0.5 text-[12px] text-ink-3">
@@ -195,7 +216,7 @@ export function MemberSubscriptionPanel({
                       0,
                       Math.min(
                         daysBetween(subscription.startsOn, subscription.endsOn) + 1,
-                        daysBetween(subscription.startsOn, new Date().toISOString().slice(0, 10)) + 1,
+                        daysBetween(subscription.startsOn, today) + 1,
                       ),
                     )}
                     totalDays={Math.max(
@@ -254,10 +275,19 @@ export function MemberSubscriptionPanel({
       )}
 
       {!canManage ? null : plans.length === 0 ? (
-        <p className="mt-3 text-[12px] text-ink-3">
-          No active plans. The owner can price one in Settings → Membership
-          plans.
-        </p>
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-[12px] text-ink-3">
+            No eligible membership plan. The owner can add a duration, term or
+            session plan in Settings → Membership plans.
+          </p>
+          <button
+            type="button"
+            disabled
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] opacity-60"
+          >
+            Start subscription
+          </button>
+        </div>
       ) : (
         <div className="mt-3 border-t border-line pt-3">
           <p className="text-[12px] font-medium text-ink-2">
@@ -283,44 +313,56 @@ export function MemberSubscriptionPanel({
             </div>
             <Field id="member-subscription-starts" label="Starts (optional)">
               {(field) => (
-                <Input
+                <DateField
                   {...field}
-                  type="date"
-                  lang="en-IN"
-                  placeholder="dd/mm/yyyy"
                   value={startsOn}
-                  onChange={(e) => setStartsOn(e.target.value)}
+                  onChange={setStartsOn}
+                  onValidityChange={setStartsValid}
                 />
               )}
             </Field>
             <Field id="member-subscription-ends" label="Ends (optional)">
               {(field) => (
-                <Input
+                <DateField
                   {...field}
-                  type="date"
-                  lang="en-IN"
-                  placeholder="dd/mm/yyyy"
                   value={endsOn}
-                  onChange={(e) => setEndsOn(e.target.value)}
+                  onChange={setEndsOn}
+                  onValidityChange={setEndsValid}
                 />
               )}
             </Field>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-[12px] text-ink-2">
+          <label
+            htmlFor="member-subscription-auto-renew"
+            className="mt-2 flex min-h-11 cursor-pointer items-start gap-2 rounded-ctl px-1 py-2.5 -mx-1 text-[12px] text-ink-2 hover:bg-deck/40"
+          >
             <input
               id="member-subscription-auto-renew"
               type="checkbox"
               checked={autoRenew}
               onChange={(e) => setAutoRenew(e.target.checked)}
+              className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent-strong)]"
             />
-            <label htmlFor="member-subscription-auto-renew">
-              Raise the next invoice automatically (payments stay manual)
-            </label>
-          </div>
+            <span>Raise the next invoice automatically (payments stay manual)</span>
+          </label>
+          {!startsValid || !endsValid ? (
+            <p role="alert" className="mt-1 text-[12px] text-ink-2">
+              Enter a real date or clear the optional date before starting the
+              subscription.
+            </p>
+          ) : null}
           <button
             type="button"
-            disabled={busy || plans.length === 0}
-            onClick={() =>
+            disabled={
+              busy ||
+              plans.length === 0 ||
+              !planId ||
+              !startsValid ||
+              !endsValid
+            }
+            onClick={() => {
+              if (!planId || plans.length === 0 || !startsValid || !endsValid)
+                return;
               run(() =>
                 createSubscriptionAction({
                   memberId,
@@ -329,8 +371,8 @@ export function MemberSubscriptionPanel({
                   ...(endsOn ? { endsOn } : {}),
                   autoRenew,
                 }),
-              )
-            }
+              );
+            }}
             className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Saving…" : "Start subscription"}

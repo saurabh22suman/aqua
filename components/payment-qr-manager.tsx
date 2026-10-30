@@ -263,45 +263,74 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
 }
 
 export function PaymentQrManager({ qrs }: { qrs: PaymentQrRow[] }) {
+  const [addOpen, setAddOpen] = useState(false);
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       <section className="rounded-card bg-paper border border-line p-5">
         <h2 className="font-display text-[16px] font-semibold text-ink">
-          Add a UPI QR
+          Collection destinations
         </h2>
-        <p className="mt-1 mb-4 text-[12px] text-ink-3">
-          The app draws the QR from your UPI ID, so the collect screen can
-          put the amount straight into the payment request.
+        <p className="mt-1 text-[12.5px] text-ink-3">
+          A QR helps someone pay. The payment is still recorded by authorised
+          staff — a scan is not a confirmation.
         </p>
-        <AddUpiForm />
-      </section>
-
-      <section className="rounded-card bg-paper border border-line p-5">
-        <h2 className="font-display text-[16px] font-semibold text-ink">
-          Add an image QR
-        </h2>
-        <p className="mt-1 mb-4 text-[12px] text-ink-3">
-          For a bank or merchant QR that is already an image. The amount
-          cannot be pre-filled on these.
-        </p>
-        <AddImageForm />
-      </section>
-
-      <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Your QRs
-        </h2>
         {qrs.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
-            No payment QRs yet. Add one above to show it at reception.
+          <p className="mt-3 rounded-ctl bg-deck px-4 py-4 text-[13px] text-ink-3">
+            No payment QRs yet. Add one to show it at reception.
           </p>
         ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
+          <div className="mt-2 divide-y divide-line">
             {qrs.map((qr) => (
               <QrRow key={qr.id} qr={qr} />
             ))}
           </div>
         )}
+      </section>
+
+      <section className="rounded-card bg-paper border border-line p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-display text-[16px] font-semibold text-ink">
+              Add a payment QR
+            </h2>
+            <p className="mt-0.5 text-[12.5px] text-ink-3">
+              Generate one from a UPI ID, or upload a bank/merchant image.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="md"
+            aria-expanded={addOpen}
+            aria-controls="payment-qr-add"
+            onClick={() => setAddOpen((open) => !open)}
+          >
+            {addOpen ? "Close" : "Add a payment QR"}
+          </Button>
+        </div>
+
+        {addOpen ? (
+          <div id="payment-qr-add" className="mt-4 space-y-5">
+            <div>
+              <h3 className="text-[14px] font-medium text-ink">
+                Generated UPI QR
+              </h3>
+              <p className="mb-3 mt-0.5 text-[12px] text-ink-3">
+                The app draws the QR from your UPI ID, so the collect screen can
+                put the amount straight into the payment request.
+              </p>
+              <AddUpiForm />
+            </div>
+            <div className="border-t border-line pt-4">
+              <h3 className="text-[14px] font-medium text-ink">Image QR</h3>
+              <p className="mb-3 mt-0.5 text-[12px] text-ink-3">
+                For a bank or merchant QR that is already an image. The amount
+                cannot be pre-filled on these.
+              </p>
+              <AddImageForm />
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );

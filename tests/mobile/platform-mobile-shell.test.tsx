@@ -12,11 +12,32 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 //
 // F34: /ops home gains the Presets card the sidebar already links.
 
+// The audit STORE is the only thing this unit test replaces. The
+// boundary itself (lib/auth/ops-operation.ts) stays real, so a read
+// whose operation row cannot be written still fails closed.
+const { auditEvents, OPS_ACTOR_ID } = vi.hoisted(() => ({
+  auditEvents: [] as { operation: string; outcome: string; actorId: string }[],
+  OPS_ACTOR_ID: "11111111-1111-4111-8111-111111111111",
+}));
+
+// The Ops reads are audit-required: the operation row is written before
+// a read result may leave the server, so the actor needs a real id and
+// one of the two platform roles.
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({
     kind: "authenticated",
-    role: "operator",
+    userId: OPS_ACTOR_ID,
+    role: "admin",
   }),
+}));
+vi.mock("@/db/ops-operation-writer", () => ({
+  appendOpsBoundaryEvent: async (
+    operation: string,
+    outcome: string,
+    actorId: string,
+  ) => {
+    auditEvents.push({ operation, outcome, actorId });
+  },
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/ops",
@@ -45,7 +66,10 @@ vi.mock("@/db/platform-activity", () => ({
 import PlatformLayout from "@/app/(platform)/layout";
 import PlatformHome from "@/app/(platform)/ops/page";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  auditEvents.length = 0;
+});
 
 describe("PlatformLayout mobile shell (F1)", () => {
   it("renders exactly four bottom-nav destinations", async () => {
@@ -79,6 +103,21 @@ describe("PlatformHome cards (F34)", () => {
 
     const presets = screen.getByText("Presets").closest("a");
     expect(presets?.getAttribute("href")).toBe("/ops/presets");
+
+    // The card is rendered from the platform reads, and every one of
+    // those reads is audit-required: the operation row is written
+    // before the result leaves the server.
+    expect(auditEvents.map((event) => event.operation).sort()).toEqual([
+      "activity.list",
+      "platform.metrics.summary",
+      "tenant.health.queue",
+    ]);
+    expect(
+      auditEvents.every(
+        (event) =>
+          event.outcome === "success" && event.actorId === OPS_ACTOR_ID,
+      ),
+    ).toBe(true);
   });
 });
 

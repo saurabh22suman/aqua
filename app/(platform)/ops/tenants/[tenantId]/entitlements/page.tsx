@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsRead } from "@/lib/auth/ops-operation";
 import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { TenantFeatureToggles } from "../tenant-feature-toggles";
 import { SectionHeader } from "../tenant-detail-shared";
@@ -27,8 +27,12 @@ export default async function TenantEntitlementsPage({
   const canWrite = auth.role === "admin";
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const detail = await getTenantDetail(asTenantId(tenantId));
+  const detail = await runOpsRead(
+    "tenant.detail",
+    tenantId,
+    () => getTenantDetail(asTenantId(tenantId)),
+    "ops_page",
+  );
   if (!detail) notFound();
 
   // X-D4 (2026-09-13 audit) — hide test-fixture feature keys that the

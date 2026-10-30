@@ -3,7 +3,7 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantHeader } from "@/db/platform-tenants";
 import { getTenantMessagingSummary } from "@/db/platform-tenant-messaging";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsRead } from "@/lib/auth/ops-operation";
 import { SectionHeader, DescriptionRow, DATETIME_FMT } from "../tenant-detail-shared";
 import { OpsCardFlush, OpsPanel } from "@/components/ops/ops-primitives";
 
@@ -16,7 +16,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 // WhatsApp connection state. C-40a ships a provider abstraction with
 // a non-production mock; there is no per-tenant WABA onboarding
 // record yet (that lands with C-40's real Cloud API adapter), so
-// "connected" here means "has sent at least one message" via
+// "connected" here means "an outbound attempt has been logged" via
 // whichever provider actually handled it — not a stored connection
 // flag, because no such flag exists to read.
 //
@@ -34,10 +34,20 @@ export default async function TenantMessagingPage({
   if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const header = await getTenantHeader(asTenantId(tenantId));
-  if (!header) notFound();
-  const summary = await getTenantMessagingSummary(header.id);
+  // ONE operation for this page: the header is read INSIDE the summary
+  // boundary, so the page does not emit a second `tenant.header` row on top
+  // of the shared layout's header operation. No new union name.
+  const summary = await runOpsRead(
+    "tenant.messaging.summary",
+    tenantId,
+    async () => {
+      const header = await getTenantHeader(asTenantId(tenantId));
+      if (!header) return null;
+      return getTenantMessagingSummary(header.id);
+    },
+    "ops_page",
+  );
+  if (!summary) notFound();
 
   return (
     <section>
@@ -51,15 +61,15 @@ export default async function TenantMessagingPage({
           value={
             summary.provider
               ? (PROVIDER_LABEL[summary.provider] ?? summary.provider)
-              : "Not connected — no messages sent yet"
+              : "Not connected — no outbound attempt yet"
           }
         />
         <DescriptionRow
-          label="Last message sent"
+          label="Last outbound attempt"
           value={summary.lastSentAt ? `${DATETIME_FMT.format(summary.lastSentAt)} IST` : "—"}
         />
         <DescriptionRow
-          label="Sent, last 7 days"
+          label="Outbound attempts, last 7 days"
           value={String(summary.sentCount7d)}
         />
         <DescriptionRow
@@ -67,7 +77,7 @@ export default async function TenantMessagingPage({
           value={String(summary.failedCount7d)}
         />
       </OpsCardFlush>
-      <OpsPanel tone="warn" className="mt-4" title="“Connected” means “has sent at least one message”">
+      <OpsPanel tone="warn" className="mt-4" title="“Connected” means “an outbound attempt has been logged”">
         There is no per-tenant WhatsApp account record yet, so this panel does
         not read a stored connection flag. It reports whichever provider
         actually handled the traffic.

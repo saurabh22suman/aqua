@@ -155,6 +155,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // Staff
   listStaffAction: "staff.read",
   createStaffAction: "staff.write",
+  searchStaffCandidatesAction: "staff.write",
   listInvitationsAction: "staff.invite",
   inviteStaffAction: "staff.invite",
   revokeInvitationAction: "staff.invite",
@@ -274,6 +275,15 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // (payments.record), reversing is management (payments.refund).
   reversePaymentAction: "payments.refund",
   listPaymentReversalsAction: "payments.read",
+  // F01 — durable recovery. The read rides the document's read
+  // permission; discarding a prepared attempt rides the write permission
+  // the operation itself needs. A prepared attempt has no financial
+  // effect, so the discard is not a money mutation — but it is still
+  // audited and actor-scoped.
+  listPaymentRecoveryAction: "invoices.read",
+  listReversalRecoveryAction: "payments.read",
+  cancelPaymentRecoveryAction: "payments.record",
+  cancelReversalRecoveryAction: "payments.refund",
   getDailyCollectionAction: "reports.financial",
   confirmCashCountAction: "payments.record",
   getReceptionCloseSummaryAction: "payments.record",

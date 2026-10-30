@@ -76,7 +76,9 @@ export function GlobalSearch({
             aria-hidden="true"
           />
           <input
-            type="search"
+            type="text"
+            inputMode="search"
+            enterKeyHint="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search members, enquiries, payments"

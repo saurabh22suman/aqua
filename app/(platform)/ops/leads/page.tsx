@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listLeads } from "@/db/platform-leads";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import type { StatusTone } from "@/components/ui/StatusBadge";
 import { Select } from "@/components/ui/Select";
@@ -72,7 +73,8 @@ export default async function LeadsPage({
 
   const { stage } = await searchParams;
   const selectedStage = STAGES.some((s) => s.value === stage) ? stage ?? "" : "";
-  const leads = await listLeads();
+  const leads = await runOpsGlobalRead("lead.list", () => listLeads(), "ops_page");
+  if (!leads) redirect("/ops/login");
   const rows = selectedStage
     ? leads.filter((lead) => lead.status === selectedStage)
     : leads;

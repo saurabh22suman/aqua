@@ -2,8 +2,8 @@
 
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
-import { Input } from "@/components/ui/Input";
-import { useCallback, useEffect, useState } from "react";
+import { TimeField } from "@/components/ui/TimeField";
+import { useCallback, useEffect, useId, useState } from "react";
 import {
   getBusinessHoursAction,
   setBusinessHoursAction,
@@ -52,6 +52,24 @@ export function BusinessHoursEditor({
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [timeValidity, setTimeValidity] = useState<
+    Record<string, { open?: boolean; close?: boolean }>
+  >({});
+
+  // One editor is mounted per location, so two locations on one page emit
+  // the SAME time ids when they are derived from the weekday alone. A
+  // native `<label for>` and an `aria-describedby` name the FIRST element
+  // carrying an id, so the second location's labels and help text would
+  // point at the FIRST location's controls.
+  //
+  // A per-mounted-instance suffix gives every field, label and help text
+  // exactly one owner. useId is stable across renders and unique per
+  // instance; the token is reduced to characters that are safe in an id and
+  // in a selector. The `hours-<day>-open` / `hours-<day>-close` PREFIX is
+  // unchanged — the reviewer's journey selects `fieldset[id^="hours-monday-
+  // open"]` — so the shared TimeField contract and the group's accessible
+  // name are untouched.
+  const instanceId = useId().replace(/[^A-Za-z0-9_-]/g, "");
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -89,6 +107,12 @@ export function BusinessHoursEditor({
   }
 
   const configured = days.some((d) => !d.closed);
+  const timesValid = days.every(
+    (d) =>
+      d.closed ||
+      (timeValidity[d.day]?.open !== false &&
+        timeValidity[d.day]?.close !== false),
+  );
 
   function update(day: Day, patch: Partial<DayHours>) {
     setDays((current) =>
@@ -122,25 +146,34 @@ export function BusinessHoursEditor({
               </Checkbox>
             </span>
             {!d.closed ? (
-              <span className="flex items-center gap-1.5">
-                <Input
-                  type="time"
+              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                <TimeField
+                  id={`hours-${d.day}-open-${instanceId}`}
+                  label={`${d.day.charAt(0).toUpperCase()}${d.day.slice(1)} opening time`}
                   value={d.open}
                   disabled={!canWrite}
-                  onChange={(e) => update(d.day, { open: e.target.value })}
-                  aria-label={`${d.day} opening time`}
-                  className="min-w-0"
+                  onChange={(value) => update(d.day, { open: value })}
+                  onValidityChange={(valid) =>
+                    setTimeValidity((current) => ({
+                      ...current,
+                      [d.day]: { ...current[d.day], open: valid },
+                    }))
+                  }
                 />
-                <span className="text-ink-3">–</span>
-                <Input
-                  type="time"
+                <TimeField
+                  id={`hours-${d.day}-close-${instanceId}`}
+                  label={`${d.day.charAt(0).toUpperCase()}${d.day.slice(1)} closing time`}
                   value={d.close}
                   disabled={!canWrite}
-                  onChange={(e) => update(d.day, { close: e.target.value })}
-                  aria-label={`${d.day} closing time`}
-                  className="min-w-0"
+                  onChange={(value) => update(d.day, { close: value })}
+                  onValidityChange={(valid) =>
+                    setTimeValidity((current) => ({
+                      ...current,
+                      [d.day]: { ...current[d.day], close: valid },
+                    }))
+                  }
                 />
-              </span>
+              </div>
             ) : null}
           </li>
         ))}
@@ -152,8 +185,9 @@ export function BusinessHoursEditor({
             size="md"
             className="mt-2"
             type="button"
-          disabled={busy}
+          disabled={busy || !timesValid}
           onClick={() => {
+            if (!timesValid) return;
             setBusy(true);
             setMessage(null);
             void (async () => {

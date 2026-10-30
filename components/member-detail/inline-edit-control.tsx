@@ -110,6 +110,7 @@ export function InlineEditControl({
         onBlur={onBlur}
         onKeyDown={onKeyDown as (e: KeyboardEvent<HTMLInputElement>) => void}
         aria-label={label}
+        formatHint="sr-only"
         className="h-11 min-w-[140px]"
       />
     );

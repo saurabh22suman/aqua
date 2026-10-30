@@ -196,7 +196,7 @@ export function MemberEnrolmentPanel({
 
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
         Enrolment
       </h2>
 

@@ -77,6 +77,10 @@
   --breakpoint-wide: 1180px;
 
   --radius-card: 20px;
+  /* The approved OpenPen owner surface radius. Owner routes remap
+   * --radius-card to this below, so Ops and other roles keep their own
+   * 20px card while the owner composition matches the reference. */
+  --radius-owner: 16px;
   /* The CONTROL radius — the human-approved 10px (owner redesign,
    * 27 October 2026). Every control the owner presses or types in wears
    * it: action buttons, text fields, selects, date and time pickers.
@@ -149,6 +153,25 @@
    * than the sidebar, so a pointer target is visible in both presets
    * without the row pretending to be selected. */
   --surface-nav-hover: #D9E8DC;
+
+  /* ── Owner OpenPen navigation (29 October 2026) ───────────────────
+   * The owner shell is the only consumer of these. Lavender paints a
+   * deep-plum owner sidebar and Mint a pale-green one; both are declared
+   * here so the owner markup never branches on the preset. They are
+   * owner scoped (not --color-sidebar) because Ops and the auth panel
+   * keep the existing pastel sidebar. */
+  --owner-nav-surface: #E0EEE5;
+  --owner-nav-ink: #244536;
+  --owner-nav-muted: #526B5D;
+  --owner-nav-hover: #D3E5D9;
+  --owner-nav-active: #FFFFFF;
+  --owner-nav-active-ink: #1F5E3A;
+  --owner-nav-focus: #1F5E3A;
+  --owner-nav-border: color-mix(in srgb, var(--owner-nav-ink) 18%, transparent);
+  /* The owner money/decision surfaces. The meaning stays in the words
+   * and the reserved status tokens; these are surfaces only. */
+  --surface-owner-money: #E7F4EE;
+  --surface-owner-decision: #FFFFFF;
 
   /* ── Owner Home surfaces (approved Lavender Option B) ────────────
    * Two extra surfaces the approved owner home needs, declared in
@@ -348,6 +371,22 @@
   --selected-ink: #4C326F;
   --surface-nav-hover: #E4DCF2;
 
+  /* Owner OpenPen navigation. The reference's lavender workspace has a
+   * deep plum sidebar and a light content canvas; Mint keeps the pale
+   * green surface declared in :root. */
+  --owner-nav-surface: #302044;
+  --owner-nav-ink: #EFE9F9;
+  --owner-nav-muted: #D5C8E6;
+  --owner-nav-hover: #3D2B55;
+  --owner-nav-active: #FFFFFF;
+  --owner-nav-active-ink: #4C326F;
+  /* Dark goldenrod clears 3:1 against BOTH the white active pill and the
+   * deep-plum sidebar, so the keyboard ring is visible on every row. */
+  --owner-nav-focus: #B8860B;
+  --owner-nav-border: color-mix(in srgb, #FFFFFF 18%, transparent);
+  --surface-owner-money: #EEE8F8;
+  --surface-owner-decision: #FFFFFF;
+
   /* Owner Home surfaces — declared in both presets so the page markup
    * never branches on the theme. */
   --surface-featured: #F2EDF9;
@@ -380,6 +419,28 @@
   --chart-5: #41525A;
 }
 
+/* ── Owner scope (OpenPen, 29 October 2026) ───────────────────────────
+ * Only the owner tree wears this attribute. It remaps two shared tokens
+ * for owner surfaces WITHOUT changing the generic preset values Ops and
+ * other roles consume:
+ *   - owner cards use the reference 16px radius;
+ *   - the selected navigation row aliases the owner nav pill tokens, so
+ *     the sidebar is white/plum in Lavender and white/forest in Mint.
+ * No palette token is restated here. */
+[data-owner-surface] {
+  --radius-card: var(--radius-owner);
+  --selected-surface: var(--owner-nav-active);
+  --selected-ink: var(--owner-nav-active-ink);
+}
+
+/* Owner sidebar keyboard focus. The global ring token is tuned for the
+ * light content surfaces; on the deep-plum sidebar (and the white active
+ * pill) it is too low-contrast. Only controls inside the owner sidebar
+ * take the owner-nav ring; the width/offset stay with the global rule. */
+[data-owner-surface] [data-testid="owner-sidebar"] :is(a, button, summary):focus-visible {
+  outline-color: var(--owner-nav-focus);
+}
+
 /* Focus fallback for controls that do not opt into the ring with a
  * utility class (selects, hand-rolled buttons, date fields). The
  * :where() keeps specificity at 0 so any component-level
@@ -389,6 +450,15 @@
   :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  /* Native selection controls inherit the preset's action accent, so an
+   * unstyled checkbox/radio cannot fall back to browser blue. `:where()`
+   * keeps specificity at zero, so an explicit `accent-*` utility (the
+   * shared Checkbox, consent controls) still wins. Geometry, hit area,
+   * disabled state and consent values are untouched. */
+  :where(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--accent-strong);
   }
 }
 

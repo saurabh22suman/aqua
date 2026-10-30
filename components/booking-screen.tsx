@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BookingForm } from "@/components/booking-form";
 import { BookingDayList, BookingRowActions } from "@/components/booking-day-list";
 import {
@@ -19,8 +19,10 @@ import { OwnerCalendar } from "@/components/owner-calendar/owner-calendar";
 import { OwnerCalendarToolbar } from "@/components/owner-calendar/owner-calendar-toolbar";
 import { calendarRange } from "@/components/owner-calendar/calendar-layout";
 import { Tabs } from "@/components/ui/Tabs";
+import { SectionHeading } from "@/components/ui/PageHeader";
 import {
   BOOKING_CATEGORY_LABELS,
+  SLOT_STARTS,
   bookingToCalendarEvent,
 } from "@/components/booking-shared";
 import {
@@ -65,10 +67,22 @@ export function BookingScreen({
   const [bill, setBill] = useState<BookingBill | null>(null);
   const [paid, setPaid] = useState(false);
   const [paidMethod, setPaidMethod] = useState<PaymentMethod>("cash");
+  // The bill currently on screen. A payment that resolves late for a
+  // different bill must not mark this one paid.
+  const currentBillId = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentBillId.current = bill?.invoiceId ?? null;
+  }, [bill?.invoiceId]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<"calendar" | "board">("calendar");
   const [scope, setScope] = useState<"day" | "week" | "agenda">("day");
+  // Owner OpenPen (29 October 2026) — the board and the selected slot
+  // share one chosen hour, so "Choose slot" is the same decision as
+  // the form's time slot.
+  const [slotStart, setSlotStart] = useState(SLOT_STARTS[9]!);
+  const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
 
   const selectedFacility = useMemo(
     () => facilities.find((candidate) => candidate.id === facilityId),
@@ -77,20 +91,28 @@ export function BookingScreen({
 
   // The week the chosen day belongs to. Monday-first, the same order
   // the schedule's week column reads.
-  const week = useMemo(() => calendarRange(date, "week").days, [date]);
+  const week = useMemo(
+    () => (hasDate ? calendarRange(date, "week").days : []),
+    [date, hasDate],
+  );
 
   // The reads follow what is on show: the board and the day view read
   // the chosen day, the week view reads the week. Nothing is read
   // behind a surface the owner is not looking at.
   const showWeek = (scope === "week" || scope === "agenda") && view === "calendar";
   const showDay = scope === "day" || view === "board";
-  const dayRead = useBookingDayRead(date, facilityId, refreshKey, showDay);
+  const dayRead = useBookingDayRead(
+    date,
+    facilityId,
+    refreshKey,
+    showDay && hasDate,
+  );
   const weekRead = useBookingWeekRead(
     week,
     date,
     facilityId,
     refreshKey,
-    showWeek,
+    showWeek && hasDate,
   );
 
   async function cancel(row: BookingDayRow) {
@@ -138,7 +160,13 @@ export function BookingScreen({
         {error ? <ErrorNote message={error} /> : null}
         <BookingBillPanel
           bill={bill}
-          onPaid={(method) => {
+          onPaid={(method, billId) => {
+            if (billId && billId !== currentBillId.current) {
+              setError(
+                "A payment for another bill was recorded. Check that bill before collecting again.",
+              );
+              return;
+            }
             setPaidMethod(method);
             setPaid(true);
           }}
@@ -159,30 +187,29 @@ export function BookingScreen({
   const step = showWeek ? 7 : 1;
 
   return (
-    <div className="space-y-6">
-      {/* The creation form is a bounded column: it is one task. The
-          board and the calendar below it take the width the page has,
-          because seven day columns inside a narrow column are not
-          readable. */}
-      <div className="max-w-xl">
-        <BookingForm
-          facilities={facilities}
-          timezone={timezone}
-          today={today}
-          terminology={terminology}
-          facilityId={facilityId}
-          onFacilityChange={setFacilityId}
-          date={date}
-          onDateChange={setDate}
-          onCreated={() => setRefreshKey((key) => key + 1)}
-        />
-      </div>
-
-      <section className="rounded-card border border-line bg-paper p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-display text-[15px] font-semibold text-ink">
-            {selectedFacility?.name ?? "Day board"}
-          </h2>
+    <div className="grid gap-5 lg:grid-cols-5">
+      {/* Owner OpenPen (29 October 2026) — the slot board and the
+          selected slot sit side by side on desktop; on a phone the
+          board comes first and the selected slot follows. The board
+          keeps every existing calendar/board control; the form keeps
+          the server quote and the customer identity together. */}
+      <section
+        // self-start keeps the board at its intrinsic height: as a grid
+        // item it stretched to the taller selected-slot column.
+        className="order-1 min-w-0 self-start rounded-card border border-line bg-paper p-5 lg:col-span-3"
+        data-testid="booking-board"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <SectionHeading
+              title="Day board"
+              subtitle={
+                selectedFacility
+                  ? `${selectedFacility.name} · ${selectedFacility.locationName}`
+                  : "Choose a facility and date to read the day."
+              }
+            />
+          </div>
           <Tabs
             label="Booking view"
             value={view}
@@ -197,41 +224,76 @@ export function BookingScreen({
         </div>
         {error ? <ErrorNote message={error} /> : null}
 
-        {view === "calendar" ? (
+        {!hasDate ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-card border border-line bg-paper px-4 py-6 text-center text-[13px] text-ink-2"
+          >
+            Choose a valid date in the selected slot to read the board.
+          </p>
+        ) : view === "calendar" ? (
           <>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-              <Tabs
-                label="Calendar range"
-                value={scope}
-                onValueChange={(value) =>
-                  setScope(
-                    value === "week"
-                      ? "week"
-                      : value === "agenda"
-                        ? "agenda"
-                        : "day",
-                  )
+            {/* Two control groups: the range tabs and the shared
+                navigation row keep a token gap between them. */}
+            <div className="mt-4 flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Tabs
+                  label="Calendar range"
+                  value={scope}
+                  onValueChange={(value) =>
+                    setScope(
+                      value === "week"
+                        ? "week"
+                        : value === "agenda"
+                          ? "agenda"
+                          : "day",
+                    )
+                  }
+                  tabs={[
+                    { value: "day", label: "Day" },
+                    { value: "week", label: "Week" },
+                    { value: "agenda", label: "Agenda" },
+                  ]}
+                />
+              </div>
+              <OwnerCalendarToolbar
+                navigation={{
+                  previous: { onSelect: () => setDate(addDays(date, -step)) },
+                  today: { onSelect: () => setDate(today) },
+                  next: { onSelect: () => setDate(addDays(date, step)) },
+                }}
+                rangeLabel={
+                  showWeek
+                    ? `${formatDateIST(week[0]!)} – ${formatDateIST(week[6]!)}`
+                    : formatDateIST(date)
                 }
-                tabs={[
-                  { value: "day", label: "Day" },
-                  { value: "week", label: "Week" },
-                  { value: "agenda", label: "Agenda" },
-                ]}
+                timezone={timezone}
+                labels={{
+                  previous: (
+                    <>
+                      <span className="sm:hidden">Previous</span>
+                      <span className="hidden sm:inline">
+                        {showWeek ? "Previous week" : "Previous day"}
+                      </span>
+                    </>
+                  ),
+                  today: "Today",
+                  next: (
+                    <>
+                      <span className="sm:hidden">Next</span>
+                      <span className="hidden sm:inline">
+                        {showWeek ? "Next week" : "Next day"}
+                      </span>
+                    </>
+                  ),
+                }}
+                ariaLabels={{
+                  previous: showWeek ? "Previous week" : "Previous day",
+                  today: "Today",
+                  next: showWeek ? "Next week" : "Next day",
+                }}
               />
             </div>
-            <OwnerCalendarToolbar
-              navigation={{
-                previous: { onSelect: () => setDate(addDays(date, -step)) },
-                today: { onSelect: () => setDate(today) },
-                next: { onSelect: () => setDate(addDays(date, step)) },
-              }}
-              rangeLabel={
-                showWeek
-                  ? `${formatDateIST(week[0]!)} – ${formatDateIST(week[6]!)}`
-                  : formatDateIST(date)
-              }
-              timezone={timezone}
-            />
             {calendarRead.failed ? (
               <BookingReadError
                 message={calendarRead.error}
@@ -257,7 +319,7 @@ export function BookingScreen({
                   title: showWeek
                     ? "No bookings in this week"
                     : "No bookings on this day",
-                  body: "Pick a facility, date and slot above to put the first one on the board.",
+                  body: "Pick a facility, date and slot beside the board to put the first one on it.",
                 }}
                 renderEventActions={(event) => {
                   const row = rowById.get(event.id);
@@ -294,10 +356,34 @@ export function BookingScreen({
                 busyId={busyId}
                 onCancel={cancel}
                 onBill={requestBill}
+                slots={SLOT_STARTS}
+                onChooseSlot={setSlotStart}
               />
             )}
           </div>
         )}
+      </section>
+
+      <section className="order-2 min-w-0 lg:col-span-2" data-testid="booking-selected-slot">
+        <SectionHeading
+          title="Selected slot"
+          subtitle="The price is the configured quote for this slot; a booking keeps the price it was quoted."
+        />
+        <div className="mt-3">
+          <BookingForm
+            facilities={facilities}
+            timezone={timezone}
+            today={today}
+            terminology={terminology}
+            facilityId={facilityId}
+            onFacilityChange={setFacilityId}
+            date={date}
+            onDateChange={setDate}
+            onCreated={() => setRefreshKey((key) => key + 1)}
+            slotStart={slotStart}
+            onSlotStartChange={setSlotStart}
+          />
+        </div>
       </section>
     </div>
   );

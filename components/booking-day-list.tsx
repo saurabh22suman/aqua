@@ -3,7 +3,9 @@
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatINR } from "@/lib/money/format";
-import { formatTimeIST } from "@/lib/time/tz";
+import { wallClock } from "@/components/owner-calendar/calendar-layout";
+import { formatTimeIST, formatWallTime12h } from "@/lib/time/tz";
+import { slotEnd } from "@/components/booking-shared";
 import type { BookingDayRow } from "@/lib/services/bookings";
 
 // V-04 — the day board: every booking for the chosen facility and
@@ -11,6 +13,12 @@ import type { BookingDayRow } from "@/lib/services/bookings";
 // row, why it cannot be billed; the bill action is absent rather
 // than disabled-and-mysterious. Cancelling is available on any live
 // row (the server refuses completed/cancelled ones).
+//
+// Owner OpenPen (29 October 2026) — the board is a real slot board:
+// free configured hours sit beside booked ones and "Choose slot" moves
+// the selected hour into the form. Availability is derived from the
+// rows already read for this facility/day; no extra read and no
+// invented price.
 
 const STATUS_LABEL: Record<string, string> = {
   held: "Held",
@@ -19,18 +27,45 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "Completed",
 };
 
+function slotMinutes(slot: string): number {
+  const [hours, minutes] = slot.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
+function bookingOverlapsSlot(row: BookingDayRow, slot: string): boolean {
+  if (row.status === "cancelled") return false;
+  const start = wallClock(row.startsAt).minutes;
+  const end = start + Math.max(
+    1,
+    Math.round(
+      (new Date(row.endsAt).getTime() - new Date(row.startsAt).getTime()) /
+        60_000,
+    ),
+  );
+  return start < slotMinutes(slotEnd(slot)) && end > slotMinutes(slot);
+}
+
 export function BookingDayList({
   rows,
   busyId,
   onCancel,
   onBill,
+  slots,
+  onChooseSlot,
 }: {
   rows: BookingDayRow[];
   busyId: string | null;
   onCancel: (row: BookingDayRow) => void;
   onBill: (row: BookingDayRow) => void;
+  /**
+   * The configured hourly starts for this desk. When supplied, free
+   * hours are offered alongside the bookings; the caller owns which
+   * slot is selected.
+   */
+  slots?: ReadonlyArray<string>;
+  onChooseSlot?: (slot: string) => void;
 }) {
-  if (rows.length === 0) {
+  if (rows.length === 0 && !slots?.length) {
     return (
       <EmptyState
         title="No bookings on this day"
@@ -39,9 +74,59 @@ export function BookingDayList({
     );
   }
 
+  const bookedMinutes = rows
+    .filter((row) => row.status !== "cancelled")
+    .map((row) => wallClock(row.startsAt).minutes);
+
+  // Interleave real bookings and free configured hours by the time they
+  // start, so the board reads like a day rather than two lists.
+  type Entry =
+    | { kind: "booking"; minute: number; row: BookingDayRow }
+    | { kind: "slot"; minute: number; slot: string };
+
+  const entries: Entry[] = rows.map((row) => ({
+    kind: "booking",
+    minute: wallClock(row.startsAt).minutes,
+    row,
+  }));
+
+  if (slots?.length && onChooseSlot) {
+    for (const slot of slots) {
+      const occupied = rows.some((row) => bookingOverlapsSlot(row, slot));
+      if (!occupied && !bookedMinutes.includes(slotMinutes(slot))) {
+        entries.push({ kind: "slot", minute: slotMinutes(slot), slot });
+      }
+    }
+  }
+
+  entries.sort((a, b) => a.minute - b.minute || (a.kind === "booking" ? -1 : 1));
+
   return (
     <ul className="divide-y divide-line" data-testid="booking-day-list">
-      {rows.map((row) => {
+      {entries.map((entry) => {
+        if (entry.kind === "slot") {
+          const start = entry.slot;
+          return (
+            <li key={`slot-${start}`} className="py-3" data-testid="booking-slot-row">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[14px] font-medium tabular-nums text-ink">
+                    {formatWallTime12h(start)}–{formatWallTime12h(slotEnd(start))}
+                  </p>
+                  <p className="mt-0.5 text-[12.5px] text-ink-3">Available</p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onChooseSlot?.(start)}
+                >
+                  Choose slot
+                </Button>
+              </div>
+            </li>
+          );
+        }
+        const row = entry.row;
         const cancelled = row.status === "cancelled";
         const paid = row.invoiceId !== null && row.amountDuePaise === 0;
         return (

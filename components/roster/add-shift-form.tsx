@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { DateField } from "@/components/ui/DateField";
 import { Field } from "@/components/ui/Field";
-import { Input } from "@/components/ui/Input";
+import { TimeField } from "@/components/ui/TimeField";
 import { Select } from "@/components/ui/Select";
 import type { ShiftTemplateRow } from "@/lib/services/shifts";
 import type { StaffRow } from "@/lib/services/staff";
@@ -46,6 +46,8 @@ export function AddShiftForm({
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("10:00");
   const [templateId, setTemplateId] = useState("");
+  const [startValid, setStartValid] = useState(true);
+  const [endValid, setEndValid] = useState(true);
   const [locationId, setLocationId] = useState(initialLocationId);
 
   useEffect(() => {
@@ -99,10 +101,11 @@ export function AddShiftForm({
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">Date</span>
-            <DateField value={shiftDate} onChange={setShiftDate} />
-          </label>
+          <Field id="add-shift-date" label="Date" required>
+            {(field) => (
+              <DateField {...field} value={shiftDate} onChange={setShiftDate} />
+            )}
+          </Field>
           <div className="min-w-0">
             <Field id="add-shift-template" label="Template (optional)">
               {(field) => (
@@ -122,31 +125,21 @@ export function AddShiftForm({
             </Field>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <Field id="add-shift-start" label="Start">
-              {(field) => (
-                <Input
-                  {...field}
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                />
-              )}
-            </Field>
-          </div>
-          <div className="min-w-0">
-            <Field id="add-shift-end" label="End">
-              {(field) => (
-                <Input
-                  {...field}
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                />
-              )}
-            </Field>
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <TimeField
+            id="add-shift-start"
+            label="Start"
+            value={startTime}
+            onChange={setStartTime}
+            onValidityChange={setStartValid}
+          />
+          <TimeField
+            id="add-shift-end"
+            label="End"
+            value={endTime}
+            onChange={setEndTime}
+            onValidityChange={setEndValid}
+          />
         </div>
         {locations.length > 1 ? (
           <div>
@@ -170,7 +163,7 @@ export function AddShiftForm({
         <Button
           variant="primary"
           size="md"
-          disabled={pending || !staffId || !locationId}
+          disabled={pending || !staffId || !locationId || !startValid || !endValid}
           onClick={() =>
             onAdd({
               staffId,

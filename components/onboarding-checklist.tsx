@@ -1,131 +1,109 @@
 import Link from "next/link";
 import { Check, ChevronRight } from "lucide-react";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { buttonClasses } from "@/components/ui/Button";
 import type { OnboardingChecklist } from "@/lib/services/onboarding-checklist";
 
-// Phase 2.8 — onboarding checklist surface. One dominant element
-// per screen, per DESIGN.md: the marine hero card carries the
-// progress and a single primary action (the first incomplete item,
-// which is also the implicit "what to do next"). The item list
-// below carries state per item; each row is a full-width 44 px
-// touch target linking to where the work is done.
+// Phase 2.8 — onboarding checklist surface.
 //
-// Composition intentionally matches the sports-club-ui-direction
-// reference's "Owner · home" framing — same hero treatment, same
-// row treatment for the list — so this screen reads as a kin
-// surface rather than a new shape.
+// Owner OpenPen (29 October 2026): completion is a small evidence
+// surface, not a hero. The three existing checks stay one clear next
+// task at a time; the count is the surface title, each row states its
+// own condition and only the next incomplete step carries a primary
+// action. Completion means these register checks passed, not that the
+// whole academy is ready.
 
 export function OnboardingChecklistView({ data }: { data: OnboardingChecklist }) {
   const nextIncomplete = data.items.find((it) => !it.complete);
   const allDone = nextIncomplete === undefined;
+  const nextIndex = data.items.findIndex((it) => !it.complete);
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <div className="flex items-center gap-3 pb-4">
-        <div>
-          <h1 className="font-display text-[19px] font-semibold leading-tight">
-            Set up your academy
-          </h1>
-          <p className="text-[12.5px] text-ink-3 mt-0.5">
-            {allDone
-              ? "Everything below is in place."
-              : "A few quick steps and the register is ready to go."}
+    <OwnerPage>
+      <PageHeader
+        title="Set up your first register"
+        purpose="Three existing checks; one clear next task."
+      />
+
+      <section
+        className="mt-5 max-w-2xl rounded-card border border-line bg-paper"
+        data-testid="onboarding-checks"
+      >
+        <div className="px-5 pt-5">
+          <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3">
+            {allDone ? "Completed" : "What's left"}
           </p>
+          <h2 className="mt-1 font-display text-[16px] font-semibold">
+            {data.completedCount} of {data.totalCount} checks complete
+          </h2>
         </div>
-      </div>
 
-      {/* Hero — one dominant element. Marine card with a single big
-          figure and a single primary CTA (the next incomplete item),
-          matching the owner dashboard's hero treatment. */}
-      <div className="rounded-card bg-marine px-5 py-5 text-paper">
-        {allDone ? (
-          <>
-            <p className="text-[12.5px] font-medium text-paper/70">Setup</p>
-            <p className="mt-1.5 font-display text-[32px] font-semibold tracking-tight leading-none">
-              All set
-            </p>
-            <p className="mt-2 text-[13px] text-paper/80">
-              Every onboarding step is complete. Add more members or batches whenever you&apos;re ready.
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-[12.5px] font-medium text-paper/70">Setup progress</p>
-            <p className="mt-1.5 font-display text-[38px] font-semibold tracking-tight leading-none">
-              {data.completedCount}
-              <span className="text-paper/60 font-normal">/{data.totalCount}</span>
-            </p>
-            <p className="mt-1.5 text-[13px] text-paper/80">
-              {data.totalCount - data.completedCount === 1
-                ? "One more thing to set up."
-                : `${data.totalCount - data.completedCount} more to set up.`}
-            </p>
-            {/* Single primary CTA — the next incomplete item, so the
-                dominant action always points at what's actually next. */}
-            {nextIncomplete ? (
-              <Link
-                href={nextIncomplete.cta.href}
-                className="mt-4 block w-full rounded-pill py-3 text-center text-[14.5px] font-semibold text-ink bg-paper transition-colors duration-150"
-              >
-                {nextIncomplete.cta.label} →
-              </Link>
-            ) : null}
-          </>
-        )}
-      </div>
+        <ol className="mt-3 divide-y divide-line border-t border-line">
+          {data.items.map((item, index) => {
+            const isNext = !item.complete && index === nextIndex;
+            return (
+              <li key={item.key} className="px-5 py-3.5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-deck text-ink-2"
+                    aria-hidden="true"
+                  >
+                    {item.complete ? (
+                      <Check size={15} strokeWidth={2.4} />
+                    ) : (
+                      <span className="text-[12px] font-semibold tabular-nums">
+                        {index + 1}
+                      </span>
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[14px] font-medium leading-tight text-ink">
+                      {item.title}
+                    </p>
+                    <p className="mt-0.5 text-[12.5px] leading-snug text-ink-3">
+                      {item.detail}
+                    </p>
+                    {!item.complete && item.secondaryCta ? (
+                      <Link
+                        href={item.secondaryCta.href}
+                        className="mt-1 inline-flex min-h-11 items-center text-[12.5px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
+                      >
+                        {item.secondaryCta.label}
+                      </Link>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-none items-center gap-2">
+                    {item.complete ? (
+                      <StatusBadge tone="good">Done</StatusBadge>
+                    ) : isNext ? (
+                      <Link
+                        href={item.cta.href}
+                        className={buttonClasses({ variant: "primary", size: "sm" })}
+                      >
+                        {item.cta.label}
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </Link>
+                    ) : (
+                      <span className="text-[12px] text-ink-3">Next step</span>
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
 
-      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">
-        {allDone ? "Completed" : "What's left"}
-      </h2>
-      <ul>
-        {data.items.map((item) => {
-          const rowInner = (
-            <div className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3">
-              <div
-                className={`h-9 w-9 rounded-[11px] grid place-items-center flex-none ${
-                  item.complete
-                    ? "bg-deck text-ink-2"
-                    : "bg-deck text-ink-3"
-                }`}
-                aria-hidden="true"
-              >
-                {item.complete ? (
-                  <Check size={16} strokeWidth={2.4} />
-                ) : (
-                  <span className="font-display text-[14px] font-semibold">!</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[14px] font-medium leading-tight">{item.title}</p>
-                <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-                  {item.complete ? "Done" : item.detail}
-                </p>
-              </div>
-              <div className="flex-none text-ink-3">
-                {item.complete ? null : <ChevronRight size={18} />}
-              </div>
-            </div>
-          );
-          return (
-            <li key={item.key} className="mb-2">
-              {item.complete ? (
-                rowInner
-              ) : (
-                <Link href={item.cta.href} className="block">
-                  {rowInner}
-                </Link>
-              )}
-              {!item.complete && item.secondaryCta ? (
-                <Link
-                  href={item.secondaryCta.href}
-                  className="mt-1 block px-3.5 text-[12.5px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
-                >
-                  {item.secondaryCta.label}
-                </Link>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    </main>
+        <div className="border-t border-line px-5 py-3">
+          <Link
+            href="/owner"
+            className="inline-flex min-h-11 items-center text-[13px] font-medium text-ink-2 underline underline-offset-2"
+          >
+            Go to owner home
+          </Link>
+        </div>
+      </section>
+    </OwnerPage>
   );
 }

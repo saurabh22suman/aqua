@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { createMemberAction, searchPersonsAction } from "@/lib/actions/people";
-import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
+import { CURRENT_POLICY_VERSION } from "@/lib/consent-policy";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { DateField } from "@/components/ui/DateField";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -194,13 +195,14 @@ export function MemberCreateForm({
     // its padding and border, plus the gap) AND the fixed bottom nav
     // it pins above, so the last section can always scroll clear of
     // both. Everything stays visible and reachable.
-    <div className="space-y-5 pb-[calc(10.5rem+env(safe-area-inset-bottom))] lg:pb-32">
+    <div className="space-y-5">
       <section className="space-y-2.5">
-        {/* Owner redesign (C2) — the shared labelled controls. The
-            labels are associated with their control by id, the metrics
-            (16px text, the 44px floor, the focus ring) belong to the
-            shared primitives, and no page-local surface override is
-            added on top of them. */}
+        {/* OpenPen owner reference — full name first, then paired fields at
+            ≥sm so the editor reads as a bounded form rather than a long
+            queue of controls. On 390px every field is one column. */}
+        <h2 className="font-display text-[16px] font-semibold">
+          Personal details
+        </h2>
         <Field id="member-full-name-field" label="Full name">
           {(field) => (
             <Input
@@ -213,37 +215,54 @@ export function MemberCreateForm({
             />
           )}
         </Field>
-        <Field id="member-phone-field" label="Phone (optional)">
-          {(field) => (
-            <Input
-              {...field}
-              type="tel"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="Phone (optional)"
-            />
-          )}
-        </Field>
-        <Field id="member-dob" label="Date of birth">
-          {() => (
-            <DateField
-              id="member-dob"
-              value={dateOfBirth}
-              onChange={setDateOfBirth}
-              data-testid="member-dob"
-            />
-          )}
-        </Field>
-        <Field id="member-joined-on" label="Joined on (optional — defaults to today)">
-          {() => (
-            <DateField
-              id="member-joined-on"
-              value={joinedOn}
-              onChange={setJoinedOn}
-              data-testid="member-joined-on"
-            />
-          )}
-        </Field>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <Field id="member-phone-field" label="Phone (optional)">
+            {(field) => (
+              <Input
+                {...field}
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone (optional)"
+              />
+            )}
+          </Field>
+          <Field id="member-dob" label="Date of birth" required>
+            {(field) => (
+              <DateField
+                {...field}
+                value={dateOfBirth}
+                onChange={setDateOfBirth}
+                data-testid="member-dob"
+              />
+            )}
+          </Field>
+          <Field id="member-joined-on" label="Joined on (optional — defaults to today)">
+            {(field) => (
+              <DateField
+                {...field}
+                value={joinedOn}
+                onChange={setJoinedOn}
+                data-testid="member-joined-on"
+              />
+            )}
+          </Field>
+          <Field id="member-location-field" label="Location">
+            {(field) => (
+              <Select
+                {...field}
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+              >
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
         <Field id="member-gender-field" label="Gender (optional)">
           {(field) => (
             <Select
@@ -255,21 +274,6 @@ export function MemberCreateForm({
               <option value="male">Male</option>
               <option value="female">Female</option>
               <option value="other">Other</option>
-            </Select>
-          )}
-        </Field>
-        <Field id="member-location-field" label="Location">
-          {(field) => (
-            <Select
-              {...field}
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-            >
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
             </Select>
           )}
         </Field>
@@ -288,9 +292,13 @@ export function MemberCreateForm({
 
       {minor === true ? (
         <section className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
-          <h3 className="text-[13px] font-semibold">
-            {titleCase(resolveTerm(terminology, "guardian", 1))} required — this {resolveTerm(terminology, "member", 1)} is a minor
-          </h3>
+          <h2 className="font-display text-[16px] font-semibold">
+            {titleCase(resolveTerm(terminology, "guardian", 1))}
+          </h2>
+          <p className="text-[12.5px] text-ink-3">
+            Required because this {resolveTerm(terminology, "member", 1)} is a
+            minor.
+          </p>
 
           {guardian.mode === "existing" ? (
             <div className="flex items-center justify-between rounded-ctl bg-water-soft px-3 py-2">
@@ -397,9 +405,12 @@ export function MemberCreateForm({
         </section>
       ) : null}
 
-      <MemberConsentChoices minor={minor} memberLabel={resolveTerm(terminology, "member", 1)}
-        processing={consentGiven} communications={communicationsGiven}
-        onProcessing={setConsentGiven} onCommunications={setCommunicationsGiven} />
+      <section className="space-y-2">
+        <h2 className="font-display text-[16px] font-semibold">Consent</h2>
+        <MemberConsentChoices minor={minor} memberLabel={resolveTerm(terminology, "member", 1)}
+          processing={consentGiven} communications={communicationsGiven}
+          onProcessing={setConsentGiven} onCommunications={setCommunicationsGiven} />
+      </section>
 
       {error ? (
         <p className="text-[13px] text-late" role="alert">
@@ -407,16 +418,10 @@ export function MemberCreateForm({
         </p>
       ) : null}
 
-      {/* Sticky save bar [automatable]: this is the longest form in the
-          product, and with the guardian section open the submit scrolls
-          two viewports down. The bar pins above the fixed bottom nav
-          (4rem + safe-area + gap) so Save is always one thumb-tap away.
-          R-D1 (2026-09-13 audit): the mandatory consent/guardian
-          content can be below the fold from here, so an incomplete
-          form states what is still required in the bar itself, and a
-          failed submit scrolls to the field. shadow-2 is the
-          floating-element level per DESIGN.md §1.4. */}
-      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] rounded-ctl border border-line bg-paper p-2 shadow-2">
+      {/* OpenPen owner reference — the bounded editor ends with an in-flow
+          Cancel/Save pair. The incomplete-form warning stays beside Save so
+          the required action is not hidden behind a floating bar. */}
+      <div className="rounded-ctl border border-line bg-paper p-2">
         {!consentGiven || (minor === true && guardianMissing) ? (
           <p className="px-1 pb-1.5 text-center text-[12px] text-warn">
             {!consentGiven
@@ -424,17 +429,25 @@ export function MemberCreateForm({
               : `A ${resolveTerm(terminology, "guardian", 1)} is required before saving.`}
           </p>
         ) : null}
-        <Button
-          type="button"
-          variant="primary"
-          size="lg"
-          onClick={submit}
-          disabled={busy}
-          className="w-full"
-          data-testid="submit-member"
-        >
-          {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}
-        </Button>
+        <div className="flex gap-2">
+          <Link
+            href={memberDetailBasePath}
+            className={`${buttonClasses({ variant: "secondary", size: "lg" })} flex-1`}
+          >
+            Cancel
+          </Link>
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            onClick={submit}
+            disabled={busy}
+            className="flex-[2]"
+            data-testid="submit-member"
+          >
+            {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsRead } from "@/lib/auth/ops-operation";
 import { DATETIME_FMT, SectionHeader, ActivityDetail } from "../tenant-detail-shared";
 import { OpsCardFlush, OpsEmptyState } from "@/components/ops/ops-primitives";
 
@@ -22,8 +22,12 @@ export default async function TenantAuditPage({
   if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const detail = await getTenantDetail(asTenantId(tenantId));
+  const detail = await runOpsRead(
+    "tenant.detail",
+    tenantId,
+    () => getTenantDetail(asTenantId(tenantId)),
+    "ops_page",
+  );
   if (!detail) notFound();
 
   return (

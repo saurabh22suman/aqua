@@ -8,7 +8,7 @@ import { getTenantConfigAuditLog } from "@/db/tenant-config-audit";
 import { listAllTenantsForSelector } from "@/db/platform-tenants";
 import { navForRole } from "@/lib/nav";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsGlobalRead, runOpsRead } from "@/lib/auth/ops-operation";
 import type { ConfigKeyName } from "@/db/config-definitions";
 import {
   OpsEmptyState,
@@ -68,21 +68,34 @@ export default async function EffectiveConfigurationPage({
   const canWrite = status.role === "admin";
 
   const { tenantId } = await params;
-  // The SAME friendly guard every other tenant route carries, applied
-  // immediately after the params are awaited and BEFORE any query: a
-  // malformed segment becomes the Next notFound signal (the friendly
-  // 404), and the database never sees it.
-  //
-  // This route used to skip the guard, so a mistyped id reached the
-  // query and surfaced as a database error instead. It was the one
-  // tenant route without the check.
-  requireUuidParam(tenantId);
-  const { role, key } = await searchParams;
-  const view = await getEffectiveConfiguration(asTenantId(tenantId));
+  // The operation boundary owns the UUID guard now: it sees the RAW
+  // segment before any query, writes the authenticated "invalid" row
+  // (no tenant, no raw value) and returns null — the same friendly 404.
+  // A mistyped id still never reaches the database.
+  const view = await runOpsRead(
+    "config.effective.read",
+    tenantId,
+    () => getEffectiveConfiguration(asTenantId(tenantId)),
+    "ops_page",
+  );
   if (!view) notFound();
+  const { role, key } = await searchParams;
 
-  const changeRequests = await listConfigChangeRequests(view.tenant.id);
-  const allTenants = await listAllTenantsForSelector();
+  const changeRequests = await runOpsRead(
+    "config.request.list",
+    view.tenant.id,
+    () => listConfigChangeRequests(view.tenant.id),
+    "ops_page",
+  );
+  if (!changeRequests) notFound();
+  // The selector is a platform-wide read, so it is a GLOBAL operation and
+  // its row carries no tenant.
+  const allTenants = await runOpsGlobalRead(
+    "tenant.selector.list",
+    () => listAllTenantsForSelector(),
+    "ops_page",
+  );
+  if (!allTenants) notFound();
 
   const selectedRoleKey =
     role && view.roles.some((r) => r.key === role) ? role : view.roles[0]?.key;
@@ -96,10 +109,20 @@ export default async function EffectiveConfigurationPage({
   const selectedConfigKey =
     key && view.config.some((c) => c.key === key) ? (key as ConfigKeyName) : null;
   const resolutionChain = selectedConfigKey
-    ? await resolveConfigChain(view.tenant.id, selectedConfigKey)
+    ? await runOpsRead(
+        "config.chain.resolve",
+        view.tenant.id,
+        () => resolveConfigChain(view.tenant.id, selectedConfigKey),
+        "ops_page",
+      )
     : null;
   const configAuditLog = selectedConfigKey
-    ? await getTenantConfigAuditLog(view.tenant.id, selectedConfigKey)
+    ? await runOpsRead(
+        "config.audit.list",
+        view.tenant.id,
+        () => getTenantConfigAuditLog(view.tenant.id, selectedConfigKey),
+        "ops_page",
+      )
     : null;
 
   // Keys whose location resolution differs from the tenant resolution —

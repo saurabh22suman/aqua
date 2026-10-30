@@ -93,7 +93,7 @@ export function OwnerHomeCharts({
     >
       <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
-          <h2 className="font-display text-[17px] font-semibold">Money at a glance</h2>
+          <h2 className="font-display text-[16px] font-semibold">Money at a glance</h2>
           <p className="mt-0.5 text-[12px] text-ink-3">
             Collections and how members paid
           </p>
@@ -125,11 +125,11 @@ export function OwnerHomeCharts({
       >
         <article
           data-testid="owner-home-money-trends"
-          className="min-w-0 rounded-card border border-line bg-paper p-4 lg:col-span-3"
+          className="min-w-0 rounded-card border border-line bg-paper p-5 lg:col-span-3"
         >
           <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
-              <h3 className="font-display text-[15px] font-semibold">Trends</h3>
+              <h3 className="font-display text-[16px] font-semibold">Trends</h3>
               <p className="mt-0.5 text-[12.5px] text-ink-3">
                 {METRIC_LABEL[metric]} · {data.period.tabLabel} ·{" "}
                 {data.period.currentLabel} (Asia/Kolkata)
@@ -198,7 +198,7 @@ function HistoryLink({
   return (
     <Link
       href={href}
-      className="mt-1.5 inline-flex min-h-[32px] items-center text-[12px] font-medium text-[var(--accent-ink)] underline-offset-2 hover:underline"
+      className="mt-1.5 inline-flex min-h-11 items-center text-[12px] font-medium text-[var(--accent-ink)] underline-offset-2 hover:underline"
     >
       {monthRange ? `See this month's history (${monthRange}) →` : "See this month's history →"}
     </Link>
@@ -226,7 +226,7 @@ function Segmented({
           key={item.key}
           href={item.href}
           aria-current={item.active ? "page" : undefined}
-          className={`flex min-h-[40px] items-center rounded-pill px-3 text-[12.5px] font-medium transition-colors duration-150 ${
+          className={`flex min-h-11 items-center rounded-pill px-3 text-[12.5px] font-medium transition-colors duration-150 ${
             // The selected control wears the PRESET accent, so the
             // period reads as part of the theme in both presets.
             item.active

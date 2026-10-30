@@ -1,37 +1,20 @@
 import { Skeleton } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
-// Owner home cold-load. The real page is a Promise.all over six actions
-// (dashboard / branding / terminology / onboarding / charts / timezone)
-// and takes 2–7s on a cold dev compile per the audit. Without this file
-// the user sees a blank document for that whole window — no header, no
-// hero, nothing. With it, Next.js streams this skeleton immediately
-// while the page's data fetches resolve.
+// Owner home cold-load. The real page is a Promise.all over several
+// actions, so this skeleton streams while the data resolves.
 //
-// Owner redesign (27 October 2026) — the skeleton mirrors the APPROVED
-// Home composition (DESIGN.md §7 and the Lavender Option B amendment):
-//
-//   1. the day, the club and the scope the figures cover;
-//   2. the summary figures;
-//   3. the one dominant action and its quiet secondaries;
-//   4. the day's classes BESIDE the attention queue;
-//   5. the money band (the trends panel beside the payment mix).
-//
-// It used to mirror the pre-Lavender composition (a money hero, an
-// attention list, a registers card, stat chips and lane strips), so the
-// page visibly rearranged itself when the data arrived.
-//
-// The placeholders wear the approved control radius (10px) where they
-// stand for a CONTROL, and the card radius where they stand for a
-// panel. Nothing here is a spinner: DESIGN.md §3 says "skeletons, never
-// spinners", because a coach on poolside 4G reads a spinner as broken.
-
+// Owner OpenPen (29 October 2026) — the skeleton mirrors the reference
+// geometry: context heading, money/decision lead, actions, sessions and
+// capacity, then the money band. The DOM order stays the test-pinned
+// order (header → summary → actions → timeline → attention → money); CSS
+// grid placement gives it the reference's visual 60/40 bands at lg.
 export default function Loading() {
   return (
-    <main
+    <OwnerPage
       data-testid="owner-home-loading"
       aria-busy="true"
       aria-label="Loading the owner overview"
-      className="px-5 pt-5 pb-8"
     >
       {/* 1 — the day, the club and the scope. */}
       <div
@@ -40,70 +23,65 @@ export default function Loading() {
       >
         <div className="min-w-0 flex-1">
           <Skeleton w={40} h={6} className="mb-2" />
-          <Skeleton w={28} h={3} />
+          <Skeleton w={28} h={3} className="mb-2" />
+          <Skeleton w={52} h={2.5} />
         </div>
         <Skeleton w={14} h={14} rounded="rounded-card" className="flex-none" />
       </div>
 
-      {/* 2 — the summary. It mirrors the REAL Home's responsive
-          branches, not a node count: two money figures as cards and one
-          compact line below the shell breakpoint, a 2×2 block from 1024
-          to 1179px, and four across at the `wide` breakpoint. A
-          skeleton that used a different grid made the page rearrange
-          itself when the data arrived — the opposite of its purpose. */}
-      <div
-        data-testid="owner-home-loading-summary"
-        className="mt-5 grid grid-cols-2 gap-2.5 wide:grid-cols-4"
-      >
-        {[0, 1].map((index) => (
+      <div className="mt-5 grid gap-5 lg:grid-cols-5 lg:items-start">
+        {/* The money/action lead, visually the left 60%. The grid class
+            mirrors the real summary contract while the surface itself is
+            the unified tinted money block. */}
+        <div className="order-1 min-w-0 lg:col-span-3 lg:col-start-1 lg:row-start-1">
           <div
-            key={index}
-            data-skeleton-figure
-            className="rounded-card border border-line bg-paper px-4 py-3.5"
+            data-testid="owner-home-loading-summary"
+            className="grid grid-cols-2 gap-2.5 rounded-card bg-[var(--surface-owner-money)] p-5 wide:grid-cols-4"
           >
-            <Skeleton w={16} h={3} className="mb-2.5" />
-            <Skeleton w={22} h={7} />
-          </div>
-        ))}
-        {/* The member and session counts: hidden from the phone
-            layout, a grid item of their own from the shell breakpoint
-            up — exactly like the real summary's compact-only cards. */}
-        {[0, 1].map((index) => (
-          <div key={`compact-${index}`} className="hidden lg:contents">
-            <div
-              data-skeleton-figure
-              className="rounded-card border border-line bg-paper px-4 py-3.5"
-            >
+            <div data-skeleton-figure className="col-span-2">
               <Skeleton w={16} h={3} className="mb-2.5" />
-              <Skeleton w={22} h={7} />
+              <Skeleton w={24} h={9} />
+            </div>
+            <div data-skeleton-figure>
+              <Skeleton w={18} h={3} className="mb-2" />
+              <Skeleton w={20} h={4} />
+              <Skeleton w={14} h={2.5} className="mt-1.5" />
+            </div>
+            <div data-skeleton-figure>
+              <Skeleton w={16} h={3} className="mb-2" />
+              <Skeleton w={20} h={4} />
+              <Skeleton w={14} h={2.5} className="mt-1.5" />
+            </div>
+            <div className="hidden lg:contents">
+              <div data-skeleton-figure className="col-span-2">
+                <Skeleton w={44} h={3} />
+              </div>
+            </div>
+            <div
+              data-testid="owner-home-loading-compact-summary"
+              className="col-span-2 mt-2.5 text-[12px] text-ink-3 lg:hidden"
+            >
+              <Skeleton w={40} h={3} />
+            </div>
+            <div
+              data-testid="owner-home-loading-actions"
+              className="col-span-2 mt-4 flex flex-wrap items-center gap-2.5"
+            >
+              <Skeleton w={36} h={12} rounded="rounded-ctl" />
+              <Skeleton w={28} h={12} rounded="rounded-ctl" />
+              <Skeleton w={26} h={12} rounded="rounded-ctl" />
+            </div>
+            <div className="col-span-2 mt-4 border-t border-line pt-3">
+              <Skeleton w={52} h={2.5} />
             </div>
           </div>
-        ))}
-      </div>
-      <p
-        data-testid="owner-home-loading-compact-summary"
-        className="mt-2.5 text-[12px] text-ink-3 lg:hidden"
-      >
-        <Skeleton w={40} h={3} />
-      </p>
+        </div>
 
-      {/* 3 — one dominant action and two quiet ones. */}
-      <div
-        data-testid="owner-home-loading-actions"
-        className="mt-4 flex flex-wrap items-center gap-2"
-      >
-        <Skeleton w={30} h={12} rounded="rounded-ctl" />
-        <Skeleton w={24} h={12} rounded="rounded-ctl" />
-        <Skeleton w={22} h={12} rounded="rounded-ctl" />
-      </div>
-
-      {/* 4 — the day's classes beside the attention queue. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-5 lg:items-start">
         <div
           data-testid="owner-home-loading-timeline"
-          className="order-2 min-w-0 lg:order-1 lg:col-span-3"
+          className="order-3 min-w-0 lg:col-span-3 lg:col-start-1 lg:row-start-2"
         >
-          <div className="rounded-card border border-line bg-paper px-4 py-4">
+          <div className="rounded-card border border-line bg-paper px-5 py-4">
             <Skeleton w={28} h={4} className="mb-4" />
             {[0, 1, 2].map((index) => (
               <div
@@ -120,9 +98,9 @@ export default function Loading() {
 
         <div
           data-testid="owner-home-loading-attention"
-          className="order-1 min-w-0 lg:order-2 lg:col-span-2"
+          className="order-2 min-w-0 lg:col-span-2 lg:col-start-4 lg:row-start-1"
         >
-          <div className="rounded-card border border-line bg-paper px-4 py-4">
+          <div className="rounded-card border border-line bg-paper px-5 py-4">
             <Skeleton w={24} h={4} className="mb-4" />
             {[0, 1, 2].map((index) => (
               <div key={index} className="flex items-center gap-3 py-3">
@@ -135,35 +113,45 @@ export default function Loading() {
             ))}
           </div>
         </div>
-      </div>
 
-      {/* 5 — the money band: the trends panel beside the payment mix.
-          The grid mirrors the REAL band exactly (5 columns, the trends
-          over three and the mix over two) — the independent review
-          found the skeleton still on the old 3-column split, so the
-          band rearranged itself when the data arrived. */}
-      <div data-testid="owner-home-loading-money" className="mt-5">
-        <Skeleton w={28} h={5} className="mb-3" />
         <div
-          data-testid="owner-home-loading-money-band"
-          className="grid gap-3 lg:grid-cols-5 lg:items-start"
+          data-testid="owner-home-loading-capacity"
+          className="order-4 min-w-0 lg:col-span-2 lg:col-start-4 lg:row-start-2"
         >
-          <div
-            data-testid="owner-home-loading-money-trends"
-            className="rounded-card border border-line bg-paper p-4 lg:col-span-3"
-          >
-            <Skeleton w={32} h={4} className="mb-4" />
-            <Skeleton w={64} h={32} className="rounded-ctl" />
+          <div className="rounded-card border border-line bg-paper px-5 py-4">
+            <Skeleton w={22} h={4} className="mb-4" />
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="py-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton w={24} h={4} />
+                  <Skeleton w={10} h={3} className="ml-auto" />
+                </div>
+                <Skeleton w={40} h={1.5} className="mt-2" />
+              </div>
+            ))}
           </div>
+        </div>
+
+        <div
+          data-testid="owner-home-loading-money"
+          className="order-5 min-w-0 lg:col-span-5 lg:col-start-1 lg:row-start-3"
+        >
+          <Skeleton w={28} h={5} className="mb-3" />
           <div
-            data-testid="owner-home-loading-money-mix"
-            className="rounded-card border border-line bg-paper p-4 lg:col-span-2"
+            data-testid="owner-home-loading-money-band"
+            className="grid gap-3 lg:grid-cols-5 lg:items-start"
           >
-            <Skeleton w={24} h={4} className="mb-4" />
-            <Skeleton w={40} h={24} rounded="rounded-ctl" />
+            <div className="rounded-card border border-line bg-paper p-5 lg:col-span-3">
+              <Skeleton w={32} h={4} className="mb-4" />
+              <Skeleton w={64} h={32} className="rounded-ctl" />
+            </div>
+            <div className="rounded-card border border-line bg-paper p-5 lg:col-span-2">
+              <Skeleton w={24} h={4} className="mb-4" />
+              <Skeleton w={40} h={24} rounded="rounded-ctl" />
+            </div>
           </div>
         </div>
       </div>
-    </main>
+    </OwnerPage>
   );
 }

@@ -9,6 +9,8 @@ import { addDays, todayInZone } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { enqueueMemberNotification, enqueueStaffNotification } from "@/lib/messaging/notification-enqueue";
+import { visibleMember } from "@/lib/services/resource-access";
+import { writeAudit } from "@/lib/audit/write";
 import { staff } from "@/db/schema/staff";
 
 // O-04 — the threshold is a configuration-registry value
@@ -189,9 +191,47 @@ export async function detectAbsenceAlerts(
         })),
       )
       .onConflictDoNothing()
-      .returning({ id: absenceAlerts.id, memberId: absenceAlerts.memberId, batchId: absenceAlerts.batchId, kind: absenceAlerts.alertKind });
+      .returning({ id: absenceAlerts.id, memberId: absenceAlerts.memberId, batchId: absenceAlerts.batchId, kind: absenceAlerts.alertKind, detail: absenceAlerts.detail });
+
+    // Actor model, resolved once per run: a job has no human actor
+    // (actor_type 'system', actor_id NULL, source 'job' — the shape
+    // lib/jobs/subscriptions-expire-job.ts writes); a human caller is
+    // attributed to that user with the request id that carried the call.
+    const actor = ctx.userId
+      ? {
+          actorType: "user" as const,
+          actorId: ctx.userId,
+          source: "web" as const,
+        }
+      : {
+          actorType: "system" as const,
+          actorId: null,
+          source: "job" as const,
+        };
 
     for (const alert of inserted) {
+      // One audit row per alert that was actually written — the loop runs
+    // over the rows the insert returned, so a re-run that writes
+    // nothing writes no audit row. Same transaction as the alert, so a
+    // failed audit rolls the alert back with it.
+    await writeAudit(tx, {
+        tenantId: ctx.tenantId,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        source: actor.source,
+        requestId: ctx.requestId ?? null,
+        action: "absence_alert.create",
+        entityType: "absence_alert",
+        entityId: alert.id,
+        after: {
+          memberId: alert.memberId,
+          batchId: alert.batchId,
+          alertKind: alert.kind,
+          calendarWeek: week,
+          detail: alert.detail,
+        },
+      });
+
       const [batch] = await tx.select({ name: batches.name, locationId: batches.locationId, coachUserId: staff.userId })
         .from(batches).leftJoin(staff, eq(staff.id, batches.coachId)).where(eq(batches.id, alert.batchId)).limit(1);
       const event = { tenantId: ctx.tenantId, eventKey: `absence:${alert.id}`,
@@ -217,8 +257,24 @@ export async function listMemberAlerts(
   ctx: ActionCtx,
   memberId: string,
 ): Promise<MemberAlertRow[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    // The alert list is a MEMBER read, so it carries the resource scope
+    // every member read carries. The narrowing comes from the shared
+    // helper (visibleMember): tenant, not deleted, the caller's site
+    // grant, and — for a coach-like role only — the batches that coach
+    // teaches. Other holders of this action's grant (owner, admin) get
+    // the standard site-scoped member read, not an assignment-scoped
+    // one. A refused member returns the same empty result as a member
+    // with no alerts: never a refusal that confirms the id.
+    //
+    // The read is member-scoped: the alert rows are not filtered by
+    // batch, so a coach assigned to one of a member's batches also
+    // sees that member's alerts from other batches (the other batch's
+    // name and detail). Whether this read should be member-scoped or
+    // batch-scoped is an open product question — recorded as a
+    // residual, not decided here.
+    if (!await visibleMember(tx, ctx, memberId)) return [];
+    const rows = await tx
       .select({
         alertId: absenceAlerts.id,
         alertKind: absenceAlerts.alertKind,
@@ -236,6 +292,9 @@ export async function listMemberAlerts(
         ),
       )
       .orderBy(desc(absenceAlerts.createdAt))
-      .limit(5),
-  ) as Promise<MemberAlertRow[]>;
+      .limit(5);
+    // The alert_kind column is free text in the database; the two
+    // kinds the service writes are the two the type names.
+    return rows as MemberAlertRow[];
+  });
 }

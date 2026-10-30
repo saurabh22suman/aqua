@@ -4,7 +4,7 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { getSampleDataState } from "@/db/sample-data-state";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsRead } from "@/lib/auth/ops-operation";
 import { InviteOwnerForm } from "./invite-owner-form";
 import { RemoveSampleDataButton } from "./remove-sample-data-button";
 import { StatusTransitionControls } from "./status-transitions";
@@ -31,10 +31,22 @@ export default async function PlatformTenantDetailPage({
   const canWrite = auth.role === "admin";
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const detail = await getTenantDetail(asTenantId(tenantId));
+  const detail = await runOpsRead(
+    "tenant.detail",
+    tenantId,
+    () => getTenantDetail(asTenantId(tenantId)),
+    "ops_page",
+  );
   if (!detail) notFound();
-  const sampleState = await getSampleDataState(tenantId);
+  // The sample-data state is its own operation. The id here is already a
+  // validated tenant, so this boundary can never be the "invalid" one.
+  const sampleState = await runOpsRead(
+    "tenant.sample_data.state",
+    detail.id,
+    () => getSampleDataState(detail.id),
+    "ops_page",
+  );
+  if (!sampleState) notFound();
 
   return (
     <>

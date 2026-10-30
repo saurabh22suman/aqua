@@ -39,8 +39,8 @@ export function LeaveTypesEditor({ types }: { types: LeaveTypeRow[] }) {
   }
 
   return (
-    <section className="mt-6 rounded-card border border-line bg-paper p-4">
-      <h2 className="font-display text-[15px] font-semibold">Leave types</h2>
+    <section className="mt-5 rounded-card border border-line bg-paper p-5">
+      <h2 className="font-display text-[16px] font-semibold">Leave types</h2>
       <p className="mt-1 text-[12.5px] text-ink-3">
         Quota is days per calendar year; leave it blank for unlimited.
       </p>
@@ -99,7 +99,7 @@ export function LeaveTypesEditor({ types }: { types: LeaveTypeRow[] }) {
                       )}
                     </Field>
                   </div>
-                  <label className="flex min-h-11 items-center gap-2 self-end text-[13px]">
+                  <label className="flex min-h-11 items-center gap-2 self-end text-[14px]">
                     <input
                       type="checkbox"
                       name="paid"
@@ -160,7 +160,7 @@ export function LeaveTypesEditor({ types }: { types: LeaveTypeRow[] }) {
               )}
             </Field>
           </div>
-          <label className="flex min-h-11 items-center gap-2 self-end text-[13px]">
+          <label className="flex min-h-11 items-center gap-2 self-end text-[14px]">
             <input
               type="checkbox"
               checked={isPaid}

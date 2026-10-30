@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listPresets } from "@/db/platform-presets";
 import { previewPreset } from "@/db/preset-engine";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { PresetCatalogue } from "./preset-catalogue";
 import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 
@@ -31,15 +32,23 @@ export default async function PresetsPage() {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
 
-  const presets = await listPresets();
-  // Preview is per-preset. Run each in parallel so the page render
-  // is one round-trip for the catalogue list.
-  const previews = await Promise.all(
-    presets.map(async (p) => {
-      const result = await previewPreset(p.key);
-      return { preset: p, result };
-    }),
+  const presets = await runOpsGlobalRead("preset.list", () => listPresets(), "ops_page");
+  if (!presets) redirect("/ops/login");
+  // Preview is per-preset. Run each in parallel so the page render is one
+  // round-trip. The batch is ONE `preset.preview` operation, not one row
+  // per preset.
+  const previews = await runOpsGlobalRead(
+    "preset.preview",
+    () =>
+      Promise.all(
+        presets.map(async (p) => {
+          const result = await previewPreset(p.key);
+          return { preset: p, result };
+        }),
+      ),
+    "ops_page",
   );
+  if (!previews) redirect("/ops/login");
 
   return (
     <OpsPage>

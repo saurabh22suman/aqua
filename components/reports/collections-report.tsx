@@ -2,6 +2,8 @@
 
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   confirmCashCountAction,
@@ -248,17 +250,18 @@ export function CollectionsReport({
   return (
     <div className="mt-4 space-y-4">
       <div className="flex flex-wrap items-end gap-2">
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Date</span>
-          <Input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
-            value={onDate}
-            onChange={(e) => setOnDate(e.target.value)}
-            
-          />
-        </label>
+        <div className="min-w-[10rem]">
+          <Field id="collections-date" label="Date" required>
+            {(field) => (
+              <DateField
+                {...field}
+                value={onDate}
+                onChange={setOnDate}
+                data-testid="collections-date"
+              />
+            )}
+          </Field>
+        </div>
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">
             {facilityLabel}
@@ -298,8 +301,18 @@ export function CollectionsReport({
         </p>
       ) : (
         <>
-          <div className="rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] text-ink-3">
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <section
+            aria-labelledby="payment-evidence-heading"
+            className="min-w-0 rounded-card border border-line bg-paper p-5"
+          >
+            <h2
+              id="payment-evidence-heading"
+              className="font-display text-[16px] font-semibold text-ink"
+            >
+              Payment evidence
+            </h2>
+            <p className="mt-1 text-[12px] text-ink-3">
               Collected on {report.onDate} · {report.paymentCount} payment
               {report.paymentCount === 1 ? "" : "s"}
             </p>
@@ -340,10 +353,8 @@ export function CollectionsReport({
                 )}
               </tbody>
             </table>
-          </div>
 
-          <div className="rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] font-medium text-ink-2">By staff</p>
+            <h3 className="mt-4 text-[13px] font-medium text-ink-2">By staff</h3>
             <table className="mt-2 w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">
@@ -374,11 +385,19 @@ export function CollectionsReport({
                 )}
               </tbody>
             </table>
-          </div>
+          </section>
 
-          <div className="rounded-card border border-line bg-paper p-3.5">
+          <section
+            aria-labelledby="cash-count-heading"
+            className="min-w-0 rounded-card border border-line bg-paper p-5"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[12px] font-medium text-ink-2">Cash count</p>
+              <h2
+                id="cash-count-heading"
+                className="font-display text-[16px] font-semibold text-ink"
+              >
+                Count the cash
+              </h2>
               {report.cashCount ? (
                 <StatusBadge
                   tone={report.cashCount.needsReview ? "warn" : "good"}
@@ -540,6 +559,7 @@ export function CollectionsReport({
                 {message}
               </p>
             ) : null}
+          </section>
           </div>
         </>
       )}

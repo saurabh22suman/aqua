@@ -88,6 +88,7 @@ export function EnquiriesBoard({
         <EnquiryList
           enquiries={enquiries}
           detailHrefPrefix={detailHrefPrefix}
+          variant={variant}
         />
       </div>
     );
@@ -114,7 +115,11 @@ export function EnquiriesBoard({
     // Owner oversight leads; the routine capture stays secondary.
     return (
       <div className="space-y-4">
-        <EnquiryList enquiries={enquiries} detailHrefPrefix={detailHrefPrefix} />
+        <EnquiryList
+          enquiries={enquiries}
+          detailHrefPrefix={detailHrefPrefix}
+          variant="oversight"
+        />
         <div>
           <Button
             variant="secondary"
@@ -261,40 +266,147 @@ function CaptureCard({
 function EnquiryList({
   enquiries,
   detailHrefPrefix,
+  variant = "front-desk",
 }: {
   enquiries: EnquiryRow[];
   detailHrefPrefix: string;
+  variant?: EnquiriesBoardVariant;
 }) {
+  if (enquiries.length === 0) {
+    return (
+      <div className="rounded-ctl border border-line">
+        <EmptyState
+          title="No enquiries yet"
+          body="Capture a walk-in, phone call or online lead — name and source only at first contact."
+        />
+      </div>
+    );
+  }
+
+  if (variant === "oversight") {
+    return (
+      <section
+        aria-labelledby="current-enquiries-heading"
+        className="rounded-card border border-line bg-paper p-5"
+      >
+        <h2
+          id="current-enquiries-heading"
+          className="font-display text-[16px] font-semibold text-ink"
+        >
+          Current enquiries
+        </h2>
+        <div data-testid="enquiries-list" className="mt-1">
+        <table
+          aria-label="Current enquiries"
+          className="hidden w-full border-collapse text-[13px] md:table"
+        >
+          <thead>
+            <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.08em] text-ink-3">
+              <th scope="col" className="py-2.5 pr-3 font-medium">
+                Person
+              </th>
+              <th scope="col" className="py-2.5 pr-3 font-medium">
+                Source
+              </th>
+              <th scope="col" className="py-2.5 pr-3 font-medium">
+                Current stage
+              </th>
+              <th scope="col" className="py-2.5 text-right font-medium">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {enquiries.map((enquiry) => (
+              <tr key={enquiry.id} className="border-b border-line last:border-0">
+                <td className="py-3 pr-3">
+                  <Link
+                    href={`${detailHrefPrefix}/${enquiry.id}`}
+                    className="flex min-h-11 flex-col justify-center"
+                  >
+                    <span className="text-[14px] font-medium leading-tight text-ink">
+                      {enquiry.fullName}
+                    </span>
+                    <span className="mt-0.5 text-[12px] text-ink-3">
+                      {enquiry.phone ? formatPhoneIN(enquiry.phone) : "No phone"}
+                      {enquiry.locationId ? "" : " · Unassigned site"}
+                    </span>
+                  </Link>
+                </td>
+                <td className="py-3 pr-3 text-ink-2">{enquiry.source}</td>
+                <td className="py-3 pr-3">
+                  <StatusBadge
+                    tone={ENQUIRY_STAGE_TONE[enquiry.stage] ?? "neutral"}
+                  >
+                    {ENQUIRY_STAGE_LABELS[enquiry.stage]}
+                  </StatusBadge>
+                </td>
+                <td className="py-3 text-right">
+                  <Link
+                    href={`${detailHrefPrefix}/${enquiry.id}`}
+                    aria-label={`Open ${enquiry.fullName}`}
+                    className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 hover:text-ink"
+                  >
+                    Open
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <ul className="divide-y divide-line md:hidden">
+          {enquiries.map((enquiry) => (
+            <li key={enquiry.id}>
+              <Link
+                href={`${detailHrefPrefix}/${enquiry.id}`}
+                className="flex items-start gap-3 py-3"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-medium text-ink">
+                    {enquiry.fullName}
+                  </span>
+                  <span className="mt-0.5 block text-[12px] text-ink-3">
+                    {enquiry.source}
+                    {enquiry.phone ? ` · ${formatPhoneIN(enquiry.phone)}` : ""}
+                    {enquiry.locationId ? "" : " · Unassigned site"}
+                  </span>
+                </span>
+                <StatusBadge
+                  tone={ENQUIRY_STAGE_TONE[enquiry.stage] ?? "neutral"}
+                >
+                  {ENQUIRY_STAGE_LABELS[enquiry.stage]}
+                </StatusBadge>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <ul data-testid="enquiries-list">
-      {enquiries.length === 0 ? (
-        <li className="rounded-ctl border border-line bg-paper list-none">
-          <EmptyState
-            title="No enquiries yet"
-            body="Capture a walk-in, phone call or online lead — name and source only at first contact."
-          />
+      {enquiries.map((e) => (
+        <li key={e.id} className="border-b border-line last:border-0">
+          <Link href={`${detailHrefPrefix}/${e.id}`} className="flex items-center gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[14px] font-medium">{e.fullName}</p>
+              <p className="mt-0.5 text-[12px] text-ink-3">
+                {e.source}
+                {e.phone ? ` · ${formatPhoneIN(e.phone)}` : ""}
+                {/* R04 — only management sees an unassigned row; the
+                    label makes the review state explicit. */}
+                {e.locationId ? "" : " · Unassigned site"}
+              </p>
+            </div>
+            <StatusBadge tone={ENQUIRY_STAGE_TONE[e.stage] ?? "neutral"}>
+              {ENQUIRY_STAGE_LABELS[e.stage]}
+            </StatusBadge>
+          </Link>
         </li>
-      ) : (
-        enquiries.map((e) => (
-          <li key={e.id} className="border-b border-line last:border-0">
-            <Link href={`${detailHrefPrefix}/${e.id}`} className="flex items-center gap-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-medium">{e.fullName}</p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  {e.source}
-                  {e.phone ? ` · ${formatPhoneIN(e.phone)}` : ""}
-                  {/* R04 — only management sees an unassigned row; the
-                      label makes the review state explicit. */}
-                  {e.locationId ? "" : " · Unassigned site"}
-                </p>
-              </div>
-              <StatusBadge tone={ENQUIRY_STAGE_TONE[e.stage] ?? "neutral"}>
-                {ENQUIRY_STAGE_LABELS[e.stage]}
-              </StatusBadge>
-            </Link>
-          </li>
-        ))
-      )}
+      ))}
     </ul>
   );
 }

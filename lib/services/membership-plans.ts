@@ -8,7 +8,7 @@ import {
 import { planShapes } from "@/db/schema/preset-engine";
 import { facilities } from "@/db/schema/preset-engine";
 import { locations } from "@/db/schema/locations";
-import { auditLog } from "@/db/schema/audit";
+import { auditActorOf, writeAudit as writeSharedAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -464,10 +464,11 @@ async function writeAudit(
   entityId: string,
   after: Record<string, unknown>,
 ): Promise<void> {
-  if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  // E-01 — the ONE audit writer (lib/audit/write.ts) applies the actor
+  // model in one place.
+  await writeSharedAudit(tx, {
     tenantId: ctx.tenantId,
-    actorId: ctx.userId,
+    ...auditActorOf(ctx),
     action,
     entityType: "membership_plan",
     entityId,

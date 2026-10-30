@@ -2,7 +2,10 @@ import Link from "next/link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listActivitiesAction } from "@/lib/actions/activities";
 import { listBookingPriceRulesAction } from "@/lib/actions/booking-price-admin";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 import { BookingPriceManager } from "@/components/bookings/booking-price-manager";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // Batch 6 — owner/admin configuration of the booking price catalogue.
 //
@@ -19,13 +22,15 @@ export default async function BookingPricesPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
 
-  const [facilities, rules] = await Promise.all([
+  const [facilities, rules, terminology] = await Promise.all([
     listActivitiesAction(),
     listBookingPriceRulesAction(),
+    getTerminologyAction(),
   ]);
 
+
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-2xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
         <Link
           href="/owner/settings"
@@ -36,13 +41,11 @@ export default async function BookingPricesPage() {
         {" / "}
         booking prices
       </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Booking prices
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        What a slot costs. A booking takes the price that matches its day
-        and time; a booking already taken keeps the price it was quoted.
-      </p>
+      <PageHeader
+        title={<>Booking prices</>}
+        purpose={<>What a slot costs. A booking takes the price that matches its day
+        and time; a booking already taken keeps the price it was quoted.</>}
+      />
       <div className="mt-5">
         <BookingPriceManager
           facilities={facilities.map((facility) => ({
@@ -51,8 +54,9 @@ export default async function BookingPricesPage() {
             locationName: facility.locationName,
           }))}
           rules={rules}
+          terminology={terminology}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

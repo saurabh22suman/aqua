@@ -60,6 +60,15 @@ export async function resolveLocationAccess(
 
   // Fallback: the caller's default membership, mirroring
   // resolveDefaultCtx's ordering (role home ordinal, then creation).
+  //
+  // `status = 'active'` is load-bearing, not a nicety: a REVOKED
+  // membership grants no access. Every other resolver of a membership
+  // applies the same rule (db/platform.ts's resolveDefaultMembership and
+  // resolveTenantAccessBySlug, lib/services/resource-access.ts's
+  // resourceRole). Without the filter here, a revoked membership that
+  // still carried all_locations = true answered "unrestricted" on the
+  // narrowed-ctx path — the caller kept tenant-wide visibility after
+  // their access was taken away.
   const membershipRows = await tx
     .select({
       id: tenantMemberships.id,
@@ -71,6 +80,7 @@ export async function resolveLocationAccess(
       and(
         eq(tenantMemberships.tenantId, ctx.tenantId),
         eq(tenantMemberships.userId, ctx.userId),
+        eq(tenantMemberships.status, "active"),
         isNull(tenantMemberships.deletedAt),
       ),
     )

@@ -1,6 +1,6 @@
 "use client";
 
-import { Palette } from "lucide-react";
+import Palette from "lucide-react/dist/esm/icons/palette.mjs";
 import { useTheme } from "@/components/theme/theme-provider";
 import { THEMES, type ThemeId } from "@/lib/theme/themes";
 
@@ -22,7 +22,14 @@ const NEXT_THEME: Record<ThemeId, ThemeId> = {
   lavender: "mint",
 };
 
-export function ThemeToggle({ className = "" }: { className?: string }) {
+export function ThemeToggle({
+  className = "",
+  compact = false,
+}: {
+  className?: string;
+  /** Icon-only header control; the accessible name still describes it. */
+  compact?: boolean;
+}) {
   const { theme, setTheme } = useTheme();
   const next = NEXT_THEME[theme];
 
@@ -35,6 +42,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       title={THEMES[next].description}
       className={[
         "inline-flex min-h-12 flex-none items-center gap-2 rounded-ctl border border-[var(--control-border)] bg-paper px-4 text-[16px] font-medium text-ink-2",
+        compact ? "justify-center px-3" : "",
         "motion-base hover:border-[var(--control-border-hover)] hover:bg-deck",
         className,
       ]
@@ -42,7 +50,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
         .join(" ")}
     >
       <Palette size={18} strokeWidth={1.8} aria-hidden="true" />
-      <span className="hidden sm:inline">{THEMES[theme].label}</span>
+      {compact ? null : <span className="hidden sm:inline">{THEMES[theme].label}</span>}
     </button>
   );
 }

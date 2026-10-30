@@ -203,6 +203,23 @@ beforeAll(async () => {
   );
 }, 60_000);
 
+// F06 — the module gate is ENTITLEMENT-based, and these fixtures create
+// tenants with no plan and no explicit feature. Their positive cases (the
+// order/booking → invoice bridge) need the grant; no assertion changes.
+beforeAll(async () => {
+  const ids = [tenant, otherTenant, scopedTenant];
+  await admin.query(
+    "delete from tenant_features where tenant_id = any($1::uuid[])",
+    [ids],
+  );
+  await admin.query(
+    `insert into tenant_features (tenant_id, feature_key, enabled)
+     select id, 'pool.booking', true from unnest($1::uuid[]) as id
+     on conflict (tenant_id, feature_key) do update set enabled = true`,
+    [ids],
+  );
+});
+
 afterAll(async () => {
   for (const id of [tenant, otherTenant, scopedTenant]) {
     await admin.query("delete from payments where tenant_id = $1", [id]);

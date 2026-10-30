@@ -17,7 +17,7 @@ export function SectionHeader({
   return (
     <div className={`flex items-baseline justify-between gap-3 ${className}`}>
       <div className="min-w-0">
-        <h2 className="font-display text-[15px] font-semibold">{title}</h2>
+        <h2 className="font-display text-[16px] font-semibold">{title}</h2>
         {subtitle ? (
           <p className="text-[12.5px] text-ink-3 mt-0.5">{subtitle}</p>
         ) : null}

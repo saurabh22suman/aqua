@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
@@ -57,6 +58,7 @@ class NotFoundSignal extends Error {
   }
 }
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
   notFound: () => {
     throw new NotFoundSignal();
   },
@@ -147,21 +149,6 @@ async function setup(testLabel: string): Promise<{
   return { tenantId, batchId };
 }
 
-function renderToString(node: unknown): string {
-  // The page returns a React element tree; we walk it for any string
-  // child to assert on rendered text. Good enough for "page didn't
-  // throw AND the batch name is on the page"; we don't need a full
-  // jsdom render to prove the click-path works.
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(renderToString).join("");
-  if (typeof node === "object" && "props" in (node as Record<string, unknown>)) {
-    const props = (node as { props: { children?: unknown } }).props;
-    return renderToString(props.children);
-  }
-  return "";
-}
-
 describe("BatchDetailPage click-through", () => {
   it("renders the batch name and the this-month figure instead of throwing", async () => {
     const { batchId } = await setup("happy");
@@ -178,9 +165,12 @@ describe("BatchDetailPage click-through", () => {
       params: Promise.resolve({ batchId }),
     });
 
-    const rendered = renderToString(result);
+    const rendered = renderToStaticMarkup(result);
     expect(rendered).toContain("K1 Detail Batch");
-    expect(rendered).toContain("This month");
+    const month = new Intl.DateTimeFormat("en-IN", {
+      month: "long", timeZone: TZ,
+    }).format(new Date());
+    expect(rendered).toContain(`${month} attendance`);
   });
 
   it("notFound is signalled for a batch id that does not belong to this tenant", async () => {

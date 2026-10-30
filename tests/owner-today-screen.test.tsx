@@ -20,7 +20,7 @@
 // (tests/tier1/owner-dashboard.test.ts covers the reads).
 
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { RetentionCard } from "@/components/reports/retention-card";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
@@ -145,7 +145,7 @@ describe("owner Home — the dominant shortcut", () => {
 });
 
 describe("owner Home — the summary row", () => {
-  it("states each figure's basis and keeps the period on its drill-down", () => {
+  it("states each figure's basis and keeps the facility on the collection drill-down", () => {
     render(
       <OwnerDashboard
         data={dashboard({
@@ -174,16 +174,25 @@ describe("owner Home — the summary row", () => {
     // Indian grouping without immaterial ".00" (DESIGN.md §4).
     expect(text).toContain("₹3,000");
     expect(text).not.toContain("₹3,000.00");
-    // The overdue tile states the count, the oldest age and the
-    // outstanding (current) balance.
-    expect(text).toContain("19 invoices past due");
-    expect(text).toContain("₹1,05,000 outstanding");
+    // The unified money surface states the current outstanding balance
+    // and the overdue count/age, with overdue explicitly included in
+    // outstanding rather than a second balance to add.
+    const money = screen.getByTestId("owner-home-money-surface");
+    const outstanding = within(money).getByText("Outstanding now").parentElement!;
+    expect(outstanding.textContent).toContain("₹1,05,000");
+    expect(outstanding.textContent).toContain("35 invoices open");
+    const overdue = within(money).getByText("Overdue now").parentElement!;
+    expect(overdue.textContent).toContain("₹57,000");
+    expect(overdue.textContent).toContain("19 invoices past due");
+    expect(overdue.textContent).toContain("oldest 18 days");
+    expect(overdue.textContent).toContain("Included in outstanding");
 
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    // Today's collection drills into today's transactions, with the
-    // facility scope preserved.
+    // The collected-today figure keeps its existing day-level ledger
+    // drilldown, with the exact today range and facility scope. The one
+    // dominant collection action still goes to Dues.
     expect(hrefs).toContain(
       "/owner/fees?tab=transactions&from=2026-10-25&to=2026-10-26&facility=loc-1",
     );
@@ -202,7 +211,12 @@ describe("owner Home — the summary row", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("No payments recorded today yet");
     expect(text).toContain("Nothing past due");
-    expect(text).toContain("₹0 outstanding");
+    const money = screen.getByTestId("owner-home-money-surface");
+    const outstanding = within(money).getByText("Outstanding now").parentElement!;
+    expect(outstanding.textContent).toContain("₹0");
+    expect(outstanding.textContent).toContain("0 invoices open");
+    const overdue = within(money).getByText("Overdue now").parentElement!;
+    expect(overdue.textContent).toContain("Nothing past due");
   });
 });
 
@@ -352,7 +366,7 @@ describe("retention card — honest states", () => {
     expect(text).not.toContain("at risk");
   });
 
-  it("reports the eligible cohort when the history supports it", () => {
+  it("reports the members without records when the history supports it", () => {
     render(
       <RetentionCard
         report={{
@@ -370,8 +384,8 @@ describe("retention card — honest states", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("swimmers at risk");
-    expect(text).toContain("Eligible swimmers");
+    expect(text).toContain("swimmers with no attendance records");
+    expect(text).toContain("swimmers active for the period");
     expect(text).not.toContain("Not enough attendance history");
   });
 });

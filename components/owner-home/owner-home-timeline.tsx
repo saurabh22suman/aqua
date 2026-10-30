@@ -62,8 +62,8 @@ export function OwnerHomeTimeline({
   return (
     <section data-testid="owner-home-today" aria-label="Your club today">
       <SectionHeader
-        className="mb-2"
-        title="Your club today"
+        className="mb-3"
+        title="Today’s sessions"
         subtitle={
           sessionCount === 0
             ? "Nothing scheduled today"

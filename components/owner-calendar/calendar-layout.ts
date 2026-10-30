@@ -8,7 +8,7 @@
 // The display zone is Asia/Kolkata, the product's canonical zone
 // (lib/time/tz.ts formats every wall clock the same way).
 
-import { addDays, weekdayOf } from "@/lib/time/tz";
+import { addDays, formatWallTime12h, weekdayOf } from "@/lib/time/tz";
 import type {
   CalendarEvent,
   CalendarGeometry,
@@ -298,10 +298,10 @@ export function dayGap(startMinutes: number, endMinutes: number): number {
 }
 
 /**
- * "07:00 – 08:00" for an event, in the display zone.
+ * "7:00 am – 8:00 am" for an event, in the display zone.
  *
- * A range that ends on the next day says so: "23:00 – 01:00 (+1d)".
- * The clock alone cannot say which day 01:00 belongs to.
+ * A range that ends on the next day says so: "11:00 pm – 1:00 am
+ * (+1d)". The clock alone cannot say which day 1:00 am belongs to.
  */
 export function timeRange(
   startMinutes: number,
@@ -309,7 +309,7 @@ export function timeRange(
 ): string {
   const end = startMinutes + durationMinutes;
   const gap = dayGap(startMinutes, end);
-  const range = `${minutesToClock(startMinutes)} – ${minutesToClock(end)}`;
+  const range = `${formatWallTime12h(minutesToClock(startMinutes))} – ${formatWallTime12h(minutesToClock(end))}`;
   return gap > 0 ? `${range} (+${gap}d)` : range;
 }
 

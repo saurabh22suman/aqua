@@ -66,7 +66,7 @@ export function MemberNotesPanel({
 
   return (
     <section className="mt-4 rounded-card border border-line bg-paper p-4">
-      <h2 className="font-display text-[15px] font-semibold">Notes</h2>
+      <h2 className="font-display text-[16px] font-semibold">Notes</h2>
       <p className="mt-1 text-[12.5px] text-ink-3">
         Internal notes for staff — they are never shown on the parent link.
       </p>

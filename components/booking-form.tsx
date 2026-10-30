@@ -5,10 +5,15 @@ import { Button } from "@/components/ui/Button";
 import { CafeMemberPicker } from "@/components/cafe-member-picker";
 import { createBookingAction, quoteBookingAction } from "@/lib/actions/bookings";
 import { Input } from "@/components/ui/Input";
+import { DateField } from "@/components/ui/DateField";
 import { Select } from "@/components/ui/Select";
 import { SLOT_STARTS, slotEnd } from "@/components/booking-shared";
 import { formatINR } from "@/lib/money/format";
-import { zonedWallTimeToInstant } from "@/lib/time/tz";
+import {
+  formatDateIST,
+  formatWallTime12h,
+  zonedWallTimeToInstant,
+} from "@/lib/time/tz";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import type { BookableFacility } from "@/lib/services/bookings";
 import type { MemberListRow } from "@/lib/services/people";
@@ -32,6 +37,8 @@ export function BookingForm({
   date,
   onDateChange,
   onCreated,
+  slotStart: slotStartProp,
+  onSlotStartChange,
 }: {
   facilities: BookableFacility[];
   timezone: string;
@@ -42,10 +49,22 @@ export function BookingForm({
   date: string;
   onDateChange: (date: string) => void;
   onCreated: () => void;
+  /**
+   * Owner OpenPen (29 October 2026) — the slot board can choose a free
+   * hour. The form keeps its own default when used alone, and follows
+   * the board when the parent controls the value.
+   */
+  slotStart?: string;
+  onSlotStartChange?: (slot: string) => void;
 }) {
   const fieldId = useId();
   const [subUnitId, setSubUnitId] = useState("");
-  const [slotStart, setSlotStart] = useState(SLOT_STARTS[9]!);
+  const [internalSlotStart, setInternalSlotStart] = useState(SLOT_STARTS[9]!);
+  const slotStart = slotStartProp ?? internalSlotStart;
+  function chooseSlot(next: string) {
+    if (slotStartProp === undefined) setInternalSlotStart(next);
+    onSlotStartChange?.(next);
+  }
   const [mode, setMode] = useState<"member" | "walk-in">("member");
   const [member, setMember] = useState<MemberListRow | null>(null);
   const [walkInName, setWalkInName] = useState("");
@@ -60,6 +79,13 @@ export function BookingForm({
     () => facilities.find((candidate) => candidate.id === facilityId),
     [facilities, facilityId],
   );
+  const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const dateInPast = dateValid && date < today;
+  const dateError = !dateValid
+    ? "Enter a valid date."
+    : dateInPast
+      ? "Choose today or a later date."
+      : null;
 
   useEffect(() => {
     setSubUnitId("");
@@ -67,6 +93,10 @@ export function BookingForm({
 
   useEffect(() => {
     if (!facilityId) return;
+    if (!dateValid || dateInPast) {
+      setQuote(null);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -91,10 +121,10 @@ export function BookingForm({
     return () => {
       cancelled = true;
     };
-  }, [facilityId, date, slotStart, timezone]);
+  }, [facilityId, date, dateValid, dateInPast, slotStart, timezone]);
 
   async function submit() {
-    if (!facilityId) return;
+    if (!facilityId || !dateValid || dateInPast) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -129,6 +159,19 @@ export function BookingForm({
 
   return (
     <section className="rounded-card border border-line bg-paper p-4 space-y-4">
+      <div
+        className="rounded-ctl border border-line bg-deck/60 px-3 py-2.5"
+        data-testid="booking-slot-summary"
+      >
+        <p className="text-[13px] font-medium leading-snug text-ink">
+          {facility ? `${facility.name} · ` : ""}
+          {dateValid && !dateInPast ? formatDateIST(date) : "Choose a valid date"}
+        </p>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">
+          {formatWallTime12h(slotStart)}–{formatWallTime12h(slotEnd(slotStart))} · 1 hour · {timezone}
+          {facility?.locationName ? ` · ${facility.locationName}` : ""}
+        </p>
+      </div>
       <div>
         <label htmlFor={`${fieldId}-facility`} className="block text-[12px] font-medium text-ink-2 mb-1">
           {titleCase(resolveTerm(terminology, "facility", 1))}
@@ -147,7 +190,7 @@ export function BookingForm({
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-4">
         <div>
           <label htmlFor={`${fieldId}-subunit`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Lane / court
@@ -172,15 +215,18 @@ export function BookingForm({
           <label htmlFor={`${fieldId}-date`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Date
           </label>
-          <Input
-            type="date"
-            lang="en-IN"
+          <DateField
             value={date}
-            min={today}
-            onChange={(event) => onDateChange(event.target.value)}
+            onChange={onDateChange}
             id={`${fieldId}-date`}
             data-testid="booking-date"
           />
+          <p
+            className={`mt-1 text-[11.5px] ${dateError ? "text-ink-2" : "text-ink-3"}`}
+            role={dateError ? "alert" : undefined}
+          >
+            {dateError ?? `Today is ${formatDateIST(today)}.`}
+          </p>
         </div>
       </div>
 
@@ -190,13 +236,13 @@ export function BookingForm({
         </label>
         <Select
           value={slotStart}
-          onChange={(event) => setSlotStart(event.target.value)}
+          onChange={(event) => chooseSlot(event.target.value)}
           id={`${fieldId}-slot`}
           data-testid="booking-slot"
         >
           {SLOT_STARTS.map((start) => (
             <option key={start} value={start}>
-              {start}–{slotEnd(start)}
+              {formatWallTime12h(start)}–{formatWallTime12h(slotEnd(start))}
             </option>
           ))}
         </Select>
@@ -284,6 +330,8 @@ export function BookingForm({
         className="w-full"
         disabled={
           busy ||
+          !dateValid ||
+          dateInPast ||
           !quote?.ok ||
           (mode === "member"
             ? member === null
@@ -292,7 +340,7 @@ export function BookingForm({
         onClick={submit}
         data-testid="booking-create"
       >
-        {busy ? "Booking…" : "Create booking"}
+        {busy ? "Booking…" : "Confirm booking"}
       </Button>
     </section>
   );

@@ -5,6 +5,29 @@ import { issueWhatsAppChallenge, type WhatsAppAuthPurpose } from "@/db/whatsapp-
 import { verifyPinResetCode, saveResetPin } from "@/db/whatsapp-auth-complete";
 import { isOpsHost } from "@/lib/ops-host";
 
+// The only answers this pre-auth route may give. Every other failure is
+// internal and must not reach an unauthenticated caller.
+const SAFE_ERRORS = new Set([
+  "Enter a valid mobile number.",
+  "WhatsApp is unavailable. Please try again later.",
+  "Please wait before requesting another code.",
+]);
+
+// An internal failure is reported as UNCERTAIN: 503 with one fixed sentence,
+// so the caller can tell "we do not know what happened" from "we refused
+// you" and never has to guess. The sentence must not invite a repeat of the
+// same request: at the save phase a blind repeat is a blind reset retry.
+function uncertain(error: unknown, step: WhatsAppAuthState["step"]) {
+  const message = error instanceof Error ? error.message : "";
+  if (SAFE_ERRORS.has(message)) {
+    return NextResponse.json({ step, error: message });
+  }
+  return NextResponse.json(
+    { step, error: "We could not confirm the outcome of this request." },
+    { status: 503 },
+  );
+}
+
 export async function handleWhatsAppAuth(request: Request, purpose: WhatsAppAuthPurpose) {
   const input: unknown = await request.json().catch(() => null);
   const parsed = whatsappAuthInput.safeParse(input);
@@ -55,7 +78,6 @@ export async function handleWhatsAppAuth(request: Request, purpose: WhatsAppAuth
     response.cookies.set(cookieName, "", { ...cookieOptions, maxAge: 0 });
     return response;
   } catch (error) {
-    return reply({ step: parsed.data.intent === "request" ? "phone" : fallbackStep,
-      error: error instanceof Error ? error.message : "Unable to complete this request. Try again." });
+    return uncertain(error, parsed.data.intent === "request" ? "phone" : fallbackStep);
   }
 }

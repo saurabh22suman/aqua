@@ -41,6 +41,24 @@ const STATUS_LABEL: Record<ListInvitationsRow["status"], string> = {
   revoked: "Revoked",
 };
 
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  coach: "Coach",
+  receptionist: "Receptionist",
+  accountant: "Accountant",
+  worker: "Worker",
+};
+
+function roleLabel(roleKey: string): string {
+  return (
+    ROLE_LABEL[roleKey] ??
+    roleKey
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
 export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
   if (rows.length === 0) {
     return (
@@ -60,11 +78,26 @@ export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
   }
 
   return (
-    <ul data-testid="invitations-list">
-      {rows.map((r) => (
-        <InvitationRow key={r.membershipId} row={r} />
-      ))}
-    </ul>
+    <section
+      data-testid="invitations-surface"
+      className="overflow-hidden rounded-card border border-line bg-paper"
+    >
+      <div
+        data-testid="invitations-head"
+        className="hidden border-b border-line px-4 py-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,.8fr)_minmax(0,1fr)_auto_minmax(0,1.2fr)] lg:items-center lg:gap-3"
+      >
+        <span>Person</span>
+        <span>Role</span>
+        <span>Location access</span>
+        <span>State</span>
+        <span className="sr-only">Action</span>
+      </div>
+      <ul data-testid="invitations-list" className="divide-y divide-line">
+        {rows.map((r) => (
+          <InvitationRow key={r.membershipId} row={r} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -156,32 +189,87 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
   }
 
   return (
-    <li className="bg-paper border border-line rounded-ctl mb-2 last:mb-0 p-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="font-mono text-[13.5px] text-ink truncate">{formatPhoneIN(row.phone)}</p>
-        {/* Owner redesign (C2) — the shared status pill. The state
-            stays NEUTRAL (F4: invitation state is neither money nor
-            attendance), but the pill shape is now the shared one. */}
-        <StatusBadge tone="neutral">{STATUS_LABEL[row.status]}</StatusBadge>
+    <li className="p-4 lg:grid lg:grid-cols-[minmax(0,1.4fr)_minmax(0,.8fr)_minmax(0,1fr)_auto_minmax(0,1.2fr)] lg:items-start lg:gap-3">
+      <div className="min-w-0">
+        <p className="text-[14px] font-medium text-ink break-words">
+          {row.fullName || formatPhoneIN(row.phone)}
+        </p>
+        <p className="mt-0.5 font-mono text-[12px] text-ink-3">
+          {formatPhoneIN(row.phone)}
+        </p>
       </div>
-      <p className="text-[12.5px] text-ink-3 mt-1">
-        {row.roleKey}
-        {row.locationNames.length === 0
-          ? " · all locations"
-          : ` · ${row.locationNames.join(", ")}`}
+      <p className="mt-1 text-[12.5px] text-ink-2 lg:mt-0">
+        <span className="mr-1 text-[11px] uppercase tracking-[0.08em] text-ink-3 lg:hidden">
+          Role
+        </span>
+        {roleLabel(row.roleKey)}
       </p>
+      <p className="mt-1 text-[12.5px] text-ink-2 lg:mt-0">
+        <span className="mr-1 text-[11px] uppercase tracking-[0.08em] text-ink-3 lg:hidden">
+          Location access
+        </span>
+        {scopeLabel}
+      </p>
+      <span className="mt-1 flex lg:mt-0">
+        <StatusBadge tone="neutral">{STATUS_LABEL[row.status]}</StatusBadge>
+      </span>
+      <div className="mt-2 flex flex-wrap gap-2 lg:mt-0 lg:justify-end">
+        {row.status === "invited" || row.status === "active" ? (
+          <button
+            type="button"
+            onClick={onIssueLink}
+            disabled={pending}
+            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 gap-1.5"
+            data-testid={`issue-link-${row.membershipId}`}
+          >
+            {busy === "link" ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} />}
+            {row.status === "invited" ? "Generate sign-in link" : "New login link"}
+          </button>
+        ) : null}
+        {row.status === "active" || row.status === "invited" ? (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setConfirmingRevoke(true);
+            }}
+            disabled={pending}
+            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium border border-line text-ink-2 disabled:opacity-50 gap-1.5"
+            data-testid={`revoke-${row.membershipId}`}
+          >
+            {busy === "revoke" ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+            Revoke
+          </button>
+        ) : null}
+        {row.status === "revoked" ? (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setConfirmingReactivate(true);
+            }}
+            disabled={pending}
+            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 gap-1.5"
+            data-testid={`reactivate-${row.membershipId}`}
+          >
+            <RotateCcw size={13} />
+            Reactivate
+          </button>
+        ) : null}
+      </div>
+
       {error ? (
-        <p className="mt-2 text-[12.5px] text-ink-3" role="alert">{error}</p>
+        <p className="mt-2 text-[12.5px] text-ink-3 lg:col-span-full" role="alert">{error}</p>
       ) : null}
       {row.status === "invited" ? (
-        <p className="mt-2 text-[12px] text-ink-3">
+        <p className="mt-2 text-[12px] text-ink-3 lg:col-span-full">
           They sign in with the login link below — the membership flips to &quot;active&quot; on first use.
           Invitations are queued for WhatsApp. Creating a login link also queues
           a private link to the registered number. You can still copy and share it yourself.
         </p>
       ) : null}
       {link ? (
-        <div className="mt-2 rounded-ctl border border-line bg-deck p-3">
+        <div className="mt-2 rounded-ctl border border-line bg-deck p-3 lg:col-span-full">
           <p className="text-[11px] text-ink-3 break-all font-mono">{link.url}</p>
           <p className="mt-1 text-[11px] text-ink-3">
             Works once, expires {link.expiresAt}. Anyone holding it can sign in as {row.roleKey} — send it
@@ -201,85 +289,41 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
           </div>
         </div>
       ) : null}
-      <div className="mt-3 flex gap-2">
-        {row.status === "invited" || row.status === "active" ? (
-          <button
-            type="button"
-            onClick={onIssueLink}
-            disabled={pending}
-            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 gap-1.5"
-            data-testid={`issue-link-${row.membershipId}`}
-          >
-            {busy === "link" ? <Loader2 size={13} className="animate-spin" /> : <ChevronRight size={13} />}
-            {row.status === "invited" ? "Get login link" : "New login link"}
-          </button>
-        ) : null}
-        {row.status === "active" || row.status === "invited" ? (
-          <button
-            type="button"
-            onClick={() => {
-              setError(null);
-              setConfirmingRevoke(true);
-            }}
-            disabled={pending}
-            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium border border-line text-ink-2 disabled:opacity-50 gap-1.5"
-            data-testid={`revoke-${row.membershipId}`}
-          >
-            {busy === "revoke" ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
-            Revoke
-          </button>
-        ) : null}
-      {row.status === "revoked" ? (
-        confirmingReactivate ? (
-          <div className="mt-2 w-full rounded-ctl border border-line bg-deck p-3">
-            <p className="text-[13px] font-medium">
-              Restore access for {formatPhoneIN(row.phone)}?
-            </p>
-            <p className="mt-1 text-[12px] text-ink-3 leading-snug">
-              They were signed in as {row.roleKey} with access to {scopeLabel}.
-              Old invitation and login links stay invalid. A fresh
-              single-use link will be issued and shown here.
-            </p>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={onReactivate}
-                disabled={pending}
-                className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-[var(--accent-strong)] text-paper disabled:opacity-50"
-                data-testid={`reactivate-confirm-${row.membershipId}`}
-              >
-                {busy === "reactivate" ? "Restoring…" : "Restore access"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmingReactivate(false)}
-                disabled={pending}
-                className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-paper border border-line text-ink-2"
-              >
-                Cancel
-              </button>
-            </div>
+
+      {row.status === "revoked" && confirmingReactivate ? (
+        <div className="mt-2 w-full rounded-ctl border border-line bg-deck p-3 lg:col-span-full">
+          <p className="text-[13px] font-medium">
+            Restore access for {formatPhoneIN(row.phone)}?
+          </p>
+          <p className="mt-1 text-[12px] text-ink-3 leading-snug">
+            They were signed in as {row.roleKey} with access to {scopeLabel}.
+            Old invitation and login links stay invalid. A fresh
+            single-use link will be issued and shown here.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={onReactivate}
+              disabled={pending}
+              className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-[var(--accent-strong)] text-paper disabled:opacity-50"
+              data-testid={`reactivate-confirm-${row.membershipId}`}
+            >
+              {busy === "reactivate" ? "Restoring…" : "Restore access"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingReactivate(false)}
+              disabled={pending}
+              className="inline-flex min-h-11 items-center justify-center rounded-pill px-4 text-[13px] font-medium bg-paper border border-line text-ink-2"
+            >
+              Cancel
+            </button>
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              setError(null);
-              setConfirmingReactivate(true);
-            }}
-            disabled={pending}
-            className="inline-flex min-h-11 items-center justify-center rounded-pill px-3 py-2 text-[13px] font-medium bg-deck text-ink-2 disabled:opacity-50 gap-1.5"
-            data-testid={`reactivate-${row.membershipId}`}
-          >
-            <RotateCcw size={13} />
-            Reactivate
-          </button>
-        )
+        </div>
       ) : null}
-      </div>
 
       {confirmingRevoke ? (
-        <div className="mt-2 rounded-ctl border border-line bg-deck p-3">
+        <div className="mt-2 rounded-ctl border border-line bg-deck p-3 lg:col-span-full">
           <p className="text-[13px] font-medium">
             Revoke access for {formatPhoneIN(row.phone)}?
           </p>

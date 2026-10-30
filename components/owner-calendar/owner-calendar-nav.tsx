@@ -19,11 +19,14 @@ export function CalendarNavControl({
   target,
   testId,
   className = "",
+  ariaLabel,
   children,
 }: {
   target: CalendarNavTarget;
   testId?: string;
   className?: string;
+  /** Full accessible name when the visible text is short. */
+  ariaLabel?: string;
   children: React.ReactNode;
 }) {
   const classNames = buttonClasses({
@@ -33,7 +36,12 @@ export function CalendarNavControl({
   });
   if ("href" in target) {
     return (
-      <Link href={target.href} className={classNames} data-testid={testId}>
+      <Link
+        href={target.href}
+        className={classNames}
+        data-testid={testId}
+        aria-label={ariaLabel}
+      >
         {children}
       </Link>
     );
@@ -44,6 +52,7 @@ export function CalendarNavControl({
       onClick={target.onSelect}
       className={classNames}
       data-testid={testId}
+      aria-label={ariaLabel}
     >
       {children}
     </button>

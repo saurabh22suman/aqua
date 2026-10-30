@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantHeader } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
+import { runOpsRead } from "@/lib/auth/ops-operation";
 import { StatusBadge, TENANT_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { TenantTabNav } from "./tenant-tab-nav";
 
@@ -37,8 +37,16 @@ export default async function TenantDetailLayout({
   if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const header = await getTenantHeader(asTenantId(tenantId));
+  // The operation boundary owns the UUID guard: it sees the RAW segment
+  // first, writes the authenticated "invalid" row (no tenant, and the raw
+  // value is never persisted) and returns null, which is the same
+  // friendly 404 the page rendered before.
+  const header = await runOpsRead(
+    "tenant.header",
+    tenantId,
+    () => getTenantHeader(asTenantId(tenantId)),
+    "ops_page",
+  );
   if (!header) notFound();
 
   return (

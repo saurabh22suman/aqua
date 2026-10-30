@@ -1,15 +1,17 @@
 import Link from "next/link";
-import { UserCog } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { hasPermission } from "@/lib/auth/permission";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
 import { listCoaches } from "@/lib/services/programs";
-import { listBatches } from "@/lib/services/programs";
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { daysAheadWindow } from "@/lib/time/tz";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { buttonClasses } from "@/components/ui/Button";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { BackLink } from "@/components/ui/BackLink";
 
 // F3 (R.1) — owner-facing upcoming-sessions page. Lists every
@@ -18,14 +20,11 @@ import { BackLink } from "@/components/ui/BackLink";
 // the surface the audit's R.1 promised ("Coach substitution —
 // records who actually took the session. ... If substitution
 // does not write the substitute, the wrong coach is paid and
-// the bug is invisible from the register surface.") and that
-// did not exist before this commit — the action existed, the
-// service existed, but the user could not reach them.
+// the bug is invisible from the register surface.").
 //
-// Permission: management-only (owner / admin). The session
-// data includes substitute buttons that mutate production data;
-// coaches use the existing coach-side surfaces (their schedule
-// page lists their own sessions and uses them).
+// Owner OpenPen (29 October 2026): exception management leads; the
+// schedule grid is a secondary destination in the heading action slot.
+// Permission: management-only (owner / admin).
 
 export default async function SessionsPage() {
   await requireOwner();
@@ -39,61 +38,38 @@ export default async function SessionsPage() {
     listUpcomingSessions(ctx, fromDate, toDate),
     listCoaches(ctx),
     // The substitute coach picker labels itself with closed-key
-    // `coach` (L3 audit). Fetching once at the page so the
-    // UpcomingSessionsList → SessionSubstituteControl prop
-    // drill is just data, not extra round trips.
+    // `coach` (L3 audit).
     getTerminologyAction(),
   ]);
 
-  // unused here, but importing keeps the export live for tests
-  // that may assert the page resolves both lists.
-  void listBatches;
-
   return (
-    <main className="px-5 pt-6 pb-8">
-      {hasPermission(ctx, "programs.read") ? <BackLink href="/owner/programs" label="Programs" /> : null}
-
-      <div className="flex items-center gap-2">
-        <UserCog size={20} className="text-ink-2" />
-        <h1 className="font-display text-[19px] font-semibold">Sessions</h1>
-      </div>
-      <p className="mt-1 text-[12.5px] text-ink-3">
-        Upcoming sessions across every batch — substitute a coach when
-        someone is unavailable. The change is recorded so the register
-        reads who actually ran the session.
-      </p>
-
-      {hasPermission(ctx, "attendance.read") ? <Link
-        href="/owner/schedule"
-        className="mt-4 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
-      >
-        <span>
-          <span className="block text-[14px] font-medium text-ink">
-            Schedule grid
-          </span>
-          <span className="block text-[12px] text-ink-3">
-            Week or month view with each batch&apos;s capacity lane and a
-            location filter.
-          </span>
-        </span>
-        <span className="text-[13px] text-ink-3">→</span>
-      </Link> : null}
-
-      <UpcomingSessionsList
-        initialSessions={upcoming}
-        coaches={coaches}
-        terminology={terminology}
-        timezone={timezone}
-        canManage={hasPermission(ctx, "programs.write")}
+    <OwnerPage>
+      <BackLink href="/owner/programs" label="Programs & batches" />
+      <PageHeader
+        title="Session exceptions"
+        purpose="Today and the next 14 days. Substitute a coach when someone is unavailable; the register then shows who actually ran the session."
+        action={
+          hasPermission(ctx, "attendance.read") ? (
+            <Link
+              href="/owner/schedule"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
+              <CalendarDays size={15} className="text-ink-3" aria-hidden="true" />
+              Schedule grid
+            </Link>
+          ) : null
+        }
       />
 
-      <div className="mt-6 rounded-card border border-line bg-paper p-4">
-        <p className="text-[12.5px] text-ink-3">
-          The window opens on today. Use Manage on a row to substitute,
-          cancel or reschedule it inline — reschedules guard against coach
-          conflicts before they save.
-        </p>
+      <div className="mt-5">
+        <UpcomingSessionsList
+          initialSessions={upcoming}
+          coaches={coaches}
+          terminology={terminology}
+          timezone={timezone}
+          canManage={hasPermission(ctx, "programs.write")}
+        />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

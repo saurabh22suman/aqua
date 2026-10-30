@@ -1,10 +1,13 @@
-import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
-import { attendance, sessions } from "@/db/schema/scheduling";
-import { members } from "@/db/schema/people";
 import { enquiries } from "@/db/schema/enquiries";
-import { todayInZone } from "@/lib/time/tz";
+import { tenants } from "@/db/schema/tenants";
+import { dayRangeUtc, todayInZone } from "@/lib/time/tz";
+import {
+  enquiryConditions,
+  enquiryScope,
+} from "@/lib/services/enquiry-scope";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { BatchAttendanceReportRow } from "./attendance-report-query";
 
@@ -19,7 +22,8 @@ export { getAttendanceReport, type BatchAttendanceReportRow } from "./attendance
 // Phase 4 — owner reports (attendance by batch, enquiry funnel,
 // retention, coach load) sharing one module and filter shape.
 // Retention is aggregate-only per scope § 7.1 (DPDP profiling):
-// we surface "X members attended zero of Y recent sessions".
+// we surface how many members have NO attendance record in the
+// period, and never a per-member list.
 // All reads run through withTenant() and respect RLS.
 
 export type ReportPeriod = { from: string; to: string };
@@ -84,6 +88,24 @@ export async function getEnquiryFunnel(
 ): Promise<EnquiryFunnelRow[]> {
   const SOURCES = ["walk-in", "phone", "referral", "online", "other"] as const;
   return withTenant(ctx.tenantId, async (tx) => {
+    // The funnel is an enquiry read, so it resolves its visibility
+    // through the ONE enquiry rule (lib/services/enquiry-scope.ts):
+    // tenant, soft delete and location scope, with the unresolved
+    // queue reserved for management. A restricted caller must not see
+    // another site's enquiries in the funnel.
+    const { predicate } = await enquiryScope(tx, ctx);
+    // The period is the tenant's own calendar days (the same
+    // half-open window every other report uses), not UTC days:
+    // new Date('2026-10-01') is UTC midnight, which is 05:30 IST and
+    // silently drops the club's first working hour of the first day.
+    const [tenantRow] = await tx
+      .select({ timezone: tenants.timezone })
+      .from(tenants)
+      .where(eq(tenants.id, ctx.tenantId));
+    const timezone = tenantRow?.timezone ?? "Asia/Kolkata";
+    const { fromUtc } = dayRangeUtc(period.from, timezone);
+    const { fromUtc: endUtc } = dayRangeUtc(period.to, timezone);
+
     const rows = await tx
       .select({
         source: enquiries.source,
@@ -93,9 +115,10 @@ export async function getEnquiryFunnel(
       .from(enquiries)
       .where(
         and(
-          eq(enquiries.tenantId, ctx.tenantId),
-          gte(enquiries.createdAt, new Date(period.from)),
-          lt(enquiries.createdAt, new Date(period.to)),
+          ...enquiryConditions(ctx, predicate, [
+            gte(enquiries.createdAt, fromUtc),
+            lt(enquiries.createdAt, endUtc),
+          ]),
         ),
       )
       .groupBy(enquiries.source, enquiries.stage);
@@ -146,142 +169,16 @@ export async function getEnquiryFunnel(
   });
 }
 
-// 4.5 — retention view. Aggregate-only, by attendance
-// signal. Members whose recent attendance is zero (or under a
-// threshold for an extended period) surface as "at risk" —
-// the cohort's count, not the cohort's identities. scope §
-// 7.1 prevents per-member risk scores on minors; the report
-// is intentionally a number, not a list.
-//
-// TRUTHFULNESS (owner UX audit, high). "At risk" is a claim about
-// someone NOT doing something they had every chance to do. That
-// needs two facts the previous version never established:
-//
-//   1. There was a chance — the academy ran attendance-eligible
-//      sessions in the window. A club with no sessions at all cannot
-//      have a retention problem.
-//   2. The member was around for the whole window. A swimmer who
-//      joined yesterday has had no chance to attend a session that
-//      happened before they joined; calling them "at risk" is a false
-//      alarm, and on a freshly seeded club it labelled every single
-//      swimmer at risk.
-//
-// When either fact is missing the view reports INSUFFICIENT HISTORY
-// instead of a risk count, so the owner is never told a cohort is
-// slipping on the strength of no evidence. The rule lives here, once,
-// so the report and the dashboard cannot disagree about it.
-// The aggregate the report shows. Its shape is PINNED by
-// tests/tier1/owner-reports.test.ts ("returns aggregate numbers only
-// — never a per-member list"), so it carries the four numbers and
-// nothing else — no per-member identifier, and no extra fields.
-export type RetentionRow = {
-  memberCountAtRisk: number;
-  membersWithZeroLast30: number;
-  membersWithPartialLast30: number;
-  totalActiveMembers: number;
-};
-
-// The report plus the evidence behind it: the cohort the claim is
-// about, the sessions that ran, and whether the history supports a
-// claim at all.
-export type RetentionReport = {
-  row: RetentionRow;
-  // The cohort the risk claim is about: active members who were
-  // members for the whole window (joined on or before its start).
-  eligibleMemberCount: number;
-  // Attendance-eligible sessions that actually ran in the window.
-  sessionsInWindow: number;
-  // "insufficient" means the view cannot make a risk claim yet.
-  history: "sufficient" | "insufficient";
-};
-
-export async function getRetentionReport(ctx: ActionCtx): Promise<RetentionReport> {
-  return withTenant(ctx.tenantId, async (tx) => {
-    // active-member denominator
-    const [{ n: totalActiveMembers }] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(members)
-      .where(and(eq(members.tenantId, ctx.tenantId), eq(members.status, "active"), sql`${members.deletedAt} is null`));
-
-    // distinct members with at least one attendance row in
-    // the last 30 days.
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const windowStart = since.toISOString().slice(0, 10);
-    const attendanceWindow = await tx
-      .select({
-        memberId: attendance.memberId,
-        markedSessions: sql<number>`count(*)::int`,
-      })
-      .from(attendance)
-      .innerJoin(sessions, eq(sessions.id, attendance.sessionId))
-      .innerJoin(members, and(eq(members.id, attendance.memberId), eq(members.tenantId, ctx.tenantId)))
-      .where(and(eq(attendance.tenantId, ctx.tenantId), eq(members.status, "active"), isNull(members.deletedAt),
-        gte(sessions.sessionDate, windowStart)))
-      .groupBy(attendance.memberId);
-
-    // The eligible cohort: active members who were members for the
-    // whole window. A member with no joined_on cannot be shown to
-    // have had the chance, so they are NOT eligible — claiming risk
-    // for them would be the same false alarm in a different shape.
-    const [{ n: eligibleMemberCount }] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(members)
-      .where(and(
-        eq(members.tenantId, ctx.tenantId),
-        eq(members.status, "active"),
-        isNull(members.deletedAt),
-        sql`${members.deletedAt} is null`,
-        sql`${members.joinedOn} is not null`,
-        sql`${members.joinedOn} <= ${windowStart}`,
-      ));
-
-    // Attendance-eligible sessions in the window. A cancelled
-    // session is not a chance to attend.
-    const [{ n: sessionsInWindow }] = await tx
-      .select({ n: sql<number>`count(*)::int` })
-      .from(sessions)
-      .where(and(
-        eq(sessions.tenantId, ctx.tenantId),
-        sql`${sessions.status} <> 'cancelled'`,
-        gte(sessions.sessionDate, windowStart),
-      ));
-
-    const withPartial: string[] = [];
-    for (const r of attendanceWindow) {
-      if (r.markedSessions > 0 && r.markedSessions < 4) withPartial.push(r.memberId);
-    }
-    // The "at risk" headline: eligible members who appear in no
-    // attendance window at all. Privacy-preserving aggregate: we
-    // count, we do not list.
-    const presentIds = new Set(attendanceWindow.map((r) => r.memberId));
-    const eligiblePresent = [...presentIds].length;
-    const history: RetentionReport["history"] =
-      sessionsInWindow > 0 && eligibleMemberCount > 0 ? "sufficient" : "insufficient";
-    const memberCountAtRisk =
-      history === "sufficient"
-        ? Math.max(0, Number(eligibleMemberCount) - eligiblePresent)
-        : 0;
-
-    return {
-      row: {
-        memberCountAtRisk,
-        membersWithZeroLast30: memberCountAtRisk,
-        membersWithPartialLast30: withPartial.length,
-        totalActiveMembers: Number(totalActiveMembers),
-      },
-      eligibleMemberCount: Number(eligibleMemberCount),
-      sessionsInWindow: Number(sessionsInWindow),
-      history,
-    };
-  });
-}
-
-// The four aggregate numbers, unchanged in shape. The report action
-// uses getRetentionReport (it also needs the history state); this
-// stays for callers that only want the numbers.
-export async function getRetentionView(ctx: ActionCtx): Promise<RetentionRow> {
-  return (await getRetentionReport(ctx)).row;
-}
+// 4.5 — the owner's attendance-records summary lives in
+// ./retention-report-query.ts (the cohort, the period and the record
+// rule are documented there). The public names are re-exported here
+// so every existing import path keeps working.
+export {
+  getRetentionReport,
+  getRetentionView,
+  type RetentionReport,
+  type RetentionRow,
+} from "./retention-report-query";
 
 // 4.6 — coach load lives in ./coach-load.ts (kept here as a
 // re-export so callers can keep their existing import path;

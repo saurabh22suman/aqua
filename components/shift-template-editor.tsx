@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
+import { TimeField } from "@/components/ui/TimeField";
 import { createShiftTemplateAction } from "@/lib/actions/shifts";
 import type { ShiftTemplateRow } from "@/lib/services/shifts";
 
@@ -36,6 +37,8 @@ export function ShiftTemplateEditor({
   const [startTime, setStartTime] = useState("06:00");
   const [endTime, setEndTime] = useState("10:00");
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5, 6]);
+  const [startValid, setStartValid] = useState(true);
+  const [endValid, setEndValid] = useState(true);
 
   function save() {
     startTransition(async () => {
@@ -74,31 +77,21 @@ export function ShiftTemplateEditor({
             )}
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="min-w-0">
-            <Field id="shift-template-start" label="Start">
-              {(field) => (
-                <Input
-                  {...field}
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                />
-              )}
-            </Field>
-          </div>
-          <div className="min-w-0">
-            <Field id="shift-template-end" label="End">
-              {(field) => (
-                <Input
-                  {...field}
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                />
-              )}
-            </Field>
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <TimeField
+            id="shift-template-start"
+            label="Start"
+            value={startTime}
+            onChange={setStartTime}
+            onValidityChange={setStartValid}
+          />
+          <TimeField
+            id="shift-template-end"
+            label="End"
+            value={endTime}
+            onChange={setEndTime}
+            onValidityChange={setEndValid}
+          />
         </div>
         <fieldset>
           <legend className="mb-1 text-[11px] text-ink-3">Days</legend>
@@ -132,7 +125,14 @@ export function ShiftTemplateEditor({
         <Button
           variant="secondary"
           size="md"
-          disabled={pending || !name.trim() || !locationId || days.length === 0}
+          disabled={
+            pending ||
+            !name.trim() ||
+            !locationId ||
+            days.length === 0 ||
+            !startValid ||
+            !endValid
+          }
           onClick={save}
         >
           Save template

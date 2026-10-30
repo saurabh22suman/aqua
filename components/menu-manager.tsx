@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { SectionHeading } from "@/components/ui/PageHeader";
 import {
   AddItemForm,
   MenuItemEditor,
@@ -234,19 +235,18 @@ export function MenuManager({
   locations: LocationOption[];
 }) {
   return (
-    <div className="space-y-8">
-      <AddCategoryForm locations={locations} />
-
+    <div className="space-y-5">
       <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Categories
-        </h2>
+        <SectionHeading
+          title="Menu catalogue"
+          subtitle="Categories and the items the counter sells, with price, GST and SAC."
+        />
         {categories.length === 0 ? (
           <p
             className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3"
             data-testid="menu-empty"
           >
-            No categories yet. Add the first category above, then items
+            No categories yet. Add the first category below, then items
             under it.
           </p>
         ) : (
@@ -265,6 +265,8 @@ export function MenuManager({
           </div>
         )}
       </section>
+
+      <AddCategoryForm locations={locations} />
     </div>
   );
 }

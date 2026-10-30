@@ -10,11 +10,11 @@ import {
   getFeesOverview,
   listDeskDues,
   listHubInvoices,
-  listHubTransactions,
+  listHubTransactionsPage,
   type DeskDueRow,
   type FeesOverview,
   type HubInvoiceRow,
-  type HubTransactionRow,
+  type HubTransactionPage,
 } from "@/lib/services/fees-hub";
 
 // U-02 — Fees & Payments hub actions. Standing preamble: (1) Zod
@@ -62,12 +62,17 @@ export async function listHubInvoicesAction(
 
 export async function listHubTransactionsAction(
   raw: unknown,
-): Promise<HubTransactionRow[]> {
+): Promise<HubTransactionPage> {
   const parsed = feesTransactionsInput.safeParse(raw);
-  if (!parsed.success) return [];
+  if (!parsed.success) {
+    return { rows: [], totalCount: 0, truncated: false, limit: 200 };
+  }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "payments.read");
-  return listHubTransactions(ctx, parsed.data);
+  // The page carries the rows AND the number of rows the filter
+  // matches, so the screen can say "showing the first N of M" instead
+  // of presenting a truncated list as the whole ledger.
+  return listHubTransactionsPage(ctx, parsed.data);
 }
 
 // M02 — the reception desk's dues call list, read-only. Same grant the

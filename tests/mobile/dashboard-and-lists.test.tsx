@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // P1-4, P1-5, P1-6, P1-8, P1-9 + the cheap P2 copy fixes from the
@@ -28,7 +28,12 @@ vi.mock("next/link", async () => {
   };
 });
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/owner",
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock("@/lib/actions/global-search", () => ({
+  globalSearchAction: vi.fn(async () => []),
 }));
 vi.mock("@/lib/actions/tenant-auth", () => ({ logoutTenantAction: vi.fn() }));
 vi.mock("@/lib/actions/people", () => ({ updateMemberAction: vi.fn() }));
@@ -56,6 +61,8 @@ vi.mock("@/lib/actions/coach", () => ({
 }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { OwnerShell } from "@/components/owner-shell";
+import { TENANT_SURFACE_NAV } from "@/lib/nav";
 import { CoachRosterSearch } from "@/components/coach-roster-search";
 import { AttendanceReportCard } from "@/components/reports/attendance-report-card";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
@@ -136,11 +143,22 @@ const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 afterEach(cleanup);
 
 describe("owner dashboard affordances (P1-4, P1-5, P1-7)", () => {
-  it("offers one-tap sign-out in the header", () => {
+  it("exposes the shared shell sign-out from the Home header account control", () => {
+    // The shared shell owns the account/sign-out affordance; Home no
+    // longer duplicates it. Render the composed shell+Home and open the
+    // account disclosure to prove the real action remains reachable.
     render(
-      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
+      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
+        <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />
+      </OwnerShell>,
     );
-    expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy();
+    const header = screen.getByTestId("owner-top-bar");
+    const account = header.querySelector("summary");
+    expect(account).not.toBeNull();
+    fireEvent.click(account!);
+    expect(
+      within(header).getByRole("button", { name: /sign out/i }),
+    ).toBeTruthy();
   });
 
   it("every needs-attention row is linked, so every row carries the chevron (PR3-C3)", () => {

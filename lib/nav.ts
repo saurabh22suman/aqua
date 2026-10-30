@@ -67,12 +67,11 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
     ],
   },
   {
-    label: "Insights",
-    items: [{ href: "/owner/reports", label: "Reports", iconName: "file-text" }],
-  },
-  {
     label: "Account",
-    items: [{ href: "/owner/settings", label: "Settings", iconName: "settings" }],
+    items: [
+      { href: "/owner/reports", label: "Reports", iconName: "file-text" },
+      { href: "/owner/settings", label: "Settings", iconName: "settings" },
+    ],
   },
 ];
 

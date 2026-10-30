@@ -4,6 +4,8 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getLead } from "@/db/platform-leads";
 import { presetForQualification } from "@/db/platform-lead-conversion";
 import { listPresets } from "@/db/platform-presets";
+import { isUuid } from "@/lib/params";
+import { recordOpsRejection, runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import type { StatusTone } from "@/components/ui/StatusBadge";
 import { LeadActions } from "./lead-actions";
 import {
@@ -65,10 +67,21 @@ export default async function LeadDetailPage({
   const canWrite = status.role === "admin";
 
   const { leadId } = await params;
-  const lead = await getLead(leadId);
+  // F-6: a malformed lead UUID is an invalid operation BEFORE any query;
+  // the raw segment is never stored and the friendly 404 is preserved.
+  if (!isUuid(leadId)) {
+    await recordOpsRejection("lead.detail", "invalid");
+    notFound();
+  }
+  const lead = await runOpsGlobalRead("lead.detail", () => getLead(leadId), "ops_page");
   if (!lead) notFound();
 
-  const [presetResult] = await Promise.all([listPresets()]);
+  const presetResult = await runOpsGlobalRead(
+    "preset.list",
+    () => listPresets(),
+    "ops_page",
+  );
+  if (!presetResult) redirect("/ops/login");
   const presetOptions = presetResult
     .filter((preset) => preset.status === "active")
     .map((preset) => ({ key: preset.key, name: preset.name }));

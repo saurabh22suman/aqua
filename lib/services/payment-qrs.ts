@@ -2,7 +2,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { paymentQrs } from "@/db/schema/payment-qrs";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit as writeAuditRow } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 import {
@@ -313,6 +313,8 @@ export async function getPaymentQrImage(
 
 type AuditTx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
+// E-01 — the one audit writer, so the QR rows carry the same actor
+// model (and the request id) as every other tenant-side mutation.
 async function writeAudit(
   tx: AuditTx,
   ctx: ActionCtx,
@@ -321,12 +323,13 @@ async function writeAudit(
   after: Record<string, unknown>,
 ): Promise<void> {
   if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  await writeAuditRow(tx, {
     tenantId: ctx.tenantId,
     actorId: ctx.userId,
     action,
     entityType: "payment_qr",
     entityId,
     after,
+    requestId: ctx.requestId ?? null,
   });
 }

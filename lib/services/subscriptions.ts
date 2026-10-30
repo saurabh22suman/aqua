@@ -10,7 +10,7 @@ import { members } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { facilities } from "@/db/schema/preset-engine";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit as writeAuditRow } from "@/lib/audit/write";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import {
   locationPredicate,
@@ -18,6 +18,7 @@ import {
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { asMemberId } from "@/lib/ids";
+import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // C-30 — subscriptions. Start/end, pause/resume, cancel. Pause extends
@@ -252,22 +253,38 @@ export async function createSubscription(
       };
     }
 
-    const [row] = await tx
-      .insert(subscriptions)
-      .values({
-        tenantId: ctx.tenantId,
-        memberId: asMemberId(parsed.data.memberId),
-        planId: plan.id,
-        locationId: plan.locationId,
-        activityId: plan.activityId,
-        startsOn,
-        endsOn,
-        status: "active",
-        autoRenew: parsed.data.autoRenew ?? false,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      })
-      .returning({ id: subscriptions.id });
+    let row: { id: string } | undefined;
+    try {
+      [row] = await tx
+        .insert(subscriptions)
+        .values({
+          tenantId: ctx.tenantId,
+          memberId: asMemberId(parsed.data.memberId),
+          planId: plan.id,
+          locationId: plan.locationId,
+          activityId: plan.activityId,
+          startsOn,
+          endsOn,
+          status: "active",
+          autoRenew: parsed.data.autoRenew ?? false,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })
+        .returning({ id: subscriptions.id });
+    } catch (err) {
+      // The pre-check above loses to a concurrent create (two desks, or
+      // a double submit). The partial unique index
+      // subscriptions_active_member_plan_uidx is the backstop; translate
+      // it into the same message the pre-check gives, instead of the
+      // driver's error text.
+      if (isUniqueViolation(err)) {
+        return {
+          ok: false,
+          error: "This member already has an active subscription to this plan.",
+        };
+      }
+      throw err;
+    }
     if (!row) return { ok: false, error: "The subscription could not be saved." };
 
     await writeAudit(tx, ctx, "subscription.create", row.id, {
@@ -472,6 +489,9 @@ export async function cancelSubscription(
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
+// E-01 — the one audit writer, so the subscription rows carry the
+// same actor model (and the request id) as every other tenant-side
+// mutation.
 async function writeAudit(
   tx: Tx,
   ctx: ActionCtx,
@@ -480,12 +500,13 @@ async function writeAudit(
   after: Record<string, unknown>,
 ): Promise<void> {
   if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  await writeAuditRow(tx, {
     tenantId: ctx.tenantId,
     actorId: ctx.userId,
     action,
     entityType: "subscription",
     entityId,
     after,
+    requestId: ctx.requestId ?? null,
   });
 }

@@ -10,11 +10,22 @@ import {
   type TerminologyState,
 } from "@/lib/terminology/keys";
 import { DateField } from "@/components/ui/DateField";
+import {
+  StaffPersonPicker,
+  type StaffCandidate,
+  type StaffCandidateSearch,
+} from "@/components/staff-person-picker";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 
 type Mode = "new" | "existing";
+
+// Stable fallback (never recreated per render). It fails honestly until the
+// backend-D candidate search is wired; it never returns invented people.
+const unavailableCandidateSearch: StaffCandidateSearch = async () => {
+  throw new Error("staff candidate search not wired");
+};
 
 // Same labels/control shape as the sibling "Invite staff" form so the
 // same decision is asked the same way on both screens (2026-09-13
@@ -23,12 +34,22 @@ type Mode = "new" | "existing";
 const ROLE_KEYS = ["coach", "receptionist", "worker", "accountant"] as const;
 type StaffType = (typeof ROLE_KEYS)[number];
 
-export function StaffCreateForm({ terminology }: { terminology: TerminologyState }) {
+export function StaffCreateForm({
+  terminology,
+  searchCandidates,
+}: {
+  terminology: TerminologyState;
+  /** Backend-D staff-candidate search; injected at the page boundary. */
+  searchCandidates?: StaffCandidateSearch;
+}) {
   const [mode, setMode] = useState<Mode>("new");
   const [fullName, setFullName] = useState("");
-  const [existingPersonId, setExistingPersonId] = useState("");
+  const [selectedPerson, setSelectedPerson] = useState<StaffCandidate | null>(
+    null,
+  );
   const [staffType, setStaffType] = useState<StaffType>("coach");
   const [employedOn, setEmployedOn] = useState("");
+  const [employedOnValid, setEmployedOnValid] = useState(true);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,12 +61,15 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
   }
 
   async function submit() {
+    if (!employedOnValid) return;
     setError(null);
     setPending(true);
     try {
       const result = await createStaffAction({
         staffType,
-        ...(mode === "new" ? { fullName } : { existingPersonId }),
+        ...(mode === "new"
+          ? { fullName }
+          : { existingPersonId: selectedPerson?.personId ?? "" }),
         ...(employedOn ? { employedOn } : {}),
       });
       if (result.kind === "ok") {
@@ -108,23 +132,12 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
         </div>
       ) : (
         <div className="mb-4">
-          <Field
-            id="staff-existingPersonId-field"
-            label="Existing person id"
-            description="Paste the person's id here. Useful when a member is also being made staff."
-          >
-            {(field) => (
-              <Input
-                {...field}
-                type="text"
-                value={existingPersonId}
-                onChange={(e) => setExistingPersonId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                className="font-mono"
-                data-testid="staff-existingPersonId"
-              />
-            )}
-          </Field>
+          <StaffPersonPicker
+            searchCandidates={searchCandidates ?? unavailableCandidateSearch}
+            selected={selectedPerson}
+            onSelect={setSelectedPerson}
+            disabled={pending}
+          />
         </div>
       )}
 
@@ -151,16 +164,23 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
 
       <div className="mb-6">
         <Field id="staff-employedOn" label="Employed on (optional)">
-          {() => (
+          {(field) => (
             <DateField
-              id="staff-employedOn"
+              {...field}
               value={employedOn}
               onChange={setEmployedOn}
+              onValidityChange={setEmployedOnValid}
               data-testid="staff-employedOn"
             />
           )}
         </Field>
       </div>
+
+      {!employedOnValid ? (
+        <p className="mb-4 text-[13px] text-ink-2" role="alert">
+          Enter a complete date as dd/mm/yyyy, or leave it blank.
+        </p>
+      ) : null}
 
       {error ? (
         <p className="mb-4 text-[13px] text-ink-2" role="alert">
@@ -174,7 +194,12 @@ export function StaffCreateForm({ terminology }: { terminology: TerminologyState
           variant="primary"
           size="lg"
           onClick={submit}
-          disabled={pending}
+          disabled={
+            pending ||
+            !employedOnValid ||
+            (mode === "existing" && selectedPerson === null) ||
+            (mode === "new" && fullName.trim().length === 0)
+          }
           className="flex-1"
           data-testid="staff-save"
         >

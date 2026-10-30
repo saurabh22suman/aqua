@@ -685,6 +685,18 @@ sticky save bar reserves its own space so it never covers the last field or
 the consent block. Cancel returns to the record; saving is never a cosmetic
 button on an auto-saving surface (the register saves as it marks).
 
+### Shared dropdown amendment — 30 October 2026
+
+The human requested a styled open dropdown across the app. This supersedes
+older native-popup guidance: preserve the native select element's ref,
+form value and event API, while the shared Select renders its own listbox.
+The popup must align with both field edges and match its width whenever
+the field fits the visible clipping region. Clamp only for actual viewport
+or ancestor limits; an arbitrary popup width cap is not acceptable.
+Long labels wrap, option rows have at least 44px targets, and selected,
+focused and disabled states use shared theme tokens plus text/markers.
+Review the OPEN control in both themes, not only its closed field.
+
 ### Tabs and filters
 
 Purpose: narrow one dataset without losing context. Tabs are **URL state**
@@ -703,6 +715,16 @@ reachable from the shell for roles without Settings. The academy mark is
 branding, not a person avatar.
 
 ### Charts
+
+**30 October 2026, current Reports task amendment.** The existing owner
+Reports screen keeps its multiple, compact server-rendered SVG cards on
+phones and desktops while the reported chart defects are corrected. This
+is the scoped exception to the one-panel, ECharts-only and phone-table-only
+guidance below; it introduces no new engine or dependency. Keep meaningful
+chart frames consistent, let empty/insufficient cards fit their content,
+and group mixed-height cards without accidental row holes. Visible axes,
+units, truthful gaps, exact accessible data and independent browser review
+remain mandatory. A passed Home chart check does not accept Reports charts.
 
 Purpose: answer one stated business question over one stated period. At most
 **one chart panel** per screen. Each chart states:
@@ -1073,3 +1095,13 @@ authoritative.
   the phone; touch targets ≥44px; inputs 16px (where any exist).
 - `pnpm typecheck`, `pnpm lint`, tests, `pnpm build`, `pnpm check:bundle`,
   `pnpm check:fonts` pass; browser evidence saved with the branch.
+
+
+### Install shortcut amendment — 30 October 2026
+
+On browsers offering an install event, activating the 44px right-edge shortcut
+opens the browser prompt directly. Do not introduce an expanded floating card.
+The shortcut uses shared paper/line/ink tokens in both themes. Drag and arrow
+keys reposition it; a drag never installs. Check its whole visible footprint
+against page controls, text, sticky chrome and navigation at each target size.
+Safari guidance must remain factual and is a separate visual acceptance case.

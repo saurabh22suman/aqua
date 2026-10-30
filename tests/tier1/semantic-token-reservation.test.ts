@@ -99,6 +99,12 @@ const WHITELIST = new Set([
   // `warn` use, DESIGN.md §1.1: warn = needs attention).
   "components/owner-dashboard.tsx",
 
+  // Extracted Owner Home money summary: late marks an overdue balance.
+  "components/owner-home/owner-home-money.tsx",
+
+  // Fees ledger: late marks negative money on a recorded reversal.
+  "components/fees/fees-transaction-list.tsx",
+
   // batch-edit-form.tsx + batch-create-form.tsx — coach conflict
   // warning. `warn` is the correct token: needs-attention.
   "components/batch-edit-form.tsx",

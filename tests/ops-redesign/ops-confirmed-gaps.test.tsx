@@ -57,6 +57,27 @@ vi.mock("@/lib/actions/platform-auth", () => ({
   }),
 }));
 
+// The tenant pages now call the approved Ops operation boundary before the
+// page-level 404. This is the same contract as the real helper for the ids
+// this suite uses: a malformed segment is a null result and never reaches a
+// read; a valid one delegates. No assertion changes.
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (
+    _operation: string,
+    tenantId: string,
+    read: () => Promise<unknown>,
+  ) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      tenantId,
+    )
+      ? read()
+      : null,
+  runOpsGlobalRead: async (
+    _operation: string,
+    read: () => Promise<unknown>,
+  ) => read(),
+}));
+
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");

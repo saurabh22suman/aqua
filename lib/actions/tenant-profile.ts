@@ -5,6 +5,8 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import {
   getTenantProfile,
+  SUPPORTED_CURRENCY,
+  UNSUPPORTED_CURRENCY_MESSAGE,
   updateTenantProfile,
   type TenantProfile,
   type UpdateTenantProfileResult,
@@ -14,6 +16,12 @@ import {
 // (2) permission check, (3) service. Reads ride settings.read (any
 // staff member can see the academy identity); writes are
 // management-only, matching branding and terminology.
+//
+// Currency is INR-only in this release. The action refuses an explicit
+// unsupported code before the permission/service call (no mutation, no
+// success audit). `currency` is optional so a read-only editor can omit
+// it for an existing non-INR tenant and still save the other fields;
+// the stored value is left untouched, never silently rewritten to INR.
 
 export async function getTenantProfileAction(): Promise<TenantProfile | null> {
   const ctx = await requireDefaultCtx();
@@ -26,8 +34,11 @@ const updateFormSchema = z.object({
   currency: z
     .string()
     .trim()
-    .length(3, "Currency must be a 3-letter ISO 4217 code.")
-    .regex(/^[A-Z]{3}$/, "Currency must be uppercase letters."),
+    .refine(
+      (value) => value === SUPPORTED_CURRENCY,
+      UNSUPPORTED_CURRENCY_MESSAGE,
+    )
+    .optional(),
   timezone: z.string().trim().min(1, "Time zone is required.").max(60),
   gstin: z.string().trim().max(15, "GSTIN is at most 15 characters."),
 });

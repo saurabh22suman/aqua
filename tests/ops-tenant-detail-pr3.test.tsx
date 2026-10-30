@@ -9,6 +9,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({ kind: "authenticated", userId: "u1" }),
 }));
+
+// The tenant pages resolve their reads through the approved Ops operation
+// boundary. These suites assert the page contract, not the audit path, so the
+// boundary delegates to the read it is given. Fixture-only: no assertion,
+// product branch or source behaviour changes.
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (
+    _operation: string,
+    _tenantId: string,
+    read: () => Promise<unknown>,
+  ) => read(),
+  runOpsGlobalRead: async (
+    _operation: string,
+    read: () => Promise<unknown>,
+  ) => read(),
+}));
 vi.mock("@/lib/params", () => ({ requireUuidParam: () => undefined }));
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";

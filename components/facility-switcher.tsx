@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 import { MapPin } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Select } from "@/components/ui/Select";
 import {
   FACILITY_COOKIE,
   isFacilityScopedPath,
@@ -46,7 +46,17 @@ export function FacilitySwitcher({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const visible = locations.length > 1 && isFacilityScopedPath(pathname);
-  const [current, setCurrent] = useState(() => searchParams.get("facility") ?? "all");
+  // The URL is the scope the page is rendered with, so the CONTROL must
+  // always show the URL's facility — including after a Back navigation,
+  // which re-renders this component with a new search param WITHOUT
+  // remounting it. A state that is only written by onChange would keep
+  // showing the facility the operator just navigated away from, while the
+  // page below is scoped by the URL: the control would be lying.
+  const urlFacility = searchParams.get("facility") ?? "all";
+  const [current, setCurrent] = useState(urlFacility);
+  useEffect(() => {
+    setCurrent(urlFacility);
+  }, [urlFacility]);
 
   // A page opened from the sidebar carries no `?facility=`, so adopt the
   // remembered choice and put it in the URL — the server already scoped
@@ -82,25 +92,24 @@ export function FacilitySwitcher({
       <label htmlFor="facility-switcher" className="sr-only">
         Facility
       </label>
-      {/* A PICKER, so it wears the standard control metrics: 48px tall,
-          the 10px control radius, 16px control text and the very lightly
-          tinted picker surface. The SELECT is the control — it carries
-          the border, the radius and the surface — so what the reader
-          sees is what the control paints. The native select keeps the
-          platform picker on a phone and its own keyboard behaviour. */}
+      {/* The shared PICKER: 48px tall, the 10px control radius, 16px
+          control text and the very lightly tinted picker surface. It
+          opens the shared listbox — our own dropdown — instead of the
+          operating system's, and it draws the chevron that says the
+          row is a choice. The location pin sits in front of it. */}
       <div className="relative">
         <MapPin
           size={14}
           className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-3"
           aria-hidden="true"
         />
-        <select
+        <Select
           id="facility-switcher"
           data-testid="facility-switcher"
           value={current}
           onChange={(e) => onChange(e.target.value)}
           aria-label="Facility"
-          className="min-h-12 w-full appearance-none rounded-ctl border border-[var(--control-border)] bg-[var(--control-surface-picker)] py-2 pl-10 pr-9 text-[16px] text-ink motion-fast transition-colors hover:border-[var(--control-border-hover)] focus:border-[var(--accent-strong)]"
+          className="pl-10"
         >
           <option value="all">All facilities</option>
           {locations.map((l) => (
@@ -108,18 +117,7 @@ export function FacilitySwitcher({
               {l.name}
             </option>
           ))}
-        </select>
-        {/* The dropdown affordance. `appearance-none` removes the
-            browser's own arrow, so the picker has to say that it is a
-            choice — the same decorative chevron the shared Select
-            draws. */}
-        <ChevronDown
-          size={16}
-          strokeWidth={1.8}
-          data-testid="facility-switcher-chevron"
-          aria-hidden="true"
-          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-3"
-        />
+        </Select>
       </div>
     </div>
   );

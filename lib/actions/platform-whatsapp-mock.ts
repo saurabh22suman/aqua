@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { opsAction } from "@/db/ops-action";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { mockMessagingEnabled } from "@/lib/messaging/provider";
 import { sendMessage } from "@/lib/messaging/send";
 import { handleInboundMessage } from "@/lib/messaging/inbound";
@@ -62,6 +63,7 @@ export async function sendMockMessageAction(
     body: String(formData.get("body") ?? "").trim(),
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("message.send", "invalid");
     return {
       ok: false,
       error: surface.error.issues[0]?.message ?? "Invalid message.",
@@ -70,6 +72,7 @@ export async function sendMockMessageAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("message.send", "denied");
     return {
       ok: false,
       error:
@@ -98,7 +101,13 @@ export async function sendMockMessageAction(
         // provider, which is the hosted mock in a deployment and the
         // in-process mock in local development.
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("message.send", error, { tenantId: surface.data.tenantId });
+    throw error;
+  });
+  if (!result.ok) {
+    await recordOpsMutationTrace("message.send", "error");
+  }
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
 
@@ -112,6 +121,7 @@ export async function injectInboundMessageAction(
     body: String(formData.get("body") ?? "").trim(),
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("message.inbound", "invalid");
     return {
       ok: false,
       error: surface.error.issues[0]?.message ?? "Invalid inbound message.",
@@ -120,6 +130,7 @@ export async function injectInboundMessageAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("message.inbound", "denied");
     return {
       ok: false,
       error:
@@ -145,6 +156,12 @@ export async function injectInboundMessageAction(
         fromPhone: surface.data.fromPhone,
         body: surface.data.body,
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("message.inbound", error, { tenantId: surface.data.tenantId });
+    throw error;
+  });
+  if (!result.ok) {
+    await recordOpsMutationTrace("message.inbound", "error");
+  }
   return result.ok ? { ok: true } : { ok: false, error: result.error };
 }

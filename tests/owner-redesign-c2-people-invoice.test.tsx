@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+
+vi.stubGlobal("crypto", { randomUUID });
 
 // Owner redesign · People lane (C2) — the invoice collection context.
 //
@@ -31,6 +34,30 @@ vi.mock("@/lib/actions/payments", () => ({
 vi.mock("@/lib/actions/payment-reversals", () => ({
   listPaymentReversalsAction: vi.fn(async () => []),
   reversePaymentAction: vi.fn(),
+}));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelPaymentRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
+  listReversalRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelReversalRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
+}));
+
+vi.mock("@/lib/actions/payment-qrs", () => ({
+  listPaymentQrsAction: vi.fn(async () => []),
 }));
 
 import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";

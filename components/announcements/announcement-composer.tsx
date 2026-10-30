@@ -42,12 +42,24 @@ export function AnnouncementComposer({
     setBusy(true);
     setMessage(null);
     try {
-      const result = await sendAnnouncementAction({
-        title,
-        body,
-        audience,
-        ...(audience === "batch" ? { batchId } : {}),
-      });
+      // A structured result proves its own outcome: ok:true is a committed
+      // send, ok:false is a refusal made before any write. A THROWN result
+      // proves nothing about delivery, so it is handled as UNKNOWN below —
+      // never as a confirmed failure and never retried automatically.
+      let result: Awaited<ReturnType<typeof sendAnnouncementAction>>;
+      try {
+        result = await sendAnnouncementAction({
+          title,
+          body,
+          audience,
+          ...(audience === "batch" ? { batchId } : {}),
+        });
+      } catch {
+        setMessage(
+          "The result could not be confirmed — the announcement may or may not have been sent. Messaging may not be enabled for this academy, or the response did not reach this screen. Refresh the sent list before retrying, so an announcement is not sent twice.",
+        );
+        return;
+      }
       setMessage(
         result.ok
           ? `Sent in-app to ${result.recipientCount} account${
@@ -60,10 +72,14 @@ export function AnnouncementComposer({
       if (result.ok) {
         setTitle("");
         setBody("");
-        router.refresh();
+        // The refresh re-renders the page tree; it is not part of the
+        // send. A refresh failure must not rewrite a confirmed outcome.
+        try {
+          router.refresh();
+        } catch {
+          // Keep the success message above.
+        }
       }
-    } catch {
-      setMessage("Could not confirm the announcement. Refresh the sent list before retrying.");
     } finally {
       setBusy(false);
     }
@@ -71,17 +87,17 @@ export function AnnouncementComposer({
 
   return (
     <form
-      className="rounded-card border border-line bg-paper p-4"
+      className="rounded-card border border-line bg-paper p-5"
       onSubmit={(event: FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         void send();
       }}
     >
-      <h2 className="font-display text-[15px] font-semibold">
-        Send an announcement
+      <h2 className="font-display text-[16px] font-semibold text-ink">
+        Compose an announcement
       </h2>
-      <p className="mt-1 text-[12.5px] text-ink-3">
-        Creates in-app notifications and queues WhatsApp updates to selected
+      <p className="mt-1 max-w-[65ch] text-[12.5px] text-ink-3">
+        Creates in-app notifications and queues WhatsApp updates for selected
         student contacts and relevant staff. Student updates require active
         communications consent. The local demo captures messages in the mock viewer.
       </p>

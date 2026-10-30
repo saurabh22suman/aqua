@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { updateMemberAction } from "@/lib/actions/people";
 import type { LocationOption, MemberDetail } from "@/lib/services/people";
 import { DateField } from "@/components/ui/DateField";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -61,10 +62,11 @@ export function MemberEditForm({
 
   return (
     <div className="space-y-2.5">
-      {/* Owner redesign (C2) — the shared labelled controls: the label
-          is associated with its control by id, the metrics belong to the
-          shared primitives, and no page-local surface override is added
-          on top of them. */}
+      {/* OpenPen owner reference — a bounded correction form: persistent
+          labels, paired fields at ≥sm, and Cancel beside Save. */}
+      <h2 className="font-display text-[16px] font-semibold">
+        Personal details
+      </h2>
       <Field id="edit-full-name-field" label="Full name">
         {(field) => (
           <Input
@@ -76,32 +78,54 @@ export function MemberEditForm({
           />
         )}
       </Field>
-      <Field id="edit-phone-field" label="Phone (optional)">
-        {(field) => (
-          <Input
-            {...field}
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (optional)"
-          />
-        )}
-      </Field>
-      <Field id="edit-dob" label="Date of birth">
-        {() => (
-          <DateField id="edit-dob" value={dateOfBirth} onChange={setDateOfBirth} />
-        )}
-      </Field>
-      <Field id="edit-joined-on" label="Joined on">
-        {() => (
-          <DateField
-            id="edit-joined-on"
-            value={joinedOn}
-            onChange={setJoinedOn}
-            data-testid="member-joined-on"
-          />
-        )}
-      </Field>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <Field id="edit-phone-field" label="Phone (optional)">
+          {(field) => (
+            <Input
+              {...field}
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone (optional)"
+            />
+          )}
+        </Field>
+        <Field id="edit-dob" label="Date of birth" required>
+          {(field) => (
+            <DateField
+              {...field}
+              value={dateOfBirth}
+              onChange={setDateOfBirth}
+              data-testid="member-dob"
+            />
+          )}
+        </Field>
+        <Field id="edit-joined-on" label="Joined on">
+          {(field) => (
+            <DateField
+              {...field}
+              value={joinedOn}
+              onChange={setJoinedOn}
+              data-testid="member-joined-on"
+            />
+          )}
+        </Field>
+        <Field id="edit-location-field" label="Location">
+          {(field) => (
+            <Select
+              {...field}
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+            >
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </div>
       <Field id="edit-gender-field" label="Gender (optional)">
         {(field) => (
           <Select
@@ -113,21 +137,6 @@ export function MemberEditForm({
             <option value="male">Male</option>
             <option value="female">Female</option>
             <option value="other">Other</option>
-          </Select>
-        )}
-      </Field>
-      <Field id="edit-location-field" label="Location">
-        {(field) => (
-          <Select
-            {...field}
-            value={locationId}
-            onChange={(e) => setLocationId(e.target.value)}
-          >
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
           </Select>
         )}
       </Field>
@@ -149,16 +158,24 @@ export function MemberEditForm({
         </p>
       ) : null}
 
-      <Button
-        type="button"
-        variant="primary"
-        size="md"
-        onClick={submit}
-        disabled={busy}
-        className="w-full"
-      >
-        {busy ? "Saving…" : "Save changes"}
-      </Button>
+      <div className="flex gap-2 pt-1">
+        <Link
+          href={`/owner/members/${member.memberId}`}
+          className={`${buttonClasses({ variant: "secondary", size: "md" })} flex-1`}
+        >
+          Cancel
+        </Link>
+        <Button
+          type="button"
+          variant="primary"
+          size="md"
+          onClick={submit}
+          disabled={busy}
+          className="flex-[2]"
+        >
+          {busy ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
     </div>
   );
 }

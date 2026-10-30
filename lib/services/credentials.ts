@@ -21,7 +21,7 @@
 // its own per-IP rate limiter (rateLimit config in lib/auth/server.ts).
 // The per-account lockout in this service is the second layer.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
@@ -102,6 +102,54 @@ export async function setCredential(
     // further and always overwrite, because reset must replace an
     // existing PIN).
     await ctx.internalAdapter.updateAccount(existing.id, { password: hash });
+  });
+}
+
+// The tx-aware sibling of setCredential. The hash is still better-auth's
+// own and the row keeps the canonical providerId/issuer, but the write
+// joins the caller's transaction — so a credential rotation can commit
+// together with the audit row that records it.
+type CredentialTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function setCredentialInTx(
+  tx: CredentialTx,
+  baUserId: string,
+  pin: string,
+): Promise<void> {
+  const ctx = await auth.$context;
+  const hash = await ctx.password.hash(pin);
+  const [existing] = await tx
+    .select({ id: baAccount.id })
+    .from(baAccount)
+    .where(
+      and(
+        eq(baAccount.userId, baUserId),
+        eq(baAccount.providerId, "credential"),
+        eq(baAccount.issuer, CREDENTIAL_ISSUER),
+        // The canonical identity is FOUR fields: better-auth's
+        // findCredentialAccount resolves on userId + providerId + issuer +
+        // accountId = userId (its email+password plugin writes
+        // accountId = email for the SAME user). Matching on three would
+        // let this write land on that other row — the reset would
+        // overwrite a credential the app's own read path cannot see.
+        eq(baAccount.accountId, baUserId),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    await tx
+      .update(baAccount)
+      .set({ password: hash, updatedAt: new Date() })
+      .where(eq(baAccount.id, existing.id));
+    return;
+  }
+  await tx.insert(baAccount).values({
+    id: uuidv7(),
+    userId: baUserId,
+    accountId: baUserId,
+    providerId: "credential",
+    issuer: CREDENTIAL_ISSUER,
+    password: hash,
   });
 }
 

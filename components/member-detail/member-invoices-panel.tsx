@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   createInvoiceAction,
@@ -11,8 +12,13 @@ import type { InvoiceRow } from "@/lib/services/invoices";
 import type { SubscriptionRow } from "@/lib/services/subscriptions";
 import { formatINR } from "@/lib/money/format";
 import { formatDateIST, todayInZone } from "@/lib/time/tz";
-import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
+// Money/recovery controls load only when the existing Open action is used.
+const InvoiceExpanded = dynamic(
+  () => import("@/components/member-detail/invoice-expanded").then((module) => module.InvoiceExpanded),
+  { loading: () => <p role="status" className="text-[13px] text-ink-3">Loading invoice…</p> },
+);
 import { SUBSCRIPTIONS_CHANGED_EVENT } from "@/components/member-subscription-panel";
+import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { Field } from "@/components/ui/Field";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
@@ -23,6 +29,22 @@ import { Select } from "@/components/ui/Select";
 // management authority (settings.manage) and the expanded row asks
 // non-managers to escalate instead.
 
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  draft: "Draft",
+  issued: "Issued",
+  partial: "Partially paid",
+  paid: "Paid",
+  void: "Void",
+};
+
+const INVOICE_STATUS_TONE: Record<string, StatusTone> = {
+  draft: "neutral",
+  issued: "warn",
+  partial: "warn",
+  paid: "good",
+  void: "neutral",
+};
+
 export function MemberInvoicesPanel({
   memberId,
   canWrite,
@@ -31,6 +53,7 @@ export function MemberInvoicesPanel({
   canRefund,
   canReadPayments,
   timezone,
+  showHeading = true,
 }: {
   memberId: string;
   canWrite: boolean;
@@ -39,6 +62,9 @@ export function MemberInvoicesPanel({
   canRefund: boolean;
   canReadPayments: boolean;
   timezone: string;
+  // Owner 360 passes its own section heading; reception and the payer
+  // view keep the panel label.
+  showHeading?: boolean;
 }) {
   const router = useRouter();
   const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
@@ -107,9 +133,11 @@ export function MemberInvoicesPanel({
 
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        Invoices
-      </p>
+      {showHeading ? (
+        <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
+          Invoices
+        </p>
+      ) : null}
 
       {invoices === null ? (
         <p className="mt-2 text-[12px] text-ink-3">Loading invoices…</p>
@@ -129,16 +157,23 @@ export function MemberInvoicesPanel({
                     {invoice.invoiceNumber}
                   </span>
                 </span>
-                <span className="rounded-pill bg-deck px-2 py-0.5 text-[11px] font-medium text-ink-2">
-                  {invoice.status}
+                <span data-testid="member-invoice-status">
+                  <StatusBadge tone={INVOICE_STATUS_TONE[invoice.status] ?? "neutral"}>
+                    {INVOICE_STATUS_LABEL[invoice.status] ?? invoice.status}
+                  </StatusBadge>
                 </span>
               </div>
               <p className="mt-0.5 text-[12px] text-ink-3">
-                {formatDateIST(invoice.issuedOn)} · {invoice.locationName}
+                Issued {formatDateIST(invoice.issuedOn)} · {invoice.locationName}
                 {invoice.activityName ? ` · ${invoice.activityName}` : ""}
-                {invoice.outstandingPaise > 0
-                  ? ` · ${formatINR(invoice.outstandingPaise)} outstanding`
-                  : ""}
+              </p>
+              <p className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-ink-2 tabular-nums">
+                <span data-testid="member-invoice-due">
+                  Due {formatDateIST(invoice.dueOn)}
+                </span>
+                <span data-testid="member-invoice-balance">
+                  Balance {formatINR(invoice.outstandingPaise)}
+                </span>
               </p>
               <button
                 type="button"
@@ -147,7 +182,7 @@ export function MemberInvoicesPanel({
                 }
                 className="mt-1.5 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink"
               >
-                {expandedId === invoice.id ? "Hide" : "View"}
+                {expandedId === invoice.id ? "Hide" : "Open"}
               </button>
               {expandedId === invoice.id ? (
                 <InvoiceExpanded

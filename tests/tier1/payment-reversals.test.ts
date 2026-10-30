@@ -236,7 +236,7 @@ describe("reversePayment", () => {
     expect(await invoiceRow()).toEqual({ status: "issued", paidPaise: 0 });
   });
 
-  it("reconciles the fees ledger: reversals net out of collections", async () => {
+  it("states the reversal beside the gross collected figure and keeps the ledger's own arithmetic", async () => {
     // Re-record a payment so there is something to reverse in-window.
     const again = await recordPayment(ctx, {
       invoiceId,
@@ -257,8 +257,13 @@ describe("reversePayment", () => {
     // Every reversal in this file happened today: 40000 + 60000 + 20000.
     expect(overview.reversedPaise).toBe(120000);
     expect(overview.reversalCount).toBe(3);
-    // 100000 + 50000 recorded, minus 120000 reversed.
-    expect(overview.collectedPaise).toBe(30000);
+    // The collected figure is GROSS: 100000 + 50000 recorded. A reversal
+    // is ledger-only and is never netted into it — the approved
+    // contract says so in docs/design-system/screens.md (/owner/fees):
+    // "A reversal is stated beside the total and is ledger-only: it is
+    // never netted into the collected figure", and again in
+    // docs/design-system/flows.md O1.
+    expect(overview.collectedPaise).toBe(150000);
 
     const rows = await listHubTransactions(ctx, period);
     const reversalRow = rows.find((row) => row.kind === "reversal");
@@ -267,6 +272,9 @@ describe("reversePayment", () => {
       reason: "Part refunded in cash",
     });
     const ledgerTotal = rows.reduce((sum, row) => sum + row.amountPaise, 0);
-    expect(ledgerTotal).toBe(overview.collectedPaise);
+    // The LEDGER still nets its own rows: 150000 captured - 120000
+    // reversed = 30000. The collected figure above stays gross.
+    expect(ledgerTotal).toBe(30000);
+    expect(overview.collectedPaise).toBe(overview.reversedPaise + ledgerTotal);
   });
 });

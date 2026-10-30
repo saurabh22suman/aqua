@@ -31,12 +31,18 @@ export function OwnerCalendarAgenda({
   projections,
   categoryLabels,
   onSelectEvent,
+  day,
+  useProjectionTime = false,
 }: {
   /** The day's events, already ordered by the part of the day they
    * fall in — a session still running from last night comes first. */
   projections: DayProjection[];
   categoryLabels: Record<CalendarCategory, string>;
   onSelectEvent: (event: CalendarEvent) => void;
+  /** When supplied, a continuation from the previous day is stated. */
+  day?: string;
+  /** Show the part of the event that falls on this day (companion list). */
+  useProjectionTime?: boolean;
 }) {
   return (
     <ul className="divide-y divide-line" data-testid="calendar-agenda">
@@ -44,7 +50,12 @@ export function OwnerCalendarAgenda({
         const { event } = projection;
         const Icon = CATEGORY_ICON[event.category];
         const cancelled = isCancelled(event.status);
-        const meta = [event.capacityLabel, event.resourceLabel]
+        const continuation = Boolean(day && event.date !== day);
+        const meta = [
+          continuation ? "Continued from previous day" : null,
+          event.capacityLabel,
+          event.resourceLabel,
+        ]
           .filter(Boolean)
           .join(" · ");
         return (
@@ -59,19 +70,22 @@ export function OwnerCalendarAgenda({
               }`}
             >
               <span className="w-[92px] flex-none text-[12px] tabular-nums text-ink-2">
-                {timeRange(event.startMinutes, event.durationMinutes)}
+                {timeRange(
+                  useProjectionTime ? projection.startMinutes : event.startMinutes,
+                  useProjectionTime ? projection.durationMinutes : event.durationMinutes,
+                )}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-medium text-ink">
+                <span className="block break-words text-[14px] font-medium text-ink">
                   {event.title}
                 </span>
-                <span className="mt-0.5 flex items-center gap-1 text-[11.5px] text-ink-3">
-                  <Icon size={12} strokeWidth={2} aria-hidden="true" />
+                <span className="mt-0.5 flex items-start gap-1 text-[11.5px] text-ink-3">
+                  <Icon size={12} strokeWidth={2} aria-hidden="true" className="mt-[2px] flex-none" />
                   {categoryLabels[event.category]}
                   {cancelled ? ` · ${eventStatusLabel(event.status)}` : ""}
                 </span>
                 {meta ? (
-                  <span className="mt-0.5 block truncate text-[12px] text-ink-3">
+                  <span className="mt-0.5 block break-words text-[12px] text-ink-3">
                     {meta}
                   </span>
                 ) : null}

@@ -13,6 +13,7 @@ import { OwnerCalendarMonth } from "@/components/owner-calendar/owner-calendar-m
 import { OwnerCalendarToolbar } from "@/components/owner-calendar/owner-calendar-toolbar";
 import { sessionToCalendarEvent } from "@/components/owner-calendar/calendar-session-event";
 import type { CalendarEvent } from "@/components/owner-calendar/calendar-model";
+import { SectionHeading } from "@/components/ui/PageHeader";
 
 // U-04 — the owner schedule.
 //
@@ -74,6 +75,13 @@ export type OwnerScheduleGridProps = {
   /** The coach id behind each session, when the read exposes one. */
   coachIds?: Record<string, string>;
   canManagePrograms?: boolean;
+  /**
+   * Owner OpenPen (29 October 2026) — the exception-management
+   * destination is a write surface (/owner/sessions requires
+   * programs.write). Defaults to the batch-management gate so a caller
+   * that already passed the write-ish flag keeps the link.
+   */
+  canManageExceptions?: boolean;
 };
 
 const DEFAULT_CATEGORY_LABELS = { batch: "Batch", booking: "Booking" };
@@ -99,6 +107,7 @@ export function OwnerScheduleGrid({
   categoryLabels = DEFAULT_CATEGORY_LABELS,
   coachIds = {},
   canManagePrograms = false,
+  canManageExceptions = canManagePrograms,
 }: OwnerScheduleGridProps) {
   const anchorDate = anchor ?? days[0] ?? "";
   const selectedDate = days.includes(anchorDate)
@@ -125,17 +134,45 @@ export function OwnerScheduleGrid({
       />
     ) : null;
 
+  const viewTitle =
+    view === "day" ? "Day" : view === "week" ? "Week" : view === "month" ? "Month" : "Agenda";
+
+  const exceptionsLink = canManageExceptions ? (
+    <Link
+      href="/owner/sessions"
+      className="inline-flex min-h-11 items-center rounded-ctl border border-line bg-[var(--control-surface-action)] px-3 text-[13px] font-medium text-[var(--accent-ink)]"
+    >
+      Manage session exceptions
+    </Link>
+  ) : null;
+
+  // Two control groups: the location filter row and the shared
+  // navigation row keep a token gap between them.
   const toolbar = (
-    <OwnerCalendarToolbar
-      navigation={{
-        previous: { href: prevHref },
-        today: { href: todayHref },
-        next: { href: nextHref },
-      }}
-      rangeLabel={rangeLabel}
-      timezone={timezone}
-      toolbarExtra={viewTabs}
-    />
+    <div className="mt-4">
+      <OwnerCalendarToolbar
+        navigation={{
+          previous: { href: prevHref },
+          today: { href: todayHref },
+          next: { href: nextHref },
+        }}
+        rangeLabel={rangeLabel}
+        timezone={timezone}
+        labels={{
+          previous: `Previous ${(view === "agenda" ? "Week" : viewTitle).toLowerCase()}`,
+          today: "Today",
+          next: `Next ${(view === "agenda" ? "Week" : viewTitle).toLowerCase()}`,
+        }}
+        toolbarExtra={
+          viewTabs || exceptionsLink ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {viewTabs}
+              {exceptionsLink}
+            </div>
+          ) : undefined
+      }
+      />
+    </div>
   );
 
   if (view === "month") {
@@ -150,16 +187,19 @@ export function OwnerScheduleGrid({
           />
         ) : null}
         {toolbar}
-        {monthCells ? (
-          <OwnerCalendarMonth
-            cells={monthCells}
-            hrefFor={(date) =>
-              `/owner/schedule?view=week&date=${date}${
-                locationId ? `&location=${locationId}` : ""
-              }`
-            }
-          />
-        ) : null}
+        <div className="mt-4 rounded-card border border-line bg-paper p-5">
+          <SectionHeading title={`${viewTitle} · scheduled sessions`} />
+          {monthCells ? (
+            <OwnerCalendarMonth
+              cells={monthCells}
+              hrefFor={(date) =>
+                `/owner/schedule?view=week&date=${date}${
+                  locationId ? `&location=${locationId}` : ""
+                }`
+              }
+            />
+          ) : null}
+        </div>
         {canManagePrograms ? (<Link
           href="/owner/programs"
           className="mt-4 inline-flex min-h-[44px] items-center rounded-pill border border-line bg-paper px-4 text-[13px] font-medium text-ink"
@@ -196,23 +236,26 @@ export function OwnerScheduleGrid({
 
       {toolbar}
 
-      <OwnerCalendar
-        events={events}
-        days={days}
-        selectedDate={selectedDate}
-        todayDate={today ?? null}
-        view={view === "agenda" ? "agenda" : view === "day" ? "day" : "week"}
-        dayHrefs={dayHrefs}
-        labels={categoryLabels}
-        empty={{
-          title:
-            view === "day"
-              ? "No sessions scheduled on this day"
-              : "No sessions scheduled in this week",
-          body: "Sessions come from a batch's weekly schedule. Add or edit a batch to change what appears here.",
-          action: canManagePrograms ? { label: "Manage batches", href: "/owner/programs" } : undefined,
-        }}
-      />
+      <div className="mt-4 rounded-card border border-line bg-paper p-5">
+        <SectionHeading title={`${viewTitle} · scheduled sessions`} />
+        <OwnerCalendar
+          events={events}
+          days={days}
+          selectedDate={selectedDate}
+          todayDate={today ?? null}
+          view={view === "agenda" ? "agenda" : view === "day" ? "day" : "week"}
+          dayHrefs={dayHrefs}
+          labels={categoryLabels}
+          empty={{
+            title:
+              view === "day"
+                ? "No sessions scheduled on this day"
+                : "No sessions scheduled in this week",
+            body: "Sessions come from a batch's weekly schedule. Add or edit a batch to change what appears here.",
+            action: canManagePrograms ? { label: "Manage batches", href: "/owner/programs" } : undefined,
+          }}
+        />
+      </div>
 
       {canManagePrograms ? (<Link
         href="/owner/programs"

@@ -56,8 +56,8 @@ export function LocationManager({
       ))}
 
       {canWrite ? (
-        <section className="rounded-card border border-line bg-paper p-4">
-          <h2 className="font-display text-[15px] font-semibold">
+        <section className="rounded-card border border-line bg-paper p-5">
+          <h2 className="font-display text-[16px] font-semibold">
             {locations.length > 1 ? "Add another location" : "Add a second location"}
           </h2>
           <p className="mt-1 text-[12.5px] text-ink-3">
@@ -102,9 +102,9 @@ function LocationCard({
   }
 
   return (
-    <section className="rounded-card border border-line bg-paper p-4">
+    <section className="rounded-card border border-line bg-paper p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           {location.name}
         </h2>
         {location.isPrimary ? (
@@ -114,91 +114,100 @@ function LocationCard({
         ) : null}
       </div>
 
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Name</span>
-          <Input
-            value={name}
-            disabled={!canWrite}
-            onChange={(e) => setName(e.target.value)}
-            
-          />
-        </label>
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Kind</span>
-          <Select
-            value={kind}
-            disabled={!canWrite}
-            onChange={(e) => setKind(e.target.value as LocationAdminRow["kind"])}
-            
-          >
-            {KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-      </div>
-
-      {canWrite ? (
-        <>
+      <div className="mt-4 grid items-start gap-5 lg:grid-cols-2">
+        <div>
+          <h3 className="font-display text-[14px] font-semibold text-ink">
+            Site details
+          </h3>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {(
-              [
-                ["line1", "Address line 1"],
-                ["line2", "Address line 2"],
-                ["city", "City"],
-                ["state", "State"],
-                ["pincode", "PIN code"],
-              ] as Array<[keyof NonNullable<Address>, string]>
-            ).map(([field, label]) => (
-              <label key={field} className="block">
-                <span className="mb-0.5 block text-[11px] text-ink-3">
-                  {label}
-                </span>
-                <Input
-                  value={(address ?? {})[field] ?? ""}
-                  onChange={(e) => setField(field, e.target.value)}
-                  
-                />
-              </label>
-            ))}
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] text-ink-3">Name</span>
+              <Input
+                value={name}
+                disabled={!canWrite}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-0.5 block text-[11px] text-ink-3">Kind</span>
+              <Select
+                value={kind}
+                disabled={!canWrite}
+                onChange={(e) => setKind(e.target.value as LocationAdminRow["kind"])}
+              >
+                {KINDS.map((k) => (
+                  <option key={k.value} value={k.value}>
+                    {k.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            className="mt-3"
-            type="button"
-            disabled={busy || name.trim().length === 0}
-            onClick={() => {
-              setBusy(true);
-              setMessage(null);
-              void (async () => {
-                const result = await updateLocationAction({
-                  locationId: location.id,
-                  name,
-                  kind,
-                  address,
-                });
-                setMessage(result.ok ? "Saved." : result.error);
-                if (result.ok) onSaved("Location saved.");
-                setBusy(false);
-              })();
-            }}
-          >
-            {busy ? "Saving…" : "Save location"}
-          </Button>
-        </>
-      ) : null}
 
-      {message ? (
-        <p role="status" className="mt-2 text-[12px] text-ink-2">
-          {message}
-        </p>
-      ) : null}
+          {canWrite ? (
+            <>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {(
+                  [
+                    ["line1", "Address line 1"],
+                    ["line2", "Address line 2"],
+                    ["city", "City"],
+                    ["state", "State"],
+                    ["pincode", "PIN code"],
+                  ] as Array<[keyof NonNullable<Address>, string]>
+                ).map(([field, label]) => (
+                  <label key={field} className="block">
+                    <span className="mb-0.5 block text-[11px] text-ink-3">
+                      {label}
+                    </span>
+                    <Input
+                      value={(address ?? {})[field] ?? ""}
+                      onChange={(e) => setField(field, e.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+              <Button
+                variant="primary"
+                size="md"
+                className="mt-3"
+                type="button"
+                disabled={busy || name.trim().length === 0}
+                onClick={() => {
+                  setBusy(true);
+                  setMessage(null);
+                  void (async () => {
+                    const result = await updateLocationAction({
+                      locationId: location.id,
+                      name,
+                      kind,
+                      address,
+                    });
+                    setMessage(result.ok ? "Saved." : result.error);
+                    if (result.ok) onSaved("Location saved.");
+                    setBusy(false);
+                  })();
+                }}
+              >
+                {busy ? "Saving…" : "Save location"}
+              </Button>
+            </>
+          ) : null}
 
-      <BusinessHoursEditor locationId={location.id} canWrite={canWrite} />
+          {message ? (
+            <p role="status" className="mt-2 text-[12px] text-ink-2">
+              {message}
+            </p>
+          ) : null}
+        </div>
+
+        <div>
+          <h3 className="font-display text-[14px] font-semibold text-ink">
+            Weekly hours
+          </h3>
+          <BusinessHoursEditor locationId={location.id} canWrite={canWrite} />
+        </div>
+      </div>
     </section>
   );
 }

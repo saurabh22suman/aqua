@@ -27,9 +27,9 @@ export function NotificationInbox({ initial }: { initial: NotificationRow[] }) {
   const unread = rows.filter((r) => !r.readAt).length;
 
   return (
-    <section className="rounded-card border border-line bg-paper p-4">
+    <section className="rounded-card border border-line bg-paper p-5">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold text-ink">
           Your notifications
         </h2>
         <span className="text-[12px] text-ink-3">

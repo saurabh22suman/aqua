@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { requestLeaveAction } from "@/lib/actions/leave";
@@ -53,14 +54,20 @@ export function LeaveRequestForm({ types }: { types: LeaveTypeRow[] }) {
         </Select>
       </label>
       <div className="grid grid-cols-2 gap-3">
-        <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] text-ink-3">From</span>
-          <DateField value={fromDate} onChange={setFromDate} />
-        </label>
-        <label className="block min-w-0">
-          <span className="mb-1 block text-[11px] text-ink-3">To</span>
-          <DateField value={toDate} onChange={setToDate} />
-        </label>
+        <Field id="leave-from-date" label="From" required>
+          {(field) => (
+            <DateField
+              {...field}
+              value={fromDate}
+              onChange={setFromDate}
+            />
+          )}
+        </Field>
+        <Field id="leave-to-date" label="To" required>
+          {(field) => (
+            <DateField {...field} value={toDate} onChange={setToDate} />
+          )}
+        </Field>
       </div>
       <label className="block">
         <span className="mb-1 block text-[11px] text-ink-3">

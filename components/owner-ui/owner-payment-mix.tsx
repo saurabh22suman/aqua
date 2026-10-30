@@ -57,10 +57,10 @@ export function OwnerPaymentMix({
   return (
     <article
       data-testid="owner-payment-mix"
-      className={`min-w-0 rounded-card border border-line bg-paper p-4 ${className}`}
+      className={`min-w-0 rounded-card border border-line bg-paper p-5 ${className}`}
     >
       <header>
-        <h2 className="font-display text-[15px] font-semibold">Payment mix</h2>
+        <h2 className="font-display text-[16px] font-semibold">Payment mix</h2>
         <p className="mt-0.5 text-[12.5px] text-ink-3">
           {period.tabLabel} · captured payments
         </p>

@@ -1,0 +1,1551 @@
+{
+  "version": 1,
+  "status": "prepared",
+  "preparedAt": "2026-10-29T00:00:00+05:30",
+  "preparedBy": "independent owner UI QA (DeepSeek V4.1 Flash, opencode-go, max)",
+  "state": "LOCAL production capture candidate; visual review pending; no release approval",
+  "sourceReady": {
+    "sha256": "73e915727cb0bdfd6dd697d53f7c494ecc0c9ec0e3093015b3a643b9f5de0a27",
+    "at": "2026-10-30T13:34:05.503533+00:00"
+  },
+  "sourceShaSemantics": "Coordinator supplies a deterministic hash of the transferred, independently reviewed combined source/artifact. Record it in sourceReady.sha256 and pass --source-sha <hash> to the driver. The driver refuses otherwise.",
+  "baseRevision": "239357fe8347c110b1e4540f70b002c9793911d1",
+  "reference": {
+    "path": "docs/design/owner-openpen-20261029/reference/openpen-owner-design-review.html",
+    "sha256": "715baef09184504226f0cf9f995977fc21c770f24077209cada9e42e87fc3c33",
+    "views": 49,
+    "realRoutes": 40
+  },
+  "acceptanceMatrix": {
+    "path": "docs/design/owner-openpen-20261029/qa/acceptance-matrix.json",
+    "sha256": "a90ae9de803a8e2b3784efbf1eaaee310e953f12821dd19553e37144a3e64e98"
+  },
+  "themes": [
+    "mint",
+    "lavender"
+  ],
+  "viewports": {
+    "desktop-1280x900": {
+      "name": "desktop-1280x900",
+      "width": 1280,
+      "height": 900
+    },
+    "mobile-390x844": {
+      "name": "mobile-390x844",
+      "width": 390,
+      "height": 844
+    },
+    "tablet-1024x768": {
+      "name": "tablet-1024x768",
+      "width": 1024,
+      "height": 768
+    },
+    "short-desktop-1280x600": {
+      "name": "short-desktop-1280x600",
+      "width": 1280,
+      "height": 600
+    },
+    "below-breakpoint-1023x768": {
+      "name": "below-breakpoint-1023x768",
+      "width": 1023,
+      "height": 768
+    },
+    "above-breakpoint-1025x768": {
+      "name": "above-breakpoint-1025x768",
+      "width": 1025,
+      "height": 768
+    },
+    "zoom200-640x450": {
+      "name": "zoom200-640x450",
+      "width": 640,
+      "height": 450
+    },
+    "short-phone-390x640": {
+      "name": "short-phone-390x640",
+      "width": 390,
+      "height": 640
+    },
+    "landscape-640x360": {
+      "name": "landscape-640x360",
+      "width": 640,
+      "height": 360
+    },
+    "tablet-768x1024": {
+      "name": "tablet-768x1024",
+      "width": 768,
+      "height": 1024
+    }
+  },
+  "capturePolicy": {
+    "views": "All 49 reference views = 40 real routes + 9 reference-specific tab/selection states.",
+    "baseCaptures": "Every view at both themes and 1280x900 + 390x844 (196 view captures).",
+    "shell": "Additional shared-shell matrix below, both themes where meaningful.",
+    "naming": "qa/evidence/final/<theme>/<viewport>/<viewId>.png plus qa/final/json measurements; top/mid/bottom suffixes for scroll checks.",
+    "noWrites": "GET/read-only plus theme/appearance controls and non-submitting tab/search/select interactions only. No save, send, payment, credential, invite, approve, reverse, void or booking-create action.",
+    "dynamicFixtures": "Resolve memberId/batchId/enquiryId/staffId from the safe synthetic fixture DOM. Never hardcode a UUID.",
+    "sourceSha": "Final capture refuses to run unless --source-sha matches sourceReady.sha256."
+  },
+  "views": [
+    {
+      "viewId": "home",
+      "referenceIds": [
+        "home"
+      ],
+      "url": "/owner",
+      "fixture": "Seeded owner dashboard: collections, attention queue, sessions/capacity, charts; 90-day synthetic history.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "members",
+      "referenceIds": [
+        "members"
+      ],
+      "url": "/owner/members",
+      "fixture": "Seeded swimmer directory (40 members across locations); search + participation filter; facility cookie/query optional.",
+      "params": [],
+      "action": null,
+      "readiness": "[data-testid=\"members-list\"]",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "new-member",
+      "referenceIds": [
+        "new-member"
+      ],
+      "url": "/owner/members/new",
+      "fixture": "Bounded add-member form; locations + terminology; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "import",
+      "referenceIds": [
+        "import"
+      ],
+      "url": "/owner/members/import",
+      "fixture": "CSV import study/steps; no file upload or save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "member",
+      "referenceIds": [
+        "member"
+      ],
+      "url": "/owner/members/{memberId}",
+      "fixture": "First seeded member UUID resolved from the members directory DOM; overview tab.",
+      "params": "memberId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "edit-member",
+      "referenceIds": [
+        "edit-member"
+      ],
+      "url": "/owner/members/{memberId}/edit",
+      "fixture": "Same seeded member; personal-details editor; no save.",
+      "params": "memberId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "member-payments",
+      "referenceIds": [
+        "member-payments"
+      ],
+      "url": "/owner/members/{memberId}?tab=payments",
+      "fixture": "Same seeded member; invoices/receipts tab.",
+      "params": "memberId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "member-progress",
+      "referenceIds": [
+        "member-progress"
+      ],
+      "url": "/owner/members/{memberId}?tab=progress",
+      "fixture": "Same seeded member; read-only assessment/progress tab; swim.levels feature.",
+      "params": "memberId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "member-notes",
+      "referenceIds": [
+        "member-notes"
+      ],
+      "url": "/owner/members/{memberId}?tab=notes",
+      "fixture": "Same seeded member; internal notes editor/history; no save.",
+      "params": "memberId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "member-docs",
+      "referenceIds": [
+        "member-docs"
+      ],
+      "url": "/owner/members/{memberId}?tab=documents",
+      "fixture": "Same seeded member; release-unavailable documents state; no upload.",
+      "params": "memberId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "fees",
+      "referenceIds": [
+        "fees"
+      ],
+      "url": "/owner/fees?tab=dues",
+      "fixture": "Seeded invoices/dues; facility/period filters default; owner finance permissions.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "fees-overview",
+      "referenceIds": [
+        "fees-overview"
+      ],
+      "url": "/owner/fees",
+      "fixture": "Fees overview default tab; period collections vs current balances.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "fees-transactions",
+      "referenceIds": [
+        "fees-transactions"
+      ],
+      "url": "/owner/fees?tab=transactions",
+      "fixture": "Seeded recorded payments/receipts; method/group filters optional.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "fees-invoices",
+      "referenceIds": [
+        "fees-invoices"
+      ],
+      "url": "/owner/fees?tab=invoices",
+      "fixture": "Seeded invoice ledger; invoice expand is the selected-invoice state.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "fees-plans",
+      "referenceIds": [
+        "fees-plans"
+      ],
+      "url": "/owner/fees?tab=plans",
+      "fixture": "Seeded plan catalogue; settings.manage controls the manage link.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "invoice",
+      "referenceIds": [
+        "invoice"
+      ],
+      "url": "/owner/fees?tab=invoices",
+      "fixture": "First invoice row; expand read-only invoice detail; no payment/void/reversal.",
+      "params": [],
+      "action": "expand-first-invoice",
+      "readiness": "main h1",
+      "states": [
+        "expanded"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "reports",
+      "referenceIds": [
+        "reports"
+      ],
+      "url": "/owner/reports",
+      "fixture": "Seeded attendance/enquiry/retention/coach/utilisation/money analytics; 30-day default period.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "collections",
+      "referenceIds": [
+        "collections"
+      ],
+      "url": "/owner/reports/collections",
+      "fixture": "Seeded day collections and cash-count evidence; no confirm/reopen.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "programs",
+      "referenceIds": [
+        "programs"
+      ],
+      "url": "/owner/programs",
+      "fixture": "Seeded programs/batches/coaches/locations; add/edit controls read-only.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "batch",
+      "referenceIds": [
+        "batch"
+      ],
+      "url": "/owner/batches/{batchId}",
+      "fixture": "First seeded batch UUID resolved from programs DOM; roster/waitlist.",
+      "params": "batchId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "schedule",
+      "referenceIds": [
+        "schedule"
+      ],
+      "url": "/owner/schedule",
+      "fixture": "Seeded week grid; location/date query; overlap/duration/clash data.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "sessions",
+      "referenceIds": [
+        "sessions"
+      ],
+      "url": "/owner/sessions",
+      "fixture": "Seeded session exceptions/register state; attendance/programs permissions.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "bookings",
+      "referenceIds": [
+        "bookings"
+      ],
+      "url": "/owner/bookings",
+      "fixture": "pool.booking feature; seeded facilities/prices/day board; quote read-only.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "enquiries",
+      "referenceIds": [
+        "enquiries"
+      ],
+      "url": "/owner/enquiries",
+      "fixture": "Seeded enquiry board/stages; location filter.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "enquiry",
+      "referenceIds": [
+        "enquiry"
+      ],
+      "url": "/owner/enquiries/{enquiryId}",
+      "fixture": "First seeded enquiry UUID resolved from enquiries DOM; detail/stage.",
+      "params": "enquiryId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "announcements",
+      "referenceIds": [
+        "announcements"
+      ],
+      "url": "/owner/announcements",
+      "fixture": "Seeded announcement history + personal notifications; messaging.send gates composer; no send.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "staff",
+      "referenceIds": [
+        "staff"
+      ],
+      "url": "/owner/staff",
+      "fixture": "Seeded staff + memberships; invite/manage links; no mutation.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "new-staff",
+      "referenceIds": [
+        "new-staff"
+      ],
+      "url": "/owner/staff/new",
+      "fixture": "Bounded staff record form; terminology; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "staff-detail",
+      "referenceIds": [
+        "staff-detail"
+      ],
+      "url": "/owner/staff/{staffId}",
+      "fixture": "First seeded staff UUID resolved from staff DOM; small read-only profile.",
+      "params": "staffId",
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "roster",
+      "referenceIds": [
+        "roster"
+      ],
+      "url": "/owner/staff/roster",
+      "fixture": "Seeded roster week/shift templates/staff/locations; week/location query.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "leave",
+      "referenceIds": [
+        "leave"
+      ],
+      "url": "/owner/staff/leave",
+      "fixture": "Seeded leave requests/types; no approve/reject.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "invitations",
+      "referenceIds": [
+        "invitations"
+      ],
+      "url": "/owner/staff/invitations",
+      "fixture": "Seeded invitations/access states; no send.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "new-invite",
+      "referenceIds": [
+        "new-invite"
+      ],
+      "url": "/owner/staff/invitations/new",
+      "fixture": "Bounded invite form; locations; no send.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "checkin",
+      "referenceIds": [
+        "checkin"
+      ],
+      "url": "/owner/staff/check-in-qr",
+      "fixture": "Staff check-in poster/QR; print/read-only; no external integration.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "settings",
+      "referenceIds": [
+        "settings"
+      ],
+      "url": "/owner/settings",
+      "fixture": "Settings categories + onboarding checklist; dashboard/bookings permissions/features.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "academy",
+      "referenceIds": [
+        "academy"
+      ],
+      "url": "/owner/settings/academy",
+      "fixture": "Seeded tenant profile; bounded editor; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "activities",
+      "referenceIds": [
+        "activities"
+      ],
+      "url": "/owner/settings/activities",
+      "fixture": "Seeded locations/activities; inline editor; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "alerts",
+      "referenceIds": [
+        "alerts"
+      ],
+      "url": "/owner/settings/alerts",
+      "fixture": "Fixed absence rule + editable threshold; seeded value; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "branding",
+      "referenceIds": [
+        "branding"
+      ],
+      "url": "/owner/settings/branding",
+      "fixture": "Seeded tenant branding; bounded editor + preview; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "configuration",
+      "referenceIds": [
+        "configuration"
+      ],
+      "url": "/owner/settings/configuration",
+      "fixture": "Seeded owner-visible configuration; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "holidays",
+      "referenceIds": [
+        "holidays"
+      ],
+      "url": "/owner/settings/holidays",
+      "fixture": "Seeded holidays/closures; add/edit controls read-only.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "locations",
+      "referenceIds": [
+        "locations"
+      ],
+      "url": "/owner/settings/locations",
+      "fixture": "Seeded locations/business hours; multi-location controls; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "menu",
+      "referenceIds": [
+        "menu"
+      ],
+      "url": "/owner/settings/menu",
+      "fixture": "Seeded caf\u00e9 menu/categories/items; owner settings only; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "payment-qrs",
+      "referenceIds": [
+        "payment-qrs"
+      ],
+      "url": "/owner/settings/payment-qrs",
+      "fixture": "Seeded UPI/image QR records; no PSP or payment action.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "plans",
+      "referenceIds": [
+        "plans"
+      ],
+      "url": "/owner/settings/plans",
+      "fixture": "settings.manage gate; seeded plans/templates/locations/activities; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "skills",
+      "referenceIds": [
+        "skills"
+      ],
+      "url": "/owner/settings/skills",
+      "fixture": "swim.levels feature + levels.write; seeded ladders; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "terminology",
+      "referenceIds": [
+        "terminology"
+      ],
+      "url": "/owner/settings/terminology",
+      "fixture": "Seeded locale vocabulary; locale query; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "booking-prices",
+      "referenceIds": [
+        "booking-prices"
+      ],
+      "url": "/owner/settings/booking-prices",
+      "fixture": "Seeded booking price rules/activities; no save; missing-price refusal checked on Bookings.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    },
+    {
+      "viewId": "onboarding",
+      "referenceIds": [
+        "onboarding"
+      ],
+      "url": "/owner/onboarding",
+      "fixture": "Onboarding checklist/register setup; seeded but post-onboarding; no save.",
+      "params": [],
+      "action": null,
+      "readiness": "main h1",
+      "states": [
+        "populated"
+      ],
+      "capture": true
+    }
+  ],
+  "extras": [
+    {
+      "checkId": "home-monthly-collections",
+      "route": "/owner?period=month",
+      "referenceIds": [
+        "home"
+      ],
+      "fixture": "Seeded monthly collections trend + same-period payment mix.",
+      "action": null,
+      "states": [
+        "monthly"
+      ]
+    },
+    {
+      "checkId": "home-monthly-attendance",
+      "route": "/owner?period=month&trend=attendance",
+      "referenceIds": [
+        "home"
+      ],
+      "fixture": "Seeded monthly attendance trend; unknown is not zero.",
+      "action": null,
+      "states": [
+        "monthly-alt-metric"
+      ]
+    },
+    {
+      "checkId": "schedule-day",
+      "route": "/owner/schedule?view=day",
+      "referenceIds": [
+        "schedule"
+      ],
+      "fixture": "Seeded day view.",
+      "action": null,
+      "states": [
+        "day"
+      ]
+    },
+    {
+      "checkId": "schedule-week",
+      "route": "/owner/schedule?view=week",
+      "referenceIds": [
+        "schedule"
+      ],
+      "fixture": "Seeded week view.",
+      "action": null,
+      "states": [
+        "week"
+      ]
+    },
+    {
+      "checkId": "schedule-agenda",
+      "route": "/owner/schedule?view=agenda",
+      "referenceIds": [
+        "schedule"
+      ],
+      "fixture": "Seeded phone agenda view.",
+      "action": null,
+      "states": [
+        "agenda"
+      ]
+    },
+    {
+      "checkId": "bookings-quote",
+      "route": "/owner/bookings",
+      "referenceIds": [
+        "bookings"
+      ],
+      "fixture": "Seeded facility/date/slot; change slot and wait for server quote. No create/cancel.",
+      "action": "choose-booking-slot",
+      "states": [
+        "selected-slot",
+        "server-quote"
+      ]
+    },
+    {
+      "checkId": "bookings-price-refusal",
+      "route": "/owner/bookings",
+      "referenceIds": [
+        "bookings"
+      ],
+      "fixture": "Probe seeded slots for a missing price quote; never submit. Record NOT OBSERVED if every seeded slot prices.",
+      "action": "probe-booking-price-refusal",
+      "states": [
+        "price-refusal-conditional"
+      ]
+    },
+    {
+      "checkId": "members-empty-search",
+      "route": "/owner/members",
+      "referenceIds": [
+        "members"
+      ],
+      "fixture": "Type an impossible search string in the seeded directory. No write.",
+      "action": "member-search-no-results",
+      "states": [
+        "empty"
+      ]
+    },
+    {
+      "checkId": "member-documents-unavailable",
+      "route": "/owner/members/{memberId}?tab=documents",
+      "referenceIds": [
+        "member-docs"
+      ],
+      "fixture": "Seeded member; documents release-unavailable panel.",
+      "action": null,
+      "states": [
+        "unavailable-capability"
+      ]
+    },
+    {
+      "checkId": "fees-invoice-expanded",
+      "route": "/owner/fees?tab=invoices",
+      "referenceIds": [
+        "invoice"
+      ],
+      "fixture": "Expand first seeded invoice; read-only.",
+      "action": "expand-first-invoice",
+      "states": [
+        "expanded"
+      ]
+    },
+    {
+      "checkId": "member-notes-editor",
+      "route": "/owner/members/{memberId}?tab=notes",
+      "referenceIds": [
+        "member-notes"
+      ],
+      "fixture": "Seeded member; notes editor + history; no save.",
+      "action": null,
+      "states": [
+        "editor"
+      ]
+    }
+  ],
+  "shellChecks": [
+    {
+      "checkId": "shell-1024x768",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "tablet-1024x768",
+          "width": 1024,
+          "height": 768
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "desktop sidebar visible at the installed lg breakpoint",
+        "sticky header and sidebar geometry stable",
+        "no page horizontal scroll",
+        "nav and sign-out reachable",
+        "ledger remains usable"
+      ]
+    },
+    {
+      "checkId": "shell-breakpoint-1023x768",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "below-breakpoint-1023x768",
+          "width": 1023,
+          "height": 768
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "no desktop sidebar below the installed breakpoint",
+        "four-item mobile nav present and reachable",
+        "no clipped account/search/sign-out"
+      ]
+    },
+    {
+      "checkId": "shell-breakpoint-1025x768",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "above-breakpoint-1025x768",
+          "width": 1025,
+          "height": 768
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "desktop shell at 1025px",
+        "no 1px overflow/clipping at the transition",
+        "header/sidebar sticky"
+      ]
+    },
+    {
+      "checkId": "shell-short-1280x600",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "short-desktop-1280x600",
+          "width": 1280,
+          "height": 600
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "only the sidebar navigation region scrolls",
+        "brand/account/sign-out remain reachable",
+        "header does not cover content or focus"
+      ]
+    },
+    {
+      "checkId": "shell-zoom200-reflow",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "zoom200-640x450",
+          "width": 640,
+          "height": 450
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "200% reflow emulated by 640x450 CSS viewport",
+        "no horizontal page scroll",
+        "navigation and sign-out reachable"
+      ],
+      "method": "CSS viewport equivalence for 200% browser zoom at 1280x900; document that this is emulation, not a browser zoom setting."
+    },
+    {
+      "checkId": "shell-members-scroll",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "desktop-1280x900",
+          "width": 1280,
+          "height": 900
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "top/mid/bottom screenshots over main content",
+        "sidebar and header positions stable within rounding tolerance",
+        "selected nav remains correct",
+        "table sideways scroll cannot move the page sideways"
+      ]
+    },
+    {
+      "checkId": "shell-sidebar-nav-overflow",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "short-desktop-1280x600",
+          "width": 1280,
+          "height": 600
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "scroll the nav scroller only",
+        "last nav item reachable",
+        "brand above and account/exit below stay fixed and reachable"
+      ]
+    },
+    {
+      "checkId": "shell-mobile-nav",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "mobile-390x844",
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "exactly four bottom-nav items",
+        "safe-area bottom clearance",
+        "search/account reachable without a fifth nav item",
+        "no desktop sidebar"
+      ]
+    },
+    {
+      "checkId": "shell-keyboard-focus",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "desktop-1280x900",
+          "width": 1280,
+          "height": 900
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "focus search, theme toggle, active nav and last nav item",
+        "visible focus ring >=2px and not clipped by sticky header/sidebar",
+        "no focus trap; Escape/dialog behavior intact where present"
+      ]
+    },
+    {
+      "checkId": "shell-theme-parity",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "desktop-1280x900",
+          "width": 1280,
+          "height": 900
+        }
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "assertions": [
+        "identical DOM/markup and layout geometry across presets within 1px",
+        "only token-carried colours differ",
+        "status colours retain meaning"
+      ]
+    },
+    {
+      "checkId": "shell-back-scroll",
+      "route": "/owner/members",
+      "viewports": [
+        {
+          "name": "desktop-1280x900",
+          "width": 1280,
+          "height": 900
+        }
+      ],
+      "themes": [
+        "lavender"
+      ],
+      "assertions": [
+        "scroll Members, open a member, use browser Back",
+        "intended list position restored",
+        "no double scroll owner"
+      ]
+    }
+  ],
+  "permissionChecks": [
+    {
+      "checkId": "accountant-home",
+      "phoneRole": "accountant",
+      "route": "/owner",
+      "expected": "redirect to /owner/fees; no dashboard figures",
+      "viewports": [
+        "desktop-1280x900",
+        "mobile-390x844"
+      ],
+      "themes": [
+        "lavender",
+        "mint"
+      ]
+    },
+    {
+      "checkId": "accountant-members",
+      "phoneRole": "accountant",
+      "route": "/owner/members",
+      "expected": "authorized destination renders; no members.write controls offered",
+      "viewports": [
+        "desktop-1280x900",
+        "mobile-390x844"
+      ],
+      "themes": [
+        "lavender"
+      ]
+    },
+    {
+      "checkId": "accountant-fees",
+      "phoneRole": "accountant",
+      "route": "/owner/fees?tab=dues",
+      "expected": "authorized finance read; no settings manage controls; no mutation",
+      "viewports": [
+        "desktop-1280x900",
+        "mobile-390x844"
+      ],
+      "themes": [
+        "lavender",
+        "mint"
+      ]
+    },
+    {
+      "checkId": "accountant-reports",
+      "phoneRole": "accountant",
+      "route": "/owner/reports",
+      "expected": "authorized reports; financial labels correct; no hidden routes revealed",
+      "viewports": [
+        "desktop-1280x900"
+      ],
+      "themes": [
+        "lavender"
+      ]
+    },
+    {
+      "checkId": "accountant-settings-denied",
+      "phoneRole": "accountant",
+      "route": "/owner/settings",
+      "expected": "404 without leaking settings content",
+      "viewports": [
+        "desktop-1280x900"
+      ],
+      "themes": [
+        "lavender"
+      ]
+    },
+    {
+      "checkId": "accountant-shell-exit",
+      "phoneRole": "accountant",
+      "route": "/owner/fees",
+      "expected": "only authorized nav destinations; sign-out reachable at both viewports",
+      "viewports": [
+        "desktop-1280x900",
+        "mobile-390x844"
+      ],
+      "themes": [
+        "lavender",
+        "mint"
+      ]
+    }
+  ],
+  "stateChecks": [
+    {
+      "checkId": "empty-members-search",
+      "route": "/owner/members",
+      "method": "client-side search only",
+      "expected": "deliberate empty state keeps filters/page context and offers recovery; no fake zero financial figure",
+      "availability": "available"
+    },
+    {
+      "checkId": "loading-members",
+      "route": "/owner/members",
+      "method": "slow client-side navigation with Next loading.tsx; capture only if visible >=250ms",
+      "expected": "loading keeps selected location/filters/heading; no layout jump",
+      "availability": "conditional"
+    },
+    {
+      "checkId": "error-owner-read",
+      "route": "/owner/members",
+      "method": "no mutation; only if a real read failure is observed",
+      "expected": "failed section + retry; unreadable balance is not zero",
+      "availability": "unavailable-no-owner-error-boundary"
+    },
+    {
+      "checkId": "booking-price-refusal",
+      "route": "/owner/bookings",
+      "method": "select slots read-only; never submit",
+      "expected": "missing price still refuses create; quoted price cannot be zero/invented",
+      "availability": "conditional-seeded-data"
+    },
+    {
+      "checkId": "long-labels-amounts",
+      "route": "/owner/members + /owner/fees",
+      "method": "use actual seeded longest names/amounts; no DOM text injection",
+      "expected": "no collision/truncation of decisions; tabular amounts right-aligned",
+      "availability": "conditional-seeded-data"
+    },
+    {
+      "checkId": "disabled-pending",
+      "route": "/owner/bookings + /owner/members/new",
+      "method": "observe quote/pending states without submitting",
+      "expected": "pending/disabled feedback is visible and input is preserved",
+      "availability": "conditional"
+    }
+  ],
+  "unavailable": [
+    {
+      "capability": "owner error boundary",
+      "reason": "No app/(owner) error.tsx exists in the baseline; a fabricated 500 or injected error is not acceptable evidence."
+    },
+    {
+      "capability": "member document upload",
+      "reason": "Reference explicitly says uploads are unavailable in this release; the honest unavailable state is the acceptance."
+    },
+    {
+      "capability": "external calendar/payment/messaging integrations",
+      "reason": "Reference is a design study, not a live integration; no provider is activated and no real message/payment is sent."
+    },
+    {
+      "capability": "missing-price fixture mutation",
+      "reason": "Seeded price rules are read-only for QA; if no seeded slot refuses, record NOT OBSERVED rather than mutating data."
+    },
+    {
+      "capability": "browser-native 200% zoom",
+      "reason": "Final run emulates 200% reflow with a 640x450 CSS viewport; browser UI zoom is not driven by Playwright."
+    },
+    {
+      "capability": "prototype-only capabilities",
+      "reason": "Any capability shown only in the reference but absent from the real route is recorded as an explicit deviation, not invented."
+    }
+  ],
+  "responsiveChecks": {
+    "group": "responsive",
+    "viewports": [
+      "short-phone-390x640",
+      "landscape-640x360",
+      "tablet-768x1024"
+    ],
+    "themes": [
+      "mint",
+      "lavender"
+    ],
+    "forms": [
+      {
+        "viewId": "responsive-member-new",
+        "route": "/owner/members/new",
+        "fixture": "Owner add-member form; seeded locations; no save."
+      },
+      {
+        "viewId": "responsive-member-edit",
+        "route": "/owner/members/{memberId}/edit",
+        "fixture": "First seeded member edit form; no save."
+      },
+      {
+        "viewId": "responsive-staff-invite",
+        "route": "/owner/staff/invitations/new",
+        "fixture": "Owner staff-invitation form; no invite or message is sent."
+      },
+      {
+        "viewId": "responsive-booking-price",
+        "route": "/owner/settings/booking-prices",
+        "fixture": "Actual seeded booking-price editor; no save; no positive price fixture is invented."
+      },
+      {
+        "viewId": "responsive-holiday",
+        "route": "/owner/settings/holidays",
+        "fixture": "Seeded holidays plus add disclosure; no holiday is added."
+      },
+      {
+        "viewId": "responsive-branding",
+        "route": "/owner/settings/branding",
+        "fixture": "Seeded branding editor plus preview; no save."
+      }
+    ],
+    "sharedShell": "/owner/members at all three viewports",
+    "assertions": [
+      "page and shell fit the viewport without horizontal page overflow",
+      "the last reachable form control scrolls into the viewport",
+      "opening existing details is read-only; Escape leaves no modal",
+      "keyboard Tab reaches a real form control or shell navigation and an action",
+      "prefers-reduced-motion media matches and computed transition/animation durations collapse",
+      "illustration drift is absent or transform/transition-free",
+      "no submit/save/send/payment or record creation",
+      "honest unresolved fixture/permission state is BLOCKED or UNTESTED, never a fabricated populated form"
+    ],
+    "notTested": [
+      "physical Xiaomi/Chrome-device behavior",
+      "OS keyboard open/close and physical keyboard",
+      "TalkBack/VoiceOver or other AT",
+      "actual browser zoom or 200% text spacing",
+      "booking-price positive quote fixture (none is fabricated)"
+    ]
+  },
+  "execution": {
+    "preparedOnly": false,
+    "prerequisites": [
+      "Coordinator transfers independently reviewed source for the exact combined artifact.",
+      "Record SOURCE_READY sha256 in sourceReady.",
+      "Build/verify the production artifact so dev/production differences can be reported.",
+      "Use lane_job.py for every heavy job; never hold an idle preview server."
+    ],
+    "preferredCommands": [
+      "python3 .opencode/scripts/lane_job.py exec pnpm check:bundle",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group routes --theme lavender --viewport desktop-1280x900 --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group routes --theme mint --viewport desktop-1280x900 --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group routes --theme lavender --viewport mobile-390x844 --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group routes --theme mint --viewport mobile-390x844 --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group states --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group shell --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group permission --source-sha <SHA>",
+      "python3 .opencode/scripts/lane_job.py exec python3 .opencode/scripts/owner_preview.py --port 3275 --production --timeout 900 --out .playwright-mcp/owner-openpen-final -- env AQUA_E2E_PRODUCTION=1 node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-owner.ts --final --group responsive --source-sha <SHA>",
+      "for theme in lavender mint; do for viewport in desktop-1280x900 mobile-390x844; do AQUA_E2E_OUT=.playwright-mcp/owner-openpen-compare python3 .opencode/scripts/lane_job.py exec node --experimental-strip-types tests/owner-openpen-20261029/reviewer/compare-reference.ts --theme \"$theme\" --viewport \"$viewport\"; done; done",
+      "cp -r .playwright-mcp/owner-openpen-final docs/design/owner-openpen-20261029/qa/evidence/final  # only after every preview exits"
+    ],
+    "fallback": "If a production budget receipt cannot be produced, run dev explicitly and report both modes where they differ; never call a dev-only observation production.",
+    "groups": {
+      "routes-desktop-lavender": {
+        "args": "--group routes --theme lavender --viewport desktop-1280x900",
+        "views": 49,
+        "captures": 49
+      },
+      "routes-desktop-mint": {
+        "args": "--group routes --theme mint --viewport desktop-1280x900",
+        "views": 49,
+        "captures": 49
+      },
+      "routes-mobile-lavender": {
+        "args": "--group routes --theme lavender --viewport mobile-390x844",
+        "views": 49,
+        "captures": 49
+      },
+      "routes-mobile-mint": {
+        "args": "--group routes --theme mint --viewport mobile-390x844",
+        "views": 49,
+        "captures": 49
+      },
+      "states": {
+        "args": "--group states",
+        "note": "empty/search-no-results, conditional loading, invoice expansion, documents unavailable, booking refusal; error recorded UNTESTED (no owner error boundary)"
+      },
+      "shell": {
+        "args": "--group shell",
+        "note": "1024/1023/1025, 1280x600, 200% reflow, Members top/mid/bottom viewport screenshots, independent nav scroll/last item/sign-out, keyboard/focus, theme parity, Back scroll"
+      },
+      "permission": {
+        "args": "--group permission",
+        "note": "accountant redirect, authorized reads, settings 404, limited nav, shell sign-out"
+      },
+      "responsive": {
+        "args": "--group responsive",
+        "note": "supplemental read-only forms and shared shell at 390x640, 640x360 and 768x1024 in both themes; real Member add/edit, Staff invitation, booking-price, Holiday and Branding forms; reduced-motion computed/media checks and keyboard reachability. Viewport proxies are not physical device/OS keyboard/AT/actual zoom."
+      },
+      "reference": {
+        "args": "capture-reference.ts --all",
+        "note": "already rendered for coordinator inputs; rerun only if reference hash changes"
+      },
+      "compare": {
+        "args": "compare-reference.ts --theme <theme> --viewport <viewport>",
+        "note": "four runs after routes + reference evidence exist; side-by-side only, no visual verdict"
+      }
+    },
+    "notes": [
+      "Run one bounded preview per routes/state/shell/permission/responsive group; the driver and owner_preview clean only owned descendants.",
+      "Raw production captures go to ignored .playwright-mcp/owner-openpen-final; do not copy anything into unignored docs between preview groups. Copy selected evidence only after ALL preview runs have exited, otherwise the budget-build fingerprint is invalidated.",
+      "Final capture refuses unless qa/final-matrix.json sourceReady.sha256 is set and --source-sha matches.",
+      "The reference input render is already ready and separate from final app review.",
+      "Every app record starts visualReviewed=false / visualVerdict=PENDING; independent review and human approval remain separate.",
+      "The final cp command must run only after every routes/states/shell/permission preview has exited; copying evidence between groups changes the source snapshot and invalidates the build receipt."
+    ]
+  },
+  "verdictPolicy": {
+    "verdicts": [
+      "PASS",
+      "CHANGES REQUIRED",
+      "BLOCKED",
+      "UNTESTED"
+    ],
+    "separateFunctional": true,
+    "separateVisual": true,
+    "humanApproval": false,
+    "rule": "Any visible hierarchy/spacing/overflow/reference mismatch can be CHANGES REQUIRED even when functional tests are green. Missing/unavailable state is UNTESTED or BLOCKED, never PASS."
+  },
+  "referenceInputs": {
+    "status": "READY",
+    "manifest": ".playwright-mcp/reference-render/manifest.json",
+    "root": ".playwright-mcp/reference-render",
+    "capturedAt": "2026-10-29",
+    "views": [
+      "home",
+      "members",
+      "fees",
+      "fees-invoices",
+      "invoice",
+      "bookings",
+      "settings"
+    ],
+    "themes": [
+      "mint",
+      "lavender"
+    ],
+    "layouts": [
+      "desktop (Chrome 1280x900)",
+      "phone (built-in Layout select; Chrome 390x844)"
+    ],
+    "captures": 28,
+    "failures": 0,
+    "sourceSha256": "715baef09184504226f0cf9f995977fc21c770f24077209cada9e42e87fc3c33",
+    "frameNote": "Prototype .ks-product frame dimensions are recorded per capture; outer review controls were hidden, not scaled. Desktop frame heights exceed 900 and phone frame heights exceed 844; viewport PNGs intentionally crop at the requested size.",
+    "finalAllViewsCommand": "AQUA_E2E_OUT=.playwright-mcp/reference-render node --experimental-strip-types tests/owner-openpen-20261029/reviewer/capture-reference.ts --all --all-views"
+  },
+  "driverValidation": {
+    "matrix": "49/49 reference views, 40/40 real routes, 11 extras, 11 shell, 6 permission, 6 state",
+    "typecheck": "pnpm exec tsc --noEmit passed after final-driver implementation",
+    "lint": "focused eslint passed for capture-owner.ts, capture-reference.ts, compare-reference.ts",
+    "finalAppCapturesRun": false,
+    "baselineRerunForDriver": false
+  },
+  "driverReady": true,
+  "driverGroups": [
+    "routes (4 theme/viewport runs)",
+    "states",
+    "shell",
+    "permission",
+    "responsive (supplemental forms / reduced motion / keyboard)"
+  ],
+  "comparisonReady": {
+    "script": "tests/owner-openpen-20261029/reviewer/compare-reference.ts",
+    "inputs": [
+      "app routes evidence",
+      "reference-render evidence"
+    ],
+    "note": "Side-by-side only; visualReviewed remains false until independent review."
+  },
+  "mobileQA": {
+    "status": "READY_FOR_COMBINED_SOURCE",
+    "matrix": "docs/design/owner-openpen-20261029/mobile-20261029/mobile-matrix.json",
+    "handoff": "docs/design/owner-openpen-20261029/mobile-20261029/qa-handoff.md",
+    "driver": "tests/owner-openpen-20261029/reviewer/mobile-qa.ts",
+    "coverageTest": "tests/owner-openpen-20261029/reviewer/mobile-matrix.test.ts",
+    "sharedCaptures": 98,
+    "cases": 15,
+    "sourceReady": null,
+    "note": "Reviewer preparation only; final combined mobile captures remain gated on SOURCE_READY and the transferred combined source."
+  },
+  "coordinatorNote": "Currentuncommittedcombinedsnapshot; existingcriticalbackendproposalsandfullgatesremainopen. Drivercapturesnotvisualapproval; useindependentreviewrecord."
+}

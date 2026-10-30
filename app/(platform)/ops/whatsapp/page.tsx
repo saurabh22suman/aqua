@@ -3,6 +3,7 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { mockMessagingEnabled } from "@/lib/messaging/provider";
 import { listRecentMessages } from "@/db/platform-messages";
 import { listTenants } from "@/db/platform-tenants";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { WhatsAppMock } from "./whatsapp-mock";
 import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 import { OpsWriteGate } from "@/components/ops/ops-display";
@@ -22,9 +23,10 @@ export default async function WhatsAppMockPage() {
   const canWrite = status.role === "admin";
 
   const [messages, tenantsResult] = await Promise.all([
-    listRecentMessages(50),
-    listTenants({ limit: 200, offset: 0 }),
+    runOpsGlobalRead("message.list", () => listRecentMessages(50), "ops_page"),
+    runOpsGlobalRead("tenant.list", () => listTenants({ limit: 200, offset: 0 }), "ops_page"),
   ]);
+  if (!messages || !tenantsResult) redirect("/ops/login");
 
   return (
     <OpsPage>

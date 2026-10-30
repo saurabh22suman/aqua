@@ -65,8 +65,44 @@ export function ActivityManager({
   }
 
   return (
-    <div className="space-y-8">
-      <section className="rounded-card bg-paper border border-line p-5 space-y-3">
+    <div className="space-y-5">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
+        Existing activities
+      </h2>
+      {locations.map((location) => {
+        const rows = byLocation.get(location.id) ?? [];
+        return (
+          <section key={location.id}>
+            <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+              {location.name}
+              {location.isPrimary ? " · primary" : ""}
+            </h2>
+            {rows.length === 0 ? (
+              <p className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
+                No activities at this facility yet.
+              </p>
+            ) : (
+              <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
+                {rows.map((activity) => (
+                  <ActivityRowEditor
+                    key={activity.id}
+                    activity={activity}
+                    pending={pending && pendingKey === activity.id}
+                    message={messages[activity.id] ?? null}
+                    onRun={(fn) => run(activity.id, fn)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+
+      <details className="rounded-card border border-line bg-paper p-5">
+        <summary className="flex min-h-11 cursor-pointer items-center font-display text-[16px] font-semibold text-ink">
+          Add activity
+        </summary>
+        <div className="mt-3 space-y-3">
         <h2 className="font-display text-[16px] font-semibold text-ink">
           Add an activity
         </h2>
@@ -176,36 +212,9 @@ export function ActivityManager({
             </div>
           </>
         )}
-      </section>
+        </div>
+      </details>
 
-      {locations.map((location) => {
-        const rows = byLocation.get(location.id) ?? [];
-        return (
-          <section key={location.id}>
-            <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-              {location.name}
-              {location.isPrimary ? " · primary" : ""}
-            </h2>
-            {rows.length === 0 ? (
-              <p className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
-                No activities at this facility yet.
-              </p>
-            ) : (
-              <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
-                {rows.map((activity) => (
-                  <ActivityRowEditor
-                    key={activity.id}
-                    activity={activity}
-                    pending={pending && pendingKey === activity.id}
-                    message={messages[activity.id] ?? null}
-                    onRun={(fn) => run(activity.id, fn)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        );
-      })}
     </div>
   );
 }
@@ -275,6 +284,7 @@ function ActivityRowEditor({
         <Input
           value={newSubUnit}
           onChange={(e) => setNewSubUnit(e.target.value)}
+          aria-label={`Add sub-unit to ${activity.name}`}
           placeholder="Add sub-unit"
           className="max-w-[12rem]"
         />

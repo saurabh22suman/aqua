@@ -132,13 +132,13 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="divide-y divide-line">
       {items.map((item) => {
         const structured = isStructured(item);
         return (
           <section
             key={item.key}
-            className="rounded-card bg-paper border border-line p-4"
+            className="py-4 first:pt-2 last:pb-2"
             data-testid={`config-${item.key}`}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -153,7 +153,43 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
               <p className="mt-0.5 text-[12px] text-ink-3">{item.description}</p>
             ) : null}
 
-            {item.editable && !structured ? (
+            {(item.key === "operations.business_hours" &&
+              item.visibility === "owner_edit") ||
+            item.key === "attendance.absence_alert_threshold_pct" ? (
+              <div className="mt-3">
+                <p className="text-[13px] text-ink-3">
+                  Current value:{" "}
+                  <span className="font-medium text-ink-2">
+                    {readOnlyValue(item)}
+                  </span>{" "}
+                  · {scopeLabel(item)}
+                </p>
+                {item.key === "operations.business_hours" ? (
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    Opening hours are set for each location.{" "}
+                    <Link
+                      href="/owner/settings/locations"
+                      className="text-[var(--accent-ink)] underline underline-offset-2"
+                    >
+                      Edit hours in Locations
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    The percentage and the minimum/consecutive-absence controls
+                    are edited together on the absence-alert screen.{" "}
+                    <Link
+                      href="/owner/settings/alerts"
+                      className="text-[var(--accent-ink)] underline underline-offset-2"
+                    >
+                      Edit threshold in Alerts
+                    </Link>
+                    .
+                  </p>
+                )}
+              </div>
+            ) : item.editable && !structured ? (
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <label className="block grow min-w-[12rem]">
                   <span className="block text-[12px] font-medium text-ink-2 mb-1">

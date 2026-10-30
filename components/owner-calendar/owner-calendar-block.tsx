@@ -33,10 +33,13 @@ export function CalendarBlock({
   placed,
   categoryLabels,
   onSelect,
+  interactive = true,
 }: {
   placed: PlacedCalendarEvent;
   categoryLabels: Record<CalendarCategory, string>;
   onSelect: (event: CalendarEvent) => void;
+  /** Short/narrow marks are descriptive only; their 44px companion row is the control. */
+  interactive?: boolean;
 }) {
   const { event, top, height, column, columns, clash } = placed;
   const Icon = CATEGORY_ICON[event.category];
@@ -53,29 +56,20 @@ export function CalendarBlock({
   const showMeta = height >= 42;
   const showTime = height >= 30;
 
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(event)}
-      data-testid="calendar-event"
-      data-event-id={event.id}
-      data-category={event.category}
-      data-top={top}
-      data-height={height}
-      data-column={column}
-      data-columns={columns}
-      aria-label={`${event.title}, ${timeRange(event.startMinutes, event.durationMinutes)}, ${categoryLabels[event.category]}${clash ? ", resource clash" : ""}`}
-      className={`absolute overflow-hidden rounded-md border border-line border-l-[3px] px-1.5 pt-0.5 text-left motion-fast transition-colors hover:brightness-[0.98] ${CATEGORY_TINT_CLASS[event.category]} ${
-        cancelled ? "opacity-70" : ""
-      }`}
-      style={{
-        top,
-        height,
-        left: `calc(${column * width}% + 2px)`,
-        width: `calc(${width}% - 4px)`,
-        borderLeftStyle: cancelled ? "dashed" : "solid",
-      }}
-    >
+  const label = `${event.title}, ${timeRange(event.startMinutes, event.durationMinutes)}, ${categoryLabels[event.category]}${clash ? ", resource clash" : ""}`;
+  const className = `absolute overflow-hidden rounded-md border border-line border-l-[3px] px-1.5 pt-0.5 text-left motion-fast transition-colors ${CATEGORY_TINT_CLASS[event.category]} ${
+    cancelled ? "opacity-70" : ""
+  } ${interactive ? "hover:brightness-[0.98]" : ""}`;
+  const style = {
+    top,
+    height,
+    left: `calc(${column * width}% + 2px)`,
+    width: `calc(${width}% - 4px)`,
+    borderLeftStyle: cancelled ? "dashed" : "solid",
+  } as const;
+
+  const content = (
+    <>
       {/* The kind of event comes FIRST, so it is never the line the
           block's height cuts off. The clash marker sits in the corner,
           where it cannot be clipped either. */}
@@ -128,6 +122,47 @@ export function CalendarBlock({
           />
         </span>
       ) : null}
+    </>
+  );
+
+  if (!interactive) {
+    return (
+      <div
+        role="img"
+        aria-label={label}
+        data-testid="calendar-event"
+        data-event-id={event.id}
+        data-category={event.category}
+        data-top={top}
+        data-height={height}
+        data-column={column}
+        data-columns={columns}
+        data-interactive="false"
+        className={className}
+        style={style}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(event)}
+      data-testid="calendar-event"
+      data-event-id={event.id}
+      data-category={event.category}
+      data-top={top}
+      data-height={height}
+      data-column={column}
+      data-columns={columns}
+      data-interactive="true"
+      aria-label={label}
+      className={className}
+      style={style}
+    >
+      {content}
     </button>
   );
 }

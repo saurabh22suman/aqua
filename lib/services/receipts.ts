@@ -6,7 +6,7 @@ import { invoices, invoiceLineItems } from "@/db/schema/invoices";
 import { members, persons } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import { brandDataFrom } from "@/lib/services/branding";
 import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
 import { renderReceiptPdf } from "@/lib/receipts/receipt-document";
@@ -46,6 +46,7 @@ type ReceiptActor = {
   actorType: "user" | "system";
   source: AuditSource;
   via: string;
+  requestId?: string | null;
 };
 
 async function loadReceiptRow(
@@ -172,7 +173,7 @@ async function serveOrCreateReceipt(
     return { ok: false, error: "The receipt could not be generated." };
   }
 
-  await tx.insert(auditLog).values({
+  await writeAudit(tx, {
     tenantId,
     actorType: actor.actorType,
     actorId: actor.userId,
@@ -186,6 +187,7 @@ async function serveOrCreateReceipt(
       fileSize: pdf.byteLength,
       via: actor.via,
     },
+    requestId: actor.requestId ?? null,
   });
 
   return { ok: true, pdf, fileName };
@@ -211,6 +213,7 @@ export async function getOrCreateReceipt(
       actorType: "user",
       source: "web",
       via: "staff",
+      requestId: ctx.requestId ?? null,
     });
   });
 }

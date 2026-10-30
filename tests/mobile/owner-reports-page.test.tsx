@@ -148,11 +148,95 @@ describe("ReportsPage resilience (PR1-C1)", () => {
       "Collections",
       "Revenue by plan",
       "Enquiry funnel",
-      "Retention",
+      // The retention card carries the approved factual heading
+      // ("Attendance records to review", human decision of 30 October
+      // 2026), not the withdrawn "Retention" title.
+      "Attendance records to review",
       "Coach load",
       "Facility utilisation",
     ]) {
       expect(text).toContain(heading);
     }
+  });
+
+  it("groups the key-report cards into two independent stacks in one reading order", async () => {
+    resolveAllBut("resolve");
+
+    render(await ReportsPage({}));
+
+    const key = document.querySelector("[data-report-key]");
+    expect(key).not.toBeNull();
+    const stacks = Array.from(key!.children);
+    // Two independent stacks. A single grid row takes the height of its
+    // tallest card, so the short coach-load card left a large hole
+    // under the tall enquiry funnel at 1280x900.
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]!.children).toHaveLength(2);
+    expect(stacks[1]!.children).toHaveLength(2);
+    // One reading order, shared by the phone and the desktop: money,
+    // attendance, then the demand behind them and the team that
+    // delivers it.
+    const order = Array.from(key!.querySelectorAll("h2")).map((heading) =>
+      (heading.textContent ?? "").trim(),
+    );
+    expect(order).toEqual([
+      "Collections over time",
+      "Attendance by batch",
+      "Enquiry funnel",
+      "Coach load",
+    ]);
+  });
+
+  it("keeps the key reports in one column when a facility hides the second stack", async () => {
+    resolveAllBut("resolve");
+
+    render(
+      await ReportsPage({
+        searchParams: Promise.resolve({
+          facility: "11111111-1111-4111-8111-111111111111",
+        }),
+      }),
+    );
+
+    const key = document.querySelector("[data-report-key]");
+    expect(key).not.toBeNull();
+    // The enquiry funnel and the coach load are tenant-wide and are
+    // hidden for a facility, so the second stack is not rendered and
+    // the first one takes the whole width instead of half of it.
+    expect(key!.children).toHaveLength(1);
+    const order = Array.from(key!.querySelectorAll("h2")).map((heading) =>
+      (heading.textContent ?? "").trim(),
+    );
+    expect(order).toEqual(["Collections over time", "Attendance by batch"]);
+  });
+
+  it("groups the more-reports cards into two independent stacks in a deliberate order", async () => {
+    resolveAllBut("resolve");
+
+    render(await ReportsPage({}));
+
+    const more = document.querySelector("[data-report-more]");
+    expect(more).not.toBeNull();
+    const stacks = Array.from(more!.children);
+    // Two independent stacks. A single grid of five cards makes every
+    // row as tall as its tallest card, which left an 87px hole under
+    // the member mix and a 68px hole under the revenue card at
+    // 1280x900 against a declared 20px gap.
+    expect(stacks).toHaveLength(2);
+    expect(stacks[0]!.querySelectorAll("article")).toHaveLength(2);
+    expect(stacks[1]!.querySelectorAll("article")).toHaveLength(3);
+    // One reading order, shared by the phone and the desktop: what
+    // attendance looked like, who needs a look, then the club's people,
+    // revenue and spaces.
+    const order = Array.from(more!.querySelectorAll("article h2")).map((heading) =>
+      (heading.textContent ?? "").trim(),
+    );
+    expect(order).toEqual([
+      "Attendance trend",
+      "Attendance records to review",
+      "members mix",
+      "Revenue by plan",
+      "Facility utilisation",
+    ]);
   });
 });

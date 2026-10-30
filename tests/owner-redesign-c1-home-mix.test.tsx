@@ -186,8 +186,10 @@ describe("the approved Home payment mix", () => {
     cleanup();
     render(<OwnerHomeLoading />);
     const skeletonBand = screen.getByTestId("owner-home-loading-money-band");
-    const skeletonTrends = screen.getByTestId("owner-home-loading-money-trends");
-    const skeletonMix = screen.getByTestId("owner-home-loading-money-mix");
+    // The current loading band no longer exposes separate old band ids;
+    // its two columns are the direct children, matching the real grid.
+    const skeletonTrends = skeletonBand.children[0] as HTMLElement;
+    const skeletonMix = skeletonBand.children[1] as HTMLElement;
 
     expect(gridTokens(skeletonBand.className)).toBe(gridTokens(realBand.className));
     expect(spanTokens(skeletonTrends.className)).toBe(

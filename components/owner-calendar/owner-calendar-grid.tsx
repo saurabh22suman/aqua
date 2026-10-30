@@ -10,6 +10,7 @@
 // is not readable at 390px and would need sideways scrolling, which
 // this product does not do.
 
+import { useEffect, useRef, useState } from "react";
 import {
   dayOfMonth,
   detectClashes,
@@ -19,6 +20,8 @@ import {
 } from "./calendar-layout";
 import { projectOntoDays } from "./calendar-projection";
 import { CalendarBlock } from "./owner-calendar-block";
+import { OwnerCalendarAgenda } from "./owner-calendar-agenda";
+import { formatDateIST, formatWallTime12h } from "@/lib/time/tz";
 import type {
   CalendarCategory,
   CalendarEvent,
@@ -76,9 +79,104 @@ export function OwnerCalendarGrid({
     hours.push(minute);
   }
   const weekLayout = days.length > 1;
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
+  const firstDay = days[0];
+
+  useEffect(() => {
+    const element = trackRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const measure = (entries?: ResizeObserverEntry[]) => {
+      const width =
+        entries?.[0]?.contentRect.width ??
+        element.getBoundingClientRect().width;
+      if (width > 0) setTrackWidth(width);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [days.length, firstDay]);
+
+  const isNarrow = (entry: { columns: number }) =>
+    trackWidth > 0 && trackWidth / entry.columns - 4 < 44;
+
+  const placedByDay = days.map((day) => ({
+    day,
+    placed: layoutDay(projections.get(day) ?? [], geometry, clashing),
+  }));
+  const companion = placedByDay.flatMap(({ day, placed }) =>
+    placed
+      .filter((entry) => entry.height < 44 || isNarrow(entry))
+      .map((entry) => ({ day, entry })),
+  );
+  const shortKeys = new Set(
+    companion.map(({ day, entry }) => `${day}:${entry.event.id}`),
+  );
 
   return (
-    <div className="relative" data-testid="calendar-grid">
+    <div>
+      {companion.length > 0 ? (
+        <section
+          className="mb-3 rounded-card border border-line bg-paper p-3"
+          data-testid="calendar-short-events"
+          aria-label="Short events with full-size access"
+        >
+          <h3 className="font-display text-[13px] font-semibold text-ink">
+            More events
+          </h3>
+          <p className="mt-0.5 text-[11.5px] text-ink-3">
+            Open short or overlapping events here. The timeline shows their
+            scheduled times.
+          </p>
+          <div className="mt-2 space-y-2">
+            {days.map((day) => {
+              const rows = companion.filter((entry) => entry.day === day);
+              if (rows.length === 0) return null;
+              return (
+                <div key={day}>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-ink-3">
+                    {formatDateIST(day)}
+                  </p>
+                  <OwnerCalendarAgenda
+                    projections={rows.map(({ entry }) => {
+                      const projection = (projections.get(day) ?? []).find(
+                        (candidate) => candidate.event.id === entry.event.id,
+                      );
+                      return {
+                        event: entry.event,
+                        startMinutes:
+                          projection?.startMinutes ?? entry.event.startMinutes,
+                        durationMinutes:
+                          projection?.durationMinutes ??
+                          entry.event.durationMinutes,
+                      };
+                    })}
+                    categoryLabels={categoryLabels}
+                    onSelectEvent={onSelectEvent}
+                    day={day}
+                    useProjectionTime
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+      <div className="relative" data-testid="calendar-grid">
+      {geometry.dayStartMinutes < 6 * 60 ? (
+        <span
+          data-testid="calendar-working-start"
+          className="pointer-events-none absolute inset-x-0"
+          style={{
+            top:
+              (6 * 60 - geometry.dayStartMinutes) *
+              geometry.pixelsPerMinute,
+            scrollMarginTop: 96,
+          }}
+          aria-hidden="true"
+        />
+      ) : null}
       {/* The time ruler. It is decorative for a screen reader — the
           event blocks and the agenda carry the same times as text. */}
       <div
@@ -94,7 +192,7 @@ export function OwnerCalendarGrid({
               top: (minute - geometry.dayStartMinutes) * geometry.pixelsPerMinute,
             }}
           >
-            {minutesToClock(minute)}
+            {formatWallTime12h(minutesToClock(minute))}
           </span>
         ))}
       </div>
@@ -106,12 +204,8 @@ export function OwnerCalendarGrid({
             : "md:grid md:grid-cols-1 space-y-4 md:space-y-0 md:gap-0 md:pl-14"
         }
       >
-        {days.map((day) => {
-          const placed = layoutDay(
-            projections.get(day) ?? [],
-            geometry,
-            clashing,
-          );
+        {days.map((day, dayIndex) => {
+          const placed = placedByDay.find((entry) => entry.day === day)?.placed ?? [];
           const isToday = todayDate === day;
           const isSelected = selectedDate === day;
           return (
@@ -143,6 +237,7 @@ export function OwnerCalendarGrid({
               <div
                 className="relative"
                 style={{ height: trackHeight }}
+                ref={dayIndex === 0 ? trackRef : undefined}
                 data-testid="calendar-track"
                 data-date={day}
               >
@@ -176,12 +271,14 @@ export function OwnerCalendarGrid({
                     placed={entry}
                     categoryLabels={categoryLabels}
                     onSelect={onSelectEvent}
+                    interactive={!shortKeys.has(`${day}:${entry.event.id}`)}
                   />
                 ))}
               </div>
             </section>
           );
         })}
+      </div>
       </div>
     </div>
   );

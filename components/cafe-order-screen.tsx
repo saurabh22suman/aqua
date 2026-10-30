@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CafeCart } from "@/components/cafe-cart";
@@ -69,6 +69,13 @@ export function CafeOrderScreen({
   const [bill, setBill] = useState<CafeBill | null>(null);
   const [paid, setPaid] = useState(false);
   const [paidMethod, setPaidMethod] = useState<PaymentMethod>("cash");
+  // The bill currently on screen. A payment that resolves late for a
+  // different bill must not mark this one paid.
+  const currentBillId = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentBillId.current = bill?.invoiceId ?? null;
+  }, [bill?.invoiceId]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -187,7 +194,13 @@ export function CafeOrderScreen({
         {error ? <CafeErrorNote message={error} /> : null}
         <CafeBillPanel
           bill={bill}
-          onPaid={(method) => {
+          onPaid={(method, billId) => {
+            if (billId && billId !== currentBillId.current) {
+              setError(
+                "A payment for another bill was recorded. Check that bill before collecting again.",
+              );
+              return;
+            }
             setPaidMethod(method);
             setPaid(true);
           }}

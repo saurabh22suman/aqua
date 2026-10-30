@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, TriangleAlert } from "lucide-react";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 import { CountChip } from "@/components/ui/CountChip";
 import type { ReactNode } from "react";
 
@@ -25,13 +25,6 @@ export type OwnerAttentionRow = {
   title: string;
   detail: string;
   href?: string;
-  /**
-   * The tone of the row's icon chip. The CLASS for the tone is chosen
-   * by the caller, because the reserved money/attention tokens are
-   * only allowed in the files the semantic-token rule sanctions.
-   */
-  tone: "warn" | "late";
-  iconClassName: string;
 };
 
 export function OwnerHomeAttention({
@@ -57,19 +50,19 @@ export function OwnerHomeAttention({
   return (
     <section
       data-testid="owner-home-attention"
-      aria-label="Needs your attention"
-      className="overflow-hidden rounded-card border border-[var(--surface-attention-border)] bg-[var(--surface-attention)]"
+      aria-label="Needs your decision"
+      className="overflow-hidden rounded-card border border-line bg-paper"
     >
-      <div className="flex items-start justify-between gap-3 px-4 pb-2 pt-4">
+      <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-5">
         <div className="min-w-0">
-          <h2 className="font-display text-[16px] font-semibold">A little attention</h2>
-          <p className="mt-0.5 text-[12px] text-ink-3">{summary}</p>
+          <h2 className="font-display text-[16px] font-semibold">Needs your decision</h2>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">{summary}</p>
         </div>
         {count > 0 ? <CountChip count={count} tone="warn" /> : null}
       </div>
 
       {rows.length === 0 && hiddenRows.length === 0 ? (
-        <div className="px-4 pb-4">
+        <div className="px-5 pb-5">
           <p className="text-[13.5px] font-medium">
             Nothing needs attention right now.
           </p>
@@ -87,8 +80,8 @@ export function OwnerHomeAttention({
             ))}
           </ul>
           {hiddenRows.length > 0 ? (
-            <details className="border-t border-[var(--surface-attention-border)]">
-              <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 px-4 text-[13px] font-medium text-ink-2 marker:content-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
+            <details className="border-t border-line">
+              <summary className="flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 px-5 text-[13px] font-medium text-ink-2 marker:content-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
                 {hiddenRows.length} more need attention
               </summary>
               <ul>
@@ -118,12 +111,6 @@ function AttentionListItem({
 }) {
   const body = (
     <>
-      <span
-        aria-hidden="true"
-        className={`grid h-9 w-9 flex-none place-items-center rounded-[11px] ${row.iconClassName}`}
-      >
-        <TriangleAlert size={16} strokeWidth={2} />
-      </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[13.5px] font-medium leading-tight">
           {row.title}
@@ -138,9 +125,9 @@ function AttentionListItem({
     </>
   );
   const classes =
-    "flex items-start gap-3 px-4 py-3 motion-fast transition-colors hover:bg-paper/60";
+    "flex items-start gap-3 px-5 py-3.5 motion-fast transition-colors hover:bg-deck/60";
   return (
-    <li className={divided ? "border-t border-[var(--surface-attention-border)]" : ""}>
+    <li className={divided ? "border-t border-line" : ""}>
       {row.href ? (
         <Link href={row.href} className={classes}>
           {body}

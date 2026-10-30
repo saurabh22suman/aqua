@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listTenants, listAllPlansForFilter } from "@/db/platform-tenants";
 import { listPresets } from "@/db/platform-presets";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -79,25 +80,31 @@ export default async function PlatformTenantsPage({
   const trial = TRIAL_FILTER_VALUES.find((v) => v === params.trial);
 
   const [result, plans, presetEntries] = await Promise.all([
-    listTenants({
-      search: params.search?.trim() || undefined,
-      status:
-        params.status === "trial" ||
-        params.status === "active" ||
-        params.status === "suspended" ||
-        params.status === "churned"
-          ? params.status
-          : undefined,
-      planId: params.planId || undefined,
-      presetKey: params.presetKey || undefined,
-      health,
-      trial,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-    }),
-    listAllPlansForFilter(),
-    listPresets(),
+    runOpsGlobalRead(
+      "tenant.list",
+      () =>
+        listTenants({
+          search: params.search?.trim() || undefined,
+          status:
+            params.status === "trial" ||
+            params.status === "active" ||
+            params.status === "suspended" ||
+            params.status === "churned"
+              ? params.status
+              : undefined,
+          planId: params.planId || undefined,
+          presetKey: params.presetKey || undefined,
+          health,
+          trial,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+        }),
+      "ops_page",
+    ),
+    runOpsGlobalRead("plan.list", () => listAllPlansForFilter(), "ops_page"),
+    runOpsGlobalRead("preset.list", () => listPresets(), "ops_page"),
   ]);
+  if (!result || !plans || !presetEntries) redirect("/ops/login");
 
   // One row per preset key for the filter dropdown — listPresets()
   // returns one row per (key, version).

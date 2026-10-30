@@ -2,9 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { Field } from "@/components/ui/Field";
 import { InlineFeedback } from "@/components/ui/InlineFeedback";
 import { Input } from "@/components/ui/Input";
+import { TimeField } from "@/components/ui/TimeField";
 import { Select } from "@/components/ui/Select";
 import { saveBookingPriceRuleAction } from "@/lib/actions/booking-price-admin";
 import {
@@ -52,6 +54,8 @@ export function BookingPriceRuleForm({
   const [isActive, setIsActive] = useState(editingRule?.isActive ?? true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [startValid, setStartValid] = useState(true);
+  const [endValid, setEndValid] = useState(true);
 
   function toggleDay(day: number) {
     setDays((prev) =>
@@ -62,6 +66,7 @@ export function BookingPriceRuleForm({
   }
 
   async function save() {
+    if (!startValid || !endValid) return;
     setError(null);
     setNotice(null);
     const result = await saveBookingPriceRuleAction({
@@ -95,7 +100,7 @@ export function BookingPriceRuleForm({
     <section className="rounded-card border border-line bg-paper p-4 space-y-4">
       <div>
         <h2 className="font-display text-[15px] font-semibold text-ink">
-          {editingRule ? "Change a price" : "Add a price"}
+          {editingRule ? "Edit price rule" : "Add price rule"}
         </h2>
         <p className="mt-1 text-[12px] text-ink-3">
           A rule prices a slot when its day and time match. Leave the days
@@ -136,11 +141,7 @@ export function BookingPriceRuleForm({
             </Select>
           )}
         </Field>
-        <Field
-          id="price-amount"
-          label="Price"
-          description="Rupees per booking. Paise are kept exactly — 500.50 is ₹500.50."
-        >
+        <Field id="price-amount" label="Price">
           {(field) => (
             <Input
               {...field}
@@ -155,6 +156,10 @@ export function BookingPriceRuleForm({
           )}
         </Field>
       </div>
+      <p className="text-[12px] text-ink-3">
+        Prices are rupees per booking. Paise are kept exactly — 500.50 is
+        ₹500.50.
+      </p>
 
       <div>
         <p className="text-[12px] font-medium text-ink-2 mb-2">Days</p>
@@ -184,29 +189,25 @@ export function BookingPriceRuleForm({
         </p>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Field id="price-start" label="From">
-          {(field) => (
-            <Input
-              {...field}
-              type="time"
-              value={startTime}
-              onChange={(event) => setStartTime(event.target.value)}
-              data-testid="price-rule-start"
-            />
-          )}
-        </Field>
-        <Field id="price-end" label="To">
-          {(field) => (
-            <Input
-              {...field}
-              type="time"
-              value={endTime}
-              onChange={(event) => setEndTime(event.target.value)}
-              data-testid="price-rule-end"
-            />
-          )}
-        </Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <TimeField
+          id="price-start"
+          label="From"
+          value={startTime}
+          onChange={setStartTime}
+          onValidityChange={setStartValid}
+          description="Leave blank for all day."
+          data-testid="price-rule-start"
+        />
+        <TimeField
+          id="price-end"
+          label="To"
+          value={endTime}
+          onChange={setEndTime}
+          onValidityChange={setEndValid}
+          description="Leave blank for all day."
+          data-testid="price-rule-end"
+        />
         <Field
           id="price-priority"
           label="Priority"
@@ -224,16 +225,13 @@ export function BookingPriceRuleForm({
         </Field>
       </div>
 
-      <label className="flex items-center gap-2 text-[13px] text-ink-2">
-        <input
-          type="checkbox"
-          checked={isActive}
-          onChange={(event) => setIsActive(event.target.checked)}
-          className="h-4 w-4"
-          data-testid="price-rule-active"
-        />
+      <Checkbox
+        checked={isActive}
+        onCheckedChange={setIsActive}
+        data-testid="price-rule-active"
+      >
         Active — an inactive rule keeps its place but stops pricing slots.
-      </label>
+      </Checkbox>
 
       {error ? (
         <div data-testid="price-rule-error">
@@ -250,25 +248,23 @@ export function BookingPriceRuleForm({
         <Button
           variant="primary"
           size="md"
-          disabled={pending}
+          disabled={pending || !startValid || !endValid}
           onClick={() => startTransition(() => void save())}
           data-testid="price-rule-save"
         >
           {pending ? "Saving…" : editingRule ? "Save changes" : "Save price"}
         </Button>
-        {editingRule ? (
-          <Button
-            variant="ghost"
-            size="md"
-            onClick={() => {
-              setError(null);
-              setNotice(null);
-              onCancel();
-            }}
-          >
-            Cancel
-          </Button>
-        ) : null}
+        <Button
+          variant="ghost"
+          size="md"
+          onClick={() => {
+            setError(null);
+            setNotice(null);
+            onCancel();
+          }}
+        >
+          Cancel
+        </Button>
       </div>
     </section>
   );

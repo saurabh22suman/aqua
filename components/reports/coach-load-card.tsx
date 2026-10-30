@@ -15,7 +15,7 @@ export async function CoachLoadCard({ rows }: { rows: CoachLoadRow[] }) {
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           {titleCase(resolveTerm(terminology, "coach", 1))} load
         </h2>
         <span className="text-[12px] text-ink-3">{rows.length} coaches</span>

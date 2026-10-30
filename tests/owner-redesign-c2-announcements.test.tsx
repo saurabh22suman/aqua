@@ -19,6 +19,11 @@ vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ({
     roleKey: "owner",
     permissions: new Set(["messaging.send"]),
+    // The real Ctx always carries the tenant's feature set next to the
+    // role grant, and the announcements page resolves the composer on
+    // both (staging blocker F21). This fixture is completed, not
+    // weakened: no assertion below changes.
+    features: new Set(["messaging"]),
   }),
   requirePagePermission: (ctx: unknown) => ctx,
 }));

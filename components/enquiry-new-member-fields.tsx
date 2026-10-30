@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { searchPersonsAction } from "@/lib/actions/people";
-import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
+import { CURRENT_POLICY_VERSION } from "@/lib/consent-policy";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import type { NewMemberDetails } from "@/lib/services/enquiries";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
@@ -102,10 +102,10 @@ export function EnquiryNewMemberFields({
     <div className="space-y-2.5">
       {/* Owner redesign (C2) — the shared labelled controls. The
           guardian and consent requirements are unchanged. */}
-      <Field id="enquiry-member-dob" label="Date of birth">
-        {() => (
+      <Field id="enquiry-member-dob" label="Date of birth" required>
+        {(field) => (
           <DateField
-            id="enquiry-member-dob"
+            {...field}
             value={dateOfBirth}
             onChange={setDateOfBirth}
             data-testid="enquiry-member-dob"

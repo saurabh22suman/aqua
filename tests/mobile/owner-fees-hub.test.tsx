@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+
+vi.stubGlobal("crypto", { randomUUID });
 
 // U-02 — the Fees hub tabs and invoice/dues lists. The invoice list
 // is a client island over the existing InvoiceExpanded collect flow;
@@ -17,6 +20,26 @@ vi.mock("@/lib/actions/invoices", () => ({
 vi.mock("@/lib/actions/payments", () => ({
   listInvoicePaymentsAction: vi.fn(),
   recordPaymentAction: vi.fn(),
+}));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelPaymentRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
+  listReversalRecoveryAction: vi.fn(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+  cancelReversalRecoveryAction: vi.fn(async () => ({
+    ok: true,
+    intentId: "intent-1",
+    replayed: false,
+  })),
 }));
 const notFound = vi.hoisted(() =>
   vi.fn(() => {

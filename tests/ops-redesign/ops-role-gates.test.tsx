@@ -29,6 +29,21 @@ vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => authState.value,
 }));
 
+// The Ops pages resolve their reads through the approved operation
+// boundary. These suites assert the page contract, not the audit path, so
+// the boundary delegates to the read it is given. Fixture-only.
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (
+    _operation: string,
+    _tenantId: string,
+    read: () => Promise<unknown>,
+  ) => read(),
+  runOpsGlobalRead: async (
+    _operation: string,
+    read: () => Promise<unknown>,
+  ) => read(),
+}));
+
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
     throw new Error(`unexpected redirect: ${path}`);

@@ -11,7 +11,10 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { ListToolbar, ToolbarField } from "@/components/member-list-toolbar";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { useMembersListNavigation } from "@/components/members-list-navigation";
 import { formatPhoneIN } from "@/lib/phone";
+import { formatDateIST } from "@/lib/time/tz";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
@@ -27,6 +30,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function MembersBoard({
   initialMembers,
   initialLocationId,
+  navigationNamespace = "default",
   terminology = DEFAULT_TERMINOLOGY,
 }: {
   initialMembers: MemberListRow[];
@@ -34,6 +38,9 @@ export function MembersBoard({
   // `?facility=` param. The list-level filter is the global switcher
   // now; there is no second location control inside the board.
   initialLocationId?: string;
+  // Server-derived tenant + actor namespace; stale/foreign history state is
+  // discarded instead of crossed between accounts or academies.
+  navigationNamespace?: string;
   // Closed-key vocab resolved by the parent server page; optional so
   // callers without tenant context render the generic terms.
   terminology?: TerminologyState;
@@ -44,20 +51,14 @@ export function MembersBoard({
   const [isPending, setPending] = useState(false);
   const [error, setError] = useState("");
   const requestEpoch = useRef(0);
-  // W1-6 — the facility comes from the URL via the page; the board's
-  // other filters are local state. A facility change is a server
-  // navigation (the switcher pushes `?facility=`), so this never needs
-  // a setter.
   const locationId = initialLocationId ?? "";
   const currentLocation = useRef(locationId);
   currentLocation.current = locationId;
-  // Facility navigation re-renders the page with new server data, but
-  // local state would otherwise keep showing the previous facility's
-  // rows. Adopt the new rows and reset the local filters so the list
-  // and its visible controls agree (docs/audits/2026-10-05 FE-03).
-  const [shownLocationId, setShownLocationId] = useState(locationId);
-  if (shownLocationId !== locationId) {
-    setShownLocationId(locationId);
+  // Account, tenant or facility change: discard prior rows/filters/state.
+  const resetKey = `${navigationNamespace}\u0000${locationId}`;
+  const [shownResetKey, setShownResetKey] = useState(resetKey);
+  if (shownResetKey !== resetKey) {
+    setShownResetKey(resetKey);
     setMembers(initialMembers);
     setSearch("");
     setStatus("");
@@ -71,14 +72,18 @@ export function MembersBoard({
     const epoch = ++requestEpoch.current;
     setError("");
     setPending(true);
-    void (async () => {
+    return (async () => {
+      let applied = false;
       try {
         const rows = await listMembersAction({
           search: merged.search || undefined,
           status: (merged.status || undefined) as MemberListRow["status"] | undefined,
           locationId: merged.locationId || undefined,
         });
-        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) setMembers(rows);
+        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
+          setMembers(rows);
+          applied = true;
+        }
       } catch {
         if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
           setError("Could not refresh this list. Previous results are still shown.");
@@ -86,8 +91,34 @@ export function MembersBoard({
       } finally {
         if (epoch === requestEpoch.current) setPending(false);
       }
+      return applied;
     })();
   }
+
+  const { save: persistNavigation } = useMembersListNavigation({
+    namespace: navigationNamespace,
+    locationId,
+    apply: async (stored) => {
+      setSearch(stored.search);
+      setStatus(stored.status);
+      return refetch({
+        search: stored.search,
+        status: stored.status,
+        locationId,
+      });
+    },
+  });
+
+  function saveNavigationState(nextSearch: string, nextStatus: string) {
+    persistNavigation(nextSearch, nextStatus, window.scrollY);
+  }
+
+  function rememberListScroll() {
+    saveNavigationState(search, status);
+  }
+
+  const memberSingular = titleCase(resolveTerm(terminology, "member", 1));
+  const memberSinceLabel = `${memberSingular} since`;
 
   return (
     <div>
@@ -104,11 +135,6 @@ export function MembersBoard({
         </Button>
       </div> : null}
 
-      {/* Owner redesign (C2) — the search entry and the lifecycle
-          filter share ONE toolbar so their control bottoms align; the
-          search takes the flexible width and the picker stays bounded.
-          Both are shared primitives, so their metrics and tints stay
-          with the foundation owner. */}
       <ListToolbar label={`${resolveTerm(terminology, "member", 1)} filters`}>
         <ToolbarField
           id="members-search"
@@ -127,8 +153,10 @@ export function MembersBoard({
                 type="search"
                 value={search}
                 onChange={(e) => {
-                  setSearch(e.target.value);
-                  refetch({ search: e.target.value });
+                  const next = e.target.value;
+                  setSearch(next);
+                  saveNavigationState(next, status);
+                  refetch({ search: next });
                 }}
                 placeholder="Name or phone number"
                 aria-label="Search members"
@@ -145,8 +173,10 @@ export function MembersBoard({
               {...field}
               value={status}
               onChange={(e) => {
-                setStatus(e.target.value);
-                refetch({ status: e.target.value });
+                const next = e.target.value;
+                setStatus(next);
+                saveNavigationState(search, next);
+                refetch({ status: next });
               }}
               data-testid="members-status-filter"
             >
@@ -161,88 +191,108 @@ export function MembersBoard({
         </ToolbarField>
       </ListToolbar>
 
-      {/* PR3-C3/C4 — desktop column header; the rows below share the
-          same grid so the roster scans and compares at 1280px while the
-          phone keeps the one-column card rows. */}
-      {/* Owner UX audit (2026-10-24): the roster gave the same weight
-          to the joined date as to the member, and the phone shared a
-          line with the code and location on a phone, so it wrapped
-          mid-number. The joined date is context the member's own page
-          carries; the roster now gives its width to the member and
-          keeps the phone readable. */}
-      <div
-        data-testid="members-table-head"
-        className="mt-4 hidden grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] gap-3 border-b border-line pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
-      >
-        <span>{titleCase(resolveTerm(terminology, "member", 1))}</span>
-        <span>Phone</span>
-        <span className="text-right">Status</span>
-      </div>
-      <ul className="mt-3 md:mt-0" data-testid="members-list" aria-busy={isPending}>
-        {members.length === 0 ? (
-          <li className="rounded-ctl border border-line bg-paper list-none">
-            {search || status || locationId ? (
-              <EmptyState
-                title={`No ${resolveTerm(terminology, "member", "other")} match.`}
-              />
-            ) : (
-              <EmptyState
-                title={`No ${resolveTerm(terminology, "member", "other")} yet.`}
-                body={`Add your first ${resolveTerm(terminology, "member", 1)} to start building the roster.`}
-                action={{
-                  label: `Add your first ${resolveTerm(terminology, "member", 1)}`,
-                  href: "/owner/members/new",
-                }}
-              />
-            )}
-          </li>
-        ) : (
-          members.map((m) => (
-            <li key={m.memberId} className="border-b border-line last:border-0">
-              {/* Owner redesign (C2) — the directory row reads
-                  identity → lifecycle state → supporting metadata. On a
-                  phone the name and the status share the first line and
-                  the metadata sits under them; from md the same DOM
-                  places the phone and the status in their own columns
-                  beside the member. The DOM order is the reading
-                  order in both layouts. */}
-              <Link
-                href={`/owner/members/${m.memberId}`}
-                data-testid="member-row"
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 py-3 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] md:gap-3"
-              >
-                <p
-                  data-testid="member-row-name"
-                  className="col-start-1 row-start-1 min-w-0 text-[14px] font-medium break-words"
-                >
-                  {m.fullName}
-                  {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
-                </p>
-                <span
-                  data-testid="member-row-status"
-                  className="col-start-2 row-start-1 flex justify-self-end md:col-start-3 md:row-start-1"
-                >
-                  <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
-                    {STATUS_LABELS[m.status]}
-                  </StatusBadge>
-                </span>
-                <p
-                  data-testid="member-row-meta"
-                  className="col-start-1 row-start-2 truncate text-[12px] text-ink-3 md:col-start-1 md:row-start-2"
-                >
-                  {m.memberCode} · {m.locationName}
-                </p>
-                <p
-                  data-testid="member-row-phone"
-                  className="col-start-2 row-start-2 text-[12.5px] text-ink-2 tabular-nums md:col-start-2 md:row-start-1"
-                >
-                  {m.phone ? formatPhoneIN(m.phone) : "—"}
-                </p>
-              </Link>
+      {/* OpenPen owner reference — the directory is one bounded surface with
+          a named heading, and the row compares identity, phone, joining date
+          and participation. The whole row stays the single action. */}
+      <section className="mt-4 rounded-card border border-line bg-paper">
+        <div className="px-3.5 pt-3.5">
+          <SectionHeading
+            title={`${titleCase(resolveTerm(terminology, "member", 1))} directory`}
+            trailing={
+              <span className="text-[12px] text-ink-3 tabular-nums">
+                {members.length} {members.length === 1 ? "record" : "records"}
+              </span>
+            }
+          />
+        </div>
+        <div
+          data-testid="members-table-head"
+          className="mt-2 hidden grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_auto_auto_auto] items-center gap-3 border-b border-line px-3.5 pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
+        >
+          <span>{memberSingular}</span>
+          <span>Phone</span>
+          <span>{memberSinceLabel}</span>
+          <span>Status</span>
+          <span className="sr-only">Action</span>
+        </div>
+        <ul className="md:px-3.5" data-testid="members-list" aria-busy={isPending}>
+          {members.length === 0 ? (
+            <li className="list-none py-2">
+              {search || status || locationId ? (
+                <EmptyState
+                  title={`No ${resolveTerm(terminology, "member", "other")} match.`}
+                />
+              ) : (
+                <EmptyState
+                  title={`No ${resolveTerm(terminology, "member", "other")} yet.`}
+                  body={`Add your first ${resolveTerm(terminology, "member", 1)} to start building the roster.`}
+                  action={{
+                    label: `Add your first ${resolveTerm(terminology, "member", 1)}`,
+                    href: "/owner/members/new",
+                  }}
+                />
+              )}
             </li>
-          ))
-        )}
-      </ul>
+          ) : (
+            members.map((m) => (
+              <li key={m.memberId} className="border-b border-line px-3.5 last:border-0 md:px-0">
+                <Link
+                  href={`/owner/members/${m.memberId}`}
+                  data-testid="member-row"
+                  onClick={rememberListScroll}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 py-3 md:grid md:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_auto_auto_auto] md:items-center md:gap-3"
+                >
+                  <p
+                    data-testid="member-row-name"
+                    className="col-start-1 row-start-1 min-w-0 text-[14px] font-medium break-words"
+                  >
+                    {m.fullName}
+                    {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
+                  </p>
+                  <span
+                    data-testid="member-row-status"
+                    className="col-start-2 row-start-1 flex justify-self-end md:col-start-4 md:row-start-1 md:justify-self-start"
+                  >
+                    <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
+                      {STATUS_LABELS[m.status]}
+                    </StatusBadge>
+                  </span>
+                  <p
+                    data-testid="member-row-meta"
+                    className="col-start-1 row-start-2 truncate text-[12px] text-ink-3 md:row-start-2"
+                  >
+                    {m.memberCode} · {m.locationName}
+                  </p>
+                  <p
+                    data-testid="member-row-phone"
+                    className="col-start-1 row-start-3 text-[12.5px] text-ink-2 tabular-nums md:col-start-2 md:row-start-1"
+                  >
+                    <span className="mr-1 text-[11px] uppercase tracking-[0.08em] text-ink-3 md:hidden">
+                      Phone
+                    </span>
+                    {m.phone ? formatPhoneIN(m.phone) : "—"}
+                  </p>
+                  <p
+                    data-testid="member-row-joined"
+                    className="col-start-1 row-start-4 text-[12px] text-ink-3 tabular-nums md:col-start-3 md:row-start-1"
+                  >
+                    <span className="mr-1 text-[11px] uppercase tracking-[0.08em] text-ink-3 md:hidden">
+                      {memberSinceLabel}
+                    </span>
+                    {formatDateIST(m.joinedOn)}
+                  </p>
+                  <span
+                    aria-hidden="true"
+                    className="hidden text-[12.5px] font-medium text-[var(--accent-ink)] md:col-start-5 md:row-start-1 md:inline"
+                  >
+                    Open
+                  </span>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
     </div>
   );
 }

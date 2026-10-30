@@ -38,6 +38,67 @@ PWA installability does not make financial/admin workflows work offline.
   skipWaiting/clients.claim reload losing work; refresh only when safe/accepted.
   Never clear the human's browser profile or unsynced offline data during setup.
 
+## The install ribbon (amendment, 30 October 2026)
+
+Human request: *"the pwa pop up should be like a ribbon coming from the
+side, and collapsable, and draggable if possible? like quick shortcut
+things"*. This changes the PRESENTATION of the install affordance only.
+The install policy below is unchanged: the same delay, the same visible
+duration, the same month-long dismissal, the same session marker, the
+same platform rules and the same exclusions.
+
+The full contract is docs/design/pwa-side-ribbon-20261030/ribbon-contract.md.
+
+- A small tab on the **RIGHT** edge opens the install options and folds
+  them away again. The right edge is the placement of record: a
+  left-edge ribbon would sit over the desktop sidebar navigation, and
+  never obstructing navigation is the stronger requirement. The wording
+  is horizontal — a rotated vertical word is unreadable.
+- The ribbon arrives after the existing delay and **arrives collapsed**:
+  it opens only when the person asks. An opening panel covered the
+  page's filters, and an opening ribbon replayed its opening when the
+  device came back online. It folds back into its tab after the
+  existing visible duration instead of disappearing.
+- While it is collapsed the ribbon is **one 44px tab**, sized to the
+  shared control contract (WCAG's 24px minimum does not replace our 44px
+  rule, so the tab is never narrowed to fit a tight page), and the move
+  handle exists only while the ribbon is open. The tab keeps its 44px
+  square and is *placed* where it covers nothing: inside the page's own
+  right gutter where the gutter can hold it, otherwise in a place
+  confirmed clear of every control — and where there is no such place
+  the ribbon does not render, so it never covers a row or steals a row's
+  click. Its hit area is exactly the visible tile, never an invisible
+  extension. The place is re-checked, not decided once: the check covers
+  the ribbon's actual position and runs again when the page scrolls, when
+  content arrives late, and when the person drags it — a drag stops at the
+  nearest clear place, and content moving over the ribbon makes it step
+  aside until the place is clear again.
+- It is never a modal: no dialog, no focus trap, no focus theft, no
+  page blocking. Escape collapses it and returns the focus to the tab.
+  It never folds away while the keyboard focus is inside it.
+- A dedicated move handle — neither the install action nor the collapse
+  control — drags the ribbon along the edge. Tapping the handle cycles
+  three bounded stops and the arrow keys move it, so the ribbon is fully
+  usable without any dragging. A drag never installs and never becomes
+  a click; a cancelled gesture never swallows the next deliberate click.
+- The ribbon stays inside the viewport: clear of the sticky header, the
+  bottom navigation and the home indicator, and clamped again on resize,
+  orientation change and visual viewport change. It hides while a modal
+  dialog is really on screen — a dialog that is hidden, or that sits
+  inside a hidden ancestor, is not an open dialog — and while a field
+  outside the ribbon has the focus. A styled select counts as a field:
+  a trigger built as a button or div with `role="combobox"` puts the
+  ribbon aside while it has the focus, and the ribbon also steps aside
+  while that select's options are open, so the options list can never be
+  covered.
+- Motion is a short transform/opacity slide from the edge, only on a
+  user expansion, using the existing motion tokens, and stationary
+  under reduced motion.
+- The ribbon keeps the honesty rules above: the browser's own install
+  event is called only by an explicit Install click, iOS gets accurate
+  "Add to Home Screen" guidance, and nothing about the ribbon may
+  suggest an install the browser cannot perform.
+
 ## TDD and acceptance
 
 Write failing tests first for manifest metadata/icons/scope, ops+parent exclusion,

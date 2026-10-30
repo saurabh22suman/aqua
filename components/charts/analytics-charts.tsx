@@ -1,5 +1,3 @@
-import { formatINR } from "@/lib/money/format";
-
 // U-01 — inline SVG charts. No charting dependency: these are plain
 // server-rendered SVG built from the design tokens (water for data,
 // deck for tracks, line for rules). Colour here is data, never
@@ -8,252 +6,74 @@ import { formatINR } from "@/lib/money/format";
 // Every chart tolerates a single point and an empty series; the card
 // wrappers own the honest empty state copy, these primitives simply
 // never invent a point.
+//
+// The time series (the attendance line and the collections columns) and
+// the member mix ring live in their own files under this folder since
+// 30 October 2026: they grew axes, and the frame they share is a
+// separate reason to change.
 
-const W = 320;
+export { ColumnChart } from "./report-column-chart";
+export { Donut, type DonutSlice } from "./report-donut";
+export { LineTrend } from "./report-line-trend";
+export { ReportDataTable, type ReportTableColumn } from "./report-data-table";
+export type { ChartPoint } from "./report-chart-scale";
 
-export type ChartPoint = {
-  label: string;
-  value: number | null;
-  hint?: string;
-};
-
-export function LineTrend({
-  points,
-  ariaLabel,
-  maxValue,
-}: {
-  points: ChartPoint[];
-  ariaLabel: string;
-  maxValue?: number;
-}) {
-  const height = 120;
-  const pad = 8;
-  const values = points.map((p) => p.value).filter((v): v is number => v !== null);
-  const max = Math.max(1, maxValue ?? 0, ...values);
-  const stepX = points.length > 1 ? (W - pad * 2) / (points.length - 1) : 0;
-  const y = (v: number) => height - pad - (v / max) * (height - pad * 2);
-
-  const path = points
-    .map((p, i) =>
-      p.value === null ? null : `${i === 0 ? "M" : "L"} ${pad + i * stepX} ${y(p.value)}`,
-    )
-    .filter(Boolean)
-    .join(" ");
-
-  return (
-    <svg
-      role="img"
-      aria-label={ariaLabel}
-      viewBox={`0 0 ${W} ${height}`}
-      className="w-full"
-    >
-      <title>{ariaLabel}</title>
-      <line
-        x1={pad}
-        y1={height - pad}
-        x2={W - pad}
-        y2={height - pad}
-        className="stroke-line"
-        strokeWidth="1"
-      />
-      {path ? (
-        <path d={path} fill="none" className="stroke-water" strokeWidth="2.5" />
-      ) : null}
-      {points.map((p, i) =>
-        p.value === null ? null : (
-          <circle
-            key={`${p.label}-${i}`}
-            cx={pad + i * stepX}
-            cy={y(p.value)}
-            r="3"
-            className="fill-water"
-          >
-            <title>{`${p.hint ?? p.label}: ${p.value}`}</title>
-          </circle>
-        ),
-      )}
-    </svg>
-  );
-}
-
-export function ColumnChart({
-  points,
-  ariaLabel,
-  valueLabel,
-}: {
-  points: ChartPoint[];
-  ariaLabel: string;
-  valueLabel?: (value: number) => string;
-}) {
-  const height = 120;
-  const pad = 8;
-  const gap = 4;
-  const values = points.map((p) => p.value ?? 0);
-  const max = Math.max(1, ...values);
-  const slot = points.length > 0 ? (W - pad * 2) / points.length : W;
-  const barWidth = Math.max(4, slot - gap);
-
-  return (
-    <svg
-      role="img"
-      aria-label={ariaLabel}
-      viewBox={`0 0 ${W} ${height}`}
-      className="w-full"
-    >
-      <title>{ariaLabel}</title>
-      <line
-        x1={pad}
-        y1={height - pad}
-        x2={W - pad}
-        y2={height - pad}
-        className="stroke-line"
-        strokeWidth="1"
-      />
-      {points.map((p, i) => {
-        const value = p.value ?? 0;
-        const barHeight = (value / max) * (height - pad * 2);
-        return (
-          <rect
-            key={`${p.label}-${i}`}
-            x={pad + i * slot + gap / 2}
-            y={height - pad - barHeight}
-            width={barWidth}
-            height={Math.max(barHeight, value > 0 ? 2 : 0)}
-            rx="3"
-            className={value > 0 ? "fill-water" : "fill-deck"}
-          >
-            <title>{`${p.hint ?? p.label}: ${
-              valueLabel ? valueLabel(value) : value
-            }`}</title>
-          </rect>
-        );
-      })}
-    </svg>
-  );
-}
+import { ProgressBar } from "@/components/ui/ProgressBar";
 
 export function HorizontalBars({
   rows,
   ariaLabel,
+  valueLabel,
 }: {
   rows: Array<{ label: string; value: number; hint?: string }>;
   ariaLabel: string;
+  /** The exact amount, shown next to the category. */
+  valueLabel?: (value: number) => string;
 }) {
-  const rowHeight = 28;
-  const height = Math.max(rowHeight, rows.length * rowHeight + 8);
-  const labelWidth = 96;
-  const max = Math.max(1, ...rows.map((r) => r.value));
-  const trackWidth = W - labelWidth - 12;
+  const max = Math.max(1, ...rows.map((row) => row.value));
 
+  // 30 October 2026 — the plan bars are HTML rows, not an SVG.
+  //
+  // The SVG drew the category in a fixed 96px column and cut the text
+  // at 18 characters, which is about 110px of type: "Annual
+  // Membership" sat on top of the bar track (measured in Chrome: a
+  // 12.4px overlap on the first label, 19.6px on the second). The cut
+  // was a guess about the type's width, and a guess cannot be right
+  // for every name.
+  //
+  // In a row the browser owns the space: the category is real text in
+  // its own column, ellipsised when it does not fit and carrying the
+  // full name for a screen reader and for the title attribute; the
+  // amount is written out when the caller formats it, so the exact
+  // figure is readable without hovering anything; and the bar is on
+  // its own line below, so a long name can never reach the track. The
+  // bar is the shared ProgressBar, so a plan bar looks like every
+  // other meter in Aqua.
   return (
-    <svg
-      role="img"
-      aria-label={ariaLabel}
-      viewBox={`0 0 ${W} ${height}`}
-      className="w-full"
-    >
-      <title>{ariaLabel}</title>
-      {rows.map((row, i) => {
-        const y = 4 + i * rowHeight;
-        const width = (row.value / max) * trackWidth;
-        return (
-          <g key={row.label}>
-            <text
-              x={0}
-              y={y + 12}
-              className="fill-ink-3"
-              fontSize="11"
+    <ul className="space-y-3" aria-label={ariaLabel}>
+      {rows.map((row) => (
+        <li key={row.label}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span
+              data-bar-label
+              className="min-w-0 truncate text-[13px] text-ink-2"
+              title={row.label}
             >
-              {row.label.length > 18 ? `${row.label.slice(0, 17)}…` : row.label}
-            </text>
-            <rect
-              x={labelWidth}
-              y={y + 2}
-              width={trackWidth}
-              height="10"
-              rx="5"
-              className="fill-deck"
+              {row.label}
+            </span>
+            <span className="shrink-0 text-[12px] tabular-nums text-ink-3">
+              {valueLabel ? valueLabel(row.value) : null}
+            </span>
+          </div>
+          <div data-bar-track className="mt-1.5">
+            <ProgressBar
+              value={row.value}
+              max={max}
+              label={`${row.label}: ${row.hint ?? valueLabel?.(row.value) ?? row.value}`}
             />
-            <rect
-              x={labelWidth}
-              y={y + 2}
-              width={Math.max(width, row.value > 0 ? 3 : 0)}
-              height="10"
-              rx="5"
-              className="fill-water"
-            >
-              <title>{`${row.label}: ${row.hint ?? formatINR(row.value)}`}</title>
-            </rect>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-export type DonutSlice = { label: string; value: number; tone: string };
-
-// A single donut for the member mix. `tone` is a closed set of token
-// class names (stroke-water / stroke-good / stroke-warn / stroke-late /
-// stroke-ink-3); the caller picks from the semantic set — never an
-// arbitrary colour.
-export function Donut({
-  slices,
-  ariaLabel,
-}: {
-  slices: DonutSlice[];
-  ariaLabel: string;
-}) {
-  const size = 132;
-  const radius = 52;
-  const stroke = 18;
-  const center = size / 2;
-  const total = slices.reduce((sum, s) => sum + s.value, 0);
-  const circumference = 2 * Math.PI * radius;
-
-  let offset = 0;
-  const arcs = slices
-    .filter((s) => s.value > 0)
-    .map((slice) => {
-      const fraction = slice.value / total;
-      const dash = fraction * circumference;
-      const arc = (
-        <circle
-          key={slice.label}
-          cx={center}
-          cy={center}
-          r={radius}
-          fill="none"
-          strokeWidth={stroke}
-          strokeDasharray={`${dash} ${circumference - dash}`}
-          strokeDashoffset={-offset}
-          className={`${slice.tone} origin-center`}
-          transform={`rotate(-90 ${center} ${center})`}
-        >
-          <title>{`${slice.label}: ${slice.value}`}</title>
-        </circle>
-      );
-      offset += dash;
-      return arc;
-    });
-
-  return (
-    <svg
-      role="img"
-      aria-label={ariaLabel}
-      viewBox={`0 0 ${size} ${size}`}
-      className="h-[132px] w-[132px]"
-    >
-      <title>{ariaLabel}</title>
-      <circle
-        cx={center}
-        cy={center}
-        r={radius}
-        fill="none"
-        strokeWidth={stroke}
-        className="stroke-deck"
-      />
-      {total > 0 ? arcs : null}
-    </svg>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

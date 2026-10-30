@@ -3,6 +3,7 @@ import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getActivePreset } from "@/db/platform-presets";
 import { presetOfferedForKind, previewPreset } from "@/db/preset-engine";
 import { listLocationsForOps, listTenants } from "@/db/platform-tenants";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { PresetDetailForm, type LocationOption } from "./preset-detail-form";
 import {
   OpsPage,
@@ -63,11 +64,19 @@ export default async function PresetDetailPage({
   const canWrite = status.role === "admin";
 
   const { key } = await params;
-  const result = await getActivePreset(key);
-  if (result.kind === "not_found") notFound();
+  const result = await runOpsGlobalRead(
+    "preset.detail",
+    () => getActivePreset(key),
+    "ops_page",
+  );
+  if (!result || result.kind === "not_found") notFound();
 
-  const preview = await previewPreset(key);
-  if (preview.kind === "not_found") notFound();
+  const preview = await runOpsGlobalRead(
+    "preset.preview",
+    () => previewPreset(key),
+    "ops_page",
+  );
+  if (!preview || preview.kind === "not_found") notFound();
 
   // Tenant list for the picker. The listTenants function is the
   // canonical operator-facing list (with status pill and member
@@ -78,13 +87,23 @@ export default async function PresetDetailPage({
   // presetKey, and memberCount for display — the engine's
   // applyPreset will check the lock on submit, so the picker
   // does not pre-validate per-tenant.
-  const tenantsResult = await listTenants({ limit: 200, offset: 0 });
+  const tenantsResult = await runOpsGlobalRead(
+    "tenant.list",
+    () => listTenants({ limit: 200, offset: 0 }),
+    "ops_page",
+  );
+  if (!tenantsResult) redirect("/ops/login");
   const tenants = tenantsResult.rows;
 
   // O-03 — the picker chooses a location, not just a tenant. One
   // query for every live location; `eligible` is computed here so
   // the client island never imports the engine's server module.
-  const allLocations = await listLocationsForOps();
+  const allLocations = await runOpsGlobalRead(
+    "location.list",
+    () => listLocationsForOps(),
+    "ops_page",
+  );
+  if (!allLocations) redirect("/ops/login");
   const locationsByTenant: Record<string, LocationOption[]> = {};
   for (const l of allLocations) {
     const options = locationsByTenant[l.tenantId] ?? [];

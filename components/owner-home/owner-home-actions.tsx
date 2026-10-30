@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ClipboardList, Plus, UserPlus } from "lucide-react";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.mjs";
+import UserPlus from "lucide-react/dist/esm/icons/user-plus.mjs";
 
 // Owner Home — the actions.
 //
@@ -28,21 +29,20 @@ export function OwnerHomeActions({
   return (
     <div
       data-testid="owner-home-actions"
-      className="mt-4 flex flex-wrap items-center gap-2"
+      className="mt-4 flex flex-wrap items-center gap-2.5"
     >
       {collectHref ? (
         <Link
           href={collectHref}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-ctl bg-[var(--accent-strong)] px-4 text-[13.5px] font-semibold text-white motion-fast transition-colors hover:bg-[var(--action-surface-hover)]"
+          className="inline-flex min-h-12 items-center justify-center rounded-ctl bg-[var(--accent-strong)] px-4 text-[16px] font-medium text-white motion-fast transition-colors hover:bg-[var(--action-surface-hover)]"
         >
-          <Plus size={16} strokeWidth={2.2} aria-hidden="true" />
           Collect payment
         </Link>
       ) : null}
       {addMemberHref ? (
         <Link
           href={addMemberHref}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-ctl bg-[var(--action-soft)] px-4 text-[13.5px] font-semibold text-[var(--action-ink)] motion-fast transition-colors hover:opacity-90"
+          className="hidden min-h-11 items-center gap-1.5 rounded-ctl border border-[var(--control-border)] bg-[var(--control-surface-action)] px-3 text-[14px] font-medium text-[var(--accent-ink)] motion-fast transition-colors hover:bg-[var(--control-surface-action-hover)] lg:inline-flex"
         >
           <UserPlus size={16} strokeWidth={2} aria-hidden="true" />
           Add {memberLabel}
@@ -51,9 +51,9 @@ export function OwnerHomeActions({
       {captureEnquiryHref ? (
         <Link
           href={captureEnquiryHref}
-          className="inline-flex min-h-[44px] items-center gap-2 px-2 text-[13.5px] font-medium text-ink-2 motion-fast transition-colors hover:text-ink"
+          className="hidden min-h-11 items-center gap-1.5 px-1.5 text-[14px] font-medium text-[var(--accent-ink)] motion-fast transition-colors hover:underline lg:inline-flex"
         >
-          <ClipboardList size={16} className="text-ink-3" aria-hidden="true" />
+          <ClipboardList size={16} aria-hidden="true" />
           Capture {enquiryLabel}
         </Link>
       ) : null}

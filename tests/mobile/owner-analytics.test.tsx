@@ -26,7 +26,13 @@ describe("U-01 attendance trend", () => {
       />,
     );
     expect(screen.getByRole("img", { name: /attendance percentage by day/i })).toBeTruthy();
-    expect(document.querySelectorAll("path.stroke-water").length).toBeGreaterThan(0);
+    // The trend is drawn as <line> segments: an SVG polyline's points
+    // are numeric pairs and cannot carry the percentage positions this
+    // chart needs, and the chart is sized in CSS pixels so its axis
+    // labels stay legible on a phone.
+    expect(
+      document.querySelectorAll("line.stroke-water").length,
+    ).toBeGreaterThan(0);
     expect(document.body.textContent).toMatch(/present/i);
   });
 
@@ -77,9 +83,14 @@ describe("U-01 plan-wise revenue", () => {
         ]}
       />,
     );
-    expect(screen.getByRole("img", { name: /collections by membership plan/i })).toBeTruthy();
+    // The plan bars are HTML rows: a list of categories, each with its
+    // own bar and its exact amount. A screen reader reads the rows
+    // (an image role would hide them).
+    expect(screen.getByRole("list", { name: /collections by membership plan/i })).toBeTruthy();
     expect(document.body.textContent).toContain("Monthly");
     expect(document.body.textContent).toContain("Term");
+    // The exact amount is written out, not left to a tooltip.
+    expect(document.body.textContent).toContain("₹2,000.00");
   });
 
   it("says so when no payment links to a plan", () => {

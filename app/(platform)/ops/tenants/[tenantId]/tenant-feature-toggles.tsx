@@ -7,6 +7,7 @@ import {
   type UpsertTenantFeatureResult,
 } from "@/lib/actions/platform-features";
 import { Button } from "@/components/ui/Button";
+import { isMandatoryModule } from "@/lib/feature-flags";
 import {
   OpsCardFlush,
   OpsEmptyState,
@@ -122,6 +123,7 @@ function TenantFeatureRow({
       tenantId={tenantId}
       featureKey={feature.key}
       currentSource={feature.source}
+      currentExpiresAt={feature.expiresAt}
       onCancel={() => setEditing(false)}
     />
   );
@@ -136,21 +138,32 @@ function TenantFeatureViewRow({
   onEdit: () => void;
   canWrite: boolean;
 }) {
+  // F05 (human decision, 29 October 2026) — the core modules are
+  // mandatory. The runtime keeps them on for every tenant whatever any
+  // override says, so a switch here would store a row nothing reads.
+  // The row is still shown, a stored override is still visible (it is
+  // never deleted), and the module reads as included.
+  const mandatory = isMandatoryModule(feature.key);
   return (
     <div className="flex flex-wrap items-center gap-3">
       <div className="min-w-0 flex-1">
         <p className="font-mono text-[14px] font-medium text-ink">{feature.key}</p>
-        {feature.expiresAt ? (
+        {mandatory ? (
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            Core module — always on for every tenant.
+            {feature.source === "plan" ? null : " A stored override is ignored."}
+          </p>
+        ) : feature.expiresAt ? (
           <p className="mt-0.5 text-[12px] text-ink-3">
             Override expires{" "}
             {new Date(feature.expiresAt).toISOString().slice(0, 10)}
           </p>
         ) : null}
       </div>
-      <OpsStatusPill tone={SOURCE_TONE[feature.source]}>
-        {SOURCE_LABEL[feature.source]}
+      <OpsStatusPill tone={mandatory ? "neutral" : SOURCE_TONE[feature.source]}>
+        {mandatory ? "Mandatory" : SOURCE_LABEL[feature.source]}
       </OpsStatusPill>
-      {canWrite ? (
+      {canWrite && !mandatory ? (
         <Button type="button" variant="secondary" size="sm" onClick={onEdit}>
           Edit
         </Button>
@@ -163,11 +176,13 @@ function TenantFeatureEditRow({
   tenantId,
   featureKey,
   currentSource,
+  currentExpiresAt,
   onCancel,
 }: {
   tenantId: string;
   featureKey: string;
   currentSource: FeatureSource;
+  currentExpiresAt?: Date;
   onCancel: () => void;
 }) {
   const [state, formAction, isPending] = useActionState(upsertTenantFeatureAction, {
@@ -195,6 +210,9 @@ function TenantFeatureEditRow({
     >
       <input type="hidden" name="tenantId" value={tenantId} />
       <input type="hidden" name="featureKey" value={featureKey} />
+      {currentExpiresAt ? (
+        <input type="hidden" name="expiresAt" value={new Date(currentExpiresAt).toISOString()} />
+      ) : null}
       <p className="text-[13px] text-ink-2">
         Editing <span className="font-mono">{featureKey}</span> · currently{" "}
         <span className="font-medium">{SOURCE_LABEL[currentSource]}</span>
@@ -211,20 +229,9 @@ function TenantFeatureEditRow({
         <Button
           type="submit"
           name="mode"
-          value="override"
+          value="enable"
           variant="primary"
           size="sm"
-          // H1: enabled vs disabled is a separate form field. The
-          // action reads enabled from formData. A boolean false
-          // becomes "false" string. Use a hidden input rather than
-          // a checkbox so the value is always sent.
-          onClick={(e) => {
-            const form = e.currentTarget.form;
-            if (form) {
-              const hidden = form.elements.namedItem("enabled") as HTMLInputElement | null;
-              if (hidden) hidden.value = "true";
-            }
-          }}
           disabled={isPending}
         >
           Force on
@@ -232,16 +239,9 @@ function TenantFeatureEditRow({
         <Button
           type="submit"
           name="mode"
-          value="override"
+          value="disable"
           variant="secondary"
           size="sm"
-          onClick={(e) => {
-            const form = e.currentTarget.form;
-            if (form) {
-              const hidden = form.elements.namedItem("enabled") as HTMLInputElement | null;
-              if (hidden) hidden.value = "false";
-            }
-          }}
           disabled={isPending}
         >
           Force off

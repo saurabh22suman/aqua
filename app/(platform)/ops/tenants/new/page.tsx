@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listActivePlans } from "@/db/platform-tenant-create";
 import { listPresets } from "@/db/platform-presets";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { NewTenantForm } from "./new-tenant-form";
 import { OpsPage, OpsPageHeader } from "@/components/ops/ops-primitives";
 import { OpsWriteGate } from "@/components/ops/ops-display";
@@ -23,13 +24,24 @@ export default async function NewTenantPage() {
   if (status.kind !== "authenticated") redirect("/ops/login");
   const canWrite = status.role === "admin";
 
-  const plans = await listActivePlans();
+  const plans = await runOpsGlobalRead(
+    "plan.list",
+    () => listActivePlans(),
+    "ops_page",
+  );
+  if (!plans) redirect("/ops/login");
   const defaultPlan = plans.find((p) => p.isDefault) ?? plans[0];
   // PR1-C6 — an explicit preset choice. Without one the tenant is
   // created with preset_key null and no sample data, which used to
   // happen silently. The service still tolerates a missing preset
   // (and warns); this form does not.
-  const presets = (await listPresets()).filter((p) => p.status === "active");
+  const allPresets = await runOpsGlobalRead(
+    "preset.list",
+    () => listPresets(),
+    "ops_page",
+  );
+  if (!allPresets) redirect("/ops/login");
+  const presets = allPresets.filter((p) => p.status === "active");
   const defaultPreset =
     presets.find((p) => p.key === "start-from-scratch") ?? presets[0];
 

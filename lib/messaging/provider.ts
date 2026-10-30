@@ -72,6 +72,27 @@ export type SendResult = {
   status: "sent";
 };
 
+// F08 (composed, rev 3) — a provider error that states the message was
+// DEFINITELY not accepted (a validation rejection, a malformed recipient,
+// a disabled account). Only this error makes a failed send safe to retry.
+//
+// Every OTHER failure — a timeout, a dropped connection, a 5xx — leaves
+// the outcome UNKNOWN: the transport may have accepted the message before
+// the failure surfaced. The dispatch records those as "unknown" and never
+// retries them automatically.
+//
+// Note: no transport's idempotency support was researched or verified in
+// this slice. If the provider that is eventually configured offers an
+// idempotency key, it should be used as the primary defence against a
+// duplicate and this taxonomy becomes a backstop.
+export class MessageNotAcceptedError extends Error {
+  readonly definitelyNotSent = true as const;
+  constructor(message: string) {
+    super(message);
+    this.name = "MessageNotAcceptedError";
+  }
+}
+
 export interface MessageProvider {
   readonly name: "mock" | "cloud";
   send(message: OutboundMessage): Promise<SendResult>;

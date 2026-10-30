@@ -15,16 +15,25 @@ import {
 import { matchingTotpStep, generateTotpSecret } from "./platform-auth-totp";
 export { currentTotpCode, verifyTotp, generateTotpSecret } from "./platform-auth-totp";
 import { loginWithEnvOperator } from "./platform-auth-env";
-import { runPlatformLoginAttempt } from "./platform-auth-attempt";
+import {
+  classifyUnexpectedError,
+  opsIdentityHash,
+  recordUnauthEvent,
+  runPlatformLoginAttempt,
+} from "./platform-auth-attempt";
 import {
   platformUsers,
   platformSessions,
   platformAuditLog,
 } from "./schema";
 
-// Public surface kept stable: callers (lib/actions/platform-auth.ts,
-// tests) import PlatformAuthError from this module.
 export { PlatformAuthError, PLATFORM_SESSION_TTL_SECONDS } from "./platform-auth-crypto";
+export {
+  lookupPlatformSession,
+  platformLogout,
+  platformLogoutWithResult,
+} from "./platform-auth-session";
+export type { PlatformSessionLookup } from "./platform-auth-session";
 
 export const platformLoginInput = z.object({
   email: z.string().email(),
@@ -103,9 +112,54 @@ export async function platformVerifyTotp(
   meta: { ipAddress?: string; userAgent?: string } = {},
 ): Promise<PlatformAuthResult> {
   const tokenHash = sha256(input.sessionToken);
-  const [subject] = await withPlatform(async () => await db.select({ userId: platformSessions.userId })
-    .from(platformSessions).where(eq(platformSessions.tokenHash, tokenHash)).limit(1));
-  if (!subject) throw new PlatformAuthError("session_invalid", "session not found");
+  // The subject lookup runs BEFORE the attempt boundary, so an unexpected
+  // failure here would leave no evidence at all. Record it — through the
+  // bounded pre-auth policy, because an unauthenticated caller can reach
+  // it — and let the original error reach the caller.
+  let subject: { userId: string } | undefined;
+  try {
+    [subject] = await withPlatform(async () => await db.select({ userId: platformSessions.userId })
+      .from(platformSessions).where(eq(platformSessions.tokenHash, tokenHash)).limit(1));
+  } catch (error) {
+    await recordUnauthEvent({
+      action: "platform.login.error",
+      detail: {
+        phase: "totp",
+        errorCode: classifyUnexpectedError(error),
+      },
+      ipAddress: meta.ipAddress,
+      phase: "totp",
+      outcome: "unexpected_error",
+      // The session token is the only identity this pre-attempt path has;
+      // record it only as the same pseudonymous hash the attempt uses.
+      identityHash: opsIdentityHash("totp", input.sessionToken),
+      correlationId: randomUUID(),
+    });
+    throw error;
+  }
+  if (!subject) {
+    // The refusal passes through the attempt boundary so that it is
+    // COUNTED and CAPPED — but on the UNKNOWN-CHALLENGE budget, which is
+    // separate from the operator's budget. An unauthenticated caller
+    // therefore cannot spend the budget that protects a real operator's
+    // sign-in: the operator's own attempt is counted against
+    // `platform.login.failed`, this one against
+    // `platform.login.failed.unknown` — and this one is inside the
+    // pre-auth budget as well, because it is written by a caller with no
+    // valid session.
+    //
+    // The identity is the session token, recorded only as its
+    // pseudonymous hash: there is no account to key an account limit on.
+    return runPlatformLoginAttempt<PlatformAuthResult>(
+      "totp",
+      input.sessionToken,
+      meta,
+      async () => {
+        throw new PlatformAuthError("session_invalid", "session not found");
+      },
+      { budget: "unknown_challenge" },
+    );
+  }
   return runPlatformLoginAttempt<PlatformAuthResult>("totp", subject.userId, meta, async (db) => {
     const tokenHash = sha256(input.sessionToken);
     const [session] = await db
@@ -164,63 +218,6 @@ export async function platformVerifyTotp(
       actorId: session.user.id,
       totpStep,
     };
-  });
-}
-
-export type PlatformSessionLookup =
-  | { kind: "not_found" }
-  | { kind: "expired" }
-  | { kind: "unauthenticated"; userId: string; role: "admin" | "viewer" }
-  | { kind: "authenticated"; userId: string; role: "admin" | "viewer" };
-
-export async function lookupPlatformSession(
-  sessionToken: string,
-): Promise<PlatformSessionLookup> {
-  if (!sessionToken) return { kind: "not_found" };
-  const tokenHash = sha256(sessionToken);
-  return withPlatform(async () => {
-    const [row] = await db
-      .select({
-        session: platformSessions,
-        user: platformUsers,
-      })
-      .from(platformSessions)
-      .innerJoin(platformUsers, eq(platformUsers.id, platformSessions.userId))
-      .where(eq(platformSessions.tokenHash, tokenHash))
-      .limit(1);
-    if (!row) return { kind: "not_found" } as const;
-    if (row.user.status !== "active") return { kind: "not_found" } as const;
-    if (row.session.expiresAt.getTime() < Date.now()) {
-      return { kind: "expired" } as const;
-    }
-    if (!row.session.secondFactorPassed) {
-      return {
-        kind: "unauthenticated",
-        userId: row.user.id,
-        role: row.user.role as "admin" | "viewer",
-      };
-    }
-    // Track operator activity without extending the fixed expiry set when
-    // the authenticator challenge completed.
-    await db
-      .update(platformSessions)
-      .set({ lastSeenAt: new Date() })
-      .where(eq(platformSessions.id, row.session.id));
-    return {
-      kind: "authenticated",
-      userId: row.user.id,
-      role: row.user.role as "admin" | "viewer",
-    };
-  });
-}
-
-export async function platformLogout(sessionToken: string): Promise<void> {
-  if (!sessionToken) return;
-  const tokenHash = sha256(sessionToken);
-  await withPlatform(async () => {
-    await db
-      .delete(platformSessions)
-      .where(eq(platformSessions.tokenHash, tokenHash));
   });
 }
 
