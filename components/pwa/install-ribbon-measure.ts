@@ -10,9 +10,37 @@
 
 import { RIBBON_HEADER_CLEARANCE, type RibbonRect } from "./install-ribbon-geometry";
 
+/**
+ * The width the page is drawn in.
+ *
+ * `window.innerWidth` is the WINDOW's width. With a classic (space
+ * taking) scrollbar it includes the 15px the scrollbar occupies, so it
+ * is 15px wider than the area the page is laid out in. A `fixed`
+ * element with `right: 0` is placed against the LAYOUT viewport, so
+ * Chrome paints it with its right edge at
+ * `document.documentElement.clientWidth` — 15px to the left of
+ * `innerWidth`.
+ *
+ * The ribbon is `fixed right-0` (components/pwa/install-ribbon.tsx), so
+ * every number that says where it may sit has to be in the layout
+ * viewport's coordinates. Measuring `innerWidth` put the collision
+ * check 15px to the right of the square Chrome actually painted, and
+ * the ribbon's leftmost strip covered what the check had called clear:
+ * the staging regression of 30 October 2026, where it sat on a
+ * right-aligned payment amount (₹7,540 in Payment mix) at 390×844.
+ *
+ * A browser without layout (jsdom, a hidden frame) reports no drawable
+ * width, and a server has no window at all; both fall back to the
+ * window's own width, so the ribbon keeps working.
+ */
 export function viewportWidth(): number {
-  if (typeof window === "undefined") return 0;
-  return Math.round(window.innerWidth);
+  if (typeof window === "undefined" || typeof document === "undefined") return 0;
+  const layout = document.documentElement?.clientWidth;
+  if (typeof layout === "number" && Number.isFinite(layout) && layout > 0) {
+    return Math.round(layout);
+  }
+  const inner = window.innerWidth;
+  return Number.isFinite(inner) && inner > 0 ? Math.round(inner) : 0;
 }
 
 export function viewportHeight(): number {
@@ -49,6 +77,12 @@ export function safeAreaBottom(): number {
  *
  * Where the gutter can hold the 44px tab, the tab sits inside it and
  * covers nothing at all.
+ *
+ * It is measured in the same coordinates the ribbon is placed in — the
+ * width the page is drawn in, not the window's width. With a classic
+ * scrollbar, `innerWidth` counts the scrollbar as page room and invents
+ * a gutter the page does not have: the tab would then be parked over
+ * the content while the dock believed it covered nothing.
  */
 export function contentGutter(): number {
   if (typeof document === "undefined") return 0;
@@ -56,7 +90,7 @@ export function contentGutter(): number {
   if (!main) return 0;
   const right = main.getBoundingClientRect().right;
   if (!Number.isFinite(right) || right <= 0) return 0;
-  return Math.max(0, Math.round(window.innerWidth - right));
+  return Math.max(0, Math.round(viewportWidth() - right));
 }
 
 /** Everything on the page a person can press. */
