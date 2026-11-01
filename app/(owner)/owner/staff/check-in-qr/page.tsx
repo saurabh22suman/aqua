@@ -2,6 +2,8 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { signPremisesQrToken } from "@/lib/services/premises-qr";
 import { BackLink } from "@/components/ui/BackLink";
 import { PremisesQrCard } from "@/components/premises-qr-card";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // V-25 — the premises check-in QR. Staff scan it with their phone
 // camera; the URL opens /check-in/<token> and one tap records a
@@ -18,16 +20,14 @@ export default async function StaffCheckInQrPage() {
   const { token } = signPremisesQrToken({ tenantId: ctx.tenantId });
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/staff/roster" label="Roster" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Check-in QR
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Print this and put it where staff arrive. Scanning opens the
+      <PageHeader
+        title={<>Check-in QR</>}
+        purpose={<>Print this and put it where staff arrive. Scanning opens the
         check-in page on their phone — they sign in once and tap check
-        in.
-      </p>
+        in.</>}
+      />
 
       <PremisesQrCard urlPath={`/check-in/${token}`} />
 
@@ -35,6 +35,6 @@ export default async function StaffCheckInQrPage() {
         The poster is valid for 180 days. Printing this page again mints
         a new one; an old poster stops working when its validity ends.
       </p>
-    </main>
+    </OwnerPage>
   );
 }

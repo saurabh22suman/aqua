@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { TimeField } from "@/components/ui/TimeField";
+import { useCallback, useEffect, useId, useState } from "react";
 import {
   getBusinessHoursAction,
   setBusinessHoursAction,
@@ -25,8 +28,6 @@ const DAYS = [
 type Day = (typeof DAYS)[number] | string;
 type DayHours = { day: string; closed: boolean; open: string; close: string };
 
-const inputClass =
-  "min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function fullWeek(loaded: DayHours[]): DayHours[] {
   return DAYS.map(
@@ -51,6 +52,24 @@ export function BusinessHoursEditor({
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [timeValidity, setTimeValidity] = useState<
+    Record<string, { open?: boolean; close?: boolean }>
+  >({});
+
+  // One editor is mounted per location, so two locations on one page emit
+  // the SAME time ids when they are derived from the weekday alone. A
+  // native `<label for>` and an `aria-describedby` name the FIRST element
+  // carrying an id, so the second location's labels and help text would
+  // point at the FIRST location's controls.
+  //
+  // A per-mounted-instance suffix gives every field, label and help text
+  // exactly one owner. useId is stable across renders and unique per
+  // instance; the token is reduced to characters that are safe in an id and
+  // in a selector. The `hours-<day>-open` / `hours-<day>-close` PREFIX is
+  // unchanged — the reviewer's journey selects `fieldset[id^="hours-monday-
+  // open"]` — so the shared TimeField contract and the group's accessible
+  // name are untouched.
+  const instanceId = useId().replace(/[^A-Za-z0-9_-]/g, "");
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -88,6 +107,12 @@ export function BusinessHoursEditor({
   }
 
   const configured = days.some((d) => !d.closed);
+  const timesValid = days.every(
+    (d) =>
+      d.closed ||
+      (timeValidity[d.day]?.open !== false &&
+        timeValidity[d.day]?.close !== false),
+  );
 
   function update(day: Day, patch: Partial<DayHours>) {
     setDays((current) =>
@@ -108,49 +133,61 @@ export function BusinessHoursEditor({
         {days.map((d) => (
           <li key={d.day} className="flex flex-wrap items-center gap-2 text-[13px]">
             <span className="w-[72px] capitalize text-ink-2">{d.day}</span>
-            <label className="flex min-h-[44px] items-center gap-1.5">
-              <input
-                type="checkbox"
+            {/* A neutral wrapper: the shared Checkbox renders its own
+                label, and a label inside a label is not valid. */}
+            <span className="flex min-h-[44px] items-center gap-1.5">
+              <Checkbox
                 checked={!d.closed}
                 disabled={!canWrite}
-                onChange={(e) => update(d.day, { closed: !e.target.checked })}
+                onCheckedChange={(checked) => update(d.day, { closed: !checked })}
                 aria-label={`${d.day} open`}
-                className="h-4 w-4"
-              />
-              <span className="text-[12px] text-ink-3">
+              >
                 {d.closed ? "Closed" : "Open"}
-              </span>
-            </label>
+              </Checkbox>
+            </span>
             {!d.closed ? (
-              <span className="flex items-center gap-1.5">
-                <input
-                  type="time"
+              <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+                <TimeField
+                  id={`hours-${d.day}-open-${instanceId}`}
+                  label={`${d.day.charAt(0).toUpperCase()}${d.day.slice(1)} opening time`}
                   value={d.open}
                   disabled={!canWrite}
-                  onChange={(e) => update(d.day, { open: e.target.value })}
-                  aria-label={`${d.day} opening time`}
-                  className={`${inputClass} min-w-0`}
+                  onChange={(value) => update(d.day, { open: value })}
+                  onValidityChange={(valid) =>
+                    setTimeValidity((current) => ({
+                      ...current,
+                      [d.day]: { ...current[d.day], open: valid },
+                    }))
+                  }
                 />
-                <span className="text-ink-3">–</span>
-                <input
-                  type="time"
+                <TimeField
+                  id={`hours-${d.day}-close-${instanceId}`}
+                  label={`${d.day.charAt(0).toUpperCase()}${d.day.slice(1)} closing time`}
                   value={d.close}
                   disabled={!canWrite}
-                  onChange={(e) => update(d.day, { close: e.target.value })}
-                  aria-label={`${d.day} closing time`}
-                  className={`${inputClass} min-w-0`}
+                  onChange={(value) => update(d.day, { close: value })}
+                  onValidityChange={(valid) =>
+                    setTimeValidity((current) => ({
+                      ...current,
+                      [d.day]: { ...current[d.day], close: valid },
+                    }))
+                  }
                 />
-              </span>
+              </div>
             ) : null}
           </li>
         ))}
       </ul>
 
       {canWrite ? (
-        <button
-          type="button"
-          disabled={busy}
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-2"
+            type="button"
+          disabled={busy || !timesValid}
           onClick={() => {
+            if (!timesValid) return;
             setBusy(true);
             setMessage(null);
             void (async () => {
@@ -169,10 +206,9 @@ export function BusinessHoursEditor({
               }
             })();
           }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          >
           {busy ? "Saving…" : "Save hours"}
-        </button>
+        </Button>
       ) : null}
 
       {message ? (

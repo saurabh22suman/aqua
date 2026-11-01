@@ -20,6 +20,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import { OwnerHomeRange } from "@/components/owner-home/owner-home-range";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 
 function data(overrides: Partial<OwnerChartsData> = {}): OwnerChartsData {
@@ -88,7 +89,22 @@ function data(overrides: Partial<OwnerChartsData> = {}): OwnerChartsData {
 afterEach(cleanup);
 
 describe("owner Home — money at a glance", () => {
-  it("puts ONE period control above both money panels", () => {
+  it("puts ONE range control above both money panels", () => {
+    render(
+      <OwnerHomeRange data={data()} period="last7" facility="loc-1" />,
+    );
+    // Exactly one range control, and it owns the selected range for
+    // the whole band.
+    const periods = screen.getByRole("navigation", { name: "Range" });
+    const labels = within(periods)
+      .getAllByRole("link")
+      .map((link) => link.textContent);
+    // Three distinct choices: a Monday-to-now "Week" button beside
+    // "Last 7 days" would be ambiguous, so it is not offered.
+    expect(labels).toEqual(["Day", "Last 7 days", "Month"]);
+  });
+
+  it("keeps both money panels inside the band, on the one range", () => {
     render(
       <OwnerHomeCharts
         data={data()}
@@ -99,33 +115,22 @@ describe("owner Home — money at a glance", () => {
     );
     const band = screen.getByTestId("owner-home-money");
     expect(within(band).getByText("Money at a glance")).toBeTruthy();
-    // Exactly one period control, and it belongs to the band.
-    const periods = within(band).getByRole("navigation", { name: "Period" });
-    const labels = within(periods)
-      .getAllByRole("link")
-      .map((link) => link.textContent);
-    expect(labels).toEqual(["Day", "Week", "Month"]);
     // Both panels live inside the same band, so they always describe
-    // the same period.
+    // the same range.
     expect(within(band).getByText("Payment mix")).toBeTruthy();
-    expect(within(band).getByText("Trends")).toBeTruthy();
+    expect(within(band).getByText("Collections")).toBeTruthy();
   });
 
-  it("keeps the metric and the facility scope on every period link", () => {
+  it("keeps the facility scope on every range link", () => {
     render(
-      <OwnerHomeCharts
-        data={data()}
-        metric="collections"
-        facility="loc-1"
-        canReadFees
-      />,
+      <OwnerHomeRange data={data()} period="last7" facility="loc-1" />,
     );
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    expect(hrefs).toContain("/owner?trend=collections&period=day&facility=loc-1");
-    expect(hrefs).toContain("/owner?trend=collections&period=month&facility=loc-1");
-    expect(hrefs).toContain("/owner?trend=attendance&period=week&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=day&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=last7&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=month&facility=loc-1");
   });
 
   it("says there is no mix instead of drawing an empty ring", () => {
@@ -153,8 +158,9 @@ describe("owner Home — money at a glance", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("No payments captured in this period");
-    expect(text).toContain("No collections in this period");
+    expect(text).toContain("No payments recorded in this period");
+    // The fixture's own comparison: neither range recorded a collection.
+    expect(text).toContain("No collections in either range");
   });
 
   it("states that the charts are unavailable instead of showing zero", () => {
@@ -167,7 +173,8 @@ describe("owner Home — money at a glance", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Charts are unavailable right now");
+    // A failed financial read says so; it never shows a fake zero.
+    expect(text).toContain("Money figures are unavailable right now");
     expect(text).not.toContain("₹0");
   });
 });

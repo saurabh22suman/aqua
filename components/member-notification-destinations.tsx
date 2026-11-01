@@ -26,7 +26,7 @@ export function MemberNotificationDestinations({ memberId, contacts, communicati
     <fieldset className="mt-3" disabled={pending}><legend className="sr-only">Notification destinations</legend>
       {contacts.length === 0 ? <p className="text-[13px] text-ink-2">Add a phone number to the student or a linked guardian first.</p> :
         contacts.map((contact) => <label key={contact.personId} className="flex min-h-[48px] items-center gap-3 py-2">
-          <input type="checkbox" checked={selected.includes(contact.personId)} className="h-5 w-5"
+          <input type="checkbox" checked={selected.includes(contact.personId)} className="h-5 w-5 flex-none accent-[var(--accent-strong)]"
             onChange={(event) => setSelected((ids) => event.target.checked ? [...ids, contact.personId] : ids.filter((id) => id !== contact.personId))} />
           <span className="text-[14px] text-ink">{contact.name}<span className="block text-[12px] text-ink-2">{contact.relationship} · {contact.phone}</span></span>
         </label>)}

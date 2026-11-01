@@ -4,6 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Save, X } from "lucide-react";
 import { inviteStaffAction } from "@/lib/actions/staff-invitations";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
 type LocationOption = { id: string; name: string };
 
@@ -56,35 +59,40 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
 
   return (
     <div>
-      <label className="block mb-4">
-        <span className="block text-[12.5px] font-medium mb-1.5">
-          Phone number (with country code)
-        </span>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="+919876543210"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] font-mono"
-          data-testid="invite-phone"
-        />
-        <span className="block mt-1 text-[12px] text-ink-3">
-          Country code first. After inviting, copy the login link from the roster and share it
-          yourself — nothing is sent automatically.
-        </span>
-      </label>
-      <label className="block mb-4">
-        <span className="block text-[12.5px] font-medium mb-1.5">Full name</span>
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="Rehan Mehta"
-          maxLength={200}
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          data-testid="invite-name"
-        />
-      </label>
+      <div className="mb-4">
+        <Field
+          id="invite-phone-field"
+          label="Phone number (with country code)"
+          description="Country code first. After inviting, copy the login link from the roster and share it yourself — nothing is sent automatically."
+        >
+          {(field) => (
+            <Input
+              {...field}
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+919876543210"
+              className="font-mono"
+              data-testid="invite-phone"
+            />
+          )}
+        </Field>
+      </div>
+      <div className="mb-4">
+        <Field id="invite-name-field" label="Full name">
+          {(field) => (
+            <Input
+              {...field}
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Rehan Mehta"
+              maxLength={200}
+              data-testid="invite-name"
+            />
+          )}
+        </Field>
+      </div>
 
       <div className="mb-4">
         <span className="block text-[12.5px] font-medium mb-1.5">Role</span>
@@ -132,25 +140,27 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
       ) : null}
 
       {error ? (
-        <p className="mb-4 text-[13px] text-ink-3" role="alert">{error}</p>
+        <p className="mb-4 text-[13px] text-ink-2" role="alert">{error}</p>
       ) : null}
 
       <div className="flex gap-2">
-        <button
+        <Button
           type="button"
+          variant="primary"
+          size="lg"
           onClick={submit}
           disabled={pending}
-          className="flex-1 rounded-pill py-4 text-[14.5px] font-semibold text-paper bg-[var(--accent-strong)] disabled:opacity-70 flex items-center justify-center gap-2"
+          className="flex-1"
           data-testid="invite-save"
         >
-          {pending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {pending ? "Inviting…" : "Create invite"}
-        </button>
+          {pending ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}
+          {pending ? "Inviting…" : "Create invitation"}
+        </Button>
         <Link
           href="/owner/staff/invitations"
-          className="rounded-pill px-4 py-4 text-[14px] font-medium text-ink-2 bg-deck flex items-center"
+          className="inline-flex items-center justify-center rounded-ctl bg-deck px-4 py-3 text-[14px] font-medium text-ink-2"
         >
-          <X size={14} className="mr-1" /> Cancel
+          <X size={14} className="mr-1" aria-hidden="true" /> Cancel
         </Link>
       </div>
     </div>

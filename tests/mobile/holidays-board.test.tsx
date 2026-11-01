@@ -93,6 +93,10 @@ describe("HolidaysBoard (R.3)", () => {
   it("removes a holiday through the action", async () => {
     render(<HolidaysBoard initialHolidays={HOLIDAYS} />);
     fireEvent.click(screen.getAllByRole("button", { name: /remove/i })[0]!);
-    expect(removeHolidayAction).toHaveBeenCalledWith({ holidayId: "h1" });
+    expect(removeHolidayAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /confirm removal/i }));
+    await vi.waitFor(() =>
+      expect(removeHolidayAction).toHaveBeenCalledWith({ holidayId: "h1" }),
+    );
   });
 });

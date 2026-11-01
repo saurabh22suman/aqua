@@ -1,28 +1,21 @@
-import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
-import { platformUsers, platformSessions, platformAuditLog } from "./schema/platform-users";
+import { platformAuditLog } from "./schema/platform-users";
 import { whatsappAuthChallenges as challenges } from "./schema/whatsapp";
 import { users } from "./schema/users";
 import { baAccount, baSession } from "./schema/better-auth";
 import { activeTenantLogin, verifyWhatsAppChallenge, withWhatsAppAuthTx } from "./whatsapp-auth";
-import { sha256, PLATFORM_SESSION_TTL_SECONDS } from "./platform-auth-crypto";
+import { sha256 } from "./platform-auth-crypto";
 import { auth } from "@/lib/auth/server";
 import { pinSchema } from "@/lib/services/credentials";
 
-export async function finishOpsWhatsAppLogin(token: string, code: string) {
-  return verifyWhatsAppChallenge(token, code, "ops_login", async (tx, id, phone) => {
-    const [user] = await tx.select().from(platformUsers).where(eq(platformUsers.id, id)).for("update");
-    if (!user || user.status !== "active" || user.phone !== phone) throw new Error("Sign-in is unavailable for this account.");
-    const sessionToken = randomBytes(32).toString("hex");
-    await tx.insert(platformSessions).values({ userId: id, tokenHash: sha256(sessionToken),
-      secondFactorPassed: true, expiresAt: new Date(Date.now() + PLATFORM_SESSION_TTL_SECONDS * 1000) });
-    await tx.update(platformUsers).set({ lastLoginAt: new Date() }).where(eq(platformUsers.id, id));
-    await tx.update(challenges).set({ consumedAt: new Date() }).where(eq(challenges.tokenHash, sha256(token)));
-    await tx.insert(platformAuditLog).values({ actorId: id, action: "platform.login",
-      detail: { method: "whatsapp_otp" } });
-    return sessionToken;
-  });
+// Kept as a fail-closed compatibility export for already-issued legacy
+// challenges. The HTTP route also refuses this passwordless Ops flow.
+export async function finishOpsWhatsAppLogin(_token: string, _code: string): Promise<
+  { ok: false } | { ok: true; value: string }
+> {
+  void _token; void _code; // Deliberately refuse every legacy credential.
+  return { ok: false };
 }
 
 export async function verifyPinResetCode(token: string, code: string) {

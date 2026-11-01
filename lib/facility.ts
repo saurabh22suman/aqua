@@ -6,7 +6,8 @@ import { z } from "zod";
 // to the URL (so links are shareable and server pages read it first).
 // Pages resolve `searchParams.facility` first, then the cookie.
 //
-// Only a well-formed UUID is ever accepted; data services combine the
+// An explicit "all" clears the filter; otherwise only a well-formed UUID
+// is accepted. Data services combine the
 // value with the standard O-08 location predicate, so a forged value
 // for a location the caller cannot see returns no rows rather than
 // widening access.
@@ -43,6 +44,7 @@ export function resolveFacilityValue(
   searchParam: string | null | undefined,
   cookieValue: string | null | undefined,
 ): string | undefined {
+  if (searchParam === "all") return undefined;
   return parseFacilityValue(searchParam) ?? parseFacilityValue(cookieValue);
 }
 
@@ -55,6 +57,7 @@ export const FACILITY_SCOPED_PATH_PREFIXES = [
   "/owner/members",
   "/owner/fees",
   "/owner/programs",
+  "/owner/bookings",
   "/owner/reports",
 ] as const;
 

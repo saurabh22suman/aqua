@@ -1,20 +1,30 @@
-// Install-offer geometry check at 390x844.
+// Historical expanded-card driver. Superseded for Chromium by
+// tests/pwa/ribbon-20261030/direct-install-chrome.mjs (human revision 30 October).
+// Install-ribbon geometry check at 390x844.
 //
-// The coordinator's browser review found that the install offer covered
-// member rows before it was dismissed. This script measures that
-// directly on a running dev server, so the finding cannot come back
-// unnoticed:
+// The coordinator's browser review found that the old install offer
+// covered member rows before it was dismissed. The offer is now a side
+// ribbon (docs/design/pwa-side-ribbon-20261030/ribbon-contract.md), so
+// this script measures THAT directly on a running server, so the finding
+// cannot come back unnoticed:
 //
-//   1. the offer must not overlap the bottom navigation;
-//   2. the offer must not cover any interactive control on the page
-//      (the row actions on a member list are on the right);
-//   3. the offer must be compact (one row, not a card);
-//   4. the offer must leave the page on its own;
-//   5. the sign-in surface must show no offer at all.
+//   1. the ribbon waits before it appears, so it never ambushes the
+//      first thing the person came to do;
+//   2. it ARRIVES COLLAPSED: one slim tab, and the move handle only
+//      exists while the ribbon is open;
+//   3. the collapsed tab is inside the page's own gutter, so it never
+//      covers the Members row links;
+//   4. it is docked to the RIGHT edge (root's placement correction of
+//      30 October 2026: a left-edge ribbon would cover the desktop
+//      sidebar navigation);
+//   5. the expanded panel stays inside the viewport;
+//   6. the ribbon never covers the bottom navigation;
+//   7. a deliberate tap opens it, and it folds back into a tab;
+//   8. the sign-in surface shows no ribbon at all.
 //
-// Run it against a dev server that already has the demo club seeded:
+// Run it against a server that already has the demo club seeded:
 //
-//   pnpm exec tsx tests/pwa/install-offer-geometry.ts http://127.0.0.1:3112
+//   pnpm exec tsx tests/pwa/install-offer-geometry.ts http://127.0.0.1:3205
 //
 // It is NOT a *.test.ts file, so the Vitest suite does not pick it up:
 // it needs a browser and a running server, which the unit suite does
@@ -24,7 +34,7 @@
 
 import { chromium } from "playwright";
 
-const BASE = process.argv[2] ?? "http://127.0.0.1:3112";
+const BASE = process.argv[2] ?? "http://127.0.0.1:3205";
 const DEMO_PHONE = process.env.AQUA_DEMO_PHONE ?? "919000000001";
 // The demo PIN every seeded demo user shares (scripts/lib/demo-credentials.ts).
 const DEMO_PIN = process.env.AQUA_DEMO_PIN ?? "123456";
@@ -32,17 +42,25 @@ const DEMO_PIN = process.env.AQUA_DEMO_PIN ?? "123456";
 const VIEWPORT = { width: 390, height: 844 };
 
 type Measurement = {
-  offerPresent: boolean;
-  offerHeight: number;
-  offerWidth: number;
-  offerTop: number | null;
-  offerBottom: number | null;
+  ribbonPresent: boolean;
+  tabWidth: number;
+  tabHeight: number;
+  tabRight: number | null;
+  contentRight: number | null;
+  gutter: number | null;
+  coversContent: boolean;
+  handlePresent: boolean;
+  ribbonRight: number | null;
+  viewportWidth: number;
+  dockedRight: boolean;
+  panelVisible: boolean;
+  panelTop: number | null;
+  panelBottom: number | null;
+  panelLeft: number | null;
+  panelRight: number | null;
+  panelInsideViewport: boolean;
   navTop: number | null;
   overlapsNavigation: boolean;
-  coveredControls: number;
-  blocksContent: boolean;
-  coveredRows: number;
-  visibleRows: number;
 };
 
 async function measure(page: import("playwright").Page): Promise<Measurement> {
@@ -52,62 +70,59 @@ async function measure(page: import("playwright").Page): Promise<Measurement> {
     // source in the browser where that helper does not exist. Defining
     // it in the page scope keeps the measurement working.
     (globalThis as unknown as { __name?: (fn: unknown) => unknown }).__name ??= (fn: unknown) => fn;
-    const section = document.querySelector('section[aria-label="Install Aqua"]');
-    // The visible surface is the pill inside the section; the section
-    // only adds the gap that keeps it off the navigation.
-    const offer = section?.querySelector(":scope > div") ?? null;
+    const ribbon = document.querySelector('[data-ribbon="install"]');
+    const tab = ribbon?.querySelector('button[aria-label="Install options"]') ?? null;
+    const handle = ribbon?.querySelector('button[aria-label="Move install ribbon"]') ?? null;
+    const panel = ribbon?.querySelector('section[aria-label="Install Aqua"]') ?? null;
+    const main = document.querySelector("main");
     const nav = Array.from(document.querySelectorAll("nav")).find(node =>
       (node.className || "").includes("fixed bottom-0"),
     );
-    const offerBox = offer?.getBoundingClientRect() ?? null;
+    const ribbonBox = ribbon?.getBoundingClientRect() ?? null;
+    const tabBox = tab?.getBoundingClientRect() ?? null;
+    const contentRight = main ? Math.round(main.getBoundingClientRect().right) : null;
+    const panelBox =
+      panel && panel.getAttribute("hidden") === null ? panel.getBoundingClientRect() : null;
     const navBox = nav?.getBoundingClientRect() ?? null;
-    const rows = Array.from(document.querySelectorAll("li, tr")).filter(
-      row => row.getBoundingClientRect().height > 10,
-    );
-    const visible = rows.filter(row => {
-      const box = row.getBoundingClientRect();
-      return box.top < window.innerHeight && box.bottom > 0;
-    });
-    const controls = Array.from(
-      document.querySelectorAll("button, a[href], input, select, textarea"),
-    ).filter(node => {
-      const box = node.getBoundingClientRect();
-      return box.width > 0 && box.height > 0 && box.top < window.innerHeight && box.bottom > 0;
-    });
     const overlapsBox = (box: DOMRect | null) =>
       Boolean(
-        offerBox &&
+        ribbonBox &&
           box &&
-          box.bottom > offerBox.top &&
-          box.top < offerBox.bottom &&
-          box.right > offerBox.left &&
-          box.left < offerBox.right,
+          box.bottom > ribbonBox.top &&
+          box.top < ribbonBox.bottom &&
+          box.right > ribbonBox.left &&
+          box.left < ribbonBox.right,
       );
-    const overlaps = (node: Element) => overlapsBox(node.getBoundingClientRect());
     return {
-      offerPresent: Boolean(offer),
-      offerHeight: offerBox ? Math.round(offerBox.height) : 0,
-      offerWidth: offerBox ? Math.round(offerBox.width) : 0,
-      offerTop: offerBox ? Math.round(offerBox.top) : null,
-      offerBottom: offerBox ? Math.round(offerBox.bottom) : null,
-      navTop: navBox ? Math.round(navBox.top) : null,
-      overlapsNavigation: Boolean(
-        offerBox && navBox && offerBox.bottom > navBox.top && offerBox.top < navBox.bottom,
+      ribbonPresent: Boolean(ribbon),
+      tabWidth: tabBox ? Math.round(tabBox.width) : 0,
+      tabHeight: tabBox ? Math.round(tabBox.height) : 0,
+      tabRight: tabBox ? Math.round(tabBox.right) : null,
+      contentRight,
+      gutter: contentRight === null ? null : window.innerWidth - contentRight,
+      // Does the collapsed tab paint over the content it must not
+      // cover? The content's right edge is the boundary.
+      coversContent: Boolean(
+        tabBox && contentRight !== null && tabBox.left < contentRight - 1,
       ),
-      coveredControls: controls.filter(overlaps).length,
-      // What actually matters: does the offer BLOCK what is beneath it?
-      // The offer is pointer-transparent, so the element under the
-      // pointer is the page's own content, not the offer.
-      blocksContent: (() => {
-        if (!offer || !offerBox) return false;
-        const hit = document.elementFromPoint(
-          (offerBox.left + offerBox.right) / 2,
-          (offerBox.top + offerBox.bottom) / 2,
-        );
-        return Boolean(hit && offer.contains(hit));
-      })(),
-      coveredRows: visible.filter(overlaps).length,
-      visibleRows: visible.length,
+      handlePresent: Boolean(handle),
+      ribbonRight: ribbonBox ? Math.round(ribbonBox.right) : null,
+      viewportWidth: window.innerWidth,
+      dockedRight: Boolean(ribbonBox && Math.abs(ribbonBox.right - window.innerWidth) <= 1),
+      panelVisible: panelBox !== null,
+      panelTop: panelBox ? Math.round(panelBox.top) : null,
+      panelBottom: panelBox ? Math.round(panelBox.bottom) : null,
+      panelLeft: panelBox ? Math.round(panelBox.left) : null,
+      panelRight: panelBox ? Math.round(panelBox.right) : null,
+      panelInsideViewport: Boolean(
+        panelBox &&
+          panelBox.top >= 0 &&
+          panelBox.bottom <= window.innerHeight &&
+          panelBox.left >= 0 &&
+          panelBox.right <= window.innerWidth,
+      ),
+      navTop: navBox ? Math.round(navBox.top) : null,
+      overlapsNavigation: overlapsBox(navBox),
     };
   });
 }
@@ -152,15 +167,15 @@ async function main() {
   const context = await browser.newContext({ viewport: VIEWPORT });
   const page = await context.newPage();
 
-  // The sign-in surface: no offer, ever.
+  // The sign-in surface: no ribbon, ever.
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  // The offer's listener lives in an effect: let the page hydrate before
+  // The ribbon's listener lives in an effect: let the page hydrate before
   // the browser's install event is simulated, or the event is missed.
   await page.waitForTimeout(1200);
   await offerInstallEventRepeatedly(page);
   await page.waitForTimeout(6000);
   const signIn = await measure(page);
-  check("sign-in surface shows no offer", !signIn.offerPresent, `offerPresent=${signIn.offerPresent}`);
+  check("sign-in surface shows no ribbon", !signIn.ribbonPresent, `ribbonPresent=${signIn.ribbonPresent}`);
 
   // Signed in: the members list, where the review found the overlap.
   await page.getByRole("textbox", { name: "Mobile number" }).fill(DEMO_PHONE);
@@ -170,38 +185,74 @@ async function main() {
   await page.goto(`${BASE}/owner/members`, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1200);
   await offerInstallEventRepeatedly(page);
-  // The offer arrives after its delay, not immediately.
+  // The ribbon arrives after its delay, not immediately.
   await page.waitForTimeout(1500);
   const early = await measure(page);
-  check("the offer waits before it appears", !early.offerPresent, `offerPresent=${early.offerPresent}`);
+  check("the ribbon waits before it appears", !early.ribbonPresent, `ribbonPresent=${early.ribbonPresent}`);
   await page.waitForTimeout(4500);
 
   const shown = await measure(page);
   console.log(`    measured: ${JSON.stringify(shown)}`);
-  // Visual evidence of the offer in place, next to the member rows.
-  await page.screenshot({ path: "/tmp/opencode/b4-install-offer.png" });
-  check("the offer appears", shown.offerPresent, `height=${shown.offerHeight}px`);
-  check("the offer is compact (one row)", shown.offerHeight <= 56, `height=${shown.offerHeight}px`);
+  // Visual evidence of the collapsed ribbon in place, next to the rows.
+  await page.screenshot({ path: "/tmp/opencode/b4-install-ribbon-collapsed.png" });
+  check("the ribbon appears", shown.ribbonPresent, `tab=${shown.tabWidth}x${shown.tabHeight}px`);
   check(
-    "the offer does not cover the bottom navigation",
-    !shown.overlapsNavigation,
-    `navTop=${shown.navTop}`,
+    "the ribbon is docked to the right edge",
+    shown.dockedRight,
+    `right=${shown.ribbonRight} viewport=${shown.viewportWidth}`,
   );
   check(
-    "the offer does not block the content beneath it",
-    !shown.blocksContent,
-    `the element under the offer is the offer itself: ${shown.blocksContent}`,
+    "the ribbon arrives collapsed: one tab, no panel, no move handle",
+    !shown.panelVisible && !shown.handlePresent,
+    `panel=${shown.panelVisible} handle=${shown.handlePresent}`,
   );
   check(
-    "the offer is a corner sliver, never a full row",
-    shown.offerHeight <= 56 && shown.offerWidth <= 160,
-    `${shown.offerWidth}x${shown.offerHeight}px`,
+    "the collapsed tab is a real hit target",
+    shown.tabWidth >= 24 && shown.tabHeight >= 44,
+    `${shown.tabWidth}x${shown.tabHeight}px`,
+  );
+  check(
+    "the collapsed tab stays inside the page's gutter",
+    !shown.coversContent,
+    `gutter=${shown.gutter}px tabLeft=${shown.tabRight === null ? null : shown.tabRight - shown.tabWidth}`,
   );
 
-  // It leaves on its own.
+  // A deliberate tap opens it.
+  await page.getByRole("button", { name: "Install options" }).click();
+  await page.waitForTimeout(400);
+  const opened = await measure(page);
+  console.log(`    measured: ${JSON.stringify(opened)}`);
+  await page.screenshot({ path: "/tmp/opencode/b4-install-ribbon-open.png" });
+  check("a deliberate tap opens the ribbon", opened.panelVisible, `panelVisible=${opened.panelVisible}`);
+  check(
+    "the move handle exists only while the ribbon is open",
+    opened.handlePresent,
+    `handle=${opened.handlePresent}`,
+  );
+  check(
+    "the expanded panel stays inside the viewport",
+    opened.panelInsideViewport,
+    `panel=${opened.panelLeft}..${opened.panelRight} / ${opened.panelTop}..${opened.panelBottom}`,
+  );
+  check(
+    "the ribbon never covers the bottom navigation",
+    !opened.overlapsNavigation,
+    `navTop=${opened.navTop}`,
+  );
+
+  // It folds back into a tab on its own.
   await page.waitForTimeout(11_000);
-  const after = await measure(page);
-  check("the offer leaves on its own", !after.offerPresent, `offerPresent=${after.offerPresent}`);
+  const folded = await measure(page);
+  check(
+    "the ribbon folds into a tab",
+    folded.ribbonPresent && !folded.panelVisible,
+    `panelVisible=${folded.panelVisible}`,
+  );
+  check(
+    "the folded tab is still a hit target",
+    folded.tabWidth >= 24 && folded.tabHeight >= 44,
+    `${folded.tabWidth}x${folded.tabHeight}px`,
+  );
 
   await browser.close();
   console.log(failures === 0 ? "\nGeometry check passed." : `\n${failures} geometry check(s) failed.`);

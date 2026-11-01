@@ -10,9 +10,19 @@ import type { ActionCtx } from "@/lib/auth/context";
 // GSTIN are the tenant's identity fields; before this service the only
 // way to fix a typo'd GSTIN was a platform operator or a migration.
 //
+// Currency is INR-only in this release (docs/project-scope.md §6.5:
+// "All currency in INR"; lib/money/format.ts formats INR only). An
+// existing non-INR tenant row remains readable and is never rewritten;
+// an explicit unsupported code is refused rather than coerced. Omitting
+// the field (a read-only editor) leaves the stored value unchanged.
+//
 // The GSTIN snapshot rule is untouched: invoices store their own
 // `gstin` at issue time (lib/services/invoice-issue.ts), so editing
 // the profile never rewrites an issued document.
+
+export const SUPPORTED_CURRENCY = "INR" as const;
+export const UNSUPPORTED_CURRENCY_MESSAGE =
+  "Only INR is supported for the academy profile in this release.";
 
 export type TenantProfile = {
   name: string;
@@ -42,8 +52,10 @@ const updateSchema = z.object({
   currency: z
     .string()
     .trim()
-    .length(3, "Currency must be a 3-letter ISO 4217 code.")
-    .regex(/^[A-Z]{3}$/, "Currency must be uppercase letters.")
+    .refine(
+      (value) => value === SUPPORTED_CURRENCY,
+      UNSUPPORTED_CURRENCY_MESSAGE,
+    )
     .optional(),
   timezone: z
     .string()

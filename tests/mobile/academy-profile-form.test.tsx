@@ -29,8 +29,8 @@ describe("AcademyProfileForm (PR2-C1)", () => {
   it("renders the editable identity fields including GSTIN", () => {
     render(<AcademyProfileForm initial={INITIAL} />);
     expect(screen.getByLabelText("Academy name")).toBeTruthy();
-    expect(screen.getByLabelText(/^Currency/)).toBeTruthy();
-    expect(screen.getByLabelText(/^Time zone/)).toBeTruthy();
+    expect(screen.getByText("Currency")).toBeTruthy();
+    expect(screen.getByText("Time zone")).toBeTruthy();
     expect(screen.getByLabelText(/GSTIN/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /save/i })).toBeTruthy();
   });
@@ -54,10 +54,14 @@ describe("AcademyProfileForm (PR2-C1)", () => {
     );
     expect(updateTenantProfileAction).toHaveBeenCalledWith({
       name: "Aqua Worli Aquatic Club",
-      currency: "INR",
       timezone: "Asia/Kolkata",
       gstin: "NOT-A-GSTIN",
     });
+    // Backend-D contract: currency is optional in the payload and an omitted
+    // value preserves the stored currency. The UI never sends an editable one.
+    expect(updateTenantProfileAction.mock.calls[0]?.[0]).not.toHaveProperty(
+      "currency",
+    );
   });
 
   it("shows a saved confirmation on success", async () => {

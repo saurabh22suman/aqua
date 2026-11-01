@@ -36,11 +36,11 @@ export function OwnerSideNav({
   return (
     <div data-testid="owner-side-nav">
       {groups.map((group, index) => (
-        <div key={group.label} className={index === 0 ? undefined : "mt-5"}>
-          <p className="px-3 text-[11px] font-medium uppercase tracking-wider text-ink-3">
+        <div key={group.label} className={index === 0 ? undefined : "mt-3"}>
+          <p className="px-2.5 text-[11px] font-medium uppercase leading-tight tracking-[1.4px] text-[var(--owner-nav-muted)]">
             {group.label}
           </p>
-          <ul className="mt-1 space-y-1">
+          <ul className="mt-1">
             {group.items.map((item) => {
               const Icon = ICONS[item.iconName];
               const isActive = item.href === activeHref;
@@ -49,16 +49,16 @@ export function OwnerSideNav({
                   <Link
                     href={item.href}
                     aria-current={isActive ? "page" : undefined}
-                    className={`flex min-h-11 items-center gap-3 rounded-ctl px-3 text-[14px] font-medium transition-colors duration-150 ${
+                    className={`flex min-h-11 items-center gap-1.5 rounded-ctl px-2 py-2 text-[14px] font-medium transition-colors duration-150 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--owner-nav-focus)] ${
                       isActive
-                        ? // The selected row is the preset's selection
-                          // pill — a tinted surface, not a white card.
+                        ? // The owner scope aliases the selection tokens to
+                          // the reference white pill (see globals.css).
                           "bg-[var(--selected-surface)] text-[var(--selected-ink)]"
-                        : "text-ink-2 hover:bg-[var(--surface-nav-hover)]"
+                        : "text-[var(--owner-nav-ink)] hover:bg-[var(--owner-nav-hover)]"
                     }`}
                   >
                     <Icon
-                      size={18}
+                      size={17}
                       strokeWidth={isActive ? 2.2 : 1.8}
                       aria-hidden="true"
                     />

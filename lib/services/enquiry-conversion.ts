@@ -3,7 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { enquiries, type EnquirySource, type EnquiryStage } from "@/db/schema/enquiries";
 import type { ActionCtx } from "@/lib/auth/context";
 import { ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
-import { createMember, enrolMember, type GuardianInput } from "@/lib/services/register";
+import { createMember, createMemberInTx, enrolMemberInTx, type GuardianInput } from "@/lib/services/register";
 import { transitionMemberStatus } from "@/lib/services/member-status";
 import { nextMemberCode } from "@/lib/services/people";
 import {
@@ -15,6 +15,7 @@ import type { MemberId } from "@/lib/ids";
 import {
   enquiryConditions,
   enquiryScope,
+  lockVisibleEnquiry,
   visibleEnquiry,
 } from "@/lib/services/enquiry-scope";
 import { auditEnquiryStateChanged, enquiryAuditState } from "@/lib/services/enquiry-audit";
@@ -41,96 +42,140 @@ export type NewMemberDetails = {
 
 // C-14: books a trial against a real batch by creating a real member
 // (status 'trial') and enrolling them -- not a separate booking
-// record. This is NOT one atomic transaction: withTenant() cannot
-// nest (db/scope.ts), so createMember, enrolMember and the enquiry
-// update below are three sequential transactions, same shape as
-// scripts/seed.ts's createMember-then-enrolMember and
-// createMemberAction's own retry loop (lib/actions/people.ts). If
-// enrolment or the enquiry update fails after the member was created,
-// the member row still exists -- a receptionist retrying the booking
-// sees "this enquiry already has a member linked" (below) rather than
-// silently creating a second one.
+// record.
+//
+// bookTrial is ONE transaction: the member (person, guardian,
+// guardianship, consent grants), the enrolment and the enquiry update
+// commit together or not at all. withTenant() cannot nest
+// (db/scope.ts), so the two shared transaction bodies (createMemberInTx,
+// enrolMemberInTx) run inside the caller's own withTenant(). The enquiry
+// row is LOCKED for the whole transaction: the decision (is a trial
+// already linked? is this stage allowed?) is made from the row's current
+// state, and two concurrent bookings of one enquiry cannot both decide
+// against a stale state.
+//
+// convertEnquiry below is NOT covered by that guarantee: it still runs
+// its member/status work and the enquiry update in separate
+// transactions. That residual is a recorded open item, not an
+// oversight.
+
+// A refusal that must roll the transaction back. Thrown inside the
+// transaction (a returned value would COMMIT it) and translated back to
+// the service's { ok: false, error } shape by the caller.
+class BookingRefused extends Error {
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "BookingRefused";
+  }
+}
+
 export async function bookTrial(
   ctx: ActionCtx,
   input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
-  const enquiry = await withTenant(ctx.tenantId, async (tx) => {
-    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
-    if (!visible) return null;
-    // R04 — the trial batch must be visible to the caller (tenant,
-    // live, location in scope; coach-assignment applies if ever
-    // reachable from a coach role). A forged batch id is refused
-    // before any member is created.
-    if (!(await visibleBatch(tx, ctx, input.batchId))) return null;
-    return visible;
-  });
-  if (!enquiry) return { ok: false, error: "Enquiry or batch not found." };
-  if (enquiry.memberId) return { ok: false, error: "This enquiry already has a member linked." };
-
-  const fromStage = enquiry.stage as EnquiryStage;
-  if (!(ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? []).includes("trial_scheduled")) {
-    return { ok: false, error: `Cannot book a trial from stage ${fromStage}.` };
-  }
-
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+    // The member code is generated OUTSIDE the transaction
+    // (nextMemberCode reads outside it; the unique key
+    // members_tenant_member_code_key is the real guarantee). A collision
+    // aborts the transaction, so the retry starts from a clean state.
     const memberCode = await nextMemberCode(ctx);
-    let created;
     try {
-      created = await createMember(ctx, {
-        fullName: enquiry.fullName,
-        phone: input.phone ?? enquiry.phone ?? undefined,
-        dateOfBirth: input.details.dateOfBirth,
-        gender: input.details.gender,
-        locationId: input.details.locationId,
-        memberCode,
-        medicalNotes: input.details.medicalNotes,
-        guardian: input.details.guardian,
-        consents: input.details.consents,
-        witnessedByUserId: ctx.userId,
-        initialStatus: "trial",
-      });
+      return await bookTrialInTx(ctx, input, memberCode);
     } catch (err) {
+      if (err instanceof BookingRefused) {
+        return { ok: false, error: err.reason };
+      }
       if (duplicateCodeMessage(err).includes(DUPLICATE_CODE_MARKER) && attempt < MAX_CODE_ATTEMPTS - 1) {
         continue;
       }
       throw err;
     }
-    if (!created.ok) return created;
-
-    await enrolMember(ctx, { memberId: created.memberId, batchId: input.batchId });
-    await withTenant(ctx.tenantId, async (tx) => {
-      await tx
-        .update(enquiries)
-        .set({
-          memberId: created.memberId,
-          trialBatchId: input.batchId,
-          stage: "trial_scheduled",
-          // R04 — assigning the trial site also resolves a legacy
-          // unassigned enquiry; an already-assigned row is untouched.
-          ...(enquiry.locationId ? {} : { locationId: input.details.locationId as never }),
-          updatedAt: new Date(),
-          updatedBy: ctx.userId,
-        })
-        .where(eq(enquiries.id, input.enquiryId));
-      // The enquiry's own audit row goes in the SAME transaction as
-      // its update. The member's creation and the enrolment keep their
-      // own rows — this one is about what happened to the enquiry.
-      await auditEnquiryStateChanged(tx, ctx, {
-        action: "enquiry.trial_book",
-        id: input.enquiryId,
-        before: enquiryAuditState(enquiry),
-        after: {
-          ...enquiryAuditState(enquiry),
-          stage: "trial_scheduled",
-          memberId: created.memberId,
-          trialBatchId: input.batchId,
-          locationId: enquiry.locationId ?? input.details.locationId,
-        },
-      });
-    });
-    return { ok: true, memberId: created.memberId };
   }
   return { ok: false, error: "Could not generate a unique member code. Try again." };
+}
+
+async function bookTrialInTx(
+  ctx: ActionCtx,
+  input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
+  memberCode: string,
+): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    // The enquiry row is LOCKED for the whole transaction: the decision
+    // (is a trial already linked? is this stage allowed?) is made from
+    // the row's CURRENT state, and a concurrent booking of the same
+    // enquiry waits here instead of creating a second member.
+    const enquiry = await lockVisibleEnquiry(tx, ctx, input.enquiryId);
+    // R04 — the trial batch must be visible to the caller (tenant,
+    // live, location in scope; coach-assignment applies if ever
+    // reachable from a coach role). A forged batch id is refused
+    // before any member is created.
+    if (!enquiry || !(await visibleBatch(tx, ctx, input.batchId))) {
+      throw new BookingRefused("Enquiry or batch not found.");
+    }
+    if (enquiry.memberId) {
+      throw new BookingRefused("This enquiry already has a member linked.");
+    }
+
+    const fromStage = enquiry.stage as EnquiryStage;
+    if (!(ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? []).includes("trial_scheduled")) {
+      throw new BookingRefused(`Cannot book a trial from stage ${fromStage}.`);
+    }
+
+    const created = await createMemberInTx(tx, ctx, {
+      fullName: enquiry.fullName,
+      phone: input.phone ?? enquiry.phone ?? undefined,
+      dateOfBirth: input.details.dateOfBirth,
+      gender: input.details.gender,
+      locationId: input.details.locationId,
+      memberCode,
+      medicalNotes: input.details.medicalNotes,
+      guardian: input.details.guardian,
+      consents: input.details.consents,
+      witnessedByUserId: ctx.userId,
+      initialStatus: "trial",
+    });
+    if (!created.ok) throw new BookingRefused(created.error);
+
+    // The enrolment result is part of the booking: a full batch or an
+    // invisible member refuses the WHOLE booking, leaving no member and
+    // no consent rows behind.
+    const enrolled = await enrolMemberInTx(tx, ctx, {
+      memberId: created.memberId,
+      batchId: input.batchId,
+    });
+    if (!enrolled.ok) throw new BookingRefused(enrolled.error);
+
+    await tx
+      .update(enquiries)
+      .set({
+        memberId: created.memberId,
+        trialBatchId: input.batchId,
+        stage: "trial_scheduled",
+        // R04 — assigning the trial site also resolves a legacy
+        // unassigned enquiry; an already-assigned row is untouched.
+        ...(enquiry.locationId ? {} : { locationId: input.details.locationId as never }),
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(eq(enquiries.id, input.enquiryId));
+    // The enquiry's own audit row goes in the SAME transaction as its
+    // update — and in the same transaction as the member's creation and
+    // the enrolment. The member's creation and the enrolment keep their
+    // own rows — this one is about what happened to the enquiry.
+    await auditEnquiryStateChanged(tx, ctx, {
+      action: "enquiry.trial_book",
+      id: input.enquiryId,
+      before: enquiryAuditState(enquiry),
+      after: {
+        ...enquiryAuditState(enquiry),
+        stage: "trial_scheduled",
+        memberId: created.memberId,
+        trialBatchId: input.batchId,
+        locationId: enquiry.locationId ?? input.details.locationId,
+      },
+    });
+    return { ok: true, memberId: created.memberId };
+  });
 }
 
 // C-15: converts an enquiry to a member, preserving source

@@ -12,8 +12,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // can be split by facility today — batches/sessions have no location
 // until Wave 2.
 
-const push = vi.hoisted(() => vi.fn());
-const replace = vi.hoisted(() => vi.fn());
+const navigate = vi.hoisted(() => vi.fn());
+const query = vi.hoisted(() => ({ value: "" }));
+vi.mock("@/components/facility-navigation", () => ({ navigateFacility: navigate }));
 const { LOCATIONS, FACILITY_2 } = vi.hoisted(() => ({
   FACILITY_2: "22222222-2222-7222-8222-222222222222",
   LOCATIONS: [
@@ -22,9 +23,9 @@ const { LOCATIONS, FACILITY_2 } = vi.hoisted(() => ({
   ],
 }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push, replace }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   usePathname: () => "/owner/members",
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(query.value),
 }));
 vi.mock("next/headers", () => ({
   cookies: vi.fn(async () => ({ get: vi.fn(() => undefined) })),
@@ -144,6 +145,8 @@ const BRANDING = {
 
 afterEach(() => {
   cleanup();
+  document.cookie = "aqua_facility=; path=/; max-age=0";
+  query.value = "";
   vi.clearAllMocks();
 });
 
@@ -162,19 +165,43 @@ describe("facility switcher (W1-6)", () => {
   });
 
   it("persists the choice in the URL and the cookie", () => {
+    query.value = "period=month";
     render(<FacilitySwitcher locations={LOCATIONS} />);
     fireEvent.change(screen.getByTestId("facility-switcher"), {
       target: { value: FACILITY_2 },
     });
-    expect(push).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
+    expect(navigate).toHaveBeenCalledWith(`/owner/members?period=month&facility=${FACILITY_2}`);
     expect(document.cookie).toContain(`aqua_facility=${encodeURIComponent(FACILITY_2)}`);
   });
 
   it("adopts a remembered cookie when the URL has no choice", () => {
+    query.value = "period=month";
     document.cookie = `aqua_facility=${encodeURIComponent(FACILITY_2)}; path=/`;
     render(<FacilitySwitcher locations={LOCATIONS} />);
-    expect(replace).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
+    expect(navigate).toHaveBeenCalledWith(`/owner/members?period=month&facility=${FACILITY_2}`, true);
     document.cookie = "aqua_facility=; path=/; max-age=0";
+  });
+
+  it("ignores an invalid remembered facility and follows URL changes", () => {
+    document.cookie = "aqua_facility=not-a-uuid; path=/";
+    const view = render(<FacilitySwitcher locations={LOCATIONS} />);
+    expect(navigate).not.toHaveBeenCalled();
+    query.value = `facility=${FACILITY_2}`;
+    view.rerender(<FacilitySwitcher locations={LOCATIONS} />);
+    expect((screen.getByTestId("facility-switcher") as HTMLSelectElement).value).toBe(FACILITY_2);
+    query.value = "";
+    view.rerender(<FacilitySwitcher locations={LOCATIONS} />);
+    expect((screen.getByTestId("facility-switcher") as HTMLSelectElement).value).toBe("all");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("clears the facility preference without losing other filters", () => {
+    query.value = `period=day&facility=${FACILITY_2}`;
+    document.cookie = `aqua_facility=${FACILITY_2}; path=/`;
+    render(<FacilitySwitcher locations={LOCATIONS} />);
+    fireEvent.change(screen.getByTestId("facility-switcher"), { target: { value: "all" } });
+    expect(navigate).toHaveBeenCalledWith("/owner/members?period=day");
+    expect(document.cookie).not.toContain("aqua_facility=");
   });
 });
 
@@ -207,9 +234,11 @@ describe("consolidated per-facility view (W1-6)", () => {
     render(
       <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
     );
-    expect(document.body.textContent).toContain("Worli Main");
-    expect(document.body.textContent).toContain("Bandra Annex");
-    expect(document.body.textContent).toContain("20 active");
-    expect(document.body.textContent).toContain("no attendance yet");
+    expect(document.body.textContent).toContain("All locations");
+    // The footer is about ACTIVE MEMBERS BY FACILITY. It carries no
+    // attendance window of its own — the selected-period attendance
+    // panel is the one attendance overview on the page.
+    expect(document.body.textContent).not.toContain("20 active");
+    expect(document.body.textContent).not.toContain("no attendance yet");
   });
 });

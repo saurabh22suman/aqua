@@ -82,8 +82,9 @@ const CONTROLS: ReadonlyArray<{
   // the same class string, so if the focus pattern renders here
   // it renders everywhere; tests/mobile/ops-focus-visible.test.ts
   // guards source-class presence file-by-file separately.
-  { path: "/ops/login", selector: 'input[name="phone"]', label: "registered mobile number" },
-  { path: "/ops/login", selector: 'button[type="submit"]', label: "send WhatsApp code" },
+  { path: "/ops/login", selector: 'input[name="email"]', label: "operator email" },
+  { path: "/ops/login", selector: 'input[name="password"]', label: "operator password" },
+  { path: "/ops/login", selector: 'button[type="submit"]', label: "continue to authenticator" },
 ];
 
 beforeAll(async () => {

@@ -57,4 +57,51 @@ describe("LinkQr", () => {
     render(<LinkQr url="https://example.com/login/link/tok-123" />);
     expectInDocument(screen.getByTestId("link-qr-loading"));
   });
+
+  it("removes the previous QR immediately when the URL changes", async () => {
+    let resolveFirst: ((svg: string) => void) | undefined;
+    toStringMock.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveFirst = resolve;
+      }),
+    );
+    const { rerender } = render(<LinkQr url="https://example.com/a" />);
+    resolveFirst!('<svg data-testid="qr-old"></svg>');
+    await waitFor(() => expectInDocument(screen.getByTestId("qr-old")));
+
+    toStringMock.mockReturnValueOnce(new Promise(() => {}));
+    rerender(<LinkQr url="https://example.com/b" />);
+
+    // The old scannable QR must not stay beside the new URL while the
+    // new one is still encoding.
+    expect(screen.queryByTestId("qr-old")).toBeNull();
+    expectInDocument(screen.getByTestId("link-qr-loading"));
+  });
+
+  it("ignores an older async encoder result that resolves after a newer URL", async () => {
+    let resolveFirst: ((svg: string) => void) | undefined;
+    let resolveSecond: ((svg: string) => void) | undefined;
+    toStringMock
+      .mockReturnValueOnce(
+        new Promise<string>((resolve) => {
+          resolveFirst = resolve;
+        }),
+      )
+      .mockReturnValueOnce(
+        new Promise<string>((resolve) => {
+          resolveSecond = resolve;
+        }),
+      );
+    const { rerender } = render(<LinkQr url="https://example.com/a" />);
+    await waitFor(() => expect(toStringMock).toHaveBeenCalledTimes(1));
+    rerender(<LinkQr url="https://example.com/b" />);
+    await waitFor(() => expect(toStringMock).toHaveBeenCalledTimes(2));
+
+    resolveSecond!('<svg data-testid="qr-b"></svg>');
+    await waitFor(() => expectInDocument(screen.getByTestId("qr-b")));
+    resolveFirst!('<svg data-testid="qr-a"></svg>');
+
+    expect(screen.queryByTestId("qr-a")).toBeNull();
+    expectInDocument(screen.getByTestId("qr-b"));
+  });
 });

@@ -91,7 +91,6 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(membershipLocations).where(eq(membershipLocations.tenantId, tenantId));
       await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
-      await tx.delete(platformAuditLog).where(eq(platformAuditLog.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
     await withPlatform(() => Promise.resolve());
@@ -99,6 +98,12 @@ afterAll(async () => {
     // cleanup runs on the privileged pool before the actor/target
     // users are deleted (audit_log.actor_id FKs to users(id)).
     await deleteAuditRowsForTenant(admin, tenantId);
+    // platform_audit_log is append-only for app_user; fixture cleanup
+    // uses the privileged pool, scoped to this test tenant.
+    await admin.query(
+      "delete from platform_audit_log where tenant_id = $1",
+      [tenantId],
+    );
     // Cleanup is scoped to this run's RUN_NUM. The previous pattern
     // was '+91987%', which matched users from any test file's previous
     // run that happened to use the same prefix -- their tenant_membership

@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { KhelIcon } from "@/components/icons/khel-icons";
 import { formatTimeIST } from "@/lib/time/tz";
 import { StaffCheckInControls } from "@/components/staff-check-in-controls";
 import type { MyAttendanceRow } from "@/lib/services/staff-attendance";
@@ -33,9 +33,9 @@ export function MyAttendanceCard({
   }
 
   return (
-    <section className="mt-5 rounded-card border border-line bg-paper p-4">
+    <section className="mt-4 rounded-card border border-line bg-paper p-3.5">
       <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
-        <Clock size={15} className="text-ink-3" />
+        <KhelIcon name="attendance" size={16} />
         Today&apos;s attendance
       </h2>
       <p className="mt-2 text-[13px] text-ink-2">{summary}</p>

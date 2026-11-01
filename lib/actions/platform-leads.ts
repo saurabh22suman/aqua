@@ -12,6 +12,7 @@ import {
   type ConvertLeadResult,
 } from "@/db/platform-lead-conversion";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
@@ -56,6 +57,7 @@ export async function createLeadAction(
     locations: locationsRaw ? Number(locationsRaw) : undefined,
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("platform_lead.create", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -65,6 +67,7 @@ export async function createLeadAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.create", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -90,9 +93,15 @@ export async function createLeadAction(
         { businessName, contactName, phone, city, source, qualification },
         { actorId: asUserId(status.userId) },
       ),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.create", error);
+    throw error;
+  });
   if (result.kind === "ok") {
     revalidatePath("/ops/leads");
+  }
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("platform_lead.create", "error");
   }
   return result;
 }
@@ -118,6 +127,7 @@ export async function transitionLeadAction(
 ): Promise<LeadMutationResult> {
   const surface = transitionLeadFormInput.safeParse(input);
   if (!surface.success) {
+    await recordOpsMutationTrace("platform_lead.update", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -127,6 +137,7 @@ export async function transitionLeadAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.update", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -148,9 +159,15 @@ export async function transitionLeadAction(
       transitionLead(leadId, surface.data, {
         actorId: asUserId(status.userId),
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.update", error);
+    throw error;
+  });
   if (result.kind === "ok") {
     revalidatePath(`/ops/leads/${leadId}`);
+  }
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("platform_lead.update", "error");
   }
   return result;
 }
@@ -176,6 +193,7 @@ export async function convertLeadAction(
     preset: String(formData.get("preset") ?? "").trim() || undefined,
   });
   if (!surface.success || !z.string().uuid().safeParse(leadId).success) {
+    await recordOpsMutationTrace("platform_lead.convert", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -187,6 +205,7 @@ export async function convertLeadAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.convert", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -197,7 +216,7 @@ export async function convertLeadAction(
     };
   }
 
-  return opsAction(
+  const result = await opsAction(
     {
       scope: "platform_lead.convert",
       actorId: asUserId(status.userId),
@@ -205,5 +224,12 @@ export async function convertLeadAction(
       detail: { slug: surface.data.slug },
     },
     () => convertLead(leadId, surface.data, { actorId: asUserId(status.userId) }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.convert", error);
+    throw error;
+  });
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("platform_lead.convert", "error");
+  }
+  return result;
 }

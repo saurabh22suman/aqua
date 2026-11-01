@@ -1,19 +1,31 @@
 import {
   addDays,
   formatDateIST,
-  formatTimeIST,
   todayInZone,
   weekdayOf,
   zonedWallTimeToInstant,
 } from "@/lib/time/tz";
+import {
+  LAST7_DAYS,
+  OWNER_PERIOD_TAB_LABEL,
+  dateOfInstant,
+  type ChartBucket,
+  type OwnerPeriod,
+  type OwnerPeriodKey,
+} from "@/lib/time/owner-period-model";
 
 // Owner Home period windows and their comparisons.
 //
-// The owner picks Day / Week / Month. Every comparison is "same elapsed
+// The owner picks Day / Last 7 days / Week / Month. Every comparison is "same elapsed
 // local time" so a figure is never compared against a full period that
 // has not finished yet:
 //   Day   (DoD) — today 00:00 → now  vs  yesterday 00:00 → yesterday at
 //                 the same wall-clock time.
+//   Last 7 (7-day) — today and the preceding six IST calendar dates,
+//                 00:00 → now  vs  the seven IST dates before that, to
+//                 the same elapsed time. NOT Monday-to-now: the window
+//                 counts calendar dates, so it does not move with the
+//                 start of the week.
 //   Week  (WoW) — Monday 00:00 → now  vs  previous Monday 00:00 → the
 //                 same elapsed time.
 //   Month (MoM) — 1st 00:00 → now  vs  previous month 1st 00:00 → the
@@ -24,59 +36,30 @@ import {
 // returned are exact instants (UTC) plus their IST labels, so the
 // figures, the chart buckets and the printed comparison range all come
 // from one window.
+//
+// The period MODEL — the keys, the labels and the shapes — lives in
+// lib/time/owner-period-model.ts. It is re-exported here so this
+// module's public surface does not change.
 
-export type OwnerPeriodKey = "day" | "week" | "month";
-export const OWNER_PERIODS: OwnerPeriodKey[] = ["day", "week", "month"];
-
-export type PeriodRange = {
-  /** Inclusive start instant. */
-  fromIso: string;
-  /** Exclusive end instant. */
-  toIso: string;
-  /** Inclusive IST calendar dates, for date-based reads. */
-  fromDate: string;
-  toDate: string;
-};
-
-export type OwnerPeriod = {
-  key: OwnerPeriodKey;
-  tabLabel: string;
-  comparisonLabel: "DoD" | "WoW" | "MoM";
-  comparisonMeaning: string;
-  current: PeriodRange;
-  previous: PeriodRange & { capped: boolean; capNote: string | null };
-};
-
-export const OWNER_PERIOD_LABEL: Record<OwnerPeriodKey, string> = {
-  day: "Day",
-  week: "Week",
-  month: "Month",
-};
+export {
+  LAST7_DAYS,
+  OWNER_HOME_RANGE_KEYS,
+  OWNER_PERIODS,
+  OWNER_PERIOD_LABEL,
+  OWNER_PERIOD_TAB_LABEL,
+  comparisonExpansionFor,
+  formatInstantRange,
+  isOwnerPeriodKey,
+  type ChartBucket,
+  type OwnerPeriod,
+  type OwnerPeriodKey,
+  type PeriodRange,
+} from "@/lib/time/owner-period-model";
 
 const TZ = "Asia/Kolkata";
 
-export function isOwnerPeriodKey(value: unknown): value is OwnerPeriodKey {
-  return value === "day" || value === "week" || value === "month";
-}
-
 function startOfDay(dateIso: string): Date {
   return zonedWallTimeToInstant(dateIso, "00:00", TZ);
-}
-
-function dateOfInstant(instant: Date): string {
-  return todayInZone(TZ, instant.getTime() - 1);
-}
-
-/** Local (IST) label for an inclusive instant range. */
-export function formatInstantRange(fromIso: string, toIsoExclusive: string): string {
-  const from = new Date(fromIso);
-  const lastIncluded = new Date(new Date(toIsoExclusive).getTime() - 1);
-  const sameDay = dateOfInstant(from) === dateOfInstant(lastIncluded);
-  const start = `${formatDateIST(from)}, ${formatTimeIST(from)}`;
-  const end = sameDay
-    ? formatTimeIST(lastIncluded)
-    : `${formatDateIST(lastIncluded)}, ${formatTimeIST(lastIncluded)}`;
-  return `${start} – ${end}`;
 }
 
 function addMonths(dateIso: string, months: number): string {
@@ -103,7 +86,7 @@ export function resolveOwnerPeriod(
     const previousStart = startOfDay(previousDate);
     return {
       key,
-      tabLabel: "Today",
+      tabLabel: OWNER_PERIOD_TAB_LABEL.day,
       comparisonLabel: "DoD",
       comparisonMeaning: "Day over day — today against yesterday at the same elapsed local time",
       current: {
@@ -123,6 +106,41 @@ export function resolveOwnerPeriod(
     };
   }
 
+  if (key === "last7") {
+    // Today and the preceding six IST calendar dates. The window is a
+    // count of CALENDAR DATES, not a count of weeks, so it does not
+    // move with the start of the week: on Wednesday 28 October it
+    // starts on Thursday 22 October, while "this week" starts on
+    // Monday 26 October.
+    const fromDate = addDays(today, -(LAST7_DAYS - 1));
+    const start = startOfDay(fromDate);
+    const elapsed = Math.max(0, nowMs - start.getTime());
+    const previousFromDate = addDays(fromDate, -LAST7_DAYS);
+    const previousStart = startOfDay(previousFromDate);
+    const previousEnd = new Date(previousStart.getTime() + elapsed);
+    return {
+      key,
+      tabLabel: OWNER_PERIOD_TAB_LABEL.last7,
+      comparisonLabel: "7-day",
+      comparisonMeaning:
+        "Seven-day comparison — these seven calendar days against the seven days before them, to the same elapsed time",
+      current: {
+        fromIso: start.toISOString(),
+        toIso: now.toISOString(),
+        fromDate,
+        toDate: today,
+      },
+      previous: {
+        fromIso: previousStart.toISOString(),
+        toIso: previousEnd.toISOString(),
+        fromDate: previousFromDate,
+        toDate: dateOfInstant(previousEnd),
+        capped: false,
+        capNote: null,
+      },
+    };
+  }
+
   if (key === "week") {
     const weekday = weekdayOf(today); // 0 = Sunday
     const mondayDate = addDays(today, -((weekday + 6) % 7));
@@ -133,7 +151,7 @@ export function resolveOwnerPeriod(
     const previousEnd = new Date(previousStart.getTime() + elapsed);
     return {
       key,
-      tabLabel: "This week",
+      tabLabel: OWNER_PERIOD_TAB_LABEL.week,
       comparisonLabel: "WoW",
       comparisonMeaning:
         "Week over week — this Monday-to-now against last week's same elapsed span",
@@ -171,7 +189,7 @@ export function resolveOwnerPeriod(
     : null;
   return {
     key,
-    tabLabel: "This month",
+    tabLabel: OWNER_PERIOD_TAB_LABEL.month,
     comparisonLabel: "MoM",
     comparisonMeaning:
       "Month over month — this month-to-date against the same elapsed span of the previous month",
@@ -191,14 +209,6 @@ export function resolveOwnerPeriod(
     },
   };
 }
-
-export type ChartBucket = {
-  key: string;
-  label: string;
-  fullLabel: string;
-  startIso: string;
-  endIso: string;
-};
 
 const HOUR_LABEL = (hour: number) => {
   const suffix = hour < 12 ? "am" : "pm";
@@ -228,9 +238,13 @@ export function periodBuckets(period: OwnerPeriod): ChartBucket[] {
       };
     });
   }
-  if (period.key === "week") {
+  if (period.key === "week" || period.key === "last7") {
+    // Seven chronological DAILY buckets for both week-shaped windows:
+    // "this week" starts on Monday, "Last 7 days" starts on the sixth
+    // preceding calendar date. A day with no marks is unknown, never 0%.
     const from = period.current.fromDate;
-    return Array.from({ length: 7 }, (_, index) => {
+    const count = period.key === "last7" ? LAST7_DAYS : 7;
+    return Array.from({ length: count }, (_, index) => {
       const date = addDays(from, index);
       return {
         key: date,

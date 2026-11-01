@@ -53,6 +53,7 @@ vi.mock("@/components/charts/owner-chart-island", () => ({
 }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { OwnerInsightsHome } from "@/components/owner-insights-home/owner-insights-home";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 
@@ -290,7 +291,7 @@ describe("owner Home — the insights section under a facility filter", () => {
     expect(enquiries.total).toBe(1);
 
     render(
-      <OwnerDashboard
+      <><OwnerDashboard
         data={DASHBOARD}
         branding={BRANDING}
         terminology={TERMINOLOGY}
@@ -302,16 +303,18 @@ describe("owner Home — the insights section under a facility filter", () => {
           viewSchedule: true,
           readEnquiries: true,
         }}
-        insights={{ ...WINDOW, attendance, enquiries }}
+        insights={{ ...WINDOW, enquiries }}
         facility={poolLocationId}
-      />,
+      /><OwnerInsightsHome data={{ ...WINDOW, enquiries }} facility={poolLocationId} canOpenEnquiries /></>,
     );
 
     const text = document.body.textContent ?? "";
-    // The selected site's batch is on screen…
-    expect(text).toContain("Alpha Squad");
-    // …and the other site's batch is not.
-    expect(text).not.toContain("Beta Squad");
+    // The read model still narrows to the selected facility…
+    expect(attendance.rows.map((row) => row.batchName)).toEqual(["Alpha Squad"]);
+    // …but the by-batch breakdown is no longer rendered on Home:
+    // attendance has ONE home (the operational attendance panel), and
+    // that panel reads the selected range, not this 30-day window.
+    expect(text).not.toContain("Alpha Squad");
     // The other site's enquiry is not counted either: one created, and
     // it is the "new" one, not the converted one.
     expect(text).toMatch(/1 created/i);

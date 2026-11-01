@@ -30,7 +30,7 @@ export function UtilisationCard({ report }: { report: UtilisationReport }) {
       data-testid="utilisation-card"
     >
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           Facility utilisation
         </h2>
         <span className="text-[12px] text-ink-3">last 4 weeks</span>

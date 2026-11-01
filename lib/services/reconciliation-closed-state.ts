@@ -4,7 +4,7 @@ import { withTenant } from "@/db/tenant";
 import { cashCounts } from "@/db/schema/cash-counts";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import {
   userLabel,
   userRoleNameFor,
@@ -90,6 +90,7 @@ export async function reopenCashCount(
           isNull(cashCounts.supersededAt),
         ),
       )
+      .for("update")
       .limit(1);
     const live = liveRows[0];
     if (!live) {
@@ -97,7 +98,11 @@ export async function reopenCashCount(
     }
 
     const now = new Date();
-    await tx
+    // The UPDATE is guarded by the same live-row condition the read
+    // used: a second reopen (or a concurrent one that lost the lock)
+    // matches NO row and is refused, so one reopen is one audit event
+    // and one state change — never two.
+    const reopened = await tx
       .update(cashCounts)
       .set({
         status: "reopened",
@@ -107,9 +112,20 @@ export async function reopenCashCount(
         reopenReason: reason,
         updatedAt: now,
       })
-      .where(eq(cashCounts.id, live.id));
+      .where(
+        and(
+          eq(cashCounts.id, live.id),
+          eq(cashCounts.tenantId, ctx.tenantId),
+          isNull(cashCounts.supersededAt),
+        ),
+      )
+      .returning({ id: cashCounts.id });
+    if (reopened.length === 0) {
+      return { ok: false, error: "No closed count for this day to reopen." };
+    }
 
-    await tx.insert(auditLog).values({
+    // E-01 — the one audit writer: the reopen carries the request id.
+    await writeAudit(tx, {
       tenantId: ctx.tenantId,
       actorId,
       action: CASH_COUNT_REOPEN_ACTION,
@@ -121,6 +137,7 @@ export async function reopenCashCount(
         variancePaise: Number(live.variancePaise),
       },
       after: { reason },
+      requestId: ctx.requestId ?? null,
     });
 
     return { ok: true };

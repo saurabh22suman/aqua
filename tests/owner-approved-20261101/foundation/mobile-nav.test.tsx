@@ -1,0 +1,105 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+vi.mock("next/link", async () => { const React = await import("react"); return { default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => React.createElement("a", { href, ...rest }, children) }; });
+const state = vi.hoisted(() => ({ pathname: "/owner" }));
+vi.mock("next/navigation", () => ({ usePathname: () => state.pathname, useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), useSearchParams: () => new URLSearchParams() }));
+vi.mock("@/lib/actions/global-search", () => ({ globalSearchAction: vi.fn(async () => []) }));
+vi.mock("@/components/tenant-sign-out", () => ({ TenantSignOut: () => <button>Sign out</button> }));
+import { OwnerShell } from "@/components/owner-shell";
+import { ownerNavForPermissions, ownerSidebarGroupsForPermissions } from "@/lib/nav";
+afterEach(cleanup);
+describe("owner mobile navigation", () => {
+  it("keeps long facility options and header controls while bounding desktop facility width", () => {
+    const longName = "Demo Annex Community Swimming Academy and Fitness Centre";
+    render(<OwnerShell navItems={[]} sidebarGroups={[]} locations={[{ id: "a", name: "Main" }, { id: "b", name: longName }]} clubName="Club"><p>Work</p></OwnerShell>);
+    const header = screen.getByTestId("owner-top-bar");
+    const group = within(header).getByRole("group", { name: "Club and facility" });
+    const facility = within(group).getByLabelText("Facility") as HTMLSelectElement;
+    expect(Array.from(facility.options).map(option => option.text)).toContain(longName);
+    fireEvent.mouseDown(facility);
+    expect(within(screen.getByRole("listbox", { name: "Facility options" })).getByRole("option", { name: longName })).toBeTruthy();
+    expect(group.className).toContain("lg:max-w-60");
+    expect(group.className).toContain("lg:flex-initial");
+    expect(group.className).toContain("lg:shrink");
+    expect(group.className).not.toContain("lg:flex-none");
+    expect(within(header).getByTestId("owner-shell-crumb")).toBeTruthy();
+    expect(within(header).getAllByTestId("global-search-input").length).toBeGreaterThan(0);
+    expect(within(header).getByText("Account")).toBeTruthy();
+  });
+  it("groups club identity with the facility selector while retaining search and authorized choices", () => {
+    render(<OwnerShell navItems={[]} sidebarGroups={[]} locations={[{ id: "a", name: "North Facility" }, { id: "b", name: "South Facility" }]} clubName="A very long club name"><p>Work</p></OwnerShell>);
+    const identity = screen.getByRole("group", { name: "Club and facility" });
+    expect(within(identity).getByText("A very long club name")).toBeTruthy();
+    const facility = within(identity).getByLabelText("Facility") as HTMLSelectElement;
+    expect(Array.from(facility.options).map(option => option.text)).toEqual(["All facilities", "North Facility", "South Facility"]);
+    fireEvent.click(screen.getByText("Search records"));
+    expect(screen.getByText("Search records").closest("details")?.open).toBe(true);
+    expect(screen.queryByRole("link", { name: "Search" })).toBeNull();
+  });
+  it("offers on-demand search and personal appearance from the compact header", () => {
+    render(<OwnerShell navItems={[]} locations={[]} clubName="My club"><p>Work</p></OwnerShell>);
+    expect(within(screen.getByTestId("owner-top-bar")).getByText("My club")).toBeTruthy();
+    const search = screen.getByText("Search records").closest("details")!;
+    expect(search.open).toBe(false);
+    fireEvent.click(screen.getByText("Search records"));
+    expect(search.open).toBe(true);
+    fireEvent.click(within(screen.getByTestId("owner-header-account")).getByText("Account"));
+    expect(screen.getByRole("link", { name: "Appearance" }).getAttribute("href")).toBe("/owner/settings/appearance");
+  });
+  it("exposes Home, Members, Calendar and a keyboard-operable More with authorized routes and sign out", () => {
+    const grants = new Set(["members.read", "attendance.read", "reports.operational"]);
+    render(<OwnerShell navItems={ownerNavForPermissions(grants)} sidebarGroups={ownerSidebarGroupsForPermissions(grants)} locations={[]}><p>Work</p></OwnerShell>);
+    const nav = within(screen.getByTestId("owner-mobile-nav"));
+    expect(nav.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/owner");
+    expect(nav.getByRole("link", { name: "Members" }).getAttribute("href")).toBe("/owner/members");
+    expect(nav.getByRole("link", { name: "Calendar" }).getAttribute("href")).toBe("/owner/schedule");
+    const more = nav.getByText("More"); fireEvent.click(more);
+    expect(nav.getByRole("link", { name: "Reports" }).getAttribute("href")).toBe("/owner/reports");
+    expect(nav.queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(nav.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+  it("closes More on Escape and selection, restores focus, and marks the active destination", () => {
+    state.pathname = "/owner/reports";
+    const grants = new Set(["members.read", "attendance.read", "reports.operational"]);
+    render(<OwnerShell navItems={ownerNavForPermissions(grants)} sidebarGroups={ownerSidebarGroupsForPermissions(grants)} locations={[]}><p>Work</p></OwnerShell>);
+    const nav = within(screen.getByTestId("owner-mobile-nav"));
+    const trigger = nav.getByText("More").closest("summary")!;
+    fireEvent.click(trigger);
+    const details = trigger.closest("details")!;
+    const reports = nav.getByRole("link", { name: "Reports" });
+    expect(reports.getAttribute("aria-current")).toBe("page");
+    fireEvent.keyDown(reports, { key: "Escape" });
+    expect(details.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
+    nav.getByRole("link", { name: "Reports" }).focus();
+    fireEvent.click(nav.getByRole("link", { name: "Reports" }));
+    expect(details.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    state.pathname = "/owner";
+  });
+  it("indicates the current More section while closed without marking the trigger as the current page", () => {
+    state.pathname = "/owner/reports/collections";
+    const grants = new Set(["members.read", "reports.operational"]);
+    render(<OwnerShell navItems={ownerNavForPermissions(grants)} sidebarGroups={ownerSidebarGroupsForPermissions(grants)} locations={[]}><p>Work</p></OwnerShell>);
+    const nav = within(screen.getByTestId("owner-mobile-nav"));
+    const trigger = nav.getByText("More").closest("summary")!;
+    expect(trigger.textContent).toMatch(/current section/i);
+    expect(trigger.getAttribute("aria-current")).toBeNull();
+    expect(trigger.closest("details")?.open).toBe(false);
+    fireEvent.click(trigger);
+    const reports = nav.getByRole("link", { name: "Reports" });
+    expect(reports.getAttribute("aria-current")).toBe("page");
+    fireEvent.keyDown(reports, { key: "Escape" });
+    expect(trigger.closest("details")?.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.textContent).toMatch(/current section/i);
+    state.pathname = "/owner";
+  });
+  it("does not offer Calendar without its destination grant", () => {
+    const grants = new Set(["members.read"]);
+    render(<OwnerShell navItems={ownerNavForPermissions(grants)} sidebarGroups={ownerSidebarGroupsForPermissions(grants)} locations={[]}><p>Work</p></OwnerShell>);
+    expect(within(screen.getByTestId("owner-mobile-nav")).queryByRole("link", { name: "Calendar" })).toBeNull();
+  });
+});

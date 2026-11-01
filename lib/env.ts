@@ -98,6 +98,7 @@ const envSchema = z
       z.enum(["mock", "capture", "cloud", "disabled"]).optional(),
     ),
     AQUA_DEPLOYMENT_STAGE: z.preprocess(emptyAsUndefined, z.enum(["development", "preview", "production"]).optional()),
+    OPS_STAGING_PASSWORD_ONLY: z.enum(["true", "false"]).default("false").transform(v => v === "true"),
     // Explicit hosted mock for a separate synthetic preview. Its origin is
     // operator configuration, never a recipient/form-controlled destination.
     WHATSAPP_CAPTURE_URL: z.preprocess(emptyAsUndefined, z.string().url().refine(value => {
@@ -248,6 +249,18 @@ const envSchema = z
       });
     }
 
+    // This guard uses only deployment configuration, never a request host.
+    // Compare exact raw origin text: URL normalization would accept :443 or credentials.
+    if (val.OPS_STAGING_PASSWORD_ONLY && (
+      val.AQUA_DEPLOYMENT_STAGE !== "preview" ||
+      val.BETTER_AUTH_URL !== "https://sportsip-staging.preprabbit.in" ||
+      val.OPS_HOST !== "sportsip-staging-ops.preprabbit.in" ||
+      !val.OPS_EMAIL || !val.OPS_PASSWORD
+    )) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["OPS_STAGING_PASSWORD_ONLY"],
+        message: "requires preview stage, canonical staging app and Ops hosts, and configured operator credentials" });
+    }
+
     // DEMO_MODE in production (server phase only — `next build` is
     // exempt for the same reason BETTER_AUTH_SECRET is exempt above:
     // a developer's .env may legitimately have DEMO_MODE=true while
@@ -290,6 +303,7 @@ export type ParsedEnv = {
   PARENT_LINK_SECRET?: string;
   OPS_EMAIL?: string;
   OPS_PASSWORD?: string;
+  OPS_STAGING_PASSWORD_ONLY: boolean;
   WHATSAPP_PROVIDER?: "mock" | "capture" | "cloud" | "disabled";
   AQUA_DEPLOYMENT_STAGE?: "development" | "preview" | "production";
   WHATSAPP_CAPTURE_URL?: string;

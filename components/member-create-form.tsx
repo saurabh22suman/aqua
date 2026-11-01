@@ -2,13 +2,20 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { createMemberAction, searchPersonsAction } from "@/lib/actions/people";
-import { CURRENT_POLICY_VERSION } from "@/lib/schemas";
+import { CURRENT_POLICY_VERSION } from "@/lib/consent-policy";
 import type { LocationOption, PersonSearchRow } from "@/lib/services/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { DateField } from "@/components/ui/DateField";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import { MemberConsentChoices } from "@/components/member-consent-choices";
+import { Dialog } from "@/components/ui/Dialog";
 import {
   resolveTerm,
   titleCase,
@@ -35,10 +42,14 @@ type GuardianChoice =
 
 export function MemberCreateForm({
   locations,
+  initialLocationId,
+  cancelHref,
   memberDetailBasePath = "/owner/members",
   terminology,
 }: {
   locations: LocationOption[];
+  initialLocationId?: string;
+  cancelHref?: string;
   // Base path for the new member's detail page, e.g. "/owner/members"
   // or "/reception/members" — each surface has its own detail route so
   // staff land somewhere they can immediately enrol the member in a
@@ -57,7 +68,8 @@ export function MemberCreateForm({
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [joinedOn, setJoinedOn] = useState("");
   const [gender, setGender] = useState("");
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const [initialLocation] = useState(() => initialLocationId === "" ? "" : locations.some((location) => location.id === initialLocationId) ? initialLocationId! : locations[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(initialLocation);
   const [medicalNotes, setMedicalNotes] = useState("");
 
   const [guardianQuery, setGuardianQuery] = useState("");
@@ -71,6 +83,10 @@ export function MemberCreateForm({
   const [communicationsGiven, setCommunicationsGiven] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const dirty = Boolean(fullName || phone || dateOfBirth || joinedOn || gender || medicalNotes ||
+    locationId !== initialLocation || guardianQuery || guardian.mode !== "none" ||
+    guardianName || guardianPhone || relationship || consentGiven || communicationsGiven);
 
   const minor = useMemo(() => looksLikeMinor(dateOfBirth), [dateOfBirth]);
 
@@ -189,97 +205,114 @@ export function MemberCreateForm({
     // its padding and border, plus the gap) AND the fixed bottom nav
     // it pins above, so the last section can always scroll clear of
     // both. Everything stays visible and reachable.
-    <div className="space-y-5 pb-[calc(10.5rem+env(safe-area-inset-bottom))] lg:pb-32">
+    <div className="space-y-5">
       <section className="space-y-2.5">
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Full name</span>
-          <input
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Full name"
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-            data-testid="member-full-name"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (optional)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          />
-        </label>
-        <div>
-          <label
-            htmlFor="member-dob"
-            className="block text-[12px] text-ink-3 mb-1"
-          >
-            Date of birth
-          </label>
-          <DateField
-            id="member-dob"
-            value={dateOfBirth}
-            onChange={setDateOfBirth}
-            data-testid="member-dob"
-          />
+        {/* OpenPen owner reference — full name first, then paired fields at
+            ≥sm so the editor reads as a bounded form rather than a long
+            queue of controls. On 390px every field is one column. */}
+        <h2 className="font-display text-[16px] font-semibold">
+          Personal details
+        </h2>
+        <Field id="member-full-name-field" label="Full name">
+          {(field) => (
+            <Input
+              {...field}
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="Full name"
+              data-testid="member-full-name"
+            />
+          )}
+        </Field>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          <Field id="member-phone-field" label="Phone (optional)">
+            {(field) => (
+              <Input
+                {...field}
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone (optional)"
+              />
+            )}
+          </Field>
+          <Field id="member-dob" label="Date of birth" required>
+            {(field) => (
+              <DateField
+                {...field}
+                value={dateOfBirth}
+                onChange={setDateOfBirth}
+                data-testid="member-dob"
+              />
+            )}
+          </Field>
+          <Field id="member-joined-on" label="Joined on (optional — defaults to today)">
+            {(field) => (
+              <DateField
+                {...field}
+                value={joinedOn}
+                onChange={setJoinedOn}
+                data-testid="member-joined-on"
+              />
+            )}
+          </Field>
+          <Field id="member-location-field" label="Location">
+            {(field) => (
+              <Select
+                {...field}
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+              >
+                {initialLocation === "" ? <option value="" disabled>Choose a location</option> : null}
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          {initialLocationId === "" && !locationId ? (
+            <p className="text-sm text-ink-3">The selected {resolveTerm(terminology, "facility", 1)} is unavailable. Choose an available {resolveTerm(terminology, "facility", 1)} to continue.</p>
+          ) : null}
         </div>
-        <div>
-          <label
-            htmlFor="member-joined-on"
-            className="block text-[12px] text-ink-3 mb-1"
-          >
-            Joined on (optional — defaults to today)
-          </label>
-          <DateField
-            id="member-joined-on"
-            value={joinedOn}
-            onChange={setJoinedOn}
-            data-testid="member-joined-on"
-          />
-        </div>
-        <select
-          value={gender}
-          onChange={(e) => setGender(e.target.value)}
-          aria-label="Gender"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        >
-          <option value="">Gender (optional)</option>
-          <option value="male">Male</option>
-          <option value="female">Female</option>
-          <option value="other">Other</option>
-        </select>
-        <select
-          value={locationId}
-          onChange={(e) => setLocationId(e.target.value)}
-          aria-label="Location"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        >
-          {locations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Medical notes (optional)</span>
-          <textarea
-            value={medicalNotes}
-            onChange={(e) => setMedicalNotes(e.target.value)}
-            placeholder="Medical notes (optional)"
-            rows={2}
-            className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-          />
-        </label>
+        <Field id="member-gender-field" label="Gender (optional)">
+          {(field) => (
+            <Select
+              {...field}
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+            >
+              <option value="">Not specified</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </Select>
+          )}
+        </Field>
+        <Field id="member-medical-notes-field" label="Medical notes (optional)">
+          {(field) => (
+            <Textarea
+              {...field}
+              value={medicalNotes}
+              onChange={(e) => setMedicalNotes(e.target.value)}
+              placeholder="Medical notes (optional)"
+              rows={2}
+            />
+          )}
+        </Field>
       </section>
 
       {minor === true ? (
         <section className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
-          <h3 className="text-[13px] font-semibold">
-            {titleCase(resolveTerm(terminology, "guardian", 1))} required — this {resolveTerm(terminology, "member", 1)} is a minor
-          </h3>
+          <h2 className="font-display text-[16px] font-semibold">
+            {titleCase(resolveTerm(terminology, "guardian", 1))}
+          </h2>
+          <p className="text-[12.5px] text-ink-3">
+            Required because this {resolveTerm(terminology, "member", 1)} is a
+            minor.
+          </p>
 
           {guardian.mode === "existing" ? (
             <div className="flex items-center justify-between rounded-ctl bg-water-soft px-3 py-2">
@@ -294,19 +327,21 @@ export function MemberCreateForm({
             </div>
           ) : (
             <>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">
-                  Search existing {resolveTerm(terminology, "guardian", "other")}
-                </span>
-                <input
-                  type="text"
-                  value={guardianQuery}
-                  onChange={(e) => runGuardianSearch(e.target.value)}
-                  placeholder="Search an existing guardian by name or phone"
-                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="guardian-search"
-                />
-              </label>
+              <Field
+                id="guardian-search-field"
+                label={`Search existing ${resolveTerm(terminology, "guardian", "other")}`}
+              >
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="text"
+                    value={guardianQuery}
+                    onChange={(e) => runGuardianSearch(e.target.value)}
+                    placeholder="Search an existing guardian by name or phone"
+                    data-testid="guardian-search"
+                  />
+                )}
+              </Field>
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
                   {guardianResults.map((r) => (
@@ -330,47 +365,47 @@ export function MemberCreateForm({
               <p className="text-[12px] text-ink-3">
                 Not found? Enter the {resolveTerm(terminology, "guardian", 1)}&apos;s details below.
               </p>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">
-                  Guardian full name
-                </span>
-                <input
-                  type="text"
-                  value={guardianName}
-                  onChange={(e) => setGuardianName(e.target.value)}
-                  placeholder="Guardian full name"
-                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="guardian-new-name"
-                />
-              </label>
-              <label className="block">
-                <span className="block text-[12px] text-ink-3 mb-1">
-                  Guardian phone (optional)
-                </span>
-                <input
-                  type="tel"
-                  value={guardianPhone}
-                  onChange={(e) => setGuardianPhone(e.target.value)}
-                  placeholder="Guardian phone (optional)"
-                  className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                />
-              </label>
+              <Field id="guardian-new-name-field" label="Guardian full name">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="text"
+                    value={guardianName}
+                    onChange={(e) => setGuardianName(e.target.value)}
+                    placeholder="Guardian full name"
+                    data-testid="guardian-new-name"
+                  />
+                )}
+              </Field>
+              <Field id="guardian-new-phone-field" label="Guardian phone (optional)">
+                {(field) => (
+                  <Input
+                    {...field}
+                    type="tel"
+                    value={guardianPhone}
+                    onChange={(e) => setGuardianPhone(e.target.value)}
+                    placeholder="Guardian phone (optional)"
+                  />
+                )}
+              </Field>
             </>
           )}
 
-          <label className="block">
-            <span className="block text-[12px] text-ink-3 mb-1">
-              Relationship to {resolveTerm(terminology, "member", 1)}
-            </span>
-            <input
-              type="text"
-              value={relationship}
-              onChange={(e) => setRelationship(e.target.value)}
-              placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
-              className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              data-testid="guardian-relationship"
-            />
-          </label>
+          <Field
+            id="guardian-relationship-field"
+            label={`Relationship to ${resolveTerm(terminology, "member", 1)}`}
+          >
+            {(field) => (
+              <Input
+                {...field}
+                type="text"
+                value={relationship}
+                onChange={(e) => setRelationship(e.target.value)}
+                placeholder={`Relationship to ${resolveTerm(terminology, "member", 1)} (e.g. mother, father)`}
+                data-testid="guardian-relationship"
+              />
+            )}
+          </Field>
 
           {guardianMissing ? (
             <div className="flex items-start gap-2 rounded-ctl bg-warn-soft px-3 py-2.5">
@@ -384,9 +419,12 @@ export function MemberCreateForm({
         </section>
       ) : null}
 
-      <MemberConsentChoices minor={minor} memberLabel={resolveTerm(terminology, "member", 1)}
-        processing={consentGiven} communications={communicationsGiven}
-        onProcessing={setConsentGiven} onCommunications={setCommunicationsGiven} />
+      <section className="space-y-2">
+        <h2 className="font-display text-[16px] font-semibold">Consent</h2>
+        <MemberConsentChoices minor={minor} memberLabel={resolveTerm(terminology, "member", 1)}
+          processing={consentGiven} communications={communicationsGiven}
+          onProcessing={setConsentGiven} onCommunications={setCommunicationsGiven} />
+      </section>
 
       {error ? (
         <p className="text-[13px] text-late" role="alert">
@@ -394,16 +432,10 @@ export function MemberCreateForm({
         </p>
       ) : null}
 
-      {/* Sticky save bar [automatable]: this is the longest form in the
-          product, and with the guardian section open the submit scrolls
-          two viewports down. The bar pins above the fixed bottom nav
-          (4rem + safe-area + gap) so Save is always one thumb-tap away.
-          R-D1 (2026-09-13 audit): the mandatory consent/guardian
-          content can be below the fold from here, so an incomplete
-          form states what is still required in the bar itself, and a
-          failed submit scrolls to the field. shadow-2 is the
-          floating-element level per DESIGN.md §1.4. */}
-      <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom)+0.75rem)] rounded-ctl border border-line bg-paper p-2 shadow-2">
+      {/* OpenPen owner reference — the bounded editor ends with an in-flow
+          Cancel/Save pair. The incomplete-form warning stays beside Save so
+          the required action is not hidden behind a floating bar. */}
+      <div className="rounded-ctl border border-line bg-paper p-2">
         {!consentGiven || (minor === true && guardianMissing) ? (
           <p className="px-1 pb-1.5 text-center text-[12px] text-warn">
             {!consentGiven
@@ -411,16 +443,46 @@ export function MemberCreateForm({
               : `A ${resolveTerm(terminology, "guardian", 1)} is required before saving.`}
           </p>
         ) : null}
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy}
-          className="w-full rounded-ctl bg-[var(--accent-strong)] py-3 min-h-[48px] text-[15px] font-semibold text-white disabled:opacity-50"
-          data-testid="submit-member"
-        >
-          {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href={cancelHref ?? memberDetailBasePath}
+            className={`${buttonClasses({ variant: "secondary", size: "lg" })} flex-1`}
+            onClick={(event) => {
+              if (busy || dirty) {
+                event.preventDefault();
+                if (!busy) setConfirmDiscard(true);
+              }
+            }}
+          >
+            Cancel
+          </Link>
+          <Button
+            type="button"
+            variant="primary"
+            size="lg"
+            onClick={submit}
+            disabled={busy}
+            className="flex-[2]"
+            data-testid="submit-member"
+          >
+            {busy ? "Saving…" : `Add ${resolveTerm(terminology, "member", 1)}`}
+          </Button>
+        </div>
       </div>
+      <Dialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Discard changes?"
+        description="Your unsaved changes will be lost."
+        hideClose
+        footer={<>
+          <Button type="button" onClick={() => setConfirmDiscard(false)}>Keep editing</Button>
+          <Button type="button" variant="secondary" onClick={() => {
+            setConfirmDiscard(false);
+            router.push(cancelHref ?? memberDetailBasePath);
+          }}>Discard changes</Button>
+        </>}
+      />
     </div>
   );
 }

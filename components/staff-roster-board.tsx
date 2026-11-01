@@ -56,6 +56,7 @@ export function StaffRosterBoard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     startTransition(async () => {
@@ -101,13 +102,25 @@ export function StaffRosterBoard({
     run(() => createShiftAction(input));
   }
 
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const byDay = new Map<string, RosterShiftRow[]>();
   for (const shift of shifts) {
     const list = byDay.get(shift.shiftDate) ?? [];
     list.push(shift);
     byDay.set(shift.shiftDate, list);
   }
+
+  const shiftByStaffDay = new Map<string, RosterShiftRow[]>();
+  for (const shift of shifts) {
+    const key = `${shift.staffId}|${shift.shiftDate}`;
+    const list = shiftByStaffDay.get(key) ?? [];
+    list.push(shift);
+    shiftByStaffDay.set(key, list);
+  }
+  // CR-03 — every already-authorized staff member stays visible. One
+  // rostered colleague must not hide an unrostered one; the unrostered
+  // row simply has empty day cells.
+  const tableStaff = staff;
 
   return (
     <div className="mt-4">
@@ -125,24 +138,86 @@ export function StaffRosterBoard({
         </p>
       ) : null}
 
-      <AddShiftForm
-        weekStart={weekStart}
-        templates={templates}
-        staff={staff}
-        locations={locations}
-        initialLocationId={weekLocationId ?? locations[0]?.id ?? ""}
-        pending={pending}
-        onAdd={addShift}
-      />
+      {tableStaff.length === 0 ? (
+        <p className="mt-5 text-[13px] text-ink-3">
+          No staff records yet — add a staff record before building the week.
+        </p>
+      ) : (
+        <div className="mt-5 hidden lg:block" data-testid="roster-week-table">
+          <table
+            aria-label="Working week"
+            className="w-full border-collapse text-[13px]"
+          >
+            <thead>
+              <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.08em] text-ink-3">
+                <th scope="col" className="py-2.5 pr-3 font-medium">
+                  Staff
+                </th>
+                {days.map((day) => (
+                  <th key={day} scope="col" className="py-2.5 pr-2 font-medium">
+                    {formatWeekdayDateIST(`${day}T12:00:00Z`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableStaff.map((member) => (
+                <tr key={member.id} className="border-b border-line last:border-0">
+                  <th
+                    scope="row"
+                    className="py-3 pr-3 text-left text-[13px] font-medium text-ink"
+                  >
+                    {member.fullName}
+                  </th>
+                  {days.map((day) => {
+                    const cell = shiftByStaffDay.get(`${member.id}|${day}`) ?? [];
+                    return (
+                      <td
+                        key={day}
+                        className="py-2 pr-2 align-top text-[12px] text-ink-2"
+                      >
+                        {cell.length === 0 ? (
+                          <span className="text-ink-3">—</span>
+                        ) : (
+                          cell.map((shift) => (
+                            <span key={shift.id} className="mb-1.5 block">
+                              <span className="block tabular-nums text-ink">
+                                {formatTimeIST(shift.startAt)}–
+                                {formatTimeIST(shift.endAt)}
+                              </span>
+                              <span className="block text-[11px] text-ink-3">
+                                {shift.publishedAt ? "Published" : "Draft"}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={pending}
+                                aria-label={`Delete shift for ${shift.staffName}`}
+                                onClick={() => run(() => deleteShiftAction(shift.id))}
+                                className="mt-0.5 inline-flex min-h-11 items-center text-[11px] text-ink-3 underline underline-offset-2 hover:text-ink disabled:opacity-50"
+                              >
+                                Remove
+                              </button>
+                            </span>
+                          ))
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div className="mt-5 space-y-4">
+      <div className="mt-5 space-y-4 lg:hidden">
         {days.map((day) => {
           const rows = byDay.get(day) ?? [];
           return (
             <section key={day}>
-              <h2 className="text-[13px] font-semibold text-ink-2">
+              <h3 className="text-[13px] font-semibold text-ink-2">
                 {formatWeekdayDateIST(`${day}T12:00:00Z`)}
-              </h2>
+              </h3>
               {rows.length === 0 ? (
                 <p className="mt-1 text-[12.5px] text-ink-3">No shifts.</p>
               ) : (
@@ -179,6 +254,34 @@ export function StaffRosterBoard({
             </section>
           );
         })}
+      </div>
+
+      <div className="mt-5">
+        <button
+          type="button"
+          onClick={() => setAddOpen((open) => !open)}
+          aria-expanded={addOpen}
+          aria-controls="add-shift-editor"
+          className="inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-4 text-[13px] font-medium text-ink-2 hover:text-ink"
+        >
+          {addOpen ? "Cancel" : "Add shift"}
+        </button>
+        <div
+          id="add-shift-editor"
+          data-add-shift-form
+          hidden={!addOpen}
+          className="mt-3"
+        >
+          <AddShiftForm
+            weekStart={weekStart}
+            templates={templates}
+            staff={staff}
+            locations={locations}
+            initialLocationId={weekLocationId ?? locations[0]?.id ?? ""}
+            pending={pending}
+            onAdd={addShift}
+          />
+        </div>
       </div>
 
       <ShiftTemplateEditor

@@ -22,6 +22,7 @@ vi.mock("next/link", async () => {
 });
 
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import { OwnerHomeAttendance } from "@/components/owner-home/owner-home-attendance";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 
 const BASE_PERIOD = {
@@ -92,21 +93,20 @@ function data(overrides: Partial<OwnerChartsData> = {}): OwnerChartsData {
 afterEach(cleanup);
 
 describe("owner Home chart band — collections", () => {
-  it("shows one metric panel and the payment mix, scoped to the period and facility", () => {
+  it("shows one financial panel and the payment mix, scoped to the range and facility", () => {
     render(<OwnerHomeCharts data={data()} metric="collections" facility="loc-1" canReadFees />);
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Trends");
+    expect(text).toContain("Collections");
     expect(text).toContain("Payment mix");
     expect(text).toContain("₹9,000");
     expect(text).toContain("Up 50% vs the previous range");
-    // The comparison states its exact IST range.
-    expect(text).toContain("Mon 19 Oct 2026, 12:00 am – Wed 21 Oct 2026, 10:00 am");
+    // The comparison no longer repeats the exact range: the range strip
+    // owns it and the disclosure carries the instants.
+    expect(text).not.toContain("Mon 19 Oct 2026, 12:00 am – Wed 21 Oct 2026, 10:00 am");
 
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    expect(hrefs).toContain("/owner?trend=attendance&period=week&facility=loc-1");
-    expect(hrefs).toContain("/owner?trend=collections&period=day&facility=loc-1");
     // Category and method drill-downs carry the same dates and scope.
     expect(hrefs).toContain(
       "/owner/fees?tab=transactions&from=2026-10-26&to=2026-10-29&group=digital&facility=loc-1",
@@ -119,7 +119,10 @@ describe("owner Home chart band — collections", () => {
   it("labels Other as its own category and states what is measured", () => {
     render(<OwnerHomeCharts data={data()} metric="collections" facility={null} canReadFees />);
     const text = document.body.textContent ?? "";
-    expect(text).toContain(
+    // The method behind "Digital" is methodology: it lives in a
+    // disclosure, not as loose prose beside the legend.
+    const detail = screen.getByTestId("owner-payment-mix-detail");
+    expect(detail.textContent).toContain(
       "Digital = UPI, bank transfer and card. Other is its own category, not digital.",
     );
     expect(text).toContain("ledger-only and not netted");
@@ -156,8 +159,9 @@ describe("owner Home chart band — collections", () => {
     });
     render(<OwnerHomeCharts data={empty} metric="collections" facility={null} canReadFees />);
     const text = document.body.textContent ?? "";
-    expect(text).toContain("No payments captured in this period");
-    expect(text).toContain("No collections in this period");
+    expect(text).toContain("No payments recorded in this period");
+    // The fixture's own comparison: neither range recorded a collection.
+    expect(text).toContain("No collections in either range");
     expect(screen.queryByTestId("owner-chart")).toBeNull();
   });
 
@@ -179,13 +183,22 @@ describe("owner Home chart band — collections", () => {
 });
 
 describe("owner Home chart band — attendance", () => {
-  it("plots present/late over marks and keeps unmarked buckets unknown", () => {
+  it("keeps attendance OUT of the money band", () => {
     render(<OwnerHomeCharts data={data()} metric="attendance" facility={null} canReadFees />);
-    const text = document.body.textContent ?? "";
+    const band = screen.getByTestId("owner-home-money");
+    // Attendance is an operational fact: it has its own panel, not a
+    // switch inside the Money section.
+    expect(band.textContent).not.toContain("16 of 20 marks");
+    expect(band.querySelector('nav[aria-label="Metric"]')).toBeNull();
+  });
+
+  it("states present/late over marks, and unknown for unmarked days", () => {
+    render(<OwnerHomeAttendance data={data()} facility={null} />);
+    const panel = screen.getByTestId("owner-home-attendance");
+    const text = panel.textContent ?? "";
     expect(text).toContain("80%");
     expect(text).toContain("16 of 20 marks");
-    expect(text).toContain("No marks recorded");
-    expect(text).toContain("A bucket with no marks is unknown, not 0%.");
+    expect(text).toContain("A day with no marks recorded is unknown, not 0%.");
   });
 
   it("says marks are unknown when a period has no attendance at all", () => {
@@ -201,11 +214,11 @@ describe("owner Home chart band — attendance", () => {
         comparison: "No marks in either range",
       },
     });
-    render(<OwnerHomeCharts data={noMarks} metric="attendance" facility={null} canReadFees />);
+    render(<OwnerHomeAttendance data={noMarks} facility={null} />);
     const text = document.body.textContent ?? "";
     expect(text).toContain("No attendance marks recorded in this period — unknown, not zero");
     // The headline is "—", never a fabricated 0% attendance figure.
-    expect(text).toContain("— present or late · 0 of 0 marks");
+    expect(text).toContain("— 0 of 0 marks present or late");
     expect(text).not.toContain("0% present");
   });
 });
@@ -213,6 +226,7 @@ describe("owner Home chart band — attendance", () => {
 describe("owner Home chart band — unavailable read", () => {
   it("states that charts are unavailable instead of rendering blank panels", () => {
     render(<OwnerHomeCharts data={null} metric="collections" facility={null} canReadFees />);
-    expect(document.body.textContent).toContain("Charts are unavailable right now");
+    // A failed financial read says so; it never renders blank panels.
+    expect(document.body.textContent).toContain("Money figures are unavailable right now");
   });
 });

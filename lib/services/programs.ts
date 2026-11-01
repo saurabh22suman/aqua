@@ -7,11 +7,20 @@ import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import type { ActionCtx } from "@/lib/auth/context";
+import { auditActorOf, writeAudit } from "@/lib/audit/write";
 import {
   locationPredicate,
+  locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { asStaffId } from "@/lib/ids";
+
+export class BatchLocationNotFoundError extends Error {
+  constructor() {
+    super("Location not found.");
+    this.name = "BatchLocationNotFoundError";
+  }
+}
 
 export async function listPrograms(ctx: ActionCtx): Promise<Program[]> {
   return withTenant(ctx.tenantId, (tx) =>
@@ -38,6 +47,16 @@ export async function createProgram(
         updatedBy: ctx.userId,
       })
       .returning();
+    // E-02 — every mutation writes its audit row in the SAME
+    // transaction as the change (docs/architecture.md:1330).
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "program.create",
+      entityType: "program",
+      entityId: program.id,
+      after: { name: program.name, description: program.description },
+    });
     return program;
   });
 }
@@ -77,10 +96,20 @@ export async function deleteProgram(
       return { ok: false, error: "This program still has active batches. Delete those first." };
     }
 
+    const deletedAt = new Date();
     await tx
       .update(programs)
-      .set({ deletedAt: new Date(), updatedBy: ctx.userId })
+      .set({ deletedAt, updatedBy: ctx.userId })
       .where(eq(programs.id, programId));
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "program.delete",
+      entityType: "program",
+      entityId: programId,
+      before: { deletedAt: null },
+      after: { deletedAt: deletedAt.toISOString() },
+    });
     return { ok: true };
   });
 }
@@ -156,6 +185,7 @@ export async function createBatch(
   },
 ): Promise<BatchWithProgramName> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
     let locationId = input.locationId ?? null;
     if (!locationId) {
       const [primary] = await tx
@@ -165,6 +195,21 @@ export async function createBatch(
         .orderBy(desc(locations.isPrimary), asc(locations.createdAt))
         .limit(1);
       locationId = primary?.id ?? null;
+    }
+
+    if (!locationVisible(access, locationId)) {
+      throw new BatchLocationNotFoundError();
+    }
+    if (locationId) {
+      const [location] = await tx
+        .select({ id: locations.id })
+        .from(locations)
+        .where(and(
+          eq(locations.id, locationId),
+          eq(locations.tenantId, ctx.tenantId),
+          isNull(locations.deletedAt),
+        ));
+      if (!location) throw new BatchLocationNotFoundError();
     }
 
     const [batch] = await tx
@@ -183,6 +228,24 @@ export async function createBatch(
         updatedBy: ctx.userId,
       })
       .returning();
+
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "batch.create",
+      entityType: "batch",
+      entityId: batch.id,
+      after: {
+        programId: batch.programId,
+        name: batch.name,
+        capacity: batch.capacity,
+        daysOfWeek: batch.daysOfWeek,
+        startTime: batch.startTime,
+        endTime: batch.endTime,
+        coachId: batch.coachId,
+        locationId: batch.locationId,
+      },
+    });
 
     const [program] = await tx
       .select({ name: programs.name })
@@ -235,6 +298,10 @@ export async function updateProgram(
   input: { programId: string; name: string; description?: string },
 ): Promise<{ ok: true; program: Program } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const [before] = await tx
+      .select({ name: programs.name, description: programs.description })
+      .from(programs)
+      .where(and(eq(programs.id, input.programId), eq(programs.tenantId, ctx.tenantId), isNull(programs.deletedAt)));
     const [program] = await tx
       .update(programs)
       .set({
@@ -246,6 +313,15 @@ export async function updateProgram(
       .where(and(eq(programs.id, input.programId), eq(programs.tenantId, ctx.tenantId), isNull(programs.deletedAt)))
       .returning();
     if (!program) return { ok: false, error: "Program not found." };
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "program.update",
+      entityType: "program",
+      entityId: program.id,
+      before: before ? { name: before.name, description: before.description } : null,
+      after: { name: program.name, description: program.description },
+    });
     return { ok: true, program };
   });
 }
@@ -269,6 +345,39 @@ export async function updateBatch(
   },
 ): Promise<{ ok: true; batch: BatchWithProgramName } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const [previous] = await tx
+      .select({
+        programId: batches.programId,
+        name: batches.name,
+        capacity: batches.capacity,
+        daysOfWeek: batches.daysOfWeek,
+        startTime: batches.startTime,
+        endTime: batches.endTime,
+        coachId: batches.coachId,
+        locationId: batches.locationId,
+      })
+      .from(batches)
+      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
+      .for("update");
+    if (
+      !previous ||
+      !locationVisible(access, previous.locationId) ||
+      (input.locationId && !locationVisible(access, input.locationId))
+    ) {
+      return { ok: false, error: "Batch not found." };
+    }
+    if (input.locationId) {
+      const [location] = await tx
+        .select({ id: locations.id })
+        .from(locations)
+        .where(and(
+          eq(locations.id, input.locationId),
+          eq(locations.tenantId, ctx.tenantId),
+          isNull(locations.deletedAt),
+        ));
+      if (!location) return { ok: false, error: "Location not found." };
+    }
     const [batch] = await tx
       .update(batches)
       .set({
@@ -286,6 +395,36 @@ export async function updateBatch(
       .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
       .returning();
     if (!batch) return { ok: false, error: "Batch not found." };
+
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "batch.update",
+      entityType: "batch",
+      entityId: batch.id,
+      before: previous
+        ? {
+            programId: previous.programId,
+            name: previous.name,
+            capacity: previous.capacity,
+            daysOfWeek: previous.daysOfWeek,
+            startTime: previous.startTime,
+            endTime: previous.endTime,
+            coachId: previous.coachId,
+            locationId: previous.locationId,
+          }
+        : null,
+      after: {
+        programId: batch.programId,
+        name: batch.name,
+        capacity: batch.capacity,
+        daysOfWeek: batch.daysOfWeek,
+        startTime: batch.startTime,
+        endTime: batch.endTime,
+        coachId: batch.coachId,
+        locationId: batch.locationId,
+      },
+    });
 
     const [program] = await tx
       .select({ name: programs.name })
@@ -320,16 +459,29 @@ export async function deleteBatch(
   batchId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
     const [batch] = await tx
-      .select({ id: batches.id })
+      .select({ id: batches.id, locationId: batches.locationId })
       .from(batches)
-      .where(and(eq(batches.id, batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)));
-    if (!batch) return { ok: false, error: "Batch not found." };
+      .where(and(eq(batches.id, batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt)))
+      .for("update");
+    if (!batch || !locationVisible(access, batch.locationId)) {
+      return { ok: false, error: "Batch not found." };
+    }
 
     await tx
       .update(batches)
       .set({ deletedAt: new Date(), updatedBy: ctx.userId })
       .where(eq(batches.id, batchId));
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "batch.delete",
+      entityType: "batch",
+      entityId: batchId,
+      before: { deletedAt: null },
+      after: { deletedAt: new Date().toISOString() },
+    });
     return { ok: true };
   });
 }

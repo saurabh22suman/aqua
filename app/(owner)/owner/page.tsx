@@ -5,14 +5,8 @@ import { getBrandingAction } from "@/lib/actions/branding";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
 import { getOwnerChartsAction } from "@/lib/actions/owner-home-charts";
-import {
-  getOwnerInsightsAttendanceAction,
-  getOwnerInsightsEnquiryStagesAction,
-} from "@/lib/actions/owner-insights";
-import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
 import { OwnerDashboard } from "@/components/owner-dashboard";
-import { insightWindow } from "@/components/owner-insights-home/insight-window";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 
@@ -47,11 +41,17 @@ export default async function OwnerHomePage({
     cookieStore.get(FACILITY_COOKIE)?.value,
   );
 
-  const trend = params.trend === "attendance" ? "attendance" : "collections";
-  const period =
-    params.period === "week" || params.period === "month" ? params.period : "day";
+  // The dashboard trend band defaults to a genuine Last 7 days window
+  // (today and the preceding six IST calendar dates). Day and Month
+  // remain available as the shorter and longer ranges; the
+  // Monday-to-now "week" window is still accepted for compatibility
+  // with existing links, but it is not offered as a button beside
+  // "Last 7 days". A legacy `trend=` parameter is accepted and
+  // ignored: the band no longer switches between two metrics.
+  const period = "last7";
+  const canReadFees = hasPermission(ctx, "reports.financial") && hasPermission(ctx, "invoices.read");
 
-  const [data, branding, terminology, checklist, chartsData, timezone] =
+  const [data, branding, terminology, checklist, chartsData] =
     await Promise.all([
       getOwnerDashboardAction(facility ? { facility } : undefined),
       getBrandingAction(),
@@ -59,38 +59,11 @@ export default async function OwnerHomePage({
       getOnboardingChecklistAction().catch(() => null),
       // The chart band degrades to a stated "unavailable" panel rather
       // than taking the page down with it.
-      getOwnerChartsAction({
+      canReadFees ? getOwnerChartsAction({
         period,
         ...(facility ? { facility } : {}),
-      }).catch(() => null),
-      // The insights window is printed in the tenant's own timezone. A
-      // read that fails here would only cost the label, so it falls
-      // back to the display zone the rest of the page uses.
-      getTenantTimezoneAction().catch(() => "Asia/Kolkata"),
+      }).catch(() => null) : Promise.resolve(null),
     ]);
-
-  // The insights read models (attendance by batch, enquiries by
-  // current stage). The window is the last 30 club days ending today,
-  // and the SELECTED FACILITY is passed as the location scope, so the
-  // numbers under a narrow filter are the narrow numbers — the read
-  // models can only narrow, never widen.
-  //
-  // A caller without the operational-reports grant never reaches a
-  // read: the section is absent, not empty, so it cannot reveal that
-  // the data exists. A read that FAILS is a different thing from an
-  // empty result, and it degrades to a stated "could not be read".
-  const canReadInsights = hasPermission(ctx, "reports.operational");
-  const insightWindowRange = insightWindow(data.today);
-  const insightInput = {
-    ...insightWindowRange,
-    ...(facility ? { locationId: facility } : {}),
-  };
-  const [attendanceInsight, enquiryInsight] = canReadInsights
-    ? await Promise.all([
-        getOwnerInsightsAttendanceAction(insightInput).catch(() => null),
-        getOwnerInsightsEnquiryStagesAction(insightInput).catch(() => null),
-      ])
-    : [null, null];
 
   // The everyday actions the Today screen puts first. Each one is
   // gated by the same permission the destination itself enforces, so
@@ -99,12 +72,20 @@ export default async function OwnerHomePage({
     addMember: hasPermission(ctx, "members.write"),
     recordPayment: hasPermission(ctx, "payments.record"),
     captureEnquiry: hasPermission(ctx, "enquiries.write"),
-    readFees:
-      hasPermission(ctx, "reports.financial") && hasPermission(ctx, "invoices.read"),
+    readFees: canReadFees,
     viewSchedule: hasPermission(ctx, "attendance.read"),
     // The enquiries LIST is a separate destination from the insights
     // read, and it enforces its own permission.
     readEnquiries: hasPermission(ctx, "enquiries.read"),
+    // The programs board and the staff directory enforce their own
+    // permissions on their own pages, and the desktop sidebar filters
+    // those same destinations by the same keys. The phone shortcuts
+    // read the same keys, so a shortcut never offers a destination
+    // that would refuse the caller.
+    readPrograms: hasPermission(ctx, "programs.read"),
+    readStaff: hasPermission(ctx, "staff.read"),
+    readMembers: hasPermission(ctx, "members.read"),
+    bookCourt: hasPermission(ctx, "bookings.read") && hasPermission(ctx, "bookings.write") && ctx.features.has("pool.booking"),
   };
   // Onboarding is for an academy that has not started yet — not a
   // standing nag for one unfinished checklist item.
@@ -117,23 +98,15 @@ export default async function OwnerHomePage({
       terminology={terminology}
       showOnboarding={isNewAcademy}
       can={can}
-      trend={trend}
+      period={period}
       facility={facility}
+      artworkIdentity={{ tenantId: ctx.tenantId, userId: ctx.userId }}
       chartsData={chartsData}
       // The seed for the small club artwork. The tenant id makes the
       // picture stable for the visit: a re-render or a hydration pass
       // never swaps the art under the owner.
       illustrationSeed={ctx.tenantId}
-      insights={
-        canReadInsights
-          ? {
-              ...insightWindowRange,
-              timezone,
-              attendance: attendanceInsight,
-              enquiries: enquiryInsight,
-            }
-          : null
-      }
+
     />
   );
 }

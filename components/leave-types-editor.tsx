@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 import {
   createLeaveTypeAction,
   updateLeaveTypeAction,
@@ -37,8 +39,8 @@ export function LeaveTypesEditor({ types }: { types: LeaveTypeRow[] }) {
   }
 
   return (
-    <section className="mt-6 rounded-card border border-line bg-paper p-4">
-      <h2 className="font-display text-[15px] font-semibold">Leave types</h2>
+    <section className="mt-5 rounded-card border border-line bg-paper p-5">
+      <h2 className="font-display text-[16px] font-semibold">Leave types</h2>
       <p className="mt-1 text-[12.5px] text-ink-3">
         Quota is days per calendar year; leave it blank for unlimited.
       </p>
@@ -72,28 +74,32 @@ export function LeaveTypesEditor({ types }: { types: LeaveTypeRow[] }) {
                   );
                 }}
               >
-                <label className="block">
-                  <span className="mb-1 block text-[11px] text-ink-3">Name</span>
-                  <input
-                    name="name"
-                    defaultValue={type.name}
-                    className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-                  />
-                </label>
+                <div>
+                  <Field id={`leave-type-${type.id}-name`} label="Name">
+                    {(field) => (
+                      <Input
+                        {...field}
+                        name="name"
+                        defaultValue={type.name}
+                      />
+                    )}
+                  </Field>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="block min-w-0">
-                    <span className="mb-1 block text-[11px] text-ink-3">
-                      Days per year
-                    </span>
-                    <input
-                      name="quota"
-                      inputMode="numeric"
-                      defaultValue={type.annualQuota ?? ""}
-                      placeholder="Unlimited"
-                      className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-                    />
-                  </label>
-                  <label className="flex min-h-11 items-center gap-2 self-end text-[13px]">
+                  <div className="min-w-0">
+                    <Field id={`leave-type-${type.id}-quota`} label="Days per year">
+                      {(field) => (
+                        <Input
+                          {...field}
+                          name="quota"
+                          inputMode="numeric"
+                          defaultValue={type.annualQuota ?? ""}
+                          placeholder="Unlimited"
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  <label className="flex min-h-11 items-center gap-2 self-end text-[14px]">
                     <input
                       type="checkbox"
                       name="paid"
@@ -128,31 +134,33 @@ export function LeaveTypesEditor({ types }: { types: LeaveTypeRow[] }) {
           setIsPaid(true);
         }}
       >
-        <label className="block">
-          <span className="mb-1 block text-[11px] text-ink-3">
-            New leave type
-          </span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Comp off"
-            className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-          />
-        </label>
+        <div>
+          <Field id="leave-type-new-name" label="New leave type">
+            {(field) => (
+              <Input
+                {...field}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Comp off"
+              />
+            )}
+          </Field>
+        </div>
         <div className="grid grid-cols-2 gap-3">
-          <label className="block min-w-0">
-            <span className="mb-1 block text-[11px] text-ink-3">
-              Days per year
-            </span>
-            <input
-              value={quota}
-              onChange={(e) => setQuota(e.target.value)}
-              inputMode="numeric"
-              placeholder="Unlimited"
-              className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            />
-          </label>
-          <label className="flex min-h-11 items-center gap-2 self-end text-[13px]">
+          <div className="min-w-0">
+            <Field id="leave-type-new-quota" label="Days per year">
+              {(field) => (
+                <Input
+                  {...field}
+                  value={quota}
+                  onChange={(e) => setQuota(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="Unlimited"
+                />
+              )}
+            </Field>
+          </div>
+          <label className="flex min-h-11 items-center gap-2 self-end text-[14px]">
             <input
               type="checkbox"
               checked={isPaid}

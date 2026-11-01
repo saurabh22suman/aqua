@@ -5,6 +5,7 @@ import { persons } from "@/db/schema/people";
 import { users } from "@/db/schema/users";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asPersonId, type StaffId, type PersonId, type TenantId, type UserId } from "@/lib/ids";
+import { auditActorOf, writeAudit } from "@/lib/audit/write";
 
 export type StaffRow = {
   id: StaffId;
@@ -101,6 +102,21 @@ export async function createStaff(
       .returning({ id: staff.id });
 
     if (!row) return { ok: false, error: "This person already has a staff record of that type." };
+    // E-02 — the audit row shares the transaction with the insert
+    // (docs/architecture.md:1330). A refusal above writes nothing.
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "staff.create",
+      entityType: "staff",
+      entityId: row.id,
+      after: {
+        personId,
+        staffType: input.staffType,
+        employedOn: input.employedOn ?? null,
+        userId: input.userId ?? null,
+      },
+    });
     return { ok: true, staffId: row.id };
   });
 }
