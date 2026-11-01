@@ -110,6 +110,7 @@ services:
       # the password needs at least 12 characters.
       OPS_EMAIL: ${OPS_EMAIL:?set OPS_EMAIL}
       OPS_PASSWORD: ${OPS_PASSWORD:?set OPS_PASSWORD}
+      OPS_STAGING_PASSWORD_ONLY: ${OPS_STAGING_PASSWORD_ONLY:-false}
       NODE_ENV: production
       DEMO_MODE: "false"
       OFFLINE_SYNC_ENABLED: ""

@@ -54,7 +54,7 @@ export async function runPlatformLoginAttempt<T>(
   phase: "password" | "totp",
   identity: string,
   meta: LoginMeta,
-  authenticate: (tx: TenantTx) => Promise<{ value: T; actorId: string; totpStep?: number }>,
+  authenticate: (tx: TenantTx) => Promise<{ value: T; actorId: string; totpStep?: number; authMethod?: "staging_password_only" }>,
   options?: { budget?: AttemptBudget },
 ): Promise<T> {
   const identityHash = opsIdentityHash(phase, identity);
@@ -110,7 +110,7 @@ async function runAttemptTransaction<T>(
   identityHash: string,
   ipAddress: string | undefined,
   correlationId: string,
-  authenticate: (tx: TenantTx) => Promise<{ value: T; actorId: string; totpStep?: number }>,
+  authenticate: (tx: TenantTx) => Promise<{ value: T; actorId: string; totpStep?: number; authMethod?: "staging_password_only" }>,
   budget: AttemptBudget,
 ): Promise<{ value: T } | { error: PlatformAuthError }> {
   // The unknown-challenge budget has its OWN action and its OWN address
@@ -169,10 +169,10 @@ async function runAttemptTransaction<T>(
     try {
       // A failed authentication rolls back its own mutations, while the
       // outer transaction can commit a safe failure event.
-      const { value, actorId, totpStep } = await tx.transaction(authenticate);
+      const { value, actorId, totpStep, authMethod } = await tx.transaction(authenticate);
       await tx.insert(platformAuditLog).values({
-        actorId, action: phase === "totp" ? "platform.login" : "platform.login.password_passed", ipAddress,
-        detail: { phase, identityHash, correlationId, method: phase === "totp" ? "password_totp" : "password",
+        actorId, action: phase === "totp" || authMethod === "staging_password_only" ? "platform.login" : "platform.login.password_passed", ipAddress,
+        detail: { phase, identityHash, correlationId, method: authMethod ?? (phase === "totp" ? "password_totp" : "password"),
           ...(totpStep === undefined ? {} : { totpStep }) }, createdAt: new Date(),
       });
       return { value };

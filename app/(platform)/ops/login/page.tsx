@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
+import { env } from "@/lib/env";
 import { PlatformLoginForm } from "./login-form";
 import { OpsCard, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 
@@ -15,7 +16,9 @@ export default async function PlatformLoginPage() {
       <OpsPageHeader
         eyebrow="Aqua operator"
         title="Sign in"
-        lede="Use your operator password, then confirm with your authenticator code."
+        lede={env.OPS_STAGING_PASSWORD_ONLY
+          ? "Staging sign-in uses your operator password only."
+          : "Use your operator password, then confirm with your authenticator code."}
       />
       <OpsCard className="mt-6 p-6">
         <PlatformLoginForm />

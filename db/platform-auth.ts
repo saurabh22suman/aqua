@@ -62,11 +62,11 @@ export async function platformLogin(
   meta: { ipAddress?: string; userAgent?: string } = {},
 ): Promise<PlatformAuthResult> {
   return runPlatformLoginAttempt<PlatformAuthResult>("password", input.email, meta, async (db) => {
-    // Preserve the configured password; an existing enrolled operator and
-    // a separate authenticator proof are required on both password paths.
+    // Only the validated staging policy allows the configured operator to bypass TOTP.
     if (env.OPS_EMAIL !== undefined && env.OPS_PASSWORD !== undefined) {
-      const value = await loginWithEnvOperator(input, meta, env.OPS_EMAIL, env.OPS_PASSWORD, db);
-      return { value, actorId: value.userId };
+      const value = await loginWithEnvOperator(input, meta, env.OPS_EMAIL, env.OPS_PASSWORD, db, env.OPS_STAGING_PASSWORD_ONLY);
+      return { value, actorId: value.userId,
+        ...(value.kind === "fully_authenticated" ? { authMethod: "staging_password_only" as const } : {}) };
     }
 
     const [user] = await db

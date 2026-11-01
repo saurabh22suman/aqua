@@ -377,9 +377,11 @@ describe("InvoiceExpanded reversals (PR2-C9)", () => {
         resolveHangingReload = resolve;
       }),
     );
-    fireEvent.click(
-      screen.getByRole("button", { name: /discard earlier attempt/i }),
-    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /discard earlier attempt/i }),
+      );
+    });
     fireEvent.click(screen.getByRole("button", { name: /confirm discard/i }));
     await waitFor(() => expect(getInvoiceAction).toHaveBeenCalledTimes(2));
 
@@ -851,9 +853,11 @@ describe("InvoiceExpanded closed-target recovery", () => {
 
     expect(await screen.findByTestId("closed-intent-recovery")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /record payment/i })).toBeNull();
-    fireEvent.click(
-      screen.getByRole("button", { name: /discard earlier attempt/i }),
-    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /discard earlier attempt/i }),
+      );
+    });
     fireEvent.click(screen.getByRole("button", { name: /confirm discard/i }));
     await waitFor(() =>
       expect(cancelPaymentRecoveryAction).toHaveBeenCalledWith({
@@ -903,9 +907,11 @@ describe("InvoiceExpanded closed-target recovery", () => {
 
     expect(await screen.findByTestId("closed-intent-recovery")).toBeTruthy();
     expect(screen.getByText(/when checked/i)).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("button", { name: /discard earlier attempt/i }),
-    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /discard earlier attempt/i }),
+      );
+    });
     fireEvent.click(screen.getByRole("button", { name: /confirm discard/i }));
 
     await waitFor(() =>
@@ -951,9 +957,11 @@ describe("InvoiceExpanded closed-target recovery", () => {
     );
 
     expect(await screen.findByTestId("closed-intent-recovery")).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole("button", { name: /discard earlier attempt/i }),
-    );
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: /discard earlier attempt/i }),
+      );
+    });
     fireEvent.click(screen.getByRole("button", { name: /confirm discard/i }));
 
     await waitFor(() =>
