@@ -172,12 +172,18 @@ owner shell. Entry: `/owner`.
 | `/owner/staff/roster` | `staff.roster` | Build and publish the weekly roster | populated · unpublished · published · conflict |
 | `/owner/staff/check-in-qr` | `staff.roster` | The premises check-in QR | populated · regenerating · error |
 | `/owner/reports` | `reports.operational` | Operational reports: attendance, funnel, retention, coach load, utilisation | populated · insufficient history · empty · error per card · loading |
-| `/owner/reports/collections` | `reports.financial` | Daily collections and the cash count | populated · not confirmed · confirmed · closed · reopen refused |
+| `/owner/reports/attendance` | `reports.operational` | Recorded attendance and register completion | populated · no marks · no roster · invalid range · error |
+| `/owner/reports/members` | `reports.operational` | Current member status and joins in range | populated · empty · scoped · error |
+| `/owner/reports/staff` | `reports.operational` + `staff.attendance` | Recorded staff check-ins and shifts | populated · empty · scoped · error |
+| `/owner/reports/batches` | `reports.operational` | Current reserved places and capacity | populated · empty · scoped · error |
+| `/owner/reports/collections` | `reports.financial` (trends also `invoices.read`) | Daily close and captured-payment trends | populated · empty · error · confirmed · closed · reopen refused |
 | `/owner/settings` | `settings.manage` | Grouped settings, account block, sign-out | populated · category open · setup incomplete · empty categories |
 | `/owner/settings/academy` | `settings.manage` | Academy profile: name, currency, time zone, GSTIN | populated · validation error · saved |
 | `/owner/settings/activities` | `settings.manage` | The activities this academy offers | populated · empty · saved |
 | `/owner/settings/alerts` | `settings.manage` | Absence alert thresholds | populated · validation error · saved |
 | `/owner/settings/branding` | `settings.manage` | Display name, short name, accent | populated · validation error · saved |
+| `/owner/settings/appearance` | owner surface session | Personal theme and on-device Collections artwork | selected · None · storage unavailable |
+| `/owner/settings/reports` | owner surface + `reports.operational` | Personal on-device report display preferences | selected · all hidden · storage unavailable |
 | `/owner/settings/configuration` | `settings.manage` | Request a platform-owned setting change | populated · pending request · rejected |
 | `/owner/settings/holidays` | `settings.manage` | Days the academy is closed | populated · empty · saved |
 | `/owner/settings/locations` | `settings.manage` | Locations, addresses and business hours | populated · single site · multi site · validation error · saved |

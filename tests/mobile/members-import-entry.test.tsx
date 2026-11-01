@@ -42,6 +42,11 @@ afterEach(() => {
 });
 
 describe("MembersPage import entry (PR2-C7)", () => {
+  it("carries the selected facility to Add member", async () => {
+    listMembersAction.mockResolvedValue([]);
+    render(await MembersPage({ searchParams: Promise.resolve({ facility: "22222222-2222-4222-8222-222222222222" }) }));
+    expect(document.body.querySelector('a[href="/owner/members/new?facility=22222222-2222-4222-8222-222222222222"]')).not.toBeNull();
+  });
   it("links to the import screen from the header", async () => {
     listMembersAction.mockResolvedValue([]);
     render(await MembersPage({}));

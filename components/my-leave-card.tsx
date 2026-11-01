@@ -1,7 +1,7 @@
 import { Palmtree } from "lucide-react";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { CancelLeaveButton } from "@/components/cancel-leave-button";
-import { LeaveRequestForm } from "@/components/leave-request-form";
+import { DeferredLeaveRequest } from "@/components/deferred-leave-request";
 import { formatDateIST } from "@/lib/time/tz";
 import type {
   LeaveBalanceRow,
@@ -29,6 +29,20 @@ const STATUS_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * The unpaid marker exists to say something the leave type's own name
+ * does not. A type whose name already says "unpaid" (in any case) must
+ * not be told twice — "Unpaid · unpaid" says it twice.
+ *
+ * The stored values and the permissions are untouched: only the printed
+ * text changes.
+ */
+function unpaidMarker(name: string, isPaid: boolean): string {
+  if (isPaid) return "";
+  if (/unpaid/i.test(name)) return "";
+  return " · unpaid";
+}
+
 export function MyLeaveCard({
   types,
   balances,
@@ -39,7 +53,7 @@ export function MyLeaveCard({
   requests: LeaveRequestRow[];
 }) {
   return (
-    <section className="mt-5 rounded-card border border-line bg-paper p-4">
+    <section className="mt-4 rounded-card border border-line bg-paper p-3.5">
       <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
         <Palmtree size={15} className="text-ink-3" />
         Leave
@@ -53,7 +67,7 @@ export function MyLeaveCard({
           >
             <span className="text-[13.5px]">
               {balance.name}
-              {balance.isPaid ? "" : " · unpaid"}
+              {unpaidMarker(balance.name, balance.isPaid)}
             </span>
             <span className="text-[13px] text-ink-3 tabular-nums">
               {balance.annualQuota === null
@@ -65,12 +79,7 @@ export function MyLeaveCard({
         ))}
       </ul>
 
-      <details className="mt-3 border-t border-line pt-3">
-        <summary className="min-h-11 cursor-pointer text-[13.5px] font-medium">
-          Request leave
-        </summary>
-        <LeaveRequestForm types={types} />
-      </details>
+      <DeferredLeaveRequest types={types} />
 
       {requests.length > 0 ? (
         <ul className="mt-3 border-t border-line pt-1">

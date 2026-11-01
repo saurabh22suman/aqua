@@ -36,7 +36,7 @@ const restrictedA = {
   roleKey: "admin",
   allLocations: false,
   locationIds: [] as string[],
-  permissions: new Set(["dashboard.view", "reports.financial", "payments.read"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read", "payments.read"]),
 };
 
 beforeAll(async () => {
@@ -45,6 +45,7 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Chart Scope', $3)",
     [tenantId, `chart-scope-${RUN}`, TZ],
   );
+  await admin.query("insert into tenant_features (tenant_id,feature_key,enabled) values ($1,'reports',true),($1,'billing',true)", [tenantId]);
   await withTenant(tenantId, async (tx) => {
     const rows = await tx
       .insert(locations)
@@ -137,6 +138,7 @@ afterAll(async () => {
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from config_values where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.end();

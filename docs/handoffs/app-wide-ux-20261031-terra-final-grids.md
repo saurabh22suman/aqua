@@ -1,0 +1,17 @@
+# Date consumer grids — 31 October 2026
+
+- Branch `fix/app-wide-ux-20261031`, HEAD `54e6d80c25164da8c85c8e33c41511ae467f3d54`, inherited dirty overlay; no commit. Runtime metadata `openai/gpt-6.1-terra`.
+- Scope: owner/reception subscription entry and owner roster shift draft; existing Field/DateField, actions, grants, validation, optional dates and auto-renew remain unchanged. Scroll remains page-owned. No shared primitive, leave form, CSS token or sensitive backend edits.
+- `components/member-subscription-panel.tsx`: Plan full row; optional Starts/Ends in a related auto-fit 13rem minimum-track pair. `components/roster/add-shift-form.tsx`: Date/Template use the same container-aware pattern. Track minimum is bounded by container width.
+- Scoped diff SHA256 `78925093360ab9bf296a8be0ccfd206f17a305402504ac967272acc9f3990a81`; `git diff --check` on both files passed.
+
+## Actual RED and checks
+- Pre-edit Chrome RED supplied by coordinator: `.playwright-mcp/app-wide-ux-20261031/chrome-grid-candidates/review.json`, build `28711e9a339894a012a68d2c916367029e14c8c259e2668390d2d9e35452746a`, 12 cases, `errors: []`. At owner member desktop 1280 both themes each subscription date had 65px text room vs 95.98px required; owner roster phone 390 both themes date had 42px vs 84.82px required. Screenshots in that evidence directory. Synthetic plan was preview-only; no subscription/invoice fixture. This is a real browser RED, not a source-class test.
+- `NODE_OPTIONS=--max-old-space-size=2048 python3 .opencode/scripts/lane_job.py harness test --profile .env.aqua-harness-regression.local -- tests/owner-openpen-20261029/people/mobile/subscription-notification-controls.test.tsx tests/owner-openpen-20261029/people/mobile/subscription-date-validity.test.tsx tests/owner-openpen-20261029/management/mobile/roster-unrostered.test.tsx tests/owner-openpen-20261029/management/roster-add-disclosure.test.tsx tests/owner-openpen-20261029/management/staff-roster.test.tsx tests/mobile/roster-publish-scope.test.tsx tests/mobile/deferred-leave-form.test.tsx tests/mobile/leave-coverage-recovery.test.tsx tests/app-wide-ux-20261031/staff-leave-copy.test.tsx tests/app-wide-ux-20261031/date-field-calendar.test.tsx tests/app-wide-ux-20261031/date-field-calendar-review.test.tsx tests/owner-openpen-20261029/shared/date-field-validity.test.tsx tests/owner-openpen-20261029/mobile/date-field-a11y.test.tsx --reporter=verbose`: exit 0, 13 files / 83 tests passed; verified disposable `aqua_test_c1a05ac212` / `app_login`.
+- `NODE_OPTIONS=--max-old-space-size=2048 python3 .opencode/scripts/lane_job.py harness quick`: exit 0, typecheck and lint. Logs: `.playwright-mcp/app-wide-ux-20261031/terra-final-grids-evidence/{focused,quick}.log`. Serialized heavy-job lock preserved.
+
+## Verdict and next step
+- **Functional:** focused tests PASS; actual rendered interactions after change remain unverified. No new geometry test was substituted for Chrome.
+- **Semantic:** form hierarchy and labels preserved by inspection; real role-journey review pending.
+- **Visual:** BLOCKED until coordinator rebuilds and repeats exact 12-case Chrome geometry probe plus full Chrome GREEN in both themes, including complete dates, 44px calendar targets, adaptive pairing, no overflow and real actions. No post-edit browser/build run here.
+- Coordinator owns full suite on separate regression DB, production build, independent review and final browser sweep after source freeze. No preview/background jobs, fixture changes, deployment, commit or unrelated work by this task.

@@ -1,11 +1,14 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { withTenant, type TenantTx } from "@/db/tenant";
+import { withTenant } from "@/db/tenant";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { tenants } from "@/db/schema/tenants";
 import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
 import { writeAudit } from "@/lib/audit/write";
+import { trustGateDenies } from "./credential-issuer-trust";
+import { auditOpsCredential } from "@/db/ops-credential-audit";
+import { enqueueInvitationNotification } from "@/lib/messaging/invitation-notification";
 import {
   signInviteLinkToken,
   INVITE_LINK_TTL_SECONDS,
@@ -30,7 +33,40 @@ export type IssueLoginLinkError =
   | "not_active"
   // A06 — the issuer's trust rank is below the target's (e.g. an
   // Administrator minting an Owner credential). No token is signed.
-  | "forbidden_target";
+  | "forbidden_target"
+  // The notification could not be queued, so the issuance was rolled
+  // back with it. Nothing was created and no credential was returned.
+  | "notification_failed";
+
+// The generated-login-link path queues the notification in the issuance's
+// own transaction (docs/whatsapp-demo-flows.md: "Events enqueue durable
+// outbox rows and audits in the originating transaction"). This sentinel
+// carries that failure out of the transaction so it is rolled back, and
+// lets the caller turn it into a bounded result instead of an unhandled
+// error. It is deliberately module-private: callers never see it.
+class InviteLinkNotificationError extends Error {
+  constructor() {
+    super("the invitation notification could not be queued");
+    this.name = "InviteLinkNotificationError";
+  }
+}
+
+export type IssueLoginLinkOptions = {
+  // Queue the WhatsApp notification for the issued link. The enqueue
+  // runs in the issuance transaction, so the credential and its
+  // notification commit together or not at all.
+  //
+  // The contract at this boundary: `notify: true` requires the helper to
+  // report a real queued row (`true`). A throw OR a `false` rolls the
+  // issuance back and returns the bounded `notification_failed` result.
+  // After that rollback the service writes exactly one
+  // `staff.login_link_notification_failed` audit trace (fixed code
+  // `notification_not_queued`, `rolledBack: true`). If even that trace
+  // cannot be written, it emits exactly one fixed safe alert
+  // (`notification_trace_write_failed`) with no cause, id, phone, token,
+  // message or stack — the caller still receives `notification_failed`.
+  notify?: boolean;
+};
 
 export type IssueLoginLinkResult =
   | {
@@ -44,70 +80,6 @@ export type IssueLoginLinkResult =
       tenantName: string;
     }
   | { kind: "error"; code: IssueLoginLinkError; message: string };
-
-// A06 — issuer-target trust on credential issuance. `homeOrdinal` is
-// the tenant role's trust rank (owner=0, admin=1, coach=2,
-// curriculum_lead=2, receptionist/accountant/worker=3). An issuer may
-// only mint a bearer credential for a target at or below its own rank:
-// Owner -> Owner (co-owner recovery) and Admin -> lower-trust staff
-// stay allowed, Admin -> Owner is refused. The rank is read from the
-// tenant's role rows, never from a caller-supplied label.
-async function issuerHomeOrdinal(
-  tx: TenantTx,
-  tenantId: TenantId,
-  issuer: ActionCtx | null | undefined,
-): Promise<number | null> {
-  if (!issuer) return null;
-  if (issuer.roleKey) {
-    const [row] = await tx
-      .select({ homeOrdinal: roles.homeOrdinal })
-      .from(roles)
-      .where(
-        and(
-          eq(roles.tenantId, tenantId),
-          eq(roles.key, issuer.roleKey),
-          isNull(roles.deletedAt),
-        ),
-      )
-      .limit(1);
-    return row?.homeOrdinal ?? null;
-  }
-  if (!issuer.userId) return null;
-  const [row] = await tx
-    .select({ homeOrdinal: roles.homeOrdinal })
-    .from(tenantMemberships)
-    .innerJoin(
-      roles,
-      and(
-        eq(roles.id, tenantMemberships.roleId),
-        eq(roles.tenantId, tenantMemberships.tenantId),
-      ),
-    )
-    .where(
-      and(
-        eq(tenantMemberships.tenantId, tenantId),
-        eq(tenantMemberships.userId, issuer.userId),
-        eq(tenantMemberships.status, "active"),
-        isNull(tenantMemberships.deletedAt),
-        isNull(roles.deletedAt),
-      ),
-    )
-    .limit(1);
-  return row?.homeOrdinal ?? null;
-}
-
-// Unknown issuer ranks fail closed: a caller with no resolvable active
-// membership or role cannot mint credentials.
-async function trustGateDenies(
-  tx: TenantTx,
-  tenantId: TenantId,
-  issuer: ActionCtx | null | undefined,
-  targetOrdinal: number,
-): Promise<boolean> {
-  if (!issuer) return false;
-  const issuerOrdinal = await issuerHomeOrdinal(tx, tenantId, issuer);
-  return issuerOrdinal === null || targetOrdinal < issuerOrdinal;
-}
 
 function forbiddenTarget(): IssueLoginLinkResult {
   return {
@@ -127,12 +99,26 @@ function forbiddenTarget(): IssueLoginLinkResult {
 // non-token issuance audit is written in the same transaction before
 // the token is returned. System callers (platform operator phone
 // flow) pass no issuer and keep their existing authority.
+//
+// opts.notify — queue the notification for the issued link in THIS
+// transaction. The rule is documented (docs/whatsapp-demo-flows.md,
+// "Connected event paths": "Events enqueue durable outbox rows and
+// audits in the originating transaction", and a generated login link
+// is one of those events), and the two sibling paths already obey it
+// (lib/services/staff-invitations.ts: inviteStaff and resendInvitation
+// both call enqueueInvitationNotification inside their withTenant
+// transaction). A failed enqueue therefore aborts the transaction: the
+// credential is never issued, never audited and never returned. Without
+// this the issuance and its audit committed first and the notification
+// was enqueued in a second transaction, so a failed enqueue left an
+// issued credential that nobody received behind a reported failure.
 export async function issueLoginLink(
   tenantId: TenantId,
   membershipId: string,
   issuer?: ActionCtx | null,
+  opts?: IssueLoginLinkOptions,
 ): Promise<IssueLoginLinkResult> {
-  return withTenant(tenantId, async (tx) => {
+  return withTenant(tenantId, async (tx): Promise<IssueLoginLinkResult> => {
     const rows = await tx
       .select({
         membershipId: tenantMemberships.id,
@@ -176,6 +162,7 @@ export async function issueLoginLink(
       ttlSeconds: ttl,
     });
     const expiresAt = new Date(claims.exp * 1000);
+    await auditOpsCredential(tx, tenantId, membershipId, purpose, expiresAt);
     if (issuer) {
       // Same transaction as the checks, before the token leaves this
       // function. Never token-bearing.
@@ -189,6 +176,24 @@ export async function issueLoginLink(
         after: { purpose, phone: m.phone, expiresAt: expiresAt.toISOString() },
       });
     }
+    if (opts?.notify) {
+      // The notification is part of the issuance (see the note above), so
+      // it is queued in this transaction. The reviewed helper REPORTS
+      // whether it really queued: `false` means the membership was missing
+      // or ineligible at its own read, or its outbox insert produced no
+      // row. The issuance REQUIRES `true` — a false is the same failure as
+      // a throw, because an issued credential nobody was notified about is
+      // the state this contract exists to prevent. Either way the sentinel
+      // aborts the transaction, so the credential, its audit and the token
+      // are rolled back together.
+      let queued = false;
+      try {
+        queued = await enqueueInvitationNotification(tx, tenantId, membershipId);
+      } catch {
+        queued = false;
+      }
+      if (!queued) throw new InviteLinkNotificationError();
+    }
     return {
       kind: "ok",
       token,
@@ -199,7 +204,78 @@ export async function issueLoginLink(
       roleKey: m.roleKey,
       tenantName: m.tenantName,
     };
+  }).catch(async (err: unknown): Promise<IssueLoginLinkResult> => {
+    // The notification could not be queued, so the transaction was rolled
+    // back: nothing was created, no audit row survived and no credential
+    // was returned. Report it as a bounded result instead of letting an
+    // operational failure escape as an unhandled error.
+    if (err instanceof InviteLinkNotificationError) {
+      // The rollback took every row this attempt wrote, so the trail would
+      // show NOTHING — a silent failure. ONE bounded failure trace, written
+      // in its OWN transaction after the rollback, records that an attempt
+      // happened and was rolled back. It never claims an issuance, and it
+      // carries a FIXED code: no cause, no message, no phone and no token.
+      await recordFailedNotificationTrace(tenantId, membershipId, issuer);
+      return {
+        kind: "error",
+        code: "notification_failed",
+        message:
+          "The sign-in link was not created because its notification could not be queued. Nothing was changed — please try again.",
+      };
+    }
+    throw err;
   });
+}
+
+/**
+ * The failure trace for an issuance whose notification could not be queued.
+ *
+ * It is written AFTER the rollback, in its own transaction, so it survives
+ * the rollback that removed the issuance rows. It carries a fixed code and
+ * nothing else: the cause is never copied, and neither is the recipient's
+ * phone, the message body or the credential.
+ *
+ * The action name follows the documented rule (docs/whatsapp-demo-flows.md,
+ * "Connected event paths": the credential and its notification commit
+ * together or not at all) and is listed for Ops review in
+ * docs/pilot-operations-runbook.md §1.
+ *
+ * The trace is best effort. If the audit store is down too, EXACTLY ONE fixed
+ * alert is emitted (`notification_trace_write_failed`) and this function
+ * still resolves: the caller's bounded `notification_failed` result is never
+ * replaced by a diagnostic failure. The alert carries no cause, id, phone,
+ * token, message or stack.
+ */
+async function recordFailedNotificationTrace(
+  tenantId: TenantId,
+  membershipId: string,
+  issuer?: ActionCtx | null,
+): Promise<void> {
+  try {
+    await withTenant(tenantId, async (tx) => {
+      await writeAudit(tx, {
+        tenantId,
+        actorId: issuer?.userId ?? null,
+        requestId: issuer?.requestId ?? null,
+        action: "staff.login_link_notification_failed",
+        entityType: "tenant_membership",
+        entityId: membershipId,
+        // A FIXED code and two booleans. Nothing from the exception.
+        after: { code: "notification_not_queued", rolledBack: true },
+      });
+    });
+  } catch {
+    // The trace is best effort: if the audit store is unavailable too, the
+    // caller's bounded result must still stand, and that result already tells
+    // the operator the link was not created. A second write would only risk a
+    // duplicate trace. ONE fixed alert is the only diagnostic that survives a
+    // store outage: fixed text and fixed values, never the cause, an id, the
+    // recipient's phone, the credential or a stack.
+    console.error("[invite-link] notification failure trace could not be written", {
+      code: "notification_trace_write_failed",
+      rolledBack: true,
+    });
+  }
 }
 
 // Phone-keyed variant for the platform operator: the operator knows
@@ -308,6 +384,7 @@ export async function issueOwnerResetLink(
       purpose: "reset",
       ttlSeconds: RESET_LINK_TTL_SECONDS,
     });
+    await auditOpsCredential(tx, tenantId, membershipId, "reset", new Date(claims.exp * 1000));
     return {
       kind: "ok",
       token,

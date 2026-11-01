@@ -1,13 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CafeMemberPicker } from "@/components/cafe-member-picker";
 import { createBookingAction, quoteBookingAction } from "@/lib/actions/bookings";
-import { inputClass } from "@/components/cafe-order-shared";
+import { Input } from "@/components/ui/Input";
+import { DateField } from "@/components/ui/DateField";
+import { Select } from "@/components/ui/Select";
 import { SLOT_STARTS, slotEnd } from "@/components/booking-shared";
 import { formatINR } from "@/lib/money/format";
-import { zonedWallTimeToInstant } from "@/lib/time/tz";
+import {
+  formatDateIST,
+  formatWallTime12h,
+  zonedWallTimeToInstant,
+} from "@/lib/time/tz";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import type { BookableFacility } from "@/lib/services/bookings";
 import type { MemberListRow } from "@/lib/services/people";
@@ -31,6 +37,8 @@ export function BookingForm({
   date,
   onDateChange,
   onCreated,
+  slotStart: slotStartProp,
+  onSlotStartChange,
 }: {
   facilities: BookableFacility[];
   timezone: string;
@@ -41,13 +49,26 @@ export function BookingForm({
   date: string;
   onDateChange: (date: string) => void;
   onCreated: () => void;
+  /**
+   * Owner OpenPen (29 October 2026) — the slot board can choose a free
+   * hour. The form keeps its own default when used alone, and follows
+   * the board when the parent controls the value.
+   */
+  slotStart?: string;
+  onSlotStartChange?: (slot: string) => void;
 }) {
+  const fieldId = useId();
   const [subUnitId, setSubUnitId] = useState("");
-  const [slotStart, setSlotStart] = useState(SLOT_STARTS[9]!);
+  const [internalSlotStart, setInternalSlotStart] = useState(SLOT_STARTS[9]!);
+  const slotStart = slotStartProp ?? internalSlotStart;
+  function chooseSlot(next: string) {
+    if (slotStartProp === undefined) setInternalSlotStart(next);
+    onSlotStartChange?.(next);
+  }
   const [mode, setMode] = useState<"member" | "walk-in">("member");
   const [member, setMember] = useState<MemberListRow | null>(null);
   const [walkInName, setWalkInName] = useState("");
-  const [quote, setQuote] = useState<{ ok: boolean; text: string } | null>(
+  const [quote, setQuote] = useState<{ ok: boolean; text: string; key: string } | null>(
     null,
   );
   const [busy, setBusy] = useState(false);
@@ -58,13 +79,26 @@ export function BookingForm({
     () => facilities.find((candidate) => candidate.id === facilityId),
     [facilities, facilityId],
   );
+  const quoteKey = JSON.stringify([facilityId, date, slotStart, timezone]);
+  const currentQuote = quote?.key === quoteKey ? quote : null;
+  const dateValid = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const dateInPast = dateValid && date < today;
+  const dateError = !dateValid
+    ? "Enter a valid date."
+    : dateInPast
+      ? "Choose today or a later date."
+      : null;
 
   useEffect(() => {
     setSubUnitId("");
   }, [facilityId]);
 
   useEffect(() => {
+    setQuote(null);
     if (!facilityId) return;
+    if (!dateValid || dateInPast) {
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -77,22 +111,22 @@ export function BookingForm({
         if (cancelled) return;
         setQuote(
           result.ok
-            ? { ok: true, text: formatINR(result.pricePaise) }
-            : { ok: false, text: result.error },
+            ? { ok: true, text: formatINR(result.pricePaise), key: quoteKey }
+            : { ok: false, text: result.error, key: quoteKey },
         );
       } catch {
         if (!cancelled) {
-          setQuote({ ok: false, text: "Could not price that slot." });
+          setQuote({ ok: false, text: "Could not price that slot.", key: quoteKey });
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [facilityId, date, slotStart, timezone]);
+  }, [facilityId, date, dateValid, dateInPast, slotStart, timezone, quoteKey]);
 
   async function submit() {
-    if (!facilityId) return;
+    if (!facilityId || !dateValid || dateInPast || !currentQuote?.ok) return;
     setBusy(true);
     setError(null);
     setNotice(null);
@@ -127,14 +161,27 @@ export function BookingForm({
 
   return (
     <section className="rounded-card border border-line bg-paper p-4 space-y-4">
+      <div
+        className="rounded-ctl border border-line bg-deck/60 px-3 py-2.5"
+        data-testid="booking-slot-summary"
+      >
+        <p className="text-[13px] font-medium leading-snug text-ink">
+          {facility ? `${facility.name} · ` : ""}
+          {dateValid && !dateInPast ? formatDateIST(date) : "Choose a valid date"}
+        </p>
+        <p className="mt-0.5 text-[12.5px] leading-snug text-ink-2">
+          {formatWallTime12h(slotStart)}–{formatWallTime12h(slotEnd(slotStart))} · 1 hour
+          {facility?.locationName ? ` · ${facility.locationName}` : ""}
+        </p>
+      </div>
       <div>
-        <label className="block text-[12px] font-medium text-ink-2 mb-1">
+        <label htmlFor={`${fieldId}-facility`} className="block text-[12px] font-medium text-ink-2 mb-1">
           {titleCase(resolveTerm(terminology, "facility", 1))}
         </label>
-        <select
+        <Select
           value={facilityId}
           onChange={(event) => onFacilityChange(event.target.value)}
-          className={inputClass}
+          id={`${fieldId}-facility`}
           data-testid="booking-facility"
         >
           {facilities.map((option) => (
@@ -142,18 +189,18 @@ export function BookingForm({
               {option.name} · {option.locationName}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-4">
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-1">
+          <label htmlFor={`${fieldId}-subunit`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Lane / court
           </label>
-          <select
+          <Select
             value={subUnitId}
             onChange={(event) => setSubUnitId(event.target.value)}
-            className={inputClass}
+            id={`${fieldId}-subunit`}
             data-testid="booking-subunit"
           >
             <option value="">
@@ -164,47 +211,49 @@ export function BookingForm({
                 {unit.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-1">
+          <label htmlFor={`${fieldId}-date`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Date
           </label>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
+          <DateField
             value={date}
-            min={today}
-            onChange={(event) => onDateChange(event.target.value)}
-            className={inputClass}
+            onChange={onDateChange}
+            id={`${fieldId}-date`}
             data-testid="booking-date"
           />
+          <p
+            className={`mt-1 text-[11.5px] ${dateError ? "text-ink-2" : "text-ink-3"}`}
+            role={dateError ? "alert" : undefined}
+          >
+            {dateError ?? `Today is ${formatDateIST(today)}.`}
+          </p>
         </div>
       </div>
 
       <div>
-        <label className="block text-[12px] font-medium text-ink-2 mb-1">
+        <label htmlFor={`${fieldId}-slot`} className="block text-[12px] font-medium text-ink-2 mb-1">
           Time slot
         </label>
-        <select
+        <Select
           value={slotStart}
-          onChange={(event) => setSlotStart(event.target.value)}
-          className={inputClass}
+          onChange={(event) => chooseSlot(event.target.value)}
+          id={`${fieldId}-slot`}
           data-testid="booking-slot"
         >
           {SLOT_STARTS.map((start) => (
             <option key={start} value={start}>
-              {start}–{slotEnd(start)}
+              {formatWallTime12h(start)}–{formatWallTime12h(slotEnd(start))}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
-      <div>
-        <p className="block text-[12px] font-medium text-ink-2 mb-2">
+      <fieldset>
+        <legend className="block text-[12px] font-medium text-ink-2 mb-2">
           Who is it for?
-        </p>
+        </legend>
         <div className="grid grid-cols-2 gap-2">
           {(["member", "walk-in"] as const).map((option) => (
             <button
@@ -223,7 +272,7 @@ export function BookingForm({
             </button>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       {mode === "member" ? (
         <CafeMemberPicker
@@ -234,14 +283,14 @@ export function BookingForm({
         />
       ) : (
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-1">
+          <label htmlFor={`${fieldId}-walkin-name`} className="block text-[12px] font-medium text-ink-2 mb-1">
             Walk-in name
           </label>
-          <input
+          <Input
             value={walkInName}
             onChange={(event) => setWalkInName(event.target.value)}
-            className={inputClass}
             placeholder="Name at the desk"
+            id={`${fieldId}-walkin-name`}
             data-testid="booking-walkin-name"
           />
           <p className="mt-1.5 text-[11px] text-ink-3">
@@ -251,14 +300,14 @@ export function BookingForm({
         </div>
       )}
 
-      {quote ? (
+      {currentQuote ? (
         <p
           className={`text-[13px] ${
-            quote.ok ? "text-ink-2" : "text-[color:var(--warn)]"
+            currentQuote.ok ? "text-ink-2" : "text-[color:var(--warn)]"
           }`}
           data-testid="booking-quote"
         >
-          {quote.ok ? `Price ${quote.text}` : quote.text}
+          {currentQuote.ok ? `Price ${currentQuote.text}` : currentQuote.text}
         </p>
       ) : null}
 
@@ -283,7 +332,9 @@ export function BookingForm({
         className="w-full"
         disabled={
           busy ||
-          !quote?.ok ||
+          !dateValid ||
+          dateInPast ||
+          !currentQuote?.ok ||
           (mode === "member"
             ? member === null
             : walkInName.trim().length === 0)
@@ -291,7 +342,7 @@ export function BookingForm({
         onClick={submit}
         data-testid="booking-create"
       >
-        {busy ? "Booking…" : "Create booking"}
+        {busy ? "Booking…" : "Confirm booking"}
       </Button>
     </section>
   );

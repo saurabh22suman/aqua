@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
 import { notFound } from "next/navigation";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
@@ -11,6 +13,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { InlineFeedback } from "@/components/ui/InlineFeedback";
 import { todayInZone } from "@/lib/time/tz";
 import type { BookableFacility } from "@/lib/services/bookings";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // Batch 6 — the authenticated owner booking desk.
 //
@@ -29,7 +33,7 @@ import type { BookableFacility } from "@/lib/services/bookings";
 // configured, a failed read and a slot conflict each say their own
 // thing. A read that fails is never rendered as an empty list.
 
-export default async function OwnerBookingsPage() {
+export default async function OwnerBookingsPage(props: { searchParams?: Promise<{ facility?: string }> }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "bookings.read");
   if (!hasFeature(ctx, "pool.booking")) notFound();
@@ -38,6 +42,10 @@ export default async function OwnerBookingsPage() {
   // fact, not offered a route that would 404 for them.
   const canManagePrices = hasPermission(ctx, "settings.manage");
 
+  const params = props.searchParams ? await props.searchParams : {};
+  const cookieStore = await cookies();
+  const locationId = resolveFacilityValue(params.facility, cookieStore.get(FACILITY_COOKIE)?.value);
+
   const timezone = await getTenantTimezoneAction();
   const today = todayInZone(timezone);
   const terminology = await getTerminologyAction();
@@ -45,7 +53,8 @@ export default async function OwnerBookingsPage() {
   let facilities: BookableFacility[] = [];
   let facilitiesError: string | null = null;
   try {
-    facilities = await listBookableFacilitiesAction();
+    const authorized = await listBookableFacilitiesAction();
+    facilities = locationId ? authorized.filter((facility) => facility.locationId === locationId) : authorized;
   } catch {
     facilitiesError =
       "The facility list could not be loaded. Reload the page to try again.";
@@ -61,35 +70,22 @@ export default async function OwnerBookingsPage() {
   }
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Home
-        </Link>
-        {" / "}
-        bookings
-      </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">Bookings</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Take a booking for a member or a walk-in. The price shown is the
-        configured price for that slot; a booking keeps the price it was
-        quoted.
-        {canManagePrices ? (
-          <>
-            {" "}
-            <Link
-              href="/owner/settings/booking-prices"
-              className="font-medium underline underline-offset-2"
-              data-testid="owner-bookings-manage-prices"
-            >
-              Manage prices
-            </Link>
-          </>
-        ) : null}
-      </p>
+    <OwnerPage>
+      <PageHeader
+        title="Bookings"
+        purpose="Choose a slot on the day board, then confirm the quoted price and the customer in the selected slot."
+      />
+      {canManagePrices ? (
+        <p className="mt-2">
+          <Link
+            href="/owner/settings/booking-prices"
+            className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
+            data-testid="owner-bookings-manage-prices"
+          >
+            Manage booking prices
+          </Link>
+        </p>
+      ) : null}
 
       {pricesError ? (
         <div className="mt-4" data-testid="owner-bookings-price-error">
@@ -127,9 +123,9 @@ export default async function OwnerBookingsPage() {
       {facilities.length === 0 && !facilitiesError ? (
         <div className="mt-4 rounded-card border border-line bg-paper">
           <EmptyState
-            title="No bookable facilities yet"
-            body="A pool, court or studio has to exist before it can be booked. Add one in Settings, then come back."
-            action={{ label: "Set up facilities", href: "/owner/settings/activities" }}
+            title={locationId ? "No bookable facilities in this selection" : "No bookable facilities yet"}
+            body={locationId ? "Choose another location or check its bookable resources." : "A pool, court or studio has to exist before it can be booked. Add one in Settings, then come back."}
+            {...(!locationId && canManagePrices ? { action: { label: "Set up facilities", href: "/owner/settings/activities" } } : {})}
           />
         </div>
       ) : null}
@@ -144,6 +140,6 @@ export default async function OwnerBookingsPage() {
           />
         </div>
       ) : null}
-    </main>
+    </OwnerPage>
   );
 }

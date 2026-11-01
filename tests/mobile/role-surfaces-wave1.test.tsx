@@ -37,6 +37,7 @@ import { ParentLinkExplainer } from "@/components/parent-link-explainer";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import type { MemberListRow } from "@/lib/services/people";
+import { formatDateIST } from "@/lib/time/tz";
 
 const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 
@@ -107,11 +108,11 @@ describe("W1-3 parent explainer (not a bare stub)", () => {
 });
 
 describe("W1-4 owner Home quick links (F26)", () => {
-  it("surfaces Enquiries, Programs/Sessions and Staff; onboarding only for a new academy", () => {
+  it("surfaces the permitted daily actions; onboarding only for a new academy", () => {
     const { rerender } = render(
-      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
+      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} can={{ addMember: true, recordPayment: true, captureEnquiry: true, readFees: true, viewSchedule: false, bookCourt: true }} />,
     );
-    for (const href of ["/owner/enquiries", "/owner/programs", "/owner/staff"]) {
+    for (const href of ["/owner/enquiries", "/owner/members/new?facility=all", "/owner/fees?tab=dues&facility=all", "/owner/bookings?facility=all"]) {
       expect(
         document.querySelector(`a[href="${href}"]`),
         `missing quick link ${href}`,
@@ -125,6 +126,7 @@ describe("W1-4 owner Home quick links (F26)", () => {
         data={DASHBOARD}
         branding={BRANDING}
         terminology={TERMINOLOGY}
+        can={{ addMember: false, recordPayment: false, captureEnquiry: false, readFees: false, viewSchedule: false, readEnquiries: true, readPrograms: true, readStaff: true }}
         showOnboarding
       />,
     );
@@ -159,7 +161,7 @@ describe("W1-5 member joined date", () => {
   });
 
 describe("members desktop columns (PR3-C4)", () => {
-  it("renders a column header and a grid row, keeping the phone row one column", () => {
+  it("keeps identity, phone, status and profile access in the directory", () => {
     const row = {
       memberId: "m1",
       fullName: "Aadhya Sharma",
@@ -173,17 +175,14 @@ describe("members desktop columns (PR3-C4)", () => {
     } as MemberListRow;
     render(<MembersBoard initialMembers={[row]} />);
 
-    const head = document.querySelector('[data-testid="members-table-head"]');
-    expect(head).not.toBeNull();
-    expect(head!.textContent).toContain("Member");
-    expect(head!.textContent).toContain("Phone");
-    expect(head!.textContent).toContain("Status");
-    // The joined date moved to the member's own page (audit 2026-10-24).
-    expect(head!.textContent).not.toContain("Joined");
-
     const link = document.querySelector('[data-testid="members-list"] a');
-    expect(link!.className).toContain("md:grid");
-    expect(document.body.textContent).toContain("+91 98123 40010");
+    expect(link?.getAttribute("href")).toBe("/owner/members/m1");
+    expect(link?.textContent).toContain("Aadhya Sharma");
+    expect(link?.textContent).toContain("+91 98123 40010");
+    expect(link?.textContent).toMatch(/active/i);
+    expect(formatDateIST(row.joinedOn)).toMatch(/1 Sep(?:t)? 2026/);
+    const profile = readFileSync("app/(owner)/owner/members/[memberId]/page.tsx", "utf8");
+    expect(profile).toContain("formatDateIST(member.joinedOn)");
   });
 });
 });

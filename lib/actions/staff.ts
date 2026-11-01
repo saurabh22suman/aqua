@@ -3,6 +3,8 @@
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
+import { searchPersonsSchema } from "@/lib/schemas";
+import { searchStaffCandidates, type StaffCandidate } from "@/lib/services/staff-candidates";
 import {
   listStaff,
   createStaff,
@@ -28,6 +30,22 @@ export async function listStaffAction(raw: {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.read");
   return listStaff({ tenantId: ctx.tenantId, userId: ctx.userId }, input);
+}
+
+export type { StaffCandidate };
+
+// The existing-person picker for createStaff. staff.write is the mandatory
+// action gate; the service then enforces the caller's existing members.read /
+// staff.read rights for the respective candidate sources. A caller with
+// staff.write but neither read grant gets [], never a widened read.
+export async function searchStaffCandidatesAction(
+  query: string,
+): Promise<StaffCandidate[]> {
+  const parsed = searchPersonsSchema.safeParse(query);
+  if (!parsed.success) return [];
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "staff.write");
+  return searchStaffCandidates(ctx, parsed.data);
 }
 
 const createSchema = z.object({
@@ -63,8 +81,11 @@ export async function createStaffAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.write");
+  // The COMPLETE authenticated ctx (see the holidays action): a rebuilt
+  // { tenantId, userId } literal would record a permission-checked
+  // request as a system actor.
   const result = await createStaff(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    ctx,
     parsed.data.existingPersonId
       ? {
           existingPersonId: parsed.data.existingPersonId,

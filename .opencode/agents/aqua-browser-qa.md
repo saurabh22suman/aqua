@@ -43,6 +43,12 @@ unverified cases. Page reachability is a smoke check, not full feature acceptanc
 
 ## Shared UI acceptance gate
 
+Load aqua-product-acceptance and complete the affected role's full journey.
+Judge meaning/information placement and default/detail copy as well as geometry.
+Test task-specific device grids/icons/density and preserve selected state during
+resizing. Record untested shared consumers explicitly; do not extend a scoped
+Owner/Ops result to the entire product. Use separate semantic verdicts.
+
 Load aqua-ui-quality and read docs/ui-quality-contract.md. For shell changes,
 require long Members top/middle/bottom scrolling, short desktop and breakpoint
 checks, independent sidebar overflow, sticky-header/focus clearance and route

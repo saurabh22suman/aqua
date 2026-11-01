@@ -10,6 +10,7 @@ import type { MemberEnrolment } from "@/lib/services/enrolment";
 import type { BatchWithProgramName } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 
 // B3 — a member created through reception's add-member form, or
 // produced by converting an enquiry with no prior trial booking,
@@ -195,7 +196,7 @@ export function MemberEnrolmentPanel({
 
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
         Enrolment
       </h2>
 
@@ -229,19 +230,24 @@ export function MemberEnrolmentPanel({
                   </div>
                   {canEnrol && transferFrom === e.batchId ? (
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <select
-                        value={transferTarget}
-                        onChange={(ev) => setTransferTarget(ev.target.value)}
-                        className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                        data-testid="transfer-target"
-                        aria-label="Transfer to"
-                      >
-                        {availableBatches.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name} — {b.programName}
-                          </option>
-                        ))}
-                      </select>
+                      {/* P2 (independent review) — the flex sizing lives
+                          on a lane-owned wrapper around the shared
+                          primitive (the primitive renders its own
+                          `relative block` wrapper). */}
+                      <div className="min-w-0 flex-1">
+                        <Select
+                          value={transferTarget}
+                          onChange={(ev) => setTransferTarget(ev.target.value)}
+                          data-testid="transfer-target"
+                          aria-label="Transfer to"
+                        >
+                          {availableBatches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name} — {b.programName}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
                       <button
                         type="button"
                         onClick={() => moveToBatch(e.batchId)}
@@ -274,19 +280,23 @@ export function MemberEnrolmentPanel({
 
           {!canEnrol ? null : availableBatches.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={effectiveBatchId}
-                onChange={(e) => setSelectedBatchId(e.target.value)}
-                aria-label={`Select ${resolveTerm(terminology, "batch", 1)} to enrol in`}
-                className="w-full min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                data-testid="enrolment-batch-select"
-              >
-                {availableBatches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — {b.programName}
-                  </option>
-                ))}
-              </select>
+              {/* P2 (independent review) — the flex sizing lives on a
+                  lane-owned wrapper around the shared primitive. */}
+              <div className="w-full min-w-0 flex-1">
+                <Select
+                  value={effectiveBatchId}
+                  onChange={(e) => setSelectedBatchId(e.target.value)}
+                  aria-label={`Select ${resolveTerm(terminology, "batch", 1)} to enrol in`}
+                  className="min-w-0"
+                  data-testid="enrolment-batch-select"
+                >
+                  {availableBatches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} — {b.programName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
               <Button
                 variant="primary"
                 onClick={enrol}

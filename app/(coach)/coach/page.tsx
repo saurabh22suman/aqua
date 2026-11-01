@@ -3,6 +3,7 @@ import { ArrowRight, CalendarClock, ChevronRight, Clock } from "lucide-react";
 import { getCoachHomeAction } from "@/lib/actions/coach";
 import { formatTimeIST, formatWeekdayDateIST, todayInZone } from "@/lib/time/tz";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import { RolePage } from "@/components/role-page";
 
 // Days between two yyyy-mm-dd dates, in calendar days. Both sides are
 // already in the tenant's timezone (today from todayInZone, next's
@@ -28,7 +29,7 @@ export default async function CoachTodayPage() {
   const today = todayInZone("Asia/Kolkata");
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <RolePage>
       <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
 
       {sessions.length === 0 ? (
@@ -44,7 +45,7 @@ export default async function CoachTodayPage() {
             const ahead = daysBetween(today, next.sessionDate!);
             const isSoon = ahead <= 1;
             return (
-              <section className="mt-6">
+              <section className="mt-5">
                 <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
                   <Clock size={15} className="text-ink-3" />
                   Up next
@@ -83,7 +84,7 @@ export default async function CoachTodayPage() {
           // from the design doc wants an actionable next step; the
           // only honest one here is to surface the absence and point
           // at the owner.
-          <div className="mt-6 text-center py-12" data-testid="coach-home-empty">
+          <div className="mt-5 text-center py-10" data-testid="coach-home-empty">
             <p className="text-[15px] font-medium">No sessions scheduled</p>
             <p className="mt-2 text-[13px] text-ink-3">
               Nothing today or in the next week. Check with the owner — you may not be on a batch yet.
@@ -98,7 +99,7 @@ export default async function CoachTodayPage() {
           </div>
         )
       ) : (
-        <ul className="mt-6 space-y-4">
+        <ul className="mt-5 space-y-3">
           {sessions.map((s) => {
             const pct = s.total > 0 ? Math.round((s.marked / s.total) * 100) : 0;
             const fill = s.marked === 0 ? "bg-water" : pct < 50 ? "bg-warn" : "bg-good";
@@ -109,11 +110,15 @@ export default async function CoachTodayPage() {
                   className="block bg-paper rounded-card border border-line p-4 transition-colors duration-150 active:bg-water-soft"
                   data-testid="coach-today-session"
                 >
-                  <div className="flex justify-between items-baseline mb-2">
-                    <span className="text-[15px] font-display font-semibold">
+                  <div className="mb-2 flex items-baseline justify-between gap-3">
+                    {/* The title BOUNDS itself and WRAPS: a long batch
+                        name stays readable in full instead of running
+                        into the count. The count never gives up its
+                        width — it is the number the coach marked. */}
+                    <span className="min-w-0 flex-1 break-words text-[15px] font-display font-semibold">
                       {formatTimeIST(s.startsAt)} {s.batchName}
                     </span>
-                    <span className="text-[13px] text-ink-3">
+                    <span className="flex-none text-[13px] text-ink-3 tabular-nums">
                       {s.total === 0 ? "No one enrolled" : `${s.marked} / ${s.total}`}
                     </span>
                   </div>
@@ -138,6 +143,6 @@ export default async function CoachTodayPage() {
           })}
         </ul>
       )}
-    </main>
+    </RolePage>
   );
 }

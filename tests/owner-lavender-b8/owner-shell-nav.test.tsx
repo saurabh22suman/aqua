@@ -103,7 +103,7 @@ describe("owner shell — the header", () => {
     // Compact: shorter than the previous 64px row.
     expect(bar.className).toContain("min-h-14");
     // The record search is still the header's job.
-    expect(within(bar).getByTestId("global-search-input")).toBeTruthy();
+    expect(within(bar).getAllByTestId("global-search-input")).toHaveLength(2);
     // And the owner can see where they are.
     expect(within(bar).getByTestId("owner-shell-crumb")).toBeTruthy();
   });

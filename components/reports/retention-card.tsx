@@ -1,25 +1,25 @@
 import type { RetentionReport } from "@/lib/services/owner-reports";
 
-// Phase 4.5 — retention view. Aggregate-only by design.
-// Per scope § 7.1 (DPDP profiling restriction), risk-scoring an
-// individual minor is out of scope; the headline is "X members
-// at risk" — a number, not a list. Coach/owner reads it as a
-// pulse: is the at-risk cohort growing, holding, shrinking.
+// Phase 4.5 — the owner's ATTENDANCE RECORDS SUMMARY. Aggregate-only
+// by design: the headline is a number, never a list.
 //
-// "At risk" definition: an active member WHO WAS A MEMBER FOR THE
-// WHOLE WINDOW and whose attendance over the last 30 days is zero.
-// Two facts have to hold before the view may say it (the rule lives
-// in lib/services/owner-reports.ts, so the report and the dashboard
-// cannot disagree):
+// The wording was approved by the human on 30 October 2026
+// (docs/audits/staging-blockers-20261029/d-workflows/dot-three-
+// 20261030/HUMAN-APPROVED-RETENTION-DEFINITION.md):
 //
-//   * there was a chance — attendance-eligible sessions ran in the
-//     window; and
-//   * the member was around — they joined on or before the window
-//     started.
+//   * "Attendance records to review" — an aggregate operational
+//     summary of the members who were here for the whole period and
+//     have NO attendance record in it.
+//   * A RECORD is any recorded mark — present, late OR absent.
+//   * A member with no mark is UNKNOWN. It is never relabelled
+//     absent, never a churn prediction and never a risk score.
 //
-// When either is missing the card says so instead of counting. A
-// freshly seeded club has neither, and calling every swimmer "at
-// risk" there was a false alarm, not a finding.
+// The rule lives in lib/services/retention-report-query.ts, so the
+// report and this card cannot disagree about what the numbers mean.
+//
+// The cohort is stated on the card, because the number is only
+// meaningful next to it: active members who joined before the period
+// started, within the caller's own locations.
 
 export function RetentionCard({
   report,
@@ -37,57 +37,82 @@ export function RetentionCard({
     return (
       <article className="bg-paper border border-line rounded-card p-4">
         <header className="flex items-baseline justify-between gap-2">
-          <h2 className="font-display text-[15px] font-semibold">Retention</h2>
+          <h2 className="font-display text-[16px] font-semibold">
+            Attendance records to review
+          </h2>
           <span className="text-[12px] text-ink-3">last 30 days</span>
         </header>
         <div className="mt-3 rounded-ctl bg-deck px-3 py-3">
           <p className="text-[14px] font-medium">Not enough attendance history</p>
           <p className="mt-1 text-[12px] text-ink-3 leading-snug">
             {sessionsInWindow > 0
-              ? `No ${memberLabel} had been here for the whole period yet, so nobody can be called at risk.`
-              : `No sessions ran in this period, so there is nothing to measure yet.`}
+              ? `No ${memberLabel} had been here for the whole period yet, so there are no records to review.`
+              : `No sessions ran in this period, so there is nothing to review yet.`}
           </p>
         </div>
         <p className="mt-3 text-[12px] text-ink-3 leading-snug">
-          Aggregate only. No per-member risk score — minors cannot be profiled under DPDP. Open the cohort manually if you want a name list.
+          Counts only — no member names and no individual scores.
         </p>
       </article>
     );
   }
 
-  const pct = eligibleMemberCount > 0
-    ? Math.round((row.memberCountAtRisk / eligibleMemberCount) * 100)
-    : null;
+  // The with-record count is DERIVED from the cohort: the eligible
+  // members minus the members without a record. It is deliberately not
+  // the legacy `membersWithPartialLast30` field — that one measures
+  // members with one to three marks, a different thing, and showing it
+  // here would put a partial-attendance proxy on screen as if it were
+  // the attendance count.
+  const withRecords = Math.max(0, eligibleMemberCount - row.memberCountAtRisk);
+
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">Retention</h2>
+        <h2 className="font-display text-[16px] font-semibold">
+          Attendance records to review
+        </h2>
         <span className="text-[12px] text-ink-3">last 30 days</span>
       </header>
-      <div className="mt-3 grid grid-cols-3 gap-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-ctl bg-deck px-3 py-3">
           <p className="font-display text-[22px] font-semibold tracking-tight">
             {row.memberCountAtRisk}
           </p>
           <p className="mt-1 text-[11px] text-ink-3">
-            {row.memberCountAtRisk === 1 ? `${memberLabelOne} at risk` : `${memberLabel} at risk`}
+            {row.memberCountAtRisk === 1
+              ? `${memberLabelOne} with no attendance record`
+              : `${memberLabel} with no attendance records`}
           </p>
         </div>
         <div className="rounded-ctl bg-deck px-3 py-3">
           <p className="font-display text-[22px] font-semibold tracking-tight">
-            {pct === null ? "—" : `${pct}%`}
+            {withRecords}
           </p>
-          <p className="mt-1 text-[11px] text-ink-3">Of eligible {memberLabel}</p>
+          <p className="mt-1 text-[11px] text-ink-3">
+            {withRecords === 1
+              ? `${memberLabelOne} with an attendance record`
+              : `${memberLabel} with attendance records`}
+          </p>
         </div>
         <div className="rounded-ctl bg-deck px-3 py-3">
           <p className="font-display text-[22px] font-semibold tracking-tight">
             {eligibleMemberCount}
           </p>
-          <p className="mt-1 text-[11px] text-ink-3">Eligible {memberLabel}</p>
+          <p className="mt-1 text-[11px] text-ink-3">
+            {eligibleMemberCount === 1
+              ? `${memberLabelOne} active for the period`
+              : `${memberLabel} active for the period`}
+          </p>
         </div>
       </div>
       <p className="mt-3 text-[12px] text-ink-3 leading-snug">
-        Aggregate only. No per-member risk score — minors cannot be profiled under DPDP. Open the cohort manually if you want a name list.
+        Counts active {memberLabel} who joined before this period started.
+        Any attendance mark counts as a record — present, late or absent.
+        A {memberLabelOne} with no mark has no record; that is not counted
+        as absent.
+      </p>
+      <p className="mt-2 text-[12px] text-ink-3 leading-snug">
+        Counts only — no member names and no individual scores.
       </p>
     </article>
   );

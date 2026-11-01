@@ -14,6 +14,7 @@ import { MyShiftsCard } from "@/components/my-shifts-card";
 import { MyAttendanceCard } from "@/components/my-attendance-card";
 import { MyLeaveCard } from "@/components/my-leave-card";
 import { addDays, todayInZone } from "@/lib/time/tz";
+import { RolePage } from "@/components/role-page";
 
 // K2 — reception's account surface. Mirrors /coach/me: name, phone,
 // sign-out. Reception's bottom nav had three tabs (Today / Add
@@ -36,10 +37,10 @@ export default async function ReceptionMePage() {
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <RolePage>
       <h1 className="font-display text-[19px] font-semibold">Me</h1>
 
-      <section className="mt-5 rounded-card border border-line bg-paper p-4">
+      <section className="mt-4 rounded-card border border-line bg-paper p-3.5">
         <p className="font-display text-[15px] font-semibold">
           {identity?.fullName ?? "Signed in"}
         </p>
@@ -57,6 +58,6 @@ export default async function ReceptionMePage() {
       />
 
       <TenantSignOut />
-    </main>
+    </RolePage>
   );
 }

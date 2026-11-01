@@ -16,6 +16,7 @@ import { MyLeaveCard } from "@/components/my-leave-card";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import Link from "next/link";
 import { BookOpen, ChevronRight } from "lucide-react";
+import { RolePage } from "@/components/role-page";
 
 // K2 — coach's account surface. Minimum the K2 brief asks for: the
 // user's name and phone, plus a sign-out button. The bottom nav's
@@ -46,10 +47,10 @@ export default async function CoachMePage() {
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <RolePage>
       <h1 className="font-display text-[19px] font-semibold">Me</h1>
 
-      <section className="mt-5 rounded-card border border-line bg-paper p-4">
+      <section className="mt-4 rounded-card border border-line bg-paper p-3.5">
         <p className="font-display text-[15px] font-semibold">
           {identity?.fullName ?? "Signed in"}
         </p>
@@ -89,6 +90,6 @@ export default async function CoachMePage() {
       ) : null}
 
       <TenantSignOut />
-    </main>
+    </RolePage>
   );
 }

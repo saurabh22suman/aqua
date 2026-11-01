@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { PresetEntry } from "./preset-catalogue";
+import { buttonClasses } from "@/components/ui/Button";
 
 // Phase 2.2b — per-preset card. One dominant element: the
 // "Open preview" link — saturated colour, on a single row. The
@@ -49,7 +50,7 @@ export function PresetCard({ entry }: { entry: PresetEntry }) {
   // link, which navigates to that detail page.
 
   return (
-    <article className="rounded-card bg-paper border border-line p-5">
+    <article className="rounded-card border border-line bg-paper p-5">
       <header className="flex items-baseline justify-between gap-4">
         <div>
           <h2 className="font-display text-[18px] font-semibold text-ink">
@@ -61,7 +62,7 @@ export function PresetCard({ entry }: { entry: PresetEntry }) {
         </div>
         <Link
           href={`/ops/presets/${entry.preset.key}`}
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 transition-colors duration-150"
+          className={buttonClasses({ variant: "primary" })}
         >
           Open preview
         </Link>
@@ -72,7 +73,7 @@ export function PresetCard({ entry }: { entry: PresetEntry }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="mt-3 text-[12px] font-medium text-ink-2 hover:text-ink"
+        className="mt-3 inline-flex min-h-11 items-center text-[13px] font-medium text-ink-2 transition-colors duration-150 hover:text-ink"
         aria-expanded={open}
       >
         {open ? "Hide counts" : "Show counts"}

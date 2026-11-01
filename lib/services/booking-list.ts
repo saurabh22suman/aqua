@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { bookings } from "@/db/schema/bookings";
@@ -79,8 +79,19 @@ export async function listBookingsForDay(
     );
     const predicates = [
       eq(bookings.tenantId, ctx.tenantId),
-      gte(bookings.startsAt, fromUtc),
+      // The day board shows what TOUCHES the day, not only what starts
+      // in it: a booking taken for 23:00 that runs until 00:30 is still
+      // on the court at midnight, and the owner has to be able to see
+      // it. The interval overlap is the canonical half-open form
+      // (`[startsAt, endsAt)` against the day), so a booking that ends
+      // exactly when the day starts, or starts exactly when the day
+      // ends, is still excluded.
+      //
+      // Every other predicate, join and projection below is unchanged:
+      // the tenant, the location access, the facility and the invoice
+      // join all read exactly as they did.
       lt(bookings.startsAt, toUtc),
+      gt(bookings.endsAt, fromUtc),
     ];
     if (input.facilityId) {
       predicates.push(eq(bookings.facilityId, input.facilityId));

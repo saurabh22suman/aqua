@@ -10,6 +10,10 @@ import {
   locationPredicate,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import {
+  enquiryConditions,
+  enquiryScope,
+} from "@/lib/services/enquiry-scope";
 
 // U-05 — R1 global search. One read-only surface across members,
 // enquiries and invoices, no cross-entity index: LIKE over the
@@ -116,6 +120,19 @@ async function searchEnquiries(
   ctx: GlobalSearchCtx,
   term: string,
 ): Promise<SearchRow[]> {
+  // The SAME visibility rule the enquiries list applies
+  // (lib/services/enquiry-scope.ts): an enquiry belongs to a site, a
+  // non-management caller sees only located enquiries inside its allowed
+  // locations, and an unresolved enquiry (location_id IS NULL) stays in
+  // the management review queue.
+  //
+  // Before this, the search box applied neither the location scope nor
+  // the management rule, so it could surface another site's enquiries and
+  // the unresolved queue that the list deliberately hides - two surfaces
+  // of the same tenant disagreeing about what the caller may see. The
+  // shared helper is used READ-ONLY here; the rule stays owned by the
+  // enquiry service family.
+  const { predicate } = await enquiryScope(tx, ctx);
   const rows = await tx
     .select({
       id: enquiries.id,
@@ -126,9 +143,9 @@ async function searchEnquiries(
     .from(enquiries)
     .where(
       and(
-        eq(enquiries.tenantId, ctx.tenantId),
-        isNull(enquiries.deletedAt),
-        or(ilike(enquiries.fullName, term), ilike(enquiries.phone, term))!,
+        ...enquiryConditions(ctx, predicate, [
+          or(ilike(enquiries.fullName, term), ilike(enquiries.phone, term))!,
+        ]),
       ),
     )
     .orderBy(desc(enquiries.createdAt))

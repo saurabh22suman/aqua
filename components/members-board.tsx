@@ -5,8 +5,14 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import type { MemberListRow } from "@/lib/services/people";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
+import { ListToolbar, ToolbarField } from "@/components/member-list-toolbar";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { useMembersListNavigation } from "@/components/members-list-navigation";
 import { formatPhoneIN } from "@/lib/phone";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 
@@ -23,6 +29,7 @@ const STATUS_LABELS: Record<string, string> = {
 export function MembersBoard({
   initialMembers,
   initialLocationId,
+  navigationNamespace = "default",
   terminology = DEFAULT_TERMINOLOGY,
 }: {
   initialMembers: MemberListRow[];
@@ -30,6 +37,9 @@ export function MembersBoard({
   // `?facility=` param. The list-level filter is the global switcher
   // now; there is no second location control inside the board.
   initialLocationId?: string;
+  // Server-derived tenant + actor namespace; stale/foreign history state is
+  // discarded instead of crossed between accounts or academies.
+  navigationNamespace?: string;
   // Closed-key vocab resolved by the parent server page; optional so
   // callers without tenant context render the generic terms.
   terminology?: TerminologyState;
@@ -40,20 +50,14 @@ export function MembersBoard({
   const [isPending, setPending] = useState(false);
   const [error, setError] = useState("");
   const requestEpoch = useRef(0);
-  // W1-6 — the facility comes from the URL via the page; the board's
-  // other filters are local state. A facility change is a server
-  // navigation (the switcher pushes `?facility=`), so this never needs
-  // a setter.
   const locationId = initialLocationId ?? "";
   const currentLocation = useRef(locationId);
   currentLocation.current = locationId;
-  // Facility navigation re-renders the page with new server data, but
-  // local state would otherwise keep showing the previous facility's
-  // rows. Adopt the new rows and reset the local filters so the list
-  // and its visible controls agree (docs/audits/2026-10-05 FE-03).
-  const [shownLocationId, setShownLocationId] = useState(locationId);
-  if (shownLocationId !== locationId) {
-    setShownLocationId(locationId);
+  // Account, tenant or facility change: discard prior rows/filters/state.
+  const resetKey = `${navigationNamespace}\u0000${locationId}`;
+  const [shownResetKey, setShownResetKey] = useState(resetKey);
+  if (shownResetKey !== resetKey) {
+    setShownResetKey(resetKey);
     setMembers(initialMembers);
     setSearch("");
     setStatus("");
@@ -67,14 +71,18 @@ export function MembersBoard({
     const epoch = ++requestEpoch.current;
     setError("");
     setPending(true);
-    void (async () => {
+    return (async () => {
+      let applied = false;
       try {
         const rows = await listMembersAction({
           search: merged.search || undefined,
           status: (merged.status || undefined) as MemberListRow["status"] | undefined,
           locationId: merged.locationId || undefined,
         });
-        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) setMembers(rows);
+        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
+          setMembers(rows);
+          applied = true;
+        }
       } catch {
         if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
           setError("Could not refresh this list. Previous results are still shown.");
@@ -82,113 +90,161 @@ export function MembersBoard({
       } finally {
         if (epoch === requestEpoch.current) setPending(false);
       }
+      return applied;
     })();
   }
+
+  const { save: persistNavigation } = useMembersListNavigation({
+    namespace: navigationNamespace,
+    locationId,
+    apply: async (stored) => {
+      setSearch(stored.search);
+      setStatus(stored.status);
+      return refetch({
+        search: stored.search,
+        status: stored.status,
+        locationId,
+      });
+    },
+  });
+
+  function saveNavigationState(nextSearch: string, nextStatus: string) {
+    persistNavigation(nextSearch, nextStatus, window.scrollY);
+  }
+
+  function rememberListScroll() {
+    saveNavigationState(search, status);
+  }
+
+  const memberSingular = titleCase(resolveTerm(terminology, "member", 1));
 
   return (
     <div>
       {error ? <div role="alert" className="mb-3 text-[13px] text-ink-2">
-        <p>{error}</p><button type="button" onClick={() => refetch({})} disabled={isPending}
-          className="min-h-11 underline">{`Retry ${resolveTerm(terminology, "member", 1)} search`}</button>
-      </div> : null}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            refetch({ search: e.target.value });
-          }}
-          placeholder="Search by name or phone"
-          aria-label="Search members"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper py-2.5 pl-9 pr-3 text-[16px]"
-          data-testid="members-search"
-        />
-      </div>
-
-      <div className="mt-2.5 flex gap-2">
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            refetch({ status: e.target.value });
-          }}
-          aria-label="Status"
-          className="min-h-11 rounded-ctl border border-line bg-paper px-2.5 py-2 text-[16px]"
-          data-testid="members-status-filter"
+        <p>{error}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => refetch({})}
+          disabled={isPending}
+          className="mt-1.5"
         >
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
+          {`Retry ${resolveTerm(terminology, "member", 1)} search`}
+        </Button>
+      </div> : null}
 
-      {/* PR3-C3/C4 — desktop column header; the rows below share the
-          same grid so the roster scans and compares at 1280px while the
-          phone keeps the one-column card rows. */}
-      {/* Owner UX audit (2026-10-24): the roster gave the same weight
-          to the joined date as to the member, and the phone shared a
-          line with the code and location on a phone, so it wrapped
-          mid-number. The joined date is context the member's own page
-          carries; the roster now gives its width to the member and
-          keeps the phone readable. */}
-      <div
-        data-testid="members-table-head"
-        className="mt-4 hidden grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] gap-3 border-b border-line pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
-      >
-        <span>{titleCase(resolveTerm(terminology, "member", 1))}</span>
-        <span>Phone</span>
-        <span className="text-right">Status</span>
-      </div>
-      <ul className="mt-3 md:mt-0" data-testid="members-list" aria-busy={isPending}>
-        {members.length === 0 ? (
-          <li className="rounded-ctl border border-line bg-paper list-none">
-            {search || status || locationId ? (
-              <EmptyState
-                title={`No ${resolveTerm(terminology, "member", "other")} match.`}
+      <ListToolbar label={`${resolveTerm(terminology, "member", 1)} filters`}>
+        <ToolbarField
+          id="members-search"
+          label="Search members"
+          width="flexible"
+        >
+          {(field) => (
+            <div className="relative">
+              <Search
+                size={16}
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
               />
-            ) : (
-              <EmptyState
-                title={`No ${resolveTerm(terminology, "member", "other")} yet.`}
-                body={`Add your first ${resolveTerm(terminology, "member", 1)} to start building the roster.`}
-                action={{
-                  label: `Add your first ${resolveTerm(terminology, "member", 1)}`,
-                  href: "/owner/members/new",
+              <Input
+                {...field}
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSearch(next);
+                  saveNavigationState(next, status);
+                  refetch({ search: next });
                 }}
+                placeholder="Name or phone number"
+                aria-label="Search members"
+                className="pl-9"
+                data-testid="members-search"
               />
-            )}
-          </li>
-        ) : (
-          members.map((m) => (
-            <li key={m.memberId} className="border-b border-line last:border-0">
-              <Link
-                href={`/owner/members/${m.memberId}`}
-                className="flex items-center gap-3 py-3 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] md:gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium">
-                    {m.fullName}
-                    {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 md:truncate">
-                    {m.memberCode} · {m.locationName}
-                  </p>
-                </div>
-                <p className="shrink-0 text-[12.5px] text-ink-2 tabular-nums md:block">
-                  {m.phone ? formatPhoneIN(m.phone) : "—"}
-                </p>
-                <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
-                  {STATUS_LABELS[m.status]}
-                </StatusBadge>
-              </Link>
+            </div>
+          )}
+        </ToolbarField>
+
+        <ToolbarField id="members-status" label="Status">
+          {(field) => (
+            <Select
+              {...field}
+              value={status}
+              onChange={(e) => {
+                const next = e.target.value;
+                setStatus(next);
+                saveNavigationState(search, next);
+                refetch({ status: next });
+              }}
+              data-testid="members-status-filter"
+            >
+              <option value="">All statuses</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </ToolbarField>
+      </ListToolbar>
+
+      <section className="mt-4 rounded-card border border-line bg-paper">
+        <div className="px-3.5 pt-3.5">
+          <SectionHeading
+            title={`${memberSingular} directory`}
+            trailing={<span className="text-[12px] text-ink-3 tabular-nums">{members.length} {members.length === 1 ? "record" : "records"}</span>}
+          />
+        </div>
+        <ul className="md:px-3.5" data-testid="members-list" aria-busy={isPending}>
+          {members.length === 0 ? (
+            <li className="list-none py-2">
+              {search || status || locationId ? (
+                <EmptyState
+                  title={`No ${resolveTerm(terminology, "member", "other")} match.`}
+                />
+              ) : (
+                <EmptyState
+                  title={`No ${resolveTerm(terminology, "member", "other")} yet.`}
+                  body={`Add your first ${resolveTerm(terminology, "member", 1)} to start building the roster.`}
+                  action={{
+                    label: `Add your first ${resolveTerm(terminology, "member", 1)}`,
+                    href: "/owner/members/new",
+                  }}
+                />
+              )}
             </li>
-          ))
-        )}
-      </ul>
+          ) : (
+            members.map((m) => (
+              <li key={m.memberId} className="border-b border-line px-3.5 last:border-0 md:px-0">
+                <Link
+                  href={`/owner/members/${m.memberId}`}
+                  data-testid="member-row"
+                  onClick={rememberListScroll}
+                  className="flex min-h-16 items-center gap-3 py-3"
+                >
+                  <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-deck text-[13px] font-semibold text-ink-2">
+                    {m.fullName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase()).join("")}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span data-testid="member-row-name" className="block break-words text-[14px] font-medium text-ink">
+                      {m.fullName}{m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
+                    </span>
+                    <span data-testid="member-row-meta" className="mt-0.5 block break-words text-[12px] text-ink-3">
+                      {m.memberCode} · {m.locationName}
+                      {m.phone ? <span data-testid="member-row-phone"> · {formatPhoneIN(m.phone)}</span> : null}
+                    </span>
+                  </span>
+                  <span data-testid="member-row-status" className="shrink-0">
+                    <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>{STATUS_LABELS[m.status]}</StatusBadge>
+                  </span>
+                  <span aria-hidden="true" className="hidden text-[12px] text-ink-3 md:inline">Open</span>
+                </Link>
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
     </div>
   );
 }

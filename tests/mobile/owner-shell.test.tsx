@@ -90,7 +90,7 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     ).toBe("page");
   });
 
-  it("carries one search box in the shared top bar (mobile + desktop)", () => {
+  it("offers responsive search with the same accessible purpose", () => {
     render(
       <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
         <p>Page content</p>
@@ -98,10 +98,20 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     );
 
     const topBar = screen.getByTestId("owner-top-bar");
-    expect(within(topBar).getByTestId("global-search-input")).toBeTruthy();
-    // One instance, one header: the same sticky header serves the
-    // mobile breakpoint and the desktop top bar.
-    expect(screen.getAllByTestId("global-search-input")).toHaveLength(1);
+    const inputs = within(topBar).getAllByTestId("global-search-input");
+    expect(inputs).toHaveLength(2);
+    const mobile = inputs[0].closest("details");
+    expect(mobile).not.toBeNull();
+    expect(mobile!.hasAttribute("open")).toBe(false);
+    expect(within(mobile!).getByText("Search records")).toBeTruthy();
+    expect(mobile!.className).toContain("lg:hidden");
+    const desktop = Array.from(topBar.querySelectorAll("div")).find(
+      (element) => element.classList.contains("lg:block") && element.contains(inputs[1]),
+    );
+    expect(desktop?.classList.contains("hidden")).toBe(true);
+    for (const input of inputs) {
+      expect(input.closest("label")?.textContent).toContain("Search members, enquiries and payments");
+    }
   });
 });
 

@@ -1,0 +1,22 @@
+# Facility and calendar height handoff — 31 October 2026
+
+Branch `fix/app-wide-ux-20261031`, HEAD `54e6d80c25164da8c85c8e33c41511ae467f3d54` with inherited uncommitted overlay. Runtime metadata: approved `openai/gpt-6.1-terra`. No commit.
+
+## Scope and changes
+- Owner `components/facility-switcher.tsx`: preserve URLSearchParams, preference cookie, visibility and URL-derived state; user choices now call the small UI seam `components/facility-navigation.ts`, which uses `location.assign`. Remembered preference adoption uses `location.replace`, avoiding an extra history entry. Server permission and facility resolution are untouched. Full GET is the intentional tradeoff for an authoritative scoped render.
+- Shared `components/ui/calendar-viewport.ts`: use available viewport height as the max-height safety ceiling, independently of the measured height used for top/above/below placement. The calendar can naturally grow beyond a prior short-month measurement; short screens still scroll. Retained existing natural-height remeasurement for placement.
+- Adjusted ordinary tests: `tests/mobile/facility-switcher.test.tsx`, `tests/shared-select-20261030/shared-select-consumers.test.tsx`, `tests/app-wide-ux-20261031/calendar-growth.test.tsx`, `tests/app-wide-ux-20261031/date-field-calendar-review.test.tsx`. Existing component inventory passes; the navigation seam is not a shared `components/ui` primitive, so no inventory edit was needed.
+- No Home range source, lib/db/auth/money/consent/global CSS, dependency or protected-test edits; existing preferences, authorization and date semantics retained.
+
+## Evidence
+- Supplied pre-edit browser RED: `.playwright-mcp/app-wide-ux-20261031/chrome-full-review-1/review.json` and `screenshots/owner-journey-error.png`: Home 390 facility selection changes the control but not URL/header/data. The same review's `screenshots/ops-calendar-six-weeks-360.png` shows February→March clipping at 360×667 (client 388 / content 424, max 390, available 651). User reports range navigation 11/11 pass; no range source altered. Prior stale-CSS artifact findings are not attributed to current source.
+- Logs: `.playwright-mcp/app-wide-ux-20261031/terra-facility-height-evidence/`. All tests serialized via `NODE_OPTIONS=--max-old-space-size=2048 python3 .opencode/scripts/lane_job.py harness test --profile .env.aqua-harness-regression.local -- <paths> --reporter=verbose`; harness verified disposable `aqua_test_c1a05ac212` / `app_login`.
+- `calendar-red.log`: exit 1; intended modeled regression expected 651px ceiling, got 390px. `calendar-green.log`: exit 1, 29 passed / 1 failed because old review test asserted the former measured max-height; adapted it to content height. `calendar-green2.log`: exit 0, 30 passed / 3 files. Modeled geometry does not establish Chrome behavior.
+- `facility-red.log`: exit 1, 3 intended seam assertions failed (choice, remembered replace, clear); 6 passed. `facility-green.log`: exit 0, 9 passed. Additional checks retain other query params, ignore an invalid UUID preference and follow URL state changes.
+- `consumers.log`: exit 1, 176 passed / 1 failed because a separate Select consumer still spied on Next router. Adapted that existing test to the native navigation seam; `consumers-green.log`: exit 0, 177 passed / 20 files, including shared Select, calendar, inline, Ops, date/time, facility and component inventory.
+- `quick.log`: `NODE_OPTIONS=--max-old-space-size=2048 python3 .opencode/scripts/lane_job.py harness quick`, exit 0 (typecheck and lint).
+
+## Verdict and next action
+- **Functional: PARTIAL** — focused tests pass; production Chrome GREEN for both changes pending. **Semantic: scoped query, cookie and date tests pass; independent journey review pending.** **Visual: BLOCKED** pending actual rendered geometry.
+- Coordinator owns source freeze, fresh same-source production build, Chrome and full suite. Verify facility selection changes URL, header, data and drill-down; return to All clears cookie without dropping other filters; remembered adoption replaces history, Back and query state work. Repeatedly test February→six-week March at 360×667 plus short viewport, resize, scroll attachment and inline no-save; ensure all days reachable and popup remains in viewport.
+- No build, preview, background job, browser run, reset, credential change, commit/push/PR/merge/deploy or other-worktree operation by this worker.

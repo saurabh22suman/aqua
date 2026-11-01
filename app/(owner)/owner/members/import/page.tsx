@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { BackLink } from "@/components/ui/BackLink";
 import { MemberImportForm } from "@/components/member-import-form";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 
 // PR2-C5 — member import, step 1: check the file. The commit step
@@ -14,14 +16,14 @@ export default async function MemberImportPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "members.write");
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-3xl">
       <BackLink href="/owner/members" label="Members" />
 
-      <h1 className="font-display text-[19px] font-semibold">Import members</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Bring an existing register across from a spreadsheet. Nothing is
-        saved until you confirm the checked rows.
-      </p>
+      <PageHeader
+        className="mt-2"
+        title="Import members"
+        purpose="Bring an existing register across from a spreadsheet. Nothing is saved until you confirm the checked rows."
+      />
 
       <p className="mt-3 text-[13px]">
         <Link
@@ -35,6 +37,6 @@ export default async function MemberImportPage() {
       <div className="mt-5">
         <MemberImportForm />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

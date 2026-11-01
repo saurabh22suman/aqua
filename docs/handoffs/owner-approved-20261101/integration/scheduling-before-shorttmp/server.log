@@ -1,0 +1,29 @@
+   ▲ Next.js 15.5.28
+   - Local:        http://127.0.0.1:3204
+   - Network:      http://127.0.0.1:3204
+
+ ✓ Starting...
+ ✓ Ready in 1705ms
+ ✓ Compiled /middleware in 124ms (117 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 2.6s (2150 modules)
+ GET /login 200 in 54ms
+ GET /login 200 in 96ms
+ ○ Compiling /api/offline/session ...
+ ✓ Compiled /api/offline/session in 831ms (1782 modules)
+ ○ Compiling /api/login/pin ...
+ ✓ Compiled /api/login/pin in 1490ms (3041 modules)
+ GET /api/offline/session 200 in 3490ms
+ GET /favicon.ico 200 in 3546ms
+ POST /api/login/pin 200 in 2793ms
+ POST /login 200 in 361ms
+ ○ Compiling /owner ...
+ ✓ Compiled /owner in 4s (4486 modules)
+ GET /favicon.ico 200 in 122ms
+ GET /owner 200 in 5511ms
+ GET /owner 200 in 941ms
+ ○ Compiling /owner/programs ...
+ ✓ Compiled /owner/programs in 2.4s (4535 modules)
+ GET /api/offline/session 200 in 2903ms
+ ⚠ Server is approaching the used memory threshold, restarting...
+[?25h

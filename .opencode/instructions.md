@@ -1,5 +1,18 @@
 # OpenCode tooling
 
+## Current acceptance workflow — 31 October 2026
+
+For UI work load aqua-product-acceptance as well as aqua-ui-quality and TDD.
+Use docs/design-system/product-acceptance.md as the current meaning/composition
+contract and /aqua-task-contract to prepare a bounded assignment. It applies to
+all current roles and future screens, with explicit unreviewed coverage.
+Functional, semantic and visual verdicts are separate. Keep a compact checkpoint
+with contract/source identity, actual RED/GREEN, pending checks and next action.
+Use a private native OpenCode session for the assigned checkout; verify the
+actual provider/model in session metadata. Stop on quota or routing disagreement;
+never silently substitute a provider. Do not reload/restart unrelated sessions.
+Existing permissions, protected tests and lane_job.py lock remain authoritative.
+
 - Project skills are in `.agents/skills/` and `.opencode/skills/`; OpenCode also discovers the existing
   `.claude/skills/execute-task`. Load skills only for the task they describe.
 - Repository instructions and installed package versions override upstream

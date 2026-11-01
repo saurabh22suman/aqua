@@ -118,7 +118,7 @@ export type OwnerDashboardData = {
   nextClass: NextClass | null;
   // C02 — collected today / outstanding / overdue, the figures the
   // owner home now leads with (periods stated in the labels there).
-  money: OwnerMoneySummary;
+  money: OwnerMoneySummary | null;
   // W1-6 (docs/role-surfaces-plan.md) — consolidated per-facility view.
   // Wave 1 splits member-scoped data only: batches/sessions have no
   // location column yet, so attendance here is grouped by each
@@ -182,6 +182,7 @@ export async function getOwnerDashboard(
     },
   );
   const today = todayInZone(timezone);
+  const canReadFinancial = !!ctx.permissions?.has("reports.financial") && !!ctx.permissions?.has("invoices.read");
 
   // Follow-ups carry no location column and cannot be sliced per site; an
   // unrestricted caller without a facility filter still gets them, and a
@@ -196,7 +197,7 @@ export async function getOwnerDashboard(
   // here rather than inside the dashboard's own transaction below
   // (withTenant cannot nest — db/scope.ts). Cash counts carry a location,
   // so both the facility choice and the access boundary apply.
-  const reviewCashCounts = (await listCashCountsNeedingReview(ctx)).filter(
+  const reviewCashCounts = (canReadFinancial ? await listCashCountsNeedingReview(ctx) : []).filter(
     (c) =>
       (!requestedLocationId || c.locationId === requestedLocationId) &&
       locationVisible(access, c.locationId),
@@ -208,27 +209,17 @@ export async function getOwnerDashboard(
   // facility choice and the enforced access boundary flow through the
   // same resolveLocationAccess those services share with this one, so
   // these reads can only narrow — never widen — the caller's view.
-  const [dailyCollection, feesOverview] = await Promise.all([
-    getDailyCollection(
-      ctx,
-      requestedLocationId
-        ? { onDate: today, locationId: requestedLocationId }
-        : { onDate: today },
-    ),
-    getFeesOverview(
-      ctx,
-      { from: today, to: addDays(today, 1) },
-      requestedLocationId ? { locationId: requestedLocationId } : {},
-    ),
-  ]);
-  const money: Omit<OwnerMoneySummary, "oldestOverdueDays"> = {
+  const money = canReadFinancial ? await Promise.all([
+    getDailyCollection(ctx, requestedLocationId ? { onDate: today, locationId: requestedLocationId } : { onDate: today }),
+    getFeesOverview(ctx, { from: today, to: addDays(today, 1) }, requestedLocationId ? { locationId: requestedLocationId } : {}),
+  ]).then(([dailyCollection, feesOverview]) => ({
     collectedTodayPaise: dailyCollection.totalPaise,
     collectedTodayCount: dailyCollection.paymentCount,
     outstandingPaise: feesOverview.outstandingPaise,
     dueInvoiceCount: feesOverview.dueInvoiceCount,
     overduePaise: feesOverview.overduePaise,
     overdueInvoiceCount: feesOverview.overdueInvoiceCount,
-  };
+  })) : null;
 
   return withTenant(ctx.tenantId, async (tx) => {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -250,7 +241,7 @@ export async function getOwnerDashboard(
     // it beside the amount so "overdue" carries when, not just how
     // much. Same status/balance gates and location boundary as the
     // Fees hub's dues figure, so the two cannot drift.
-    const [oldestOverdue] = await tx
+    const [oldestOverdue] = money ? await tx
       .select({ dueOn: sql<string | null>`min(${invoices.dueOn})` })
       .from(invoices)
       .where(
@@ -261,11 +252,11 @@ export async function getOwnerDashboard(
           sql`${invoices.dueOn} < ${today}`,
           locationCondition(invoices.locationId),
         ),
-      );
+      ) : [];
     const oldestOverdueDays = oldestOverdue?.dueOn
       ? Math.max(0, Math.round((Date.parse(today) - Date.parse(oldestOverdue.dueOn)) / 86_400_000))
       : null;
-    const moneySummary: OwnerMoneySummary = { ...money, oldestOverdueDays };
+    const moneySummary: OwnerMoneySummary | null = money ? { ...money, oldestOverdueDays } : null;
 
     const memberOptinExists = (locationIds: string[]) =>
       exists(
@@ -458,7 +449,7 @@ export async function getOwnerDashboard(
     // until someone opened the Fees hub. The figure is the same
     // getFeesOverview the hub shows; the row states the amount and the
     // invoice count so the owner can decide, not just tally.
-    if (money.overdueInvoiceCount > 0) {
+    if (money && money.overdueInvoiceCount > 0) {
       // The row states the age as well as the amount: "overdue" is a
       // decision only when the owner knows how late it is.
       const lateAge =

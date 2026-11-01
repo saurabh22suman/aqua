@@ -5,6 +5,8 @@ node_modules
 coverage
 docs
 tests
+# Browser probes depend on test-only helpers and do not belong in app images.
+e2e
 .env
 .env.local
 .env.*.local

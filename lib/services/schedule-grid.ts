@@ -52,11 +52,17 @@ export async function getScheduleGrid(
       gte(sessions.sessionDate, parsed.data.fromDate),
       lte(sessions.sessionDate, parsed.data.toDate),
     ];
+    // O-08 — the caller's access is applied FIRST, and a requested
+    // locationId may only NARROW it, never widen it. The access
+    // predicate therefore applies to EVERY read: naming another
+    // location's id (the ?location= query string reaches this service
+    // unchecked) narrows the result to nothing instead of replacing
+    // the caller's scope. Same shape as the sibling reads
+    // (lib/services/roster.ts, lib/services/attendance-report-query.ts).
+    const predicate = locationPredicate(sessions.locationId, access);
+    if (predicate) conditions.push(predicate);
     if (parsed.data.locationId) {
       conditions.push(eq(sessions.locationId, parsed.data.locationId));
-    } else {
-      const predicate = locationPredicate(sessions.locationId, access);
-      if (predicate) conditions.push(predicate);
     }
 
     const rows = await tx

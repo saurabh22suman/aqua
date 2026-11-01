@@ -1,4 +1,4 @@
-import { CalendarDays } from "lucide-react";
+import { KhelIcon } from "@/components/icons/khel-icons";
 import {
   formatTimeIST,
   formatWeekdayDateIST,
@@ -13,9 +13,9 @@ import type { MyShiftRow } from "@/lib/services/shifts";
 
 export function MyShiftsCard({ shifts }: { shifts: MyShiftRow[] }) {
   return (
-    <section className="mt-5 rounded-card border border-line bg-paper p-4">
+    <section className="mt-4 rounded-card border border-line bg-paper p-3.5">
       <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
-        <CalendarDays size={15} className="text-ink-3" />
+        <KhelIcon name="schedule" size={16} />
         My shifts
       </h2>
       {shifts.length === 0 ? (

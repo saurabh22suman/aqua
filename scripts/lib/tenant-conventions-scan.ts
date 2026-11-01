@@ -128,6 +128,18 @@ export function scanTenantConventions(
     if (columns === null) continue;
     const first = firstColumn(columns);
     if (first === "tenant_id") continue;
+    // Applied migrations stay immutable. Only a later, top-level DROP
+    // of this exact public index retires its historical definition.
+    // Mask literals/DO bodies so text mentioning a DROP cannot waive it.
+    const indexName = statement.match(/\bindex\s+(?:if\s+not\s+exists\s+)?([a-z_]\w*)\s+on\b/i)?.[1]?.toLowerCase();
+    const laterStatements = stripComments(subsequentSql).replace(
+      /'(?:''|[^'])*'|\$([a-zA-Z_]\w*|)\$[\s\S]*?\$\1\$/g,
+      " ",
+    );
+    const retired = indexName && [...laterStatements.matchAll(
+      /(?:^|;)\s*drop\s+index\s+(?:if\s+exists\s+)?(?:public\.)?([a-z_]\w*)\s*;/gi,
+    )].some((drop) => drop[1]?.toLowerCase() === indexName);
+    if (retired) continue;
     const bare = unquote(table).split(".").pop()!;
     if (PRE_TENANT_INDEX_EXEMPTIONS[`${bare}.${first}`]) continue;
     violations.push({

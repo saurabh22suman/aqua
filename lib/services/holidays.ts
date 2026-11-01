@@ -3,6 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { tenantHolidays } from "@/db/schema/tenant-holidays";
 import type { ActionCtx } from "@/lib/auth/context";
 import { z } from "zod";
+import { auditActorOf, writeAudit } from "@/lib/audit/write";
 
 // Phase R.3 — holiday and closure calendar. The session
 // generator (lib/jobs/session-generator.ts) consults this
@@ -133,6 +134,21 @@ export async function addHoliday(
           updatedBy: ctx.userId,
         })
         .returning({ id: tenantHolidays.id });
+      // E-02 — the audit row shares the transaction with the insert
+      // (docs/architecture.md:1330). A duplicate is a refusal: it
+      // throws, the transaction rolls back and nothing is audited.
+      await writeAudit(tx, {
+        tenantId: ctx.tenantId,
+        ...auditActorOf(ctx),
+        action: "holiday.add",
+        entityType: "holiday",
+        entityId: row!.id,
+        after: {
+          name: parsed.data.name,
+          holidayDate: parsed.data.holidayDate,
+          recurringYearly: parsed.data.recurringYearly ?? false,
+        },
+      });
       return { kind: "ok", holidayId: row!.id };
     } catch (err) {
       // The unique partial indexes on tenant_holidays surface
@@ -180,10 +196,28 @@ export async function removeHoliday(
           eq(tenantHolidays.tenantId, ctx.tenantId),
         ),
       )
-      .returning({ id: tenantHolidays.id });
+      .returning({
+        id: tenantHolidays.id,
+        name: tenantHolidays.name,
+        holidayDate: tenantHolidays.holidayDate,
+        recurringYearly: tenantHolidays.recurringYearly,
+      });
     if (!row) {
       return { kind: "error", code: "not_found", message: "Holiday not found." };
     }
+    await writeAudit(tx, {
+      tenantId: ctx.tenantId,
+      ...auditActorOf(ctx),
+      action: "holiday.remove",
+      entityType: "holiday",
+      entityId: row.id,
+      before: {
+        name: row.name,
+        holidayDate: row.holidayDate,
+        recurringYearly: row.recurringYearly,
+      },
+      after: { removed: true },
+    });
     return { kind: "ok", holidayId: row.id };
   });
 }
