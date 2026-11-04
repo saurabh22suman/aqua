@@ -7,6 +7,7 @@ import {
   type ApplyPresetResult,
 } from "@/db/preset-engine";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
@@ -53,6 +54,7 @@ export async function applyPresetAction(
     ...(locationRaw ? { locationId: locationRaw } : {}),
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("tenant.preset.apply", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -63,6 +65,7 @@ export async function applyPresetAction(
   // (2) platform-session permission check
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tenant.preset.apply", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -91,9 +94,14 @@ export async function applyPresetAction(
         actorId: asUserId(status.userId),
         ...(surface.data.locationId ? { locationId: surface.data.locationId } : {}),
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tenant.preset.apply", error, { tenantId: surface.data.tenantId });
+    throw error;
+  });
   if (result.kind === "ok") {
     redirect(`/ops/tenants/${surface.data.tenantId}`);
+  } else {
+    await recordOpsMutationTrace("tenant.preset.apply", "error", { tenantId: surface.data.tenantId });
   }
   return result;
 }

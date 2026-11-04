@@ -12,12 +12,9 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const FILE = "components/ui/StatCard.tsx";
 const DASHBOARD = "components/owner-dashboard.tsx";
-// Owner Lavender B (27 October 2026): the four summary tiles moved
-// into components/owner-home/owner-home-metrics.tsx, which renders
-// them through the SAME shared primitive. The guard follows them there
-// so the 13px floor still has one owner and the tiles still go through
-// components/ui/StatCard.tsx.
-const METRICS = "components/owner-home/owner-home-metrics.tsx";
+// The approved Home collections pair owns both readable KPI labels;
+// quick actions are a separate surface.
+const HOME_MONEY = "components/owner-home/owner-home-money.tsx";
 
 describe("owner dashboard KPI labels (F36)", () => {
   it("has no text-[11px] labels left", () => {
@@ -32,15 +29,18 @@ describe("owner dashboard KPI labels (F36)", () => {
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
-  it("the owner dashboard renders its KPI cards through the primitive", () => {
-    const src = [DASHBOARD, METRICS]
-      .map((path) => readFileSync(join(ROOT, path), "utf8"))
-      .join("\n");
-    // The tiles come from the shared primitive — and the four of them
-    // are named here, so a hand-rolled tile cannot slip in beside it.
-    expect(src).toContain("@/components/ui/StatCard");
-    expect(src).toContain("<StatCard");
-    expect(src).toContain('"Collected today"');
-    expect(src).toContain('"Overdue"');
+  it("the owner Home renders its real KPI labels through the unified money surface", () => {
+    const dashboard = readFileSync(join(ROOT, DASHBOARD), "utf8");
+    const money = readFileSync(join(ROOT, HOME_MONEY), "utf8");
+    // Collections and actions are separate surfaces in the approved Home.
+    expect(dashboard).toContain("<OwnerHomeMoney");
+    expect(dashboard).not.toContain("<OwnerHomeMetrics");
+    // The accepted Home (owner mock, 2 Nov 2026) has no separate
+    // quick-actions surface: the one contextual action lives inside the
+    // collections card.
+    expect(dashboard).not.toContain("<OwnerHomeActions");
+    expect(money).not.toContain("<OwnerHomeActions");
+    expect(money).toMatch(/className="[^"]*text-\[13px\][^"]*">Today</);
+    expect(money).toMatch(/className="[^"]*text-\[13px\][^"]*">Last 7 days</);
   });
 });

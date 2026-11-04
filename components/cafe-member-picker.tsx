@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Search } from "lucide-react";
+import { useId, useState } from "react";
+import Search from "lucide-react/dist/esm/icons/search.mjs";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { listMembersAction } from "@/lib/actions/people";
 import {
@@ -19,9 +20,6 @@ import type { MemberListRow } from "@/lib/services/people";
 // 16px input per DESIGN.md §2 — anything smaller triggers iOS
 // zoom-on-focus.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
-
 export function CafeMemberPicker({
   member,
   terminology,
@@ -33,6 +31,7 @@ export function CafeMemberPicker({
   onSelect: (member: MemberListRow | null) => void;
   disabled?: boolean;
 }) {
+  const searchId = useId();
   const memberOne = titleCase(resolveTerm(terminology, "member", 1));
   const memberOther = resolveTerm(terminology, "member", "other");
   const [query, setQuery] = useState("");
@@ -88,36 +87,34 @@ export function CafeMemberPicker({
       className="rounded-card border border-line bg-paper p-4"
       data-testid="cafe-member"
     >
-      <label className="block">
-        <span className="block text-[12px] font-medium text-ink-2 mb-1">
-          {memberOne} (optional)
-        </span>
-        <div className="flex items-stretch gap-2">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void search();
-              }
-            }}
-            placeholder="Name, phone or member code"
-            className={inputClass}
-            disabled={disabled}
-            data-testid="cafe-member-search"
-          />
-          <Button
-            size="sm"
-            onClick={search}
-            disabled={disabled || searching || query.trim().length === 0}
-            aria-label="Search members"
-          >
-            <Search size={16} strokeWidth={2} />
-            Search
-          </Button>
-        </div>
+      <label htmlFor={searchId} className="block text-[12px] font-medium text-ink-2 mb-1">
+        {memberOne} (optional)
       </label>
+      <div className="flex items-stretch gap-2">
+        <Input
+          id={searchId}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void search();
+            }
+          }}
+          placeholder="Name, phone or member code"
+          className="min-w-0 flex-1"
+          disabled={disabled}
+          data-testid="cafe-member-search"
+        />
+        <Button
+          onClick={search}
+          disabled={disabled || searching || query.trim().length === 0}
+          aria-label="Search members"
+        >
+          <Search size={16} strokeWidth={2} />
+          Search
+        </Button>
+      </div>
       {error ? (
         <p role="alert" className="mt-2 text-[12px] text-ink-2">
           {error}

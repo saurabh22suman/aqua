@@ -87,49 +87,50 @@ afterAll(async () => {
 });
 
 describe("WhatsApp authentication", () => {
-  it("creates an ops session once under concurrent OTP verification and rejects replay", async () => {
+  it("rejects valid legacy Ops OTPs under concurrent verification and replay", async () => {
     const token = await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
     const code = lastCode();
     const results = await Promise.all([complete.finishOpsWhatsAppLogin(token, code), complete.finishOpsWhatsAppLogin(token, code)]);
-    expect(results.filter((r) => r.ok)).toHaveLength(1);
-    expect((await complete.finishOpsWhatsAppLogin(token, code)).ok).toBe(false);
-    const sessions = await admin.query("select * from platform_sessions where user_id=$1", [operatorId]);
-    expect(sessions.rows).toHaveLength(1);
-    expect(sessions.rows[0].second_factor_passed).toBe(true);
-  });
-
-  it("persists five wrong attempts and rejects the correct code afterwards", async () => {
-    await cooldown(opsPhone);
-    const token = await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
-    const code = lastCode();
-    const wrong = code === "000000" ? "111111" : "000000";
-    const results = await Promise.all(Array.from({ length: 5 }, () => complete.finishOpsWhatsAppLogin(token, wrong)));
     expect(results.every((r) => !r.ok)).toBe(true);
     expect((await complete.finishOpsWhatsAppLogin(token, code)).ok).toBe(false);
+    const sessions = await admin.query("select * from platform_sessions where user_id=$1", [operatorId]);
+    expect(sessions.rows).toHaveLength(0);
   });
 
-  it("rejects expired codes and a suspended operator", async () => {
-    await cooldown(opsPhone);
-    const token = await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
+  it("persists five wrong PIN-reset attempts and rejects the correct code afterwards", async () => {
+    await cooldown(coachPhone);
+    const token = await challenges.issueWhatsAppChallenge(coachPhone, "pin_reset");
     const code = lastCode();
-    await admin.query("update whatsapp_auth_challenges set expires_at=now()-interval '1 second' where phone=$1", [opsPhone]);
-    expect((await complete.finishOpsWhatsAppLogin(token, code)).ok).toBe(false);
+    const wrong = code === "000000" ? "111111" : "000000";
+    const results = await Promise.all(Array.from({ length: 5 }, () => complete.verifyPinResetCode(token, wrong)));
+    expect(results.every((r) => !r.ok)).toBe(true);
+    expect((await complete.verifyPinResetCode(token, code)).ok).toBe(false);
+    const attempts = await admin.query("select max(attempts)::int as n from whatsapp_auth_challenges where phone=$1", [coachPhone]);
+    expect(attempts.rows[0].n).toBe(5);
+  });
+
+  it("rejects expired PIN-reset codes and legacy Ops codes for a suspended operator", async () => {
+    await cooldown(coachPhone);
+    const token = await challenges.issueWhatsAppChallenge(coachPhone, "pin_reset");
+    const code = lastCode();
+    await admin.query("update whatsapp_auth_challenges set expires_at=now()-interval '1 second' where phone=$1", [coachPhone]);
+    expect((await complete.verifyPinResetCode(token, code)).ok).toBe(false);
     await cooldown(opsPhone);
     const fresh = await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
     const freshCode = lastCode();
     await admin.query("update platform_users set status='suspended' where id=$1", [operatorId]);
-    await expect(complete.finishOpsWhatsAppLogin(fresh, freshCode)).rejects.toThrow("unavailable");
+    expect((await complete.finishOpsWhatsAppLogin(fresh, freshCode)).ok).toBe(false);
     await admin.query("update platform_users set status='active' where id=$1", [operatorId]);
   });
 
   it("throttles resend and invalidates earlier codes when a new code is issued", async () => {
-    await cooldown(opsPhone);
-    const old = await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
+    await cooldown(coachPhone);
+    const old = await challenges.issueWhatsAppChallenge(coachPhone, "pin_reset");
     const oldCode = lastCode();
-    await expect(challenges.issueWhatsAppChallenge(opsPhone, "ops_login")).rejects.toThrow("wait");
-    await cooldown(opsPhone);
-    await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
-    expect((await complete.finishOpsWhatsAppLogin(old, oldCode)).ok).toBe(false);
+    await expect(challenges.issueWhatsAppChallenge(coachPhone, "pin_reset")).rejects.toThrow("wait");
+    await cooldown(coachPhone);
+    await challenges.issueWhatsAppChallenge(coachPhone, "pin_reset");
+    expect((await complete.verifyPinResetCode(old, oldCode)).ok).toBe(false);
   });
 
   it("does not dispatch to an unknown number or authorize its challenge", async () => {
@@ -140,6 +141,7 @@ describe("WhatsApp authentication", () => {
   });
 
   it("verifies a coach reset before saving and revokes old sessions atomically", async () => {
+    await cooldown(coachPhone);
     const login = await credentials.pinLogin(coachPhone, "123456");
     expect(login.status).toBe(200);
     const token = await challenges.issueWhatsAppChallenge(coachPhone, "pin_reset");
@@ -175,23 +177,25 @@ describe("WhatsApp authentication", () => {
     expect(fetchMock.mock.calls.length).toBe(count);
   });
 
-  it("returns the OTP challenge only in an HttpOnly cookie and completes HTTP ops login", async () => {
+  it("refuses HTTP Ops WhatsApp login without sending or setting cookies, including old valid challenges", async () => {
     await cooldown(opsPhone);
+    const oldToken = await challenges.issueWhatsAppChallenge(opsPhone, "ops_login");
+    const code = lastCode();
+    const count = fetchMock.mock.calls.length;
     const { handleWhatsAppAuth } = await import("@/lib/auth/whatsapp-route");
     const request = (body: object, cookie = "") => new Request("http://ops.localhost:3100/ops/api/whatsapp-auth", {
       method: "POST", headers: { host: "ops.localhost:3100", origin: "http://ops.localhost:3100",
         "Content-Type": "application/json", cookie }, body: JSON.stringify(body),
     });
     const sent = await handleWhatsAppAuth(request({ intent: "request", phone: opsPhone }), "ops_login");
-    const cookie = sent.cookies.get("aqua_whatsapp_ops_login");
-    expect(cookie?.httpOnly).toBe(true);
-    expect(cookie?.sameSite).toBe("strict");
-    expect(await sent.json()).toMatchObject({ step: "code" });
-    expect(cookie?.value).toMatch(/^[a-f0-9]{64}$/);
-    const verified = await handleWhatsAppAuth(request({ intent: "verify", code: lastCode() },
-      `aqua_whatsapp_ops_login=${cookie?.value}`), "ops_login");
-    expect(await verified.json()).toMatchObject({ redirectPath: "/ops" });
-    expect(verified.cookies.get("platform_session")?.httpOnly).toBe(true);
+    const verified = await handleWhatsAppAuth(request({ intent: "verify", code },
+      `aqua_whatsapp_ops_login=${oldToken}`), "ops_login");
+    for (const response of [sent, verified]) {
+      expect(response.status).toBe(403);
+      expect(response.headers.get("set-cookie")).toBeNull();
+    }
+    expect(fetchMock.mock.calls.length).toBe(count);
+    expect((await admin.query("select id from platform_sessions where user_id=$1", [operatorId])).rows).toEqual([]);
   });
 
   it("does not expose legacy email or phone sign-in through the public Better Auth handler", async () => {

@@ -58,7 +58,9 @@ export async function getEnquiryFunnelAction(raw: unknown): Promise<EnquiryFunne
   const period = periodSchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getEnquiryFunnel({ tenantId: ctx.tenantId }, period);
+  // The FULL authenticated ctx — the service resolves the enquiry
+  // visibility rule (and the caller's location access) from it.
+  return getEnquiryFunnel(ctx, period);
 }
 
 export async function getRetentionViewAction(): Promise<RetentionReport> {
@@ -66,14 +68,14 @@ export async function getRetentionViewAction(): Promise<RetentionReport> {
   // computed inside the service.
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getRetentionReport({ tenantId: ctx.tenantId });
+  return getRetentionReport(ctx);
 }
 
 export async function getCoachLoadAction(raw: unknown): Promise<CoachLoadRow[]> {
   const period = periodSchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getCoachLoad({ tenantId: ctx.tenantId }, period);
+  return getCoachLoad(ctx, period);
 }
 
 // V-08 — facility utilisation card. A read of the last 4 weeks of
@@ -84,7 +86,12 @@ export async function getFacilityUtilisationAction(raw?: unknown): Promise<Utili
   const parsed = utilisationInput.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getFacilityUtilisation({ tenantId: ctx.tenantId }, parsed);
+  // The FULL authenticated ctx: the utilisation service resolves the
+  // caller's location access from it (O-08). A narrowed `{ tenantId }`
+  // literal carries no user and no location list, so the service
+  // resolved an EMPTY location set and the report returned nothing at
+  // all for a tenant with location scoping on.
+  return getFacilityUtilisation(ctx, parsed);
 }
 
 export async function attendanceReportCsvAction(raw: unknown): Promise<CsvEnvelope> {

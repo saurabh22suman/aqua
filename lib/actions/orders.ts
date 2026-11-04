@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
+import { hasFeature, requirePermission } from "@/lib/auth/permission";
 import {
   createOrder,
   finalizeOrder,
@@ -51,6 +51,23 @@ export async function createOrderAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "payments.record");
+  // K-02 café entitlement. NEW café module work needs the café
+  // entitlement, not only the `payments.record` grant: `payments.record`
+  // resolves the `billing` module, and `cafe.pos` is a separate,
+  // separately-entitled module that the standard plan does not carry.
+  //
+  // This guard is CREATE-ONLY on purpose. An order that already exists
+  // stays billable, voidable and collectable under the existing
+  // permissions after the entitlement is switched off (the operator's
+  // policy: a disabled café blocks NEW module work, not the settlement of
+  // historical billing). The finalize / void / open-list / request-bill
+  // actions are deliberately left unchanged.
+  if (!hasFeature(ctx, "cafe.pos")) {
+    return {
+      ok: false,
+      error: "The café module is not enabled for this club.",
+    };
+  }
   return createOrder(ctx, parsed.data);
 }
 

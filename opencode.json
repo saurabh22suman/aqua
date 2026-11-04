@@ -45,5 +45,7 @@
         }
       }
     }
-  }
+  },
+  "model": "minimax/MiniMax-M3.1-Flash",
+  "default_agent": "aqua-workhorse"
 }

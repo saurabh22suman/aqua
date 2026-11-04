@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+import type { PaymentIntentRecovery } from "@/lib/services/payment-intent-recovery";
+
+vi.stubGlobal("crypto", { randomUUID });
 
 // K-08 — reception café billing panels render tests.
 //   * the open-order list shows member, status, bill number and amount
@@ -30,9 +34,26 @@ vi.mock("next/navigation", () => ({
 
 const requestCafeBillAction = vi.hoisted(() => vi.fn());
 const recordPaymentAction = vi.hoisted(() => vi.fn());
+const listPaymentRecoveryAction = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<PaymentIntentRecovery>>(async () => ({
+    open: null,
+    lastCommitted: null,
+  })),
+);
+const cancelPaymentRecoveryAction = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, intentId: "intent-1", replayed: false })),
+);
 
 vi.mock("@/lib/actions/orders", () => ({ requestCafeBillAction }));
 vi.mock("@/lib/actions/payments", () => ({ recordPaymentAction }));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction,
+  cancelPaymentRecoveryAction,
+}));
+
+vi.mock("@/lib/actions/payment-qrs", () => ({
+  listPaymentQrsAction: vi.fn(async () => []),
+}));
 
 import { CafeOpenOrders } from "@/components/cafe-open-orders";
 import { CafeBillPanel } from "@/components/cafe-bill-panel";
@@ -108,6 +129,10 @@ beforeEach(() => {
     id: "pay1",
     invoiceStatus: "paid",
   });
+  listPaymentRecoveryAction.mockResolvedValue({
+    open: null,
+    lastCommitted: null,
+  });
 });
 
 afterEach(() => {
@@ -169,12 +194,23 @@ describe("CafeOpenOrders — request bill then collect", () => {
     );
     expect(screen.getByTestId("cafe-bill-tax").textContent).toContain("12.50");
 
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", {
+          name: /record payment/i,
+        }) as HTMLButtonElement).disabled,
+      ).toBe(false),
+    );
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
     await screen.findByTestId("cafe-receipt");
     expect(recordPaymentAction).toHaveBeenCalledWith({
       invoiceId: "inv1",
       amountPaise: 26250,
       method: "cash",
+      // F01 — the public action carries a one-time operation key, so a
+      // slow café payment cannot settle the bill twice.
+      idempotencyKey: expect.any(String),
+      observedIntentId: null,
     });
   });
 
@@ -196,6 +232,189 @@ describe("CafeOpenOrders — request bill then collect", () => {
 });
 
 describe("CafeBillPanel", () => {
+  it("blocks a new payment and explains an ambiguous payment record", async () => {
+    listPaymentRecoveryAction.mockResolvedValue({
+      open: null,
+      lastCommitted: null,
+      ambiguous: true,
+    });
+    render(<CafeBillPanel bill={BILL} onPaid={vi.fn()} />);
+
+    const notice = await screen.findByTestId("payment-recovery-ambiguous");
+    expect(notice.textContent).toMatch(/earlier payment records for this bill conflict/i);
+    expect(notice.textContent).toMatch(/manual resolution outside this screen/i);
+    expect(notice.textContent).not.toMatch(/forked|cycled|administrator/i);
+
+    const button = screen.getByRole("button", {
+      name: /record payment/i,
+    }) as HTMLButtonElement;
+    await waitFor(() => expect(button.disabled).toBe(true));
+    fireEvent.click(button);
+    expect(recordPaymentAction).not.toHaveBeenCalled();
+  });
+
+  it("confirms the paid result before a slow recovery read resolves", async () => {
+    const onPaid = vi.fn();
+    recordPaymentAction.mockResolvedValue({
+      ok: true,
+      id: "pay-1",
+      invoiceStatus: "paid",
+    });
+    render(<CafeBillPanel bill={BILL} onPaid={onPaid} />);
+    await waitFor(() => expect(listPaymentRecoveryAction).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: /upi qr/i }));
+    fireEvent.change(screen.getByTestId("cafe-reference"), {
+      target: { value: "UTR-42" },
+    });
+
+    listPaymentRecoveryAction.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    await waitFor(() => expect(onPaid).toHaveBeenCalledWith("upi", "inv1"));
+  });
+
+  it("clears the retained unknown outcome when the same panel serves a different bill", async () => {
+    recordPaymentAction.mockRejectedValueOnce(new Error("Failed to fetch"));
+    const { rerender } = render(
+      <CafeBillPanel bill={BILL} onPaid={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /upi qr/i }));
+    fireEvent.change(screen.getByTestId("cafe-reference"), {
+      target: { value: "UTR-A" },
+    });
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    expect(await screen.findByText(/did not complete/i)).toBeTruthy();
+    expect(screen.getByText(/outcome is unknown/i)).toBeTruthy();
+
+    const otherBill: CafeBill = {
+      ...BILL,
+      invoiceId: "inv-b",
+      invoiceNumber: "INV-B",
+      amountDuePaise: 10000,
+    };
+    rerender(<CafeBillPanel bill={otherBill} onPaid={() => {}} />);
+
+    await waitFor(() =>
+      expect(screen.queryByText(/outcome is unknown/i)).toBeNull(),
+    );
+    const show = await screen.findByRole("button", { name: /show upi qr/i });
+    expect((show as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("does not mark a different bill paid when the previous bill's payment resolves late", async () => {
+    const billA = { ...BILL, invoiceId: "inv-a", invoiceNumber: "INV-A" };
+    const billB = { ...BILL, invoiceId: "inv-b", invoiceNumber: "INV-B" };
+    const orderTwo = {
+      ...MEMBER_ORDER,
+      orderId: "o2",
+      memberId: "m2",
+      memberName: "Second Member",
+      invoiceNumber: "INV-B",
+    };
+    requestCafeBillAction.mockImplementation(
+      async (input: { orderId: string }) => ({
+        ok: true,
+        alreadyBilled: false,
+        bill: input.orderId === "o1" ? billA : billB,
+      }),
+    );
+    let resolvePayment: ((value: unknown) => void) | undefined;
+    recordPaymentAction.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePayment = resolve;
+      }),
+    );
+
+    render(<CafeOpenOrders orders={[MEMBER_ORDER, orderTwo]} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /request bill for aadhya sharma/i }),
+    );
+    await screen.findByTestId("cafe-bill");
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    // The operator leaves the first bill while its payment is still in
+    // flight and collects a different bill.
+    fireEvent.click(screen.getByRole("button", { name: /back to open orders/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /request bill for second member/i }),
+    );
+    await screen.findByTestId("cafe-bill");
+
+    resolvePayment!({ ok: true, id: "pay-a", invoiceStatus: "paid" });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // The second bill was never paid: it must not show a receipt.
+    expect(screen.queryByTestId("cafe-receipt")).toBeNull();
+    expect(screen.getAllByText(/INV-B/).length).toBeGreaterThan(0);
+  });
+
+  it("does not carry a previous bill's refusal onto the next bill", async () => {
+    const billA = { ...BILL, invoiceId: "inv-a", invoiceNumber: "INV-A" };
+    const billB = { ...BILL, invoiceId: "inv-b", invoiceNumber: "INV-B" };
+    const orderTwo = {
+      ...MEMBER_ORDER,
+      orderId: "o2",
+      memberId: "m2",
+      memberName: "Second Member",
+      invoiceNumber: "INV-B",
+    };
+    requestCafeBillAction.mockImplementation(
+      async (input: { orderId: string }) => ({
+        ok: true,
+        alreadyBilled: false,
+        bill: input.orderId === "o1" ? billA : billB,
+      }),
+    );
+    let resolvePayment: ((value: unknown) => void) | undefined;
+    recordPaymentAction.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePayment = resolve;
+      }),
+    );
+
+    render(<CafeOpenOrders orders={[MEMBER_ORDER, orderTwo]} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: /request bill for aadhya sharma/i }),
+    );
+    await screen.findByTestId("cafe-bill");
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /back to open orders/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /request bill for second member/i }),
+    );
+    await screen.findByTestId("cafe-bill");
+
+    resolvePayment!({ ok: false, error: "Server refusal." });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(screen.queryByText(/Server refusal/i)).toBeNull();
+    expect(screen.getByRole("button", { name: /record payment/i })).toBeTruthy();
+  });
+
   it("renders every line and the totals in paise", () => {
     render(<CafeBillPanel bill={BILL} onPaid={vi.fn()} />);
     expect(screen.getByTestId("cafe-bill").textContent).toContain(

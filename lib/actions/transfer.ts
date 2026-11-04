@@ -28,8 +28,8 @@ export async function transferMemberToBatchAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.write");
-  return transferMemberToBatch(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
-    parsed.data,
-  );
+  // The COMPLETE authenticated ctx: a rebuilt { tenantId, userId }
+  // literal drops the role/permission set, so the service's actor rule
+  // would write a real transfer as a system actor with no actor id.
+  return transferMemberToBatch(ctx, parsed.data);
 }

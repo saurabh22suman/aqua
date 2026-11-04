@@ -22,10 +22,10 @@ const HELPER_MARKER = "resolveLocationAccess(";
 const RESOURCE_HELPER_RE = /\b(?:resolveLocationAccess|visibleMember|visibleBatch)\s*\(/;
 
 export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
+  "lib/services/staff-candidates.ts":
+    "human-approved stricter staff-picker privacy: member home locations use the resolved caller allLocations/locationIds even when general O-08 location scoping is off; existing live staff require staff.read, members require members.read. Runtime privacy regressions pin cross-tenant/location denial and authorized staff-only fallback.",
   "lib/services/dashboard.ts":
     "owner dashboard aggregates; the owner surface is never location-restricted (access applies to staff)",
-  "lib/services/owner-reports.ts":
-    "owner reports; the owner surface is never location-restricted",
   "lib/services/makeup.ts":
     "follow-up: makeup credits are reached through location-checked member/batch surfaces",
   "lib/services/facility-optins.ts":
@@ -46,8 +46,6 @@ export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
     "follow-up: waitlist queues are reached through enquiry/member surfaces; scope when the receptionist surface needs it",
   "lib/services/onboarding-checklist.ts":
     "owner onboarding checklist; the owner surface is never location-restricted",
-  "lib/services/owner-analytics.ts":
-    "owner analytics (/owner/reports); the owner surface is never location-restricted, same as owner-reports.ts",
   "lib/services/announcements.ts":
     "announcement audience resolution is a tenant-wide fan-out decided by the owner (audience all/batch/parents); announcements carry no location column, so per-location scoping does not apply",
   "lib/services/announcement-audience.ts":

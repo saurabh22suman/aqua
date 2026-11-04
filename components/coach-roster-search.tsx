@@ -57,9 +57,10 @@ export function CoachRosterSearch({ roster }: { roster: CoachRosterRow[] }) {
                 className="flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 active:bg-deck"
                 data-testid="coach-roster-row"
               >
-                {/* U-09 — deterministic avatar seeded by the stable
-                    member id (never the display name). */}
-                <PersonAvatar seed={m.memberId} size={36} className="flex-none" />
+                {/* The avatar draws the member's displayed name (the
+                    name beside it), and keeps the stable id as identity
+                    metadata only. */}
+                <PersonAvatar name={m.name} seed={m.memberId} size={36} className="flex-none" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[14px] font-medium truncate">
                     {m.name}

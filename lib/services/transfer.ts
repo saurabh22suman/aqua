@@ -7,7 +7,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { todayInZone } from "@/lib/time/tz";
 import { visibleBatch, visibleMember } from "./resource-access";
-import { writeAudit } from "@/lib/audit/write";
+import { auditActorOf, writeAudit } from "@/lib/audit/write";
 
 export type TransferBatchResult =
   | { kind: "ok"; fromBatchId: string; toBatchId: string }
@@ -31,8 +31,8 @@ export async function transferMemberToBatch(ctx: ActionCtx, input: {
     const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
     const today = todayInZone(tenant.timezone);
     const [existing] = await tx.select({ id: enrolments.id }).from(enrolments).where(and(eq(enrolments.tenantId, ctx.tenantId),
-      eq(enrolments.memberId, member.id), eq(enrolments.batchId, dest.id), eq(enrolments.enrolledOn, today))).limit(1);
-    if (existing) return { kind: "error", code: "already_enrolled_in_target", message: "Member is already enrolled in the destination batch today." };
+      eq(enrolments.memberId, member.id), eq(enrolments.batchId, dest.id))).limit(1);
+    if (existing) return { kind: "error", code: "already_enrolled_in_target", message: "Member is already enrolled in the destination batch." };
     const [{ n }] = await tx.select({ n: sql<number>`count(distinct ${enrolments.memberId})::int` }).from(enrolments)
       .where(and(eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, dest.id)));
     if (n >= dest.capacity) return { kind: "error", code: "target_full", message: `Destination batch is full (capacity ${dest.capacity}).` };
@@ -40,8 +40,8 @@ export async function transferMemberToBatch(ctx: ActionCtx, input: {
     await tx.delete(enrolments).where(inArray(enrolments.id, sourceRows.map(row => row.id)));
     const [inserted] = await tx.insert(enrolments).values({ tenantId: ctx.tenantId, memberId: member.id,
       batchId: dest.id, enrolledOn: today, createdBy: ctx.userId, updatedBy: ctx.userId }).returning({ id: enrolments.id });
-    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, actorType: ctx.userId ? "user" : "system",
-      requestId: ctx.requestId, action: "member.transfer", entityType: "member", entityId: member.id,
+    await writeAudit(tx, { tenantId: ctx.tenantId, ...auditActorOf(ctx),
+      action: "member.transfer", entityType: "member", entityId: member.id,
       before: { enrolments: sourceRows.map(row => ({ id: row.id, batchId: row.batchId, enrolledOn: row.enrolledOn })) },
       after: { enrolmentId: inserted.id, batchId: dest.id, enrolledOn: today } });
     return { kind: "ok", fromBatchId: source.id, toBatchId: dest.id };

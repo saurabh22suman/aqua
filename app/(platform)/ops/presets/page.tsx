@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listPresets } from "@/db/platform-presets";
 import { previewPreset } from "@/db/preset-engine";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { PresetCatalogue } from "./preset-catalogue";
+import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 
 // Phase 2.2b — operator-facing preset catalogue at /ops/presets.
 //
@@ -24,36 +26,58 @@ import { PresetCatalogue } from "./preset-catalogue";
 // the count list) are below the fold; the button is the only
 // saturated colour. Tenants' nav links to this page from the
 // platform sidebar in 2.2b's small nav edit.
-
+//
+// Ops redesign (28 October 2026): the page is the shared Ops frame.
 export default async function PresetsPage() {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
 
-  const presets = await listPresets();
-  // Preview is per-preset. Run each in parallel so the page render
-  // is one round-trip for the catalogue list.
-  const previews = await Promise.all(
-    presets.map(async (p) => {
-      const result = await previewPreset(p.key);
-      return { preset: p, result };
-    }),
+  const presets = await runOpsGlobalRead("preset.list", () => listPresets(), "ops_page");
+  if (!presets) redirect("/ops/login");
+  // Preview is per-preset. Run each in parallel so the page render is one
+  // round-trip. The batch is ONE `preset.preview` operation, not one row
+  // per preset.
+  const previews = await runOpsGlobalRead(
+    "preset.preview",
+    () =>
+      Promise.all(
+        presets.map(async (p) => {
+          const result = await previewPreset(p.key);
+          return { preset: p, result };
+        }),
+      ),
+    "ops_page",
   );
+  if (!previews) redirect("/ops/login");
 
   return (
-    <div className="max-w-4xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        Catalogue
-      </p>
-      <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
-        Preset catalogue
-      </h1>
-      <p className="mt-1 text-[14px] text-ink-2">
-        Onboarding presets. The <Link href="/ops/tenants" className="text-[var(--accent-ink)] underline underline-offset-2">tenant list</Link>{" "}
-        shows the applied state; this page is the picker and the
-        preview.
-      </p>
-
+    <OpsPage>
+      <OpsPageHeader
+        eyebrow="Catalogue"
+        title="Preset catalogue"
+        lede={
+          <>
+            Onboarding presets. The{" "}
+            <Link
+              href="/ops/tenants"
+              className="text-[var(--accent-ink)] underline underline-offset-2"
+            >
+              tenant list
+            </Link>{" "}
+            shows the applied state; this page is the picker and the preview.
+          </>
+        }
+      />
+      <OpsPanel
+        tone="info"
+        className="mt-5"
+        title="Counts come from the preview engine, not from prose"
+      >
+        Every number above is the engine’s own preview of what would be
+        seeded. The description is supporting text and can drift; the counts
+        cannot.
+      </OpsPanel>
       <PresetCatalogue entries={previews} />
-    </div>
+    </OpsPage>
   );
 }

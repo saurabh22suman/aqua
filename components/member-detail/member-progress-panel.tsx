@@ -58,7 +58,7 @@ function FrameworkSection({ framework }: { framework: MemberProgressFramework })
 
   return (
     <section className="mt-4 rounded-card border border-line bg-paper p-4">
-      <h2 className="font-display text-[15px] font-semibold">
+      <h2 className="font-display text-[16px] font-semibold">
         {framework.name}
       </h2>
       <ul className="mt-3 divide-y divide-line">

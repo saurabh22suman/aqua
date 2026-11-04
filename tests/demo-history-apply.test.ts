@@ -32,7 +32,7 @@ const owner = {
   roleKey: "owner",
   allLocations: true,
   locationIds: [] as string[],
-  permissions: new Set(["dashboard.view", "reports.financial", "payments.read"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read", "payments.read"]),
 };
 
 beforeAll(async () => {
@@ -50,6 +50,7 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone, gstin) values ($1, $2, 'Aqua Worli', $3, $4)",
     [tenantId, `demo-academy`, TZ, "27AAPFU0939F1ZV"],
   );
+  await admin.query("insert into tenant_features (tenant_id,feature_key,enabled) values ($1,'reports',true),($1,'billing',true)", [tenantId]);
   await withTenant(tenantId, async (tx) => {
     const [location] = await tx
       .insert(locations)
@@ -151,6 +152,7 @@ afterAll(async () => {
     ]) {
       await admin.query(`delete from ${table} where tenant_id = $1`, [tenantId]);
     }
+    await admin.query("delete from tenant_features where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.end();

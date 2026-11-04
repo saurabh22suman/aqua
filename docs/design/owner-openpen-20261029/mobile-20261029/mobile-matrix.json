@@ -1,0 +1,916 @@
+{
+  "version": 1,
+  "status": "prepared",
+  "preparedAt": "2026-10-29T13:10:00+05:30",
+  "role": "independent reviewer QA preparation; no production source edits",
+  "model": {
+    "id": "deepseek-v4.1-flash",
+    "providerID": "opencode-go",
+    "variant": "max"
+  },
+  "sourceReady": {
+    "sha256": "73e915727cb0bdfd6dd697d53f7c494ecc0c9ec0e3093015b3a643b9f5de0a27",
+    "at": "2026-10-30T13:34:05.503533+00:00"
+  },
+  "sourceGate": "Final mobile/combined captures and builds are refused until coordinator publishes SOURCE_READY with exact hash manifest.",
+  "task": {
+    "path": "docs/design/owner-openpen-20261029/mobile-20261029/task.md",
+    "sha256": "1b8480075228f5c314153305cce98bf175160f2a788e25722d9073bd13f26ff8"
+  },
+  "preMobileBaseline": {
+    "path": "docs/design/owner-openpen-20261029/mobile-20261029/pre-mobile-baseline.json",
+    "sha256": "ee78b03ad9e09a9e39f4984514871a47bc880433951380932eb57f641dd49568",
+    "head": "239357fe8347c110b1e4540f70b002c9793911d1"
+  },
+  "reuse": {
+    "fullRouteMatrix": "docs/design/owner-openpen-20261029/qa/final-matrix.json",
+    "fullRouteMatrixSha256": "a0db2429a6a7e374284b1917174a80a80750508e990eb97296da2d9f8de0348c",
+    "driver": "tests/owner-openpen-20261029/reviewer/capture-owner.ts",
+    "mobileDriver": "tests/owner-openpen-20261029/reviewer/mobile-qa.ts",
+    "matrixTest": "tests/owner-openpen-20261029/reviewer/mobile-matrix.test.ts",
+    "playwright": "existing playwright 1.62.1; Chrome channel chrome",
+    "noNewToolInstall": true
+  },
+  "widths": [
+    320,
+    360,
+    375,
+    390,
+    412,
+    430,
+    480
+  ],
+  "sharedRoutes": [
+    {
+      "route": "/owner",
+      "family": "Home: money, decisions, actions, charts",
+      "fixture": "seeded owner home + 90-day history"
+    },
+    {
+      "route": "/owner/members",
+      "family": "Members: toolbar, search/filter, long directory",
+      "fixture": "40 seeded members; facility cookie"
+    },
+    {
+      "route": "/owner/members/{memberId}",
+      "family": "Member record: header, tabs, inline editors",
+      "fixture": "first seeded member DOM href"
+    },
+    {
+      "route": "/owner/fees?tab=dues",
+      "family": "Fees: money records, statuses, tabs",
+      "fixture": "seeded invoices/dues"
+    },
+    {
+      "route": "/owner/bookings",
+      "family": "Bookings: date/slot/quote form and board",
+      "fixture": "pool.booking feature; seeded facilities; no seeded prices"
+    },
+    {
+      "route": "/owner/reports",
+      "family": "Reports: charts, tables, date range",
+      "fixture": "seeded analytics; 30-day range"
+    },
+    {
+      "route": "/owner/settings",
+      "family": "Settings hub and bounded editors",
+      "fixture": "seeded settings + owner permissions"
+    }
+  ],
+  "layers": {
+    "fullRoutes": {
+      "reference": "docs/design/owner-openpen-20261029/qa/final-matrix.json",
+      "referenceViews": 49,
+      "realRoutes": 40,
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "viewports": [
+        "390x844",
+        "1280x900"
+      ],
+      "driverGroup": "routes (4 theme/viewport runs)"
+    },
+    "sharedFamilies": {
+      "widths": [
+        320,
+        360,
+        375,
+        390,
+        412,
+        430,
+        480
+      ],
+      "height": 844,
+      "routes": [
+        "/owner",
+        "/owner/members",
+        "/owner/members/{memberId}",
+        "/owner/fees?tab=dues",
+        "/owner/bookings",
+        "/owner/reports",
+        "/owner/settings"
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "captures": 98,
+      "policy": "representative layered matrix, not a hidden Cartesian product"
+    },
+    "shortTablet": {
+      "cases": [
+        "390x640 short portrait",
+        "640x360 landscape",
+        "768x1024 tablet",
+        "1024x768 tablet/shell",
+        "1280x600 short desktop"
+      ],
+      "routes": [
+        "/owner/members/new",
+        "/owner/members/{memberId}?tab=notes",
+        "/owner/members/import",
+        "/owner/bookings",
+        "/owner/schedule",
+        "/owner/settings/holidays"
+      ]
+    },
+    "states": {
+      "reference": "docs/design/owner-openpen-20261029/qa/final-matrix.json stateChecks",
+      "permission": "accountant role",
+      "noFakeError": true
+    },
+    "behavior": {
+      "cases": [
+        "MOB-05",
+        "MOB-06",
+        "MOB-07",
+        "MOB-08",
+        "MOB-09",
+        "MOB-10",
+        "MOB-11",
+        "MOB-12"
+      ]
+    },
+    "supplementalResponsive": {
+      "case": "MOB-15",
+      "driver": "tests/owner-openpen-20261029/reviewer/capture-owner.ts",
+      "group": "responsive",
+      "viewports": [
+        "short-phone-390x640",
+        "landscape-640x360",
+        "tablet-768x1024"
+      ],
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "forms": [
+        "/owner/members/new",
+        "/owner/members/{memberId}/edit",
+        "/owner/staff/invitations/new",
+        "/owner/settings/booking-prices",
+        "/owner/settings/holidays",
+        "/owner/settings/branding"
+      ],
+      "sharedShell": "/owner/members",
+      "notEmulated": [
+        "physical Xiaomi",
+        "OS keyboard",
+        "AT",
+        "actual browser zoom"
+      ],
+      "noPositivePriceFixture": true
+    },
+    "device": {
+      "checklist": "deviceChecklist",
+      "notEmulated": true
+    }
+  },
+  "cases": [
+    {
+      "id": "MOB-01",
+      "name": "Full owner route coverage",
+      "status": "PREPARED",
+      "routes": "49 reference views / 40 real routes",
+      "fixtures": "existing final-matrix fixtures; owner + accountant states",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "HTTP/shell/heading/theme/fonts",
+        "no page horizontal overflow",
+        "captured vs tested vs visualReviewed separated",
+        "reference-specific tabs and states captured",
+        "no final PASS before independent inspection"
+      ]
+    },
+    {
+      "id": "MOB-02",
+      "name": "Representative shared-family widths",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner",
+        "/owner/members",
+        "/owner/members/{memberId}",
+        "/owner/fees?tab=dues",
+        "/owner/bookings",
+        "/owner/reports",
+        "/owner/settings"
+      ],
+      "fixtures": "see sharedRoutes; dynamic IDs from DOM",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        320,
+        360,
+        375,
+        390,
+        412,
+        430,
+        480
+      ],
+      "heights": [
+        844
+      ],
+      "assertions": [
+        "no accidental document horizontal overflow",
+        "no clipped/duplicate page gutters",
+        "intrinsic wrapping and min-width:0 reflow",
+        "standard 48px / compact 44px targets measured",
+        "no overlapping interactive controls",
+        "long names/amounts wrap without hiding decisions"
+      ]
+    },
+    {
+      "id": "MOB-03",
+      "name": "Short portrait and landscape forms",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/members/new",
+        "/owner/members/{memberId}?tab=notes",
+        "/owner/members/import",
+        "/owner/bookings",
+        "/owner/schedule",
+        "/owner/settings/holidays"
+      ],
+      "fixtures": "seeded locations/member/booking price-refusal state",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        640
+      ],
+      "heights": [
+        640,
+        360
+      ],
+      "assertions": [
+        "first/last field, helper and error reachable",
+        "Save/Cancel reachable and not covered",
+        "one obvious vertical scroller",
+        "sticky import bar does not cover focused control",
+        "dialog and date picker cancel/reopen preserve draft",
+        "orientation change retains valid draft"
+      ]
+    },
+    {
+      "id": "MOB-04",
+      "name": "Tablet, shell and breakpoint",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/members",
+        "/owner/settings",
+        "/owner/fees?tab=dues"
+      ],
+      "fixtures": "seeded data",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        768,
+        1024,
+        1023,
+        1025,
+        1280
+      ],
+      "heights": [
+        1024,
+        768,
+        600,
+        844
+      ],
+      "assertions": [
+        "sidebar at/above installed breakpoint only",
+        "breakpoint -1/at/+1 no clipped transition",
+        "1024x768 and 1280x600 nav/exit reachable",
+        "long Members top/mid/bottom viewport evidence",
+        "theme parity (token colours only)"
+      ]
+    },
+    {
+      "id": "MOB-05",
+      "name": "Targets, typography and focus",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner",
+        "/owner/members",
+        "/owner/members/{memberId}",
+        "/owner/fees?tab=dues",
+        "/owner/bookings",
+        "/owner/reports",
+        "/owner/settings"
+      ],
+      "fixtures": "seeded data",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        320,
+        360,
+        390,
+        430,
+        480
+      ],
+      "heights": [
+        844
+      ],
+      "assertions": [
+        "48px standard and 44px compact minimum hit boxes",
+        "16px input text and 10px control radius",
+        "label/control/error association",
+        "focus ring >=2px and not clipped",
+        "text/background contrast >=4.5 in both themes",
+        "small chart links/tab targets measured, not assumed",
+        "status/focus/disabled/selected colours semantic"
+      ]
+    },
+    {
+      "id": "MOB-06",
+      "name": "DateField and label/error associations",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/members/new",
+        "/owner/members/{memberId}/edit",
+        "/owner/staff/new",
+        "/owner/staff/leave",
+        "/owner/settings/holidays",
+        "/owner/bookings"
+      ],
+      "fixtures": "synthetic member/staff fixtures; no save",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "Field aria-describedby reaches control",
+        "DateField format/helper/error ids referenced",
+        "required DOB/guardian/consent rules unchanged",
+        "dd/mm/yyyy display and ISO output/paste",
+        "invalid/leap/old-year/1900 boundary behavior preserved",
+        "partial text/draft preserved on blur/error"
+      ]
+    },
+    {
+      "id": "MOB-07",
+      "name": "Date-only, timezone and selection context",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/schedule",
+        "/owner/bookings",
+        "/owner/reports",
+        "/owner/staff/roster"
+      ],
+      "fixtures": "seeded schedule/bookings/reports; no mutation",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "selected date/slot/range and timezone visible",
+        "task-specific Previous/Today/Next preserved",
+        "date-only values do not shift by timezone",
+        "leap/invalid dates do not submit",
+        "cancel/reopen leaves selection/draft intact",
+        "no flexible/overnight duration or new preset semantics"
+      ]
+    },
+    {
+      "id": "MOB-08",
+      "name": "Mobile charts, money and long values",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner",
+        "/owner/members",
+        "/owner/fees?tab=dues",
+        "/owner/fees?tab=transactions",
+        "/owner/reports"
+      ],
+      "fixtures": "seeded 90-day collections/attendance; exact money values",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        320,
+        360,
+        390,
+        430,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "owner-mini-chart / owner-mini-donut visible on phone",
+        "desktop owner-chart island measured separately",
+        "exact amounts/sign/period/scope retained",
+        "overdue is subset of outstanding; no fake zero",
+        "long legends/labels wrap; exact-value table usable",
+        "table sideways scroll has named focusable region where required",
+        "no consequential value hidden to fit"
+      ]
+    },
+    {
+      "id": "MOB-09",
+      "name": "Filters, list restoration and context changes",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/members",
+        "/owner/fees?tab=dues",
+        "/owner/enquiries",
+        "/owner/staff",
+        "/owner/reports"
+      ],
+      "fixtures": "seeded lists; read-only filter interactions",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "search/status/scroll retained after detail/back",
+        "resize/orientation keeps valid filter scope",
+        "tenant/permission change clears or re-scopes sensitive state",
+        "filter no-results distinguished from empty",
+        "no mutation or false success"
+      ]
+    },
+    {
+      "id": "MOB-10",
+      "name": "Dialog, picker and sticky-action journeys",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/bookings",
+        "/owner/schedule",
+        "/owner/members/import",
+        "/owner/settings/holidays"
+      ],
+      "fixtures": "safe synthetic fixtures; no submit",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        640,
+        844,
+        900
+      ],
+      "assertions": [
+        "open, Escape, close button and cancel all close",
+        "focus returns to opener",
+        "draft preserved after cancel/reopen",
+        "last field/error/action reachable above bottom nav/keyboard",
+        "sticky bar never covers focused control",
+        "no save/send/payment action executed"
+      ]
+    },
+    {
+      "id": "MOB-11",
+      "name": "Empty/loading/error/permission/offline states",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner/members",
+        "/owner/fees?tab=dues",
+        "/owner/reports",
+        "/owner/settings",
+        "/owner"
+      ],
+      "fixtures": "owner + accountant; seeded data; no real writes",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "empty vs no-matches vs loading vs error distinct",
+        "offline/unknown outcome never rendered as success",
+        "accountant sees authorized destinations only",
+        "settings 404 does not leak content",
+        "no automatic financial retry or false saved/sent/paid",
+        "unavailable states recorded NOT TESTED/BLOCKED"
+      ]
+    },
+    {
+      "id": "MOB-12",
+      "name": "Reduced motion and interaction resilience",
+      "status": "NOT TESTED",
+      "routes": [
+        "/owner",
+        "/owner/members",
+        "/owner/bookings",
+        "/owner/settings/holidays"
+      ],
+      "fixtures": "seeded data",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "prefers-reduced-motion removes non-essential motion",
+        "charts remain legible without animation",
+        "dialog/picker still usable with reduced motion",
+        "no new motion library/dependency"
+      ]
+    },
+    {
+      "id": "MOB-13",
+      "name": "Existing budget/font gates retained",
+      "status": "NOT TESTED",
+      "routes": "combined build",
+      "fixtures": "existing scripts only",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        1280
+      ],
+      "heights": [
+        844,
+        900
+      ],
+      "assertions": [
+        "150KiB first-load route budget retained",
+        "60KiB emitted woff2 budget retained",
+        "no new font/chart/date dependency",
+        "builder-reported pass is not combined-build proof"
+      ]
+    },
+    {
+      "id": "MOB-14",
+      "name": "Physical/device layer",
+      "status": "NOT TESTED",
+      "routes": "see deviceChecklist",
+      "fixtures": "actual device required",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390
+      ],
+      "heights": [
+        844
+      ],
+      "assertions": [
+        "actual Xiaomi Chrome/PWA keyboard open/close/Back",
+        "actual 200%/400% browser zoom",
+        "actual 200% text/spacing",
+        "TalkBack/VoiceOver reading order",
+        "safe-area/notch and rotation",
+        "physical keyboard focus safety"
+      ]
+    },
+    {
+      "id": "MOB-15",
+      "name": "Supplemental responsive forms, reduced motion and keyboard",
+      "status": "PREPARED",
+      "routes": [
+        "/owner/members/new",
+        "/owner/members/{memberId}/edit",
+        "/owner/staff/invitations/new",
+        "/owner/settings/booking-prices",
+        "/owner/settings/holidays",
+        "/owner/settings/branding",
+        "/owner/members"
+      ],
+      "fixtures": "seeded Owner data; booking-price actual state only; no positive price fixture is fabricated; unresolved member fixture is BLOCKED",
+      "themes": [
+        "mint",
+        "lavender"
+      ],
+      "widths": [
+        390,
+        640,
+        768
+      ],
+      "heights": [
+        640,
+        360,
+        1024
+      ],
+      "assertions": [
+        "full Owner add/edit forms and shared shell fit 390x640, 640x360 and 768x1024",
+        "read-only details open, inputs focus and the last control scrolls into the viewport",
+        "Escape leaves no modal",
+        "keyboard Tab reaches a real form control or shell navigation and an action",
+        "prefers-reduced-motion media matches and computed transition/animation durations collapse",
+        "no submit/save/send/payment or record creation",
+        "viewport proxy is not physical Xiaomi/OS keyboard/AT/actual browser zoom"
+      ]
+    }
+  ],
+  "deviceChecklist": [
+    {
+      "id": "xiaomi-chrome",
+      "status": "NOT TESTED",
+      "reason": "No actual Xiaomi hardware/Chrome run in this worktree."
+    },
+    {
+      "id": "installed-pwa-keyboard",
+      "status": "NOT TESTED",
+      "reason": "Installed-PWA keyboard open/close/Back requires a real device."
+    },
+    {
+      "id": "browser-zoom-200",
+      "status": "NOT TESTED",
+      "reason": "Resize/reflow proxy is not actual browser zoom."
+    },
+    {
+      "id": "browser-zoom-400",
+      "status": "NOT TESTED",
+      "reason": "400% actual browser zoom unavailable in this harness."
+    },
+    {
+      "id": "text-spacing-200",
+      "status": "NOT TESTED",
+      "reason": "200% text/spacing is separate from viewport resize."
+    },
+    {
+      "id": "talkback",
+      "status": "NOT TESTED",
+      "reason": "Android screen-reader behavior not available."
+    },
+    {
+      "id": "voiceover",
+      "status": "NOT TESTED",
+      "reason": "iOS screen-reader behavior not available."
+    },
+    {
+      "id": "physical-keyboard",
+      "status": "NOT TESTED",
+      "reason": "Keyboard emulation does not prove physical keyboard/safe-area behavior."
+    },
+    {
+      "id": "safe-area-notch",
+      "status": "NOT TESTED",
+      "reason": "Notch/home-indicator geometry needs a real device."
+    },
+    {
+      "id": "os-keyboard-open-close",
+      "status": "NOT TESTED",
+      "reason": "OS keyboard resize/scroll behavior needs a real device."
+    },
+    {
+      "id": "reduced-motion-device",
+      "status": "NOT TESTED",
+      "reason": "Reduced-motion can be emulated, but device/browser behavior remains separate."
+    },
+    {
+      "id": "native-os-date-picker",
+      "status": "NOT TESTED",
+      "reason": "Native OS/browser date picker cancel/reopen is not automatable in headless Chrome; shared calendar Dialog cancel/reopen is covered, native picker is not."
+    }
+  ],
+  "assertions": {
+    "no-document-horizontal-overflow": "documentElement/body scrollWidth must not exceed clientWidth for the case, except a named local table region.",
+    "control-targets": "standard actions >=48px, compact actions >=44px; measure rendered rects.",
+    "input-text-16": "visible input/select/textarea computed font-size >=16px.",
+    "control-radius-10": "approved 10px control radius retained; no new radius.",
+    "label-error-association": "label htmlFor and aria-describedby/error id resolve to the control/visible text.",
+    "no-overlap": "visible interactive/sticky/status boxes do not intersect in a way that covers a decision or focused control.",
+    "focus-reachable": "focused control is within viewport and elementFromPoint returns it/descendant, not sticky chrome.",
+    "single-vertical-scroll": "one intended page scroll owner; no nested vertical trap.",
+    "mobile-charts-visible": "phone Home renders owner-mini-chart/owner-mini-donut; desktop owner-chart measured separately.",
+    "exact-money-context": "amounts, sign, period, location and outstanding/overdue relationship remain exact.",
+    "table-scroll-region": "a sideways table has a local overflow region with accessible name/focus path where required.",
+    "filter-restoration": "query/status/scroll/day/selection retained after detail/back and resize where safe.",
+    "dialog-cancel-restore": "Escape/close/cancel closes, restores focus and preserves valid draft.",
+    "date-format-validation": "dd/mm/yyyy display, ISO paste/output, invalid/leap/old-year handling and required DOB/guardian/consent unchanged.",
+    "permission-scope": "accountant only sees authorized destinations; settings 404; context change re-scopes state.",
+    "honest-state": "empty/no matches/loading/offline/error/unknown are distinct; no false saved/sent/paid.",
+    "reduced-motion": "prefers-reduced-motion removes non-essential animation; charts/dialogs remain usable.",
+    "no-new-dependency": "no @playwright/test, axe or other install; reuse existing Playwright/Vitest."
+  },
+  "redGreen": {
+    "red": {
+      "command": "pnpm exec vitest run tests/owner-openpen-20261029/reviewer/mobile-matrix.test.ts",
+      "result": "FAIL: 5 tests (stub matrix missing widths/routes/cases/device checklist)",
+      "evidence": "docs/design/owner-openpen-20261029/mobile-20261029/evidence/red.log",
+      "classification": "QA preparation coverage RED, not product RED"
+    },
+    "green": {
+      "command": "pnpm exec vitest run tests/owner-openpen-20261029/reviewer/mobile-matrix.test.ts",
+      "result": "PASS: 1 file, 5 tests at 2026-10-29T13:32:55Z",
+      "evidence": "docs/design/owner-openpen-20261029/mobile-20261029/evidence/green.log"
+    },
+    "productRed": "None: reviewer scope has no production edits. Do not fabricate production RED/GREEN for builder fixes."
+  },
+  "evidencePolicy": {
+    "raw": "ignored .playwright-mcp/mobile-<run>/ via AQUA_E2E_OUT only",
+    "copy": "Copy selected evidence into docs only after every preview process has exited; never between production preview groups (budget fingerprint).",
+    "redaction": "synthetic data only; no auth fields, credentials, real child/parent data or PII screenshots.",
+    "resizeProxy": "390x640/640x360 and 640x450 are viewport/reflow proxies, not actual OS keyboard or browser zoom."
+  },
+  "statusSummary": {
+    "prepared": true,
+    "finalAppCapturesRun": false,
+    "buildRun": false,
+    "sourceTransferred": false,
+    "readyForCombinedSource": true
+  },
+  "stop": "READY_FOR_COMBINED_SOURCE; do not poll for SOURCE_READY.",
+  "driverValidation": {
+    "tsc": "pnpm exec tsc --noEmit passed",
+    "eslint": "focused eslint passed for mobile-qa.ts and mobile-matrix.test.ts",
+    "vitest": "5/5 passed",
+    "mobileCheckMatrix": "passed: 7 widths, 7 shared routes, 98 shared captures, 14 cases, 12 device checks, 49 final views, 0 issues",
+    "finalAppCapturesRun": false,
+    "buildRun": false,
+    "dialog": "calendar event Dialog open/Escape/focus-restore/reopen and visible range/timezone implemented in mobile-qa behavior group"
+  },
+  "blockers": [
+    {
+      "id": "B-01",
+      "kind": "scope",
+      "text": "Reviewer scope only: production mobile implementation belongs to builders; no app source was edited. Manufacturing product RED/GREEN here would be false."
+    },
+    {
+      "id": "B-02",
+      "kind": "dependency",
+      "text": "Combined SOURCE_READY hash manifest is absent. OwnerPage/PageHeader transfer is not present in this reviewer worktree; final mobile/shared capture is gated until coordinator transfers reviewed combined source."
+    },
+    {
+      "id": "B-03",
+      "kind": "device",
+      "text": "Actual Xiaomi Chrome/PWA, OS keyboard, 200%/400% browser zoom, 200% text/spacing, TalkBack/VoiceOver, physical keyboard and notch/safe-area remain NOT TESTED."
+    },
+    {
+      "id": "B-04",
+      "kind": "policy",
+      "text": "No @playwright/test, axe, new font/chart/date library or dependency install. Reuse existing Playwright 1.62.1 and Vitest."
+    },
+    {
+      "id": "B-05",
+      "kind": "source-observation",
+      "text": "Current baseline DateField member/DOB callers do not forward Field aria-describedby/error ids. This is a source-observed final-test target, not reproduced here and not edited by reviewer."
+    },
+    {
+      "id": "B-06",
+      "kind": "scope-exclusion",
+      "text": "No mobile Ops, coach/reception redesign, flexible/overnight booking duration, global timezone rewrite, new report presets or offline cache/profile clearing."
+    }
+  ],
+  "reportContext": {
+    "dotQaReview": "/home/soloengine/Documents/Codex/2026-10-27/continue-work-on-aqua-currently-planned/outputs/DOT-QA-REPORT-REVIEW-2026-10-29.txt",
+    "dotQaFullText": "/home/soloengine/Documents/Codex/2026-10-27/continue-work-on-aqua-currently-planned/outputs/DOT-QA-REPORT-FULL-TEXT-2026-10-29.txt",
+    "dotQaSourceLinks": "/home/soloengine/Documents/Codex/2026-10-27/continue-work-on-aqua-currently-planned/outputs/DOT-QA-REPORT-SOURCE-LINKS-2026-10-29.json",
+    "sectionsRead": [
+      16,
+      17,
+      18,
+      19
+    ],
+    "reportNature": "35 proposed risk cases and 10 critical journeys are proposals, not execution results; no QA PASS/release approval follows.",
+    "scope": "Context update only; full 35-case cross-role suite is not authorized in this slice."
+  },
+  "verdictModel": {
+    "execution": [
+      "command completed",
+      "exit code",
+      "fixture/connection health",
+      "artifact produced",
+      "retry/flake state"
+    ],
+    "workflow": [
+      "PASS",
+      "FAIL",
+      "BLOCKED",
+      "NOT TESTED"
+    ],
+    "rule": "A passing diagnostic command can still capture an OPEN defect. Keep assertion/execution health separate from workflow verdict; an evidence test that demonstrates an open defect is not workflow GREEN.",
+    "perCase": true,
+    "oneScreenshotCannotHideEarlierFailure": true
+  },
+  "identity": {
+    "requiredBeforeFinalRun": [
+      "candidate/source manifest SHA-256",
+      "base SHA",
+      "worktree",
+      "lockfile SHA-256",
+      "config/diff manifest",
+      "disposable DB name and app_login role",
+      "fixture/seed manifest",
+      "build mode/artifact identity",
+      "browser channel/version",
+      "theme/viewport/timezone"
+    ],
+    "rule": "Record exact combined candidate + fixture + build + browser identity. Dirty/ambiguous source, stale artifact or different candidate invalidates evidence.",
+    "current": "sourceReady=null; pre-mobile baseline preserved; no combined source transfer in this reviewer tree."
+  },
+  "riskJourneyMap": {
+    "E01": "INCLUDED \u2014 owner money review context (Home/Fees/Reports exact amounts, period/scope, mobile charts).",
+    "E02": "OUT OF SCOPE \u2014 reception member/partial-payment recovery; reception redesign queued; NOT TESTED here.",
+    "E03": "OUT OF SCOPE \u2014 coach attendance; coach redesign queued; NOT TESTED here.",
+    "E04": "INCLUDED \u2014 tenant/grant denial with allowed control (accountant permission cases in final matrix; no settings leak).",
+    "E05": "PARTIAL \u2014 owner feature-gated bookings/settings only; full mandatory/optional module matrix NOT TESTED in this slice.",
+    "E06": "OUT OF SCOPE \u2014 Ops admin MFA/audit/manual-trial; Ops remains desktop-only; NOT TESTED here.",
+    "E07": "OUT OF SCOPE \u2014 Ops viewer denial; NOT TESTED here.",
+    "E08": "PARTIAL \u2014 owner booking price/conflict/refusal read-only cases; no mutation; full cross-role booking conflict matrix NOT TESTED.",
+    "E09": "NOT TESTED \u2014 PWA account switch/offline recovery; existing offline/privacy scripts are separate and were not rerun; no cache/profile/queue clearing.",
+    "E10": "OUT OF SCOPE \u2014 signed parent privacy/production zero-JS; protected parent artifact proof remains separate; NOT TESTED here.",
+    "governance": "Relevant owner-scope journeys only; this does not authorize the full 35-case cross-role suite or backend implementation."
+  },
+  "budgetAuthority": {
+    "local": [
+      "150*1024 first-load route JS from build summary",
+      "60*1024 emitted woff2 combined"
+    ],
+    "rule": "Existing local script accounting supersedes the report unresolved-convention caveat. Do not reopen it as a founder decision."
+  },
+  "noScopeExpansion": [
+    "No new package, test runner, axe, CI or protected-test change.",
+    "No backend implementation or new RLS/API/money/auth work.",
+    "No full 35-case cross-role suite in this slice.",
+    "No deployment or device-tooling install."
+  ],
+  "fullRouteMatrixSha256": "bedec6f07f2d0c6d32f7d6cfdac1c08fd58a373ac32d902f78c50bf338d9de55",
+  "coordinatorTransfer": {
+    "at": "2026-10-30T11:26:27.989787+00:00",
+    "from": "/home/soloengine/thedutchrabbit/aqua-worktrees/owner-openpen-integration-20261029/docs/design/owner-openpen-20261029/mobile-20261029/mobile-matrix.json",
+    "originalSha256": "e41e640c6c9b8d94c428b707270ba39a16eda83aec03bebdbb987b3bca633472",
+    "status": "QA preparation transferred; captures/results remain historical, not final PASS",
+    "reason": "File omitted from combined candidate; current source changes await r3 source-ready publication"
+  }
+}

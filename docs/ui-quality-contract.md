@@ -1,5 +1,17 @@
 # Aqua UI acceptance contract
 
+## Current meaning and whole-product precedence — 31 October 2026
+
+Read docs/design-system/product-acceptance.md. Its human-authorised meaning,
+copy ownership, Last 7 days dashboard and task-specific device/icon/density
+rules supersede contradictory older composition prescriptions in this file.
+Maintain a current/planned role/workflow/device/state coverage ledger, not an
+Owner/Ops-only pass. Preserve this file's security, state, geometry and browser
+requirements. A scoped checker validates evidence records; the reviewer still
+judges the complete journey. Report functional, semantic and visual outcomes
+separately. No setup, test or contact-sheet result constitutes deployment or
+human design approval.
+
 Effective 26 October 2026. Applies to new UI work and review; existing violations
 are defects to track, not an instruction to silently redesign every route.
 DESIGN.md owns visual tokens and approved compositions; this file owns behavioral

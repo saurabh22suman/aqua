@@ -103,11 +103,11 @@ describe("owner shell — the navigation scrolls on its own", () => {
     // case that renders the shell-level sign-out.
     renderShell([TENANT_SURFACE_NAV.owner[0]!]);
     const scrollRegion = screen.getByTestId("owner-side-nav-scroll");
-    expect(within(scrollRegion).queryByText("Aqua")).toBeNull();
+    expect(within(scrollRegion).queryByText("KhelSuite")).toBeNull();
     expect(within(scrollRegion).queryByRole("button")).toBeNull();
 
     const sidebar = screen.getByTestId("owner-sidebar");
-    expect(within(sidebar).getByText("Aqua")).toBeTruthy();
+    expect(within(sidebar).getByText("KhelSuite")).toBeTruthy();
     expect(within(sidebar).getByRole("button")).toBeTruthy();
   });
 

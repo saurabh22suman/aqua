@@ -288,10 +288,19 @@ export async function getFeesOverview(
     return {
       from: period.from,
       to: period.to,
-      // Net of reversals: the ledger's negative rows are subtracted
-      // here so the headline reconciles with the transaction list.
-      collectedPaise:
-        toSafePaise(BigInt(collected?.paise ?? "0") - BigInt(reversed?.paise ?? "0")),
+      // GROSS captured payments for the period. A reversal is
+      // ledger-only and is NEVER netted into this figure — the
+      // approved contract says so twice: docs/design-system/screens.md
+      // (/owner/fees): "A reversal is stated beside the total and is
+      // ledger-only: it is never netted into the collected figure",
+      // and docs/design-system/flows.md O1: "it is ledger-only, and it
+      // is never netted into the collected total". The reversed total
+      // is stated BESIDE it (reversedPaise / reversalCount) and the
+      // ledger carries the reversal rows, so the owner sees the
+      // correction without the collection figure being rewritten.
+      // This matches the owner home chart, the daily collection report
+      // and daily_rollups, which are all gross too.
+      collectedPaise: toSafePaise(collected?.paise ?? "0"),
       paymentCount: Number(collected?.count ?? 0),
       reversedPaise: toSafePaise(reversed?.paise ?? "0"),
       reversalCount: Number(reversed?.count ?? 0),
@@ -369,12 +378,34 @@ export async function listHubInvoices(
   });
 }
 
-export async function listHubTransactions(
+export const HUB_TRANSACTION_LIMIT = 200;
+
+export type HubTransactionPage = {
+  rows: HubTransactionRow[];
+  /** Every row the filter matches — not only the page shown. */
+  totalCount: number;
+  /** True when `rows` is a prefix of the matching rows. */
+  truncated: boolean;
+  limit: number;
+};
+
+/**
+ * The transaction ledger page.
+ *
+ * The rows are the newest matching entries; the count is the number
+ * of entries the filter matches IN FULL, so a screen that shows the
+ * first N can say so honestly instead of implying the list is
+ * exhaustive (the overview's collected figure covers every payment in
+ * the period, so a silent truncation made the two disagree).
+ */
+export async function listHubTransactionsPage(
   ctx: ActionCtx,
   raw: unknown,
-): Promise<HubTransactionRow[]> {
+): Promise<HubTransactionPage> {
   const parsed = feesTransactionsInput.safeParse(raw);
-  if (!parsed.success) return [];
+  if (!parsed.success) {
+    return { rows: [], totalCount: 0, truncated: false, limit: HUB_TRANSACTION_LIMIT };
+  }
 
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
@@ -415,6 +446,9 @@ export async function listHubTransactions(
         locationName: locations.name,
         receiverName: userNameFor(payments.tenantId, payments.receivedBy),
         receiverRole: userRoleNameFor(payments.tenantId, payments.receivedBy),
+        // The number of payments the filter matches, counted before
+        // the limit — so a truncated page can say what it left out.
+        matchingCount: sql<number>`count(*) over ()::int`,
       })
       .from(payments)
       .leftJoin(
@@ -429,7 +463,7 @@ export async function listHubTransactions(
       .innerJoin(locations, eq(locations.id, payments.locationId))
       .where(and(...conditions))
       .orderBy(desc(payments.receivedAt))
-      .limit(200);
+      .limit(HUB_TRANSACTION_LIMIT);
 
     // PR2-C9 — reversal rows, joined back to the payment for location
     // scoping and display context. Negative amount so the list nets.
@@ -461,6 +495,9 @@ export async function listHubTransactions(
         locationName: locations.name,
         receiverName: userNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
         receiverRole: userRoleNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
+        // The number of reversals the filter matches, counted before
+        // the limit — the other half of the honest total.
+        matchingCount: sql<number>`count(*) over ()::int`,
       })
       .from(paymentReversals)
       .innerJoin(
@@ -482,7 +519,7 @@ export async function listHubTransactions(
       .innerJoin(locations, eq(locations.id, payments.locationId))
       .where(and(...reversalConditions))
       .orderBy(desc(paymentReversals.createdAt))
-      .limit(200);
+      .limit(HUB_TRANSACTION_LIMIT);
 
     const combined: HubTransactionRow[] = [
       ...rows.map((r) => ({
@@ -515,6 +552,26 @@ export async function listHubTransactions(
       })),
     ].sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
 
-    return combined.slice(0, 200);
+    const page = combined.slice(0, HUB_TRANSACTION_LIMIT);
+    const totalCount =
+      Number(rows[0]?.matchingCount ?? 0) +
+      Number(reversalRows[0]?.matchingCount ?? 0);
+    return {
+      rows: page,
+      totalCount,
+      truncated: totalCount > page.length,
+      limit: HUB_TRANSACTION_LIMIT,
+    };
   });
+}
+
+/**
+ * The ledger rows alone. The same read as listHubTransactionsPage,
+ * without the count — for callers that only need the rows.
+ */
+export async function listHubTransactions(
+  ctx: ActionCtx,
+  raw: unknown,
+): Promise<HubTransactionRow[]> {
+  return (await listHubTransactionsPage(ctx, raw)).rows;
 }

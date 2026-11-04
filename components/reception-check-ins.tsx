@@ -193,6 +193,7 @@ export function ReceptionCheckIns({
                               className="flex min-h-[44px] items-center gap-3 py-2"
                             >
                               <PersonAvatar
+                                name={row.name}
                                 seed={row.memberId}
                                 size={32}
                                 className="flex-none"

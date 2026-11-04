@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { OwnerShell, ownerRoleLabel } from "@/components/owner-shell";
+import { ownerSidebarGroupsWithBookings } from "@/components/owner-ui/owner-navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { listLocations } from "@/lib/services/people";
 import { getBranding } from "@/lib/services/branding";
+import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import {
   ownerNavForPermissions,
   ownerSidebarGroupsForPermissions,
@@ -40,23 +42,55 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   }
   // W1-6 — the switcher renders itself away for single-facility
   // tenants, so this query is the only cost a small academy pays.
-  const locations = await listLocations(ctx);
-  const branding = await getBranding(ctx);
+  //
+  // The three reads are independent of each other, so they are batched.
+  // The identity read is the EXISTING tenant-scoped one
+  // (lib/services/staff.ts): it resolves the signed-in user's own full
+  // name through withTenant, with the resolved ctx and no new grant, no
+  // raw users query and no change to the auth or query scope. It runs
+  // here — AFTER the context resolution and the surface gate above — so
+  // a caller that never reached the owner surface reads no identity.
+  //
+  // The shell's account controls are PERSON controls: they draw the
+  // owner's OWN initials, never the club's branding initials. A signed-in
+  // owner who was never entered as a person has no name on file; the
+  // shell then draws the shared primitive's honest unknown ("?").
+  const [locations, branding, identity] = await Promise.all([
+    listLocations(ctx),
+    getBranding(ctx),
+    getCurrentStaffIdentity(ctx),
+  ]);
   // U-10 — responsive shell: sidebar + top bar (with global search,
   // U-05) at lg, the existing bottom nav below it. C01 — both lists
   // are permission-filtered: the Accountant gets Home (→ Fees),
   // Members, Fees & payments and Reports; Owner/Admin hold every gate
   // and see the full contract unchanged.
+  //
+  // Owner redesign (27 October 2026) — the booking desk joins the
+  // desktop Scheduling group, but only for a caller who may read
+  // bookings AND whose tenant is entitled to the booking feature. That
+  // is the same pair of gates the BOOKINGS ROUTE enforces
+  // (app/(owner)/owner/bookings/page.tsx), so the sidebar never offers
+  // a destination that would answer 404. The mobile bottom nav keeps
+  // its four items (DESIGN.md §2); the phone reaches the booking desk
+  // through Settings, and the Operations lane owns those links.
+  const sidebarGroups = ownerSidebarGroupsWithBookings(
+    ownerSidebarGroupsForPermissions(ctx.permissions),
+    ctx.permissions,
+    ctx.features,
+  );
   return (
-    <OwnerShell
-      navItems={ownerNavForPermissions(ctx.permissions)}
-      sidebarGroups={ownerSidebarGroupsForPermissions(ctx.permissions)}
-      locations={locations}
-      clubName={branding.displayName ?? branding.fallbackDisplayName}
-      clubInitials={branding.initials}
-      accountLabel={ownerRoleLabel(ctx.roleKey)}
-    >
-      {children}
-    </OwnerShell>
+    <Suspense fallback={<p role="status" className="p-4 text-sm text-ink-2">Loading workspace…</p>}>
+      <OwnerShell
+        navItems={ownerNavForPermissions(ctx.permissions)}
+        sidebarGroups={sidebarGroups}
+        locations={locations}
+        clubName={branding.displayName ?? branding.fallbackDisplayName}
+        accountName={identity?.fullName ?? null}
+        accountLabel={ownerRoleLabel(ctx.roleKey)}
+      >
+        {children}
+      </OwnerShell>
+    </Suspense>
   );
 }

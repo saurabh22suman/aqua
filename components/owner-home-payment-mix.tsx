@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerChartIsland } from "@/components/charts/owner-chart-island";
 import { ChartTable, PanelFigure } from "@/components/owner-home-chart-parts";
 import { MiniDonut } from "@/components/owner-mini-donut";
@@ -29,7 +29,7 @@ export function PaymentMixPanel({
       <header>
         <h2 className="font-display text-[15px] font-semibold">Payment mix</h2>
         <p className="mt-0.5 text-[12.5px] text-ink-3">
-          {period.tabLabel} · captured payments
+          {period.tabLabel} · recorded payments
         </p>
       </header>
 
@@ -38,7 +38,7 @@ export function PaymentMixPanel({
           <PanelFigure amount={formatINRCompact(collections.totalPaise)} />
           <p className="text-[12px] text-ink-3">
             {collections.paymentCount} payment{collections.paymentCount === 1 ? "" : "s"}{" "}
-            captured in this period
+            recorded in this period
           </p>
           <div className="hidden lg:block">
             <OwnerChartIsland

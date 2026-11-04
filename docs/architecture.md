@@ -1050,22 +1050,11 @@ create table bookings (
 );
 ```
 
-Double-booking is prevented by the database, not by application logic:
+Double-booking is prevented by the database, not by application logic. Held and confirmed whole-facility bookings conflict with every child booking in either order. The same child is exclusive; distinct children may overlap. Intervals are half-open `[)`; cancelled and completed bookings release the slot.
 
-```sql
-create extension if not exists btree_gist;
+The forward-only `20261101000000_booking_whole_conflicts.sql` uses a GiST exclusion constraint on tenant, facility, time and UUID ranges: an unbounded range for a whole facility, and a singleton range for a child. The database enforces the invariant under concurrency, including direct app-login writes, and reports SQLSTATE 23P01. Existing active conflicts must be resolved before migration.
 
-alter table bookings add constraint no_overlap
-  exclude using gist (
-    facility_id with =,
-    coalesce(sub_unit, '') with =,
-    exclude with &&
-  ) where (status in ('held', 'confirmed'));
-```
-
-An exclusion constraint is race-proof under concurrency in a way that a check-then-insert never is.
-
-**As-built (2026-09-18).** `facilities` and `facility_sub_units` (preset-engine) already serve as activities and resources; the physical rename to `activities`/`resources` remains deferred (M-02) because it buys naming, not behaviour. The `bookings` table lands in `20260918140000_v02_bookings.sql` with the exclusion constraint exactly as designed — tenant, facility, `coalesce(sub_unit_id, 0-uuid)` and `tstzrange(starts_at, ends_at, '[)')`, restricted to `held`/`confirmed` — plus `booking_price_rules` and the `bookings.advance_window_days` config key. The fifty-concurrent test is the proof: dropping the constraint lets all fifty succeed, which is why the guarantee lives in the database and never in application code.
+`facilities` and `facility_sub_units` (preset-engine) serve as activities and resources. Booking price rules and the `bookings.advance_window_days` configuration key remain unchanged. The old coalesced sub-unit exclusion from `20260918140000_v02_bookings.sql` did not enforce whole-versus-child conflicts and is replaced by this migration.
 
 ### 8.8 Swimming vertical (Phase 3)
 

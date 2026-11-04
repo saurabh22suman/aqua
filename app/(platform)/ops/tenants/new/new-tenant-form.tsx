@@ -6,24 +6,33 @@ import {
   createTenantAction,
   type CreateTenantResult,
 } from "@/lib/actions/platform-tenants";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
 
 // Phase 1.5 — create-tenant form. H1 — uses <form action={createTenantAction}>
 // rather than onSubmit. Pre-hydration submit goes via POST to the
 // action endpoint; form fields (name, slug, timezone, currency,
 // GSTIN, locationName) never appear as query-string values.
+//
+// India-first (29 October 2026): NEW tenants are created with INR and IST. The
+// values are submitted as hidden fields so the existing server contract is
+// unchanged; the operator sees plain India context, not an ISO/IANA input.
+// Existing tenant records keep their stored currency and time zone.
 
 type Plan = { key: string; name: string; isDefault: boolean };
 type Preset = { key: string; name: string; description: string };
 
 export function NewTenantForm({
-  defaultTimezone,
-  defaultCurrency,
   defaultLocationName,
   plans,
   defaultPlanKey,
   presets,
   defaultPresetKey,
 }: {
+  // Kept for the page's create-tenant contract; the form no longer edits these.
   defaultTimezone: string;
   defaultCurrency: string;
   defaultLocationName: string;
@@ -59,16 +68,24 @@ export function NewTenantForm({
 
       <Section
         title="Settings"
-        subtitle="Defaults applied unless the operator overrides."
+        subtitle="New tenants are created with INR and Indian Standard Time."
       >
-        <Field
-          label="Time zone"
-          name="timezone"
-          required
-          defaultValue={defaultTimezone}
-          autoComplete="off"
-          hint="IANA identifier, e.g. Asia/Kolkata."
-        />
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] font-medium text-ink">Currency · INR</p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            This new tenant is created with Indian rupees.
+          </p>
+        </div>
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] font-medium text-ink">
+            Time zone · Indian Standard Time
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            This new tenant uses IST (UTC+05:30).
+          </p>
+        </div>
+        <input type="hidden" name="timezone" value="Asia/Kolkata" />
+        <input type="hidden" name="currency" value="INR" />
         <SelectField
           label="Plan"
           name="planKey"
@@ -79,21 +96,11 @@ export function NewTenantForm({
           }))}
         />
         <Field
-          label="Currency"
-          name="currency"
-          required
-          defaultValue={defaultCurrency}
-          autoComplete="off"
-          pattern="[A-Z]{3}"
-          maxLength={3}
-          hint="ISO 4217, three uppercase letters."
-        />
-        <Field
           label="GSTIN"
           name="gstin"
           autoComplete="off"
           maxLength={15}
-          hint="15-character GSTIN. Optional for non-India tenants."
+          hint="15-character GSTIN. Optional."
         />
       </Section>
 
@@ -123,40 +130,22 @@ export function NewTenantForm({
           defaultValue={defaultLocationName}
           autoComplete="off"
         />
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            name="locationIsPrimary"
-            defaultChecked
-            className="h-5 w-5 rounded border border-line text-[var(--accent-ink)] focus:ring-[var(--accent-strong)]"
-          />
-          <span className="text-[14px] text-ink-2">
-            This is the primary location
-          </span>
-        </label>
+        <Checkbox name="locationIsPrimary" defaultChecked>
+          This is the primary location
+        </Checkbox>
       </Section>
 
       {error ? (
-        <p
-          role="alert"
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-        >
+        <OpsPanel tone="error" role="alert">
           {error}
-        </p>
+        </OpsPanel>
       ) : null}
 
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-pill px-6 py-3 text-[14px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
-        >
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="primary" disabled={isPending}>
           {isPending ? "Creating…" : "Create tenant"}
-        </button>
-        <Link
-          href="/ops/tenants"
-          className="rounded-pill px-4 py-3 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
-        >
+        </Button>
+        <Link href="/ops/tenants" className={buttonClasses({ variant: "secondary" })}>
           Cancel
         </Link>
       </div>
@@ -174,7 +163,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-card bg-paper border border-line p-5 space-y-4">
+    <OpsCard className="space-y-4 p-5">
       <div>
         <h2 className="font-display text-[16px] font-semibold text-ink">
           {title}
@@ -184,7 +173,7 @@ function Section({
         ) : null}
       </div>
       <div className="space-y-4">{children}</div>
-    </section>
+    </OpsCard>
   );
 }
 
@@ -211,8 +200,8 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-[13px] font-medium text-ink-2">{label}</span>
-      <input
+      <span className="mb-1 block text-[13px] font-medium text-ink-2">{label}</span>
+      <Input
         type={type}
         name={name}
         required={required}
@@ -220,7 +209,6 @@ function Field({
         autoComplete={autoComplete}
         pattern={pattern}
         maxLength={maxLength}
-        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       />
       {hint ? (
         <span className="mt-1 block text-[12px] text-ink-3">{hint}</span>
@@ -242,18 +230,14 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[13px] font-medium text-ink-2">{label}</span>
-      <select
-        name={name}
-        defaultValue={defaultValue}
-        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-      >
+      <span className="mb-1 block text-[13px] font-medium text-ink-2">{label}</span>
+      <Select name={name} defaultValue={defaultValue}>
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

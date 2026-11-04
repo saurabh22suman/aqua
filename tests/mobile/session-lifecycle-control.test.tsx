@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // R.4 (docs/five-day-work-guide.md) — session cancel / reschedule UI.
@@ -74,11 +74,25 @@ describe("SessionLifecycleControl (R.4)", () => {
     fireEvent.change(screen.getByTestId("reschedule-date"), {
       target: { value: "14/09/2026" },
     });
-    fireEvent.change(screen.getByTestId("reschedule-start"), {
-      target: { value: "18:00" },
+    const startGroup = screen.getByRole("group", { name: /start time/i });
+    const endGroup = screen.getByRole("group", { name: /end time/i });
+    fireEvent.change(within(startGroup).getByLabelText("Hour"), {
+      target: { value: "6" },
     });
-    fireEvent.change(screen.getByTestId("reschedule-end"), {
-      target: { value: "19:00" },
+    fireEvent.change(within(startGroup).getByLabelText("Minutes"), {
+      target: { value: "00" },
+    });
+    fireEvent.change(within(startGroup).getByLabelText("AM/PM"), {
+      target: { value: "PM" },
+    });
+    fireEvent.change(within(endGroup).getByLabelText("Hour"), {
+      target: { value: "7" },
+    });
+    fireEvent.change(within(endGroup).getByLabelText("Minutes"), {
+      target: { value: "00" },
+    });
+    fireEvent.change(within(endGroup).getByLabelText("AM/PM"), {
+      target: { value: "PM" },
     });
     fireEvent.click(screen.getByRole("button", { name: /save new time/i }));
 

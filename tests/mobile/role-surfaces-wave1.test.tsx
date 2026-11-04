@@ -37,6 +37,7 @@ import { ParentLinkExplainer } from "@/components/parent-link-explainer";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import type { MemberListRow } from "@/lib/services/people";
+import { formatDateIST } from "@/lib/time/tz";
 
 const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 
@@ -107,16 +108,21 @@ describe("W1-3 parent explainer (not a bare stub)", () => {
 });
 
 describe("W1-4 owner Home quick links (F26)", () => {
-  it("surfaces Enquiries, Programs/Sessions and Staff; onboarding only for a new academy", () => {
+  it("surfaces the permitted daily actions; onboarding only for a new academy", () => {
     const { rerender } = render(
-      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
+      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} can={{ addMember: true, recordPayment: true, captureEnquiry: true, readFees: true, viewSchedule: false, bookCourt: true }} />,
     );
-    for (const href of ["/owner/enquiries", "/owner/programs", "/owner/staff"]) {
-      expect(
-        document.querySelector(`a[href="${href}"]`),
-        `missing quick link ${href}`,
-      ).toBeTruthy();
-    }
+    // The accepted Home (owner mock, 2 Nov 2026) offers ONE contextual
+    // action — record a payment against an explicit unpaid bill — plus
+    // the invoice shortcut. Add member, Capture enquiry and Book a slot
+    // are reached from their own navigation.
+    expect(
+      document.querySelector('a[href="/owner/fees?tab=dues&facility=all"]'),
+      "missing the record payment action",
+    ).toBeTruthy();
+    expect(document.querySelector('a[href="/owner/enquiries"]')).toBeNull();
+    expect(document.querySelector('a[href="/owner/members/new?facility=all"]')).toBeNull();
+    expect(document.querySelector('a[href="/owner/bookings?facility=all"]')).toBeNull();
     // An established academy is not nagged with the setup checklist.
     expect(document.querySelector('a[href="/owner/onboarding"]')).toBeNull();
 
@@ -125,6 +131,7 @@ describe("W1-4 owner Home quick links (F26)", () => {
         data={DASHBOARD}
         branding={BRANDING}
         terminology={TERMINOLOGY}
+        can={{ addMember: false, recordPayment: false, captureEnquiry: false, readFees: false, viewSchedule: false, readEnquiries: true, readPrograms: true, readStaff: true }}
         showOnboarding
       />,
     );
@@ -159,7 +166,7 @@ describe("W1-5 member joined date", () => {
   });
 
 describe("members desktop columns (PR3-C4)", () => {
-  it("renders a column header and a grid row, keeping the phone row one column", () => {
+  it("keeps identity, phone, status and profile access in the directory", () => {
     const row = {
       memberId: "m1",
       fullName: "Aadhya Sharma",
@@ -173,17 +180,17 @@ describe("members desktop columns (PR3-C4)", () => {
     } as MemberListRow;
     render(<MembersBoard initialMembers={[row]} />);
 
-    const head = document.querySelector('[data-testid="members-table-head"]');
-    expect(head).not.toBeNull();
-    expect(head!.textContent).toContain("Member");
-    expect(head!.textContent).toContain("Phone");
-    expect(head!.textContent).toContain("Status");
-    // The joined date moved to the member's own page (audit 2026-10-24).
-    expect(head!.textContent).not.toContain("Joined");
-
     const link = document.querySelector('[data-testid="members-list"] a');
-    expect(link!.className).toContain("md:grid");
-    expect(document.body.textContent).toContain("+91 98123 40010");
+    // The drill-down carries the directory's scope: an all-facilities
+    // directory states it explicitly, so a remembered facility cookie can
+    // never narrow it.
+    expect(link?.getAttribute("href")).toBe("/owner/members/m1?facility=all");
+    expect(link?.textContent).toContain("Aadhya Sharma");
+    expect(link?.textContent).toContain("+91 98123 40010");
+    expect(link?.textContent).toMatch(/active/i);
+    expect(formatDateIST(row.joinedOn)).toMatch(/1 Sep(?:t)? 2026/);
+    const profile = readFileSync("app/(owner)/owner/members/[memberId]/page.tsx", "utf8");
+    expect(profile).toContain("formatDateIST(member.joinedOn)");
   });
 });
 });

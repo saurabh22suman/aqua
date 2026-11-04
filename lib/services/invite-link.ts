@@ -2,10 +2,13 @@ import { and, eq, isNull } from "drizzle-orm";
 import { auth } from "@/lib/auth/server";
 import { withTenant } from "@/db/tenant";
 import { withPlatform } from "@/db/scope";
+import { db } from "@/db/auth-db";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { tenants } from "@/db/schema/tenants";
 import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
+import { baSession } from "@/db/schema/better-auth";
+import { platformAuditLog } from "@/db/schema/platform-users";
 import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
 import { writeAudit } from "@/lib/audit/write";
@@ -17,6 +20,7 @@ import {
   hasCredentialByPhone,
   pinSchema,
   setCredential,
+  setCredentialInTx,
 } from "./credentials";
 import { asTenantId } from "@/lib/ids";
 
@@ -291,6 +295,7 @@ export async function redeemLoginLink(
     return {
       kind: "ok" as const,
       userId: m.userId,
+      membershipId: m.membershipId,
       phone: m.phone,
       homePath: m.homePath,
       hadCredential,
@@ -306,17 +311,40 @@ export async function redeemLoginLink(
   const sessionToken = await withPlatform(async () => {
     const baUserId = await ensureBaUserForPhone(consumed.phone);
 
-    if (pin !== undefined) {
+    if (claims.purpose === "reset") {
+      // One transaction: the credential rotation, the revocation of the
+      // owner's other sessions and the audit row. A failed audit rolls
+      // the other two back. The revocation follows the reset's PURPOSE,
+      // not the presence of a PIN — a reset link may be redeemed without
+      // one.
+      await withPlatform(() =>
+        db.transaction(async (tx) => {
+          if (pin !== undefined) await setCredentialInTx(tx, baUserId, pin);
+          await tx.delete(baSession).where(eq(baSession.userId, baUserId));
+          await tx.insert(platformAuditLog).values({
+            action: "credentials.pin_reset",
+            tenantId: claims.tenantId,
+            targetType: "user",
+            targetId: consumed.userId,
+            detail: {
+              purpose: "reset",
+              membershipId: consumed.membershipId,
+              sessionsRevoked: true,
+              // Whether the credential actually changed. A reset may be
+              // redeemed without a PIN: the sessions are revoked and the
+              // record must say the PIN was NOT rotated, or the
+              // operator's evidence contradicts what happened.
+              credentialRotated: pin !== undefined,
+            },
+          });
+        }),
+      );
+    } else if (pin !== undefined) {
       await setCredential(baUserId, pin);
     }
-    // A successful reset revokes the owner's other sessions before
-    // the fresh one is minted: the reset may be happening because a
-    // device or session was compromised, and leaving those live
-    // would defeat the point.
-    if (claims.purpose === "reset" && pin !== undefined) {
-      const baCtx = await auth.$context;
-      await baCtx.internalAdapter.deleteUserSessions(baUserId);
-    }
+    // The new session is minted after the reset's transaction commits:
+    // better-auth's adapter has no transaction handle, so it cannot
+    // join one.
     const baCtx = await auth.$context;
     const session = await baCtx.internalAdapter.createSession(baUserId);
     return (session as { token: string }).token;

@@ -129,6 +129,7 @@ export async function createInvoiceForSubscription(
           ],
         },
         ctx.userId ?? null,
+        ctx.requestId ?? null,
       );
       if (!result.ok) return { ok: false, error: result.error };
       return {

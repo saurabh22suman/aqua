@@ -51,7 +51,7 @@ const restrictedAdmin: ReviewCtx = {
   roleKey: "admin",
   allLocations: false,
   locationIds: [locA],
-  permissions: new Set(["dashboard.view"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read"]),
 };
 
 const unrestrictedOwner: ReviewCtx = {
@@ -60,7 +60,7 @@ const unrestrictedOwner: ReviewCtx = {
   roleKey: "owner",
   allLocations: true,
   locationIds: [],
-  permissions: new Set(["dashboard.view"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read"]),
 };
 
 beforeAll(async () => {
@@ -239,21 +239,21 @@ describe("review dashboard location scope (A07)", () => {
     );
 
     const ownerAll = await dashboard.getOwnerDashboard(unrestrictedOwner, {});
-    expect(ownerAll.money.collectedTodayPaise).toBe(150000);
-    expect(ownerAll.money.collectedTodayCount).toBe(2);
-    expect(ownerAll.money.outstandingPaise).toBe(350000);
-    expect(ownerAll.money.dueInvoiceCount).toBe(2);
-    expect(ownerAll.money.overduePaise).toBe(350000);
-    expect(ownerAll.money.overdueInvoiceCount).toBe(2);
+    expect(ownerAll.money?.collectedTodayPaise).toBe(150000);
+    expect(ownerAll.money?.collectedTodayCount).toBe(2);
+    expect(ownerAll.money?.outstandingPaise).toBe(350000);
+    expect(ownerAll.money?.dueInvoiceCount).toBe(2);
+    expect(ownerAll.money?.overduePaise).toBe(350000);
+    expect(ownerAll.money?.overdueInvoiceCount).toBe(2);
     expect(ownerAll.needsAttention.some((item) => item.title === "Overdue fees")).toBe(true);
 
     const scopedA = await dashboard.getOwnerDashboard(restrictedAdmin, {});
-    expect(scopedA.money.collectedTodayPaise).toBe(100000);
-    expect(scopedA.money.collectedTodayCount).toBe(1);
-    expect(scopedA.money.outstandingPaise).toBe(100000);
-    expect(scopedA.money.dueInvoiceCount).toBe(1);
-    expect(scopedA.money.overduePaise).toBe(100000);
-    expect(scopedA.money.overdueInvoiceCount).toBe(1);
+    expect(scopedA.money?.collectedTodayPaise).toBe(100000);
+    expect(scopedA.money?.collectedTodayCount).toBe(1);
+    expect(scopedA.money?.outstandingPaise).toBe(100000);
+    expect(scopedA.money?.dueInvoiceCount).toBe(1);
+    expect(scopedA.money?.overduePaise).toBe(100000);
+    expect(scopedA.money?.overdueInvoiceCount).toBe(1);
     expect(scopedA.needsAttention.some((item) => item.title === "Overdue fees")).toBe(true);
     expect(
       scopedA.needsAttention.some((item) => item.detail.includes("2,500")),
@@ -264,10 +264,10 @@ describe("review dashboard location scope (A07)", () => {
     const scopedAtoB = await dashboard.getOwnerDashboard(restrictedAdmin, {
       locationId: locB,
     });
-    expect(scopedAtoB.money.collectedTodayPaise).toBe(0);
-    expect(scopedAtoB.money.outstandingPaise).toBe(0);
-    expect(scopedAtoB.money.overduePaise).toBe(0);
-    expect(scopedAtoB.money.overdueInvoiceCount).toBe(0);
+    expect(scopedAtoB.money?.collectedTodayPaise).toBe(0);
+    expect(scopedAtoB.money?.outstandingPaise).toBe(0);
+    expect(scopedAtoB.money?.overduePaise).toBe(0);
+    expect(scopedAtoB.money?.overdueInvoiceCount).toBe(0);
   });
 
   // C02 audit regression note — "cancelled/zero-roster session": a
@@ -313,45 +313,13 @@ describe("review dashboard location scope (A07)", () => {
   });
 });
 
-// Owner Home composition, pinned as a source scan (the same shape the
-// repo's kpi-label-size and date-display-sweep guards use).
-//
-// Superseded 2026-10-25 by the approved owner redesign. The first
-// screen now leads with the figures (each label stating its basis),
-// then the one dominant shortcut, then the 60/40 workspace (today's
-// classes beside the exceptions), then the single trend panel. The
-// honesty contracts survive: the money figure is today's captured
-// total and says so, register state is never called attendance, and
-// the phantom "Today's facilities" heading stays gone.
-//
-// Owner Lavender B (27 October 2026): the screen opens with the day,
-// the academy and the scope, and the sections were split into the
-// components/owner-home/ modules. The scan follows the composition:
-// the ORDER is still read from the dashboard's own JSX (the block
-// markers below), and the wording guards read the file that owns the
-// wording.
-describe("owner Home composition and labels", () => {
-  it("leads with the context, then the summary, then the dominant action, then the workspace, then one trend panel", () => {
-    const src = readFileSync("components/owner-dashboard.tsx", "utf8");
-    const context = src.indexOf("<OwnerHomeHeader");
-    const summary = src.indexOf("<OwnerHomeMetrics");
-    const action = src.indexOf("<OwnerHomeActions");
-    const attention = src.indexOf("<OwnerHomeAttention");
-    const trend = src.indexOf("<OwnerHomeCharts");
-    expect(context).toBeGreaterThan(-1);
-    expect(summary).toBeGreaterThan(context);
-    expect(action).toBeGreaterThan(summary);
-    expect(attention).toBeGreaterThan(action);
-    expect(trend).toBeGreaterThan(attention);
-    // The old gross-only label and the phantom facilities heading are gone.
-    expect(src).not.toContain("Payments recorded today");
-    expect(src).not.toContain("Today's facilities");
-    // Completion is stated as marks recorded, never as attendance.
-    const sessionState = readFileSync(
-      "components/owner-home/session-state.ts",
-      "utf8",
-    );
+// The former source-order test prescribed the superseded chart band and
+// nested actions. Rendered approved order is checked in foundation/home.test.tsx.
+// Keep the register/attendance honesty guard independent of that composition.
+describe("owner register terminology", () => {
+  it("does not describe register completion as attendance", () => {
+    const sessionState = readFileSync("components/owner-home/session-state.ts", "utf8");
     expect(sessionState).toContain("Register complete");
-    expect(sessionState).not.toContain("Attendance\u2019s");
+    expect(sessionState).not.toContain("Attendance’s");
   });
 });

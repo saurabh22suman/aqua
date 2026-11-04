@@ -1,5 +1,9 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
+import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   confirmCashCountAction,
@@ -12,6 +16,9 @@ import { Button } from "@/components/ui/Button";
 import { formatINR } from "@/lib/money/format";
 import { parseRupeesToPaise } from "@/lib/payment-qr";
 import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
+import { Dialog } from "@/components/ui/Dialog";
+import { navigateFacility } from "@/components/facility-navigation";
+import type { MouseEvent } from "react";
 
 // C-34 — the daily collection report: totals by method and by the
 // staff member who took the money, plus the cash count confirmation
@@ -38,8 +45,6 @@ import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
 const REVIEW_THRESHOLD_PAISE = 50_000; // ₹500
 const OWNER_CLOSE_THRESHOLD_PAISE = 200_000; // ₹2,000
 
-const inputClass =
-  "min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 type ReportState = { scope: string; data: DailyCollection };
 
@@ -49,6 +54,8 @@ export function CollectionsReport({
   facilityLabel,
   canConfirm,
   canReopen,
+  initialLocationId,
+  showNavigation = false,
 }: {
   defaultDate: string;
   locations: Array<{ id: string; name: string }>;
@@ -59,9 +66,11 @@ export function CollectionsReport({
   // settings.manage — the same owner/admin grant the over-₹2,000
   // close and the reopen service enforce.
   canReopen: boolean;
+  initialLocationId?: string;
+  showNavigation?: boolean;
 }) {
   const [onDate, setOnDate] = useState(defaultDate);
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(() => initialLocationId !== undefined ? (locations.some(location => location.id === initialLocationId) ? initialLocationId : "") : locations[0]?.id ?? "");
   const [state, setState] = useState<ReportState | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [counted, setCounted] = useState("");
@@ -70,8 +79,10 @@ export function CollectionsReport({
   const [message, setMessage] = useState<string | null>(null);
   const [reopenOpen, setReopenOpen] = useState(false);
   const [reopenReason, setReopenReason] = useState("");
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
   const requestSeq = useRef(0);
   const loadedScope = useRef<string | null>(null);
+  const draftRevision = useRef(0);
   // The scope currently on screen, readable from async callbacks
   // without stale closures.
   const scopeRef = useRef({ onDate, locationId });
@@ -80,9 +91,9 @@ export function CollectionsReport({
   const scopeKey = `${onDate}|${locationId}`;
 
   const load = useCallback(async (scope: { onDate: string; locationId: string }) => {
-    if (!scope.onDate) return;
-    const key = `${scope.onDate}|${scope.locationId}`;
     const seq = ++requestSeq.current;
+    if (!scope.onDate || !scope.locationId) return;
+    const key = `${scope.onDate}|${scope.locationId}`;
     setLoadError(false);
     try {
       const data = await getDailyCollectionAction({
@@ -101,6 +112,7 @@ export function CollectionsReport({
   useEffect(() => {
     if (loadedScope.current === scopeKey) return;
     loadedScope.current = scopeKey;
+    draftRevision.current += 1;
     // A draft count/note belongs to the scope it was typed under; it
     // must not silently carry into another day or facility.
     setCounted("");
@@ -116,6 +128,16 @@ export function CollectionsReport({
   const locationName =
     locations.find((location) => location.id === locationId)?.name ?? "this facility";
   const scopeLabel = `${formatDateIST(onDate)} · ${locationName}`;
+  const facilityQuery = new URLSearchParams({ facility: locationId });
+  const reportHref = `/owner/reports?${facilityQuery}`;
+  const trendHref = `/owner/reports/collections?${new URLSearchParams({ view: "trends", period: "last7", facility: locationId })}`;
+  function leave(event: MouseEvent<HTMLAnchorElement>, href: string) {
+    event.preventDefault();
+    if (busy) { setMessage("Wait for the current request to finish before leaving."); return; }
+    if (!locationId) { setMessage("Choose a facility before leaving."); return; }
+    if (counted.trim() || note.trim() || reopenOpen || reopenReason.trim()) { setPendingHref(href); return; }
+    navigateFacility(href);
+  }
 
   // C05 — after an uncertain failure (thrown, response lost) the
   // report is reloaded before the busy state is released, so a retry
@@ -133,6 +155,7 @@ export function CollectionsReport({
     }
     // The action is bound to the scope whose evidence is displayed.
     const target = { onDate, locationId };
+    const submittedRevision = draftRevision.current;
     const targetLabel = `${formatDateIST(target.onDate)} · ${
       locations.find((location) => location.id === target.locationId)?.name ?? "this facility"
     }`;
@@ -146,6 +169,11 @@ export function CollectionsReport({
           countedPaise: Number(paise),
           ...(note.trim() ? { note: note.trim() } : {}),
         });
+        if (result.ok && scopeRef.current.onDate === target.onDate &&
+            scopeRef.current.locationId === target.locationId && draftRevision.current === submittedRevision) {
+          setCounted("");
+          setNote("");
+        }
         setMessage(
           result.ok
             ? result.variancePaise === 0
@@ -240,44 +268,57 @@ export function CollectionsReport({
   if (locations.length === 0) {
     return (
       <p className="mt-4 text-[13px] text-ink-3">
-        Add a location before reconciling collections.
+        No locations are available for daily close.
       </p>
     );
   }
 
   return (
     <div className="mt-4 space-y-4">
+      {showNavigation ? <>
+        <nav aria-label="Collections navigation" className="flex flex-wrap items-center gap-2">
+          <a href={reportHref} onClick={event => leave(event, reportHref)} className="inline-flex min-h-11 items-center px-3 text-sm text-ink-2">All reports</a>
+          <a href={trendHref} onClick={event => leave(event, trendHref)} className="inline-flex min-h-11 items-center px-3 text-sm text-ink-2">Trends</a>
+          <span aria-current="page" className="inline-flex min-h-11 items-center rounded-pill bg-deck px-4 text-sm font-medium">Daily close</span>
+        </nav>
+        <Dialog open={pendingHref !== null} onOpenChange={open => { if (!open) setPendingHref(null); }} title="Leave daily close?" description="Your unsaved cash count or reopen draft will be lost." footer={<><Button variant="secondary" onClick={() => setPendingHref(null)}>Stay</Button><Button onClick={() => { if (pendingHref && !busy) navigateFacility(pendingHref); }}>Leave</Button></>} />
+        {message && (!locationId || busy) ? <p role="status" className="text-sm text-ink-2">{message}</p> : null}
+      </> : null}
       <div className="flex flex-wrap items-end gap-2">
-        <label className="block">
-          <span className="mb-0.5 block text-[11px] text-ink-3">Date</span>
-          <input
-            type="date"
-            lang="en-IN"
-            placeholder="dd/mm/yyyy"
-            value={onDate}
-            onChange={(e) => setOnDate(e.target.value)}
-            className={inputClass}
-          />
-        </label>
+        <div className="min-w-[13rem]">
+          <Field id="collections-date" label="Date" required>
+            {(field) => (
+              <DateField
+                {...field}
+                value={onDate}
+                onChange={setOnDate}
+                data-testid="collections-date"
+              />
+            )}
+          </Field>
+        </div>
         <label className="block">
           <span className="mb-0.5 block text-[11px] text-ink-3">
             {facilityLabel}
           </span>
-          <select
+          <Select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
-            className={inputClass}
+            
           >
+            {!locationId ? <option value="">Choose a {facilityLabel}</option> : null}
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
-      {!onDate ? (
+      {!locationId ? (
+        <p role="alert" className="text-[13px] text-ink-3">Choose an available {facilityLabel} to see collections.</p>
+      ) : !onDate ? (
         <p className="text-[13px] text-ink-3">Pick a date to see collections.</p>
       ) : loadError ? (
         <div className="rounded-card border border-line bg-paper p-3.5">
@@ -298,8 +339,18 @@ export function CollectionsReport({
         </p>
       ) : (
         <>
-          <div className="rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] text-ink-3">
+          <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <section
+            aria-labelledby="payment-evidence-heading"
+            className="min-w-0 rounded-card border border-line bg-paper p-5"
+          >
+            <h2
+              id="payment-evidence-heading"
+              className="font-display text-[16px] font-semibold text-ink"
+            >
+              Payment evidence
+            </h2>
+            <p className="mt-1 text-[12px] text-ink-3">
               Collected on {report.onDate} · {report.paymentCount} payment
               {report.paymentCount === 1 ? "" : "s"}
             </p>
@@ -340,10 +391,8 @@ export function CollectionsReport({
                 )}
               </tbody>
             </table>
-          </div>
 
-          <div className="rounded-card border border-line bg-paper p-3.5">
-            <p className="text-[12px] font-medium text-ink-2">By staff</p>
+            <h3 className="mt-4 text-[13px] font-medium text-ink-2">By staff</h3>
             <table className="mt-2 w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">
@@ -374,11 +423,19 @@ export function CollectionsReport({
                 )}
               </tbody>
             </table>
-          </div>
+          </section>
 
-          <div className="rounded-card border border-line bg-paper p-3.5">
+          <section
+            aria-labelledby="cash-count-heading"
+            className="min-w-0 rounded-card border border-line bg-paper p-5"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[12px] font-medium text-ink-2">Cash count</p>
+              <h2
+                id="cash-count-heading"
+                className="font-display text-[16px] font-semibold text-ink"
+              >
+                Count the cash
+              </h2>
               {report.cashCount ? (
                 <StatusBadge
                   tone={report.cashCount.needsReview ? "warn" : "good"}
@@ -431,11 +488,11 @@ export function CollectionsReport({
                         <span className="mb-0.5 block text-[11px] text-ink-3">
                           Reason for reopening (required)
                         </span>
-                        <input
+                        <Input
                           value={reopenReason}
                           disabled={busy}
                           onChange={(e) => setReopenReason(e.target.value)}
-                          className={`${inputClass} w-full`}
+                          className="w-full"
                           placeholder="Reason for reopening"
                         />
                       </label>
@@ -490,11 +547,11 @@ export function CollectionsReport({
                         <span className="mb-0.5 block text-[11px] text-ink-3">
                           Counted cash (₹)
                         </span>
-                        <input
+                        <Input
                           inputMode="decimal"
                           value={counted}
-                          onChange={(e) => setCounted(e.target.value)}
-                          className={inputClass}
+                          onChange={(e) => { draftRevision.current += 1; setCounted(e.target.value); }}
+                          
                           placeholder="0.00"
                         />
                       </label>
@@ -504,10 +561,10 @@ export function CollectionsReport({
                             ? "Reason (required)"
                             : "Reason (optional)"}
                         </span>
-                        <input
+                        <Input
                           value={note}
-                          onChange={(e) => setNote(e.target.value)}
-                          className={`${inputClass} w-full`}
+                          onChange={(e) => { draftRevision.current += 1; setNote(e.target.value); }}
+                          className="w-full"
                           placeholder={
                             varianceNeedsReason
                               ? "Why the cash differs"
@@ -540,6 +597,7 @@ export function CollectionsReport({
                 {message}
               </p>
             ) : null}
+          </section>
           </div>
         </>
       )}

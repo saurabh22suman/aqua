@@ -3,7 +3,7 @@ import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { facilities, facilitySubUnits } from "@/db/schema/preset-engine";
 import { locations } from "@/db/schema/locations";
-import { auditLog } from "@/db/schema/audit";
+import { auditActorOf, writeAudit as writeSharedAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import { ACTIVITY_KINDS, type ActivityKind } from "@/lib/activities";
 import type { ActionCtx } from "@/lib/auth/context";
@@ -368,6 +368,8 @@ function dedupe(names: string[]): string[] {
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
+// E-01 — the ONE audit writer (lib/audit/write.ts) applies the actor
+// model (actor_type, actor_id, source, request_id) in one place.
 async function writeAudit(
   tx: Tx,
   ctx: ActionCtx,
@@ -375,10 +377,9 @@ async function writeAudit(
   entityId: string,
   after: Record<string, unknown>,
 ): Promise<void> {
-  if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  await writeSharedAudit(tx, {
     tenantId: ctx.tenantId,
-    actorId: ctx.userId,
+    ...auditActorOf(ctx),
     action,
     entityType: "activity",
     entityId,

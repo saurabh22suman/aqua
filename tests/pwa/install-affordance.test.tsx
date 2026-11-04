@@ -9,6 +9,8 @@ import {
   INSTALL_OFFER_SHOWN_KEY,
 } from "@/lib/offline/install-prompt";
 
+// Human revision: Chromium installs from the shortcut directly; timed
+// expansion/dismissal checks below apply to truthful iOS guidance.
 // The install UX contract (docs/design-system/pwa.md) plus the review
 // finding from the coordinator's browser pass:
 //
@@ -44,6 +46,20 @@ const IPHONE_UA =
 
 function fireInstallEvent() {
   fireEvent(window, new FakeInstallPromptEvent("beforeinstallprompt"));
+}
+
+/**
+ * CHANGED 30 October 2026 (the approved side-ribbon brief and the
+ * independent Chrome review): the ribbon now ARRIVES COLLAPSED and
+ * opens only when the person asks, so a test that wants the offer's
+ * controls opens the ribbon first — one tap on the tab, exactly as a
+ * person would.
+ */
+async function openRibbon() {
+  const tab = screen.getByRole("button", { name: /install options/i });
+  await act(async () => {
+    fireEvent.click(tab);
+  });
 }
 
 beforeEach(() => {
@@ -82,63 +98,54 @@ describe("the install affordance", () => {
     expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
   });
 
-  it("uses the browser's own install event when Chromium offers one", async () => {
+  it("uses the browser's own install event directly from the shortcut", async () => {
     vi.useFakeTimers();
     render(<InstallAffordance pathname="/owner" />);
     fireInstallEvent();
-
-    // The offer arrives after a short delay, not on the first frame.
     expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
-    await act(async () => {
-      vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
-    });
-
-    const button = screen.getByRole("button", { name: /^install aqua$/i });
-    await act(async () => {
-      fireEvent.click(button);
-    });
+    await act(async () => { vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^install aqua$/i })); });
     expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
     expect(screen.getByText(/installed/i)).toBeTruthy();
   });
 
-  it("is one compact row, not a card with a paragraph", async () => {
+  it("offers one direct shortcut without an expanded card", async () => {
     vi.useFakeTimers();
     const { container } = render(<InstallAffordance pathname="/owner" />);
     fireInstallEvent();
-    await act(async () => {
-      vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
-    });
-
-    const offer = container.querySelector('section[aria-label="Install Aqua"]');
-    expect(offer).not.toBeNull();
-    // A single row: one action and one dismissal, no paragraph of copy.
-    expect(offer?.querySelectorAll("p")).toHaveLength(0);
-    expect(screen.getAllByRole("button")).toHaveLength(2);
+    await act(async () => { vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10); });
+    expect(container.querySelector('section[aria-label="Install Aqua"]')).toBeNull();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /^install aqua$/i })).toBeTruthy();
   });
 
   it("leaves the page again on its own instead of waiting to be dismissed", async () => {
     vi.useFakeTimers();
+    setUserAgent(IPHONE_UA);
     render(<InstallAffordance pathname="/owner" />);
-    fireInstallEvent();
+
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
-    expect(screen.getByRole("button", { name: /^install aqua$/i })).toBeTruthy();
+    await openRibbon();
+    expect(screen.getByRole("button", { name: /not now/i })).toBeTruthy();
 
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_VISIBLE_MS + 10);
     });
-    expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /not now/i })).toBeNull();
   });
 
   it("does not come back in the same session", async () => {
     vi.useFakeTimers();
+    setUserAgent(IPHONE_UA);
     const first = render(<InstallAffordance pathname="/owner" />);
-    fireInstallEvent();
+
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
-    expect(screen.getByRole("button", { name: /^install aqua$/i })).toBeTruthy();
+    await openRibbon();
+    expect(screen.getByRole("button", { name: /not now/i })).toBeTruthy();
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_VISIBLE_MS + 10);
     });
@@ -147,11 +154,11 @@ describe("the install affordance", () => {
     // A later navigation fires the browser's event again (Chromium fires
     // it per page load). The offer must not ambush the person again.
     render(<InstallAffordance pathname="/owner/members" />);
-    fireInstallEvent();
+
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
-    expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /not now/i })).toBeNull();
     expect(window.sessionStorage.getItem(INSTALL_OFFER_SHOWN_KEY)).toBeTruthy();
   });
 
@@ -162,6 +169,7 @@ describe("the install affordance", () => {
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
+    await openRibbon();
 
     expect(screen.getByText(/add to home screen/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
@@ -169,22 +177,24 @@ describe("the install affordance", () => {
 
   it("does not nag again after the offer is dismissed", async () => {
     vi.useFakeTimers();
+    setUserAgent(IPHONE_UA);
     const first = render(<InstallAffordance pathname="/owner" />);
-    fireInstallEvent();
+
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
+    await openRibbon();
     fireEvent.click(screen.getByRole("button", { name: /not now/i }));
-    expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /not now/i })).toBeNull();
     expect(window.localStorage.getItem(INSTALL_DISMISSAL_KEY)).toBeTruthy();
     first.unmount();
 
     render(<InstallAffordance pathname="/owner" />);
-    fireInstallEvent();
+
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
-    expect(screen.queryByRole("button", { name: /^install aqua$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /not now/i })).toBeNull();
   });
 
   it("never appears on the sign-in surface", async () => {
@@ -225,6 +235,7 @@ describe("the install affordance", () => {
 
   it("stays out of the way of the page: no modal, no focus theft", async () => {
     vi.useFakeTimers();
+    setUserAgent(IPHONE_UA);
     render(
       <div>
         <h1>Owner home</h1>
@@ -232,11 +243,12 @@ describe("the install affordance", () => {
       </div>,
     );
     const before = document.activeElement;
-    fireInstallEvent();
+
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
-    expect(screen.getByRole("button", { name: /^install aqua$/i })).toBeTruthy();
+    await openRibbon();
+    expect(screen.getByRole("button", { name: /not now/i })).toBeTruthy();
 
     expect(document.querySelector("[role='dialog']")).toBeNull();
     expect(document.querySelector("[aria-modal='true']")).toBeNull();

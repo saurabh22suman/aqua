@@ -4,7 +4,9 @@ description: Implement or review Aqua UI with shared-shell, scrolling, component
 ---
 
 Read AGENTS.md, DESIGN.md and docs/ui-quality-contract.md. Read only relevant
-role workflows and components. Do not redesign unrelated surfaces or select a
+role workflows and components. Load aqua-product-acceptance for information
+ownership, copy and whole-journey acceptance. Its dated contract reconciles older
+contradictory compositions. Do not redesign unrelated surfaces or select a
 new visual direction without an assignment.
 
 Before editing, record intended user outcome, files/shared consumers, scroll

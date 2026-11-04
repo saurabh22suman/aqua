@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // 2026-10-05 audit FE-03 — a facility change is a server navigation.
@@ -70,11 +70,14 @@ describe("MembersBoard facility navigation (FE-03)", () => {
     );
 
     const search = screen.getByLabelText("Search members") as HTMLInputElement;
-    const status = screen.getByTestId("members-status-filter") as HTMLSelectElement;
+    const statusChip = (name: string) =>
+      within(screen.getByRole("group", { name: "Status" })).getByRole("button", {
+        name,
+      });
     fireEvent.change(search, { target: { value: "Anita" } });
-    fireEvent.change(status, { target: { value: "active" } });
+    fireEvent.click(statusChip("Active"));
     expect(search.value).toBe("Anita");
-    expect(status.value).toBe("active");
+    expect(statusChip("Active").getAttribute("aria-pressed")).toBe("true");
 
     rerender(
       <MembersBoard
@@ -86,9 +89,8 @@ describe("MembersBoard facility navigation (FE-03)", () => {
     expect((screen.getByTestId("members-search") as HTMLInputElement).value).toBe(
       "",
     );
-    expect(
-      (screen.getByTestId("members-status-filter") as HTMLSelectElement).value,
-    ).toBe("");
+    expect(statusChip("All").getAttribute("aria-pressed")).toBe("true");
+    expect(statusChip("Active").getAttribute("aria-pressed")).toBe("false");
     expect(screen.getByText("Bhav B")).toBeTruthy();
   });
 

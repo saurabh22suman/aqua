@@ -7,6 +7,7 @@ import { locations, programs, enquiries, members, batches } from "@/db/schema";
 import { sessions, attendance } from "@/db/schema/scheduling";
 import { createMember, enrolMember } from "@/lib/services/register";
 import { createBatch } from "@/lib/services/programs";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 import {
   getAttendanceReport,
   getEnquiryFunnel,
@@ -33,13 +34,16 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const SYSTEM_USER: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let programId = "";
 
 beforeAll(async () => {
+  await admin.query("insert into users (id, phone) values ($1, $2)", [
+    SYSTEM_USER, `reports-actor-${RUN}`,
+  ]);
   tenantId = asTenantId(uuidv7());
   const plan = (
     await admin.query<{ id: string }>("select id from plans where is_default = true")
@@ -82,8 +86,10 @@ afterAll(async () => {
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
+  await admin.query("delete from users where id = $1", [SYSTEM_USER]);
   await admin.end();
 });
 

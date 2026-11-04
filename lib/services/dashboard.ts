@@ -45,6 +45,21 @@ export type TodaysLane = {
   // different (and wrong) claim.
   marked: number;
   started: boolean;
+  // ── Display fields (3 November 2026, additive) ──────────────────────
+  // The Home session row shows its time, the facility it happens at and
+  // the session's own status. Every value comes from the SAME row this
+  // lane is already built from: nothing new is queried, nothing is
+  // invented, and no permission, money or lifecycle rule changes. All
+  // four are optional, so an older fixture or consumer that builds a
+  // lane without them keeps compiling and rendering exactly as before.
+  /** The start instant, ISO-encoded (`sessions.starts_at`, NOT NULL). */
+  startsAt?: string;
+  /** The end instant, ISO-encoded (`sessions.ends_at`, NOT NULL). */
+  endsAt?: string;
+  /** The session's own venue, same tenant only (null when it has none). */
+  locationName?: string | null;
+  /** The session's own `status` text column, unchanged. */
+  status?: string;
 };
 
 // The next class after now — the answer to "nothing today" that is
@@ -118,7 +133,7 @@ export type OwnerDashboardData = {
   nextClass: NextClass | null;
   // C02 — collected today / outstanding / overdue, the figures the
   // owner home now leads with (periods stated in the labels there).
-  money: OwnerMoneySummary;
+  money: OwnerMoneySummary | null;
   // W1-6 (docs/role-surfaces-plan.md) — consolidated per-facility view.
   // Wave 1 splits member-scoped data only: batches/sessions have no
   // location column yet, so attendance here is grouped by each
@@ -182,6 +197,7 @@ export async function getOwnerDashboard(
     },
   );
   const today = todayInZone(timezone);
+  const canReadFinancial = !!ctx.permissions?.has("reports.financial") && !!ctx.permissions?.has("invoices.read");
 
   // Follow-ups carry no location column and cannot be sliced per site; an
   // unrestricted caller without a facility filter still gets them, and a
@@ -196,7 +212,7 @@ export async function getOwnerDashboard(
   // here rather than inside the dashboard's own transaction below
   // (withTenant cannot nest — db/scope.ts). Cash counts carry a location,
   // so both the facility choice and the access boundary apply.
-  const reviewCashCounts = (await listCashCountsNeedingReview(ctx)).filter(
+  const reviewCashCounts = (canReadFinancial ? await listCashCountsNeedingReview(ctx) : []).filter(
     (c) =>
       (!requestedLocationId || c.locationId === requestedLocationId) &&
       locationVisible(access, c.locationId),
@@ -208,27 +224,17 @@ export async function getOwnerDashboard(
   // facility choice and the enforced access boundary flow through the
   // same resolveLocationAccess those services share with this one, so
   // these reads can only narrow — never widen — the caller's view.
-  const [dailyCollection, feesOverview] = await Promise.all([
-    getDailyCollection(
-      ctx,
-      requestedLocationId
-        ? { onDate: today, locationId: requestedLocationId }
-        : { onDate: today },
-    ),
-    getFeesOverview(
-      ctx,
-      { from: today, to: addDays(today, 1) },
-      requestedLocationId ? { locationId: requestedLocationId } : {},
-    ),
-  ]);
-  const money: Omit<OwnerMoneySummary, "oldestOverdueDays"> = {
+  const money = canReadFinancial ? await Promise.all([
+    getDailyCollection(ctx, requestedLocationId ? { onDate: today, locationId: requestedLocationId } : { onDate: today }),
+    getFeesOverview(ctx, { from: today, to: addDays(today, 1) }, requestedLocationId ? { locationId: requestedLocationId } : {}),
+  ]).then(([dailyCollection, feesOverview]) => ({
     collectedTodayPaise: dailyCollection.totalPaise,
     collectedTodayCount: dailyCollection.paymentCount,
     outstandingPaise: feesOverview.outstandingPaise,
     dueInvoiceCount: feesOverview.dueInvoiceCount,
     overduePaise: feesOverview.overduePaise,
     overdueInvoiceCount: feesOverview.overdueInvoiceCount,
-  };
+  })) : null;
 
   return withTenant(ctx.tenantId, async (tx) => {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -250,7 +256,7 @@ export async function getOwnerDashboard(
     // it beside the amount so "overdue" carries when, not just how
     // much. Same status/balance gates and location boundary as the
     // Fees hub's dues figure, so the two cannot drift.
-    const [oldestOverdue] = await tx
+    const [oldestOverdue] = money ? await tx
       .select({ dueOn: sql<string | null>`min(${invoices.dueOn})` })
       .from(invoices)
       .where(
@@ -261,11 +267,11 @@ export async function getOwnerDashboard(
           sql`${invoices.dueOn} < ${today}`,
           locationCondition(invoices.locationId),
         ),
-      );
+      ) : [];
     const oldestOverdueDays = oldestOverdue?.dueOn
       ? Math.max(0, Math.round((Date.parse(today) - Date.parse(oldestOverdue.dueOn)) / 86_400_000))
       : null;
-    const moneySummary: OwnerMoneySummary = { ...money, oldestOverdueDays };
+    const moneySummary: OwnerMoneySummary | null = money ? { ...money, oldestOverdueDays } : null;
 
     const memberOptinExists = (locationIds: string[]) =>
       exists(
@@ -343,6 +349,12 @@ export async function getOwnerDashboard(
         programName: programs.name,
         startTime: batches.startTime,
         startsAt: sessions.startsAt,
+        // Display-only: the same row carries its end instant and its own
+        // status, and the facility is the session's OWN venue, read
+        // through the tenant-scoped LEFT join below.
+        endsAt: sessions.endsAt,
+        status: sessions.status,
+        locationName: locations.name,
         capacity: batches.capacity,
         marked: sql<number>`(select count(*)::int from ${attendance} a where a.session_id = ${sessions.id})`,
         enrolled: sql<number>`(select count(distinct e.member_id)::int from ${enrolments} e where e.batch_id = ${sessions.batchId} and e.tenant_id = ${ctx.tenantId})`,
@@ -361,12 +373,31 @@ export async function getOwnerDashboard(
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
       .innerJoin(programs, eq(programs.id, batches.programId))
+      // The session's own venue, same tenant only — the same LEFT join
+      // the Calendar's session read uses. LEFT so a session with no venue
+      // keeps its row and reports NULL instead of dropping out.
+      .leftJoin(
+        locations,
+        and(
+          eq(locations.id, sessions.locationId),
+          eq(locations.tenantId, ctx.tenantId),
+        ),
+      )
       .where(
         and(
           eq(sessions.tenantId, ctx.tenantId),
           eq(sessions.sessionDate, today),
           sql`${sessions.status} <> 'cancelled'`,
-          locationCondition(batches.locationId),
+          // The session's OWN venue: the column the Calendar's session
+          // read and the coach schedule already scope by. The generator
+          // snapshots it from the batch, so a session keeps its venue
+          // when the batch's default location later changes — scoping by
+          // the batch here would show a caller a session at a location
+          // they cannot see. The caller's facility choice and the
+          // enforced access boundary still intersect through
+          // locationCondition, and a session with no venue stays visible,
+          // exactly as the shared rule does elsewhere.
+          locationCondition(sessions.locationId),
         ),
       )
       .orderBy(sessions.startsAt);
@@ -407,7 +438,14 @@ export async function getOwnerDashboard(
           eq(sessions.tenantId, ctx.tenantId),
           gte(sessions.startsAt, new Date(now)),
           sql`${sessions.status} <> 'cancelled'`,
-          locationCondition(batches.locationId),
+          // The same physical-session venue rule as today's lanes and the
+          // Calendar: the session's own venue, intersected with the
+          // caller's facility choice and access exactly as before. This
+          // read selects concrete sessions, not recurrence blueprints, so
+          // a session that kept a different venue is scoped by where it
+          // actually happens. Unassigned venues stay visible under access
+          // and are excluded by an explicit facility — the shared rule.
+          locationCondition(sessions.locationId),
         ),
       )
       .orderBy(sessions.startsAt)
@@ -458,7 +496,7 @@ export async function getOwnerDashboard(
     // until someone opened the Fees hub. The figure is the same
     // getFeesOverview the hub shows; the row states the amount and the
     // invoice count so the owner can decide, not just tally.
-    if (money.overdueInvoiceCount > 0) {
+    if (money && money.overdueInvoiceCount > 0) {
       // The row states the age as well as the amount: "overdue" is a
       // decision only when the owner knows how late it is.
       const lateAge =
@@ -510,6 +548,10 @@ export async function getOwnerDashboard(
       coachName: s.coachName,
       marked: s.marked,
       started: s.startsAt.getTime() < now,
+      startsAt: s.startsAt.toISOString(),
+      endsAt: s.endsAt.toISOString(),
+      locationName: s.locationName ?? null,
+      status: s.status,
     }));
 
     // Attendance this week: present+late over total marks in the last

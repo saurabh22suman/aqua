@@ -1,8 +1,34 @@
 # OpenCode development setup
 
+## Current task workflow — 31 October 2026
+
+The installed terminal command was verified as OpenCode **2.2.4** on 31 October;
+this is not a claim about every existing running server. No upgrade is needed
+for this task. Native V2 contracts govern new API calls. Supported V1 definitions
+are intended to remain compatible; do not rewrite the harness merely because
+the major version differs from an old example.
+
+New sessions in this local task checkout default to the verified direct
+`minimax/MiniMax-M3.1-Flash` and aqua-workhorse. This does not change global
+providers, credentials or models stored on existing sessions. Reviewers inherit
+the selected model; retain observed session-metadata proof and stop on quota.
+
+The project now supplies /aqua-task-contract and aqua-product-acceptance. Read
+docs/design-system/product-acceptance.md before UI implementation/review. One
+contract owns meaning, copy placement, device composition and required states;
+separate functional, semantic and visual decisions identify the actual artifact.
+Use short resume handoffs and relevant files rather than full-chat/repo dumps.
+
+Keep existing providers, permissions, protected files and the single heavy-job
+lock. A new session must record observed provider/model metadata; a catalog entry
+alone is not proof of usable quota or correct routing. Do not guess variants,
+silently substitute paid usage or treat a displayed cost as an allowance check.
+Project-scoped private sessions avoid reloading unrelated clients. No new
+plugin, account change, broad permission or framework migration is required.
+
 ## Active harness — OpenCode V2 (25 October 2026)
 
-OpenCode **2.1.4** is installed on this workstation. Global and project configs,
+OpenCode **2.1.4** was the verified workstation version on 25 October. Global and project configs,
 agent permissions and delegated commands use native V2 syntax. Older tooling
 notes below describe the previous verified setup where stated. V2 does not run
 LSP servers: use the project compiler/lint commands. No model is forced by this
@@ -236,3 +262,55 @@ Live HTTP probes confirmed tenant/ops login 200s and cross-host 404s on port 310
 The worker started and drained after SIGINT using app_login without a migration
 credential. The smoke server/worker and disposable test container were stopped;
 the database-only development Compose service remains available on port 55432.
+
+## Current local UI review workflow (31 October 2026)
+
+The current project default is the direct MiniMax model recorded near the top
+of this document. Runtime session metadata remains the authority on routing;
+an old terminal footer or an available model entry is insufficient evidence.
+
+For the remaining app-wide UI corrections the coordinator uses the approved
+private worker fence in two phases: tests and handoff writable with product
+source read-only for RED, then source writes reopened after the intended
+consumer failures are inspected. A missing import is test setup failure, and
+baseline-green characterization is not RED. The reviewed asset transcription
+that preceded its own tests is recorded as a method deviation in the dated
+handoff, rather than retrospectively described as TDD.
+
+Run focused checks through lane_job.py; `harness quick` means typecheck plus
+lint and `harness test <paths>` means focused tests. The coordinator owns the
+full serial suite and builds after a source freeze. Never start an unawaited
+background full suite inside a time-bounded worker call.
+
+Use a budget-verified production artifact for broad multi-role Chrome review.
+The 2GB development server can automatically restart as routes accumulate;
+an interrupted navigation is infrastructure evidence, not a visual pass.
+Preserve the heap cap and switch artifact rather than escalating to a 6GB
+heap on the memory-constrained laptop. Inspect actual component consumers:
+`type="date"` on InlineEditField already renders DateField. Keep functional,
+semantic and rendered visual acceptance separate, with affected-role coverage.
+
+Consolidate review findings before a worker starts where possible. Queue
+non-blocking copy/layout feedback for its next boundary; reserve interrupting
+steering for unsafe or unapproved work. After a bounded native call exits,
+inspect its handoff and executed results before continuing the same session.
+An idle session or exit code zero does not prove the assigned task is complete.
+
+For a read-only project-configuration check in OpenCode2, run `opencode debug config` from the assigned worktree. Record only the selected model/agent and source paths; configuration documents may contain private values. A global API discovery result alone does not establish the project configuration.
+
+### Verification and fixture separation
+
+The complete regression suite and browser previews need separate disposable
+database profiles. Preview seeding reserves demo tenant slugs that some
+integration fixtures deliberately create themselves. A collision is a harness
+isolation failure; preserve the preview records and run those tests in the
+separate regression database. E2Es that explicitly require a seeded member use
+the preview profile. Both profiles retain the local `app_login` runtime guard,
+matching migration target and private ignored environment file.
+
+Shared-control review must exercise nested menus, selected options that need
+scrolling, focus restoration, real filter navigation and narrow/short viewports.
+A closed-control screenshot or JSX class assertion cannot establish those
+behaviors. Keep actual production Chrome failures open even if focused tests
+are green. Document new modules in component-usage.md and run the vocabulary
+check after changing product wording; preserve protected tests.
