@@ -355,6 +355,10 @@ const ALLOWLIST = new Set([
   "tests/owner-openpen-20261029/scheduling/mobile/calendar-companion-rendered.ts",
   "tests/staging-blockers-20261029/d-workflows/tenant-profile-currency-inr.test.ts",
   "tests/staging-blockers-20261029/e-jobs-privacy/invitation-notification-result.test.ts",
+  // Owner release: privileged setup/assertions in disposable test fixtures only;
+  // application actions/services still execute through the restricted app role.
+  "tests/owner-release-20261104/cafe-entitlement.test.ts",
+  "tests/owner-light-20261102/operations/home-session-display-data.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {
