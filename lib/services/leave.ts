@@ -2,6 +2,7 @@ import { and, between, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { leaveRequests, leaveTypes } from "@/db/schema/leave";
+import { staff } from "@/db/schema/staff";
 import { writeAudit } from "@/lib/audit/write";
 import { ownStaffIdInTx } from "@/lib/services/staff-self";
 import {
@@ -76,6 +77,22 @@ export async function requestLeave(
     if (!type) return { ok: false, error: "Leave type not found." };
 
     if (type.annualQuota !== null) {
+      // The quota check and the insert must not interleave: two
+      // concurrent requests would read the same balance, both pass and
+      // both insert. The lock is on the STAFF row — a stable parent
+      // that always exists for the caller; the leave rows themselves
+      // cannot be locked when the member has none yet.
+      await tx
+        .select({ id: staff.id })
+        .from(staff)
+        .where(
+          and(
+            eq(staff.id, staffId),
+            eq(staff.tenantId, ctx.tenantId),
+          ),
+        )
+        .for("update");
+
       const balances = await balancesInTx(tx, ctx.tenantId, staffId, year);
       const balance = balances.find((b) => b.leaveTypeId === type.id);
       const available = balance?.availableDays ?? type.annualQuota;

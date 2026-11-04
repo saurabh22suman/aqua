@@ -19,6 +19,7 @@ import {
   type TransitionResult,
 } from "@/db/platform-tenant-status";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
 import { asUserId, asTenantId } from "@/lib/ids";
 
@@ -69,6 +70,7 @@ export async function createTenantAction(
     presetKey: String(formData.get("presetKey") ?? "").trim(),
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("tenant.create", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -83,6 +85,7 @@ export async function createTenantAction(
   // (2) permission check — platform session, fully past 2FA.
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tenant.create", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -101,9 +104,14 @@ export async function createTenantAction(
       detail: { slug: normalised.slug },
     },
     () => createTenant(normalised, { actorId: asUserId(status.userId) }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tenant.create", error);
+    throw error;
+  });
   if (result.kind === "ok") {
     redirect(`/ops/tenants/${result.tenantId}`);
+  } else {
+    await recordOpsMutationTrace("tenant.create", "error");
   }
   return result;
 }
@@ -123,6 +131,47 @@ const transitionFormInputSchema = z.object({
 
 export type TransitionFormInput = z.input<typeof transitionFormInputSchema>;
 
+// The trace name follows the transition the operator asked for. Each
+// branch calls the boundary with a LITERAL operation name: a computed
+// name would be a name no coverage check can prove, and the registry
+// (lib/auth/ops-operation.ts) is the contract for these operations.
+//
+// The parse-failure branch above keeps the documented family default
+// (tenant.activate), because a malformed request names no transition.
+async function traceTransition(
+  outcome: "invalid" | "denied" | "error",
+  targetStatus: "active" | "suspended" | "churned",
+  tenantId?: string,
+): Promise<void> {
+  if (targetStatus === "suspended") {
+    await recordOpsMutationTrace("tenant.suspend", outcome, { tenantId });
+    return;
+  }
+  if (targetStatus === "churned") {
+    await recordOpsMutationTrace("tenant.churn", outcome, { tenantId });
+    return;
+  }
+  await recordOpsMutationTrace("tenant.activate", outcome, { tenantId });
+}
+
+// The THROWN-failure twin of traceTransition. The original error is
+// rethrown by the caller; this only records how the call ended.
+async function traceThrownTransition(
+  error: unknown,
+  targetStatus: "active" | "suspended" | "churned",
+  tenantId?: string,
+): Promise<void> {
+  if (targetStatus === "suspended") {
+    await recordOpsThrownFailure("tenant.suspend", error, { tenantId });
+    return;
+  }
+  if (targetStatus === "churned") {
+    await recordOpsThrownFailure("tenant.churn", error, { tenantId });
+    return;
+  }
+  await recordOpsThrownFailure("tenant.activate", error, { tenantId });
+}
+
 export async function transitionTenantStatusAction(
   tenantId: string,
   input: unknown,
@@ -130,12 +179,15 @@ export async function transitionTenantStatusAction(
   // (1) parse
   const surface = transitionFormInputSchema.safeParse(input);
   if (!surface.success) {
+    await recordOpsMutationTrace("tenant.activate", "invalid");
     return {
       kind: "error",
       code: "invalid",
       message: surface.error.issues[0]?.message ?? "Invalid input.",
     };
   }
+  // Traces follow the parsed target; the parse-failure branch above keeps
+  // the documented family default (tenant.activate).
   const normalised: z.input<typeof transitionInput> = {
     targetStatus: surface.data.targetStatus,
     reason: surface.data.reason?.trim() || undefined,
@@ -144,6 +196,7 @@ export async function transitionTenantStatusAction(
   // (2) permission check — same shape as createTenant.
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await traceTransition("denied", surface.data.targetStatus, tenantId);
     return {
       kind: "error",
       code: "invalid",
@@ -174,9 +227,15 @@ export async function transitionTenantStatusAction(
       transitionTenantStatus(asTenantId(tenantId), normalised, {
         actorId: asUserId(status.userId),
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await traceThrownTransition(error, surface.data.targetStatus, tenantId);
+    throw error;
+  });
   if (result.kind === "ok") {
     revalidatePath(`/ops/tenants/${tenantId}`);
+  }
+  if (result.kind !== "ok") {
+    await traceTransition("error", surface.data.targetStatus, tenantId);
   }
   return result;
 }

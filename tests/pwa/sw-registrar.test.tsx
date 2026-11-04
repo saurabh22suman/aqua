@@ -115,6 +115,7 @@ describe("the service worker registrar", () => {
     await act(async () => {
       vi.advanceTimersByTime(INSTALL_OFFER_DELAY_MS + 10);
     });
+    // Human revision: the native install action is the side shortcut itself.
     expect(screen.getByRole("button", { name: /^install aqua$/i })).toBeTruthy();
 
     // …and when the connection drops, the page says so.

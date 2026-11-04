@@ -100,10 +100,18 @@ describe("owner shell — the header", () => {
     const bar = screen.getByTestId("owner-top-bar");
     expect(bar.className).toContain("sticky");
     expect(bar.className).toContain("top-0");
-    // Compact: shorter than the previous 64px row.
-    expect(bar.className).toContain("min-h-14");
-    // The record search is still the header's job.
-    expect(within(bar).getByTestId("global-search-input")).toBeTruthy();
+    // Compact: the approved rows are 52px on a phone and 62px on a
+    // desktop (measured in Chrome). The earlier 56px phone row and the
+    // 64px row before it are superseded.
+    expect(bar.className).toContain("min-h-[52px]");
+    expect(bar.className).toContain("lg:min-h-[62px]");
+    // The DESKTOP record search is the header's job; the phone's lives
+    // in the More panel, so the header row keeps room for the club
+    // identity, the facility in scope and the account.
+    expect(within(bar).getAllByTestId("global-search-input")).toHaveLength(1);
+    // Both instances stay mounted — the phone search is still there,
+    // reachable from More, and no query or result state is lost.
+    expect(screen.getAllByTestId("global-search-input")).toHaveLength(2);
     // And the owner can see where they are.
     expect(within(bar).getByTestId("owner-shell-crumb")).toBeTruthy();
   });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Phase 1b (mobile UX plan v2) — EmptyState wired into the four
@@ -69,7 +69,15 @@ describe("EmptyState wiring", () => {
   it("members board with no members shows the designed empty state", () => {
     render(<MembersBoard initialMembers={[]} />);
     expect(screen.getByText("No members yet.")).toBeTruthy();
-    expect(screen.getByText("Add your first member").closest("a")).not.toBeNull();
+    // The empty state EXPLAINS; it does not carry a second create
+    // action. The directory has ONE create affordance — the contextual
+    // action in the page header — so the list must not repeat it
+    // (owner-light-20261102/people/contextual-plus.test.tsx pins that
+    // the empty list adds no link).
+    expect(screen.getByText(/Add your first member to start building the roster/i)).toBeTruthy();
+    expect(
+      within(screen.getByTestId("members-list")).queryAllByRole("link"),
+    ).toHaveLength(0);
   });
 
   it("register with zero enrolled shows the empty state and a route back", () => {

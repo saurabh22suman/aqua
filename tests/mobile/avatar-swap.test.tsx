@@ -51,13 +51,34 @@ describe("U-09 avatar swap", () => {
 
     render(<StaffBoard rows={rows} />);
 
-    const avatars = document.querySelectorAll('[data-testid="person-avatar"]');
-    expect(avatars).toHaveLength(2);
+    // StaffBoard deliberately renders two responsive surfaces: an aligned
+    // desktop table (hidden below md) and an identity-first phone list
+    // (hidden from md). CSS exposes exactly one at a time, so the obsolete
+    // whole-DOM count of 2 saw the same two people twice. Assert each
+    // surface separately and keep the seed (not name) contract.
+    const table = screen.getByRole("table", { name: "Team directory" });
+    const phoneList = screen.getByTestId("staff-list").querySelector("ul");
+    expect(phoneList).not.toBeNull();
+
+    for (const surface of [table, phoneList as HTMLElement]) {
+      const avatars = surface.querySelectorAll(
+        '[data-testid="person-avatar"]',
+      );
+      expect(avatars).toHaveLength(2);
+      for (const avatar of Array.from(avatars)) {
+        expect(avatar.getAttribute("data-avatar-seed")).toBeTruthy();
+      }
+    }
+
     expect(
-      document.querySelector('[data-avatar-seed="person-1"]'),
-      "the seed must be the stable person id",
-    ).toBeTruthy();
-    expect(document.querySelector('[data-avatar-seed="person-2"]')).toBeTruthy();
+      document.querySelectorAll('[data-avatar-seed="person-1"]'),
+      "the seed must be the stable person id on both responsive surfaces",
+    ).toHaveLength(2);
+    expect(
+      document.querySelectorAll('[data-avatar-seed="person-2"]'),
+    ).toHaveLength(2);
+    expect(screen.getAllByText("Asha Rao").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Vikram Nair").length).toBeGreaterThan(0);
   });
 
   it("coach members list renders an avatar seeded by memberId per row", () => {

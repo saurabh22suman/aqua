@@ -37,6 +37,12 @@ remedy, followed by missing evidence. Do not edit or run commands.
 
 ## Shared UI acceptance gate
 
+Load aqua-product-acceptance. Review heading/content ownership, duplicate facts,
+scope/comparison copy, default/detail hierarchy, truthful terminology and
+task-specific icon/density treatment for every affected consumer. Distinguish
+functional, semantic and visual evidence; reject attendance in Money even when
+tests and geometry pass. Do not infer whole-app acceptance from Owner/Ops.
+
 Load aqua-ui-quality and read docs/ui-quality-contract.md. For shell changes,
 require long Members top/middle/bottom scrolling, short desktop and breakpoint
 checks, independent sidebar overflow, sticky-header/focus clearance and route

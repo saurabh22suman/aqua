@@ -83,7 +83,7 @@ function attentionItem(index: number) {
 afterEach(cleanup);
 
 describe("owner Home — the dominant shortcut", () => {
-  it("collects payment as the single primary action, into the real journey", () => {
+  it("offers recording payment in the daily actions into the real journey", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -92,15 +92,21 @@ describe("owner Home — the dominant shortcut", () => {
         can={ALL_CAN}
       />,
     );
-    const collect = screen.getByRole("link", { name: /collect payment/i });
+    const collect = screen.getByRole("link", { name: /record payment/i });
     // The Dues list is where an invoice is opened and the payment is
     // recorded — not the transactions history.
-    expect(collect.getAttribute("href")).toBe("/owner/fees?tab=dues");
-    expect(collect.className).toContain("bg-[var(--accent-strong)]");
-    // Secondary actions are quiet links, not competing filled buttons.
-    const add = screen.getByRole("link", { name: /add member/i });
-    expect(add.className).not.toContain("bg-[var(--accent-strong)]");
-    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+    expect(collect.getAttribute("href")).toBe("/owner/fees?tab=dues&facility=all");
+    // The shared Owner glyph: the approved mock's own outline "money"
+    // path at 16px (the shared OwnerIcon, foundation-owned).
+    const glyph = collect.querySelector("svg");
+    expect(glyph?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(glyph?.getAttribute("stroke-width")).toBe("1.8");
+    expect(glyph?.getAttribute("width")).toBe("16");
+    expect(glyph?.querySelector("path")?.getAttribute("d")).toBe("M3.5 10.5h17");
+    // The accepted Home has one contextual action; Add member and
+    // Capture enquiry left Home with the Quick actions box.
+    expect(screen.queryByRole("link", { name: /add member/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^enquiry$/i })).toBeNull();
   });
 
   it("never offers an action the caller cannot perform", () => {
@@ -118,9 +124,9 @@ describe("owner Home — the dominant shortcut", () => {
         }}
       />,
     );
-    expect(screen.queryByRole("link", { name: /collect payment/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /add member/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /record payment/i })).toBeNull();
+    // The collected-today drill-down still follows the fees read grant.
+    expect(screen.getByRole("link", { name: /collected today/i })).toBeTruthy();
   });
 
   it("offers no actions when the caller holds none of them", () => {
@@ -138,14 +144,14 @@ describe("owner Home — the dominant shortcut", () => {
         }}
       />,
     );
-    expect(screen.queryByRole("link", { name: /collect payment/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /record payment/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /add member/i })).toBeNull();
-    expect(screen.queryByRole("link", { name: /capture enquiry/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^enquiry$/i })).toBeNull();
   });
 });
 
 describe("owner Home — the summary row", () => {
-  it("states each figure's basis and keeps the period on its drill-down", () => {
+  it("states each figure's basis and keeps the facility on the collection drill-down", () => {
     render(
       <OwnerDashboard
         data={dashboard({
@@ -169,21 +175,21 @@ describe("owner Home — the summary row", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Collected today");
-    expect(text).toContain("Overdue");
+    expect(text).toContain("Today");
     // Indian grouping without immaterial ".00" (DESIGN.md §4).
     expect(text).toContain("₹3,000");
     expect(text).not.toContain("₹3,000.00");
-    // The overdue tile states the count, the oldest age and the
-    // outstanding (current) balance.
-    expect(text).toContain("19 invoices past due");
-    expect(text).toContain("₹1,05,000 outstanding");
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("₹3,000");
+    expect(money.textContent).not.toContain("₹1,05,000");
+    expect(money.textContent).not.toContain("₹57,000");
 
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    // Today's collection drills into today's transactions, with the
-    // facility scope preserved.
+    // The collected-today figure keeps its existing day-level ledger
+    // drilldown, with the exact today range and facility scope. The one
+    // dominant collection action still goes to Dues.
     expect(hrefs).toContain(
       "/owner/fees?tab=transactions&from=2026-10-25&to=2026-10-26&facility=loc-1",
     );
@@ -200,9 +206,11 @@ describe("owner Home — the summary row", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("No payments recorded today yet");
-    expect(text).toContain("Nothing past due");
-    expect(text).toContain("₹0 outstanding");
+    // The manual provenance of a collection is not a Home badge: the
+    // truthful confirmation detail belongs to the payment flow.
+    expect(text).not.toMatch(/manually recorded/i);
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("₹0");
   });
 });
 
@@ -232,7 +240,11 @@ describe("owner Home — the attention queue", () => {
         terminology={TERMINOLOGY}
       />,
     );
-    expect(document.body.textContent).toContain("Nothing needs attention right now.");
+    const text = document.body.textContent ?? "";
+    // ONE truthful message about the empty queue. The panel used to
+    // print two differently-worded copies of the same fact.
+    expect(text).not.toContain("Nothing needs your attention today");
+    expect(text).not.toContain("Nothing needs attention right now.");
   });
 });
 
@@ -258,11 +270,12 @@ describe("owner Home — a quiet day", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Nothing scheduled today");
-    expect(text).toContain("Evening Squad");
+    expect(text).toContain("Next: Evening Squad");
     expect(text).toContain("6:00 pm");
     expect(text).toContain("Imran Sheikh");
-    expect(text).toContain("4 of 12 enrolled");
+    // The approved next-class line carries the real class, time and coach;
+    // it does not reprint a capacity phrase.
+    expect(text).not.toContain("4 of 12 enrolled");
   });
 
   it("says when there is nothing booked ahead either", () => {
@@ -320,12 +333,15 @@ describe("owner Home — today's classes", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Morning Squad");
     expect(text).toContain("Imran Sheikh");
-    expect(text).toContain("Register complete — 12 of 12 marked");
-    expect(text).toContain("Register not started");
-    expect(text).toContain("no coach assigned");
-    expect(text).toContain("9 of 12 marked across 2 sessions");
-    // Completion is never dressed up as attendance.
-    expect(text.toLowerCase()).not.toContain("attendance — 12");
+    // The row states the CLOCK state. Register completion is no longer
+    // recast on the row, and it is never attendance.
+    const pills = screen
+      .getByTestId("owner-home-today")
+      .querySelectorAll('[data-testid="session-state-pill"]');
+    expect(pills).toHaveLength(2);
+    expect(text).not.toMatch(/Register (complete|not started|in progress)/i);
+    expect(text).not.toMatch(/marked across/i);
+    expect(text.toLowerCase()).not.toContain("attendance");
   });
 });
 
@@ -352,7 +368,7 @@ describe("retention card — honest states", () => {
     expect(text).not.toContain("at risk");
   });
 
-  it("reports the eligible cohort when the history supports it", () => {
+  it("reports the members without records when the history supports it", () => {
     render(
       <RetentionCard
         report={{
@@ -370,8 +386,8 @@ describe("retention card — honest states", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("swimmers at risk");
-    expect(text).toContain("Eligible swimmers");
+    expect(text).toContain("swimmers with no attendance records");
+    expect(text).toContain("swimmers active for the period");
     expect(text).not.toContain("Not enough attendance history");
   });
 });

@@ -169,44 +169,37 @@ describe("mock access — the gate scan", () => {
         userId: asUserId(fx.ids.staffUserId),
         permissions: new Set(["settings.manage"]),
       };
-      const issued = await fx.services.credentials.issueGateCredential(owner, {
-        memberId: fx.ids.memberNothing,
-        kind: "rfid",
-        secret: "TAG-FACILITY-BOOKED",
-      });
-      expect(issued.ok).toBe(true);
-      await fx.admin.query(
-        `insert into bookings
-           (id, tenant_id, location_id, facility_id, member_id, starts_at, ends_at, status, price_paise)
-         values ($1, $2, $3, $4, $5, '2026-10-26T09:00:00.000Z', '2026-10-26T11:00:00.000Z', 'confirmed', 0)`,
-        [
-          uuidv7(),
-          fx.ids.tenantId,
-          fx.ids.locationId,
-          fx.ids.courtFacilityId,
-          fx.ids.memberNothing,
-        ],
-      );
+      const bookingId = uuidv7();
+      let credentialId: string | undefined;
+      try {
+        const issued = await fx.services.credentials.issueGateCredential(owner, {
+          memberId: fx.ids.memberNothing,
+          kind: "rfid",
+          secret: "TAG-FACILITY-BOOKED",
+        });
+        expect(issued.ok).toBe(true);
+        if (!issued.ok) return;
+        credentialId = issued.credentialId;
+        await fx.admin.query(
+          `insert into bookings
+             (id, tenant_id, location_id, facility_id, member_id, starts_at, ends_at, status, price_paise)
+           values ($1, $2, $3, $4, $5, '2026-10-26T11:00:00.000Z', '2026-10-26T12:00:00.000Z', 'confirmed', 0)`,
+          [bookingId, fx.ids.tenantId, fx.ids.locationId, fx.ids.courtFacilityId, fx.ids.memberNothing],
+        );
 
-      const outcome = await scan({
-        deviceKey: "court1",
-        secret: "TAG-FACILITY-BOOKED",
-      });
-      expect(outcome.decision).toBe("granted");
-      expect(outcome.reasonCode).toBe("granted_booking");
-
-      // Leave the rest of the suite the academy it found.
-      await fx.admin.query(
-        "delete from bookings where member_id = $1 and sub_unit_id is null",
-        [fx.ids.memberNothing],
-      );
-      await fx.admin.query(
-        "delete from gate_credentials where member_id = $1 and kind = 'rfid' and secret_hash = $2",
-        [
-          fx.ids.memberNothing,
-          expectedDigest(fx.ids.tenantId, "rfid", "TAG-FACILITY-BOOKED"),
-        ],
-      );
+        const outcome = await scan({
+          deviceKey: "court1",
+          secret: "TAG-FACILITY-BOOKED",
+          now: new Date("2026-10-26T11:30:00.000Z"),
+        });
+        expect(outcome.decision).toBe("granted");
+        expect(outcome.reasonCode).toBe("granted_booking");
+      } finally {
+        await fx.admin.query("delete from bookings where tenant_id=$1 and id=$2", [fx.ids.tenantId, bookingId]);
+        if (credentialId) {
+          await fx.admin.query("delete from gate_credentials where tenant_id=$1 and id=$2", [fx.ids.tenantId, credentialId]);
+        }
+      }
     });
 
     it("denies a member whose membership has lapsed", async () => {

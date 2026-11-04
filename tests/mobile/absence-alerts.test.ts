@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   PostgreSqlContainer,
   type StartedPostgreSqlContainer,
@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { asTenantId, asUserId } from "@/lib/ids";
-import { addDays, todayInZone } from "@/lib/time/tz";
+import { addDays } from "@/lib/time/tz";
 import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // R.8 (docs/five-day-work-guide.md, V-20) — absence alerts.
@@ -41,7 +41,8 @@ const memberB = uuidv7();
 const TZ = "Asia/Kolkata";
 
 const ctx = { tenantId, userId };
-const today = todayInZone(TZ);
+const today = "2026-10-25";
+const fixedNow = Date.parse("2026-10-25T06:00:00Z");
 const day = (n: number) => addDays(today, -n);
 
 beforeAll(async () => {
@@ -118,9 +119,11 @@ beforeAll(async () => {
       );
     }
   }
+  vi.spyOn(Date, "now").mockReturnValue(fixedNow);
 }, 240_000);
 
 afterAll(async () => {
+  vi.restoreAllMocks();
   if (admin) {
     await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from absence_alerts where tenant_id = $1::uuid", [tenantId]);
@@ -164,6 +167,36 @@ describe("detection and dedupe (R.8)", () => {
 
     const forB = await alerts.listMemberAlerts(ctx, memberB);
     expect(forB.map((a) => a.alertKind)).toEqual(["low_monthly_attendance"]);
+  });
+
+  it("does not count previous-month marks toward this month's minimum", async () => {
+    vi.mocked(Date.now).mockReturnValue(Date.parse("2026-11-01T06:00:00Z"));
+    try {
+      const currentWeek = alerts.isoWeekKey("2026-11-01");
+      expect(alerts.isoWeekKey(today)).not.toBe(currentWeek);
+      const marks = await admin.query<{ member_id: string; in_lookback: number; in_november: number }>(
+        `select a.member_id,
+          count(*) filter (where s.session_date between '2026-10-18' and '2026-11-01')::int as in_lookback,
+          count(*) filter (where s.session_date between '2026-11-01' and '2026-11-30')::int as in_november
+         from attendance a join sessions s on s.id = a.session_id and s.tenant_id = a.tenant_id
+         where a.tenant_id = $1 and a.member_id = any($2::uuid[])
+         group by a.member_id`,
+        [tenantId, [memberA, memberB]],
+      );
+      expect(marks.rows).toHaveLength(2);
+      for (const row of marks.rows) {
+        expect(row.in_lookback).toBe(4);
+        expect(row.in_november).toBe(0);
+      }
+      await alerts.detectAbsenceAlerts(ctx);
+      const result = await admin.query(
+        "select id from absence_alerts where tenant_id=$1 and alert_kind='low_monthly_attendance' and calendar_week=$2",
+        [tenantId, currentWeek],
+      );
+      expect(result.rowCount).toBe(0);
+    } finally {
+      vi.mocked(Date.now).mockReturnValue(fixedNow);
+    }
   });
 
   it("respects a lowered threshold", async () => {

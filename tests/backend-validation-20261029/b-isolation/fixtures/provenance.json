@@ -1,0 +1,39 @@
+{
+  "purpose": "Portable, SHA-pinned source snapshots for tests/backend-validation-20261029/b-isolation/b-05-scanner-exemption-staleness.test.ts. These are DATA (.ts.txt), never compiled, linted or executed as repository code. The test resolves them relative to its own directory via import.meta.url, so it does not depend on docs/ or the process cwd.",
+  "baseRevision": "239357fe8347c110b1e4540f70b002c9793911d1",
+  "files": [
+    {
+      "fixture": "owner-analytics.scoped.ts.txt",
+      "sourcePath": "lib/services/owner-analytics.ts",
+      "variant": "lane C location-scoped version",
+      "sha256": "cfffbb2f1b9fb08431bb0c66a62a1379b1854c37dcb0e964f178a206ee2dc722",
+      "provenance": "coordinator-provided snapshot under docs/audits/backend-validation-20261029/b-isolation/context/c-scoped-reports/ (manifest.json sha256 matches this file byte-for-byte); copied verbatim",
+      "expectation": "scanner violation = false (uses the location-access helper)"
+    },
+    {
+      "fixture": "owner-reports.scoped.ts.txt",
+      "sourcePath": "lib/services/owner-reports.ts",
+      "variant": "lane C location-scoped version",
+      "sha256": "2aab7bc25e92250a8e1df43fe214dbbeb3b28dc7a8e4100a1ac2eb0b3b2e277e",
+      "provenance": "coordinator-provided snapshot under docs/audits/backend-validation-20261029/b-isolation/context/c-scoped-reports/ (manifest.json sha256 matches this file byte-for-byte); copied verbatim",
+      "expectation": "scanner violation = false (uses the location-access helper)"
+    },
+    {
+      "fixture": "owner-analytics.base-239357f.ts.txt",
+      "sourcePath": "lib/services/owner-analytics.ts",
+      "variant": "recorded unmodified base 239357f (pre-lane-C)",
+      "sha256": "24c4d61996c3de65b67fc09770c33469c86a156b2d53daf33b214279a626d9c6",
+      "provenance": "byte-identical copy of this worktree's lib/services/owner-analytics.ts, confirmed unmodified by git status against base 239357fe8347c110b1e4540f70b002c9793911d1",
+      "expectation": "scanner violation = true (queries members/sessions without the helper)"
+    },
+    {
+      "fixture": "owner-reports.base-239357f.ts.txt",
+      "sourcePath": "lib/services/owner-reports.ts",
+      "variant": "recorded unmodified base 239357f (pre-lane-C)",
+      "sha256": "0538740dc76b7220321c8e9fd23cc11c8e6476d98012d206e0ea40928f9e2236",
+      "provenance": "byte-identical copy of this worktree's lib/services/owner-reports.ts, confirmed unmodified by git status against base 239357fe8347c110b1e4540f70b002c9793911d1",
+      "expectation": "scanner violation = true (queries members/sessions/attendance without the helper)"
+    }
+  ],
+  "note": "The two scoped fixtures are what the combined tree will contain after lane C's fix is integrated. The two base fixtures are the recorded pre-integration state, so the scanner's detection ability is asserted against a FIXED, recorded input rather than against whatever the current working tree happens to contain."
+}

@@ -155,7 +155,7 @@ describe("review resource and roster closure", () => {
     await admin.query("update members set status='left' where id=$1", [memberB]);
     await admin.query("delete from attendance where member_id=$1", [memberA]);
     // The inactive member has a recent mark; the sole active member has none.
-    await admin.query("update sessions set session_date=current_date where id=$1", [sessionB]);
+    await admin.query("update sessions set session_date=current_date, starts_at=now() - interval '1 day', ends_at=now() - interval '1 day' + interval '1 hour' where id=$1", [sessionB]);
     // A risk claim needs the member to have been around for the whole
     // window (owner UX audit 2026-10-24): someone who joined inside
     // the window had no chance to attend the sessions before they

@@ -49,6 +49,7 @@ const ALL_CAN = {
   captureEnquiry: true,
   readFees: true,
   viewSchedule: true,
+  viewTrend: true,
 };
 
 function dashboard(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardData {
@@ -110,8 +111,10 @@ describe("owner Home — the screen opens with the real context", () => {
     const text = context.textContent ?? "";
     // The real date, the real club and the real location scope.
     expect(text).toContain("Sun, 25 Oct 2026");
-    expect(text).toContain("Splash Sports Club");
-    expect(text).toContain("Splash Pool");
+    expect(text).toMatch(/Good (morning|afternoon|evening)|Hello/);
+    // The facility in scope is the header switcher's job; the date line
+    // does not repeat it.
+    expect(text).not.toContain("Splash Pool");
   });
 
   it("puts a small piece of club artwork beside the heading", () => {
@@ -123,44 +126,27 @@ describe("owner Home — the screen opens with the real context", () => {
         can={ALL_CAN}
       />,
     );
-    const art = screen.getByTestId("owner-home-illustration");
-    expect(art.querySelector("svg")).toBeTruthy();
+    expect(screen.queryByTestId("owner-home-illustration")).toBeNull();
+    expect(screen.getByTestId("owner-home-money-surface").querySelector("[data-owner-artwork]")).toBeTruthy();
   });
 });
 
 describe("owner Home — the figures", () => {
-  it("leads with the day's money and keeps the member and session counts", () => {
-    render(
-      <OwnerDashboard
-        data={dashboard()}
-        branding={BRANDING}
-        terminology={TERMINOLOGY}
-        can={ALL_CAN}
-      />,
-    );
-    const cards = screen.getAllByTestId("stat-card");
-    expect(cards).toHaveLength(4);
-    expect(within(cards[0]!).getByText("Collected today")).toBeTruthy();
-    expect(within(cards[1]!).getByText("Overdue")).toBeTruthy();
-    expect(within(cards[2]!).getByText(/Active members/)).toBeTruthy();
-    expect(within(cards[3]!).getByText(/Sessions today/)).toBeTruthy();
+  // Current balances belong on Fees; Home owns the real daily collection.
+  it("leads with the real collection without repeating balance or operational data", () => {
+    render(<OwnerDashboard data={dashboard()} branding={BRANDING} terminology={TERMINOLOGY} can={ALL_CAN} />);
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("₹18,400");
+    expect(money.textContent).not.toContain("₹4,200");
+    expect(money.textContent).not.toContain("active members");
+    expect(screen.getByTestId("owner-home-today")).toBeTruthy();
+  });
+  it("keeps the sessions context without a duplicate phone summary", () => {
+    render(<OwnerDashboard data={dashboard()} branding={BRANDING} terminology={TERMINOLOGY} can={ALL_CAN} />);
+    expect(screen.getByTestId("owner-home-today").textContent).toContain("Nothing scheduled today");
+    expect(screen.queryByTestId("owner-home-compact-summary")).toBeNull();
   });
 
-  it("gives a phone the two money figures and a compact real summary", () => {
-    render(
-      <OwnerDashboard
-        data={dashboard()}
-        branding={BRANDING}
-        terminology={TERMINOLOGY}
-        can={ALL_CAN}
-      />,
-    );
-    const summary = screen.getByTestId("owner-home-compact-summary");
-    const text = summary.textContent ?? "";
-    // Real numbers, not a placeholder.
-    expect(text).toContain("128");
-    expect(text).toContain("6");
-  });
 });
 
 describe("owner Home — the actions", () => {
@@ -173,15 +159,34 @@ describe("owner Home — the actions", () => {
         can={ALL_CAN}
       />,
     );
-    const collect = screen.getByRole("link", { name: /collect payment/i });
-    expect(collect.className).toContain("bg-[var(--accent-strong)]");
-    const add = screen.getByRole("link", { name: /add member/i });
-    expect(add.className).not.toContain("bg-[var(--accent-strong)]");
-    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+    const collect = screen.getByRole("link", { name: /record payment/i });
+    // The shared Owner glyph (foundation): the approved mock's own
+    // outline "money" path at 16px.
+    const glyph = collect.querySelector("svg");
+    expect(glyph?.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(glyph?.getAttribute("stroke-width")).toBe("1.8");
+    expect(glyph?.getAttribute("width")).toBe("16");
+    expect(glyph?.querySelector("path")?.getAttribute("d")).toBe("M3.5 10.5h17");
+    // The trend link is the quiet secondary action, and the Quick
+    // actions box (Add member / Capture enquiry) left Home.
+    expect(screen.getByRole("link", { name: /view trend/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /add member/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^enquiry$/i })).toBeNull();
   });
 });
 
 describe("owner Home — today's sessions", () => {
+  it.each([
+    [4, "session", "sessions", "1 more session"],
+    [5, "session", "sessions", "2 more sessions"],
+    [4, "class", "classes", "1 more class"],
+    [5, "class", "classes", "2 more classes"],
+  ])("uses the correct resolved session noun for %i total sessions", (count, one, other, expected) => {
+    const terminology = { locale: "en" as const, overrides: { session: { en: { one, other } } } };
+    const todaysLanes = Array.from({ length: count }, (_, index) => lane({ sessionId: `s${index}`, batchId: `b${index}` }));
+    render(<OwnerDashboard data={dashboard({ todaysLanes })} branding={BRANDING} terminology={terminology} can={ALL_CAN} />);
+    expect(screen.getByTestId("owner-home-today-more").querySelector("summary")?.textContent).toMatch(new RegExp(`^${expected}(?:\\s|$)`));
+  });
   it("states the real occupancy and a truthful next marker", () => {
     render(
       <OwnerDashboard
@@ -206,14 +211,14 @@ describe("owner Home — today's sessions", () => {
     );
     const timeline = screen.getByTestId("owner-home-today");
     const text = timeline.textContent ?? "";
-    // The real fraction of places taken.
-    expect(text).toContain("14");
-    expect(text).toContain("16");
-    // Register completion, not attendance.
-    expect(text).toContain("Register complete — 14 of 14 marked");
-    // The next session is marked as the next one — not the finished one.
-    const next = within(timeline).getByTestId("owner-home-next-session");
-    expect(next.textContent).toContain("Evening Squad");
+    // The approved row states a truthful CLOCK state, not a capacity bar
+    // and not a register count recast as progress.
+    expect(text).not.toMatch(/14\s*\/\s*16/);
+    expect(text).not.toMatch(/Register (complete|not started|in progress)/i);
+    expect(
+      timeline.querySelectorAll('[data-testid="session-state-pill"]').length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(text).toContain("Evening Squad");
   });
 });
 
@@ -236,9 +241,12 @@ describe("owner Home — the attention queue", () => {
     );
     const queue = screen.getByTestId("owner-home-attention");
     const text = queue.textContent ?? "";
-    // The money-late item is never the one hidden behind a disclosure.
-    expect(text).toContain("Overdue fees");
-    // And the real total is stated.
-    expect(within(queue).getByTestId("count-chip").textContent).toContain("4");
+    // Overdue balances are owned by Fees; operational exceptions stay reachable.
+    expect(text).not.toContain("Overdue fees");
+    expect(text).toContain("Cash count needs review");
+    expect(text).toContain("Follow-up overdue");
+    expect(text).toContain("Register not started");
+    expect(within(queue).getByTestId("count-chip").textContent).toContain("3");
+    expect(screen.getByRole("link", { name: /record payment/i }).getAttribute("href")).toContain("tab=dues");
   });
 });

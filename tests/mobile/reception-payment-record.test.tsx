@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+
+vi.stubGlobal("crypto", { randomUUID });
 
 // PR2-C3 — the reception payment screen must RECORD a counter payment,
 // not just display a QR: search a member, pick an open invoice, take
@@ -20,6 +23,35 @@ vi.mock("@/lib/actions/invoices", () => ({
 const recordPaymentAction = vi.fn();
 vi.mock("@/lib/actions/payments", () => ({
   recordPaymentAction: (...args: unknown[]) => recordPaymentAction(...args),
+}));
+
+import type {
+  CancelIntentResult,
+  PaymentIntentRecovery,
+} from "@/lib/services/payment-intent-recovery";
+
+const listPaymentRecoveryAction = vi.fn<
+  (...args: unknown[]) => Promise<PaymentIntentRecovery>
+>(async () => ({
+  open: null,
+  lastCommitted: null,
+}));
+const cancelPaymentRecoveryAction = vi.fn<
+  (...args: unknown[]) => Promise<CancelIntentResult>
+>(async () => ({
+  ok: true,
+  intentId: "intent-1",
+  replayed: false,
+}));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction: (...args: unknown[]) =>
+    listPaymentRecoveryAction(...args),
+  cancelPaymentRecoveryAction: (...args: unknown[]) =>
+    cancelPaymentRecoveryAction(...args),
+}));
+
+vi.mock("@/lib/actions/payment-qrs", () => ({
+  listPaymentQrsAction: vi.fn(async () => []),
 }));
 
 import { PaymentRecordForm } from "@/components/payment-record-form";
@@ -79,6 +111,10 @@ describe("PaymentRecordForm (PR2-C3)", () => {
       invoiceId: "inv-1",
       amountPaise: 250000,
       method: "cash",
+      // F01 — the public action carries a one-time operation key, so a
+      // retry of the same submission is one operation.
+      idempotencyKey: expect.any(String),
+      observedIntentId: null,
     });
     expect(await screen.findByRole("status")).toHaveProperty(
       "textContent",
@@ -111,11 +147,110 @@ describe("PaymentRecordForm (PR2-C3)", () => {
       amountPaise: 250000,
       method: "upi",
       reference: "UTR-42",
+      // F01 — the public action carries a one-time operation key.
+      idempotencyKey: expect.any(String),
+      observedIntentId: null,
     });
     expect(await screen.findByRole("status")).toHaveProperty(
       "textContent",
       "Payment recorded. Invoice is now partially paid.",
     );
+  });
+
+  it("keeps the payment confirmation after a full payment removes the invoice", async () => {
+    recordPaymentAction.mockResolvedValue({
+      ok: true,
+      id: "pay-1",
+      invoiceStatus: "paid",
+    });
+    render(<PaymentRecordForm />);
+    await pickMemberAndInvoice();
+
+    listMemberInvoicesAction.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    expect(
+      await screen.findByText("Payment recorded. Invoice is now paid."),
+    ).toBeTruthy();
+    expect(screen.getByText(/No open invoices for this member/)).toBeTruthy();
+  });
+
+  it("disables the record button while a member search is pending", async () => {
+    render(<PaymentRecordForm />);
+    await pickMemberAndInvoice();
+
+    listMembersAction.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.change(screen.getByLabelText(/find member/i), {
+      target: { value: "Audit" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /search/i }));
+
+    expect(
+      (screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("disables search and invoice selection while a payment is pending", async () => {
+    recordPaymentAction.mockReturnValue(new Promise(() => {}));
+    render(<PaymentRecordForm />);
+    await pickMemberAndInvoice();
+
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    expect(
+      (screen.getByRole("button", { name: /search/i }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByTestId("payment-invoice-inv-1") as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("clears a previous list-refresh error when the next payment starts", async () => {
+    recordPaymentAction.mockResolvedValue({
+      ok: true,
+      id: "pay-1",
+      invoiceStatus: "paid",
+    });
+    render(<PaymentRecordForm />);
+    await pickMemberAndInvoice();
+
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false),
+    );
+    listMemberInvoicesAction.mockRejectedValueOnce(new Error("list failed"));
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    expect(
+      await screen.findByText(/invoice list could not be refreshed/i),
+    ).toBeTruthy();
+
+    listMemberInvoicesAction.mockResolvedValue([INVOICE]);
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/invoice list could not be refreshed/i)).toBeNull(),
+    );
+  });
+
+  it("shows a refusal before a slow recovery re-read resolves", async () => {
+    recordPaymentAction.mockResolvedValue({
+      ok: false,
+      error: "Server refusal.",
+    });
+    render(<PaymentRecordForm />);
+    await pickMemberAndInvoice();
+    await waitFor(() =>
+      expect(listPaymentRecoveryAction).toHaveBeenCalled(),
+    );
+
+    listPaymentRecoveryAction.mockReturnValueOnce(new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+
+    expect(await screen.findByText("Server refusal.")).toBeTruthy();
   });
 
   it("shows the server's refusal without losing the selection", async () => {

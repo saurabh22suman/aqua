@@ -75,10 +75,14 @@ describe("OnboardingChecklistView (F27)", () => {
     expect(screen.getAllByText("Done")).toHaveLength(3);
   });
 
-  it("switches the section heading once everything is complete", () => {
+  it("drops the completion overline once everything is complete", () => {
     render(<OnboardingChecklistView data={ALL_DONE} />);
-    expect(screen.getByText("Completed")).toBeTruthy();
+    // 3 November 2026: the "Completed" overline repeated what the page
+    // title ("Register setup complete") and the real count already say,
+    // so it is gone. The count still states the outcome.
+    expect(screen.queryByText("Completed")).toBeNull();
     expect(screen.queryByText("What's left")).toBeNull();
+    expect(screen.getByText("3 of 3 checks complete")).toBeTruthy();
   });
 
   it("renders a secondary CTA (import) next to the primary one", () => {

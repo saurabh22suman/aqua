@@ -124,14 +124,12 @@ services:
       # cannot infer it: name it here. It must differ from the apex host
       # above and must not be any other environment's ops host.
       OPS_HOST: ${OPS_HOST:?set OPS_HOST}
-      # The env operator door (db/platform-auth-env.ts): the platform
-      # login's email + password live in the deployment's environment,
-      # the session is created fully authenticated, and no TOTP or a
-      # registered operator phone is needed to get into /ops. Both must
-      # be set (lib/env.ts refuses one without the other), and the
-      # password needs at least 12 characters.
+      # The configured existing operator normally requires TOTP. The
+      # explicitly guarded staging-only opt-in below defaults to false.
+      # Both credentials are required; password minimum is 12 characters.
       OPS_EMAIL: ${OPS_EMAIL:?set OPS_EMAIL}
       OPS_PASSWORD: ${OPS_PASSWORD:?set OPS_PASSWORD}
+      OPS_STAGING_PASSWORD_ONLY: ${OPS_STAGING_PASSWORD_ONLY:-false}
       NODE_ENV: production
       DEMO_MODE: "false"
       OFFLINE_SYNC_ENABLED: ""

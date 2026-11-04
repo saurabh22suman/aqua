@@ -75,13 +75,21 @@ describe("MemberImportForm file identity (P1)", () => {
 
     // B resolves first and becomes the active preview…
     fastB.resolve({ ok: true, preview: preview(2) });
-    await waitFor(() => expect(screen.getByText("register-b.csv")).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /Review register-b\.csv/ }),
+      ).toBeTruthy(),
+    );
+    expect(screen.getByText("Checked register-b.csv.")).toBeTruthy();
     // …then the older A response arrives and must be ignored.
     slowA.resolve({ ok: true, preview: preview(1) });
     await waitFor(() => expect(previewMemberImportAction).toHaveBeenCalledTimes(2));
-    expect(screen.getByText("register-b.csv")).toBeTruthy();
-    expect(screen.queryByText("register-a.csv")).toBeNull();
-    expect(screen.getByText(/2 of 2 rows ready/i)).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: /Review register-b\.csv/ }),
+    ).toBeTruthy();
+    expect(screen.getByText("Checked register-b.csv.")).toBeTruthy();
+    expect(screen.queryByText("Checked register-a.csv.")).toBeNull();
+    expect(screen.getByText(/^2\s+ready$/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: /import 2 members/i }));
@@ -105,7 +113,7 @@ describe("MemberImportForm file identity (P1)", () => {
 
     render(<MemberImportForm />);
     chooseFile("register.csv", "name,date\nA,2015-01-01");
-    await screen.findByText(/1 of 1 row ready/i);
+    await screen.findByText(/^1\s+ready$/);
     fireEvent.click(screen.getByRole("checkbox"));
 
     const button = screen.getByRole("button", { name: /import 1 member/i });

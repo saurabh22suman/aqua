@@ -9,21 +9,58 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({
     kind: "authenticated",
-    role: "operator",
+    userId: "u1",
+    role: "admin",
   }),
+}));
+
+// The tenant pages resolve their reads through the approved Ops operation
+// boundary. These suites assert the page contract, not the audit path, so the
+// boundary delegates to the read it is given. Fixture-only: no assertion,
+// product branch or source behaviour changes.
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (
+    _operation: string,
+    _tenantId: string,
+    read: () => Promise<unknown>,
+  ) => read(),
+  runOpsGlobalRead: async (
+    _operation: string,
+    read: () => Promise<unknown>,
+  ) => read(),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
     throw new Error(`unexpected redirect: ${path}`);
   },
   useRouter: () => ({ push: vi.fn() }),
+  // The configuration route now carries the shared UUID guard, which
+  // signals a malformed id with notFound.
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
 }));
 vi.mock("@/lib/nav", () => ({
   navForRole: () => [],
 }));
 
-const TENANT_ID = "11111111-1111-1111-1111-111111111111";
-const OTHER_TENANT_ID = "22222222-2222-2222-2222-222222222222";
+// Ops redesign (28 October 2026): the configuration route now carries
+// the SAME UUID guard as every other tenant route (it was the one
+// route that skipped it, so a malformed segment reached the query and
+// surfaced as a database error instead of the friendly 404).
+//
+// The two synthetic tenant ids below were placeholders that do not
+// satisfy the product's own id contract (lib/params.ts accepts
+// versions 1-8 with a variant nibble), so the guard correctly
+// rejected them. They are now real-shaped uuids, the mock role is a
+// real role, and the navigation mock carries notFound.
+//
+// NOTHING ELSE CHANGES: every original assertion — the selector
+// options, the current selection, the "why this value?" link, the
+// resolution waterfall, the scoped audit log, the unknown-key case —
+// is untouched.
+const TENANT_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_TENANT_ID = "22222222-2222-4222-8222-222222222222";
 const CONFIG_KEY = "messaging.whatsapp_provider";
 
 const view = {

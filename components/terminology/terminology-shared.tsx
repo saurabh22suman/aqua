@@ -44,14 +44,23 @@ export function contextualSample(
 
 export function ResolvePreviewNotice({
   state,
-  locale,
 }: {
   state: TerminologyState;
+  // The locale is accepted so the caller's shape does not change. The
+  // preview resolves through `state`, which already carries the active
+  // locale, and the PAGE owns the locale label — the editor must not
+  // print it a second time.
   locale: Locale;
 }) {
   // One line confirming what the closed-key resolver sees for the
   // active locale. The locale selector sits on the page; the form
   // itself stays locale-narrow, which is why the preview is too.
+  //
+  // 3 November 2026: the line used to end with "Database columns stay
+  // member_code, never renamed." and an "Active locale: en" footer. Both
+  // named internal architecture the owner does not act on, and the
+  // locale was already stated by the page's picker and its
+  // language-scope note.
   return (
     <li className="text-[12px] text-ink-3 px-1">
       Today&apos;s view uses{" "}
@@ -60,8 +69,6 @@ export function ResolvePreviewNotice({
       <span className="text-ink">{titleCase(resolveTerm(state, "batch", "other"))}</span>{" "}
       ·{" "}
       <span className="text-ink">{titleCase(resolveTerm(state, "session", "other"))}</span>
-      . Database columns stay <span className="text-ink">member_code</span>, never renamed.
-      <span className="block mt-0.5 text-ink-3">Active locale: <span className="text-ink-2 font-mono">{locale}</span></span>
     </li>
   );
 }

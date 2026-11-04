@@ -50,6 +50,9 @@ vi.mock("@/components/charts/owner-chart-island", () => ({
 }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { OwnerInsightsHome } from "@/components/owner-insights-home/owner-insights-home";
+import { AttendanceByBatch } from "@/components/owner-insights-home/attendance-by-batch";
+import { attendancePreview } from "@/components/owner-insights-home/insight-preview";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import type {
@@ -105,54 +108,6 @@ function dashboard(overrides: Partial<OwnerDashboardData> = {}): OwnerDashboardD
   } as OwnerDashboardData;
 }
 
-function attendance(
-  overrides: Partial<AttendanceByBatchInsight> = {},
-): AttendanceByBatchInsight {
-  const marks = { present: 90, late: 6, absent: 4, total: 100 };
-  const register = {
-    sessionsWithRoster: 4,
-    completedRegisters: 3,
-    completionPct: 75,
-    rosterSlots: 120,
-    markedSlots: 100,
-    unmarkedSlots: 20,
-  };
-  return {
-    from: WINDOW.from,
-    to: WINDOW.to,
-    rows: [
-      {
-        batchId: "batch-alpha",
-        batchName: "Alpha Squad",
-        programName: "Swim",
-        locationId: "loc-a",
-        sessions: 4,
-        marks,
-        shares: { present: 90, late: 6, absent: 4 },
-        register,
-      },
-      {
-        batchId: "batch-beta",
-        batchName: "Beta Squad",
-        programName: "Swim",
-        locationId: "loc-a",
-        sessions: 2,
-        marks: { present: 0, late: 0, absent: 0, total: 0 },
-        shares: { present: null, late: null, absent: null },
-        register: {
-          sessionsWithRoster: 2,
-          completedRegisters: 0,
-          completionPct: 0,
-          rosterSlots: 24,
-          markedSlots: 0,
-          unmarkedSlots: 24,
-        },
-      },
-    ],
-    summary: { sessions: 6, marks, shares: { present: 90, late: 6, absent: 4 }, register },
-    ...overrides,
-  };
-}
 
 function enquiries(overrides: Partial<EnquiryStageInsight> = {}): EnquiryStageInsight {
   return {
@@ -224,49 +179,48 @@ function renderInsights(
   insights: {
     from: string;
     to: string;
-    attendance: AttendanceByBatchInsight | null;
     enquiries: EnquiryStageInsight | null;
   },
   options: { facility?: string | null } = {},
 ) {
   return render(
-    <OwnerDashboard
-      data={dashboard()}
-      branding={BRANDING}
-      terminology={TERMINOLOGY}
-      can={{ ...ALL_CAN, readEnquiries: true }}
-      insights={insights}
+    <OwnerInsightsHome
+      data={insights}
+      canOpenEnquiries
       facility={options.facility ?? null}
     />,
   );
 }
 
+/**
+ * The by-batch breakdown, rendered on its own.
+ *
+ * It is no longer part of the Owner Home insights section: attendance
+ * has ONE home there (the operational attendance panel, on the selected
+ * range). The component and its read model still exist, so its own
+ * readability contract is still pinned — here, on the component.
+ */
+function renderAttendanceDetail(insight: AttendanceByBatchInsight) {
+  return render(<AttendanceByBatch insight={insight} />);
+}
+
 afterEach(cleanup);
 
 describe("owner Home — the insights preview", () => {
-  it("shows one concise preview per read model, with truthful labels", () => {
+  it("shows one concise preview for the read model it owns, with truthful labels", () => {
     renderInsights({
       ...WINDOW,
-      attendance: attendance(),
       enquiries: enquiries(),
     });
 
-    // The PREVIEW is the always-visible summary. It names both
-    // subjects for what they measure.
+    // The PREVIEW is the always-visible summary. It names the subject
+    // for what it measures.
     const preview = screen.getByTestId("owner-insights-preview");
     const previewText = preview.textContent ?? "";
-    expect(previewText).toContain("Attendance by batch");
     expect(previewText).toContain("Enquiries by current stage");
-
-    // The register figure is completion, not attendance. (The review
-    // asked for the owner's words, so the copy says "sessions fully
-    // marked" rather than "registers complete".)
-    expect(previewText).toContain("3 of 4 sessions fully marked");
-    expect(previewText).not.toMatch(/attendance rate/i);
-    expect(previewText).not.toMatch(/% attendance/i);
-
-    // The mark composition names its denominator: the marks recorded.
-    expect(previewText).toContain("96 of 100 marks present or late");
+    // Attendance is NOT in the insights section any more: it has one
+    // home on the Home page (the operational attendance panel).
+    expect(previewText).not.toContain("Attendance by batch");
 
     // The enquiry figure is the CURRENT stage of a cohort. The preview
     // never calls it a conversion rate…
@@ -278,17 +232,23 @@ describe("owner Home — the insights preview", () => {
   it("states an empty read as empty and a failed read as unavailable", () => {
     renderInsights({
       ...WINDOW,
-      // The attendance read failed. It is NOT an empty result.
-      attendance: null,
-      // The enquiry read succeeded and the cohort is empty.
+      // The enquiry read failed. It is NOT an empty result.
+      enquiries: null,
+    });
+
+    const text = document.body.textContent ?? "";
+    expect(text).toMatch(/enquiries by current stage could not be read/i);
+    // The failed read is never drawn as "nothing happened".
+    expect(text).not.toMatch(/no enquiries created/i);
+  });
+
+  it("states an empty cohort as empty, not as unavailable", () => {
+    renderInsights({
+      ...WINDOW,
       enquiries: enquiries({ total: 0, rows: [] }),
     });
 
     const text = document.body.textContent ?? "";
-    expect(text).toMatch(/attendance by batch could not be read/i);
-    // The failed read is never drawn as "nothing happened".
-    expect(text).not.toMatch(/no batch ran/i);
-    // The empty cohort is stated as empty, not as unavailable.
     expect(text).toMatch(/no enquiries created/i);
     expect(text).not.toMatch(/enquiries by current stage could not be read/i);
   });
@@ -296,7 +256,6 @@ describe("owner Home — the insights preview", () => {
   it("keeps the detail one disclosure away, with the same numbers", () => {
     renderInsights({
       ...WINDOW,
-      attendance: attendance(),
       enquiries: enquiries(),
     });
 
@@ -307,28 +266,15 @@ describe("owner Home — the insights preview", () => {
     expect(summary?.textContent ?? "").toMatch(/detail/i);
 
     const text = document.body.textContent ?? "";
-    // The detail carries the batch rows and the stage rows.
-    expect(text).toContain("Alpha Squad");
-    expect(text).toContain("Beta Squad");
+    // The detail carries the stage rows.
     expect(text).toContain("Converted");
-    // A batch with no marks is unknown, never 0%.
-    expect(text).toMatch(/no marks recorded/i);
-    expect(text).not.toMatch(/0% present/i);
   });
 
-  it("keeps the facility scope on the drill-down and never widens the view", () => {
+  it("keeps the facility scope and never widens the view", () => {
     renderInsights(
-      { ...WINDOW, attendance: attendance(), enquiries: enquiries() },
+      { ...WINDOW, enquiries: enquiries() },
       { facility: "loc-a" },
     );
-
-    const report = screen.getByRole("link", { name: /attendance report/i });
-    const href = report.getAttribute("href") ?? "";
-    // The drill-down carries the window and the facility the figures
-    // were computed under.
-    expect(href).toContain(`from=${WINDOW.from}`);
-    expect(href).toContain(`to=${WINDOW.to}`);
-    expect(href).toContain("facility=loc-a");
 
     // The enquiries list cannot be scoped to a facility, so it is not
     // offered as a drill-down under a narrower filter — an honest
@@ -340,7 +286,7 @@ describe("owner Home — the insights preview", () => {
 
   it("offers the enquiries list when no facility filter narrows the view", () => {
     renderInsights(
-      { ...WINDOW, attendance: attendance(), enquiries: enquiries() },
+      { ...WINDOW, enquiries: enquiries() },
       { facility: null },
     );
 
@@ -386,11 +332,7 @@ describe("owner Home — the insights preview", () => {
 //      presented as the same numbers.
 describe("owner Home — the expanded detail stays readable on a phone", () => {
   it("shows three batches at first and keeps the rest behind a disclosure", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    renderAttendanceDetail(attendanceWithManyBatches());
 
     const list = screen.getByTestId("owner-insights-batch-list");
     expect(within(list).getAllByTestId("owner-insights-batch-row")).toHaveLength(3);
@@ -402,11 +344,7 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
   });
 
   it("offers an explicit control that names the whole set and can collapse it", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    renderAttendanceDetail(attendanceWithManyBatches());
 
     const more = screen.getByTestId("owner-insights-more-batches");
     const summary = more.querySelector("summary");
@@ -419,11 +357,7 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
   });
 
   it("opens and closes the disclosure from its native control", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    renderAttendanceDetail(attendanceWithManyBatches());
 
     const more = screen.getByTestId("owner-insights-more-batches");
     const summary = more.querySelector("summary")!;
@@ -441,32 +375,23 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
   });
 
   it("states the selection and keeps the totals on the full scoped result", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    const insight = attendanceWithManyBatches();
+    renderAttendanceDetail(insight);
 
-    const detail = screen.getByTestId("owner-insights-detail");
-    const text = detail.textContent ?? "";
+    const text = document.body.textContent ?? "";
     // The selection is stated, not implied.
     expect(text).toMatch(/3 of 5 batches/i);
     expect(text).toMatch(/name order/i);
     // The totals still describe every batch in the scoped result.
     expect(text).toContain("5 batches");
     expect(text).toContain("500 marks recorded");
-    // And so does the preview.
-    const preview = screen.getByTestId("owner-insights-preview").textContent ?? "";
-    expect(preview).toContain("5 batches ran");
-    expect(preview).toContain("450 of 500 marks present or late");
+    // And the preview sentence says the same thing.
+    expect(attendancePreview(insight)).toContain("5 batches ran");
+    expect(attendancePreview(insight)).toContain("450 of 500 marks present or late");
   });
 
   it("shows the whole batch name instead of cutting it off", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    renderAttendanceDetail(attendanceWithManyBatches());
 
     const more = screen.getByTestId("owner-insights-more-batches");
     const name = within(more).getByText(/Sunday Open Practice/);
@@ -479,11 +404,7 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
   });
 
   it("uses the owner's words rather than the data model's", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    renderAttendanceDetail(attendanceWithManyBatches());
 
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/registers/i);
@@ -491,13 +412,9 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
   });
 
   it("says that cancelled sessions are not counted, and that the report counts them", () => {
-    renderInsights({
-      ...WINDOW,
-      attendance: attendanceWithManyBatches(),
-      enquiries: enquiries(),
-    });
+    renderAttendanceDetail(attendanceWithManyBatches());
 
-    const text = screen.getByTestId("owner-insights-detail").textContent ?? "";
+    const text = document.body.textContent ?? "";
     expect(text).toMatch(/cancelled sessions are not counted/i);
     // The drill-down is not presented as the same numbers.
     expect(text).toMatch(/attendance report counts them too/i);
@@ -506,7 +423,6 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
   it("gives the expand control a visible open/closed cue and a themed focus ring", () => {
     renderInsights({
       ...WINDOW,
-      attendance: attendanceWithManyBatches(),
       enquiries: enquiries(),
     });
 

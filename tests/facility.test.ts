@@ -26,7 +26,13 @@ describe("facility value resolution", () => {
 
   it("falls back to the cookie when the URL is silent", () => {
     expect(resolveFacilityValue(undefined, ID)).toBe(ID);
-    expect(resolveFacilityValue("all", ID)).toBe(ID);
+    expect(resolveFacilityValue("invalid", ID)).toBe(ID);
+  });
+
+  it("gives an explicit UUID or All precedence over a stale cookie", () => {
+    expect(resolveFacilityValue(OTHER_ID, ID)).toBe(OTHER_ID);
+    expect(resolveFacilityValue("all", ID)).toBeUndefined();
+    expect(resolveFacilityValue(undefined, undefined)).toBeUndefined();
   });
 
   it("drops malformed values from both sources", () => {
@@ -104,4 +110,3 @@ describe("ECharts axis money formatting", () => {
     expect(compactPaiseINR(10000000)).toBe("₹1L");
   });
 });
-

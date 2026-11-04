@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { listStaffAction } from "@/lib/actions/staff";
 import { titleCase } from "@/lib/terminology/keys";
 import { formatDateIST } from "@/lib/time/tz";
@@ -8,16 +7,17 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { getCurriculumLeadState } from "@/lib/services/curriculum-lead";
 import { CurriculumLeadControl } from "@/components/curriculum-lead-control";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PersonAvatar } from "@/components/avatar";
 
-// Phase 3.5 — staff detail view. Read-only at this phase;
-// edit + delete land with 3.6 (invitations), where the
-// "rescind an invite" and "remove staff" actions are
-// designed together — both involve the same audit + state
-// machine.
+// Owner OpenPen management lane (29 October 2026).
 //
-// R02 (2026-10-13 role-workflow audit) — the one delegated change
-// this page carries: the owner/admin can designate a coach as the
-// academy's curriculum lead or remove that delegation.
+// A small read-only profile. The one delegated change it carries is the
+// curriculum-lead designation (R02): owner/admin can mark a coach as the
+// academy's curriculum lead or remove that delegation. Login access is
+// stated in the same words as the staff directory and managed in
+// Invitations — a linked identity is not an active login.
 export default async function StaffDetailPage({
   params,
 }: {
@@ -36,52 +36,73 @@ export default async function StaffDetailPage({
       ? await getCurriculumLeadState(ctx, staffId)
       : null;
 
-  const initials =
-    staff.fullName
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]!.toUpperCase())
-      .join("") || "?";
-
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <Link
         href="/owner/staff"
-        className="inline-flex items-center gap-1 text-[13px] text-ink-3 hover:text-ink mb-4"
+        className="mb-4 inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 hover:text-ink"
       >
-        <ChevronLeft size={16} />
+        <OwnerIcon name="left" size={16} />
         Staff
       </Link>
 
-      <div className="bg-paper border border-line rounded-card px-5 py-5 flex items-center gap-4">
-        <div className="h-14 w-14 rounded-[16px] bg-water-soft text-water grid place-items-center font-display text-[18px] font-semibold flex-none">
-          {initials}
-        </div>
+      <div className="flex items-center gap-4">
+        {/* The shared initials avatar: the flat themed tint and the same
+            grapheme-safe initials as the staff directory, the member chips and
+            the profile. Decorative beside the visible name — the heading is the
+            text, and the avatar repeats no identity of its own. The 56px
+            rounded-square profile shape is kept by the clipping wrapper. */}
+        <span className="flex-none overflow-hidden rounded-card">
+          <PersonAvatar
+            name={staff.fullName}
+            seed={staff.personId}
+            size={56}
+            square
+          />
+        </span>
         <div className="min-w-0">
-          <h1 className="font-display text-[19px] font-semibold leading-tight truncate">
+          <h1 className="truncate font-display text-[22px] font-semibold leading-tight tracking-[-0.4px]">
             {staff.fullName}
           </h1>
-          <p className="text-[13px] text-ink-3 mt-0.5">
+          <p className="mt-0.5 text-[13px] text-ink-3">
             {titleCase(staff.staffType)}
-            {staff.employedOn ? ` · employed ${formatDateIST(staff.employedOn)}` : ""}
+            {staff.employedOn
+              ? ` · employed ${formatDateIST(staff.employedOn)}`
+              : ""}
           </p>
         </div>
       </div>
 
-      <div className="mt-5 bg-paper border border-line rounded-card overflow-hidden">
-        <div className="grid grid-cols-3 px-4 py-3 border-b border-line last:border-b-0">
-          <p className="text-[13px] text-ink-3">Status</p>
-          <div className="col-span-2">
-            <p className="text-[14px]">{staff.userId ? "Has login" : "No login"}</p>
-            <p className="text-[12px] text-ink-3 mt-0.5">
-              {staff.userId
-                ? "They sign in with their phone number — no separate password."
-                : "No phone-based login yet. Send an invite from the invitations surface to wire one up."}
-            </p>
+      <section className="mt-5 rounded-card border border-line bg-paper p-5">
+        <h2 className="font-display text-[16px] font-semibold text-ink">
+          Staff details
+        </h2>
+        <dl className="mt-1">
+          <div className="border-b border-line py-3">
+            <dt className="text-[12px] text-ink-3">Staff type</dt>
+            <dd className="mt-0.5 text-[14px] text-ink">
+              {titleCase(staff.staffType)}
+            </dd>
           </div>
-        </div>
-      </div>
+          <div className="border-b border-line py-3">
+            <dt className="text-[12px] text-ink-3">Login access</dt>
+            <dd className="mt-0.5 text-[14px] text-ink">
+              {staff.userId ? "Linked" : "Not linked"}
+            </dd>
+            <dd className="mt-1 text-[12.5px] text-ink-3">
+              {staff.userId
+                ? "A phone-based login is linked to this record — they sign in with their phone number and PIN, no separate password. Invitations holds the current access state."
+                : "No login is linked to this record. Send an invite from Invitations to add one."}
+            </dd>
+          </div>
+        </dl>
+        <Link
+          href="/owner/staff/invitations"
+          className="mt-3 inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 hover:text-ink"
+        >
+          Manage access in Invitations
+        </Link>
+      </section>
 
       {curriculumState ? (
         <CurriculumLeadControl
@@ -91,16 +112,15 @@ export default async function StaffDetailPage({
         />
       ) : null}
 
-      <p className="mt-6 text-[12.5px] text-ink-3 leading-snug">
-        This profile is read-only. Manage login access from{" "}
+      <p className="mt-5 text-[12.5px] leading-snug text-ink-3">
+        Staff record details are read-only here.{" "}
         <Link
-          href="/owner/staff/invitations"
-          className="text-[var(--accent-ink)] underline underline-offset-2"
+          href="/owner/staff"
+          className="font-medium text-[var(--accent-ink)] underline underline-offset-2"
         >
-          Invitations
+          Back to staff
         </Link>
-        .
       </p>
-    </main>
+    </OwnerPage>
   );
 }

@@ -31,7 +31,7 @@ import { describe, expect, it } from "vitest";
 
 const ROUTES = [
   "app/(owner)/owner/loading.tsx",
-  "app/(owner)/owner/members/loading.tsx",
+  "app/(owner)/owner/members/[memberId]/loading.tsx",
   "app/(owner)/owner/reports/loading.tsx",
   "app/(owner)/owner/settings/menu/loading.tsx",
   "app/(owner)/owner/settings/skills/loading.tsx",

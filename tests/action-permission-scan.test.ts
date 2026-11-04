@@ -139,6 +139,45 @@ const EXEMPTIONS: Exemption[] = [
     exportedName: "*",
     reason: "Platform-scoped: ops.<base>-only route (middleware gates); tenant permission keys don't apply.",
   },
+  // F08/F09 — the composed notification/job operator surfaces. Each entry
+  // names ONE action: the platform admin gate (requireOpsAdminAction) is the
+  // platform's permission equivalent, and the audited operation boundary is
+  // what records the access. No wildcard and no general detection waiver.
+  {
+    file: "lib/actions/platform-failed-notifications.ts",
+    exportedName: "listFailedMessagesAction",
+    reason: "Platform-scoped read: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The read runs inside runOpsGlobalRead('notification.list_failed'), which writes one audited operation row per identified caller and fails the read closed when that row cannot be written.",
+  },
+  {
+    file: "lib/actions/platform-failed-notifications.ts",
+    exportedName: "retryFailedNotificationAction",
+    reason: "Platform-scoped mutation: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The mutation runs inside the opsAction() pipeline with scope 'notification.retry_failed', which re-checks the actor row inside the transaction, and an identified operator's malformed or refused request leaves an invalid/denied operation row.",
+  },
+  {
+    file: "lib/actions/platform-failed-notifications.ts",
+    exportedName: "dismissFailedNotificationAction",
+    reason: "Platform-scoped mutation: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The mutation runs inside the opsAction() pipeline with scope 'notification.dismiss', which re-checks the actor row inside the transaction, and an identified operator's malformed or refused request leaves an invalid/denied operation row.",
+  },
+  {
+    file: "lib/actions/platform-jobs.ts",
+    exportedName: "listDeadLetterJobsAction",
+    reason: "Platform-scoped read: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The read runs inside runOpsGlobalRead('job.dead_letter.list'), which writes one audited operation row per identified caller and fails the read closed when that row cannot be written.",
+  },
+  {
+    file: "lib/actions/platform-notifications.ts",
+    exportedName: "listNotificationsNeedingAttentionAction",
+    reason: "Platform-scoped read: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The read runs inside runOpsGlobalRead('notification.list_attention'), which writes one audited operation row per identified caller and fails the read closed when that row cannot be written.",
+  },
+  {
+    file: "lib/actions/platform-notifications.ts",
+    exportedName: "resendUnknownNotificationAction",
+    reason: "Platform-scoped mutation: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The mutation runs inside the opsAction() pipeline with scope 'notification.resend', which re-checks the actor row inside the transaction, and an identified operator's malformed or refused request leaves an invalid/denied operation row.",
+  },
+  {
+    file: "lib/actions/platform-notifications.ts",
+    exportedName: "closeUnknownNotificationAction",
+    reason: "Platform-scoped mutation: the platform admin gate (requireOpsAdminAction) is the permission equivalent — a tenant permission key does not apply to the platform control plane. The mutation runs inside the opsAction() pipeline with scope 'notification.close', which re-checks the actor row inside the transaction, and an identified operator's malformed or refused request leaves an invalid/denied operation row.",
+  },
   // Tenant-scoped actions that return only the caller's own
   // tenant's metadata — no role-specific filtering needed
   // because the data is shared across every role within the

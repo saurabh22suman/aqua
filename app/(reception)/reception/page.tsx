@@ -7,6 +7,7 @@ import { listStaffAttendanceDayAction } from "@/lib/actions/staff-attendance";
 import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
 import { CountChip } from "@/components/ui/CountChip";
+import { KhelIcon } from "@/components/icons/khel-icons";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { todayInZone } from "@/lib/time/tz";
@@ -41,7 +42,7 @@ export default async function ReceptionTodayPage() {
     : [];
 
   return (
-    <main className="px-5 pt-10">
+    <main className="px-5 pt-6 pb-8">
       <div className="flex items-center gap-2.5">
         <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
         <CountChip
@@ -50,86 +51,115 @@ export default async function ReceptionTodayPage() {
         />
       </div>
 
-      {canCollect ? (
+      {/* The module entries are ONE grid, not five stacked full-width
+          cards: on a phone they are a compact two-up set, and each one
+          carries a short purpose instead of a paragraph. The manual
+          payment confirmation stays where it matters — on the
+          collect-payment entry. */}
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {canCollect ? (
+          <Link
+            href="/reception/collect-payment"
+            className="flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+            data-testid="collect-payment-link"
+          >
+            <span className="grid h-10 w-10 flex-none place-items-center rounded-ctl bg-deck text-ink-2">
+              <KhelIcon name="collect-payment" size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium leading-tight">
+                Collect payment
+              </span>
+              <span className="mt-0.5 block text-[12px] text-ink-3 leading-tight">
+                Cash or UPI — verify at the counter.
+              </span>
+            </span>
+            <ChevronRight size={18} className="text-ink-3 flex-none" />
+          </Link>
+        ) : null}
+
+        {canCloseDay ? (
+          <Link
+            href="/reception/close"
+            className="flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+            data-testid="close-day-link"
+          >
+            <span className="grid h-10 w-10 flex-none place-items-center rounded-ctl bg-deck text-ink-2">
+              <KhelIcon name="audit-activity" size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium leading-tight">
+                Close day
+              </span>
+              <span className="mt-0.5 block text-[12px] text-ink-3 leading-tight">
+                Count today&apos;s cash and close the counter.
+              </span>
+            </span>
+            <ChevronRight size={18} className="text-ink-3 flex-none" />
+          </Link>
+        ) : null}
+
+        {canSeeDues ? (
+          <Link
+            href="/reception/dues"
+            className="flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+            data-testid="dues-link"
+          >
+            <span className="grid h-10 w-10 flex-none place-items-center rounded-ctl bg-deck text-ink-2">
+              <KhelIcon name="fees" size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium leading-tight">
+                Dues
+              </span>
+              <span className="mt-0.5 block text-[12px] text-ink-3 leading-tight">
+                Pending fees, overdue first.
+              </span>
+            </span>
+            <ChevronRight size={18} className="text-ink-3 flex-none" />
+          </Link>
+        ) : null}
+
         <Link
-          href="/reception/collect-payment"
-          className="mt-6 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="collect-payment-link"
+          href="/reception/members"
+          className="flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+          data-testid="member-search-link"
         >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Collect payment</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Find an invoice and record cash or UPI; verify the payment at the
-              counter.
-            </p>
-          </div>
+          <span className="grid h-10 w-10 flex-none place-items-center rounded-ctl bg-deck text-ink-2">
+            <KhelIcon name="members" size={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-medium leading-tight">
+              Find a {titleCase(resolveTerm(terminology, "member", 1)).toLowerCase()}
+            </span>
+            <span className="mt-0.5 block text-[12px] text-ink-3 leading-tight">
+              Search by name, phone or code.
+            </span>
+          </span>
           <ChevronRight size={18} className="text-ink-3 flex-none" />
         </Link>
-      ) : null}
 
-      {canCloseDay ? (
-        <Link
-          href="/reception/close"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="close-day-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Close day</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Count today&apos;s cash and close your counter.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      {canSeeDues ? (
-        <Link
-          href="/reception/dues"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="dues-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Dues</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Pending fee payments, overdue first — for follow-up calls.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      <Link
-        href="/reception/members"
-        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-        data-testid="member-search-link"
-      >
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">
-            Find a {titleCase(resolveTerm(terminology, "member", 1)).toLowerCase()}
-          </p>
-          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-            Search by name, phone or member code.
-          </p>
-        </div>
-        <ChevronRight size={18} className="text-ink-3 flex-none" />
-      </Link>
-
-      {canUseCafe ? (
-        <Link
-          href="/reception/cafe"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="cafe-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Café</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Take a counter order and settle it.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
+        {canUseCafe ? (
+          <Link
+            href="/reception/cafe"
+            className="flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
+            data-testid="cafe-link"
+          >
+            <span className="grid h-10 w-10 flex-none place-items-center rounded-ctl bg-deck text-ink-2">
+              <KhelIcon name="cafe" size={20} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium leading-tight">
+                Café
+              </span>
+              <span className="mt-0.5 block text-[12px] text-ink-3 leading-tight">
+                Take a counter order and settle it.
+              </span>
+            </span>
+            <ChevronRight size={18} className="text-ink-3 flex-none" />
+          </Link>
+        ) : null}
+      </div>
 
       <ReceptionCheckIns sessions={sessions} canMark={canMark} />
 

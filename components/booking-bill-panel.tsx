@@ -26,7 +26,7 @@ export function BookingBillPanel({
   onBack,
 }: {
   bill: BookingBill;
-  onPaid: (method: PaymentMethod) => void;
+  onPaid: (method: PaymentMethod, billId?: string) => void;
   onBack: () => void;
 }) {
   return (

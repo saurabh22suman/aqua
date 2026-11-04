@@ -203,6 +203,23 @@ beforeAll(async () => {
   );
 }, 60_000);
 
+// F06 — the module gate is ENTITLEMENT-based, and these fixtures create
+// tenants with no plan and no explicit feature. Their positive cases (the
+// order/booking → invoice bridge) need the grant; no assertion changes.
+beforeAll(async () => {
+  const ids = [tenant, otherTenant, scopedTenant];
+  await admin.query(
+    "delete from tenant_features where tenant_id = any($1::uuid[])",
+    [ids],
+  );
+  await admin.query(
+    `insert into tenant_features (tenant_id, feature_key, enabled)
+     select id, 'pool.booking', true from unnest($1::uuid[]) as id
+     on conflict (tenant_id, feature_key) do update set enabled = true`,
+    [ids],
+  );
+});
+
 afterAll(async () => {
   for (const id of [tenant, otherTenant, scopedTenant]) {
     await admin.query("delete from payments where tenant_id = $1", [id]);
@@ -296,14 +313,7 @@ describe("B6 booking reliability — exclusive slots", () => {
     expect(second.ok).toBe(true);
   });
 
-  it("CHARACTERISES a known gap: a whole-facility booking and a lane booking do not collide", async () => {
-    // The exclusion constraint keys on
-    // `coalesce(sub_unit_id, nil-uuid)`, so "the whole facility" and
-    // "lane A" are DIFFERENT keys and both rows are accepted. This is
-    // the constraint's granularity — a schema decision, not an
-    // application bug — and it is recorded for the coordinator rather
-    // than fixed here (no schema expansion in this batch, and the
-    // insert exclusion stays the sole authority on concurrency).
+  it("rejects a lane booking overlapping a whole-facility booking", async () => {
     const whole = await bookings.createBooking(ctx, {
       facilityId,
       subUnitId: null,
@@ -320,7 +330,8 @@ describe("B6 booking reliability — exclusive slots", () => {
       startsAt: wall(DAY_4, "15:00"),
       endsAt: wall(DAY_4, "16:00"),
     });
-    expect(lane.ok).toBe(true);
+    expect(lane.ok).toBe(false);
+    if (!lane.ok) expect(lane.error).toBe(bookings.SLOT_TAKEN_ERROR);
   });
 });
 

@@ -108,13 +108,13 @@ export const OPS_ALLOWLIST = [
   // is matched exactly, like the apex entry point above.
   "/",
   "/ops",
-  // /api/auth is here because better-auth's sign-in endpoints are
-  // safe to expose (no better-auth state exists on the ops host
-  // — there are no tenants here). The platform's actual auth lives
-  // on /ops/login + /ops/verify. Keeping /api/auth available means
-  // a future "sign in with phone" feature on the platform can
-  // share the better-auth endpoints without a separate route.
-  "/api/auth/",
+  // "/api/auth/" is deliberately NOT served here. The platform surface
+  // authenticates with its own platform_session cookie and has no
+  // better-auth identity, so admitting the tenant's better-auth surface
+  // let a TENANT session token — transmitted by hand rather than by a
+  // browser, which never sends it here — be honoured on the platform
+  // host. The tenant apex still serves it; that is where the phone+PIN
+  // and magic-link flows live.
   "/api/health",
   "/_next/",
   "/favicon",

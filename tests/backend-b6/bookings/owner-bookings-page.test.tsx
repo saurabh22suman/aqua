@@ -49,6 +49,8 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => undefined }) }));
+
 vi.mock("next/link", async () => {
   const React = await import("react");
   return {
@@ -135,7 +137,7 @@ describe("B6 owner bookings page", () => {
     mocks.facilities = [FACILITY];
     mocks.priceStatus = { total: 1, active: 1 };
 
-    render(await OwnerBookingsPage());
+    render(await OwnerBookingsPage({}));
 
     expect(screen.getByTestId("booking-screen").textContent).toContain(
       "Indoor Court",
@@ -148,7 +150,7 @@ describe("B6 owner bookings page", () => {
     mocks.facilities = [FACILITY];
     mocks.priceStatus = { total: 1, active: 1 };
 
-    render(await OwnerBookingsPage());
+    render(await OwnerBookingsPage({}));
 
     const link = screen.getByTestId("owner-bookings-manage-prices");
     expect(link.getAttribute("href")).toBe("/owner/settings/booking-prices");
@@ -161,7 +163,7 @@ describe("B6 owner bookings page", () => {
     mocks.facilities = [FACILITY];
     mocks.priceStatus = { total: 0, active: 0 };
 
-    render(await OwnerBookingsPage());
+    render(await OwnerBookingsPage({}));
 
     expect(
       screen.queryByTestId("owner-bookings-manage-prices"),
@@ -176,7 +178,7 @@ describe("B6 owner bookings page", () => {
     asOwner();
     mocks.facilities = [];
 
-    render(await OwnerBookingsPage());
+    render(await OwnerBookingsPage({}));
 
     expect(document.body.textContent).toContain("No bookable facilities yet");
     const link = screen.getByRole("link", { name: /set up facilities/i });
@@ -189,7 +191,7 @@ describe("B6 owner bookings page", () => {
     mocks.facilities = [FACILITY];
     mocks.priceStatus = { total: 0, active: 0 };
 
-    render(await OwnerBookingsPage());
+    render(await OwnerBookingsPage({}));
 
     const notice = screen.getByTestId("owner-bookings-no-price");
     expect(notice.textContent).toContain("No price is configured");
@@ -202,7 +204,7 @@ describe("B6 owner bookings page", () => {
     mocks.facilitiesError = true;
     mocks.priceError = true;
 
-    render(await OwnerBookingsPage());
+    render(await OwnerBookingsPage({}));
 
     expect(screen.getByTestId("owner-bookings-facilities-error")).toBeTruthy();
     expect(screen.getByTestId("owner-bookings-price-error")).toBeTruthy();
@@ -214,13 +216,13 @@ describe("B6 owner bookings page", () => {
     asOwner({ features: [] });
     mocks.facilities = [FACILITY];
 
-    await expect(OwnerBookingsPage()).rejects.toThrow(/NEXT_NOT_FOUND/);
+    await expect(OwnerBookingsPage({})).rejects.toThrow(/NEXT_NOT_FOUND/);
   });
 
   it("refuses the route without the bookings.read permission", async () => {
     asOwner({ permissions: ["settings.manage"] });
     mocks.facilities = [FACILITY];
 
-    await expect(OwnerBookingsPage()).rejects.toThrow(/NEXT_NOT_FOUND/);
+    await expect(OwnerBookingsPage({})).rejects.toThrow(/NEXT_NOT_FOUND/);
   });
 });

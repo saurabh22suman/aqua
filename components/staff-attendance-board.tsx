@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { correctStaffAttendanceAction } from "@/lib/actions/staff-attendance";
 import { Button } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Textarea";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
 import { formatTimeIST } from "@/lib/time/tz";
 import type { StaffAttendanceDayRow } from "@/lib/services/staff-attendance";
@@ -149,12 +150,13 @@ export function StaffAttendanceBoard({
                           </button>
                         ))}
                       </div>
-                      <textarea
+                      <Textarea
                         value={note}
                         onChange={(e) => setNote(e.target.value)}
                         rows={2}
                         placeholder="Reason (required)"
-                        className="mt-2 w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink"
+                        aria-label="Reason (required)"
+                        className="mt-2 w-full"
                       />
                       {error ? (
                         <p role="alert" className="mt-1 text-[12.5px] text-ink-2">

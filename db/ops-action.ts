@@ -28,6 +28,8 @@ export const OPS_SCOPES = [
   "tenant.suspend",
   "tenant.churn",
   "tenant.invite_owner",
+  "tenant.owner_login_link.issue",
+  "tenant.owner_reset_link.issue",
   "tenant.remove_sample_data",
   "tenant.preset.apply",
   "config.set",
@@ -40,6 +42,20 @@ export const OPS_SCOPES = [
   "config.request.resolve",
   "message.send",
   "message.inbound",
+  // F08+F09 (composed, rev 3) — the operator surfaces for the
+  // notification recovery work and the dead-letter queue. ALL SEVEN
+  // scopes land in THIS ONE hunk: the union is a closed list, so two
+  // patches cannot both edit it (review P0-2).
+  //
+  // The three READS are audited like the mutations: a privileged read
+  // that changes nothing still writes a platform_audit_log row.
+  "notification.list_attention",
+  "notification.resend",
+  "notification.close",
+  "notification.list_failed",
+  "notification.retry_failed",
+  "notification.dismiss",
+  "job.dead_letter.list",
 ] as const;
 
 export type OpsScope = (typeof OPS_SCOPES)[number];
@@ -71,6 +87,10 @@ const opsContext = new AsyncLocalStorage<OpsContext>();
 
 export function currentOpsScope(): OpsScope | null {
   return opsContext.getStore()?.scope ?? null;
+}
+
+export function currentOpsActorId(): UserId | null {
+  return opsContext.getStore()?.actorId ?? null;
 }
 
 // Wraps a mutation. Validation is strict: an unknown scope or a
@@ -162,4 +182,41 @@ export async function recordOpsAudit(
   });
 
   if (context) context.recorded = true;
+}
+
+// The IN-TRANSACTION noop evidence. A mutation that committed but changed
+// nothing still has evidence, written in its own transaction so it commits or
+// rolls back with the mutation — never a post-commit write.
+//
+// The scope and the actor come from the opsAction context and are NEVER
+// invented: outside that context this is a programming error, not a
+// config.set row with a null actor.
+//
+// The caller states ITS OWN scope, actor and tenant, and they must match the
+// ambient context exactly. An ambient context must not be allowed to label a
+// noop with another operation's scope, actor or tenant: the noop evidence is
+// only truthful when it describes the operation that actually ran.
+export async function recordOpsNoop(
+  tx: TenantTx,
+  input: {
+    correlationId: string;
+    origin: "server_action" | "ops_page" | "http_route" | "internal_call";
+    scope: OpsScope;
+    actorId: UserId;
+    tenantId: string | null;
+  },
+): Promise<void> {
+  const context = opsContext.getStore();
+  if (!context) throw new Error("recordOpsNoop: no opsAction context");
+  if (
+    context.scope !== input.scope ||
+    context.actorId !== input.actorId ||
+    context.tenantId !== input.tenantId
+  ) {
+    throw new Error("recordOpsNoop: operation context mismatch");
+  }
+  await recordOpsAudit(tx, {
+    action: context.scope,
+    detail: { outcome: "noop", correlationId: input.correlationId, origin: input.origin },
+  });
 }

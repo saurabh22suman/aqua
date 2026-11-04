@@ -21,7 +21,7 @@
 // tests/owner-insights-home-scope.test.ts).
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 const FACILITY = "33333333-3333-4333-8333-333333333333";
 
@@ -49,25 +49,6 @@ const dashboardFixture = {
   },
 };
 
-const attendanceFixture = {
-  from: "2026-09-27",
-  to: "2026-10-27",
-  rows: [],
-  summary: {
-    sessions: 0,
-    marks: { present: 0, late: 0, absent: 0, total: 0 },
-    shares: { present: null, late: null, absent: null },
-    register: {
-      sessionsWithRoster: 0,
-      completedRegisters: 0,
-      completionPct: null,
-      rosterSlots: 0,
-      markedSlots: 0,
-      unmarkedSlots: 0,
-    },
-  },
-};
-
 const enquiryFixture = {
   from: "2026-09-27",
   to: "2026-10-27",
@@ -77,7 +58,6 @@ const enquiryFixture = {
 
 const mocks = vi.hoisted(() => ({
   ctx: { permissions: new Set<string>(), features: new Set<string>() },
-  attendance: vi.fn(),
   enquiries: vi.fn(),
 }));
 
@@ -125,7 +105,6 @@ vi.mock("@/lib/actions/tenant-timezone", () => ({
 }));
 
 vi.mock("@/lib/actions/owner-insights", () => ({
-  getOwnerInsightsAttendanceAction: (...args: unknown[]) => mocks.attendance(...args),
   getOwnerInsightsEnquiryStagesAction: (...args: unknown[]) => mocks.enquiries(...args),
 }));
 
@@ -140,7 +119,6 @@ beforeEach(() => {
     "enquiries.read",
   ]);
   mocks.ctx.features = new Set(["reports", "members", "enquiries"]);
-  mocks.attendance.mockResolvedValue(attendanceFixture);
   mocks.enquiries.mockResolvedValue(enquiryFixture);
 });
 
@@ -149,50 +127,30 @@ afterEach(() => {
 });
 
 describe("Owner Home — the insights wiring", () => {
-  it("reads both insight models with the selected facility as the location scope", async () => {
-    render(
-      await OwnerHomePage({ searchParams: Promise.resolve({ facility: FACILITY }) }),
-    );
-
-    expect(mocks.attendance).toHaveBeenCalledTimes(1);
-    expect(mocks.enquiries).toHaveBeenCalledTimes(1);
-    for (const call of [
-      mocks.attendance.mock.calls[0]![0],
-      mocks.enquiries.mock.calls[0]![0],
-    ]) {
-      const input = call as { from: string; to: string; locationId?: string };
-      // The facility narrows the read; it is never dropped.
-      expect(input.locationId).toBe(FACILITY);
-      // A real 30-day window ending today (exclusive end).
-      expect(input.from).toBe("2026-09-27");
-      expect(input.to).toBe("2026-10-27");
-    }
+  // Analysis has moved to Reports; Home must not issue this read even
+  // for an authorized owner and a facility filter.
+  it("does not issue the reports-only enquiry read from Home", async () => {
+    render(await OwnerHomePage({ searchParams: Promise.resolve({ facility: FACILITY }) }));
+    expect(mocks.enquiries).not.toHaveBeenCalled();
   });
 
-  it("never reads the insight models for a caller without the operational-reports grant", async () => {
+  it("never reads the insight model for a caller without the operational-reports grant", async () => {
     // A caller who may open the dashboard but not the operational
     // reports gets no insight read at all, and no section.
     mocks.ctx.permissions = new Set(["dashboard.view", "members.read"]);
 
     render(await OwnerHomePage({ searchParams: Promise.resolve({}) }));
 
-    expect(mocks.attendance).not.toHaveBeenCalled();
     expect(mocks.enquiries).not.toHaveBeenCalled();
     const text = document.body.textContent ?? "";
     expect(text).not.toContain("Enquiries by current stage");
   });
 
-  it("degrades a failed read to an unavailable panel instead of breaking the page", async () => {
-    mocks.attendance.mockRejectedValue(new Error("connection reset"));
-
+  it("keeps Home usable when a reports-only read would fail", async () => {
+    mocks.enquiries.mockRejectedValue(new Error("connection reset"));
     render(await OwnerHomePage({ searchParams: Promise.resolve({}) }));
-
-    const text = document.body.textContent ?? "";
-    // The page is still there…
-    expect(text).toContain("Collected today");
-    // …and the failed read says it could not be read, which is not the
-    // same as "nothing happened".
-    expect(text).toMatch(/could not be read/i);
-    expect(text).not.toMatch(/no batch ran/i);
+    expect(mocks.enquiries).not.toHaveBeenCalled();
+    expect(screen.getByTestId("owner-home")).toBeTruthy();
   });
+
 });

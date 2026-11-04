@@ -17,21 +17,38 @@ export function PremisesQrCard({ urlPath }: { urlPath: string }) {
   }, [urlPath]);
 
   return (
-    <div data-print-isolate="premises-qr" className="print-isolate-block mt-5 rounded-card border border-line bg-paper p-4">
-      <h2 className="mb-4 text-center font-display text-[19px] font-semibold">Staff check-in</h2>
-      <div className="flex justify-center">
-        <LinkQr url={url} size={220} />
+    <div className="mt-5">
+      <div
+        data-testid="premises-qr-poster"
+        data-print-isolate="premises-qr"
+        className="print-isolate-block rounded-card border border-line bg-paper p-5"
+      >
+        <h2 className="text-center font-display text-[22px] font-semibold">
+          Staff check-in
+        </h2>
+        <p className="mx-auto mt-1 max-w-[32ch] text-center text-[13px] text-ink-3">
+          Scan the academy&rsquo;s code, sign in, then confirm your own check-in.
+        </p>
+        <div className="mt-5 flex justify-center">
+          <LinkQr url={url} size={220} />
+        </div>
+        <a href={url} className="mt-4 flex min-h-11 items-center justify-center text-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 print:hidden">
+          Open check-in page
+        </a>
+        <p className="mt-4 hidden text-[11px] font-medium uppercase tracking-[0.08em] text-ink-3 text-center print:block">
+          If the camera cannot scan, open this link by hand
+        </p>
+        <p className="mt-1 hidden break-all text-center text-[12px] text-ink-3 print:block">
+          {url}
+        </p>
       </div>
-      <p className="mt-3 break-all text-center text-[12px] text-ink-3">
-        {url}
-      </p>
       <Button
         variant="secondary"
         size="md"
         className="mt-3 w-full print:hidden"
         onClick={() => window.print()}
       >
-        Print this page
+        Print poster
       </Button>
     </div>
   );

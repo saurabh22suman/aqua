@@ -90,7 +90,7 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     ).toBe("page");
   });
 
-  it("carries one search box in the shared top bar (mobile + desktop)", () => {
+  it("offers responsive search with the same accessible purpose", () => {
     render(
       <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
         <p>Page content</p>
@@ -98,10 +98,34 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     );
 
     const topBar = screen.getByTestId("owner-top-bar");
-    expect(within(topBar).getByTestId("global-search-input")).toBeTruthy();
-    // One instance, one header: the same sticky header serves the
-    // mobile breakpoint and the desktop top bar.
-    expect(screen.getAllByTestId("global-search-input")).toHaveLength(1);
+    // The DESKTOP search is the header's job. The phone's lives in the
+    // More panel, so the header row keeps room for the club identity,
+    // the facility in scope and the account.
+    const headerInputs = within(topBar).getAllByTestId("global-search-input");
+    expect(headerInputs).toHaveLength(1);
+    const desktop = Array.from(topBar.querySelectorAll("div")).find(
+      (element) =>
+        element.classList.contains("lg:block") &&
+        element.contains(headerInputs[0]!),
+    );
+    expect(desktop?.classList.contains("hidden")).toBe(true);
+
+    // The phone search stays mounted inside the More panel: the panel is
+    // closed until the owner opens it, and it is hidden on a desktop.
+    const mobileNav = screen.getByTestId("owner-mobile-nav");
+    expect(mobileNav.className).toContain("lg:hidden");
+    const more = within(mobileNav).getByText("More").closest("details");
+    expect(more).not.toBeNull();
+    expect(more!.hasAttribute("open")).toBe(false);
+    const phoneInput = within(more!).getByTestId("global-search-input");
+    expect(phoneInput).toBeTruthy();
+
+    // Both instances say the same thing about what they search.
+    for (const input of [headerInputs[0]!, phoneInput]) {
+      expect(input.closest("label")?.textContent).toContain(
+        "Search members, enquiries and payments",
+      );
+    }
   });
 });
 

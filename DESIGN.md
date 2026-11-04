@@ -2,6 +2,26 @@
 
 **The visual system for Aqua. Loaded on every UI task. Non-negotiable.**
 
+## Current whole-product amendment — 31 October 2026
+
+The human authorised the app-wide fixes and local demo. The reconciled contract
+is [product acceptance](docs/design-system/product-acceptance.md). It takes
+precedence over conflicting older visible-comparison-copy, Money/Attendance,
+uniform icon/chip-size, density and chart-frame prescriptions below. Historical
+sections describe earlier decisions, not permission to retain a demonstrated
+defect. Security, data, money, consent and accessible exact values still apply.
+
+Money contains financial summaries; attendance has its own operational home.
+Shared period/facility context and comparisons have one display owner. Exact
+methodology/ranges remain accessible in Details rather than repeated prose.
+Dashboard trends default to a compact genuine Last 7 days with a range toggle.
+Phone and desktop may differ in composition, ordering, density and icon sizes;
+both themes retain the same meanings and component behaviour. Compact needless
+space without shrinking readable content or usable targets. Align related
+comparison regions; do not force unrelated cards to an arbitrary equal height.
+These rules apply to every role/shared/public consumer and future screen, with
+actual coverage recorded. They are not a claim that the entire app is accepted.
+
 ## Design program — 2026-10-26
 
 The current program is defined in `docs/design-system/` (README,
@@ -52,9 +72,18 @@ the corresponding components have shipped.
 - Mango is the **default**, not a universal requirement. Use the tenant's
   approved runtime accent, including marine where configured. Changing the
   system palette or adding decorative colour needs a recorded decision.
-- Use the existing local SVG avatar for people, seeded by stable identity;
-  `TenantMark` is academy branding, not a person's avatar. R1 has no photo
-  upload. This is a product decision, not a claim that DPDP bans all photos.
+- Person avatars are the person's **name initials**, never generated or
+  gradient art (human decision, 2 November 2026: "please use the name
+  initials only, like others"). The initials come from the displayed name
+  the row already shows — the first two non-empty words, the first
+  grapheme of a single name, and "?" when there is no name (an honest
+  unknown, never an invented identity). They are drawn on the flat theme
+  tint (`--accent-soft`/`--accent-ink`) in both presets. A stable person
+  id may stay as identity metadata, but it never decides what is drawn;
+  no photo upload exists. `TenantMark` is academy branding, not a
+  person's avatar. The first grapheme is taken whole, so a combining
+  accent or an Indian-script conjunct is never split. This is a product
+  decision, not a claim that DPDP bans all photos.
 - Check populated, unselected, selected, empty, loading, error, disabled and
   permission-limited states. Preserve Late and offline save/retry behaviour;
   do not add a cosmetic Save button to an auto-saving register.
@@ -287,7 +316,7 @@ Global, not per-component. This is a money product; misaligned digits are the te
 Spacing: multiples of **4px** only.
 
 ```js
-borderRadius: { card: '20px', ctl: '14px', pill: '9999px' }
+borderRadius: { card: '20px', ctl: '10px', pill: '9999px' }
 boxShadow: {
   1: '0 1px 2px rgba(15,31,28,.05)',
   2: '0 2px 6px rgba(15,31,28,.05), 0 14px 32px rgba(15,31,28,.08)',
@@ -301,6 +330,136 @@ page never re-guesses them: `--control-height-sm` (44px), `--control-height-md`
 (48px), `--control-height-lg` (52px), `--icon-size-sm/md/lg`
 (16/18/20px), `--icon-stroke` (1.8) and `--icon-stroke-active` (2.2),
 plus the layer order `--z-nav`, `--z-sticky`, `--z-overlay`, `--z-toast`.
+
+### 1.4a The shared control contract (owner redesign, 27 October 2026)
+
+The human approved ONE control system for both presets. It is a contract
+about **rendered** geometry, not about class names:
+
+- **Standard control — 48px high, 10px radius (`--radius-ctl`), 16px
+  control text, 16px horizontal padding.** Action buttons, text fields,
+  selects, date fields and time pickers are all standard controls.
+- **Compact control — at least 44px high.** A table row action and a
+  tertiary control keep the 44px floor; a shared button says so
+  explicitly (`size="sm"`).
+- **A standard button is the default.** `Button` and `buttonClasses()`
+  default to the 48px standard, so an ordinary header, form or toolbar
+  action is never 44px beside a 48px input. A compact action opts in.
+- **A long action wraps and grows.** No action sets `whitespace-nowrap`,
+  `truncate` or `overflow-hidden` to keep a numeric height.
+- **Surfaces:** an ordinary entry or search field stays **neutral**; a
+  **picker** (a select, a date or time field) wears a very lightly tinted
+  picker surface; a **secondary** action button wears a slightly stronger
+  theme tint; the **primary** action is the solid theme colour.
+  Destructive, error and success keep their reserved tokens and always
+  carry a word or an icon, so colour is never the only cue.
+- **A toolbar aligns control bottoms.** Labels sit consistently above
+  fields; no extra field margin changes the row alignment. Search gets
+  useful flexible width, pickers have bounded widths, and a narrow
+  screen wraps or stacks deliberately.
+
+The tokens live in `app/globals.css` (`--control-text`,
+`--control-padding-x`, `--control-border`, `--control-border-hover`,
+`--control-surface`, `--control-surface-picker`, `--control-surface-action`,
+`--control-surface-action-hover`). The tints are `color-mix()` expressions
+over `--accent-strong`, so they follow the preset without being restated
+per preset.
+
+The rendered geometry is proved in Chrome by
+`e2e/owner-redesign-c1-controls.ts`, which measures the computed height,
+radius, font size and painted background of the real controls, in both
+presets, at 390×844, 1280×900, 1280×600, 1023×768 and 1024×768 — and
+also proves that the shell's controls share a bottom edge and that no
+viewport gains a sideways scroll.
+
+### 1.4b Subtle surfaces and purposeful placement (human direction, 28 October 2026)
+
+The owner summary row is the reference for the product's quiet colour language.
+Ops uses the same foundations and attention to detail, with desktop-first
+density. This is a design requirement, **not a statement that every consumer
+has been implemented or visually accepted**. Owner and Ops may use different
+compositions for their tasks; they must not look like unrelated products.
+
+**Summary surfaces.** Use the existing tokens below. Pastels group information
+and aid scanning; the label, value, explanatory text and any status icon carry
+the meaning. A coloured surface alone is never a status or an interaction cue.
+
+| Context | Surface token / utility | Meaning and supporting treatment |
+| --- | --- | --- |
+| Collected money; active platform context | `--color-tile-money` / `bg-tile-money` | Calm mint. Owner collections use a wallet with `good` ink; Ops active tenants use an appropriate tenant icon, not a money icon. An active count is not a claim that every tenant is healthy. |
+| People or general task information | `--color-tile-info` / `bg-tile-info` | Powder blue in Mint Garden, pale lilac in Lavender Club. Owner active members and Ops open tasks use their own meaningful labels/icons. An open-task count alone does not imply urgency. |
+| Sessions or trial context | `--color-tile-butter` / `bg-tile-butter` | Restrained butter surface. A calendar identifies sessions; trial context has a suitable trial/time label. Yellow is not automatically a warning. |
+| Confirmed overdue money or positive at-risk count | `--color-late-soft` / `bg-late-soft` | Soft red with `late` ink and an explicit overdue/risk label. Only use alarm treatment when the underlying condition exists. |
+| Neutral, unavailable or inapplicable information | Existing `paper` / `deck` surface | Explain the state. Do not manufacture a number, a healthy status or a pastel category merely to fill a row. |
+
+Owner reference order: **Collected today → Overdue → Active members → Sessions
+today**. Respect the sport's existing member/session terminology. Ops Overview
+order: **Active tenants → On trial → At risk → Open ops tasks**. These are
+context assignments, not a rotating palette based on a tile's array index.
+Keep each metric in the same position across theme changes and data refreshes.
+
+- **Calm zero:** zero collected stays mint with honest zero-payment copy;
+  zero overdue or zero at risk has a calm neutral/information treatment and
+  explicit zero-state wording, not red alarm ink. Missing data stays distinct
+  from zero. An absent Ops snapshot must not create four zero-valued cards.
+- **Text:** dark readable ink on pale surfaces; `late` value ink only for a
+  real problem. Keep numeric formatting and tabular numerals consistent.
+  Labels are quieter than values; the short explanatory line is quieter than
+  both. Do not shrink text or remove definitions to equalise card heights.
+- **Icons:** when present, use a consistent 32px chip, 10px chip radius,
+  18px icon and 8px icon-to-label gap. Use existing icon-size/stroke tokens and
+  individual Lucide imports. Decorative icons are hidden from assistive
+  technology; visible words retain the meaning. Use reserved `good`, `late`,
+  `warn`, `water`, `marine` or neutral chip treatments for the actual context.
+- **Geometry:** siblings share a radius, padding, label baseline and value
+  rhythm. Owner `StatCard` retains its existing compact geometry; Ops may
+  retain its larger display figure. Do not duplicate either component's
+  styles on individual pages or stretch all panels to an arbitrary height.
+  Owner keeps its 2×2 phone summary; Ops may stack metrics on a narrow screen
+  to preserve readable labels and snapshot notes instead of shrinking them.
+- **Interaction:** only a supported drill-down is a link. Carry the same
+  period/location filters to its destination. A non-interactive metric has
+  no pointer cursor, hover elevation or invented button affordance.
+
+**Controls and their small differences.** Consume the shared primitives from
+§1.4a, including ref, label, keyboard, pending and disabled behavior. The
+existing surface derivations are deliberate: entry/search is neutral;
+pickers mix 5% of `--accent-strong` into paper; secondary actions mix 10%
+(16% on hover); primary actions use the solid action token. Use
+`--control-surface-picker`, `--control-surface-action` and
+`--control-surface-action-hover`, not local colour literals or copied mixes.
+Selections, validation and destructive actions keep their own semantic tokens.
+Do not tint a search field to make it look as important as the primary action.
+
+**Placement and alignment.** Put the page title and context first, then the
+relevant summaries, then the work that needs attention. Group filters with
+the dataset they affect and actions with the task they complete. In a toolbar,
+labels sit above their fields and the input/select/action control bottoms
+align, even when an action has no label. Use one intended gap between groups;
+do not render empty header/action slots that leave phantom gaps. Give search
+the flexible width; keep short pickers bounded. Wrap related controls
+together, then stack them on a phone rather than clipping labels, native date
+segments, chevrons or buttons. Use the shared 4px spacing scale, not per-page
+pixel nudges. Do not force an unlabelled button into a field-label row.
+
+**Every state is designed.** Include populated, real zero, missing data,
+filtered-empty, loading, error/retry, selected, disabled/pending and
+permission-limited states where applicable. Keep the page's structure and
+control geometry stable. A viewer's limit is stated in words; it is never
+conveyed only by faded colour. Theme preference must not alter data, scope,
+permissions or the meaning of a status. Preserve reduced-motion behavior.
+
+**Finish gate for these details.** Inspect actual computed backgrounds, ink
+contrast, icon geometry, field/button heights, label alignment and overflow
+after hydration in **both presets**. Standard controls are 48px high with
+16px text and 10px radius; compact actions explicitly retain the 44px floor.
+Check Owner at 390×844 and 1280×900; check Ops at 1280×900 plus narrow reflow
+at 390×844. Apply §2.1's extended matrix when shell/scroll behavior changes.
+Verify text contrast (4.5:1 ordinary, 3:1 large) and applicable control/focus
+contrast (3:1) on the actual tinted surfaces. Record functional acceptance
+separately from visual acceptance; a class name or passing build is not proof
+that the browser painted the right colour. Save measurable intended RED
+before a visual implementation change, then GREEN and independent review.
 
 ### 1.5 Motion
 
@@ -355,6 +514,11 @@ or with its navigation scrolled out of reach:
 Verify at 1280×900, 1024×768, 1023×768 (one pixel below the
 breakpoint), 1280×600 (short) and 390×844.
 
+Verify actual browser 200% zoom and record native window/content
+dimensions. A 640×450 reflow proxy may supplement the check, but cannot
+certify browser zoom. Device scale factor and pinch zoom are not
+substitutes.
+
 
 ---
 
@@ -399,7 +563,19 @@ Rule of thumb: **≤ ~10 curated items → row-card; more or working lists → d
 
 ### Button
 
-`components/ui/Button.tsx` (2026-09-13 audit §7.2). Enforced sizes: `sm` = 44px (the §2 floor, met exactly), `md`/`lg` = 48px. Variants: `primary` (the single accent action), `secondary`, `ghost`, and `destructive` (the `late` token — hard-to-reverse actions like "Mark churned"). Never hand-roll a height below 44px.
+`components/ui/Button.tsx` (2026-09-13 audit §7.2). Variants: `primary`
+(the single accent action), `secondary`, `ghost`, and `destructive` (the
+`late` token — hard-to-reverse actions like "Mark churned"). Never
+hand-roll a height below 44px.
+
+Sizes (the shared control contract, §1.4a): **`md` is the default** — the
+48px standard control, 16px control text and the 10px control radius.
+`lg` is the standard with more padding. `sm` is the explicit **compact**
+control: 44px, for a table row action or a tertiary control. A caller
+that says nothing gets the standard.
+
+Every shared button carries `data-control="button"`, so a check can find
+a shared button without guessing at its classes.
 
 ### Foundation primitives (foundation lane, 2026-10-26)
 
@@ -415,15 +591,16 @@ friends) is still forbidden.
 
 | Primitive | File | Notes |
 |---|---|---|
-| Button | `components/ui/Button.tsx` | existed; unchanged API |
+| Button | `components/ui/Button.tsx` | existed; the API is unchanged — the standard control is now the default (§1.4a) |
 | Status badge | `components/ui/StatusBadge.tsx` | existed; owns the tone maps (§3 status pill) |
 | Table / list row | `components/ui/DataTable.tsx`, `Row.tsx` | existed |
 | Empty state / error | `components/ui/EmptyState.tsx`, `FieldError.tsx` | existed |
 | Section header | `components/ui/SectionHeader.tsx` | existed |
 | Skeleton | `components/skeleton.tsx` | existed |
-| Input / Textarea | `components/ui/Input.tsx`, `Textarea.tsx` | 16px text, 44px floor, `invalid` → `aria-invalid` |
+| Input / Textarea | `components/ui/Input.tsx`, `Textarea.tsx` | the standard control: 16px text, 48px height, 10px radius, neutral entry surface (§1.4a); `invalid` → `aria-invalid` |
 | Label / Field | `components/ui/Label.tsx`, `Field.tsx` | one field shape: label, description, control, error beside the control |
-| Select | `components/ui/Select.tsx` | native select, decorative chevron |
+| Select | `components/ui/Select.tsx` | native select, decorative chevron; a picker surface |
+| Date field | `components/ui/DateField.tsx` | the masked day-first date picker; a picker surface |
 | Checkbox / Switch | `components/ui/Checkbox.tsx`, `Switch.tsx` | native checkbox; switch is `role="switch"` with `aria-checked` |
 | Tabs | `components/ui/Tabs.tsx` | in-page tabs with roving tabindex; URL-state tabs stay links (`SegmentedTabs.tsx`) |
 | Dialog | `components/ui/Dialog.tsx` | native `<dialog>`, focus returns to the trigger |
@@ -457,7 +634,7 @@ One primary action per screen. Everything else is secondary or a plain link.
 ### Action hierarchy
 
 Purpose: tell the reader what the screen is *for* without a row of equal
-buttons. **One dominant action** — accent-filled, 44px, the only one on the
+buttons. **One dominant action** — accent-filled, standard 48px (§1.4a), the only one on the
 screen. Everything else is **secondary** (quiet bordered control or plain
 link) or **tertiary** (plain link, muted). A destructive action never sits
 beside the dominant one as an equal.
@@ -471,7 +648,10 @@ swimmer and Capture enquiry are quiet secondary/tertiary links.
 ### Summary metric
 
 Purpose: answer one standing question at a glance and lead to its evidence.
-Use: four (never more than five) tiles in one row on desktop, 2×2 on a phone.
+Use: four (never more than five) tiles in one row on desktop, 2×2 on an owner
+phone. Ops may stack at narrow widths as specified in §1.4b.
+Apply §1.4b's subtle surfaces, icon treatment, calm-zero rules and consistent
+geometry; plain white tiles are not the default substitute for that direction.
 Every tile carries:
 
 1. a label that states its **basis** — "today", a **current balance**, or a
@@ -534,6 +714,18 @@ sticky save bar reserves its own space so it never covers the last field or
 the consent block. Cancel returns to the record; saving is never a cosmetic
 button on an auto-saving surface (the register saves as it marks).
 
+### Shared dropdown amendment — 30 October 2026
+
+The human requested a styled open dropdown across the app. This supersedes
+older native-popup guidance: preserve the native select element's ref,
+form value and event API, while the shared Select renders its own listbox.
+The popup must align with both field edges and match its width whenever
+the field fits the visible clipping region. Clamp only for actual viewport
+or ancestor limits; an arbitrary popup width cap is not acceptable.
+Long labels wrap, option rows have at least 44px targets, and selected,
+focused and disabled states use shared theme tokens plus text/markers.
+Review the OPEN control in both themes, not only its closed field.
+
 ### Tabs and filters
 
 Purpose: narrow one dataset without losing context. Tabs are **URL state**
@@ -552,6 +744,16 @@ reachable from the shell for roles without Settings. The academy mark is
 branding, not a person avatar.
 
 ### Charts
+
+**30 October 2026, current Reports task amendment.** The existing owner
+Reports screen keeps its multiple, compact server-rendered SVG cards on
+phones and desktops while the reported chart defects are corrected. This
+is the scoped exception to the one-panel, ECharts-only and phone-table-only
+guidance below; it introduces no new engine or dependency. Keep meaningful
+chart frames consistent, let empty/insufficient cards fit their content,
+and group mixed-height cards without accidental row holes. Visible axes,
+units, truthful gaps, exact accessible data and independent browser review
+remain mandatory. A passed Home chart check does not accept Reports charts.
 
 Purpose: answer one stated business question over one stated period. At most
 **one chart panel** per screen. Each chart states:
@@ -761,7 +963,11 @@ what is on today, and (optionally) one trend.
    and percentage, expands Digital into UPI / bank transfer / card, and
    links each category to `/owner/fees?tab=transactions` filtered by
    `group=`/`method=` for the same dates and facility. Reversals are stated
-   beside the total (ledger-only, not netted).
+   beside the total (ledger-only, not netted). The approved composition
+   puts the **donut and the legend side by side**, and they wrap
+   deliberately on a narrow screen rather than forcing a sideways scroll.
+   Every legend row carries a colour swatch that REPEATS the meaning; the
+   words carry it, so colour is never the only cue.
 6. **By <facilities>** — only when the tenant has more than one location.
 
 **Mobile (390×844):** header → dominant action → summary (2×2) → exceptions →
@@ -878,6 +1084,39 @@ budget, accessibility and truthfulness rules above — still stands.
   ids and deploy infrastructure — is a coordinated decision outside
   this work.
 
+### Owner shell navigation (27 October 2026)
+
+The desktop sidebar's **Scheduling** group carries the **booking desk**
+(`/owner/bookings`) beside Programs & batches, Sessions and Schedule.
+
+- The entry appears only for a caller who holds the **`bookings.read`
+  permission** AND whose tenant is entitled to the **`pool.booking`
+  feature** — the same two gates the bookings route itself enforces, so
+  the sidebar never offers a destination that answers 404.
+- When the caller's permissions removed the whole Scheduling group, the
+  group is created with the booking desk in it, in the canonical order of
+  the groups that are present. The booking desk is never offered twice.
+- The **mobile bottom nav keeps exactly four items** (DESIGN.md §2). The
+  phone reaches the booking desk through Settings — *Programs &
+  facilities → Bookings* and *Fees & payments → Booking prices* — which
+  the Settings page owns.
+
+A hidden link is not a security control: the route and its actions stay
+authoritative.
+
+### Owner navigation reads on intent — 3 November 2026
+
+An owner's page is read when the owner NAVIGATES to it, not prefetched in
+the background. Owner links (the shell, the sidebar and phone navigation,
+the More menu, the account menu, the staff board, the shared search results
+and the shared link renderers on an owner destination) ask for no automatic
+prefetch; every other destination keeps exactly the prefetch it asks for, so
+coach, reception and Ops behaviour is unchanged. The owner's loading states
+are kept — a navigation still shows them — and no record data is fetched
+while the owner is reading something else. This is a per-link UI setting,
+not a caching, security or framework change; the failure it addresses was
+observed only in the browser, and the browser remains the acceptance.
+
 ### Verification criteria
 
 - 1280×900 and 390×844 with the seeded owner, plus one intermediate width
@@ -898,3 +1137,101 @@ budget, accessibility and truthfulness rules above — still stands.
   the phone; touch targets ≥44px; inputs 16px (where any exist).
 - `pnpm typecheck`, `pnpm lint`, tests, `pnpm build`, `pnpm check:bundle`,
   `pnpm check:fonts` pass; browser evidence saved with the branch.
+
+
+### Install shortcut amendment — 30 October 2026
+
+On browsers offering an install event, activating the 44px right-edge shortcut
+opens the browser prompt directly. Do not introduce an expanded floating card.
+The shortcut uses shared paper/line/ink tokens in both themes. Drag and arrow
+keys reposition it; a drag never installs. Check its whole visible footprint
+against page controls, text, sticky chrome and navigation at each target size.
+Safari guidance must remain factual and is a separate visual acceptance case.
+
+
+### Shared calendar and date-only filters — 31 October 2026
+
+Human revision: date selection uses the shared app-styled calendar popup across
+DateField consumers, with DD/MM/YYYY display and canonical YYYY-MM-DD values.
+Dates are chosen rather than entered as free text. Supersedes the earlier
+masked-text-only presentation. Keep labels, required/optional validation,
+month/year selection suitable for birth dates, keyboard navigation, Escape,
+focus restoration and both theme tokens. Opening/cancelling must not commit an
+inline edit; choosing a date commits that chosen value once. Calendar buttons
+never submit the enclosing form. Avoid visible instructions for typing a date.
+
+Filters show dates only. Ops Activity uses Any date, Today, Last 7 days, Last
+30 days and Custom with optional start/end dates. A selected end date includes
+its complete IST calendar day; the read uses an exclusive next-midnight bound.
+No visible hours, minutes, AM/PM or seconds in these filters. Existing explicit
+timestamp APIs retain their documented precision. Scheduling and follow-up
+forms keep the times their tasks actually require.
+
+Review selected-date text and calendar hit areas together in narrow inline
+fields; neither may cover the other. Popups and month/year controls must fit
+small viewports. Time groups retained in scheduling forms wrap when three
+readable controls cannot fit; preserve their text size, validity and canonical
+value. Actual Chrome geometry and journeys establish acceptance, separately
+from layout-intent tests. No deployment is authorised by a local pass.
+
+
+### Owner light — 2 November 2026 (approved mock)
+
+Human approval of the standalone owner concept, implemented in the real
+product. The approved source is the owner mock of 2 November 2026,
+sha256 `3bd4a5533ba345fb1daaad15761e8646df2993c6a57be94ce45960f523c5bca5`.
+The mock is the reference for the owner product's type, icons and phone
+composition; it is not a second application, and the real pages keep their
+real data, permissions and actions.
+
+**Type.** One family for the owner product: Instrument Sans, 400 for body
+text, rows and controls, 500 for headings, labels and figures. The heavy
+display face is removed inside the owner surface only, so Ops, coach,
+reception, the public pages and the auth panel keep the face and the
+weights they have today. Meaningful emphasis stays meaningful: body text
+at 400 against a heading or a figure at 500. No new font package, no new
+icon dependency.
+
+**Icons.** The owner surfaces draw the approved mock's own outline
+geometry: a 24×24 box, no fill, the current colour as the stroke, a 1.8
+stroke, round caps and joins, decorative beside a label. The sizes follow
+the mock: 16 for the facility pin, 22 for navigation, 24 for the floating
+action. A selected destination is the theme's accent on the SAME outline —
+never a heavier, filled or borrowed symbol, and never another icon pack.
+One shared owner icon set; no duplicated maps and no local copies.
+
+**Owner Home.** Today and the last seven days side by side, one figure
+each, no stacked numbers and no repeated sentence. No manual badge and no
+explanatory methodology on Home — the manual confirmation of a payment
+belongs to the payment flow, where it is true. No boxed shortcut block and
+no second member-directory tile beside the directory itself.
+
+**Create actions.** A contextual floating action appears only where a
+create action actually exists: one round 56px action on a phone, above the
+navigation and clear of the safe area, and a labelled action in the
+desktop header. It never duplicates a mobile header action, never appears
+as a generic action on Home, and the content reserves room for it only on
+the page that carries it.
+
+**One fact, one owner.** A screen states its scope once: the directory
+heading is the page heading, the result count and the labels stay, and a
+second sentence repeating them is removed. Useful guidance — validation,
+consent, privacy, money and empty states — is never removed with it.
+
+**Phone composition.** The owner header is a compact context row: the club
+identity, the facility in scope and the account. Long names truncate on
+purpose and keep their full value; the facility in scope is readable, with
+the whole selected value available. Controls keep a 44px target and 16px
+control text, and the row never overflows horizontally. The record search
+stays reachable from the More panel on a phone and in the header on a
+desktop, and both remain available.
+
+**Dates.** Date filters stay simple: the shared calendar popup, dates only,
+no visible hours in a filter. Scheduling forms keep the times their tasks
+require.
+
+**State and approval.** Filters, drafts, the selected records, the scroll
+position and the focus survive a layout change. Functional checks and
+visual approval are separate: a passing test is not an approval, and a
+local pass authorises nothing. Other roles, the semantic colours, the
+security boundaries and the performance budgets are unchanged.
