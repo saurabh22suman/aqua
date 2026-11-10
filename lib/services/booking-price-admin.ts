@@ -33,14 +33,27 @@ import type { ActionCtx } from "@/lib/auth/context";
 // Authority for calling it lives in lib/actions/booking-price-admin.ts
 // (`settings.manage` — owner/admin; the receptionist role does not
 // carry it).
+//
+// NULL facility_id is a CATCH-ALL rule: it prices every facility in the
+// club. It is therefore a tenant-wide row, not a row "at no location".
+// The shared helper's locationVisible(access, null) answers whether the
+// caller may see tenant-wide rows:
+//
+//   • unrestricted (owner/system)            → visible;
+//   • legacy O-08 scoped staff               → visible (the house rule);
+//   • facility-scoped manager                → NOT visible (club-wide);
+//   • denied                                 → NOT visible.
+//
+// A facility row whose join failed (locationId NULL) is NOT a catch-all;
+// it is treated as out of scope rather than promoted to a whole-business
+// row.
 
 export * from "./booking-price-rules";
 export * from "./booking-price-writes";
 
 // The catalogue the owner edits. A rule attached to a facility is
 // listed only when that facility is one the caller can reach; a
-// catch-all rule is tenant-wide and therefore always visible (it
-// prices the caller's own facilities too).
+// catch-all rule is tenant-wide and follows the helper's NULL rule.
 export async function listBookingPriceRules(
   ctx: ActionCtx,
 ): Promise<BookingPriceRuleRow[]> {
@@ -64,10 +77,10 @@ export async function listBookingPriceRules(
       .orderBy(asc(bookingPriceRules.priority), asc(bookingPriceRules.label));
 
     return rows
-      .filter(
-        (row) =>
-          row.rule.facilityId === null ||
-          locationVisible(access, row.locationId),
+      .filter((row) =>
+        row.rule.facilityId === null
+          ? locationVisible(access, null)
+          : row.locationId !== null && locationVisible(access, row.locationId),
       )
       .map((row) =>
         toBookingPriceRuleRow(row.rule, row.facilityName ?? null),
@@ -99,9 +112,10 @@ export async function getBookingPriceStatus(
       )
       .where(eq(bookingPriceRules.tenantId, ctx.tenantId));
 
-    const visible = rows.filter(
-      (row) =>
-        row.facilityId === null || locationVisible(access, row.locationId),
+    const visible = rows.filter((row) =>
+      row.facilityId === null
+        ? locationVisible(access, null)
+        : row.locationId !== null && locationVisible(access, row.locationId),
     );
     return {
       total: visible.length,

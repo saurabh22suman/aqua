@@ -4,33 +4,15 @@ import { rolePermissions, roles } from "@/db/schema/roles";
 import type { Ctx } from "@/lib/auth/context";
 import { PERMISSIONS } from "@/db/seed-platform";
 
-// Tenant role gating — single permission resolution.
-//
-// The audit found authorization spread across:
-//   - `assertStaff(ctx)` and three siblings, role-key lists that
-//     admit every staff role (including coach) to every staff-gated
-//     read.
-//   - Feature entitlements (resolveTenantFeatureKeys()) that resolve
-//     correctly but are never consulted at any callsite.
-//   - Layouts that gate only on session existence.
-//
-// This module is the single resolution: `requirePermission(ctx,
-// "members.read")` checks (1) the role carries that permission
-// (via role_permissions), (2) the tenant's plan + overrides enable
-// the module (via resolveTenantFeatureKeys), and (3) the call site
-// is location-scoped (left to the per-action data fetch — a coarse
-// tenant-scoped guard; the per-row scoping is RLS's job).
-//
-// Module derivation comes from PERMISSIONS in db/seed-platform.ts.
-// The seed is the source of truth for "every permission's module"
-// — see the invariant comment on PERMISSIONS there. We import the
-// constant rather than reading it back from the DB because the
-// AST scan (tests/tier1/permission-matrix.test.ts) needs to know
-// the list at scan time, and the row state isn't available until
-// after the seed runs.
 const PERMISSION_TO_MODULE: Record<string, string> = Object.fromEntries(
   PERMISSIONS.map((p) => [p.key, p.module]),
 );
+
+export function moduleForPermission(permissionKey: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(PERMISSION_TO_MODULE, permissionKey)
+    ? PERMISSION_TO_MODULE[permissionKey]
+    : undefined;
+}
 
 // Permissions whose module is "core" — every tenant has these
 // modules in its plan baseline by construction (the standard plan
@@ -67,17 +49,14 @@ export function hasFeature(ctx: Ctx, module: string): boolean {
   return ctx.features.has(module);
 }
 
-// Resolve a single permission against both the role's grant set and
-// the tenant's feature entitlement. Throws ForbiddenError — the
-// action's catch is responsible for translating it into the right
-// user-visible error. Today no action catches it; the test suite
-// mutation proof (sub-PR 3) will catch a missing requirePermission
-// at a callsite before the user does.
-export function requirePermission(ctx: Ctx, permissionKey: string): void {
+export function requirePermission<T extends Pick<Ctx, "permissions" | "features">>(
+  ctx: T,
+  permissionKey: string,
+): void {
   if (!ctx.permissions.has(permissionKey)) {
     throw new ForbiddenError(permissionKey, "role_grant_missing");
   }
-  const moduleKey = PERMISSION_TO_MODULE[permissionKey];
+  const moduleKey = moduleForPermission(permissionKey);
   // If the permission isn't in the closed PERMISSIONS list, this is
   // a developer error — fail closed with a clear message rather than
   // silently allowing.
@@ -90,17 +69,6 @@ export function requirePermission(ctx: Ctx, permissionKey: string): void {
   }
 }
 
-// Resolve the role's permission set and the tenant's feature set
-// inside one withTenant() so the ctx that flows downstream carries
-// both. Called from lib/auth/context.ts's requireDefaultCtx and
-// resolveCtxFor.
-//
-// The module field on PERMISSIONS is the canonical link to the
-// features table — every permission's module is a features.key row
-// (the seed enforces this; tests/tier1/platform-entitlements.test.ts
-// pins it). We read the role_permissions rows for the membership's
-// role, not all role_permissions rows, because the role is what
-// gates the caller's permissions — not the tenant.
 export async function resolvePermissionContext(
   tenantId: Ctx["tenantId"],
   roleId: Ctx["roleId"],

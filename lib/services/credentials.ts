@@ -20,8 +20,14 @@
 // Rate limiting is intentionally out of scope here: better-auth has
 // its own per-IP rate limiter (rateLimit config in lib/auth/server.ts).
 // The per-account lockout in this service is the second layer.
+//
+// 2026-11-09 member activation — ONE LINE IS NEW IN THIS POSTIMAGE:
+// `CREDENTIAL_ISSUER` is EXPORTED, so the transaction-aware credential
+// primitives (lib/services/self-service-credential.ts) resolve the SAME
+// pinned issuer instead of writing the literal a second time. Nothing
+// else in this file changes, and nothing here changes behaviour.
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
@@ -53,7 +59,7 @@ export { PIN_LOCKOUT_THRESHOLD, PIN_LOCKOUT_WINDOW_MS } from "./pin-lockout";
 // (and in the migration test) rather than imported from a deep path.
 // findCredentialAccount filters on it, so every credential row this
 // service writes must carry it or sign-in will not find the account.
-const CREDENTIAL_ISSUER = "local:credential";
+export const CREDENTIAL_ISSUER = "local:credential";
 
 // Generic failure body. Identical for "wrong pin", "locked",
 // "unknown phone" — no oracle for which case fired.
@@ -105,9 +111,63 @@ export async function setCredential(
   });
 }
 
+// The tx-aware sibling of setCredential. The hash is still better-auth's
+// own and the row keeps the canonical providerId/issuer, but the write
+// joins the caller's transaction — so a credential rotation can commit
+// together with the audit row that records it.
+//
+// IT OVERWRITES. It is the RESET path's tool, and it must never be used
+// to set or reset a PIN through a member invitation: the member
+// activation writes its first credential with
+// `setCredentialIfAbsentInTx` (lib/services/self-service-credential.ts),
+// which never updates.
+type CredentialTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function setCredentialInTx(
+  tx: CredentialTx,
+  baUserId: string,
+  pin: string,
+): Promise<void> {
+  const ctx = await auth.$context;
+  const hash = await ctx.password.hash(pin);
+  const [existing] = await tx
+    .select({ id: baAccount.id })
+    .from(baAccount)
+    .where(
+      and(
+        eq(baAccount.userId, baUserId),
+        eq(baAccount.providerId, "credential"),
+        eq(baAccount.issuer, CREDENTIAL_ISSUER),
+        // The canonical identity is FOUR fields: better-auth's
+        // findCredentialAccount resolves on userId + providerId + issuer +
+        // accountId = userId (its email+password plugin writes
+        // accountId = email for the SAME user). Matching on three would
+        // let this write land on that other row — the reset would
+        // overwrite a credential the app's own read path cannot see.
+        eq(baAccount.accountId, baUserId),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    await tx
+      .update(baAccount)
+      .set({ password: hash, updatedAt: new Date() })
+      .where(eq(baAccount.id, existing.id));
+    return;
+  }
+  await tx.insert(baAccount).values({
+    id: uuidv7(),
+    userId: baUserId,
+    accountId: baUserId,
+    providerId: "credential",
+    issuer: CREDENTIAL_ISSUER,
+    password: hash,
+  });
+}
+
 // Ensures the users row and the better-auth ba_user row exist for a
-// canonical phone, links them, and returns the ba_user id. This is
-// the identity half of magic-link redemption, extracted so the demo
+// canonical phone, links them, and returns the ba_user id. This is the
+// identity half of magic-link redemption, extracted so the demo
 // seeding path (setCredentialForPhone) cannot drift from it.
 export async function ensureBaUserForPhone(rawPhone: string): Promise<string> {
   const phone = normaliseToE164(rawPhone);
@@ -174,6 +234,14 @@ export async function setCredentialForPhone(
 // plugin's temp email is the stripped form while redeem wrote the
 // canonical +91 form in some paths; the live difference is a real
 // shape that signInEmail must respect, not something we paper over.
+/** Verify the existing PIN without creating a Better Auth staff session. */
+export async function verifyCredentialPin(baUserId: string, pin: string): Promise<boolean> {
+  const ctx = await auth.$context;
+  const account = await withPlatform(() => ctx.internalAdapter.findCredentialAccount(baUserId));
+  if (!account?.password) return false;
+  return ctx.password.verify({ hash: account.password, password: pin });
+}
+
 export async function hasCredentialByBaUserId(baUserId: string): Promise<boolean> {
   const ctx = await auth.$context;
   const account = await withPlatform(async () => {
@@ -217,7 +285,7 @@ export async function pinLogin(rawPhone: string, pin: string): Promise<Response>
   // (matches how the seed and OTP plugin store users.phone).
   //
   // F-1 (2026-09-13 Indian-user UX audit): the old ad-hoc strip +
-  // leading-0 rewrite rejected the way most Indian users type their
+  // leading-0 rewrite refused the way most Indian users type their
   // own number — a bare 10-digit mobile (e.g. 9000000001) never
   // matched a stored +91 row and surfaced as "Wrong number or PIN".
   // normaliseToE164 already handles every shape (bare 10-digit,

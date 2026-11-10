@@ -1,7 +1,10 @@
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
 import { BackLink } from "@/components/ui/BackLink";
 import { getBrandingAction } from "@/lib/actions/branding";
 import { BrandingForm } from "@/components/branding/branding-form";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // Phase 2.9 — owner branding editor. Setting display name and
 // short name, and choosing an accent from the six approved
@@ -11,17 +14,23 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 export default async function BrandingSettingsPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
   const data = await getBrandingAction();
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/settings" label="Settings" />
 
-      <h1 className="font-display text-[19px] font-semibold">Branding</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        The display name, short name and accent that show across the academy.
-      </p>
+      <PageHeader title={<>Branding</>} />
 
-      <div className="mt-6">
+      {/* Audit correction: the form owns the ONE live draft preview
+          (mark + display name + selected accent). A page-level static
+          preview competed with it on desktop, so the page composition
+          keeps only the working form. */}
+      {/* The page's own purpose line is gone: it only listed the fields the
+          form already shows. The accent is a tenant branding value and
+          still paints the academy mark — nothing here changes, resets or
+          re-points it. */}
+      <div className="mt-5 max-w-[700px]">
         <BrandingForm
           initial={{
             displayName: data.displayName ?? data.fallbackDisplayName,
@@ -30,6 +39,6 @@ export default async function BrandingSettingsPage() {
           }}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

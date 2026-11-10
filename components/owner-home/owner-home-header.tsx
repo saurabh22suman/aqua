@@ -1,49 +1,32 @@
 import { formatFullDateIST } from "@/lib/time/tz";
+import { greetingFor } from "@/components/owner-home/greeting";
 import type { ReactNode } from "react";
 
-// Owner Home — the header that opens the screen.
+// Owner Home — the context header.
 //
-// The approved board opens with three real things and then the work:
-// the day, the club, and the location the figures cover. Nothing here
-// is decorative and nothing here is invented — the date is the
-// tenant's own day, the name is the academy's, and the location is
-// the scope the figures were read under.
-//
-// The heading says "Your club today" rather than a greeting: a greeting
-// ("a good day for your club") asserts how the day is going, and the
-// day may have three overdue payments in it.
+// The approved mock (evening reference, 3 November 2026) opens with a compact
+// time-of-day greeting and the club's own day. The facility in scope is NOT
+// repeated under the date: the header row's facility switcher already states
+// it, and one fact keeps one owner. The greeting is computed, never invented —
+// no personal name is available in the authorised Owner context.
 export function OwnerHomeHeader({
-  displayName,
-  scopeLabel,
   today,
-  illustration,
 }: {
   displayName: string;
-  /** The location the figures cover, or "All locations". */
+  /**
+   * The location the figures cover. Kept in the API (callers still pass
+   * it) but NOT printed here: the header row's facility switcher already
+   * states it, and one fact keeps one owner.
+   */
   scopeLabel: string | null;
   /** The tenant's own day (ISO date). */
   today: string;
   illustration?: ReactNode;
 }) {
   return (
-    <header
-      data-testid="owner-home-context"
-      className="flex items-start justify-between gap-4"
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
-          {formatFullDateIST(today)}
-        </p>
-        <h1 className="mt-1.5 font-display text-[24px] font-semibold leading-tight tracking-[-0.02em] sm:text-[28px]">
-          Your club today
-        </h1>
-        <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
-          {"Here’s how things are looking at "}
-          <span className="font-medium text-ink-2">{displayName}</span>
-          {scopeLabel ? ` · ${scopeLabel}` : ""}
-        </p>
-      </div>
-      {illustration ? <div className="flex-none">{illustration}</div> : null}
+    <header data-testid="owner-home-context">
+      <h1 className="font-display text-2xl font-medium tracking-tight">{greetingFor()}</h1>
+      <p className="mt-1 text-xs text-ink-3">{formatFullDateIST(today)}</p>
     </header>
   );
 }

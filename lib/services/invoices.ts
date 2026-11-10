@@ -15,11 +15,17 @@ import { asMemberId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
 import { toSafePaise } from "@/lib/money/safe-paise";
 import type { InvoiceStatus, InvoiceSource } from "@/db/schema/invoices";
+import type { InvoicePayerKind } from "@/db/schema/invoices";
 
 // C-32 — invoice reads. Location-scoped (O-08): a scoped receptionist
 // sees only their own facility's documents. The write paths live in
 // invoice-mutations.ts (ctx-facing) and invoice-issue.ts (the shared
 // in-transaction core).
+//
+// WR-1 / Option A — a guest invoice has no member, so the member join
+// here is a LEFT join. The document must still open: an invoice the
+// owner can see in the fees ledger but cannot open is a row that
+// disappears exactly where the money is.
 
 export type { InvoiceStatus };
 
@@ -59,8 +65,12 @@ export type InvoiceLineRow = {
 };
 
 export type InvoiceDetail = InvoiceRow & {
-  memberId: string;
-  memberName: string;
+  // WR-1 — a guest invoice has no member.
+  memberId: string | null;
+  memberName: string | null;
+  // Which kind of payer this document names, and the name to show.
+  payerKind: InvoicePayerKind;
+  payerName: string;
   lines: InvoiceLineRow[];
 };
 
@@ -150,17 +160,20 @@ export async function getInvoice(
         invoice: invoices,
         locationName: locations.name,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
       })
       .from(invoices)
       .innerJoin(locations, eq(locations.id, invoices.locationId))
-      .innerJoin(
+      // WR-1 — a guest invoice has no member, so this join cannot be an
+      // inner join: the document must still open.
+      .leftJoin(
         members,
         and(
           eq(members.id, invoices.memberId),
           eq(members.tenantId, ctx.tenantId),
         ),
       )
-      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(persons, eq(persons.id, members.personId))
       .where(
         and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)),
       )
@@ -185,10 +198,15 @@ export async function getInvoice(
       locationName: row.locationName,
       activityName: null,
     });
+    const payerKind = row.invoice.payerKind as InvoicePayerKind;
     return {
       ...base,
       memberId: row.invoice.memberId,
       memberName: row.memberName,
+      payerKind,
+      // WR-1 — the payer's display name: the member's name for a
+      // member payer, the buyer's name for a guest payer.
+      payerName: row.memberName ?? row.guestName ?? "",
       lines: lineRows.map((line) => {
         const tax = toSafePaise(line.taxPaise);
         const split = splitIntraStateTax(tax);

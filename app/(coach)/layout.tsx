@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
-import { BottomNav } from "@/components/bottom-nav";
+import { StaffBottomNav } from "@/components/staff-ui/staff-bottom-nav";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { canAccessSurface, SURFACE_COACH } from "@/lib/auth/surface-access";
 import { TENANT_SURFACE_NAV } from "@/lib/nav";
@@ -19,9 +19,12 @@ export default async function CoachLayout({ children }: { children: ReactNode })
     notFound();
   }
   return (
-    <div className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]">
+    <div
+      data-staff-surface
+      className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]"
+    >
       {children}
-      <BottomNav
+      <StaffBottomNav
         items={TENANT_SURFACE_NAV.coach}
       />
     </div>

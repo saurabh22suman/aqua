@@ -1,36 +1,32 @@
-import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import { getTodayAction } from "@/lib/actions/coach";
 import { getTerminologyAction } from "@/lib/actions/terminology";
-import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { resolveTerm } from "@/lib/terminology/keys";
 import { listStaffAttendanceDayAction } from "@/lib/actions/staff-attendance";
 import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
 import { CountChip } from "@/components/ui/CountChip";
+import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
-import { todayInZone } from "@/lib/time/tz";
+import { formatFullDateIST, todayInZone } from "@/lib/time/tz";
+import {
+  StaffNavCard,
+  StaffPage,
+  StaffPageHeader,
+} from "@/components/staff-ui/staff-page";
 
+// Reception's Today surface. One compact grid of the destinations this
+// counter is actually authorised to open, then the day's check-ins and
+// staff attendance. Every entry is gated by grant AND entitlement so a
+// tap never lands on a refused action.
 export default async function ReceptionTodayPage() {
   const ctx = await requireReception();
   const [{ sessions }, terminology] = await Promise.all([
     getTodayAction(),
     getTerminologyAction(),
   ]);
-  // U-08 — the receptionist role carries attendance.mark
-  // (lib/services/roles.ts), so the panel is interactive. If a future
-  // role reaches this surface without it, the panel degrades to
-  // read-only rather than offering a tap that would fail.
   const canMark = hasPermission(ctx, "attendance.mark");
-  // V-24 — the staff-attendance half U-08 deferred. Reception carries
-  // staff.attendance; a role without it sees no board rather than a
-  // tap that would be refused.
   const canMarkStaff = hasPermission(ctx, "staff.attendance");
-  // C03 — module entries follow grant + entitlement, never surface
-  // alone: a card is only shown when its action would be allowed
-  // (payments.record/invoices.read) and the tenant's plan includes the
-  // module the action's requirePermission checks. Otherwise the tap
-  // would land on a refused action.
   const canCollect = hasPermission(ctx, "payments.record") && hasFeature(ctx, "billing");
   const canCloseDay = canCollect;
   const canSeeDues = hasPermission(ctx, "invoices.read") && hasFeature(ctx, "billing");
@@ -40,96 +36,82 @@ export default async function ReceptionTodayPage() {
     ? await listStaffAttendanceDayAction({ date: today })
     : [];
 
+  const memberNoun = resolveTerm(terminology, "member", 1);
+
   return (
-    <main className="px-5 pt-10">
-      <div className="flex items-center gap-2.5">
-        <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
-        <CountChip
-          count={sessions.length}
-          label={sessions.length === 1 ? "session" : "sessions"}
+    <StaffPage>
+      <StaffPageHeader
+        title="Today"
+        meta={formatFullDateIST(today)}
+        action={
+          <CountChip
+            count={sessions.length}
+            label={sessions.length === 1 ? "session" : "sessions"}
+          />
+        }
+      />
+
+      <OptionalWorkspaceGuide
+        startCollapsed
+        title="A look around reception"
+        intro="Explore the areas shown here at your own pace. This guide makes no changes."
+        regionLabel="Optional reception guide"
+        itemLabel="Reception area"
+        items={[
+          { key: "members", title: "Find a member", detail: "The member card opens the member search." },
+          { key: "checkins", title: "Today's check-ins", detail: "The check-ins panel shows today's sessions." },
+          ...(canMarkStaff ? [{ key: "staff", title: "Staff attendance", detail: "The staff attendance panel is shown below." }] : []),
+        ]}
+      />
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {canCollect ? (
+          <StaffNavCard
+            href="/reception/collect-payment"
+            icon="money"
+            label="Collect payment"
+            description="Cash or UPI — verify at the counter."
+            testId="collect-payment-link"
+          />
+        ) : null}
+
+        {canCloseDay ? (
+          <StaffNavCard
+            href="/reception/close"
+            icon="check"
+            label="Close day"
+            description="Count today's cash and close the counter."
+            testId="close-day-link"
+          />
+        ) : null}
+
+        {canSeeDues ? (
+          <StaffNavCard
+            href="/reception/dues"
+            icon="invoice"
+            label="Dues"
+            description="Pending fees, overdue first."
+            testId="dues-link"
+          />
+        ) : null}
+
+        <StaffNavCard
+          href="/reception/members"
+          icon="search"
+          label={`Find a ${memberNoun}`}
+          description="Search by name, phone or code."
+          testId="member-search-link"
         />
+
+        {canUseCafe ? (
+          <StaffNavCard
+            href="/reception/cafe"
+            icon="booking"
+            label="Café"
+            description="Take a counter order and settle it."
+            testId="cafe-link"
+          />
+        ) : null}
       </div>
-
-      {canCollect ? (
-        <Link
-          href="/reception/collect-payment"
-          className="mt-6 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="collect-payment-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Collect payment</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Find an invoice and record cash or UPI; verify the payment at the
-              counter.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      {canCloseDay ? (
-        <Link
-          href="/reception/close"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="close-day-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Close day</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Count today&apos;s cash and close your counter.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      {canSeeDues ? (
-        <Link
-          href="/reception/dues"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="dues-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Dues</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Pending fee payments, overdue first — for follow-up calls.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      <Link
-        href="/reception/members"
-        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-        data-testid="member-search-link"
-      >
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">
-            Find a {titleCase(resolveTerm(terminology, "member", 1)).toLowerCase()}
-          </p>
-          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-            Search by name, phone or member code.
-          </p>
-        </div>
-        <ChevronRight size={18} className="text-ink-3 flex-none" />
-      </Link>
-
-      {canUseCafe ? (
-        <Link
-          href="/reception/cafe"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="cafe-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Café</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Take a counter order and settle it.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
 
       <ReceptionCheckIns sessions={sessions} canMark={canMark} />
 
@@ -140,6 +122,6 @@ export default async function ReceptionTodayPage() {
           canMark={canMarkStaff}
         />
       ) : null}
-    </main>
+    </StaffPage>
   );
 }

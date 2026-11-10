@@ -9,6 +9,7 @@ import {
 } from "@/lib/actions/session-lifecycle";
 import { zonedWallTimeToInstant } from "@/lib/time/tz";
 import { DateField } from "@/components/ui/DateField";
+import { TimeField } from "@/components/ui/TimeField";
 
 // R.4 (docs/five-day-work-guide.md) — per-session cancel/reschedule
 // controls for /owner/sessions. The service (cancelSession,
@@ -43,6 +44,8 @@ export function SessionLifecycleControl({
   const [end, setEnd] = useState(endWall);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [startValid, setStartValid] = useState(true);
+  const [endValid, setEndValid] = useState(true);
 
   async function run(
     fn: () => Promise<
@@ -76,6 +79,7 @@ export function SessionLifecycleControl({
   }
 
   function reschedule() {
+    if (!date || !startValid || !endValid) return;
     const startsAt = zonedWallTimeToInstant(date, start, "Asia/Kolkata");
     const endsAt = zonedWallTimeToInstant(date, end, "Asia/Kolkata");
     void run(
@@ -104,24 +108,27 @@ export function SessionLifecycleControl({
             id="reschedule-date"
             value={date}
             onChange={setDate}
+            required
             data-testid="reschedule-date"
           />
         </div>
-        <div className="flex gap-2">
-          <input
-            type="time"
+        <div className="grid grid-cols-1 gap-2">
+          <TimeField
+            id="reschedule-start"
+            label="Start time"
             value={start}
-            onChange={(e) => setStart(e.target.value)}
-            className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
-            aria-label="Start time"
+            onChange={setStart}
+            onValidityChange={setStartValid}
+            required
             data-testid="reschedule-start"
           />
-          <input
-            type="time"
+          <TimeField
+            id="reschedule-end"
+            label="End time"
             value={end}
-            onChange={(e) => setEnd(e.target.value)}
-            className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
-            aria-label="End time"
+            onChange={setEnd}
+            onValidityChange={setEndValid}
+            required
             data-testid="reschedule-end"
           />
         </div>
@@ -135,7 +142,7 @@ export function SessionLifecycleControl({
           <button
             type="button"
             onClick={reschedule}
-            disabled={busy || !date || end <= start}
+            disabled={busy || !date || !startValid || !endValid || end <= start}
             className="inline-flex min-h-11 items-center justify-center flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
             {busy ? "Saving…" : "Save new time"}

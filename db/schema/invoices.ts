@@ -26,6 +26,41 @@ import type { TenantId, MemberId } from "@/lib/ids";
 // GST), SAC code and GST-rate snapshots on the lines, and
 // subtotal + tax = total in integer paise (prices are GST-exclusive,
 // C-29b).
+//
+// WR-1 / Option A — the payer is EXPLICIT. A walk-in booking has no
+// member, but a walk-in bill is a real document with a real buyer, so
+// member_id is nullable and payer_kind says which kind of payer the
+// document names. The two states are exclusive (invoices_payer_check):
+// a member document always has a member and carries NO buyer name, a
+// guest document never has a member and always carries the buyer's
+// name. The composite foreign key still applies whenever member_id is
+// present, so a member payer stays tenant-checked.
+//
+// CORRECTION PASS (2026-11-05) — the mirror grows with the migration's
+// new rule: guest_name carries the same 1..120 bound as the booking
+// name it comes from (bookings_walk_in_name_check). Without this the
+// mirror and db/migrations/20261105120000_invoice_guest_payer.sql
+// would disagree, which is the same class of defect as F-6 in the
+// review (a mirror that did not compile).
+//
+// DECISION PASS (2026-11-05) — two changes, both in step with the
+// migration:
+//
+//   1. invoices_payer_check's member branch now also says
+//      "and guest_name is null" (the migration's C4). The packet's own
+//      invariant is that the two states are exclusive, and it did not
+//      say anything about a member document's name.
+//
+//   2. THE IDENTITY OF AN ISSUED DOCUMENT IS FIXED, and that rule is NOT
+//      in this mirror: it is the migration's BEFORE UPDATE trigger
+//      (invoices_payer_immutable_trg), which Drizzle cannot express.
+//      The trigger freezes payer_kind, member_id AND guest_name, so a
+//      wrongly-billed walk-in invoice and a typo in its guest name are
+//      corrected by VOIDING AND REISSUING, never by editing the issued
+//      document (the human's decision, 2026-11-05). Read this mirror as
+//      "the columns the guard compares", and read
+//      db/migrations/20261105120000_invoice_guest_payer.sql for the
+//      guard itself — the two must never disagree.
 
 export const invoices = pgTable(
   "invoices",
@@ -36,7 +71,19 @@ export const invoices = pgTable(
       .references(() => tenants.id, { onDelete: "cascade" })
       .$type<TenantId>(),
     locationId: uuid("location_id").notNull(),
-    memberId: uuid("member_id").notNull().$type<MemberId>(),
+    // A guest invoice (a walk-in booking) has NO member. The payer kind
+    // says so explicitly; the foreign key still applies when a member
+    // is present.
+    memberId: uuid("member_id").$type<MemberId>(),
+    payerKind: text("payer_kind")
+      .notNull()
+      .default("member")
+      .$type<InvoicePayerKind>(),
+    // The buyer's name on a guest document. Null for a member payer:
+    // the member's name is on the member's person record. Bounded to
+    // the same 1..120 as bookings.walk_in_name, and FIXED at issue by
+    // the migration's invoices_payer_immutable_trg.
+    guestName: text("guest_name"),
     subscriptionId: uuid("subscription_id"),
     invoiceNumber: text("invoice_number").notNull(),
     financialYear: text("financial_year").notNull(),
@@ -78,8 +125,30 @@ export const invoices = pgTable(
       "invoices_paid_within_total_check",
       sql`${t.paidPaise} <= ${t.totalPaise}`,
     ),
+    // WR-1 — the payer is one of two kinds and the two are exclusive.
+    check(
+      "invoices_payer_kind_check",
+      sql`${t.payerKind} in ('member', 'guest')`,
+    ),
+    // DECISION PASS — the member branch also says "and no buyer name":
+    // a member document's buyer is the member's own person record, and
+    // a name on the document would be a second, unreadable copy of it.
+    check(
+      "invoices_payer_check",
+      sql`(${t.payerKind} = 'member' and ${t.memberId} is not null and ${t.guestName} is null)
+          or (${t.payerKind} = 'guest' and ${t.memberId} is null and ${t.guestName} is not null and btrim(${t.guestName}) <> '')`,
+    ),
+    // CORRECTION PASS — the buyer's name is bounded exactly like the
+    // booking name it comes from (bookings_walk_in_name_check).
+    check(
+      "invoices_guest_name_length_check",
+      sql`${t.guestName} is null or char_length(${t.guestName}) between 1 and 120`,
+    ),
     check("invoices_dates_check", sql`${t.dueOn} >= ${t.issuedOn}`),
     unique("invoices_id_tenant_key").on(t.id, t.tenantId),
+    // The FK target for payments_invoice_payer_tenant_fkey: a payment's
+    // payer must be the invoice's payer.
+    unique("invoices_id_tenant_payer_key").on(t.id, t.tenantId, t.memberId),
     unique("invoices_number_tenant_key").on(
       t.tenantId,
       t.financialYear,
@@ -154,3 +223,6 @@ export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InvoiceStatus = "draft" | "issued" | "partial" | "paid" | "void";
 export type InvoiceSource = "membership" | "cafe" | "other";
+// WR-1 — which kind of payer a document names. 'member' is a member of
+// the tenant; 'guest' is a walk-in buyer with no member record.
+export type InvoicePayerKind = "member" | "guest";

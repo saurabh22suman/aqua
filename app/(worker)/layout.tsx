@@ -11,5 +11,5 @@ export default async function WorkerLayout({ children }: { children: ReactNode }
   } catch {
     redirect("/login");
   }
-  return <div className="min-h-dvh">{children}</div>;
+  return <div data-staff-surface className="min-h-dvh">{children}</div>;
 }

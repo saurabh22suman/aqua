@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import type { ReactNode } from "react";
 
 // PR3-C2 — the KPI tile. `kpi` is the shared display-face figure

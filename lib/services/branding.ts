@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
@@ -167,6 +168,9 @@ export async function updateBranding(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "invalid", message: "Only the academy owner can change this setting." };
+    }
     const [existing] = await tx
       .select({ branding: tenants.branding })
       .from(tenants)

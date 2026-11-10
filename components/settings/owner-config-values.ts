@@ -26,6 +26,19 @@ export const KEY_TITLES: Record<string, string> = {
   "bookings.advance_window_days": "Booking advance window",
 };
 
+/**
+ * The help the OWNER reads beside a setting, when the registry's own
+ * description names internal architecture instead of the decision.
+ *
+ * The registry description stays the definition of record — this mapping
+ * only decides what is shown. Nothing here changes a value, a default, a
+ * grant or the request path.
+ */
+export const KEY_HELP: Record<string, string> = {
+  "access.location_scoped_staff":
+    "When enabled, staff are limited to their assigned locations.",
+};
+
 export function valueType(item: OwnerConfigItem): string {
   const type = item.jsonSchema["type"];
   return typeof type === "string" ? type : "string";

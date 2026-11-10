@@ -264,7 +264,12 @@ export async function resolveDefaultMembership(
           operationalTenantFilter(),
         ),
       )
-      .orderBy(roles.homeOrdinal)
+      // The default club must be decided by a RULE, not by the order the
+      // rows happen to sit in: two memberships of the SAME role tie on
+      // homeOrdinal (the owner role is 0 in every club), and the tie is
+      // broken by the membership's age — the same order the location
+      // access helper mirrors ("role home ordinal, then creation").
+      .orderBy(roles.homeOrdinal, tenantMemberships.createdAt)
       .limit(1);
 
     const row = rows[0];

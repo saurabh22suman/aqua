@@ -1,14 +1,20 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
-import { Search } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import type { MemberListRow } from "@/lib/services/people";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
-import { formatPhoneIN } from "@/lib/phone";
-import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { ListToolbar, ToolbarField } from "@/components/member-list-toolbar";
+import { MemberList, type MemberListEmptyKind } from "@/components/member-list";
+import { MemberStatusFilter } from "@/components/member-status-filter";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import {
+  clearMembersReturnIntent,
+  recordMembersReturnIntent,
+  useMembersListNavigation,
+} from "@/components/members-list-navigation";
+import { DEFAULT_TERMS, type TerminologyState } from "@/lib/terminology/keys";
 
 const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 
@@ -20,19 +26,40 @@ const STATUS_LABELS: Record<string, string> = {
   left: "Left",
 };
 
+// The status filter's options: every REAL status the product has, plus
+// "All" — which is every status, not an invented one. There is no "On
+// hold": a member is trial, active, paused, lapsed or left.
+const STATUS_FILTERS: Array<{ value: string; label: string }> = [
+  { value: "", label: "All" },
+  ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
+];
+
 export function MembersBoard({
   initialMembers,
   initialLocationId,
+  navigationNamespace = "default",
   terminology = DEFAULT_TERMINOLOGY,
+  canWrite = true,
 }: {
   initialMembers: MemberListRow[];
   // W1-6 — set by the owner layout's facility switcher via the page's
   // `?facility=` param. The list-level filter is the global switcher
   // now; there is no second location control inside the board.
   initialLocationId?: string;
+  // Server-derived tenant + actor namespace; stale/foreign history state is
+  // discarded instead of crossed between accounts or academies.
+  navigationNamespace?: string;
   // Closed-key vocab resolved by the parent server page; optional so
   // callers without tenant context render the generic terms.
   terminology?: TerminologyState;
+  /**
+   * Whether the caller may add a member. The board owns the empty
+   * message, so it has to be true for the role reading it: the add verb
+   * is offered only where it is permitted ("No members yet → 'Add
+   * member', where permitted" — UI-UX.txt §6). A caller who may only
+   * read is not told to add one.
+   */
+  canWrite?: boolean;
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [search, setSearch] = useState("");
@@ -40,20 +67,14 @@ export function MembersBoard({
   const [isPending, setPending] = useState(false);
   const [error, setError] = useState("");
   const requestEpoch = useRef(0);
-  // W1-6 — the facility comes from the URL via the page; the board's
-  // other filters are local state. A facility change is a server
-  // navigation (the switcher pushes `?facility=`), so this never needs
-  // a setter.
   const locationId = initialLocationId ?? "";
   const currentLocation = useRef(locationId);
   currentLocation.current = locationId;
-  // Facility navigation re-renders the page with new server data, but
-  // local state would otherwise keep showing the previous facility's
-  // rows. Adopt the new rows and reset the local filters so the list
-  // and its visible controls agree (docs/audits/2026-10-05 FE-03).
-  const [shownLocationId, setShownLocationId] = useState(locationId);
-  if (shownLocationId !== locationId) {
-    setShownLocationId(locationId);
+  // Account, tenant or facility change: discard prior rows/filters/state.
+  const resetKey = `${navigationNamespace}\u0000${locationId}`;
+  const [shownResetKey, setShownResetKey] = useState(resetKey);
+  if (shownResetKey !== resetKey) {
+    setShownResetKey(resetKey);
     setMembers(initialMembers);
     setSearch("");
     setStatus("");
@@ -67,128 +88,178 @@ export function MembersBoard({
     const epoch = ++requestEpoch.current;
     setError("");
     setPending(true);
-    void (async () => {
+    return (async () => {
+      let applied = false;
       try {
         const rows = await listMembersAction({
           search: merged.search || undefined,
           status: (merged.status || undefined) as MemberListRow["status"] | undefined,
           locationId: merged.locationId || undefined,
         });
-        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) setMembers(rows);
+        if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
+          setMembers(rows);
+          applied = true;
+        }
       } catch {
         if (epoch === requestEpoch.current && merged.locationId === currentLocation.current) {
-          setError("Could not refresh this list. Previous results are still shown.");
+          // The failure owns the list: the alert beside it says what
+          // happened, so the copy must not also claim that a previous
+          // result is still on screen when there is none.
+          setError(
+            members.length > 0
+              ? "Could not refresh this list. Previous results are still shown."
+              : "Could not refresh this list.",
+          );
         }
       } finally {
         if (epoch === requestEpoch.current) setPending(false);
       }
+      return applied;
     })();
   }
+
+  const { save: persistNavigation } = useMembersListNavigation({
+    namespace: navigationNamespace,
+    locationId,
+    apply: async (stored) => {
+      setSearch(stored.search);
+      setStatus(stored.status);
+      return refetch({
+        search: stored.search,
+        status: stored.status,
+        locationId,
+      });
+    },
+  });
+
+  function saveNavigationState(nextSearch: string, nextStatus: string) {
+    persistNavigation(nextSearch, nextStatus, window.scrollY);
+  }
+
+  function rememberListScroll() {
+    saveNavigationState(search, status);
+    // The owner is leaving for a profile: remember what this directory
+    // was showing, so its own back link can bring it back.
+    recordMembersReturnIntent({
+      namespace: navigationNamespace,
+      locationId,
+      search,
+      status,
+      scrollY: window.scrollY,
+    });
+  }
+
+  // The no-match state is a dead end unless the owner can leave it.
+  //
+  // ONE clear action drops the search text, the status filter and the
+  // PERSISTED list state (the history entry and the armed return
+  // intent), so Back never restores the filters the owner just
+  // dismissed. The FACILITY SCOPE is untouched: clearing a filter never
+  // widens the directory beyond the facility it was read under. The
+  // rows come back from an AUTHORITATIVE read, never from the rows
+  // that are already on screen.
+  function clearFilters() {
+    setSearch("");
+    setStatus("");
+    clearMembersReturnIntent();
+    saveNavigationState("", "");
+    void refetch({ search: "", status: "" });
+  }
+
+  // The club roster spans sports, so its person label stays generic.
+  const memberTerm = {
+    one: DEFAULT_TERMS[terminology.locale].member.one,
+    other: DEFAULT_TERMS[terminology.locale].member.other,
+  };
+  // The drill-down keeps the scope the directory was read under: the
+  // canonical selected facility, or an EXPLICIT "all" so a remembered
+  // facility cookie can never narrow an all-facilities directory. A URL
+  // without the query is normalised by the facility switcher with a hard
+  // reload, which would erase the in-memory return intent.
+  const scopeQuery = locationId ? `?facility=${locationId}` : "?facility=all";
+  // Which empty state the list is in. The DECISION stays here: a failed
+  // read is a failure, a filter that matched nothing is a no-match, and
+  // a facility that holds nobody is simply empty.
+  const emptyKind: MemberListEmptyKind = error
+    ? "failed"
+    : search || status
+      ? "no-match"
+      : "empty";
 
   return (
     <div>
       {error ? <div role="alert" className="mb-3 text-[13px] text-ink-2">
-        <p>{error}</p><button type="button" onClick={() => refetch({})} disabled={isPending}
-          className="min-h-11 underline">{`Retry ${resolveTerm(terminology, "member", 1)} search`}</button>
-      </div> : null}
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            refetch({ search: e.target.value });
-          }}
-          placeholder="Search by name or phone"
-          aria-label="Search members"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper py-2.5 pl-9 pr-3 text-[16px]"
-          data-testid="members-search"
-        />
-      </div>
-
-      <div className="mt-2.5 flex gap-2">
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            refetch({ status: e.target.value });
-          }}
-          aria-label="Status"
-          className="min-h-11 rounded-ctl border border-line bg-paper px-2.5 py-2 text-[16px]"
-          data-testid="members-status-filter"
+        <p>{error}</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => refetch({})}
+          disabled={isPending}
+          className="mt-1.5"
         >
-          <option value="">All statuses</option>
-          {Object.entries(STATUS_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
+          {`Retry ${DEFAULT_TERMS[terminology.locale].member.one} search`}
+        </Button>
+      </div> : null}
 
-      {/* PR3-C3/C4 — desktop column header; the rows below share the
-          same grid so the roster scans and compares at 1280px while the
-          phone keeps the one-column card rows. */}
-      {/* Owner UX audit (2026-10-24): the roster gave the same weight
-          to the joined date as to the member, and the phone shared a
-          line with the code and location on a phone, so it wrapped
-          mid-number. The joined date is context the member's own page
-          carries; the roster now gives its width to the member and
-          keeps the phone readable. */}
-      <div
-        data-testid="members-table-head"
-        className="mt-4 hidden grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] gap-3 border-b border-line pb-2 text-[11px] uppercase tracking-[0.1em] text-ink-3 md:grid"
-      >
-        <span>{titleCase(resolveTerm(terminology, "member", 1))}</span>
-        <span>Phone</span>
-        <span className="text-right">Status</span>
-      </div>
-      <ul className="mt-3 md:mt-0" data-testid="members-list" aria-busy={isPending}>
-        {members.length === 0 ? (
-          <li className="rounded-ctl border border-line bg-paper list-none">
-            {search || status || locationId ? (
-              <EmptyState
-                title={`No ${resolveTerm(terminology, "member", "other")} match.`}
+      <ListToolbar label={`${DEFAULT_TERMS[terminology.locale].member.one} filters`}>
+        <ToolbarField
+          id="members-search"
+          label="Search members"
+          width="flexible"
+        >
+          {(field) => (
+            <div className="relative">
+              {/* The approved mock's magnifier, drawn by the shared owner
+                  icon set (owner-only surface). */}
+              <OwnerIcon
+                name="search"
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3"
               />
-            ) : (
-              <EmptyState
-                title={`No ${resolveTerm(terminology, "member", "other")} yet.`}
-                body={`Add your first ${resolveTerm(terminology, "member", 1)} to start building the roster.`}
-                action={{
-                  label: `Add your first ${resolveTerm(terminology, "member", 1)}`,
-                  href: "/owner/members/new",
+              <Input
+                {...field}
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSearch(next);
+                  saveNavigationState(next, status);
+                  refetch({ search: next });
                 }}
+                placeholder="Name or phone number"
+                aria-label="Search members"
+                className="pl-9"
+                data-testid="members-search"
               />
-            )}
-          </li>
-        ) : (
-          members.map((m) => (
-            <li key={m.memberId} className="border-b border-line last:border-0">
-              <Link
-                href={`/owner/members/${m.memberId}`}
-                className="flex items-center gap-3 py-3 md:grid md:grid-cols-[minmax(0,2.5fr)_minmax(0,1fr)_auto] md:gap-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium">
-                    {m.fullName}
-                    {m.isMinor ? <span className="text-[11px] text-ink-3">{" (minor)"}</span> : null}
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 md:truncate">
-                    {m.memberCode} · {m.locationName}
-                  </p>
-                </div>
-                <p className="shrink-0 text-[12.5px] text-ink-2 tabular-nums md:block">
-                  {m.phone ? formatPhoneIN(m.phone) : "—"}
-                </p>
-                <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>
-                  {STATUS_LABELS[m.status]}
-                </StatusBadge>
-              </Link>
-            </li>
-          ))
-        )}
-      </ul>
+            </div>
+          )}
+        </ToolbarField>
+
+        {/* The status filter is a visible row of chips (the leaf owns
+            the drawing); the board owns the choice, the navigation
+            state it saves and the re-read it triggers. */}
+        <MemberStatusFilter
+          options={STATUS_FILTERS}
+          value={status}
+          onChange={(next) => {
+            setStatus(next);
+            saveNavigationState(search, next);
+            refetch({ status: next });
+          }}
+        />
+      </ListToolbar>
+
+      <MemberList
+        members={members}
+        memberTerm={memberTerm}
+        statusLabels={STATUS_LABELS}
+        emptyKind={emptyKind}
+        onClearFilters={clearFilters}
+        scopeQuery={scopeQuery}
+        onOpen={rememberListScroll}
+        isPending={isPending}
+        canWrite={canWrite}
+      />
     </div>
   );
 }

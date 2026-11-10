@@ -1,12 +1,13 @@
-import Link from "next/link";
 import { getRosterAction } from "@/lib/actions/coach";
 import { RegisterBoard } from "@/components/register-board";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { requireCoach } from "@/lib/auth/surface-guard";
-import { formatTimeIST } from "@/lib/time/tz";
+import { formatDateIST, formatTimeIST } from "@/lib/time/tz";
 import { requireUuidParam } from "@/lib/params";
+import { BackLink } from "@/components/ui/BackLink";
+import { StaffPage } from "@/components/staff-ui/staff-page";
 
 export default async function RegisterPage({
   params,
@@ -28,29 +29,27 @@ export default async function RegisterPage({
 
   if (!data) {
     return (
-      <main className="px-5 pt-10">
-        <p className="text-[15px] font-medium">
+      <StaffPage>
+        <BackLink href="/coach" label="Today" />
+        <p className="text-[15px] font-medium text-ink">
           {titleCase(resolveTerm(terminology, "session", 1))} not found
         </p>
-        <Link href="/coach" className="mt-2 inline-flex items-center min-h-[44px] text-[13px] text-ink-3 underline">
-          Back to today
-        </Link>
-      </main>
+        <p className="mt-2 text-[13px] text-ink-3">
+          This register is not part of your batches, or it no longer exists.
+        </p>
+      </StaffPage>
     );
   }
 
   const time = formatTimeIST(data.startsAt);
 
   return (
-    <main className="px-5 pt-6">
-      {/* min-h-44px target: the old 13px inline link was ~20px tall,
-          unreachable one-handed mid-register. [automatable] */}
-      <Link href="/coach" className="inline-flex items-center min-h-[44px] text-[13px] text-ink-3 underline underline-offset-2">
-        ← Today
-      </Link>
-      <h1 className="mt-2 font-display text-[19px] font-semibold text-marine">
+    <StaffPage className="px-5">
+      <BackLink href="/coach" label="Today" />
+      <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
         {time} · {data.batchName}
       </h1>
+      <p className="mt-1 text-[13px] text-ink-3">{formatDateIST(data.startsAt)}</p>
 
       <div className="mt-4">
         <RegisterBoard
@@ -61,6 +60,6 @@ export default async function RegisterPage({
           terminology={terminology}
         />
       </div>
-    </main>
+    </StaffPage>
   );
 }

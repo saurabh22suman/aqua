@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 // Phase 1 (mobile UX plan v2) — DESIGN.md §3: "Empty state — built with
 // the list, never after. Every list has one. Every empty state has a

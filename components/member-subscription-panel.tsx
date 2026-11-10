@@ -1,20 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   cancelSubscriptionAction,
   createSubscriptionAction,
   listMemberSubscriptionsAction,
+  listMemberSubscriptionPlansAction,
   pauseSubscriptionAction,
   resumeSubscriptionAction,
 } from "@/lib/actions/subscriptions";
-import { listPlansAction } from "@/lib/actions/membership-plans";
 import type { SubscriptionRow } from "@/lib/services/subscriptions";
+import {
+  isFailedSeed,
+  seedForMember,
+  type MemberSubscriptionSeed,
+} from "@/components/member-detail/member-panel-initial-data";
 import type { PlanRow } from "@/lib/services/membership-plans";
 import { formatINR } from "@/lib/money/format";
+import { Field } from "@/components/ui/Field";
+import { DateField } from "@/components/ui/DateField";
+import { Select } from "@/components/ui/Select";
 import { RunwayStrip } from "@/components/ui/RunwayStrip";
-import { formatDateIST } from "@/lib/time/tz";
+import { formatDateIST, todayInZone } from "@/lib/time/tz";
 
 // C-30 — a member's plans over time. Start a subscription from an
 // active plan, pause/resume (pause extends the end date by the paused
@@ -25,8 +33,9 @@ import { formatDateIST } from "@/lib/time/tz";
 // router.refresh() re-renders the server tree but keeps client state).
 export const SUBSCRIPTIONS_CHANGED_EVENT = "aqua:subscriptions-changed";
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
+function ParticipationNote() {
+  return <p className="mt-0.5 text-[12px] text-ink-3">Separate from academy participation — pausing one does not pause the other.</p>;
+}
 
 function statusTone(status: SubscriptionRow["status"]): string {
   if (status === "active") return "bg-marine/10 text-marine";
@@ -34,10 +43,40 @@ function statusTone(status: SubscriptionRow["status"]): string {
   return "bg-deck text-ink-3";
 }
 
+/** Plans a subscription can start from — shared by the read and a seed. */
+function eligiblePlans(planRows: PlanRow[]): PlanRow[] {
+  return planRows.filter((plan) =>
+    ["duration", "term", "sessions"].includes(plan.kind),
+  );
+}
+
+const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionRow["status"], string> = {
+  active: "Active",
+  paused: "Paused",
+  expired: "Expired",
+  cancelled: "Cancelled",
+};
+
+// B5 — the same six plan kinds named in the plans list keep their own
+// meaning on a member's subscription row. An unknown value is shown as
+// stored rather than mislabelled as a one-time plan.
 function kindLabel(kind: string): string {
-  if (kind === "duration") return "duration";
-  if (kind === "sessions") return "session pack";
-  return "one-time";
+  switch (kind) {
+    case "duration":
+      return "membership";
+    case "term":
+      return "term";
+    case "sessions":
+      return "class pack";
+    case "one_time":
+      return "one-time charge";
+    case "per_session":
+      return "pay-as-you-go";
+    case "drop_in":
+      return "drop-in";
+    default:
+      return kind;
+  }
 }
 
 
@@ -53,47 +92,106 @@ function daysBetween(fromIso: string, toIso: string): number {
 export function MemberSubscriptionPanel({
   memberId,
   canManage,
+  initialData,
 }: {
   memberId: string;
+  // Owner overview only: the already-authorized server read. Absent for every
+  // other consumer, which keeps its own mount read.
+  initialData?: MemberSubscriptionSeed;
   // R10 (2026-10-13 role-workflow audit) — start/pause/resume/cancel
   // ride members.write. A reader without it keeps the plan view.
   canManage: boolean;
 }) {
   const router = useRouter();
+  const seed = seedForMember(initialData, memberId);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRow[] | null>(
-    null,
+    seed && !isFailedSeed(seed) ? seed.subscriptions : null,
   );
-  const [plans, setPlans] = useState<PlanRow[]>([]);
-  const [loadError, setLoadError] = useState(false);
+  const [plans, setPlans] = useState<PlanRow[]>(
+    seed && !isFailedSeed(seed) ? eligiblePlans(seed.plans) : [],
+  );
+  const [loadError, setLoadError] = useState(
+    Boolean(seed && isFailedSeed(seed)),
+  );
+  // Stale-response guard: a late read for a previous member is ignored.
+  const currentMember = useRef(memberId);
+  currentMember.current = memberId;
+  const loadEpoch = useRef(0);
+  const appliedSeed = useRef<typeof seed>(seed);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [planId, setPlanId] = useState("");
+  const seededPlans = seed && !isFailedSeed(seed) ? eligiblePlans(seed.plans) : [];
+  const [planId, setPlanId] = useState(seededPlans[0]?.id ?? "");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [autoRenew, setAutoRenew] = useState(false);
+  const [startsValid, setStartsValid] = useState(true);
+  const [endsValid, setEndsValid] = useState(true);
+
+  // The academy's day, not the server's UTC day (staging blocker F15).
+  // Between 00:00 and 05:29 IST the UTC date is still yesterday, which
+  // under-counted the runway's used days by one.
+  const today = todayInZone("Asia/Kolkata");
 
   const load = useCallback(async () => {
+    const at = memberId;
+    const run = ++loadEpoch.current;
     try {
       const [rows, planRows] = await Promise.all([
-        listMemberSubscriptionsAction(memberId),
-        listPlansAction(),
+        listMemberSubscriptionsAction(at),
+        listMemberSubscriptionPlansAction(at),
       ]);
+      if (at !== currentMember.current || run !== loadEpoch.current) return;
       setSubscriptions(rows);
-      setPlans(
-        planRows.filter((plan) =>
-          ["duration", "term", "sessions"].includes(plan.kind),
-        ),
+      // One eligible array drives both the picker and its default. An
+      // invoice-only or otherwise ineligible first row must never become the
+      // selected plan.
+      const eligible = eligiblePlans(planRows);
+      setPlans(eligible);
+      setPlanId((current) =>
+        eligible.some((plan) => plan.id === current)
+          ? current
+          : (eligible[0]?.id ?? ""),
       );
-      setPlanId((current) => current || planRows[0]?.id || "");
       setLoadError(false);
     } catch {
+      if (at !== currentMember.current || run !== loadEpoch.current) return;
       setLoadError(true);
     }
   }, [memberId]);
 
   useEffect(() => {
+    // A usable seed for THIS member is already the authoritative read.
+    if (seedForMember(initialData, memberId)) return;
+    // A member change must never show the previous member's rows.
+    setSubscriptions(null);
+    setLoadError(false);
     void load();
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [memberId, initialData]);
+
+  // A fresh server seed for the same member still applies.
+  useEffect(() => {
+    const current = seedForMember(initialData, memberId);
+    if (!current || appliedSeed.current === current) return;
+    appliedSeed.current = current;
+    // A newer authoritative read: an older pending one must not win.
+    loadEpoch.current += 1;
+    if (isFailedSeed(current)) {
+      setLoadError(true);
+      setSubscriptions(null);
+      return;
+    }
+    setLoadError(false);
+    setSubscriptions(current.subscriptions);
+    const eligible = eligiblePlans(current.plans);
+    setPlans(eligible);
+    setPlanId((value) =>
+      eligible.some((plan) => plan.id === value)
+        ? value
+        : (eligible[0]?.id ?? ""),
+    );
+  }, [initialData, memberId]);
 
   function run(fn: () => Promise<{ ok: true } | { ok: false; error: string }>) {
     setBusy(true);
@@ -123,6 +221,7 @@ export function MemberSubscriptionPanel({
   if (loadError) {
     return (
       <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
+        <ParticipationNote />
         <p className="text-[12px] text-ink-3">Could not load plans.</p>
         <button
           type="button"
@@ -138,6 +237,7 @@ export function MemberSubscriptionPanel({
   if (subscriptions === null) {
     return (
       <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
+        <ParticipationNote />
         <p className="text-[12px] text-ink-3">Loading plans…</p>
       </div>
     );
@@ -145,13 +245,10 @@ export function MemberSubscriptionPanel({
 
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
         Paid plan
-      </p>
-      <p className="mt-0.5 text-[12px] text-ink-3">
-        Separate from academy participation — pausing one does not pause the
-        other.
-      </p>
+      </h2>
+      <ParticipationNote />
 
       {subscriptions.length === 0 ? (
         <p className="mt-2 text-[12px] text-ink-3">
@@ -173,9 +270,10 @@ export function MemberSubscriptionPanel({
                   </span>
                 </span>
                 <span
+                  data-testid="subscription-status"
                   className={`rounded-pill px-2 py-0.5 text-[11px] font-medium ${statusTone(subscription.status)}`}
                 >
-                  {subscription.status}
+                  {SUBSCRIPTION_STATUS_LABEL[subscription.status]}
                 </span>
               </div>
               <p className="mt-0.5 text-[12px] text-ink-3">
@@ -195,7 +293,7 @@ export function MemberSubscriptionPanel({
                       0,
                       Math.min(
                         daysBetween(subscription.startsOn, subscription.endsOn) + 1,
-                        daysBetween(subscription.startsOn, new Date().toISOString().slice(0, 10)) + 1,
+                        daysBetween(subscription.startsOn, today) + 1,
                       ),
                     )}
                     totalDays={Math.max(
@@ -254,69 +352,96 @@ export function MemberSubscriptionPanel({
       )}
 
       {!canManage ? null : plans.length === 0 ? (
-        <p className="mt-3 text-[12px] text-ink-3">
-          No active plans. The owner can price one in Settings → Membership
-          plans.
-        </p>
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="text-[12px] text-ink-3">
+            No eligible membership plan. The owner can add a duration, term or
+            session plan in Settings → Membership plans.
+          </p>
+          <button
+            type="button"
+            disabled
+            className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] opacity-60"
+          >
+            Start subscription
+          </button>
+        </div>
       ) : (
         <div className="mt-3 border-t border-line pt-3">
           <p className="text-[12px] font-medium text-ink-2">
             Start a subscription
           </p>
-          <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <label className="block sm:col-span-1">
-              <span className="block text-[11px] text-ink-3 mb-0.5">Plan</span>
-              <select
-                value={planId}
-                onChange={(e) => setPlanId(e.target.value)}
-                className={inputClass}
-              >
-                {plans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name} · {formatINR(plan.amountPaise)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-ink-3 mb-0.5">
-                Starts (optional)
-              </span>
-              <input
-                type="date"
-                lang="en-IN"
-                placeholder="dd/mm/yyyy"
-                value={startsOn}
-                onChange={(e) => setStartsOn(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-ink-3 mb-0.5">
-                Ends (optional)
-              </span>
-              <input
-                type="date"
-                lang="en-IN"
-                placeholder="dd/mm/yyyy"
-                value={endsOn}
-                onChange={(e) => setEndsOn(e.target.value)}
-                className={inputClass}
-              />
-            </label>
+          <div className="mt-2 grid gap-2">
+            <div>
+              <Field id="member-subscription-plan" label="Plan">
+                {(field) => (
+                  <Select
+                    {...field}
+                    value={planId}
+                    onChange={(e) => setPlanId(e.target.value)}
+                  >
+                    {plans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} · {formatINR(plan.amountPaise)}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Field>
+            </div>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-2">
+              <Field id="member-subscription-starts" label="Starts (optional)">
+                {(field) => (
+                  <DateField
+                    {...field}
+                    value={startsOn}
+                    onChange={setStartsOn}
+                    onValidityChange={setStartsValid}
+                  />
+                )}
+              </Field>
+              <Field id="member-subscription-ends" label="Ends (optional)">
+                {(field) => (
+                  <DateField
+                    {...field}
+                    value={endsOn}
+                    onChange={setEndsOn}
+                    onValidityChange={setEndsValid}
+                  />
+                )}
+              </Field>
+            </div>
           </div>
-          <label className="mt-2 flex items-center gap-2 text-[12px] text-ink-2">
+          <label
+            htmlFor="member-subscription-auto-renew"
+            className="mt-2 flex min-h-11 cursor-pointer items-start gap-2 rounded-ctl px-1 py-2.5 -mx-1 text-[12px] text-ink-2 hover:bg-deck/40"
+          >
             <input
+              id="member-subscription-auto-renew"
               type="checkbox"
               checked={autoRenew}
               onChange={(e) => setAutoRenew(e.target.checked)}
+              className="mt-0.5 h-5 w-5 flex-none accent-[var(--accent-strong)]"
             />
-            Raise the next invoice automatically (payments stay manual)
+            <span>Raise the next invoice automatically (payments stay manual)</span>
           </label>
+          {!startsValid || !endsValid ? (
+            <p role="alert" className="mt-1 text-[12px] text-ink-2">
+              Enter a real date or clear the optional date before starting the
+              subscription.
+            </p>
+          ) : null}
           <button
             type="button"
-            disabled={busy || plans.length === 0}
-            onClick={() =>
+            disabled={
+              busy ||
+              plans.length === 0 ||
+              !planId ||
+              !startsValid ||
+              !endsValid
+            }
+            onClick={() => {
+              if (!planId || plans.length === 0 || !startsValid || !endsValid)
+                return;
               run(() =>
                 createSubscriptionAction({
                   memberId,
@@ -325,8 +450,8 @@ export function MemberSubscriptionPanel({
                   ...(endsOn ? { endsOn } : {}),
                   autoRenew,
                 }),
-              )
-            }
+              );
+            }}
             className="mt-2 inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {busy ? "Saving…" : "Start subscription"}

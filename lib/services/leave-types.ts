@@ -1,3 +1,36 @@
+// POST-IMAGE — NOT APPLIED, NOT COMPILED, NOT TYPECHECKED, NOT LINTED, NOT
+// TESTED, NOT RUN.
+//
+// Proposed target:
+//   lib/services/leave-types.ts
+//
+// The only changes are the two marked blocks and the one import. Everything
+// else in the file is byte-identical to the file in the tree.
+//
+// ── HOW THIS FILE DIFFERS FROM THE REPAIRED POST-IMAGE ──────────────────────
+//
+// The CODE is unchanged. The independent review found no security
+// regression in it, and this packet carries it unchanged. The COMMENTS are
+// reconciled with the review's findings (each traced in
+// docs/design/parallel-release/manager-owner-types-existing-identity-final-review-20261108/
+// RECONCILIATION.md §2.2):
+//
+//   • this packet's directory in the gate comment (the repaired packet's
+//     path would have pointed at a superseded directory);
+//   • the lock-order sentence → the BOUNDED LOCK SET (H2). The repaired
+//     packet wrote "The only product writers that take a membership row
+//     lock are …" and named TWO of them. That was FALSE: there are FIVE
+//     product writers of `tenant_memberships`. The bound survives and
+//     WIDENS, but the enumeration is replaced by the class — every writer
+//     of that table that changes `status`, `role_id` or `links_valid_from`
+//     takes FOR NO KEY UPDATE, which conflicts with FOR SHARE — with the
+//     five writers named as evidence;
+//   • the liveness mechanism sentence (M1): under READ COMMITTED the
+//     blocked `SELECT … FOR SHARE` re-evaluates its WHERE clause on the
+//     new row version and SKIPS the row, so the gate receives ZERO ROWS —
+//     it never observes `status = 'revoked'`.
+//
+
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
@@ -5,6 +38,10 @@ import { leaveTypes } from "@/db/schema/leave";
 import { writeAudit } from "@/lib/audit/write";
 import type { TenantId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
+import {
+  OWNER_WRITE_REFUSAL,
+  callerIsLiveOwnerInTx,
+} from "@/lib/services/leave-owner-identity";
 
 // V-26 — leave types and their seeding. The migration backfilled the
 // defaults for existing tenants; seedDefaultLeaveTypes() does the same
@@ -49,7 +86,7 @@ async function seedDefaultsOnTx(tx: TenantTx, tenantId: TenantId): Promise<void>
       .values({
         tenantId,
         name: preset.name,
-        annualQuota: preset.annualQuota,
+        annualQuota: preset.annualQuota ?? null,
         isPaid: preset.isPaid,
       })
       .onConflictDoNothing({ target: [leaveTypes.tenantId, leaveTypes.name] });
@@ -64,6 +101,9 @@ export async function seedDefaultLeaveTypes(
   return withTenant(tenantId, (innerTx) => seedDefaultsOnTx(innerTx, tenantId));
 }
 
+// The READ half is deliberately NOT gated. A coach must be able to pick a
+// leave type to request leave, so the catalogue read stays open to every
+// staff member. The rule is a WRITE rule.
 export async function listLeaveTypes(ctx: ActionCtx): Promise<LeaveTypeRow[]> {
   return withTenant(ctx.tenantId, async (tx) => {
     return tx
@@ -88,6 +128,57 @@ export async function createLeaveType(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // ── THE CLUB-WIDE WRITE IS OWNER-ONLY ────────────────────────────
+    //
+    // `leave_types` carries no location column (db/schema/leave.ts:29-51):
+    // the catalogue is a CLUB-WIDE object, so under the standing rule —
+    // "club-wide settings and access delegation remain owner-only" — its
+    // writes belong to the owner.
+    //
+    // The gate reads the caller's OWN live membership and the LIVE role
+    // row that membership names. It does NOT read ctx.roleKey, ctx.roleId,
+    // ctx.membershipId or ctx.permissions: a caller that claims to be the
+    // owner while its membership is somebody else's is refused.
+    //
+    // The refusal is UNIFORM ("Not authorized.") for every reason — no
+    // membership, another club's membership, a revoked membership, a
+    // soft-deleted membership, a soft-deleted role, a role that is not the
+    // owner, and an identity-free caller — so a non-owner learns nothing
+    // about which conjunct refused it.
+    //
+    // It happens BEFORE the write and before the audit row, so a refused
+    // caller leaves NO row and NO audit row: the refusal returns from
+    // inside the transaction with nothing written.
+    //
+    // THE LOCK SET IS BOUNDED, not asserted: the gate locks AT MOST ONE
+    // membership row (`tenant_memberships` is UNIQUE (tenant_id, user_id) —
+    // db/schema/memberships.ts:46) and AT MOST ONE role row (`roles` is
+    // UNIQUE (tenant_id, key) — db/schema/roles.ts:40). EVERY product
+    // writer that UPDATEs `tenant_memberships` changes only `status`,
+    // `role_id`, `links_valid_from`, `updated_at` or `updated_by` — none
+    // of which is in a unique index on that table — so each takes FOR NO
+    // KEY UPDATE, which CONFLICTS WITH the gate's FOR SHARE. The five
+    // writers that exist today (staff-invitations.ts:553-561 and :819-832,
+    // invite-link.ts:271-280, db/membership-activation.ts:55-65,
+    // curriculum-lead.ts:209-217) are evidence for that class, not an
+    // exhaustive list. NONE of them takes a role lock; and no writer holds
+    // a `leave_types` lock and then asks for a membership lock. So the
+    // order membership (M) → role (R) → leave_types (T) has no inversion.
+    //
+    // LIVENESS: if a revocation COMMITTED while this gate was waiting, the
+    // blocked `SELECT … FOR SHARE` re-evaluates its WHERE clause on the
+    // new row version (EvalPlanQual) and SKIPS the row — `status =
+    // 'active'` no longer matches — so the gate receives ZERO ROWS. It
+    // never observes `status = 'revoked'`; it simply finds no live owner
+    // row and refuses.
+    //
+    // The predicate, its F-04 / F-03a exception and its residuals are
+    // documented in
+    // docs/design/parallel-release/manager-owner-types-existing-identity-final-review-20261108/.
+    if (!(await callerIsLiveOwnerInTx(tx, ctx))) {
+      return { ok: false, error: OWNER_WRITE_REFUSAL };
+    }
+
     let inserted: { id: string } | undefined;
     try {
       [inserted] = await tx
@@ -135,6 +226,26 @@ export async function updateLeaveType(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // ── THE CLUB-WIDE WRITE IS OWNER-ONLY ────────────────────────────
+    //
+    // The same gate as `createLeaveType`, and it runs BEFORE the
+    // `leave_types` row is locked, so a refused caller takes no row lock
+    // at all. The lock order stays membership (M) → role (R) → leave_types
+    // (T): the gate's FOR SHARE on the membership and the role is taken
+    // first, then the catalogue row.
+    //
+    // THE ORDERING CLAIM IS A SPECIFICATION DEPENDENCY, not an accident:
+    // the concurrency case (N4b) parks the writer on the catalogue row
+    // lock and observes the concurrent revocation blocked on the gate's
+    // membership lock. If a future implementation moved the gate AFTER
+    // the catalogue-row lock, the writer would hold no membership lock
+    // while parked and the revocation would NOT be blocked — the case
+    // would then fail for a reason that is a specification change, not a
+    // bug. Keep the gate BEFORE the row lock.
+    if (!(await callerIsLiveOwnerInTx(tx, ctx))) {
+      return { ok: false, error: OWNER_WRITE_REFUSAL };
+    }
+
     const [existing] = await tx
       .select()
       .from(leaveTypes)

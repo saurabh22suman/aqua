@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { enrolMemberAction, listMemberEnrolmentsAction } from "@/lib/actions/enrolment";
 import { addToWaitlistAction } from "@/lib/actions/waitlist";
 import { transferMemberToBatchAction } from "@/lib/actions/transfer";
 import type { MemberEnrolment } from "@/lib/services/enrolment";
+import {
+  isFailedSeed,
+  seedForMember,
+  type MemberEnrolmentSeed,
+} from "@/components/member-detail/member-panel-initial-data";
 import type { BatchWithProgramName } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 
 // B3 — a member created through reception's add-member form, or
 // produced by converting an enquiry with no prior trial booking,
@@ -36,6 +42,7 @@ export function MemberEnrolmentPanel({
   terminology,
   canEnrol,
   canWaitlist,
+  initialData,
 }: {
   memberId: string;
   // Closed-key vocab resolved by the parent server page (L3 audit).
@@ -50,11 +57,26 @@ export function MemberEnrolmentPanel({
   // enquiries.write. Readers keep the enrolment list.
   canEnrol: boolean;
   canWaitlist: boolean;
+  // Owner overview only: the already-authorized server read. Absent for every
+  // other consumer, which keeps its own mount read.
+  initialData?: MemberEnrolmentSeed;
 }) {
   const router = useRouter();
-  const [enrolments, setEnrolments] = useState<MemberEnrolment[] | null>(null);
-  const [batches, setBatches] = useState<BatchWithProgramName[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const seed = seedForMember(initialData, memberId);
+  const [enrolments, setEnrolments] = useState<MemberEnrolment[] | null>(
+    seed && !isFailedSeed(seed) ? seed.enrolments : null,
+  );
+  const [batches, setBatches] = useState<BatchWithProgramName[] | null>(
+    seed && !isFailedSeed(seed) ? seed.batches : null,
+  );
+  const [loadError, setLoadError] = useState<string | null>(
+    seed && isFailedSeed(seed) ? "Could not load enrolment data." : null,
+  );
+  // Stale-response guard: a late read for a previous member is ignored.
+  const currentMember = useRef(memberId);
+  currentMember.current = memberId;
+  const loadEpoch = useRef(0);
+  const appliedSeed = useRef<typeof seed>(seed);
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   // R.5 — when the refusal is a full batch, offer the waitlist instead
@@ -69,17 +91,21 @@ export function MemberEnrolmentPanel({
   const [busy, setBusy] = useState(false);
 
   async function load() {
+    const at = memberId;
+    const run = ++loadEpoch.current;
     setLoadError(null);
     setEnrolments(null);
     setBatches(null);
     try {
       const [enrolmentRows, batchRows] = await Promise.all([
-        listMemberEnrolmentsAction(memberId),
+        listMemberEnrolmentsAction(at),
         listBatchesAction(),
       ]);
+      if (at !== currentMember.current || run !== loadEpoch.current) return;
       setEnrolments(enrolmentRows);
       setBatches(batchRows);
     } catch (err) {
+      if (at !== currentMember.current || run !== loadEpoch.current) return;
       setLoadError(
         err instanceof Error ? err.message : "Could not load enrolment data.",
       );
@@ -87,9 +113,29 @@ export function MemberEnrolmentPanel({
   }
 
   useEffect(() => {
-    load();
+    // A usable seed for THIS member is already the authoritative read.
+    if (seedForMember(initialData, memberId)) return;
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberId]);
+  }, [memberId, initialData]);
+
+  // A fresh server seed for the same member still applies.
+  useEffect(() => {
+    const current = seedForMember(initialData, memberId);
+    if (!current || appliedSeed.current === current) return;
+    appliedSeed.current = current;
+    // A newer authoritative read: an older pending one must not win.
+    loadEpoch.current += 1;
+    if (isFailedSeed(current)) {
+      setLoadError("Could not load enrolment data.");
+      setEnrolments(null);
+      setBatches(null);
+      return;
+    }
+    setLoadError(null);
+    setEnrolments(current.enrolments);
+    setBatches(current.batches);
+  }, [initialData, memberId]);
 
   const enrolledBatchIds = new Set((enrolments ?? []).map((e) => e.batchId));
   const availableBatches = (batches ?? []).filter((b) => !enrolledBatchIds.has(b.id));
@@ -195,7 +241,7 @@ export function MemberEnrolmentPanel({
 
   return (
     <div className="mt-4 rounded-card border border-line bg-paper p-3.5">
-      <h2 className="text-[13px] font-semibold uppercase tracking-[0.08em] text-ink-3">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
         Enrolment
       </h2>
 
@@ -229,19 +275,24 @@ export function MemberEnrolmentPanel({
                   </div>
                   {canEnrol && transferFrom === e.batchId ? (
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <select
-                        value={transferTarget}
-                        onChange={(ev) => setTransferTarget(ev.target.value)}
-                        className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                        data-testid="transfer-target"
-                        aria-label="Transfer to"
-                      >
-                        {availableBatches.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name} — {b.programName}
-                          </option>
-                        ))}
-                      </select>
+                      {/* P2 (independent review) — the flex sizing lives
+                          on a lane-owned wrapper around the shared
+                          primitive (the primitive renders its own
+                          `relative block` wrapper). */}
+                      <div className="min-w-0 flex-1">
+                        <Select
+                          value={transferTarget}
+                          onChange={(ev) => setTransferTarget(ev.target.value)}
+                          data-testid="transfer-target"
+                          aria-label="Transfer to"
+                        >
+                          {availableBatches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name} — {b.programName}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
                       <button
                         type="button"
                         onClick={() => moveToBatch(e.batchId)}
@@ -274,19 +325,23 @@ export function MemberEnrolmentPanel({
 
           {!canEnrol ? null : availableBatches.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={effectiveBatchId}
-                onChange={(e) => setSelectedBatchId(e.target.value)}
-                aria-label={`Select ${resolveTerm(terminology, "batch", 1)} to enrol in`}
-                className="w-full min-h-11 min-w-0 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                data-testid="enrolment-batch-select"
-              >
-                {availableBatches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} — {b.programName}
-                  </option>
-                ))}
-              </select>
+              {/* P2 (independent review) — the flex sizing lives on a
+                  lane-owned wrapper around the shared primitive. */}
+              <div className="w-full min-w-0 flex-1">
+                <Select
+                  value={effectiveBatchId}
+                  onChange={(e) => setSelectedBatchId(e.target.value)}
+                  aria-label={`Select ${resolveTerm(terminology, "batch", 1)} to enrol in`}
+                  className="min-w-0"
+                  data-testid="enrolment-batch-select"
+                >
+                  {availableBatches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} — {b.programName}
+                    </option>
+                  ))}
+                </Select>
+              </div>
               <Button
                 variant="primary"
                 onClick={enrol}

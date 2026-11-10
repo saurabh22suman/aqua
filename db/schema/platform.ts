@@ -26,6 +26,7 @@ export const plans = pgTable(
     pricePaise: bigint("price_paise", { mode: "bigint" }),
     currency: text("currency").notNull().default("INR"),
     isDefault: boolean("is_default").notNull().default(false),
+    availableForNewTenants: boolean("available_for_new_tenants").notNull().default(false),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -37,6 +38,7 @@ export const plans = pgTable(
   },
   (t) => [
     unique("plans_key_unique").on(t.key),
+    check("plans_signup_default_check", sql`not ${t.isDefault} or (${t.status} = 'active' and ${t.availableForNewTenants})`),
     uniqueIndex("plans_single_default")
       .on(t.isDefault)
       .where(sql`${t.isDefault}`),

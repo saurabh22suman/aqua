@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { TenantTx } from "@/db/tenant";
+import type { AuditActorType, AuditSource } from "@/db/schema/audit";
 import { whatsappNotificationOutbox as outbox } from "@/db/schema/whatsapp";
 import { tenantMemberships, membershipLocations } from "@/db/schema/memberships";
 import { users } from "@/db/schema/users";
@@ -9,7 +10,22 @@ import { writeAudit } from "@/lib/audit/write";
 import { normaliseToE164 } from "@/lib/phone";
 import { asMemberId, type TenantId } from "@/lib/ids";
 
-export type NotificationEvent = { tenantId: TenantId; eventKey: string; body: string; essential?: boolean; audience?: "selected" | "guardians" };
+export type NotificationEvent = {
+  tenantId: TenantId;
+  eventKey: string;
+  body: string;
+  essential?: boolean;
+  audience?: "selected" | "guardians";
+  // Who the queued audit row is attributed to. A background job has no
+  // human actor (actor_type 'system', actor_id NULL, source 'job'); a
+  // request path names the acting user. When it is not supplied the row
+  // keeps today's shape ('user', no actor id, 'web') — the request-path
+  // call sites in other lanes (payments, invoice issue, announcements,
+  // session lifecycle, invitations) rely on that until they pass their
+  // own actor, which is a cross-lane interface change and is proposed,
+  // not applied here.
+  actor?: { actorType: AuditActorType; actorId: string | null; source: AuditSource };
+};
 
 export async function enqueueMemberNotification(tx: TenantTx, event: NotificationEvent, memberId: string) {
   const result = await memberNotificationContacts(tx, event.tenantId, memberId);
@@ -62,7 +78,13 @@ export async function enqueueStaffNotification(tx: TenantTx, event: Notification
 }
 
 async function queuedAudit(tx: TenantTx, event: NotificationEvent, id: string) {
-  await writeAudit(tx, { tenantId: event.tenantId, actorId: null, action: "whatsapp.notification.queued",
+  // The actor the queued row is attributed to. The default is the
+  // historical shape; a job passes its own (system / job), so a
+  // background action is never recorded as a web user who does not
+  // exist.
+  const actor = event.actor ?? { actorType: "user" as const, actorId: null, source: "web" as const };
+  await writeAudit(tx, { tenantId: event.tenantId, actorType: actor.actorType, actorId: actor.actorId,
+    source: actor.source, action: "whatsapp.notification.queued",
     entityType: "whatsapp_notification", entityId: id, after: { eventKey: event.eventKey } });
 }
 

@@ -15,9 +15,11 @@ import { env } from "@/lib/env";
 export async function GET() {
   try {
     await pingDatabase();
-  } catch (err) {
+  } catch {
+    // Driver errors may contain credentials; log only a stable marker.
+    console.error("HEALTH_DATABASE_UNAVAILABLE");
     return NextResponse.json(
-      { status: "error", message: err instanceof Error ? err.message : String(err) },
+      { status: "error", message: "The database is unavailable." },
       { status: 503 },
     );
   }

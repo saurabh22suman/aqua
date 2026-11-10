@@ -3,8 +3,6 @@
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
-import { withTenant } from "@/db/tenant";
-import { enqueueInvitationNotification } from "@/lib/messaging/invitation-notification";
 import {
   issueLoginLink,
   type IssueLoginLinkResult,
@@ -18,6 +16,20 @@ import {
 // cookies().set() inside a Server Action does not emit Set-Cookie
 // on the flight response in this Next version (verified: action
 // ran, jar.set executed, no Set-Cookie header).
+//
+// The notification is queued INSIDE the issuance transaction (the
+// service's `notify` option), so the link, its audit and its queued
+// notification commit together. A second transaction here would let the
+// issuance commit and then fail, which reported a committed credential
+// as a failure and lost it.
+//
+// `notify: true` is all-or-nothing: a throw or a `false` from the helper
+// rolls the issuance back and returns `notification_failed`. The service
+// then records one fixed-code `staff.login_link_notification_failed` trace
+// in its own transaction. If that trace write also fails, the action still
+// returns `notification_failed`; the loss surfaces as one fixed safe alert
+// (`notification_trace_write_failed`) with no ids, phone, token, error or
+// stack.
 
 const membershipIdSchema = z.string().uuid();
 
@@ -32,8 +44,5 @@ export async function issueLoginLinkAction(
   requirePermission(ctx, "staff.invite");
   // A06 — pass the authenticated issuer so the service can deny
   // minting credentials for higher-trust targets before signing.
-  const result = await issueLoginLink(ctx.tenantId, parsed.data.membershipId, ctx);
-  if (result.kind === "ok") await withTenant(ctx.tenantId,
-    (tx) => enqueueInvitationNotification(tx, ctx.tenantId, parsed.data.membershipId));
-  return result;
+  return issueLoginLink(ctx.tenantId, parsed.data.membershipId, ctx, { notify: true });
 }

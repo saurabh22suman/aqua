@@ -1,5 +1,6 @@
-import { CalendarCheck, ShieldCheck, Users } from "lucide-react";
+import { CalendarCheck, ShieldCheck } from "lucide-react";
 import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { formatDateIST } from "@/lib/time/tz";
@@ -9,22 +10,44 @@ import type { MemberAttendanceHistory } from "@/lib/services/attendance-history"
 // U-03 — the member overview's read-only profile sections, extracted
 // from the page so the page itself stays a tab switch plus the header.
 // Guardians, consent, status history and the attendance grid.
+//
+// OpenPen owner reference — the owner overview places contacts/consent
+// beside participation. `sections` narrows the composition without
+// changing the default (reception still renders every section).
+
+export type MemberProfileSection =
+  | "guardians"
+  | "consent"
+  | "status"
+  | "attendance";
+
+const ALL_SECTIONS: MemberProfileSection[] = [
+  "guardians",
+  "consent",
+  "status",
+  "attendance",
+];
 
 export function MemberProfileSections({
   member,
   attendanceHistory,
   terminology,
+  sections = ALL_SECTIONS,
 }: {
   member: MemberDetail;
   attendanceHistory: MemberAttendanceHistory & { today: string };
   terminology: TerminologyState;
+  sections?: MemberProfileSection[];
 }) {
+  const shown = new Set(sections);
   return (
     <>
-      {member.isMinor ? (
+      {shown.has("guardians") && member.isMinor ? (
         <section className="mt-4">
-          <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-            <Users size={15} className="text-ink-3" />
+          <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold">
+            {/* The approved mock's people glyph, drawn by the shared owner
+                icon set (owner-only surface). */}
+            <OwnerIcon name="members" size={15} className="text-ink-3" />
             Guardians
           </h2>
           {member.guardians.length === 0 ? (
@@ -50,8 +73,9 @@ export function MemberProfileSections({
         </section>
       ) : null}
 
+      {shown.has("consent") ? (
       <section className="mt-4">
-        <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
+        <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold">
           <ShieldCheck size={15} className="text-ink-3" />
           Consent
         </h2>
@@ -75,10 +99,11 @@ export function MemberProfileSections({
           </ul>
         )}
       </section>
+      ) : null}
 
-      {member.statusHistory.length > 0 ? (
+      {shown.has("status") && member.statusHistory.length > 0 ? (
         <section className="mt-4">
-          <h2 className="font-display text-[14px] font-semibold">
+          <h2 className="font-display text-[16px] font-semibold">
             Status history
           </h2>
           <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
@@ -103,16 +128,18 @@ export function MemberProfileSections({
         </section>
       ) : null}
 
-      <section className="mt-4">
-        <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-          <CalendarCheck size={15} className="text-ink-3" />
-          Attendance
-        </h2>
-        <MemberAttendanceGrid
-          rows={attendanceHistory.rows}
-          today={attendanceHistory.today}
-        />
-      </section>
+      {shown.has("attendance") ? (
+        <section className="mt-4">
+          <h2 className="flex items-center gap-1.5 font-display text-[16px] font-semibold">
+            <CalendarCheck size={15} className="text-ink-3" />
+            Attendance
+          </h2>
+          <MemberAttendanceGrid
+            rows={attendanceHistory.rows}
+            today={attendanceHistory.today}
+          />
+        </section>
+      ) : null}
     </>
   );
 }

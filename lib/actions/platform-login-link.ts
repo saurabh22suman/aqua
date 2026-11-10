@@ -1,13 +1,17 @@
 "use server";
 
 import { z } from "zod";
+import { env } from "@/lib/env";
+import { tenantSignInOrigin } from "@/lib/tenant-sign-in-origin";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import {
   issueLoginLinkForPhone,
   issueOwnerResetLinkForPhone,
   type IssueLoginLinkResult,
 } from "@/lib/services/invite-link";
-import { asTenantId } from "@/lib/ids";
+import { asTenantId, asUserId } from "@/lib/ids";
+import { opsAction } from "@/db/ops-action";
 
 // Platform-side login-link minting for tenant owners. The operator
 // is not tenant management, so this cannot reuse the tenant-side
@@ -22,17 +26,24 @@ const ownerLinkInput = z.object({
   phone: z.string().trim().min(1).max(40),
 });
 
+export type OwnerLinkActionResult =
+  | (Extract<IssueLoginLinkResult, { kind: "ok" }> & { url: string })
+  | Extract<IssueLoginLinkResult, { kind: "error" }>
+  | { kind: "error"; code: "origin_not_configured"; message: string };
+
 export async function issueOwnerLoginLinkAction(
   input: unknown,
-): Promise<IssueLoginLinkResult> {
+): Promise<OwnerLinkActionResult> {
   // (1) parse
   const parsed = ownerLinkInput.safeParse(input);
   if (!parsed.success) {
+    await recordOpsMutationTrace("tenant.owner_login_link.issue", "invalid");
     return { kind: "error", code: "membership_not_found", message: "Pick a tenant and a phone number." };
   }
   // (2) platform-session permission check
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tenant.owner_login_link.issue", "denied");
     return {
       kind: "error",
       code: "membership_not_found",
@@ -42,8 +53,27 @@ export async function issueOwnerLoginLinkAction(
           : "Your session has expired. Sign in again.",
     };
   }
+  // Resolve configuration before issuing a credential or an issuance audit.
+  const origin = tenantSignInOrigin(env.BETTER_AUTH_URL);
+  if (!origin) {
+    await recordOpsMutationTrace("tenant.owner_login_link.issue", "error", { tenantId: parsed.data.tenantId });
+    return {
+      kind: "error", code: "origin_not_configured",
+      message: "The club sign-in address is not configured correctly. No link was created. Contact the platform administrator.",
+    };
+  }
   // (3) service
-  return issueLoginLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone);
+  const result = await opsAction({
+    scope: "tenant.owner_login_link.issue", actorId: asUserId(status.userId),
+    tenantId: parsed.data.tenantId,
+  }, () => issueLoginLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone)).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tenant.owner_login_link.issue", error, { tenantId: parsed.data.tenantId });
+    throw error;
+  });
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("tenant.owner_login_link.issue", "error", { tenantId: parsed.data.tenantId });
+  }
+  return result.kind === "ok" ? { ...result, url: `${origin}${result.urlPath}` } : result;
 }
 
 // 2026-09-11 auth feature: owner PIN reset. Same guard shape as the
@@ -58,15 +88,17 @@ const ownerResetInput = z.object({
 
 export async function issueOwnerResetLinkAction(
   input: unknown,
-): Promise<IssueLoginLinkResult> {
+): Promise<OwnerLinkActionResult> {
   // (1) parse
   const parsed = ownerResetInput.safeParse(input);
   if (!parsed.success) {
+    await recordOpsMutationTrace("tenant.owner_reset_link.issue", "invalid");
     return { kind: "error", code: "membership_not_found", message: "Pick a tenant and a phone number." };
   }
   // (2) platform-session permission check
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tenant.owner_reset_link.issue", "denied");
     return {
       kind: "error",
       code: "membership_not_found",
@@ -76,6 +108,25 @@ export async function issueOwnerResetLinkAction(
           : "Your session has expired. Sign in again.",
     };
   }
+  // Resolve configuration before issuing a credential or an issuance audit.
+  const origin = tenantSignInOrigin(env.BETTER_AUTH_URL);
+  if (!origin) {
+    await recordOpsMutationTrace("tenant.owner_reset_link.issue", "error", { tenantId: parsed.data.tenantId });
+    return {
+      kind: "error", code: "origin_not_configured",
+      message: "The club sign-in address is not configured correctly. No link was created. Contact the platform administrator.",
+    };
+  }
   // (3) service
-  return issueOwnerResetLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone);
+  const result = await opsAction({
+    scope: "tenant.owner_reset_link.issue", actorId: asUserId(status.userId),
+    tenantId: parsed.data.tenantId,
+  }, () => issueOwnerResetLinkForPhone(asTenantId(parsed.data.tenantId), parsed.data.phone)).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tenant.owner_reset_link.issue", error, { tenantId: parsed.data.tenantId });
+    throw error;
+  });
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("tenant.owner_reset_link.issue", "error", { tenantId: parsed.data.tenantId });
+  }
+  return result.kind === "ok" ? { ...result, url: `${origin}${result.urlPath}` } : result;
 }

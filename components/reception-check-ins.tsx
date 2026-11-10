@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   getRosterAction,
   markAttendanceSessionAction,
@@ -13,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, ATTENDANCE_MARK_TONE } from "@/components/ui/StatusBadge";
 import { SkeletonLine } from "@/components/skeleton";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { formatTimeIST } from "@/lib/time/tz";
 
 // U-08 — reception's "Today's check-ins" panel. Built only from the
@@ -111,7 +111,8 @@ export function ReceptionCheckIns({
   return (
     <section className="mt-6" data-testid="reception-checkins">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-[14px] font-semibold">
+        <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
+          <OwnerIcon name="calendar" size={16} className="text-ink-3" />
           Today&apos;s check-ins
         </h2>
         {sessions.length > 0 ? (
@@ -138,7 +139,7 @@ export function ReceptionCheckIns({
             const rows = roster[s.id];
             return (
               <li key={s.id}>
-                <div className="bg-paper rounded-card border border-line">
+                <div className="rounded-2xl border border-line bg-paper">
                   <button
                     type="button"
                     onClick={() => toggle(s.id)}
@@ -147,18 +148,18 @@ export function ReceptionCheckIns({
                     className="w-full min-h-[56px] px-4 py-3 text-left"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[15px] font-display font-semibold">
+                      <span className="text-[15px] font-medium leading-snug text-ink">
                         {formatTimeIST(s.startsAt)} {s.batchName}
                       </span>
-                      <span className="flex items-center gap-1 text-[13px] text-ink-3 flex-none">
+                      <span className="flex flex-none items-center gap-1 text-[13px] text-ink-3">
                         {s.total === 0
                           ? "No one enrolled"
                           : `${s.marked} / ${s.total} checked in`}
-                        {open ? (
-                          <ChevronUp size={16} aria-hidden="true" />
-                        ) : (
-                          <ChevronDown size={16} aria-hidden="true" />
-                        )}
+                        <OwnerIcon
+                          name="down"
+                          size={16}
+                          className={open ? "rotate-180" : undefined}
+                        />
                       </span>
                     </div>
                     {s.total > 0 ? (
@@ -193,6 +194,7 @@ export function ReceptionCheckIns({
                               className="flex min-h-[44px] items-center gap-3 py-2"
                             >
                               <PersonAvatar
+                                name={row.name}
                                 seed={row.memberId}
                                 size={32}
                                 className="flex-none"

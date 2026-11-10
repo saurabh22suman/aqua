@@ -170,7 +170,10 @@ export function RegisterBoard({
                   {markedCount}
                 </span>{" "}
                 of {rows.length} marked
-                <CountChip count={markedCount} label="marked" />
+                {/* The marked count is stated ONCE, here. A second pill
+                    repeating the same number said it twice on one strip;
+                    the REMAINING state is the second fact worth showing,
+                    so only that one is a pill. */}
                 {unmarked.length > 0 ? (
                   <CountChip count={unmarked.length} label="left" tone="warn" />
                 ) : null}

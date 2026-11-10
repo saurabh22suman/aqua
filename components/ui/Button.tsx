@@ -4,8 +4,37 @@ import type { ButtonHTMLAttributes } from "react";
 // On one Owner member-detail screen five buttons sharing the same
 // radius measured five different heights (33/36/38/44/44px), three of
 // them below DESIGN.md §2's hard 44×44px floor. This is the enforced
-// scale; `sm` is already 44px so no call site can drift below the
-// floor while remaining on the primitive.
+// scale.
+//
+// Owner redesign (27 October 2026) — the approved control contract:
+// the shared system now has ONE standard control:
+//
+//   "Standard action buttons, text fields, selects, date and time
+//    pickers share a 48px height, 10px radius, 16px control text and
+//    consistent horizontal padding. Long actions may wrap and grow; do
+//    not clip them to meet a numeric height. Compact table/tertiary
+//    controls retain at least 44px effective targets."
+//
+//   - `sm` is the COMPACT control (a table row action, a tertiary
+//     control): 44px, the accessibility floor, and the only variant
+//     that may sit below the standard height.
+//   - `md` and `lg` are the STANDARD control: 48px
+//     (`--control-height-md`), 16px control text, the 10px control
+//     radius and one horizontal padding (16px, `--control-padding-x`).
+//   - The DEFAULT is `md`. A caller that says nothing gets the
+//     STANDARD control, so an ordinary header, form or toolbar action
+//     is never 44px beside a 48px input. A genuinely compact table or
+//     tertiary action opts in to `size="sm"` explicitly — the booking
+//     desk's per-row actions do exactly that.
+//   - A long label WRAPS and the button grows. Nothing here sets
+//     `whitespace-nowrap`, `truncate` or `overflow-hidden`, so an
+//     action is never clipped to keep a numeric height.
+//
+// The tints follow the approved rule: a solid theme colour for the one
+// primary action, a slightly stronger theme tint for a secondary
+// action, a neutral surface for a tertiary one, and the reserved `late`
+// token for a destructive action. Destructive/error/success always
+// carry a word or an icon as well, so colour is never the only cue.
 //
 // `destructive` is a real variant backed by the `late` token, for
 // actions that are hard to reverse (Ops "Mark churned"). `primary`
@@ -21,23 +50,25 @@ export type ButtonVariant =
 export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--accent-strong)] text-white hover:opacity-90",
-  secondary: "border border-line bg-paper text-ink-2 hover:bg-deck",
-  ghost: "bg-deck text-ink-2 hover:bg-paper",
+  primary:
+    "bg-[var(--accent-strong)] text-white hover:bg-[var(--action-surface-hover)]",
+  secondary:
+    "border border-[var(--control-border)] bg-[var(--control-surface-action)] text-[var(--accent-ink)] hover:bg-[var(--control-surface-action-hover)] hover:border-[var(--control-border-hover)]",
+  ghost: "bg-transparent text-ink-2 hover:bg-deck",
   destructive: "bg-late text-white hover:opacity-90",
 };
 
-// sm = 44px (the DESIGN.md floor, met exactly), md/lg = 48px for
-// primary or trailing actions where a little more weight is useful.
+// sm = 44px (the DESIGN.md §2 floor for a compact table/tertiary
+// control, met exactly); md/lg = 48px, the standard control height.
 const SIZE_CLASS: Record<ButtonSize, string> = {
-  sm: "min-h-11 px-3.5 py-2 text-[13px]",
-  md: "min-h-12 px-5 py-3 text-[14px]",
-  lg: "min-h-12 px-5 py-3.5 text-[15px]",
+  sm: "min-h-11 px-3.5 py-2 text-[16px]",
+  md: "min-h-12 px-4 py-2.5 text-[16px]",
+  lg: "min-h-12 px-4 py-3 text-[16px]",
 };
 
 export function buttonClasses({
   variant = "secondary",
-  size = "sm",
+  size = "md",
   pill = false,
   className = "",
 }: {
@@ -66,7 +97,7 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function Button({
   variant = "secondary",
-  size = "sm",
+  size = "md",
   pill = false,
   className = "",
   type = "button",
@@ -75,6 +106,10 @@ export function Button({
   return (
     <button
       type={type}
+      // A stable hook for the shared control contract: the browser
+      // geometry probe and any lane's own check can find a SHARED
+      // button without guessing at its classes.
+      data-control="button"
       className={buttonClasses({ variant, size, pill, className })}
       {...rest}
     />

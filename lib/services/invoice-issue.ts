@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { tenants } from "@/db/schema/tenants";
 import { invoices, invoiceLineItems } from "@/db/schema/invoices";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import { resolveConfigInTx } from "@/db/config";
 import { allocateInvoiceNumber } from "@/lib/services/invoice-numbering";
 import { GST_RATE_KEY } from "@/lib/services/tax";
@@ -24,6 +24,12 @@ import { toSafePaise } from "@/lib/money/safe-paise";
 // issues a bill of supply and no tax is charged. Rates are resolved
 // per line (activity + facility) and snapshotted; a later config
 // change never rewrites an issued document.
+//
+// WR-1 / Option A — the payer is EXPLICIT. A member document names a
+// member; a guest document (a walk-in bill) names no member and
+// carries the buyer's name. The two states are exclusive, and a guest
+// document is never notified: a walk-in has no phone and no guardian,
+// so the notification is skipped, never faked.
 
 export const SAC_CODE_KEY = "billing.sac_code" as const;
 export const RENEWAL_WINDOW_DAYS = 7;
@@ -32,44 +38,72 @@ const dateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a yyyy-mm-dd date.");
 
-export const issueInvoiceInputSchema = z.object({
-  tenantId: z.string().uuid(),
-  memberId: z.string().uuid(),
-  locationId: z.string().uuid(),
-  subscriptionId: z.string().uuid().nullish(),
-  issuedOn: dateSchema,
-  dueOn: dateSchema,
-  notes: z.string().trim().max(500).nullish(),
-  // K-03 — where this document came from. Defaults to the original
-  // membership path so existing callers are untouched; café orders
-  // pass 'cafe' (lib/services/orders.ts).
-  source: z.enum(["membership", "cafe", "other"]).default("membership"),
-  lines: z
-    .array(
-      z.object({
-        description: z.string().trim().min(1).max(300),
-        amountPaise: z.number().int().positive(),
-        activityId: z.string().uuid().nullish(),
-        // K-03 — optional per-line snapshots. The café path supplies
-        // the order's snapshotted SAC and GST rate so the issued
-        // document matches the operational record to the paisa; the
-        // membership path leaves them unset and resolves the tenant
-        // config as before.
-        sacCode: z
-          .string()
-          .regex(/^\d{4,8}$/, "The SAC code must be 4-8 digits.")
-          .nullish(),
-        taxRateBp: z.number().int().min(0).max(10000).nullish(),
-        // V-04 — an explicit tax for callers that hold a GST-inclusive
-        // amount and split it themselves (the booking bill). Trusted
-        // exactly like the SAC/rate snapshot above: the service layer,
-        // not the client, computed it. Without it the invoice applies
-        // computeTax(amountPaise, rateBp) as before.
-        taxPaise: z.number().int().min(0).nullish(),
-      }),
-    )
-    .min(1, "An invoice needs at least one line."),
-});
+export const issueInvoiceInputSchema = z
+  .object({
+    tenantId: z.string().uuid(),
+    // WR-1 — a guest document has no member.
+    memberId: z.string().uuid().nullish(),
+    // Which kind of payer this document names. 'member' is the
+    // default, so every existing caller is unchanged.
+    payerKind: z.enum(["member", "guest"]).default("member"),
+    // The buyer's name on a guest document.
+    guestName: z.string().trim().min(1).max(120).nullish(),
+    locationId: z.string().uuid(),
+    subscriptionId: z.string().uuid().nullish(),
+    issuedOn: dateSchema,
+    dueOn: dateSchema,
+    notes: z.string().trim().max(500).nullish(),
+    // K-03 — where this document came from. Defaults to the original
+    // membership path so existing callers are untouched; café orders
+    // pass 'cafe' (lib/services/orders.ts).
+    source: z.enum(["membership", "cafe", "other"]).default("membership"),
+    lines: z
+      .array(
+        z.object({
+          description: z.string().trim().min(1).max(300),
+          amountPaise: z.number().int().positive(),
+          activityId: z.string().uuid().nullish(),
+          // K-03 — optional per-line snapshots. The café path supplies
+          // the order's snapshotted SAC and GST rate so the issued
+          // document matches the operational record to the paisa; the
+          // membership path leaves them unset and resolves the tenant
+          // config as before.
+          sacCode: z
+            .string()
+            .regex(/^\d{4,8}$/, "The SAC code must be 4-8 digits.")
+            .nullish(),
+          taxRateBp: z.number().int().min(0).max(10000).nullish(),
+          // V-04 — an explicit tax for callers that hold a GST-inclusive
+          // amount and split it themselves (the booking bill). Trusted
+          // exactly like the SAC/rate snapshot above: the service layer,
+          // not the client, computed it. Without it the invoice applies
+          // computeTax(amountPaise, rateBp) as before.
+          taxPaise: z.number().int().min(0).nullish(),
+        }),
+      )
+      .min(1, "An invoice needs at least one line."),
+  })
+  .refine(
+    (value) =>
+      value.payerKind === "member"
+        ? value.memberId !== undefined && value.memberId !== null
+        : value.memberId === undefined || value.memberId === null,
+    {
+      message:
+        "A member invoice needs a member, and a guest invoice must not name one.",
+      path: ["memberId"],
+    },
+  )
+  .refine(
+    (value) =>
+      value.payerKind === "guest"
+        ? value.guestName !== undefined && value.guestName !== null
+        : true,
+    {
+      message: "A guest invoice needs the buyer's name.",
+      path: ["guestName"],
+    },
+  );
 
 export type IssueInvoiceInput = z.input<typeof issueInvoiceInputSchema>;
 
@@ -81,6 +115,7 @@ export async function issueInvoiceInTx(
   tx: TenantTx,
   raw: IssueInvoiceInput,
   actorId: UserId | null,
+  requestId: string | null = null,
 ): Promise<IssueInvoiceResult> {
   const parsed = issueInvoiceInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -179,7 +214,11 @@ export async function issueInvoiceInTx(
     .values({
       tenantId,
       locationId: input.locationId,
-      memberId: asMemberId(input.memberId),
+      // WR-1 — the payer is written the way the caller declared it and
+      // the database's own checks keep the two states exclusive.
+      memberId: input.memberId ? asMemberId(input.memberId) : null,
+      payerKind: input.payerKind,
+      guestName: input.payerKind === "guest" ? (input.guestName ?? null) : null,
       subscriptionId: input.subscriptionId ?? null,
       invoiceNumber: allocated.invoiceNumber,
       financialYear: allocated.financialYear,
@@ -214,8 +253,9 @@ export async function issueInvoiceInTx(
   // A user-issued invoice carries the actor; a system-issued renewal
   // (the invoices.generate job) carries actor_type='system' with no
   // actor_id, which the old NOT NULL column made impossible (F-15
-  // job gap).
-  await tx.insert(auditLog).values({
+  // job gap). The request id joins the row to the request that caused
+  // it (architecture §8.11); a job has none, so it stays NULL.
+  await writeAudit(tx, {
     tenantId,
     actorType: actorId ? "user" : "system",
     actorId: actorId ?? null,
@@ -231,11 +271,20 @@ export async function issueInvoiceInTx(
       taxPaise,
       totalPaise,
       subscriptionId: input.subscriptionId ?? null,
+      // WR-1 — the audit row names the payer, so a guest document is
+      // traceable without reading the invoice.
+      payerKind: input.payerKind,
+      guestName: input.payerKind === "guest" ? (input.guestName ?? null) : null,
     },
+    requestId,
   });
 
-  await enqueueMemberNotification(tx, { tenantId, eventKey: `invoice:${invoice.id}`, essential: true,
-    body: `Aqua invoice ${allocated.invoiceNumber} issued. Total: ${formatINR(totalPaise)}. Due date: ${input.dueOn}. Contact the academy for payment details.` }, input.memberId);
+  // WR-1 — a guest payer has no phone and no guardian: there is
+  // nobody to notify, so the notification is skipped, never faked.
+  if (input.memberId) {
+    await enqueueMemberNotification(tx, { tenantId, eventKey: `invoice:${invoice.id}`, essential: true,
+      body: `Aqua invoice ${allocated.invoiceNumber} issued. Total: ${formatINR(totalPaise)}. Due date: ${input.dueOn}. Contact the academy for payment details.` }, input.memberId);
+  }
   return {
     ok: true,
     invoiceId: invoice.id,

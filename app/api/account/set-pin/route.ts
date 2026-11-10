@@ -5,8 +5,8 @@ import { withPlatform } from "@/db/scope";
 import {
   hasCredentialByBaUserId,
   pinSchema,
-  setCredential,
 } from "@/lib/services/credentials";
+import { initializeCredentialIfAbsent } from "@/lib/services/self-service-credential";
 
 // POST /api/account/set-pin — session-gated safety net for the
 // first-login flow (2026-09-11 auth feature).
@@ -50,6 +50,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ kind: "error", code: "already_set" }, { status: 409 });
   }
 
-  await setCredential(session.user.id, parsed.data.pin);
+  const created = await initializeCredentialIfAbsent(session.user.id, parsed.data.pin);
+  if (!created) {
+    return NextResponse.json({ kind: "error", code: "already_set" }, { status: 409 });
+  }
   return NextResponse.json({ kind: "ok" });
 }

@@ -1,11 +1,10 @@
-import { and, eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
-import { db } from "./client";
-import { withPlatform, withPlatformAdmin } from "./scope";
+import { withPlatformAdmin } from "./scope";
 import { tenants } from "./schema/tenants";
 import { locations } from "./schema/locations";
-import { plans } from "./schema/platform";
+import { findSignupPlan } from "./saas-plan-catalogue";
+export { listActivePlans } from "./saas-plan-catalogue";
 import { recordOpsAudit } from "./ops-action";
 import { finishTenantProvisioning } from "./platform-tenant-provision";
 import { seedRoleTemplates } from "@/lib/services/roles";
@@ -132,26 +131,6 @@ type ProvisionedTenant =
 
 const SLUG_TAKEN_PG_CODE = "23505"; // Postgres unique_violation
 
-// Reads the active plans for the new-tenant form's <select>. Plans is
-// RLS-exempt (db/allowlist.ts); the withPlatform() wrapper is for the
-// standing convention rather than for visibility — every platform-side
-// read goes through it.
-export async function listActivePlans(): Promise<
-  Array<{ key: string; name: string; isDefault: boolean }>
-> {
-  return withPlatform(async () => {
-    return db
-      .select({
-        key: plans.key,
-        name: plans.name,
-        isDefault: plans.isDefault,
-      })
-      .from(plans)
-      .where(eq(plans.status, "active"))
-      .orderBy(plans.sortOrder);
-  });
-}
-
 export async function createTenant(
   rawInput: CreateTenantInput,
   ctx: { actorId: UserId },
@@ -172,31 +151,16 @@ export async function createTenant(
 
   try {
     const result: ProvisionedTenant = await withPlatformAdmin(async (tx) => {
-      // Plan lookup is a straight read on a platform-scoped table
-      // (allowlist). No need for withPlatform() — the surrounding
-      // platform_admin session doesn't change that visibility.
-      // planKey omitted -> resolve is_default rather than assuming a
-      // hardcoded key: the key of "the default plan" and the string
-      // this form falls back to were two sources of truth that only
-      // happened to agree because nothing had renamed the default
-      // plan yet.
-      const planRows = await tx
-        .select({ id: plans.id, name: plans.name, key: plans.key })
-        .from(plans)
-        .where(
-          input.planKey
-            ? and(eq(plans.key, input.planKey), eq(plans.status, "active"))
-            : and(eq(plans.isDefault, true), eq(plans.status, "active")),
-        )
-        .limit(1);
-      const plan = planRows[0];
+      // Sale eligibility is rechecked on the server in this transaction.
+      // Standard remains active for existing clubs, but cannot be forged here.
+      const plan = await findSignupPlan(tx, input.planKey);
       if (!plan) {
         return {
           kind: "error",
           code: "plan_not_found",
           message: input.planKey
-            ? `No active plan with key "${input.planKey}".`
-            : "No default plan is configured.",
+            ? `No signup-eligible active plan with key "${input.planKey}".`
+            : "No signup-eligible default plan is configured.",
         };
       }
 

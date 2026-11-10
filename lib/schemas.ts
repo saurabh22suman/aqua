@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Matches the seeded row in policy_versions (db/seed-platform.ts) --
 // the version every consent grant captured through the UI cites.
-export const CURRENT_POLICY_VERSION = "2026.1";
+export { CURRENT_POLICY_VERSION } from "./consent-policy";
 
 // C-05: a consent grant, as captured at member registration. Shape
 // only -- the business rule "processing is required" lives in
