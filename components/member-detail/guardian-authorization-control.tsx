@@ -40,7 +40,7 @@ export function GuardianAuthorizationControl({ guardianshipId, personName, relat
   return (
     <div className="mt-3 rounded-ctl border border-line bg-deck p-3">
       <p className="text-sm font-medium text-ink">{personName} · {relationship}</p>
-      <p className="mt-1 text-sm text-ink-3">Ending this authorization removes access for this member and ends the guardian relationship used for notifications and consent.</p>
+      <p className="mt-1 text-sm text-ink-3">Ending this authorization removes their access to this profile and ends the relationship used for notifications and consent.</p>
       <Label className="mt-2" htmlFor={`guardian-reason-${guardianshipId}`} required>Reason</Label>
       <Textarea
         id={`guardian-reason-${guardianshipId}`}

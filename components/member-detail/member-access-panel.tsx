@@ -148,8 +148,8 @@ export function MemberAccessPanel({
         subtitle={`${read.memberName} · ${read.memberCode} · ${read.facilityName}`}
       />
       {read.guardianChoices?.length ? (
-        <section aria-label="Guardian authorizations" className="mt-4">
-          <h3 className="text-sm font-medium text-ink">Guardian authorizations</h3>
+        <section aria-label="Family authorizations" className="mt-4">
+          <h3 className="text-sm font-medium text-ink">Family authorizations</h3>
           {read.guardianChoices.map((guardian) => <GuardianAuthorizationControl key={guardian.guardianshipId} {...guardian} />)}
         </section>
       ) : null}
