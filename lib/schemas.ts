@@ -32,7 +32,7 @@ export const createMemberSchema = z.object({
   // Mandatory, not optional -- C-05. Minor status is derived from this
   // server-side (isMinor, lib/time/tz.ts); "unknown" cannot be treated
   // as "adult" by omitting it.
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateOfBirth: z.string().date(),
   gender: z.enum(["male", "female", "other"]).optional(),
   locationId: z.string().uuid(),
   memberCode: z.string().min(1).max(50),
@@ -57,7 +57,7 @@ export const updateMemberSchema = z
     memberId: z.string().uuid(),
     fullName: z.string().trim().min(1, "Name can't be empty.").max(200).optional(),
     phone: z.string().trim().min(8).max(20).nullable().optional(),
-    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    dateOfBirth: z.string().date().optional(),
     gender: z.enum(["male", "female", "other"]).nullable().optional(),
     locationId: z.string().uuid().optional(),
     medicalNotes: z.string().max(2000).nullable().optional(),
@@ -122,7 +122,7 @@ export const addFollowUpSchema = z.object({
 export const completeFollowUpSchema = z.string().uuid();
 
 const newMemberDetailsSchema = z.object({
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateOfBirth: z.string().date(),
   gender: z.enum(["male", "female", "other"]).optional(),
   locationId: z.string().uuid(),
   medicalNotes: z.string().max(2000).optional(),

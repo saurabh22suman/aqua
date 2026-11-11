@@ -51,6 +51,8 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   withdrawLinkBindingAction: "members.link.confirm",
   issueMemberActivationTokenAction: "members.link.confirm",
   provisionMemberAccountLinkAction: "members.write",
+  enrollMemberSignInAction: "members.write",
+  withdrawGuardianAuthorizationAction: "members.link.confirm",
 
   // Attendance
   getMemberAttendanceHistoryAction: "attendance.read",

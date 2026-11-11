@@ -149,7 +149,8 @@ export async function lockAffectedShifts(
 // LINKED means: the record names one of the affected shifts
 // (`staff_attendance.shift_id` is NULLABLE — db/schema/staff-attendance.ts:39
 // — and a record with no shift is not evidence of anything) and the
-// record's `work_date` is that shift's `shift_date`.
+// the record belongs to the same staff member. A different work date is
+// still linked evidence and cannot silently disappear from the lock set.
 //
 // THERE IS NO STATUS FILTER IN THE SQL, AND NO `LIMIT 1`. That is the
 // whole point of this function:
@@ -195,7 +196,6 @@ export async function lockLinkedAttendance(
       and(
         eq(staffAttendance.tenantId, tenantId),
         eq(staffAttendance.staffId, staffId),
-        eq(staffAttendance.workDate, shifts.shiftDate),
         inArray(staffAttendance.shiftId, [...affectedShiftIds]),
       ),
     )

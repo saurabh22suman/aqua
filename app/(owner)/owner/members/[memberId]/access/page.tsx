@@ -1,4 +1,7 @@
 import { notFound } from "next/navigation";
+import { MemberEnrollmentForm } from "@/components/member-detail/member-enrollment-form";
+import { hasPermission } from "@/lib/auth/permission";
+import { isFacilityScopedRoleKey } from "@/lib/services/facility-scope";
 import { MemberAccessPanel } from "@/components/member-detail/member-access-panel";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { BackLink } from "@/components/ui/BackLink";
@@ -10,31 +13,8 @@ import {
   type MemberAccessRead,
 } from "@/lib/services/member-link-readmodel";
 
-// THE OWNER'S ACCESS PAGE FOR ONE MEMBER.
-//
-// WHAT IT IS: the place where staff hand a member or a guardian their own
-// sign-in link, and where the club stands behind a pairing.
-//
-// WHAT IT IS NOT: an account screen. It never provisions a link, never
-// searches club accounts, never creates a person and never invites anyone
-// by message. A link row is the thing this page manages, and a link row
-// exists only after a club account has been enrolled and named.
-//
-// A CONFIRMATION IS ABOUT THE PAIRING, NOT ABOUT A PHONE. The card shows
-// which account is being confirmed and which number the club has on file
-// for the person; the two may differ and the page never compares them.
-//
-// THE PAGE READ IS AUTHORIZED HERE, NOT IN THE LAYOUT. The page guard
-// (requireOwner) proves the surface, requirePagePermission proves the
-// grant, and the read model then proves the actor's REAL authority — the
-// live membership, the grant it carries and the facilities it is currently
-// assigned to — against the member's own facility. A member outside that
-// facility answers 404, exactly like a member who does not exist.
-//
-// THE READ IS A SERVICE CALL, NOT A NEW SERVER ACTION. The page already
-// holds the actor's context and has already checked the grant; the read
-// model re-checks the authority from the database. This keeps the slice
-// clear of lib/auth/**, which is a protected path.
+// The page guards the surface and link-confirm permission. The read model
+// rechecks live facility authority; enrollment also requires members.write.
 export default async function MemberAccessPage({
   params,
 }: {
@@ -64,8 +44,9 @@ export default async function MemberAccessPage({
       <PageHeader
         className="mt-2"
         title="Member and family access"
-        purpose="The sign-in links this member and their guardians already have. Confirming says which account belongs to which person — it is not a check that anybody owns a phone. An invitation is handed over by hand; nothing is sent for you."
+        purpose="Set up and manage sign-in links for this member and their guardians. Confirming says which account belongs to which person — it is not a check that anybody owns a phone. An invitation is handed over by hand; nothing is sent for you."
       />
+      {read && hasPermission(ctx, "members.write") && (ctx.roleKey === "owner" || isFacilityScopedRoleKey(ctx.roleKey)) ? <MemberEnrollmentForm key={read.memberId} read={read} /> : null}
       <div className="mt-4">
         <MemberAccessPanel read={read} failed={failed} />
       </div>

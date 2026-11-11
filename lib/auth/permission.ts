@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { rolePermissions, roles } from "@/db/schema/roles";
 import type { Ctx } from "@/lib/auth/context";
@@ -82,7 +82,7 @@ export async function resolvePermissionContext(
       tx
         .select({ id: roles.id })
         .from(roles)
-        .where(eq(roles.id, roleId))
+        .where(and(eq(roles.id, roleId), eq(roles.tenantId, tenantId), isNull(roles.deletedAt)))
         .limit(1),
     ]);
     if (roleRow.length === 0) {

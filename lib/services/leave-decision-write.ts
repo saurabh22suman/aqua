@@ -52,7 +52,7 @@ export type LeaveAuditWriter = (
 
 export type LeaveDecisionResult =
   | { ok: true; shiftsMarked: number }
-  | { ok: false; error: string };
+  | { ok: false; error: string; attendanceWorkDates?: string[] };
 
 export async function writeDecision(
   tx: TenantTx,

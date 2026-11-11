@@ -41,6 +41,7 @@ import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { leaveRequests } from "@/db/schema/leave";
 import { ownStaffIdInTx } from "@/lib/services/staff-self";
+import { hasOwnerCorrectionAuthority } from "@/lib/services/staff-attendance-owner-resolution";
 import { lockStaffForRoster } from "@/lib/services/staff-roster-lock";
 import {
   affectedShiftsInRange,
@@ -71,19 +72,19 @@ export type { LeaveDecisionResult };
 // transaction it is an exception, because that is the only thing that
 // rolls the transaction back.
 export class LeaveDecisionRefusal extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly attendanceWorkDates?: string[]) {
     super(message);
     this.name = "LeaveDecisionRefusal";
   }
 }
 
-function refuse(message: string): never {
-  throw new LeaveDecisionRefusal(message);
+function refuse(message: string, attendanceWorkDates?: string[]): never {
+  throw new LeaveDecisionRefusal(message, attendanceWorkDates);
 }
 
 // THE DECISION.
 export async function decideLeaveRequest(
-  ctx: ActionCtx,
+  ctx: ActionCtx & { features?: ReadonlySet<string> },
   input: { requestId: string; note?: string | null },
   decision: "approved" | "rejected",
   writeAuditRow: LeaveAuditWriter,
@@ -102,6 +103,13 @@ export async function decideLeaveRequest(
       if (caller.kind === "system" || caller.kind === "identity-free") {
         refuse("Not authenticated.");
       }
+
+      // Resolve disclosure authority before request, staff, shift or attendance
+      // locks. Missing or incomplete context is intentionally non-disclosing.
+      const canSeeAttendanceDates = decision === "approved" &&
+        ctx.permissions?.has("staff.attendance") === true &&
+        ctx.permissions.has("settings.manage") && ctx.features?.has("staff") === true &&
+        await hasOwnerCorrectionAuthority(tx, ctx);
 
       // An owner/admin is a user with a membership, not necessarily a
       // staff row. When the decider has no staff record, `decided_by`
@@ -192,7 +200,10 @@ export async function decideLeaveRequest(
           request.staffId,
           lockedShifts,
         );
-        if (block.error) refuse(block.error);
+        if (block.error) {
+          refuse(block.error, canSeeAttendanceDates && block.attendanceWorkDates.length > 0
+            ? block.attendanceWorkDates : undefined);
+        }
         resolvedShiftIds = block.resolvedShiftIds;
       }
 
@@ -214,7 +225,9 @@ export async function decideLeaveRequest(
     });
   } catch (error) {
     if (error instanceof LeaveDecisionRefusal) {
-      return { ok: false, error: error.message };
+      return error.attendanceWorkDates
+        ? { ok: false, error: error.message, attendanceWorkDates: error.attendanceWorkDates }
+        : { ok: false, error: error.message };
     }
     throw error;
   }

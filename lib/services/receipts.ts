@@ -285,7 +285,15 @@ export async function getScopedSelfReceiptInTx(tx: TenantTx, scope: SelfScope, p
   if (!invoice) return { ok: false, error: "Receipt not found." };
   const row = await loadReceiptRow(tx, scope.tenantId, paymentId, memberId);
   if (!row) return { ok: false, error: "Receipt not found." };
-  return serveOrCreateReceipt(tx, scope.tenantId, paymentId, row, {
-    userId: scope.userId, actorType: "user", source: "api", via: scope.audience === "member" ? "member_self" : "guardian_self",
+  const via = scope.audience === "member" ? "member_self" : "guardian_self";
+  const result = await serveOrCreateReceipt(tx, scope.tenantId, paymentId, row, {
+    userId: scope.userId, actorType: "user", source: "api", via,
   });
+  if (!result.ok) return result;
+  await writeAudit(tx, {
+    tenantId: scope.tenantId, actorType: "user", actorId: scope.userId,
+    source: "api", action: "receipt.download", entityType: "receipt", entityId: paymentId,
+    after: { via, fileSize: result.pdf.byteLength },
+  });
+  return result;
 }

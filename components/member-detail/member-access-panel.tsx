@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { GuardianAuthorizationControl } from "@/components/member-detail/guardian-authorization-control";
 import { useRouter } from "next/navigation";
 import Check from "lucide-react/dist/esm/icons/check.mjs";
 import { Button } from "@/components/ui/Button";
@@ -32,11 +33,8 @@ import type {
 
 // THE STAFF SIDE OF A MEMBER'S SIGN-IN LINK.
 //
-// THE THREE APPROVED ACTIONS ARE REUSED EXACTLY: confirm, withdraw and
-// issue are the three functions lib/actions/member-link-binding.ts already
-// exports, and each re-checks the actor's real authority in its own
-// service. This component adds no action: it never provisions a link,
-// never searches club accounts and never creates a person.
+// Link confirmations and guardian authorizations are distinct operations.
+// Each write checks the actor's live authority in its own service.
 //
 // WHICH ACCOUNT IS BEING CONFIRMED? The card shows BOTH numbers: the
 // account's own current sign-in number and the club's record of the
@@ -149,6 +147,12 @@ export function MemberAccessPanel({
         title="Sign-in links"
         subtitle={`${read.memberName} · ${read.memberCode} · ${read.facilityName}`}
       />
+      {read.guardianChoices?.length ? (
+        <section aria-label="Guardian authorizations" className="mt-4">
+          <h3 className="text-sm font-medium text-ink">Guardian authorizations</h3>
+          {read.guardianChoices.map((guardian) => <GuardianAuthorizationControl key={guardian.guardianshipId} {...guardian} />)}
+        </section>
+      ) : null}
       {read.links.length === 0 ? (
         <div className="mt-3">
           <p className="text-[15px] font-medium text-ink">No sign-in link yet</p>

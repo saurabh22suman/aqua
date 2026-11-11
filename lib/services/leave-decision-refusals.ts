@@ -95,19 +95,36 @@ export async function recordedDayBlock(
   tenantId: TenantId,
   staffId: StaffId,
   affected: readonly AffectedShift[],
-): Promise<{ error: string | null; resolvedShiftIds: string[] }> {
+): Promise<{ error: string | null; resolvedShiftIds: string[]; attendanceWorkDates: string[] }> {
   // Always lock every linked record, including nonblocking ones, before
   // deciding; a later correction cannot overtake this transaction.
   const linked = await lockLinkedAttendance(tx, tenantId, staffId, affected.map((row) => row.id));
-  if (linkedAttendanceBlocks(linked)) return { error: RECORDED_DAY_MESSAGE, resolvedShiftIds: [] };
+  const hasBlockingAttendance = linkedAttendanceBlocks(linked);
   const resolvedShiftIds: string[] = [];
+  const unresolvedDates = new Set(linked.filter((item) =>
+    (LEAVE_DECISION_EVIDENCE.blockingAttendanceStatuses as readonly string[]).includes(item.status),
+  ).map((item) => item.row.workDate));
+  let unresolvedShift = false;
   for (const shift of affected) {
     if (!(LEAVE_DECISION_EVIDENCE.blockingShiftStatuses as readonly string[]).includes(shift.status)) continue;
-    const evidence = linked.find((item) => item.shiftId === shift.id);
-    if (!evidence || !(await hasCurrentOwnerResolution(tx, evidence.row))) {
-      return { error: RECORDED_DAY_MESSAGE, resolvedShiftIds: [] };
+    // Multiple attendance rows can name one shift. A nonblocking row
+    // must not hide another row's current owner-resolution proof.
+    let resolved = false;
+    for (const evidence of linked) {
+      if (evidence.shiftId === shift.id && await hasCurrentOwnerResolution(tx, evidence.row)) {
+        resolved = true;
+        break;
+      }
     }
-    resolvedShiftIds.push(shift.id);
+    if (!resolved) {
+      unresolvedShift = true;
+      for (const item of linked) if (item.shiftId === shift.id) unresolvedDates.add(item.row.workDate);
+    } else {
+      resolvedShiftIds.push(shift.id);
+    }
   }
-  return { error: null, resolvedShiftIds };
+  if (hasBlockingAttendance || unresolvedShift) {
+    return { error: RECORDED_DAY_MESSAGE, resolvedShiftIds: [], attendanceWorkDates: [...unresolvedDates].sort() };
+  }
+  return { error: null, resolvedShiftIds, attendanceWorkDates: [] };
 }

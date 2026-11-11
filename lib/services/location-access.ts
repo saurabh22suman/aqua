@@ -221,7 +221,8 @@ export async function resolveLocationAccess(
 
 // The caller's membership row in THIS tenant, whatever its status.
 //
-// The lookup is deliberately UNFILTERED:
+// Membership status remains deliberately UNFILTERED; a deleted role is
+// not a live authority and is excluded in the join below:
 //
 //   • a REVOKED or DELETED membership must still be FOUND, because the
 //     role it names is what decides the branch. A revoked manager is
@@ -262,6 +263,7 @@ export async function resolveCallerMembership(
       and(
         eq(roles.id, tenantMemberships.roleId),
         eq(roles.tenantId, ctx.tenantId),
+        isNull(roles.deletedAt),
       ),
     )
     .where(

@@ -46,8 +46,7 @@ export async function readAttendanceSnapshot(tx: TenantTx, tenantId: StaffAttend
       to_char(${shifts.updatedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'),
       ${shifts.createdBy}, ${shifts.updatedBy})`,
   }).from(staffAttendance).innerJoin(shifts, and(eq(shifts.id, staffAttendance.shiftId),
-    eq(shifts.tenantId, staffAttendance.tenantId), eq(shifts.staffId, staffAttendance.staffId),
-    eq(shifts.shiftDate, staffAttendance.workDate)))
+    eq(shifts.tenantId, staffAttendance.tenantId), eq(shifts.staffId, staffAttendance.staffId)))
     .where(and(eq(staffAttendance.tenantId, tenantId), eq(staffAttendance.id, id))).limit(1);
   return value ?? null;
 }

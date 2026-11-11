@@ -416,19 +416,15 @@ export async function readLiveLinkIds(
 /**
  * GATE 1 — THE CLUB'S RECORD FOR THIS PERSON. NEVER OVERRIDABLE.
  *
- * A NULL snapshot, or a NULL current number, FAILS CLOSED here.
- *
- * THE RESIDUAL, STATED: whether a CHANGED club record invalidates an
- * otherwise valid identity confirmation is a question no human has
- * settled. This file keeps the EXISTING implementation's answer (the
- * club's record must still be current) rather than inventing a new one,
- * and the handoff names the question.
+ * A missing snapshot remains current only while the current number is
+ * also missing. The separate identity gate then requires a standing
+ * explicit attestation. Any change to the club record remains stale.
  */
 export function clubRecordIsCurrent(
   recordedPhone: string | null,
   personPhone: string | null,
 ): boolean {
-  if (recordedPhone === null) return false;
-  if (personPhone === null) return false;
+  // A missing snapshot remains current while the club record is missing.
+  // Gate 2 still requires a live explicit attestation for that case.
   return recordedPhone === personPhone;
 }

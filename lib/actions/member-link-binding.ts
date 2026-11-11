@@ -23,6 +23,7 @@
 // records that anybody owns a number.
 
 import { z } from "zod";
+import { enrollMemberSignIn } from "@/lib/services/member-access-enrollment";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import {
@@ -115,4 +116,16 @@ export async function provisionMemberAccountLinkAction(raw: {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.write");
   return provisionMemberAccountLink(ctx, input);
+}
+
+/** Set up one explicit account/link; no credential or message is created. */
+export async function enrollMemberSignInAction(raw: {
+  audience: "member" | "guardian"; memberId: string; guardianshipId?: string; phone: string; identityAcknowledged: boolean;
+}): Promise<ProvisionResult> {
+  const input = z.object({ audience: linkAudienceSchema, memberId: z.string().uuid(), guardianshipId: z.string().uuid().optional(), phone: z.string().min(1).max(40), identityAcknowledged: z.literal(true) })
+    .refine(value => value.audience !== "guardian" || !!value.guardianshipId).parse(raw);
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "members.write");
+  requirePermission(ctx, "members.link.confirm");
+  return enrollMemberSignIn(ctx, input);
 }

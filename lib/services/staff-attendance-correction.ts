@@ -201,7 +201,7 @@ export async function correctAttendance(
       if (candidate?.shiftId) {
         const [shift] = await tx.select({ id: shifts.id }).from(shifts)
           .where(and(eq(shifts.tenantId, ctx.tenantId), eq(shifts.id, candidate.shiftId),
-            eq(shifts.staffId, target.id), eq(shifts.shiftDate, input.workDate))).limit(1).for("update");
+            eq(shifts.staffId, target.id))).limit(1).for("update");
         lockedOwnerShift = shift?.id ?? null;
       }
     }
@@ -286,6 +286,19 @@ export async function correctAttendance(
           error:
             "Only an owner or admin can change another day's attendance. Ask them to make this correction.",
         };
+      }
+    }
+
+    // A worked/absent row linked to a different-day shift remains blocking
+    // until a live owner explicitly resolves it as leave. Do not broaden
+    // the manager's same-date facility proof above.
+    if (existing?.shiftId && (existing.status === "present" || existing.status === "absent") &&
+        input.status !== "present" && input.status !== "absent" && !ownerAuthority) {
+      const [linkedShift] = await tx.select({ shiftDate: shifts.shiftDate }).from(shifts)
+        .where(and(eq(shifts.id, existing.shiftId), eq(shifts.tenantId, ctx.tenantId),
+          eq(shifts.staffId, target.id))).limit(1);
+      if (linkedShift && linkedShift.shiftDate !== existing.workDate) {
+        return { ok: false, error: "An owner must resolve this linked attendance record." };
       }
     }
 

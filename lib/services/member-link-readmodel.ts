@@ -25,6 +25,9 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { guardianships } from "@/db/schema/consent";
 import { locations } from "@/db/schema/locations";
+import { tenantMemberships } from "@/db/schema/memberships";
+import { rolePermissions, roles } from "@/db/schema/roles";
+import { isFacilityScopedRoleKey } from "@/lib/services/facility-scope";
 import { members, persons } from "@/db/schema/people";
 import {
   guardianChildLinks,
@@ -38,7 +41,7 @@ import {
   type LinkAuthority,
 } from "@/lib/services/member-link-authority";
 import { attestationQuartetIsPresent } from "@/lib/services/self-service-link-facts";
-import { asMemberId } from "@/lib/ids";
+import { asMemberId, asUserId } from "@/lib/ids";
 
 export type MemberAccessAudience = "member" | "guardian";
 
@@ -63,6 +66,7 @@ export type MemberAccessLink = {
   personName: string;
   /** The guardianship relationship — a guardian link only. */
   relationship: string | null;
+  guardianshipId?: string | null;
 };
 
 export type MemberAccessRead = {
@@ -71,6 +75,7 @@ export type MemberAccessRead = {
   memberCode: string;
   facilityName: string;
   links: MemberAccessLink[];
+  guardianChoices?: Array<{ guardianshipId: string; personName: string; relationship: string; clubPhone: string | null }>;
 };
 
 /** What both link tables project. */
@@ -85,6 +90,7 @@ type LinkProjection = {
   accountPhone: string | null;
   personName: string;
   relationship: string | null;
+  guardianshipId?: string | null;
   clubPhone: string | null;
 };
 
@@ -123,6 +129,7 @@ function toLink(
     clubPhone: row.clubPhone,
     personName: row.personName,
     relationship: row.relationship,
+    guardianshipId: row.guardianshipId ?? null,
   };
 }
 
@@ -241,6 +248,7 @@ export async function readMemberAccessLinks(
           accountPhone: users.phone,
           personName: persons.fullName,
           relationship: guardianships.relationship,
+          guardianshipId: guardianships.id,
           clubPhone: persons.phone,
         })
         .from(guardianChildLinks)
@@ -266,6 +274,23 @@ export async function readMemberAccessLinks(
         .orderBy(desc(guardianChildLinks.createdAt))
     ).map((row) => ({ ...row, audience: "guardian" as const }));
 
+    // Only live guardian records belonging to the already-authorized member.
+    const actorRoles = await tx.select({ key: roles.key, roleId: roles.id }).from(tenantMemberships)
+      .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)))
+      .innerJoin(users, and(eq(users.id, tenantMemberships.userId), isNull(users.deletedAt)))
+      .where(and(eq(tenantMemberships.tenantId, ctx.tenantId), eq(tenantMemberships.userId, asUserId(actorUserId)), eq(tenantMemberships.status, "active"), isNull(tenantMemberships.deletedAt)))
+      .limit(1).for("share");
+    const roleKey = actorRoles[0]?.key;
+    const actorRole = actorRoles[0];
+    const writeGrant = actorRole ? await tx.select({ roleId: rolePermissions.roleId }).from(rolePermissions)
+      .where(and(eq(rolePermissions.tenantId, ctx.tenantId), eq(rolePermissions.roleId, actorRole.roleId), eq(rolePermissions.permissionKey, "members.write")))
+      .limit(1).for("share") : [];
+    const maySeeChoices = (roleKey === "owner" || isFacilityScopedRoleKey(roleKey)) && writeGrant.length > 0;
+    const guardianChoices = maySeeChoices ? await tx.select({ guardianshipId: guardianships.id, personName: persons.fullName, relationship: guardianships.relationship, clubPhone: persons.phone })
+      .from(guardianships).innerJoin(persons, and(eq(persons.id, guardianships.guardianId), eq(persons.tenantId, guardianships.tenantId), isNull(persons.deletedAt)))
+      .where(and(eq(guardianships.tenantId, ctx.tenantId), eq(guardianships.minorId, subject.personId), isNull(guardianships.deletedAt)))
+      .for("share") : [];
+
     const rows: LinkProjection[] = [...memberLinkRows, ...guardianLinkRows];
 
     // THE CONFIRMERS' PROVENANCE — read ONCE for the whole read, inside
@@ -288,6 +313,7 @@ export async function readMemberAccessLinks(
       memberCode: subject.memberCode,
       facilityName: subject.facilityName,
       links: rows.map((row) => toLink(row, authorities)),
+      guardianChoices,
     };
   });
 }

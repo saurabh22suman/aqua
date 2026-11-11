@@ -299,12 +299,12 @@ export type AuthorizedLink = {
  * an unreadable number is a refusal there.
  */
 function gate2PairingStands(args: {
-  recordedPhone: string;
+  recordedPhone: string | null;
   accountPhone: string | null;
   attestationStands: boolean;
 }): boolean {
   if (args.attestationStands) return true;
-  if (args.accountPhone === null) return false;
+  if (args.recordedPhone === null || args.accountPhone === null) return false;
   return args.accountPhone === args.recordedPhone;
 }
 
@@ -377,13 +377,6 @@ async function authorizeBoundLinksInternal(
     if (!clubRecordIsCurrent(fact.recordedPhone, fact.personPhone)) {
       return { ok: false, reason: "identity_not_confirmed" };
     }
-    // GATE 1 has already refused a NULL snapshot, so the narrowing here
-    // is safe.
-    const recordedPhone = fact.recordedPhone;
-    if (recordedPhone === null) {
-      return { ok: false, reason: "identity_not_confirmed" };
-    }
-
     const confirmer = fact.attestationConfirmerUserId;
     const attestationStands = attestationAuthorityStands({
       quartetPresent: fact.attestationQuartetPresent,
@@ -395,7 +388,7 @@ async function authorizeBoundLinksInternal(
 
     if (
       !gate2PairingStands({
-        recordedPhone,
+        recordedPhone: fact.recordedPhone,
         accountPhone: args.accountPhone,
         attestationStands,
       })

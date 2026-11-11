@@ -85,7 +85,7 @@ export async function resolveTenantAccessBySlug(
       .innerJoin(tenants, eq(tenants.id, tenantMemberships.tenantId))
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(
@@ -203,7 +203,7 @@ export async function resolveHomePath(
       )
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(
@@ -250,7 +250,7 @@ export async function resolveDefaultMembership(
       )
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(
@@ -324,7 +324,7 @@ export async function resolveSessionForLogin(
       )
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(

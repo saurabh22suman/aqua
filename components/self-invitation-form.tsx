@@ -191,11 +191,16 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
 
   return (
     <div>
-      <h1 className="font-display font-semibold text-ink">Open your account</h1>
+      <h1 className="font-display font-semibold text-ink">
+        {audience === "member" ? "Member sign-in" : "Guardian sign-in"}
+      </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
-        Your club&apos;s invitation opens your{" "}
+        Your club&apos;s private invitation opens your{" "}
         {audience === "member" ? "membership" : "family view"}. Use the PIN for
         your existing account, or choose a first PIN now.
+      </p>
+      <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
+        Keep this single-use invitation private.
       </p>
 
       <form onSubmit={onSubmit} aria-busy={busy} className="space-y-5">

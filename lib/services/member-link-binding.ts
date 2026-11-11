@@ -553,11 +553,17 @@ export async function provisionMemberAccountLink(
     guardianshipId?: string;
   },
 ): Promise<ProvisionResult> {
+  return withTenant(ctx.tenantId, (tx) => provisionMemberAccountLinkInTx(tx, ctx, input));
+}
+
+export async function provisionMemberAccountLinkInTx(
+  tx: TenantTx,
+  ctx: ActionCtx,
+  input: { audience: LinkAudience; accountUserId: string; memberId?: string; guardianshipId?: string },
+): Promise<ProvisionResult> {
   const actorUserId = ctx.userId;
   if (!actorUserId) return { kind: "error", code: "not_found", message: "No such link." };
   const accountUserId = asUserId(input.accountUserId);
-
-  return withTenant(ctx.tenantId, async (tx) => {
     const authority = (
       await readLinkAuthorities(tx, {
         tenantId: ctx.tenantId,
@@ -590,7 +596,8 @@ export async function provisionMemberAccountLink(
             isNull(members.deletedAt),
           ),
         )
-        .limit(1);
+        .limit(1)
+        .for("share");
       const member = memberRows[0];
       if (!member) {
         return { kind: "error", code: "not_found", message: "No such member." };
@@ -620,6 +627,7 @@ export async function provisionMemberAccountLink(
           updatedAt: new Date(),
           updatedBy: actorUserId,
         })
+        .onConflictDoNothing()
         .returning({ id: memberAccountLinks.id });
       if (inserted.length === 0) {
         return { kind: "error", code: "not_found", message: "No such member." };
@@ -672,7 +680,8 @@ export async function provisionMemberAccountLink(
           isNull(guardianships.deletedAt),
         ),
       )
-      .limit(1);
+      .limit(1)
+        .for("share");
     const guardian = guardianRows[0];
     if (!guardian) {
       return { kind: "error", code: "not_found", message: "No such guardianship." };
@@ -700,6 +709,7 @@ export async function provisionMemberAccountLink(
         updatedAt: new Date(),
         updatedBy: actorUserId,
       })
+      .onConflictDoNothing()
       .returning({ id: guardianChildLinks.id });
     if (inserted.length === 0) {
       return { kind: "error", code: "not_found", message: "No such guardianship." };
@@ -723,5 +733,5 @@ export async function provisionMemberAccountLink(
     });
 
     return { kind: "ok", linkId };
-  });
 }
+

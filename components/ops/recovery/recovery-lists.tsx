@@ -94,13 +94,8 @@ export function RecoveryAttentionList({
   );
 }
 
-// The failed attempts in the metered message ledger.
-//
-// EVIDENCE ONLY, and deliberately without a control. These rows are
-// message_log records of attempts, so their ids are not the outbox ids
-// the audited retry/dismiss mutation addresses (mutateExhausted selects
-// whatsapp_notification_outbox by id). A control here would always be a
-// no-op that reads as a recovery.
+// This list uses message-log IDs to show failed attempts. The audited
+// retry and dismiss actions use queue-entry IDs from the exhausted jobs list.
 export function RecoveryFailedList({ rows }: { rows: OpsFailedMessageRow[] }) {
   return (
     <OpsCardFlush>
