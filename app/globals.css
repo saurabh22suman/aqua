@@ -767,10 +767,9 @@ html {
   --chart-3: #EAC681;
   --chart-4: #D4A3C7;
   --chart-5: #A8B7C3;
-}
 
 /* Owner-local tokens would otherwise retain the light surface literals. */
-[data-theme="dark"] [data-owner-surface] {
+& [data-owner-surface] {
   --owner-nav-surface: #1B1E23;
   --owner-hero: #292F36;
   --owner-hero-ink: #F3F0E9;
@@ -785,14 +784,15 @@ html {
 /* Existing shared primary/destructive buttons ask for white explicitly.
  * Keep their classes and size; use dark ink on the bright dark-mode fills.
  */
-[data-theme="dark"] .text-white:is(
+& .text-white:is(
   [class~="bg-[var(--accent-strong)]"], .bg-accent, .bg-late, .bg-good, .bg-warn
 ) {
   color: #251C0D;
 }
 
 /* Marine is light inverse ink in this preset; modal scrims stay dark. */
-[data-theme="dark"] [class~="backdrop:bg-marine/45"]::backdrop,
-[data-theme="dark"] [class~="bg-marine/30"] {
+& [class~="backdrop:bg-marine/45"]::backdrop,
+& [class~="bg-marine/30"] {
   background-color: rgb(0 0 0 / 60%);
+}
 }
