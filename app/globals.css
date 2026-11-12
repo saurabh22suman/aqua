@@ -716,7 +716,7 @@ html {
   --color-ink: #F3F0E9;
   --color-ink-2: #D3D0CA;
   --color-ink-3: #B6BAC0;
-  --color-marine: #28312F;
+  --color-marine: #E4D6BE;
   --color-water: #7CCACA;
   --color-water-soft: #203739;
   --color-line: #3E454E;
@@ -789,4 +789,10 @@ html {
   [class~="bg-[var(--accent-strong)]"], .bg-accent, .bg-late, .bg-good, .bg-warn
 ) {
   color: #251C0D;
+}
+
+/* Marine is light inverse ink in this preset; modal scrims stay dark. */
+[data-theme="dark"] [class~="backdrop:bg-marine/45"]::backdrop,
+[data-theme="dark"] [class~="bg-marine/30"] {
+  background-color: rgb(0 0 0 / 60%);
 }
