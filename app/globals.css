@@ -704,3 +704,89 @@ html {
     display: flex !important;
   }
 }
+
+/* Slate & Amber — approved dark palette, 12 November 2026.
+ * Colour-only overrides. Existing markup, geometry, typography, breakpoints
+ * and the two light presets retain their original declarations.
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-deck: #15181C;
+  --color-paper: #202429;
+  --color-ink: #F3F0E9;
+  --color-ink-2: #D3D0CA;
+  --color-ink-3: #B6BAC0;
+  --color-marine: #28312F;
+  --color-water: #7CCACA;
+  --color-water-soft: #203739;
+  --color-line: #3E454E;
+  --color-sidebar: #1B1E23;
+  --color-tile-money: #23362C;
+  --color-tile-info: #252F3D;
+  --color-tile-butter: #3D3423;
+
+  /* Status meanings are preserved; their ink becomes readable on dark. */
+  --color-good: #97DDAD;
+  --color-good-soft: #223C2D;
+  --color-late: #FFAAA1;
+  --color-late-soft: #482926;
+  --color-warn: #FFD185;
+  --color-warn-soft: #40341E;
+
+  --accent: #FFC15B;
+  --accent-soft: #3E3220;
+  --accent-ink: #FFCE7B;
+  --accent-strong: #FFC15B;
+  --focus-ring: #FFD185;
+  --action-surface-hover: #FFD185;
+  --action-foreground: #251C0D;
+  --surface-inverse: #30363E;
+  --text-inverse: #F3F0E9;
+  --selected-surface: #3E3220;
+  --selected-ink: #FFCE7B;
+  --surface-nav-hover: #2B3037;
+  --surface-owner-money: #26352D;
+  --surface-owner-decision: #202429;
+  --surface-featured: #292F36;
+  --surface-attention: #352724;
+  --surface-attention-border: #58403A;
+  --tint-butter: #3A3325;
+  --tint-powder: #303244;
+
+  --owner-nav-surface: #1B1E23;
+  --owner-nav-ink: #F3F0E9;
+  --owner-nav-muted: #B6BAC0;
+  --owner-nav-hover: #2B3037;
+  --owner-nav-active: #3E3220;
+  --owner-nav-active-ink: #FFCE7B;
+  --owner-nav-focus: #FFD185;
+  --owner-nav-border: #3E454E;
+
+  --chart-1: #91CDA6;
+  --chart-2: #7CCACA;
+  --chart-3: #EAC681;
+  --chart-4: #D4A3C7;
+  --chart-5: #A8B7C3;
+}
+
+/* Owner-local tokens would otherwise retain the light surface literals. */
+[data-theme="dark"] [data-owner-surface] {
+  --owner-nav-surface: #1B1E23;
+  --owner-hero: #292F36;
+  --owner-hero-ink: #F3F0E9;
+  --owner-overdue-surface: #482926;
+  --owner-shortcut-surface: #202429;
+  --owner-action-members: #26382D;
+  --owner-action-payment: #3B3023;
+  --owner-action-booking: #293447;
+  --owner-action-enquiry: #353047;
+}
+
+/* Existing shared primary/destructive buttons ask for white explicitly.
+ * Keep their classes and size; use dark ink on the bright dark-mode fills.
+ */
+[data-theme="dark"] .text-white:is(
+  [class~="bg-[var(--accent-strong)]"], .bg-accent, .bg-late, .bg-good, .bg-warn
+) {
+  color: #251C0D;
+}

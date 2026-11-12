@@ -6,7 +6,7 @@ import { THEMES, type ThemeId } from "@/lib/theme/themes";
 
 // UI foundation — the appearance control.
 //
-// One control, one action: switch to the other preset. The button
+// One control, one action: cycle through the approved presets. The button
 // carries the current and next preset in its accessible name, so a
 // screen reader user hears what is active and what the control does —
 // the colour swatch alone is never the only carrier of meaning
@@ -19,7 +19,8 @@ import { THEMES, type ThemeId } from "@/lib/theme/themes";
 
 const NEXT_THEME: Record<ThemeId, ThemeId> = {
   mint: "lavender",
-  lavender: "mint",
+  lavender: "dark",
+  dark: "mint",
 };
 
 export function ThemeToggle({
