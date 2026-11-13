@@ -188,6 +188,7 @@ owner shell. Entry: `/owner`.
 | `/owner/settings/skills` | `settings.manage` plus feature `swim.levels` (editing needs `levels.write`) | The skill ladder and its rubrics | module off · populated · empty · read-only ladder |
 | `/owner/settings/terminology` | `settings.manage` | The words this academy uses | populated · validation error · saved |
 | `/owner/announcements` | `messaging.send` | Compose and send an announcement; read the notification inbox | populated · no audience · sent · failed |
+| `/owner/inbox` | Live owner-surface session; addressed-recipient read only | Read personal announcements without composer or member-directory permission | populated · empty · read/unread · unavailable · wrong surface refused |
 | `/owner/onboarding` | `members.read` | The first-run setup checklist | not started · in progress · complete |
 
 ### `/owner` — Owner Home
