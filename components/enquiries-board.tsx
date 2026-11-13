@@ -14,6 +14,7 @@ import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
 import type { OverdueFollowUp } from "@/lib/services/enquiries";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { formatDateIST } from "@/lib/time/tz";
+import { isOptionalContactPhoneValid } from "@/lib/contact-phone";
 
 /**
  * Which surface this board is serving.
@@ -56,6 +57,7 @@ export function EnquiriesBoard({
   const [source, setSource] = useState<CaptureSource>("walk-in");
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [captureOpen, setCaptureOpen] = useState(variant === "front-desk");
   // The EXPLICIT intents. Both counters start at 0, so nothing is
@@ -67,7 +69,11 @@ export function EnquiriesBoard({
   // the owner's create action. Both are typed DOM references — no
   // timer, no history and no cache is involved.
   const nameFieldRef = useRef<HTMLInputElement>(null);
+  const phoneFieldRef = useRef<HTMLInputElement>(null);
   const actionAreaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (phoneError) phoneFieldRef.current?.focus();
+  }, [phoneError]);
   useEffect(() => {
     if (variant !== "oversight" || !navigationNamespace || !enquiryReturn) return;
     if (window.history.state?.aquaEnquiryToken !== enquiryReturn.token || enquiryReturn.namespace !== navigationNamespace) return;
@@ -135,8 +141,13 @@ export function EnquiriesBoard({
 
   async function submit() {
     if (!fullName.trim() || !locationId) return;
-    setBusy(true);
     setError(null);
+    if (!isOptionalContactPhoneValid(phone)) {
+      setPhoneError("Enter a valid phone number.");
+      return;
+    }
+    setPhoneError(null);
+    setBusy(true);
     try {
       const enquiry = await createEnquiryAction({
         fullName: fullName.trim(),
@@ -179,10 +190,12 @@ export function EnquiriesBoard({
       locationId={locationId}
       locations={locations}
       error={error}
+      phoneError={phoneError}
       busy={busy}
       nameFieldRef={nameFieldRef}
+      phoneFieldRef={phoneFieldRef}
       onFullName={setFullName}
-      onPhone={setPhone}
+      onPhone={(value) => { setPhone(value); setPhoneError(null); }}
       onSource={setSource}
       onLocationId={setLocationId}
       onSubmit={() => void submit()}

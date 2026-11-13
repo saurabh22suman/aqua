@@ -33,8 +33,10 @@ export function EnquiryCaptureCard({
   locationId,
   locations,
   error,
+  phoneError,
   busy,
   nameFieldRef,
+  phoneFieldRef,
   onFullName,
   onPhone,
   onSource,
@@ -47,6 +49,7 @@ export function EnquiryCaptureCard({
   locationId: string;
   locations: Array<{ id: string; name: string }>;
   error: string | null;
+  phoneError: string | null;
   busy: boolean;
   /**
    * The real name field, so the owner who OPENS the capture gets the
@@ -54,6 +57,7 @@ export function EnquiryCaptureCard({
    * owns no focus of its own.
    */
   nameFieldRef: React.RefObject<HTMLInputElement | null>;
+  phoneFieldRef: React.RefObject<HTMLInputElement | null>;
   onFullName: (value: string) => void;
   onPhone: (value: string) => void;
   onSource: (value: CaptureSource) => void;
@@ -81,11 +85,12 @@ export function EnquiryCaptureCard({
         )}
       </Field>
 
-      <Field id="enquiry-capture-phone-field" label="Phone (optional)">
+      <Field id="enquiry-capture-phone-field" label="Phone (optional)" error={phoneError}>
         {(field) => (
           <Input
             {...field}
             type="tel"
+            ref={phoneFieldRef}
             value={phone}
             onChange={(e) => onPhone(e.target.value)}
           />
