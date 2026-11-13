@@ -47,8 +47,8 @@ function PeriodForm({ tab, from, to, facility, timezone, method, group }: Period
 
   return <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-2" aria-label="Collection period">
     {facility ? <input type="hidden" name="facility" value={facility} /> : null}
-    <div><label htmlFor="fees-period-from" className="text-[13px] text-ink-2">From date</label><DateField id="fees-period-from" value={start} onChange={setStart} required /></div>
-    <div><label htmlFor="fees-period-through" className="text-[13px] text-ink-2">Through date</label><DateField id="fees-period-through" value={end} onChange={setEnd} required /></div>
+    <div className="w-full sm:w-auto sm:min-w-48"><label htmlFor="fees-period-from" className="text-[13px] text-ink-2">From date</label><DateField id="fees-period-from" value={start} onChange={setStart} required /></div>
+    <div className="w-full sm:w-auto sm:min-w-48"><label htmlFor="fees-period-through" className="text-[13px] text-ink-2">Through date</label><DateField id="fees-period-through" value={end} onChange={setEnd} required /></div>
     <Button type="submit" variant="secondary">Apply period</Button>
     <Button type="button" variant="secondary" onClick={() => month(0)}>This month</Button>
     <Button type="button" variant="secondary" onClick={() => month(-1)}>Last month</Button>
