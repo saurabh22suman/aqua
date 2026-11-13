@@ -52,7 +52,7 @@ jobs:
       # BETTER_AUTH_SECRET's "ci-build-only" pattern since the
       # parent page is never hit by this test.
       BETTER_AUTH_URL: http://127.0.0.1:3220
-      PARENT_LINK_SECRET: ci-build-only-not-a-real-secret
+      PARENT_LINK_SECRET: ci-only-public-dummy-parent-link-secret-not-for-production
 
     steps:
       # fetch-depth: 0 -- M2's lane-overlap check needs origin/<base>
@@ -344,7 +344,7 @@ jobs:
       NODE_ENV: test
       BETTER_AUTH_SECRET: ci-build-only-not-a-real-secret
       BETTER_AUTH_URL: http://127.0.0.1:3220
-      PARENT_LINK_SECRET: ci-build-only-not-a-real-secret
+      PARENT_LINK_SECRET: ci-only-public-dummy-parent-link-secret-not-for-production
 
     steps:
       - uses: actions/checkout@v4
