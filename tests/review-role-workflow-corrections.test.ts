@@ -176,6 +176,17 @@ beforeAll(async () => {
     "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true),($5,$2,$6,$7,'active',true),($8,$2,$9,$10,'active',true)",
     [randomUUID(), tenantId, ownerUser, await roleId("owner"), randomUUID(), adminUser, await roleId("admin"), randomUUID(), coachUser, await roleId("coach")],
   );
+  // Real, distinct scoped actors: reception cannot inherit management's
+  // unresolved-queue permission, and neither can reach location B.
+  const receptionMembership = randomUUID(), managerMembership = randomUUID();
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$3,$4,$6,'active',false),($2,$3,$5,$7,'active',false)",
+    [receptionMembership, managerMembership, tenantId, scopedReceptionUser, scopedManagerUser, await roleId("receptionist"), await roleId("admin")],
+  );
+  await admin.query(
+    "insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$3,$4,$6),($2,$3,$5,$6)",
+    [randomUUID(), randomUUID(), tenantId, receptionMembership, managerMembership, locA],
+  );
   // Active coach for R09 (revoked later in the test, after an old link
   // is minted).
   await admin.query(

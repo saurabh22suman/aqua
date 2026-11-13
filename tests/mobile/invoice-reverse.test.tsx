@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // PR2-C9 — the invoice panel reverses a captured payment with a
@@ -27,6 +27,13 @@ vi.mock("@/lib/actions/payment-reversals", () => ({
   listPaymentReversalsAction: (...args: unknown[]) =>
     listPaymentReversalsAction(...args),
   reversePaymentAction: (...args: unknown[]) => reversePaymentAction(...args),
+}));
+const listReversalRecoveryAction = vi.hoisted(() => vi.fn(async () => ({ open: null, lastCommitted: null })));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction: vi.fn(async () => ({ open: null, lastCommitted: null })),
+  listReversalRecoveryAction,
+  cancelPaymentRecoveryAction: vi.fn(),
+  cancelReversalRecoveryAction: vi.fn(),
 }));
 
 import { InvoiceExpanded } from "@/components/member-detail/invoice-expanded";
@@ -82,6 +89,22 @@ function setup() {
 }
 
 describe("InvoiceExpanded reversals (PR2-C9)", () => {
+  it("forwards the observed intent and original key when retrying a recorded reversal", async () => {
+    setup();
+    const key = "11111111-1111-4111-8111-111111111111";
+    const intentId = "22222222-2222-4222-8222-222222222222";
+    listReversalRecoveryAction.mockResolvedValueOnce({
+      open: null,
+      lastCommitted: { intentId, idempotencyKey: key, committedAt: "2026-09-21T11:00:00Z", resultId: "rev-1", invoiceStatus: "issued" },
+    } as never);
+    reversePaymentAction.mockResolvedValue({ ok: true, id: "rev-1", invoiceStatus: "issued" });
+    render(<InvoiceExpanded invoiceId="inv-1" canWrite canRecord canRefund canReadPayments onChanged={() => {}} />);
+    fireEvent.click(await screen.findByRole("button", { name: /reverse/i }));
+    fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Duplicate cash entry" } });
+    fireEvent.click(await screen.findByRole("button", { name: "Retry the same reversal" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Retry the same reversal" }).at(-1)!);
+    await waitFor(() => expect(reversePaymentAction).toHaveBeenCalledWith({ paymentId: "pay-1", amountPaise: 100000, reason: "Duplicate cash entry", idempotencyKey: key, observedIntentId: intentId }));
+  });
   it("reverses a captured payment with a reason", async () => {
     setup();
     reversePaymentAction.mockResolvedValue({
@@ -104,12 +127,15 @@ describe("InvoiceExpanded reversals (PR2-C9)", () => {
     fireEvent.change(screen.getByLabelText(/reason/i), {
       target: { value: "Duplicate cash entry" },
     });
+    await waitFor(() => expect((screen.getByRole("button", { name: /confirm reversal/i }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /confirm reversal/i }));
 
     expect(reversePaymentAction).toHaveBeenCalledWith({
       paymentId: "pay-1",
       amountPaise: 100000,
       reason: "Duplicate cash entry",
+      idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      observedIntentId: null,
     });
   });
 
@@ -200,6 +226,7 @@ describe("InvoiceExpanded failure recovery (FE-04)", () => {
     );
 
     const button = await screen.findByRole("button", { name: /record payment/i });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(button);
 
     await screen.findByText(/did not complete/i);
@@ -230,6 +257,7 @@ describe("InvoiceExpanded failure recovery (FE-04)", () => {
     fireEvent.change(screen.getByLabelText(/reason/i), {
       target: { value: "Duplicate cash entry" },
     });
+    await waitFor(() => expect((screen.getByRole("button", { name: /confirm reversal/i }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /confirm reversal/i }));
 
     await screen.findByText(/did not complete/i);

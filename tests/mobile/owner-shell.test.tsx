@@ -40,7 +40,7 @@ afterEach(cleanup);
 describe("U-10 owner shell — both navs, right breakpoints", () => {
   it("renders a sidebar hidden below lg and the unchanged bottom nav below lg", () => {
     render(
-      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
+      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} sidebarGroups={OWNER_SIDEBAR_GROUPS} locations={[]}>
         <p>Page content</p>
       </OwnerShell>,
     );
@@ -56,19 +56,18 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     expect(screen.getByText("Page content")).toBeTruthy();
   });
 
-  it("keeps the bottom nav at the four TENANT_SURFACE_NAV.owner items and groups the sidebar", () => {
+  it("keeps approved primary destinations and groups the sidebar", () => {
     render(
-      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
+      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} sidebarGroups={OWNER_SIDEBAR_GROUPS} locations={[]}>
         <p>Page content</p>
       </OwnerShell>,
     );
 
     const mobileNav = screen.getByTestId("owner-mobile-nav");
-    const mobileHrefs = within(mobileNav)
-      .getAllByRole("link")
+    const mobileHrefs = Array.from(mobileNav.querySelectorAll('nav[aria-label="Primary"] > a'))
       .map((l) => l.getAttribute("href"));
-    expect(mobileHrefs).toEqual(TENANT_SURFACE_NAV.owner.map((i) => i.href));
-    expect(mobileHrefs).toHaveLength(4);
+    expect(mobileHrefs).toEqual(["/owner", "/owner/members", "/owner/fees"]);
+    expect(within(mobileNav).getByText("More")).toBeTruthy();
 
     // W1-6 continuation — the desktop sidebar carries the grouped
     // operational destinations (Main / Operations / Insights /
@@ -90,7 +89,7 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
     ).toBe("page");
   });
 
-  it("carries one search box in the shared top bar (mobile + desktop)", () => {
+  it("carries search in the desktop top bar and mobile More panel", () => {
     render(
       <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
         <p>Page content</p>
@@ -99,25 +98,23 @@ describe("U-10 owner shell — both navs, right breakpoints", () => {
 
     const topBar = screen.getByTestId("owner-top-bar");
     expect(within(topBar).getByTestId("global-search-input")).toBeTruthy();
-    // One instance, one header: the same sticky header serves the
-    // mobile breakpoint and the desktop top bar.
-    expect(screen.getAllByTestId("global-search-input")).toHaveLength(1);
+    expect(within(screen.getByTestId("owner-mobile-nav")).getByTestId("global-search-input")).toBeTruthy();
+    expect(screen.getAllByTestId("global-search-input")).toHaveLength(2);
   });
 });
 
 describe("owner nav Fees entry (PR3-C3)", () => {
-  it("keeps the mobile bottom nav at four items and adds Fees to the desktop sidebar only", () => {
+  it("offers Fees in the approved mobile primary bar and desktop sidebar", () => {
     render(
-      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} locations={[]}>
+      <OwnerShell navItems={TENANT_SURFACE_NAV.owner} sidebarGroups={OWNER_SIDEBAR_GROUPS} locations={[]}>
         <p>Page content</p>
       </OwnerShell>,
     );
     const mobileNav = screen.getByTestId("owner-mobile-nav");
-    const mobileLinks = within(mobileNav)
-      .getAllByRole("link")
+    const mobileLinks = Array.from(mobileNav.querySelectorAll('nav[aria-label="Primary"] > a'))
       .map((a) => a.getAttribute("href"));
-    expect(mobileLinks).toHaveLength(4);
-    expect(mobileLinks).not.toContain("/owner/fees");
+    expect(mobileLinks).toEqual(["/owner", "/owner/members", "/owner/fees"]);
+    expect(within(mobileNav).getByText("More")).toBeTruthy();
 
     const sidebar = screen.getByTestId("owner-side-nav");
     const sideLinks = within(sidebar)

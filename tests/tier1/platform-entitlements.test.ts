@@ -38,6 +38,7 @@ const F04_CATALOGUE_TABLES = [
 // tests/tier1/roles-permissions.test.ts's ROLE_MATRIX. NOTE: the task
 // text says "29 permissions" but lists 30; this is the verbatim list.
 const ALL_PERMISSION_KEYS = [
+  "members.link.confirm",
   "members.read",
   "members.read.assigned",
   "members.write",
@@ -115,12 +116,18 @@ describe("platform catalogue and plan-baseline entitlements", () => {
     await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-entitlements.test.ts"));
     await seedPlatformCatalogue(requireMigrationUrl("tests/tier1/platform-entitlements.test.ts"));
 
-    const defaults = await admin.query<{ key: string; price_paise: string | null }>(
-      "select key, price_paise from plans where is_default = true",
+    const defaults = await admin.query<{ key: string; price_paise: string | null; status: string; available_for_new_tenants: boolean }>(
+      "select key, price_paise, status, available_for_new_tenants from plans where is_default = true",
     );
     expect(defaults.rows).toHaveLength(1);
-    expect(defaults.rows[0].key).toBe("standard");
+    // Migration 20261109124000 makes the fresh-database Starter offer
+    // the default with no price; later configured defaults are separate.
+    expect(defaults.rows[0].key).toBe("starter");
     expect(defaults.rows[0].price_paise).toBeNull();
+    expect(defaults.rows[0].status).toBe("active");
+    expect(defaults.rows[0].available_for_new_tenants).toBe(true);
+    const starter = await admin.query<{ key: string; available_for_new_tenants: boolean }>("select key, available_for_new_tenants from plans where key = 'starter'");
+    expect(starter.rows).toEqual([{key:"starter", available_for_new_tenants:true}]);
 
     const featureCount = await admin.query<{ n: number }>(
       "select count(*)::int as n from features where key ~ '^[a-z][a-z0-9._-]*$' and key not like 'fn-%' and key not like 'updated-%' and key not like 'resolver-%' and key not like 'act-%'",

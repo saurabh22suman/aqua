@@ -14,6 +14,7 @@ import { tenantMemberships, membershipLocations } from "@/db/schema/memberships"
 import { locations } from "@/db/schema/locations";
 import { platformAuditLog } from "@/db/schema/platform-users";
 import { seedRoleTemplates } from "@/lib/services/roles";
+import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 import {
   inviteStaff,
   listInvitations,
@@ -26,7 +27,6 @@ import {
   type TenantId,
   type UserId,
 } from "@/lib/ids";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Phase 3.6 — staff invitations. TDD; the action + UI land in
 // the same PR, but service-layer invariants are what tests pin
@@ -45,7 +45,8 @@ const RUN = Date.now().toString(36);
 const RUN_NUM = Date.now() % 1000000;
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+// Legacy variable name, but this is a real owner membership, not a system actor.
+const SYSTEM_USER: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
@@ -68,12 +69,12 @@ beforeAll(async () => {
     locationId = loc!.id;
   });
   await seedRoleTemplates(tenantId);
-  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
-  // sentinel needs a real row before an audited mutation runs.
+  // Create the real issuing owner before an audited mutation runs.
   await admin.query(
     "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [SYSTEM_USER, `system-invite-${RUN}`],
+    [SYSTEM_USER, `+9199${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`],
   );
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, SYSTEM_USER]);
 });
 
 afterAll(async () => {
@@ -91,14 +92,12 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(membershipLocations).where(eq(membershipLocations.tenantId, tenantId));
       await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
-      await tx.delete(platformAuditLog).where(eq(platformAuditLog.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
-    await withPlatform(() => Promise.resolve());
+    await deleteAuditRowsForTenant(admin, tenantId);
     // E-02 — audit_log rows are insert-only for app_user, so the
     // cleanup runs on the privileged pool before the actor/target
     // users are deleted (audit_log.actor_id FKs to users(id)).
-    await deleteAuditRowsForTenant(admin, tenantId);
     // Cleanup is scoped to this run's RUN_NUM. The previous pattern
     // was '+91987%', which matched users from any test file's previous
     // run that happened to use the same prefix -- their tenant_membership
@@ -106,13 +105,14 @@ afterAll(async () => {
     // tenant_memberships_user_id_fkey, and turned the suite red for a
     // reason that was always someone else's data.
     await admin.query(
-      "delete from users where phone like $1",
+      "delete from users where phone like $1 and not exists (select 1 from audit_log where actor_id=users.id)",
       [`+91987${RUN_NUM}%`],
     );
     await admin.query(
       "delete from tenant_memberships where tenant_id = $1",
       [tenantId],
     );
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
     await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }

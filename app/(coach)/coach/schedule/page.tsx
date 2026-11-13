@@ -2,59 +2,96 @@ import Link from "next/link";
 import { getScheduleAction } from "@/lib/actions/coach";
 import { formatTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
 import { requireCoach } from "@/lib/auth/surface-guard";
+import {
+  STAFF_CARD,
+  StaffPage,
+  StaffPageHeader,
+} from "@/components/staff-ui/staff-page";
+import {
+  registerProgressPercent,
+  registerState,
+} from "@/components/staff-ui/register-state";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 
+// Coach schedule — the next seven days of the sessions this coach is
+// assigned to. The same register words as Today: completion is marks
+// recorded out of the people expected, never attendance.
 export default async function CoachSchedulePage() {
   await requireCoach();
   const { days } = await getScheduleAction({});
 
   return (
-    <main className="px-5 pt-10 pb-8">
-      <h1 className="font-display text-[22px] font-semibold text-marine">Schedule</h1>
-      <p className="mt-1 text-[13px] text-ink-3">Next {days.length} days</p>
+    <StaffPage>
+      <StaffPageHeader
+        title="Schedule"
+        meta={`Next ${days.length} ${days.length === 1 ? "day" : "days"}`}
+      />
 
-      <ul className="mt-4 space-y-4">
+      <div className="mt-5 space-y-5">
         {days.map((d) => {
           const dateLabel = formatWeekdayDateIST(d.date);
           return (
-            <li key={d.date}>
-              <p className="text-[12px] font-medium text-ink-3">{dateLabel}</p>
+            <section key={d.date}>
+              <h2 className="text-[12px] font-medium text-ink-3">{dateLabel}</h2>
               {d.sessions.length === 0 ? (
-                <p className="mt-1 text-[13px] text-ink-3">No sessions</p>
+                <p className="mt-1 text-[13px] text-ink-3">Nothing scheduled</p>
               ) : (
-                <ul className="mt-1 space-y-2">
-                  {d.sessions.map((s) => (
-                    <li key={s.id}>
-                      <Link
-                        href={`/coach/register/${s.id}`}
-                        className="block bg-paper rounded-card border border-line p-3"
-                      >
-                        <div className="flex justify-between items-baseline">
-                          <span className="text-[14px] font-display font-semibold">
-                            {formatTimeIST(s.startsAt)} {s.batchName}
-                          </span>
-                          <span className="text-[12.5px] text-ink-3">
-                            {s.total === 0 ? "No one enrolled" : `${s.marked} / ${s.total}`}
-                          </span>
-                        </div>
-                        {s.total > 0 ? (
-                          <div className="mt-2 h-1.5 rounded-pill bg-deck overflow-hidden">
-                            <div
-                              className={`h-full rounded-pill ${
-                                s.marked === 0 ? "bg-water" : s.marked / s.total < 0.5 ? "bg-warn" : "bg-good"
-                              }`}
-                              style={{ width: `${Math.round((s.marked / s.total) * 100)}%` }}
+                <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
+                  {d.sessions.map((s) => {
+                    const state = registerState(s.marked, s.total);
+                    const pct = registerProgressPercent(s.marked, s.total);
+                    const fill =
+                      state.label === "Register complete"
+                        ? "bg-good"
+                        : s.marked === 0
+                          ? "bg-water"
+                          : "bg-warn";
+                    return (
+                      <li key={s.id}>
+                        <Link
+                          href={`/coach/register/${s.id}`}
+                          className="block px-4 py-3 transition-colors duration-150 hover:bg-deck/50 active:bg-deck"
+                          data-testid="coach-schedule-session"
+                        >
+                          <div className="flex items-baseline justify-between gap-2.5">
+                            <span className="min-w-0 flex-1 break-words text-[14px] font-medium leading-snug text-ink">
+                              {formatTimeIST(s.startsAt)} {s.batchName}
+                              {s.locationName ? <span className="block text-[12px] font-normal text-ink-3">{s.locationName}</span> : null}
+                            </span>
+                            <span className="flex-none text-[12px] text-ink-3 tabular-nums">
+                              {state.detail}
+                            </span>
+                          </div>
+                          {s.total > 0 ? (
+                            <div className="mt-2 h-1.5 overflow-hidden rounded-pill bg-deck">
+                              <div
+                                className={`h-full rounded-pill ${fill}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          ) : null}
+                          <div className="mt-2 flex items-center justify-between gap-3">
+                            {s.total > 0 ? (
+                              <span className="text-[12px] font-medium text-ink-2">
+                                {state.label}
+                              </span>
+                            ) : null}
+                            <OwnerIcon
+                              name="chevron"
+                              size={16}
+                              className="ml-auto flex-none text-ink-3"
                             />
                           </div>
-                        ) : null}
-                      </Link>
-                    </li>
-                  ))}
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
-            </li>
+            </section>
           );
         })}
-      </ul>
-    </main>
+      </div>
+    </StaffPage>
   );
 }

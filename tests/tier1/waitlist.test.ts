@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { persons, locations, programs, members, batches } from "@/db/schema";
 import { enrolments } from "@/db/schema/scheduling";
@@ -20,7 +21,7 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const actorId: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
@@ -35,6 +36,9 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Waitlist Test', $3)",
     [tenantId, "waitlist-" + RUN, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -60,7 +64,11 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -86,8 +94,8 @@ beforeEach(async () => {
         locationId,
         memberCode: "WL-A-" + RUN + "-" + p1!.id.slice(0, 4).replace(/-/g, ""),
         status: "active",
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: actorId,
+        updatedBy: actorId,
       })
       .returning({ id: members.id });
     memberAId = m1!.id;
@@ -104,8 +112,8 @@ beforeEach(async () => {
         locationId,
         memberCode: "WL-B-" + RUN + "-" + p2!.id.slice(0, 4).replace(/-/g, ""),
         status: "active",
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: actorId,
+        updatedBy: actorId,
       })
       .returning({ id: members.id });
     memberBId = m2!.id;
@@ -129,7 +137,7 @@ beforeEach(async () => {
 describe("addToWaitlist (Phase R.5)", () => {
   it("places the first entry at position 1", async () => {
     const result = await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     expect(result.kind).toBe("ok");
@@ -140,11 +148,11 @@ describe("addToWaitlist (Phase R.5)", () => {
 
   it("places the second entry at position 2 (FIFO)", async () => {
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     const second = await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberBId, batchId },
     );
     expect(second.kind).toBe("ok");
@@ -155,11 +163,11 @@ describe("addToWaitlist (Phase R.5)", () => {
 
   it("rejects a second add for the same member (open-waitlist unique)", async () => {
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     const second = await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     expect(second.kind).toBe("error");
@@ -175,12 +183,12 @@ describe("addToWaitlist (Phase R.5)", () => {
         memberId: asMemberId(memberAId),
         batchId,
         enrolledOn: new Date().toISOString().slice(0, 10),
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: actorId,
+        updatedBy: actorId,
       });
     });
     const result = await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     expect(result.kind).toBe("error");
@@ -193,15 +201,15 @@ describe("addToWaitlist (Phase R.5)", () => {
 describe("promoteHead + re-indexing (Phase R.5)", () => {
   it("promotes the head and re-indexes the remaining queue", async () => {
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberBId, batchId },
     );
     const promote = await promoteHead(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { batchId },
     );
     expect(promote.kind).toBe("ok");
@@ -209,7 +217,7 @@ describe("promoteHead + re-indexing (Phase R.5)", () => {
     // Head is now member B; his position is the one member A
     // previously held (i.e. 1 after the re-index).
     const head = await getWaitlistHead(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { batchId },
     );
     expect(head).toBeDefined();
@@ -219,7 +227,7 @@ describe("promoteHead + re-indexing (Phase R.5)", () => {
 
   it("returns not_on_waitlist when the queue is empty", async () => {
     const result = await promoteHead(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { batchId },
     );
     expect(result.kind).toBe("error");
@@ -245,34 +253,34 @@ describe("cancelWaitlist + re-indexing (Phase R.5)", () => {
           locationId,
           memberCode: "WL-C-" + RUN + "-" + p!.id.slice(0, 4).replace(/-/g, ""),
           status: "active",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: actorId,
+          updatedBy: actorId,
         })
         .returning({ id: members.id });
       return m!.id;
     });
 
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberAId, batchId },
     );
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberBId, batchId },
     );
     await addToWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: cMemberId, batchId },
     );
 
     const cancel = await cancelWaitlist(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: memberBId, batchId },
     );
     expect(cancel.kind).toBe("ok");
 
     const head = await getWaitlistHead(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { batchId },
     );
     // After the cancel, the queue is A(1) + C(2). Head is A.

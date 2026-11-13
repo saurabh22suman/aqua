@@ -24,6 +24,8 @@ const invoiceId = uuidv7();
 const personId = uuidv7();
 const memberId = uuidv7();
 const locationId = uuidv7();
+const ownerRoleId = uuidv7();
+const ownerMembershipId = uuidv7();
 
 const ctxA = { tenantId: tenantA, userId: actorId };
 
@@ -52,6 +54,10 @@ beforeAll(async () => {
        ($3, $4, 'Other Academy', 'active', 'Asia/Kolkata', 'INR', '29AAAAA0000A1Z5')`,
     [tenantA, `profile-${RUN}`, tenantB, `profile-b-${RUN}`],
   );
+  // Real, active Owner authority for this synthetic settings fixture.
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRoleId, tenantA]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [ownerMembershipId, tenantA, actorId, ownerRoleId]);
+  await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, 'settings.manage')", [tenantA, ownerRoleId]);
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Main', true)",
     [locationId, tenantA],
@@ -79,6 +85,10 @@ afterAll(async () => {
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
     await admin.query("delete from locations where tenant_id = $1", [tenant]);
     await deleteAuditRowsForTenant(admin, tenant);
+    await admin.query("delete from tenant_memberships where tenant_id = $1 and user_id = $2 and role_id = $3", [tenant, actorId, ownerRoleId]);
+    await admin.query("delete from role_permissions where tenant_id = $1 and role_id = $2", [tenant, ownerRoleId]);
+    await admin.query("delete from roles where tenant_id = $1 and id = $2", [tenant, ownerRoleId]);
+
   }
   await admin.query("delete from tenants where id = any($1::uuid[])", [
     [tenantA, tenantB],

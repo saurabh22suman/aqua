@@ -22,6 +22,8 @@ vi.mock("next/link", async () => {
 });
 
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import { OwnerHomeAttendance } from "@/components/owner-home/owner-home-attendance";
+import { OwnerHomeRange } from "@/components/owner-home/owner-home-range";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 
 const BASE_PERIOD = {
@@ -93,9 +95,9 @@ afterEach(cleanup);
 
 describe("owner Home chart band — collections", () => {
   it("shows one metric panel and the payment mix, scoped to the period and facility", () => {
-    render(<OwnerHomeCharts data={data()} metric="collections" facility="loc-1" canReadFees />);
+    render(<><OwnerHomeRange data={data()} period="week" facility="loc-1" /><OwnerHomeCharts data={data()} metric="collections" facility="loc-1" canReadFees /></>);
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Trends");
+    expect(text).toContain("Collections");
     expect(text).toContain("Payment mix");
     expect(text).toContain("₹9,000");
     expect(text).toContain("Up 50% vs the previous range");
@@ -105,8 +107,8 @@ describe("owner Home chart band — collections", () => {
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    expect(hrefs).toContain("/owner?trend=attendance&period=week&facility=loc-1");
-    expect(hrefs).toContain("/owner?trend=collections&period=day&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=day&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=last7&facility=loc-1");
     // Category and method drill-downs carry the same dates and scope.
     expect(hrefs).toContain(
       "/owner/fees?tab=transactions&from=2026-10-26&to=2026-10-29&group=digital&facility=loc-1",
@@ -156,8 +158,8 @@ describe("owner Home chart band — collections", () => {
     });
     render(<OwnerHomeCharts data={empty} metric="collections" facility={null} canReadFees />);
     const text = document.body.textContent ?? "";
-    expect(text).toContain("No payments captured in this period");
-    expect(text).toContain("No collections in this period");
+    expect(text).toContain("No payments recorded in this period");
+    expect(screen.queryByText("Payment mix")).toBeNull();
     expect(screen.queryByTestId("owner-chart")).toBeNull();
   });
 
@@ -180,12 +182,12 @@ describe("owner Home chart band — collections", () => {
 
 describe("owner Home chart band — attendance", () => {
   it("plots present/late over marks and keeps unmarked buckets unknown", () => {
-    render(<OwnerHomeCharts data={data()} metric="attendance" facility={null} canReadFees />);
+    render(<OwnerHomeAttendance data={data()} facility={null} />);
     const text = document.body.textContent ?? "";
     expect(text).toContain("80%");
     expect(text).toContain("16 of 20 marks");
     expect(text).toContain("No marks recorded");
-    expect(text).toContain("A bucket with no marks is unknown, not 0%.");
+    expect(text).toContain("A day with no marks recorded is unknown, not 0%.");
   });
 
   it("says marks are unknown when a period has no attendance at all", () => {
@@ -201,11 +203,11 @@ describe("owner Home chart band — attendance", () => {
         comparison: "No marks in either range",
       },
     });
-    render(<OwnerHomeCharts data={noMarks} metric="attendance" facility={null} canReadFees />);
+    render(<OwnerHomeAttendance data={noMarks} facility={null} />);
     const text = document.body.textContent ?? "";
     expect(text).toContain("No attendance marks recorded in this period — unknown, not zero");
     // The headline is "—", never a fabricated 0% attendance figure.
-    expect(text).toContain("— present or late · 0 of 0 marks");
+    expect(text).toContain("0 of 0 marks present or late");
     expect(text).not.toContain("0% present");
   });
 });
@@ -213,6 +215,6 @@ describe("owner Home chart band — attendance", () => {
 describe("owner Home chart band — unavailable read", () => {
   it("states that charts are unavailable instead of rendering blank panels", () => {
     render(<OwnerHomeCharts data={null} metric="collections" facility={null} canReadFees />);
-    expect(document.body.textContent).toContain("Charts are unavailable right now");
+    expect(document.body.textContent).toContain("Money figures are unavailable right now");
   });
 });

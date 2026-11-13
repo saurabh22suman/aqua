@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { logoutTenantAction } from "@/lib/actions/tenant-auth";
 import { syncBeforeLogout } from "@/lib/offline/logout";
@@ -8,7 +9,7 @@ import { clearFacilityCookie } from "@/lib/facility";
 import { clearThemeCookie } from "@/lib/theme/storage";
 import { Button } from "@/components/ui/Button";
 
-export function TenantSignOut({ className = "mt-6" }: { className?: string }) {
+export function TenantSignOut({ className = "mt-6", showClubSwitch = true }: { className?: string; showClubSwitch?: boolean }) {
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
   const [drafts, setDrafts] = useState(0), [error, setError] = useState("");
   useEffect(() => { setReady(true); }, []);
@@ -40,6 +41,7 @@ export function TenantSignOut({ className = "mt-6" }: { className?: string }) {
   }
   return <form action={logoutTenantAction} className={className}
     onSubmit={event => { event.preventDefault(); void signOut(); }} aria-busy={busy}>
+    {showClubSwitch ? <Link href="/clubs" className="flex min-h-11 items-center rounded-ctl px-4 text-sm text-ink hover:bg-deck">Switch club</Link> : null}
     {drafts > 0 ? <div className="mb-3 space-y-3 rounded-ctl border border-line bg-paper p-4">
       <p role="alert" className="text-[14px] text-ink">{drafts} attendance {drafts === 1 ? "mark is" : "marks are"} saved on this device but not synced.</p>
       <p className="text-[13px] text-ink-2">Connect and retry syncing, or discard these local drafts before signing out. Recorded server attendance is kept.</p>

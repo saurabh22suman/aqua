@@ -2,13 +2,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { batches, locations, programs, sessions } from "@/db/schema";
 import { createMember, enrolMember, markAttendance } from "@/lib/services/register";
 import { getOwnerDashboard } from "@/lib/services/dashboard";
 import { addFollowUp, createEnquiry } from "@/lib/services/enquiries";
 import { todayInZone } from "@/lib/time/tz";
-import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -18,6 +20,10 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const receptionId = asUserId(uuidv7());
+const receptionActor = () => ({ tenantId, userId: receptionId, roleKey: "receptionist", allLocations: true, locationIds: [] as string[] });
+const actor = () => ({ tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] });
 let locationId = "";
 let programId = "";
 
@@ -30,6 +36,13 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Owner Dashboard', $3, $4)",
     [tenantId, `owner-dash-${RUN}`, plan.rows[0]?.id ?? null, TZ],
   );
+
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
+  await admin.query("insert into users(id,phone) values($1,$2)", [receptionId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'", [uuidv7(), tenantId, receptionId]);
 
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
@@ -59,14 +72,19 @@ afterAll(async () => {
     await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [receptionId]);
   }
   await admin.end();
 });
 
 async function makeMember(label: string): Promise<string> {
   const created = await createMember(
-    { tenantId, userId: undefined as unknown as UserId },
+    actor(),
     {
       fullName: `Dashboard Member ${label}`,
       dateOfBirth: "1990-01-01",
@@ -88,7 +106,7 @@ describe("getOwnerDashboard", () => {
     void a;
     void b;
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     expect(data.activeMemberCount).toBeGreaterThanOrEqual(2);
   });
 
@@ -110,7 +128,7 @@ describe("getOwnerDashboard", () => {
         .returning({ id: batches.id });
       batchId = b.id;
     });
-    await enrolMember({ tenantId }, { memberId, batchId });
+    await enrolMember(actor(), { memberId, batchId });
 
     const today = todayInZone(TZ);
     // Starts well in the past relative to "now" so it reads as begun-but-unmarked.
@@ -126,7 +144,7 @@ describe("getOwnerDashboard", () => {
       });
     });
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     const flagged = data.needsAttention.some((item) => item.detail.includes(`Unmarked Batch ${RUN}`));
     expect(flagged).toBe(true);
   });
@@ -150,7 +168,7 @@ describe("getOwnerDashboard", () => {
         .returning({ id: batches.id });
       batchId = b.id;
     });
-    await enrolMember({ tenantId }, { memberId, batchId });
+    await enrolMember(actor(), { memberId, batchId });
 
     const today = todayInZone(TZ);
     const startsAt = new Date(Date.now() - 60 * 60 * 1000);
@@ -163,11 +181,11 @@ describe("getOwnerDashboard", () => {
       sessionId = s.id;
     });
     await markAttendance(
-      { tenantId },
+      receptionActor(),
       { sessionId, memberId, status: "present", clientId: `dash-${RUN}` },
     );
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     const flagged = data.needsAttention.some((item) => item.detail.includes(`Marked Batch ${RUN}`));
     expect(flagged).toBe(false);
   });
@@ -197,7 +215,7 @@ describe("getOwnerDashboard", () => {
       await tx.insert(sessions).values({ tenantId, batchId, sessionDate: today, startsAt, endsAt });
     });
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     const flagged = data.needsAttention.some((item) => item.detail.includes(`Empty Batch ${RUN}`));
     expect(flagged).toBe(false);
   });
@@ -220,7 +238,7 @@ describe("getOwnerDashboard", () => {
         .returning({ id: batches.id });
       batchId = b.id;
     });
-    await enrolMember({ tenantId }, { memberId, batchId });
+    await enrolMember(actor(), { memberId, batchId });
 
     const today = todayInZone(TZ);
     await withTenant(tenantId, async (tx) => {
@@ -233,7 +251,7 @@ describe("getOwnerDashboard", () => {
       });
     });
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     const lane = data.todaysLanes.find((l) => l.batchName === `Lane Batch ${RUN}`);
     expect(lane).toBeDefined();
     expect(lane?.capacity).toBe(4);
@@ -241,11 +259,11 @@ describe("getOwnerDashboard", () => {
   });
 
   it("surfaces an overdue follow-up in needsAttention, stating why and linking to the enquiry", async () => {
-    const enquiry = await createEnquiry({ tenantId }, { fullName: `Overdue Enquiry ${RUN}`, source: "walk-in" });
+    const enquiry = await createEnquiry(actor(), { fullName: `Overdue Enquiry ${RUN}`, source: "walk-in" });
     const past = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    await addFollowUp({ tenantId }, { enquiryId: enquiry.id, dueAt: past, note: "call back" });
+    await addFollowUp(actor(), { enquiryId: enquiry.id, dueAt: past, note: "call back" });
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     const item = data.needsAttention.find((i) => i.detail.includes(`Overdue Enquiry ${RUN}`));
     expect(item).toBeDefined();
     expect(item!.title).toBe("Follow-up overdue");
@@ -254,11 +272,11 @@ describe("getOwnerDashboard", () => {
   });
 
   it("does not surface a completed or future follow-up", async () => {
-    const enquiry = await createEnquiry({ tenantId }, { fullName: `Not Overdue Enquiry ${RUN}`, source: "walk-in" });
+    const enquiry = await createEnquiry(actor(), { fullName: `Not Overdue Enquiry ${RUN}`, source: "walk-in" });
     const future = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await addFollowUp({ tenantId }, { enquiryId: enquiry.id, dueAt: future });
+    await addFollowUp(actor(), { enquiryId: enquiry.id, dueAt: future });
 
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     const item = data.needsAttention.find((i) => i.detail.includes(`Not Overdue Enquiry ${RUN}`));
     expect(item).toBeUndefined();
   });
@@ -277,7 +295,7 @@ describe("getOwnerDashboard", () => {
   });
 
   it("links every needsAttention item to where the owner can act (PR3-C3)", async () => {
-    const data = await getOwnerDashboard({ tenantId });
+    const data = await getOwnerDashboard(actor());
     expect(data.needsAttention.length).toBeGreaterThan(0);
     for (const item of data.needsAttention) {
       expect(item.href, `${item.title}: ${item.detail}`).toBeTruthy();

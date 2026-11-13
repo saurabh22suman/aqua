@@ -10,14 +10,17 @@ import { members } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { facilities } from "@/db/schema/preset-engine";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit as writeAuditRow } from "@/lib/audit/write";
 import { addDays, todayInZone } from "@/lib/time/tz";
+import { resolveSubscriptionEndDate } from "@/lib/subscription-terms";
+export { SESSION_PACK_VALIDITY_DAYS } from "@/lib/subscription-terms";
 import {
   locationPredicate,
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { asMemberId } from "@/lib/ids";
+import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // C-30 — subscriptions. Start/end, pause/resume, cancel. Pause extends
@@ -28,7 +31,6 @@ import type { ActionCtx } from "@/lib/auth/context";
 // 2026-09-14 ends 2026-10-13. A session pack defaults to a 90-day
 // validity window; both are overridable at creation.
 
-export const SESSION_PACK_VALIDITY_DAYS = 90;
 
 export type SubscriptionRow = {
   id: string;
@@ -161,6 +163,7 @@ export async function createSubscription(
       error: parsed.error.issues[0]?.message ?? "Invalid subscription.",
     };
   }
+  if (!ctx.userId) return { ok: false, error: "Not authenticated." };
   return withTenant(ctx.tenantId, async (tx) => {
     const memberRows = await tx
       .select({ id: members.id, locationId: members.locationId })
@@ -217,14 +220,8 @@ export async function createSubscription(
     const today = todayInZone(tenant?.timezone ?? "Asia/Kolkata");
     const startsOn = parsed.data.startsOn ?? today;
 
-    let endsOn: string;
-    if (parsed.data.endsOn) {
-      endsOn = parsed.data.endsOn;
-    } else if (plan.kind === "duration" || plan.kind === "term") {
-      endsOn = addDays(startsOn, (plan.durationDays ?? 30) - 1);
-    } else {
-      endsOn = addDays(startsOn, SESSION_PACK_VALIDITY_DAYS - 1);
-    }
+    const kind = plan.kind === "duration" ? "duration" : plan.kind === "term" ? "term" : "sessions";
+    const endsOn = resolveSubscriptionEndDate({ kind, startsOn, durationDays: plan.durationDays, endsOn: parsed.data.endsOn });
     if (daysBetween(startsOn, endsOn) < 0) {
       return { ok: false, error: "The end date cannot be before the start." };
     }
@@ -252,22 +249,38 @@ export async function createSubscription(
       };
     }
 
-    const [row] = await tx
-      .insert(subscriptions)
-      .values({
-        tenantId: ctx.tenantId,
-        memberId: asMemberId(parsed.data.memberId),
-        planId: plan.id,
-        locationId: plan.locationId,
-        activityId: plan.activityId,
-        startsOn,
-        endsOn,
-        status: "active",
-        autoRenew: parsed.data.autoRenew ?? false,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
-      })
-      .returning({ id: subscriptions.id });
+    let row: { id: string } | undefined;
+    try {
+      [row] = await tx
+        .insert(subscriptions)
+        .values({
+          tenantId: ctx.tenantId,
+          memberId: asMemberId(parsed.data.memberId),
+          planId: plan.id,
+          locationId: plan.locationId,
+          activityId: plan.activityId,
+          startsOn,
+          endsOn,
+          status: "active",
+          autoRenew: parsed.data.autoRenew ?? false,
+          createdBy: ctx.userId,
+          updatedBy: ctx.userId,
+        })
+        .returning({ id: subscriptions.id });
+    } catch (err) {
+      // The pre-check above loses to a concurrent create (two desks, or
+      // a double submit). The partial unique index
+      // subscriptions_active_member_plan_uidx is the backstop; translate
+      // it into the same message the pre-check gives, instead of the
+      // driver's error text.
+      if (isUniqueViolation(err)) {
+        return {
+          ok: false,
+          error: "This member already has an active subscription to this plan.",
+        };
+      }
+      throw err;
+    }
     if (!row) return { ok: false, error: "The subscription could not be saved." };
 
     await writeAudit(tx, ctx, "subscription.create", row.id, {
@@ -294,6 +307,7 @@ export async function pauseSubscription(
       error: parsed.error.issues[0]?.message ?? "Invalid pause.",
     };
   }
+  if (!ctx.userId) return { ok: false, error: "Not authenticated." };
   return withTenant(ctx.tenantId, async (tx) => {
     const rows = await tx
       .select({
@@ -308,7 +322,8 @@ export async function pauseSubscription(
           eq(subscriptions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
     const subscription = rows[0];
     if (!subscription) return { ok: false, error: "Subscription not found." };
     // O-08 — another facility's subscription is not found.
@@ -360,6 +375,7 @@ export async function resumeSubscription(
   if (!parsed.success) {
     return { ok: false, error: "Invalid subscription reference." };
   }
+  if (!ctx.userId) return { ok: false, error: "Not authenticated." };
   return withTenant(ctx.tenantId, async (tx) => {
     const rows = await tx
       .select({
@@ -376,7 +392,8 @@ export async function resumeSubscription(
           eq(subscriptions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
     const subscription = rows[0];
     if (!subscription) return { ok: false, error: "Subscription not found." };
     const access = await resolveLocationAccess(tx, ctx);
@@ -427,6 +444,7 @@ export async function cancelSubscription(
   if (!parsed.success) {
     return { ok: false, error: "Invalid subscription reference." };
   }
+  if (!ctx.userId) return { ok: false, error: "Not authenticated." };
   return withTenant(ctx.tenantId, async (tx) => {
     const rows = await tx
       .select({
@@ -441,7 +459,8 @@ export async function cancelSubscription(
           eq(subscriptions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
     const subscription = rows[0];
     if (!subscription) return { ok: false, error: "Subscription not found." };
     const access = await resolveLocationAccess(tx, ctx);
@@ -472,6 +491,9 @@ export async function cancelSubscription(
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
+// E-01 — the one audit writer, so the subscription rows carry the
+// same actor model (and the request id) as every other tenant-side
+// mutation.
 async function writeAudit(
   tx: Tx,
   ctx: ActionCtx,
@@ -480,12 +502,13 @@ async function writeAudit(
   after: Record<string, unknown>,
 ): Promise<void> {
   if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  await writeAuditRow(tx, {
     tenantId: ctx.tenantId,
     actorId: ctx.userId,
     action,
     entityType: "subscription",
     entityId,
     after,
+    requestId: ctx.requestId ?? null,
   });
 }

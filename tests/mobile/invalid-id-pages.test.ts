@@ -66,8 +66,10 @@ vi.mock("@/lib/actions/programs", () => ({
   listBatchesAction: failIfCalled("listBatchesAction"),
 }));
 vi.mock("@/lib/actions/platform-auth", () => ({
-  platformAuthStatusAction: async () => ({ kind: "authenticated", role: "operator" }),
+  platformAuthStatusAction: async () => ({ kind: "authenticated", role: "admin", userId: "11111111-1111-7111-8111-111111111111" }),
 }));
+const { appendOpsBoundaryEvent } = vi.hoisted(() => ({ appendOpsBoundaryEvent: vi.fn(async () => undefined) }));
+vi.mock("@/db/ops-operation-writer", () => ({ appendOpsBoundaryEvent }));
 vi.mock("@/db/platform-tenants", () => ({
   getTenantDetail: failIfCalled("getTenantDetail"),
 }));
@@ -159,6 +161,9 @@ describe("malformed URL ids render the friendly 404, never a ZodError (P0-1)", (
     await expect(
       PlatformTenantDetailPage({ params: Promise.resolve({ tenantId }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(appendOpsBoundaryEvent).toHaveBeenLastCalledWith(
+      "tenant.detail", "invalid", "11111111-1111-7111-8111-111111111111", expect.any(String), undefined, "ops_page",
+    );
   });
 
   it("never reaches any action on a malformed id", () => {

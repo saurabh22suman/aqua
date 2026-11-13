@@ -40,6 +40,7 @@ const userAdmin = asUserId(uuidv7());
 const userScopedOwner = asUserId(uuidv7());
 const userReception = asUserId(uuidv7());
 const userAccountant = asUserId(uuidv7());
+const attendanceReceptionist = asUserId(uuidv7());
 const RUN = Date.now().toString(36);
 const phones = new Map<string, string>();
 const cookies = new Map<string, string>();
@@ -47,9 +48,9 @@ const cookies = new Map<string, string>();
 async function signIn(role: "owner" | "admin" | "scopedOwner" | "reception" | "accountant") {
   const saved = cookies.get(role);
   if (saved) { session.cookie = saved; return; }
-  const response = await loginWithPin(new Request("http://localhost/api/login/pin", {
+  const response = await loginWithPin(new Request(`${new URL(process.env.BETTER_AUTH_URL!).origin}/api/login/pin`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", origin: new URL(process.env.BETTER_AUTH_URL!).origin, host: new URL(process.env.BETTER_AUTH_URL!).host },
     body: JSON.stringify({ phone: phones.get(role), pin: "123456" }),
   }));
   if (response.status !== 200) throw new Error(`PIN login failed for ${role}: ${response.status}`);
@@ -142,7 +143,7 @@ afterAll(async () => {
     }
     await admin.query("delete from tenants where id=$1", [id]);
   }
-  await admin.query("delete from users where id=any($1::uuid[])", [[userOwner, userAdmin, userScopedOwner, userReception, userAccountant]]);
+  await admin.query("delete from users where id=any($1::uuid[])", [[userOwner, userAdmin, userScopedOwner, userReception, userAccountant, attendanceReceptionist]]);
   for (const key of ["owner", "admin", "scopedOwner", "reception", "accountant"]) {
     const id = `boundary-${key}-${RUN}`;
     await admin.query("delete from ba_session where user_id=$1", [id]);
@@ -181,12 +182,16 @@ describe("authenticated authorization boundaries", () => {
     expect((await admin.query("select id from attendance where session_id=$1 and member_id=any($2::uuid[])",
       [sessionB, [outsiderA, memberB]])).rowCount).toBe(0);
 
-    const systemCtx = { tenantId, systemActor: true as const };
-    await expect(markAttendance(systemCtx, { sessionId: sessionB, memberId: outsiderA,
+    const receptionistMembership = uuidv7();
+    const { rows: roles } = await admin.query<{ id: string }>("select id from roles where tenant_id=$1 and key='receptionist'", [tenantId]);
+    await admin.query("insert into users(id,phone) values($1,$2)", [attendanceReceptionist, `+91${String(BigInt('0x' + attendanceReceptionist.replaceAll('-', '').slice(0, 12)) % 9000000000n + 1000000000n)}`]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [receptionistMembership, tenantId, attendanceReceptionist, roles[0]!.id]);
+    const staffCtx = { tenantId, userId: attendanceReceptionist, roleKey: "receptionist", permissions: new Set(["attendance.mark"]) };
+    await expect(markAttendance(staffCtx, { sessionId: sessionB, memberId: outsiderA,
       status: "present", clientId: `nonroster-svc-${RUN}` })).rejects.toThrow();
-    await expect(markAttendance(systemCtx, { sessionId: sessionB, memberId: otherMember,
+    await expect(markAttendance(staffCtx, { sessionId: sessionB, memberId: otherMember,
       status: "present", clientId: `foreign-svc-${RUN}` })).rejects.toThrow();
-    await markAttendance(systemCtx, { sessionId: sessionB, memberId: memberB,
+    await markAttendance(staffCtx, { sessionId: sessionB, memberId: memberB,
       status: "present", clientId: `roster-svc-${RUN}` });
     expect((await admin.query("select id from attendance where session_id=$1 and member_id=$2",
       [sessionB, memberB])).rowCount).toBe(1);

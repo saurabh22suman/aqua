@@ -17,6 +17,8 @@ const tenantA = asTenantId(uuidv7());
 const tenantB = asTenantId(uuidv7());
 const actor = asUserId(uuidv7());
 const locA = uuidv7();
+const ownerRoles = [uuidv7(), uuidv7()];
+const ownerMemberships = [uuidv7(), uuidv7()];
 
 const ctxA = { tenantId: tenantA, userId: actor, requestId: uuidv7() };
 const ctxB = { tenantId: tenantB, userId: actor };
@@ -42,9 +44,20 @@ beforeAll(async () => {
     actor,
     `+9193${String(Date.now()).slice(-8)}`,
   ]);
+  for (const [index, tenant] of [tenantA, tenantB].entries()) {
+    // Real, active Owner authority for this synthetic settings fixture.
+    await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRoles[index], tenant]);
+    await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [ownerMemberships[index], tenant, actor, ownerRoles[index]]);
+    await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, 'settings.manage')", [tenant, ownerRoles[index]]);
+  }
 }, 60_000);
 
 afterAll(async () => {
+  for (const [index, tenant] of [tenantA, tenantB].entries()) {
+    await admin.query("delete from tenant_memberships where tenant_id = $1 and user_id = $2 and role_id = $3", [tenant, actor, ownerRoles[index]]);
+    await admin.query("delete from role_permissions where tenant_id = $1 and role_id = $2", [tenant, ownerRoles[index]]);
+    await admin.query("delete from roles where tenant_id = $1 and id = $2", [tenant, ownerRoles[index]]);
+  }
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

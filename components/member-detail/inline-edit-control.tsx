@@ -2,6 +2,9 @@
 
 import type { ChangeEvent, KeyboardEvent, Ref } from "react";
 import { DateField } from "@/components/ui/DateField";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import type {
   InlineEditFieldName,
   InlineEditFieldOption,
@@ -20,9 +23,6 @@ const FIELD_LABELS: Record<InlineEditFieldName, string> = {
 };
 
 export { FIELD_LABELS };
-
-const baseInputClass =
-  "rounded-ctl border border-line bg-paper px-3 text-[16px] focus:outline-none focus:border-[var(--accent-strong)]";
 
 export function InlineEditControl({
   field,
@@ -57,7 +57,7 @@ export function InlineEditControl({
 
   if (type === "select") {
     return (
-      <select
+      <Select
         ref={inputRef as Ref<HTMLSelectElement>}
         value={draft}
         onChange={(e) => {
@@ -68,7 +68,7 @@ export function InlineEditControl({
         onBlur={onBlur}
         onKeyDown={onKeyDown as (e: KeyboardEvent<HTMLSelectElement>) => void}
         aria-label={label}
-        className={`${baseInputClass} h-11 pr-7`}
+        className="min-w-[140px]"
       >
         <option value="">—</option>
         {(options ?? []).map((o) => (
@@ -76,13 +76,13 @@ export function InlineEditControl({
             {o.label}
           </option>
         ))}
-      </select>
+      </Select>
     );
   }
 
   if (type === "textarea") {
     return (
-      <textarea
+      <Textarea
         ref={inputRef as Ref<HTMLTextAreaElement>}
         value={draft}
         onChange={handleChange}
@@ -91,7 +91,7 @@ export function InlineEditControl({
         placeholder={placeholder}
         aria-label={label}
         rows={2}
-        className={`${baseInputClass} py-2 min-w-[200px]`}
+        className="min-w-[200px]"
       />
     );
   }
@@ -110,13 +110,14 @@ export function InlineEditControl({
         onBlur={onBlur}
         onKeyDown={onKeyDown as (e: KeyboardEvent<HTMLInputElement>) => void}
         aria-label={label}
+        formatHint="sr-only"
         className="h-11 min-w-[140px]"
       />
     );
   }
 
   return (
-    <input
+    <Input
       ref={inputRef as Ref<HTMLInputElement>}
       type="text"
       value={draft}
@@ -125,7 +126,7 @@ export function InlineEditControl({
       onKeyDown={onKeyDown as (e: KeyboardEvent<HTMLInputElement>) => void}
       placeholder={placeholder}
       aria-label={label}
-      className={`${baseInputClass} h-11 min-w-[140px]`}
+      className="min-w-[140px]"
     />
   );
 }

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { bookings } from "@/db/schema/bookings";
@@ -19,6 +19,13 @@ import type { ActionCtx } from "@/lib/auth/context";
 // out of lib/services/bookings.ts to keep every file under the
 // 300-line rule; bookings.ts re-exports this surface so callers keep
 // one import.
+//
+// DECISION (2026-11-05) — a wrongly-billed document is corrected by
+// VOIDING AND REISSUING, so the board has to be able to tell a VOID
+// document from a live one: a voided bill is not collectible (its
+// amount due is zero) and the board names its status, so the counter
+// can see that the booking needs a replacement bill rather than a
+// payment.
 
 const uuid = z.string().uuid();
 
@@ -59,6 +66,10 @@ export type BookingDayRow = {
   pricePaise: number;
   invoiceId: string | null;
   invoiceNumber: string | null;
+  // DECISION (2026-11-05) — the linked document's status, so the board
+  // can tell a live bill from a VOIDED one. Additive: every consumer
+  // that does not read it still compiles.
+  invoiceStatus: string | null;
   amountDuePaise: number;
   billable: boolean;
 };
@@ -79,14 +90,25 @@ export async function listBookingsForDay(
     );
     const predicates = [
       eq(bookings.tenantId, ctx.tenantId),
-      gte(bookings.startsAt, fromUtc),
+      // The day board shows what TOUCHES the day, not only what starts
+      // in it: a booking taken for 23:00 that runs until 00:30 is still
+      // on the court at midnight, and the owner has to be able to see
+      // it. The interval overlap is the canonical half-open form
+      // (`[startsAt, endsAt)` against the day), so a booking that ends
+      // exactly when the day starts, or starts exactly when the day
+      // ends, is still excluded.
+      //
+      // Every other predicate, join and projection below is unchanged:
+      // the tenant, the location access, the facility and the invoice
+      // join all read exactly as they did.
       lt(bookings.startsAt, toUtc),
+      gt(bookings.endsAt, fromUtc),
     ];
     if (input.facilityId) {
-      predicates.push(eq(bookings.facilityId, input.facilityId));
+      predicates.push(eq(facilities.id, input.facilityId));
     }
     if (input.locationId) {
-      predicates.push(eq(bookings.locationId, input.locationId));
+      predicates.push(eq(locations.id, input.locationId));
     }
     const scoped = locationPredicate(bookings.locationId, access);
     if (scoped) predicates.push(scoped);
@@ -145,6 +167,12 @@ export async function listBookingsForDay(
       const billed = row.booking.invoiceId !== null && invoice !== null;
       const total = billed ? Number(invoice.totalPaise) : 0;
       const paid = billed ? Number(invoice.paidPaise) : 0;
+      // DECISION (2026-11-05) — a VOID document is not collectible: the
+      // product refuses a payment against it ("This invoice is void." —
+      // lib/services/payments.ts), so its amount due is zero. The board
+      // must not invite the counter to collect money against a document
+      // the product will refuse.
+      const voided = billed && invoice.status === "void";
       return {
         bookingId: row.booking.id,
         facilityId: row.booking.facilityId,
@@ -162,9 +190,23 @@ export async function listBookingsForDay(
         pricePaise: Number(row.booking.pricePaise),
         invoiceId: billed ? row.booking.invoiceId : null,
         invoiceNumber: billed ? invoice.invoiceNumber : null,
-        amountDuePaise: billed ? Math.max(0, total - paid) : 0,
+        invoiceStatus: billed ? invoice.status : null,
+        amountDuePaise: voided ? 0 : billed ? Math.max(0, total - paid) : 0,
+        // WR-1 — a walk-in booking is billable (the human's decision,
+        // 2026-11-05): it has a name and a price, so the counter can
+        // issue its bill and collect the money by hand. A booking with
+        // neither a member nor a walk-in name cannot be billed, and a
+        // cancelled booking never can.
+        //
+        // DECISION (2026-11-05) — a booking whose bill was VOIDED is
+        // still billable: the correction is "void, then reissue", and
+        // the replacement is issued by asking for the bill again. The
+        // flag was never invoice-dependent, so it stays as it is.
         billable:
-          row.booking.memberId !== null && row.booking.status !== "cancelled",
+          (row.booking.memberId !== null ||
+            (row.booking.walkInName !== null &&
+              row.booking.walkInName.trim().length > 0)) &&
+          row.booking.status !== "cancelled",
       };
     });
   });

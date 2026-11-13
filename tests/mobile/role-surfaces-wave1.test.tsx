@@ -34,6 +34,7 @@ vi.mock("@/lib/actions/people", () => ({ listMembersAction: vi.fn() }));
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { MembersBoard } from "@/components/members-board";
 import { ParentLinkExplainer } from "@/components/parent-link-explainer";
+import { ownerSidebarGroupsForPermissions } from "@/lib/nav";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import type { MemberListRow } from "@/lib/services/people";
@@ -111,12 +112,10 @@ describe("W1-4 owner Home quick links (F26)", () => {
     const { rerender } = render(
       <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
     );
-    for (const href of ["/owner/enquiries", "/owner/programs", "/owner/staff"]) {
-      expect(
-        document.querySelector(`a[href="${href}"]`),
-        `missing quick link ${href}`,
-      ).toBeTruthy();
-    }
+    // Approved Home no longer duplicates the shell's task navigation.
+    const navigation = ownerSidebarGroupsForPermissions(new Set(["enquiries.read","programs.read","staff.read"])).flatMap(group => group.items);
+    for (const href of ["/owner/enquiries", "/owner/programs", "/owner/staff"]) expect(navigation.some(item => item.href === href)).toBe(true);
+    expect(ownerSidebarGroupsForPermissions(new Set()).flatMap(group => group.items).some(item => item.href === "/owner/staff")).toBe(false);
     // An established academy is not nagged with the setup checklist.
     expect(document.querySelector('a[href="/owner/onboarding"]')).toBeNull();
 
@@ -159,7 +158,7 @@ describe("W1-5 member joined date", () => {
   });
 
 describe("members desktop columns (PR3-C4)", () => {
-  it("renders a column header and a grid row, keeping the phone row one column", () => {
+  it("renders the compact member row with its business details and unbroken phone", () => {
     const row = {
       memberId: "m1",
       fullName: "Aadhya Sharma",
@@ -173,17 +172,16 @@ describe("members desktop columns (PR3-C4)", () => {
     } as MemberListRow;
     render(<MembersBoard initialMembers={[row]} />);
 
-    const head = document.querySelector('[data-testid="members-table-head"]');
-    expect(head).not.toBeNull();
-    expect(head!.textContent).toContain("Member");
-    expect(head!.textContent).toContain("Phone");
-    expect(head!.textContent).toContain("Status");
-    // The joined date moved to the member's own page (audit 2026-10-24).
-    expect(head!.textContent).not.toContain("Joined");
-
-    const link = document.querySelector('[data-testid="members-list"] a');
-    expect(link!.className).toContain("md:grid");
-    expect(document.body.textContent).toContain("+91 98123 40010");
+    const link = document.querySelector('[data-testid="member-row"]');
+    expect(link?.getAttribute("href")).toContain("/owner/members/m1");
+    expect(link?.textContent).toContain("Aadhya Sharma");
+    expect(link?.textContent).toContain("AWS-010");
+    expect(link?.textContent).toContain("Worli Main");
+    expect(link?.textContent).toContain("Active");
+    const phone = document.querySelector('[data-testid="member-row-phone"]');
+    expect(phone?.textContent).toContain("+91 98123 40010");
+    expect(phone?.className).toContain("whitespace-nowrap");
+    expect(link?.textContent).not.toContain("Joined");
   });
 });
 });

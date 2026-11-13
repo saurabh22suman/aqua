@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { tenantIsOperational } from "@/db/tenant-availability";
 import { withTenant } from "@/db/tenant";
 import { receipts } from "@/db/schema/receipts";
 import { payments } from "@/db/schema/payments";
@@ -6,7 +7,7 @@ import { invoices, invoiceLineItems } from "@/db/schema/invoices";
 import { members, persons } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import { brandDataFrom } from "@/lib/services/branding";
 import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
 import { renderReceiptPdf } from "@/lib/receipts/receipt-document";
@@ -14,8 +15,11 @@ import { gstDocumentKind, placeOfSupplyForGstin } from "@/lib/gst";
 import { methodLabel } from "@/lib/services/payments";
 import type { PaymentMethod } from "@/db/schema/payments";
 import type { AuditSource } from "@/db/schema/audit";
-import type { UserId } from "@/lib/ids";
+import { asMemberId, type UserId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
+import type { TenantTx } from "@/db/tenant";
+import type { SelfScope } from "@/lib/auth/self-scope";
+import { billingSubjectInTx } from "@/lib/services/self-billing";
 import { toSafePaise } from "@/lib/money/safe-paise";
 
 // C-39 — branded receipts. Generated lazily on first read and stored
@@ -23,6 +27,12 @@ import { toSafePaise } from "@/lib/money/safe-paise";
 // a second read return the stored bytes, never a second document. A
 // failed render is an error the caller surfaces — it never blocks the
 // payment itself, which is already committed (see recordPayment).
+//
+// WR-1 / Option A — a walk-in payment has no member, so the member
+// join is a LEFT join and the receipt names the buyer the invoice
+// names. A guest payment that produced NO receipt would be money
+// collected with no document behind it, which is exactly the silence
+// this change must not create.
 
 export type ReceiptResult =
   | { ok: true; pdf: Buffer; fileName: string }
@@ -35,7 +45,9 @@ function receiptFileName(invoiceNumber: string): string {
 type ReceiptRow = {
   payment: typeof payments.$inferSelect;
   invoice: typeof invoices.$inferSelect;
-  memberName: string;
+  // WR-1 — the payer's display name: the member's name for a member
+  // payer, the invoice's guest name for a guest payer.
+  payerName: string;
   locationName: string;
   tenantName: string;
   branding: unknown;
@@ -46,6 +58,7 @@ type ReceiptActor = {
   actorType: "user" | "system";
   source: AuditSource;
   via: string;
+  requestId?: string | null;
 };
 
 async function loadReceiptRow(
@@ -59,6 +72,7 @@ async function loadReceiptRow(
       payment: payments,
       invoice: invoices,
       memberName: persons.fullName,
+      guestName: invoices.guestName,
       locationName: locations.name,
       tenantName: tenants.name,
       branding: tenants.branding,
@@ -71,19 +85,31 @@ async function loadReceiptRow(
         eq(invoices.tenantId, tenantId),
       ),
     )
-    .innerJoin(
+    // WR-1 — a guest payment has no member, so this join cannot be an
+    // inner join: the receipt must still be produced.
+    .leftJoin(
       members,
       and(eq(members.id, payments.memberId), eq(members.tenantId, tenantId)),
     )
-    .innerJoin(persons, eq(persons.id, members.personId))
+    .leftJoin(persons, eq(persons.id, members.personId))
     .innerJoin(locations, eq(locations.id, payments.locationId))
     .innerJoin(tenants, eq(tenants.id, payments.tenantId))
     .where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId)))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
+  // The member route serves ONE member's receipts. A guest payment has
+  // no member, so it is never served there — the parent link can never
+  // hand a stranger a walk-in receipt.
   if (memberId && row.payment.memberId !== memberId) return null;
-  return row;
+  return {
+    payment: row.payment,
+    invoice: row.invoice,
+    payerName: row.memberName ?? row.guestName ?? "",
+    locationName: row.locationName,
+    tenantName: row.tenantName,
+    branding: row.branding,
+  };
 }
 
 function buildReceiptPdf(row: ReceiptRow, sacCode: string | null): Buffer {
@@ -100,7 +126,11 @@ function buildReceiptPdf(row: ReceiptRow, sacCode: string | null): Buffer {
     gstin: row.invoice.gstin,
     placeOfSupply: placeOfSupplyForGstin(row.invoice.gstin),
     sacCode,
-    memberName: row.memberName,
+    // The renderer's field carries the PAYER's name: the member's name
+    // for a member payer, the guest's name for a walk-in payer. The
+    // printed line ("Received with thanks from") is already
+    // payer-neutral.
+    memberName: row.payerName,
     paymentAmountPaise: toSafePaise(row.payment.amountPaise),
     paymentMethodLabel: methodLabel(row.payment.method as PaymentMethod),
     paymentReference: row.payment.reference,
@@ -172,7 +202,7 @@ async function serveOrCreateReceipt(
     return { ok: false, error: "The receipt could not be generated." };
   }
 
-  await tx.insert(auditLog).values({
+  await writeAudit(tx, {
     tenantId,
     actorType: actor.actorType,
     actorId: actor.userId,
@@ -186,6 +216,7 @@ async function serveOrCreateReceipt(
       fileSize: pdf.byteLength,
       via: actor.via,
     },
+    requestId: actor.requestId ?? null,
   });
 
   return { ok: true, pdf, fileName };
@@ -211,6 +242,7 @@ export async function getOrCreateReceipt(
       actorType: "user",
       source: "web",
       via: "staff",
+      requestId: ctx.requestId ?? null,
     });
   });
 }
@@ -219,12 +251,16 @@ export async function getOrCreateReceipt(
 // caller passes the personId from the verified token, so another
 // child's (or another tenant's) payment can never resolve. Generation
 // is attributed to the token route (system/api) — no staff user acted.
+//
+// WR-1 — a walk-in payment has no member, so this route never serves
+// one: the member check in loadReceiptRow refuses it.
 export async function getReceiptForMember(
   tenantId: ActionCtx["tenantId"],
   memberId: string,
   paymentId: string,
 ): Promise<ReceiptResult> {
   return withTenant(tenantId, async (tx) => {
+    if (!await tenantIsOperational(tx, tenantId)) return { ok: false, error: "Receipt not found." };
     const row = await loadReceiptRow(tx, tenantId, paymentId, memberId);
     if (!row) return { ok: false, error: "Receipt not found." };
     return serveOrCreateReceipt(tx, tenantId, paymentId, row, {
@@ -234,4 +270,32 @@ export async function getReceiptForMember(
       via: "parent_link",
     });
   });
+}
+
+// Scoped self-session receipt: eligibility and creation share the caller's
+// transaction. The subject is revalidated before any receipt read/write.
+export async function getScopedSelfReceiptInTx(tx: TenantTx, scope: SelfScope, paymentId: string, selected?: string): Promise<ReceiptResult> {
+  const memberId = await billingSubjectInTx(tx, scope, selected);
+  if (!memberId) return { ok: false, error: "Receipt not found." };
+  // Lock payment before invoice, matching the existing reversal service.
+  // Recheck the captured status and member/invoice relation while locked.
+  const [payment] = await tx.select({ invoiceId: payments.invoiceId }).from(payments)
+    .where(and(eq(payments.id, paymentId), eq(payments.tenantId, scope.tenantId), eq(payments.memberId, asMemberId(memberId)), eq(payments.status, "captured"))).limit(1).for("share");
+  if (!payment?.invoiceId) return { ok: false, error: "Receipt not found." };
+  const [invoice] = await tx.select({ id: invoices.id }).from(invoices)
+    .where(and(eq(invoices.id, payment.invoiceId), eq(invoices.tenantId, scope.tenantId), eq(invoices.memberId, asMemberId(memberId)))).limit(1).for("share");
+  if (!invoice) return { ok: false, error: "Receipt not found." };
+  const row = await loadReceiptRow(tx, scope.tenantId, paymentId, memberId);
+  if (!row) return { ok: false, error: "Receipt not found." };
+  const via = scope.audience === "member" ? "member_self" : "guardian_self";
+  const result = await serveOrCreateReceipt(tx, scope.tenantId, paymentId, row, {
+    userId: scope.userId, actorType: "user", source: "api", via,
+  });
+  if (!result.ok) return result;
+  await writeAudit(tx, {
+    tenantId: scope.tenantId, actorType: "user", actorId: scope.userId,
+    source: "api", action: "receipt.download", entityType: "receipt", entityId: paymentId,
+    after: { via, fileSize: result.pdf.byteLength },
+  });
+  return result;
 }

@@ -6,6 +6,8 @@ import { env } from "@/lib/env";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import BatchDetailPage from "@/app/(owner)/owner/batches/[batchId]/page";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactElement } from "react";
 
 // K1 — regression test for /owner/batches/[batchId].
 //
@@ -57,6 +59,7 @@ class NotFoundSignal extends Error {
   }
 }
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
   notFound: () => {
     throw new NotFoundSignal();
   },
@@ -119,7 +122,7 @@ async function setup(testLabel: string): Promise<{
 
   await admin.query(
     "insert into users (id, phone, better_auth_id) values ($1, $2, $3)",
-    [ownerUserId, `+91k1-${RUN}-${uuidv7()}`, ownerBetterAuthId],
+    [ownerUserId, `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`, ownerBetterAuthId],
   );
 
   await admin.query(
@@ -147,20 +150,6 @@ async function setup(testLabel: string): Promise<{
   return { tenantId, batchId };
 }
 
-function renderToString(node: unknown): string {
-  // The page returns a React element tree; we walk it for any string
-  // child to assert on rendered text. Good enough for "page didn't
-  // throw AND the batch name is on the page"; we don't need a full
-  // jsdom render to prove the click-path works.
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(renderToString).join("");
-  if (typeof node === "object" && "props" in (node as Record<string, unknown>)) {
-    const props = (node as { props: { children?: unknown } }).props;
-    return renderToString(props.children);
-  }
-  return "";
-}
 
 describe("BatchDetailPage click-through", () => {
   it("renders the batch name and the this-month figure instead of throwing", async () => {
@@ -178,9 +167,10 @@ describe("BatchDetailPage click-through", () => {
       params: Promise.resolve({ batchId }),
     });
 
-    const rendered = renderToString(result);
+    const rendered = renderToStaticMarkup(result as ReactElement);
     expect(rendered).toContain("K1 Detail Batch");
-    expect(rendered).toContain("This month");
+    expect(rendered).toContain(`${new Intl.DateTimeFormat("en-IN", { month: "long", timeZone: "Asia/Kolkata" }).format(new Date())} attendance`);
+    expect(rendered).toContain("No attendance marks have been recorded in this period.");
   });
 
   it("notFound is signalled for a batch id that does not belong to this tenant", async () => {

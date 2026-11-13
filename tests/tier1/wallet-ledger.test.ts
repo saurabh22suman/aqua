@@ -29,6 +29,7 @@ const tenant = asTenantId(uuidv7());
 const otherTenant = asTenantId(uuidv7());
 const loc = uuidv7();
 const actor = asUserId(uuidv7());
+const ownerRole = uuidv7(), membershipId = uuidv7();
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 const secondPersonId = uuidv7();
@@ -77,8 +78,11 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9193${String(Date.now()).slice(-8)}`,
+    `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`,
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[ownerRole,tenant]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'members.read'),($1,$2,'payments.record'),($1,$2,'payments.read')",[tenant,ownerRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,tenant,actor,ownerRole]);
   await admin.query(
     `insert into persons (id, tenant_id, full_name) values
        ($1, $3, 'Wallet Member'), ($2, $3, 'Wallet Second')`,
@@ -101,6 +105,15 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  // Only the privileged disposable fixture cleanup removes these rows;
+  // the app-user UPDATE/DELETE denial test below is unchanged. Audit is retained.
+  for (const id of [tenant,otherTenant]) {
+    for (const table of ["receipts","account_entries","payments","members","persons","tenant_memberships","role_permissions","roles","locations"]) {
+      await admin.query(`delete from "${table}" where tenant_id=$1`,[id]);
+    }
+    await admin.query("delete from tenants where id=$1",[id]);
+  }
+  await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[actor]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

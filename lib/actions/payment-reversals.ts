@@ -19,6 +19,22 @@ const reverseFormInput = z.object({
   paymentId: z.string().uuid(),
   amountPaise: z.number().int().positive(),
   reason: z.string().trim().min(3).max(300),
+  // F01 — a public reversal request MUST carry its operation key.
+  idempotencyKey: z
+    .string({
+      error:
+        "A reversal needs its one-time operation key. Refresh and try again.",
+    })
+    .uuid(
+      "A reversal needs its one-time operation key. Refresh and try again.",
+    ),
+  observedIntentId: z
+    .string({
+      error:
+        "Check the document for an earlier attempt before reversing.",
+    })
+    .uuid("Check the document for an earlier attempt before reversing.")
+    .nullable(),
 });
 
 export async function reversePaymentAction(

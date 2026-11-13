@@ -30,15 +30,27 @@ const issueOwnerResetLinkForPhone = vi.fn();
 vi.mock("@/lib/services/invite-link", () => ({
   issueOwnerResetLinkForPhone: (...args: unknown[]) => issueOwnerResetLinkForPhone(...args),
 }));
+const recordTrace = vi.fn();
+const executeOpsAction = vi.fn(async (_scope: unknown, run: () => Promise<unknown>) => run());
+vi.mock("@/lib/auth/ops-operation", () => ({
+  recordOpsMutationTrace: (...args: unknown[]) => recordTrace(...args),
+  recordOpsThrownFailure: vi.fn(),
+}));
+vi.mock("@/db/ops-action", () => ({
+  opsAction: (scope: unknown, run: () => Promise<unknown>) => executeOpsAction(scope, run),
+}));
 
 import { issueOwnerResetLinkAction } from "@/lib/actions/platform-login-link";
 
 const TENANT_ID = "11111111-1111-7111-8111-111111111111";
+const ACTOR_ID = "22222222-2222-7222-8222-222222222222";
 
 describe("issueOwnerResetLinkAction", () => {
   beforeEach(() => {
     platformAuthStatusAction.mockReset();
     issueOwnerResetLinkForPhone.mockReset();
+    recordTrace.mockReset();
+    executeOpsAction.mockClear();
   });
 
   it("rejects malformed input without calling the service", async () => {
@@ -46,6 +58,8 @@ describe("issueOwnerResetLinkAction", () => {
     expect(r.kind).toBe("error");
     expect(issueOwnerResetLinkForPhone).not.toHaveBeenCalled();
     expect(platformAuthStatusAction).not.toHaveBeenCalled();
+    expect(recordTrace).toHaveBeenCalledWith("tenant.owner_reset_link.issue", "invalid");
+    expect(executeOpsAction).not.toHaveBeenCalled();
   });
 
   it("refuses when there is no authenticated platform session", async () => {
@@ -56,12 +70,14 @@ describe("issueOwnerResetLinkAction", () => {
     });
     expect(r.kind).toBe("error");
     expect(issueOwnerResetLinkForPhone).not.toHaveBeenCalled();
+    expect(recordTrace).toHaveBeenCalledWith("tenant.owner_reset_link.issue", "denied");
+    expect(executeOpsAction).not.toHaveBeenCalled();
   });
 
   it("forwards tenant + phone to the service when authenticated", async () => {
     platformAuthStatusAction.mockResolvedValue({
       kind: "authenticated",
-      userId: "u1",
+      userId: ACTOR_ID,
       role: "admin",
     });
     issueOwnerResetLinkForPhone.mockResolvedValue({
@@ -82,12 +98,16 @@ describe("issueOwnerResetLinkAction", () => {
     expect(issueOwnerResetLinkForPhone).toHaveBeenCalledTimes(1);
     expect(issueOwnerResetLinkForPhone.mock.calls[0]![0]).toBe(TENANT_ID);
     expect(issueOwnerResetLinkForPhone.mock.calls[0]![1]).toBe("+919000000001");
+    expect(executeOpsAction).toHaveBeenCalledWith(
+      { scope: "tenant.owner_reset_link.issue", actorId: ACTOR_ID, tenantId: TENANT_ID },
+      expect.any(Function),
+    );
   });
 
   it("propagates the service error (e.g. not_owner) unchanged", async () => {
     platformAuthStatusAction.mockResolvedValue({
       kind: "authenticated",
-      userId: "u1",
+      userId: ACTOR_ID,
       role: "admin",
     });
     issueOwnerResetLinkForPhone.mockResolvedValue({
@@ -100,5 +120,6 @@ describe("issueOwnerResetLinkAction", () => {
       phone: "+919000000002",
     });
     expect(r).toMatchObject({ kind: "error", code: "not_owner" });
+    expect(recordTrace).toHaveBeenCalledWith("tenant.owner_reset_link.issue", "error", { tenantId: TENANT_ID });
   });
 });

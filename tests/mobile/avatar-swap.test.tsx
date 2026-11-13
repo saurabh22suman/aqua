@@ -52,12 +52,15 @@ describe("U-09 avatar swap", () => {
     render(<StaffBoard rows={rows} />);
 
     const avatars = document.querySelectorAll('[data-testid="person-avatar"]');
-    expect(avatars).toHaveLength(2);
+    // Mobile and desktop presentations both render the same two people.
+    expect(avatars).toHaveLength(4);
     expect(
       document.querySelector('[data-avatar-seed="person-1"]'),
       "the seed must be the stable person id",
     ).toBeTruthy();
     expect(document.querySelector('[data-avatar-seed="person-2"]')).toBeTruthy();
+    expect(document.querySelectorAll('[data-avatar-seed="person-1"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-avatar-seed="person-2"]')).toHaveLength(2);
   });
 
   it("coach members list renders an avatar seeded by memberId per row", () => {

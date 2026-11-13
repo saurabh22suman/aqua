@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { persons, locations, programs, batches } from "@/db/schema";
 import { sessions, attendance, enrolments, members } from "@/db/schema";
@@ -14,7 +15,7 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const actorId: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
@@ -28,6 +29,9 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Lifecycle Test', $3)",
     [tenantId, `lifecycle-${RUN}`, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -67,7 +71,11 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -102,7 +110,7 @@ beforeEach(async () => {
 describe("cancelSession (Phase R.4)", () => {
   it("cancels a scheduled session", async () => {
     const result = await cancelSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       sessionId,
     );
     expect(result.kind).toBe("ok");
@@ -111,7 +119,7 @@ describe("cancelSession (Phase R.4)", () => {
     }
   });
 
-  it("preserves attendance rows on cancel — they are not deleted by the lifecycle change", async () => {
+  it("refuses cancellation after attendance and preserves the scheduled session and marks", async () => {
     // Add an attendance row while the session is still scheduled
     // (the coach may have pre-marked).
     await withTenant(tenantId, async (tx) => {
@@ -128,8 +136,8 @@ describe("cancelSession (Phase R.4)", () => {
           locationId,
           memberCode: `LC-${RUN}-${p!.id.slice(0, 4).replace(/-/g, "")}`,
           status: "active",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: actorId,
+          updatedBy: actorId,
         })
         .returning({ id: members.id });
       await tx.insert(enrolments).values({
@@ -137,8 +145,8 @@ describe("cancelSession (Phase R.4)", () => {
         memberId: m!.id,
         batchId,
         enrolledOn: new Date().toISOString().slice(0, 10),
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: actorId,
+        updatedBy: actorId,
       });
       await tx.insert(attendance).values({
         tenantId,
@@ -150,10 +158,10 @@ describe("cancelSession (Phase R.4)", () => {
     });
 
     const result = await cancelSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       sessionId,
     );
-    expect(result.kind).toBe("ok");
+    expect(result).toMatchObject({ kind: "error", code: "cannot_cancel_held" });
 
     const rows = await withTenant(tenantId, async (tx) =>
       tx
@@ -162,6 +170,8 @@ describe("cancelSession (Phase R.4)", () => {
         .where(eq(attendance.sessionId, sessionId)),
     );
     expect(rows).toHaveLength(1);
+    const [session] = await withTenant(tenantId, (tx) => tx.select({ status: sessions.status }).from(sessions).where(eq(sessions.id, sessionId)));
+    expect(session?.status).toBe("scheduled");
   });
 
   it("rejects cancellation of a held session", async () => {
@@ -172,7 +182,7 @@ describe("cancelSession (Phase R.4)", () => {
         .where(eq(sessions.id, sessionId));
     });
     const result = await cancelSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       sessionId,
     );
     expect(result.kind).toBe("error");
@@ -183,11 +193,11 @@ describe("cancelSession (Phase R.4)", () => {
 
   it("returns ok idempotently when called twice", async () => {
     const first = await cancelSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       sessionId,
     );
     const second = await cancelSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       sessionId,
     );
     expect(first.kind).toBe("ok");
@@ -202,7 +212,7 @@ describe("rescheduleSession (Phase R.4)", () => {
     const dateStr = newDate.toISOString().slice(0, 10);
 
     const result = await rescheduleSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       {
         sessionId,
         newSessionDate: dateStr,
@@ -217,14 +227,14 @@ describe("rescheduleSession (Phase R.4)", () => {
   });
 
   it("uncancels a cancelled session and reschedules it", async () => {
-    await cancelSession({ tenantId, userId: SYSTEM_USER }, sessionId);
+    await cancelSession({ tenantId, userId: actorId }, sessionId);
 
     const newDate = new Date();
     newDate.setUTCDate(newDate.getUTCDate() + 12);
     const dateStr = newDate.toISOString().slice(0, 10);
 
     const result = await rescheduleSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       {
         sessionId,
         newSessionDate: dateStr,
@@ -241,7 +251,7 @@ describe("rescheduleSession (Phase R.4)", () => {
   it("rejects a same-date reschedule (no change)", async () => {
     const today = new Date().toISOString().slice(0, 10);
     const result = await rescheduleSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       {
         sessionId,
         newSessionDate: today,
@@ -258,7 +268,7 @@ describe("rescheduleSession (Phase R.4)", () => {
   it("rejects end <= start", async () => {
     const newDate = "2027-01-15";
     const result = await rescheduleSession(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       {
         sessionId,
         newSessionDate: newDate,

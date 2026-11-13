@@ -370,6 +370,34 @@ beforeAll(async () => {
   // queue). Both are the shapes where a count could leak to a caller
   // who must not see it.
   sharedLocation = await insertLocation(sharedTenantId, "Shared Site", true);
+  // Scope is resolved from live memberships, not the context's location claims.
+  await admin.query("insert into users(id,phone) values ($1,$2),($3,$4)",
+    [owner.userId, "+919900001101", scopedToA.userId, "+919900001102"]);
+  for (const [tenant, location, scopedRole] of [
+    [tenantId, locationA, "admin"], [sharedTenantId, sharedLocation, "accountant"],
+  ] as const) {
+    const ownerRole = randomUUID(), limitedRole = randomUUID(), limitedMembership = randomUUID();
+    await admin.query(
+      "insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values ($1,$3,'owner','Owner','/owner',0),($2,$3,$4,'Limited','/owner',1)",
+      [ownerRole, limitedRole, tenant, scopedRole],
+    );
+    await admin.query(
+      "insert into role_permissions(tenant_id,role_id,permission_key) values ($1,$2,'reports.operational'),($1,$2,'settings.manage'),($1,$3,'reports.operational')",
+      [tenant, ownerRole, limitedRole],
+    );
+    if (tenant === tenantId) {
+      await admin.query(
+        "insert into role_permissions(tenant_id,role_id,permission_key) values ($1,$2,'enquiries.read'),($1,$3,'enquiries.read'),($1,$3,'settings.manage')",
+        [tenant, ownerRole, limitedRole],
+      );
+    }
+    await admin.query(
+      "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values ($1,$3,$4,$6,'active',true),($2,$3,$5,$7,'active',false)",
+      [randomUUID(), limitedMembership, tenant, owner.userId, scopedToA.userId, ownerRole, limitedRole],
+    );
+    await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)",
+      [randomUUID(), tenant, limitedMembership, location]);
+  }
   const sharedMember = await insertMember(sharedTenantId, sharedLocation, "Shared Swimmer");
   const sharedProgramId = randomUUID();
   const sharedBatchId = randomUUID();
@@ -631,7 +659,7 @@ describe("owner insights — authorization", () => {
   it("still serves an owner whose role carries the grant", async () => {
     // The guard is permission-based, not role-name-based.
     const templateOwner = {
-      userId: asUserId(randomUUID()),
+      userId: owner.userId,
       roleKey: "owner",
       allLocations: true,
       locationIds: [] as string[],
@@ -672,7 +700,7 @@ describe("visibility review — the counts that could reach the wrong caller", (
   // A management caller: it holds settings.manage, so the unresolved
   // (location-less) enquiry queue is its to see.
   const sharedOwner = () => ({
-    userId: asUserId(randomUUID()),
+    userId: owner.userId,
     roleKey: "owner",
     allLocations: true,
     locationIds: [] as string[],
@@ -684,7 +712,7 @@ describe("visibility review — the counts that could reach the wrong caller", (
   // scope applies. Built per call — the tests in this file run in
   // parallel, so a shared mutable ctx would be a race.
   const sharedScoped = () => ({
-    userId: asUserId(randomUUID()),
+    userId: scopedToA.userId,
     roleKey: "accountant",
     allLocations: false,
     locationIds: [sharedLocation],

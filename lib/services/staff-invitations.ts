@@ -1,5 +1,6 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { v7 as uuidv7 } from "uuid";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withPlatform } from "@/db/scope";
 import { withTenant, type TenantTx } from "@/db/tenant";
@@ -13,16 +14,22 @@ import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import { users } from "@/db/schema/users";
-import type { StaffType } from "@/db/schema/staff";
+import { baUser, baSession } from "@/db/schema/better-auth";
+import { staff, type StaffType } from "@/db/schema/staff";
+import { persons } from "@/db/schema/people";
 import { staffLocations } from "@/db/schema/staff-locations";
 import { ensurePersonAndStaff } from "@/db/invite-helpers";
 import { writeAudit } from "@/lib/audit/write";
-import { auth } from "@/lib/auth/server";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 import { enqueueInvitationNotification } from "@/lib/messaging/invitation-notification";
-import { findBaUserIdByPhone } from "@/lib/services/credentials";
 import { issueLoginLink } from "@/lib/services/invite-link-issue";
+import {
+  callerIsLiveOwnerForManagerAppointment,
+  preflightManagerAppointment,
+  validateManagerFacilitySelection,
+} from "@/lib/services/manager-appointment";
+import { MANAGER_ROLE_KEY } from "@/lib/services/manager-role-grants";
 
 // Phase 3.6 — staff invitations. Tenant-side service that
 // invites a person by phone to a specific role on this tenant.
@@ -54,6 +61,8 @@ const E164_PLUS = /^\+\d{8,15}$/;
 // 'coach' row is the realistic case. 'owner' is included for
 // completeness when a tenant has a co-owner arrangement; the
 // service refuses if it would leave the tenant with zero owners.
+//
+// Manager scope is explicit and validated at appointment.
 export const STAFF_INVITABLE_ROLES = [
   "admin",
   "coach",
@@ -63,6 +72,8 @@ export const STAFF_INVITABLE_ROLES = [
   // a location list (or a staff record).
   "worker",
   "accountant",
+  // Manager has operational authority within the owner-selected scope.
+  MANAGER_ROLE_KEY,
 ] as const;
 
 export type StaffInvitableRoleKey = (typeof STAFF_INVITABLE_ROLES)[number];
@@ -71,10 +82,8 @@ export type InviteStaffInput = {
   phone: string;
   fullName: string;
   roleKey: StaffInvitableRoleKey;
-  // Empty list means "all locations" — the membership gets
-  // allLocations=true and no membership_locations rows. A
-  // non-empty list restricts the membership's location scope to
-  // those ids; the role's location scope does not widen this.
+  // Other roles retain empty = all. Manager requires an explicit all choice.
+  managerAllLocations?: boolean;
   locationIds: string[];
 };
 
@@ -89,7 +98,15 @@ export type InviteStaffResult =
         | "unknown_role"
         | "location_not_found"
         | "already_member"
-        | "would_leave_zero_owners";
+        | "would_leave_zero_owners"
+        // The manager appointment's refusals. Every one of them is
+        // raised BEFORE any row is written.
+        | "owner_required"
+        | "facilities_required"
+        | "conflicting_scope"
+        | "duplicate_facilities"
+        | "facility_not_found"
+        | "uncertain";
       message: string;
     };
 
@@ -98,6 +115,7 @@ const inputSchema = z.object({
   fullName: z.string().trim().min(1).max(200),
   roleKey: z.enum(STAFF_INVITABLE_ROLES),
   locationIds: z.array(z.string().uuid()).max(50).default([]),
+  managerAllLocations: z.boolean().default(false),
 });
 
 export async function inviteStaff(
@@ -137,6 +155,37 @@ export async function inviteStaff(
   }
   const actorId = ctx.userId;
 
+  try {
+  // Early refusal avoids a global identity lookup for an already-denied actor.
+  // Authority is checked again in the membership write transaction.
+  if (!(await withTenant(ctx.tenantId, (tx) => callerIsLiveOwnerForSettingsOrDelegation(tx, ctx)))) {
+    return { kind: "error", code: "owner_required", message: "Only the academy owner can manage invitations." };
+  }
+
+  // ── THE MANAGER APPOINTMENT PREFLIGHT ──────────────────────────────
+  //
+  // Manager appointment is an OWNER act; scope is explicit. Both are checked HERE,
+  // BEFORE the global account lookup below, so a refused manager
+  // appointment creates no user row and no orphan account.
+  //
+  // This preflight opens its OWN tenant scope, and that scope closes
+  // before the platform scope opens: the scopes are SEQUENTIAL, never
+  // nested (db/scope.ts:56-72). The answer here is a fast filter —
+  // the authoritative owner check runs again inside the transaction
+  // that writes the membership.
+  let locationIds = input.locationIds;
+  if (input.roleKey === MANAGER_ROLE_KEY) {
+    const preflight = await preflightManagerAppointment(ctx, locationIds, input.managerAllLocations);
+    if (!preflight.ok) {
+      return {
+        kind: "error",
+        code: preflight.code,
+        message: preflight.message,
+      };
+    }
+    locationIds = preflight.locationIds;
+  }
+
   // 1. Find-or-create the `users` row — through withPlatform()
   // because the users table is in the platform allowlist (RLS-
   // exempt). Phone is unique there. A re-invite to the same phone
@@ -147,7 +196,10 @@ export async function inviteStaff(
 
   // 2. Open the tenant scope for membership + role + location
   //    writes, and verify the locations exist in this tenant.
-  return withTenant(ctx.tenantId, async (tx) => {
+  return await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "owner_required", message: "Only the academy owner can manage invitations." };
+    }
     const tenantExists = await tx
       .select({ id: tenants.id })
       .from(tenants)
@@ -159,6 +211,44 @@ export async function inviteStaff(
         code: "tenant_not_found",
         message: "Tenant not found.",
       };
+    }
+
+    // ── THE MANAGER'S OWN GATE, INSIDE THE WRITE TRANSACTION ────────
+    //
+    // The preflight above ran in its own transaction, before the
+    // global account lookup. THIS is the authoritative check: it runs
+    // in the SAME transaction that inserts the membership, the
+    // selected facilities and the audit row, so a revocation or a
+    // role change that lands in between cannot slip a manager
+    // through, and a refusal writes NOTHING at all.
+    //
+    // It reads the caller's own live membership and that membership's
+    // live role row — never ctx.roleKey, ctx.roleId or
+    // ctx.permissions — through the one predicate the leave
+    // catalogue already uses. See lib/services/manager-appointment.ts
+    // for the F-04/F-03a exception this second surface needs.
+    if (input.roleKey === MANAGER_ROLE_KEY) {
+      if (!(await callerIsLiveOwnerForManagerAppointment(tx, ctx))) {
+        return {
+          kind: "error",
+          code: "owner_required",
+          message: "Only the academy owner can appoint a facility manager.",
+        };
+      }
+      const selection = await validateManagerFacilitySelection(
+        tx,
+        ctx.tenantId,
+        locationIds,
+        input.managerAllLocations,
+      );
+      if (!selection.ok) {
+        return {
+          kind: "error",
+          code: selection.code,
+          message: selection.message,
+        };
+      }
+      locationIds = selection.locationIds;
     }
 
     // Required role: find by key within the calling tenant. The
@@ -208,7 +298,7 @@ export async function inviteStaff(
     // Location validity — every provided id must belong to this
     // tenant. RLS would catch a cross-tenant id at write time,
     // but the structured error here is clearer than a 42501.
-    if (input.locationIds.length > 0) {
+    if (locationIds.length > 0) {
       const valid = await tx
         .select({ id: locations.id })
         .from(locations)
@@ -219,7 +309,7 @@ export async function inviteStaff(
           ),
         );
       const validIds = new Set(valid.map((l) => l.id));
-      for (const lid of input.locationIds) {
+      for (const lid of locationIds) {
         if (!validIds.has(lid)) {
           return {
             kind: "error",
@@ -238,7 +328,9 @@ export async function inviteStaff(
         tenantId: ctx.tenantId,
         userId: user.id as never,
         roleId: roleRow[0]!.id,
-        allLocations: input.locationIds.length === 0,
+        allLocations: input.roleKey === MANAGER_ROLE_KEY
+          ? input.managerAllLocations
+          : locationIds.length === 0,
         status: "invited",
         createdBy: ctx.userId,
         updatedBy: ctx.userId,
@@ -247,8 +339,8 @@ export async function inviteStaff(
     const membershipId = inserted[0]!.id;
 
     // Per-location scope rows when locationIds were given.
-    if (input.locationIds.length > 0) {
-      for (const lid of input.locationIds) {
+    if (locationIds.length > 0) {
+      for (const lid of locationIds) {
         await tx.insert(membershipLocations).values({
           tenantId: ctx.tenantId,
           membershipId,
@@ -275,6 +367,16 @@ export async function inviteStaff(
     // they don't appear on the staff roster and aren't assigned to
     // batches. The helper skips the staff insert when staffType is
     // undefined.
+    //
+    // 2026-11-09 manager rollout — the MANAGER is also "no staff
+    // row", for the same reason as the administrator: staff.staff_type
+    // carries a check constraint over ('coach', 'receptionist',
+    // 'worker', 'accountant') (db/schema/staff.ts), and adding a
+    // 'manager' value is a schema change this rollout does not make.
+    // The manager is appointed with a membership and a person row, and
+    // its facilities come from membership_locations — not from a staff
+    // row. Consequence, recorded as a follow-on: a manager cannot be
+    // rostered on the staff roster or assigned to a batch.
     const STAFF_TYPE_FOR_ROLE: Partial<Record<StaffInvitableRoleKey, StaffType>> = {
       coach: "coach",
       receptionist: "receptionist",
@@ -297,8 +399,8 @@ export async function inviteStaff(
       // record (the access decision is still the membership's
       // location list; this is the staff↔location linkage the staff
       // record and per-location pay will read).
-      if (invited.staffId && input.locationIds.length > 0) {
-        for (const locationId of input.locationIds) {
+      if (invited.staffId && locationIds.length > 0) {
+        for (const locationId of locationIds) {
           await tx
             .insert(staffLocations)
             .values({
@@ -313,11 +415,8 @@ export async function inviteStaff(
         }
       }
     } catch {
-      return {
-        kind: "error",
-        code: "invalid",
-        message: "Could not create the person record for this invite.",
-      };
+      // A failure after membership insertion must abort the transaction.
+      throw new Error("Invitation setup failed");
     }
 
     await enqueueInvitationNotification(tx, ctx.tenantId, inserted[0].id);
@@ -335,7 +434,8 @@ export async function inviteStaff(
       after: {
         userId: user.id,
         roleKey: input.roleKey,
-        locationIds: input.locationIds,
+        locationIds,
+        allLocations: input.roleKey === MANAGER_ROLE_KEY ? input.managerAllLocations : locationIds.length === 0,
         status: "invited",
         staffId: invitedStaffId,
       },
@@ -349,6 +449,9 @@ export async function inviteStaff(
       wasNewUser: user.wasNew,
     };
   });
+  } catch {
+    return { kind: "error", code: "uncertain", message: "Could not confirm the invitation. Refresh and check the invitations list before trying again." };
+  }
 }
 
 export type ListInvitationsRow = {
@@ -391,6 +494,32 @@ export async function listInvitations(
       findPhonesByUserIds(userIds),
     );
 
+    // Names belong to the tenant's person records, not the global user.
+    // A user may have a different name at another club or multiple staff roles.
+    const namesByUserAndRole = new Map<string, string>();
+    if (userIds.length > 0) {
+      const staffNames = await tx
+        .select({ userId: staff.userId, roleKey: staff.staffType, fullName: persons.fullName })
+        .from(staff)
+        .innerJoin(persons, and(
+          eq(persons.id, staff.personId),
+          eq(persons.tenantId, staff.tenantId),
+          isNull(persons.deletedAt),
+        ))
+        .where(and(
+          eq(staff.tenantId, ctx.tenantId),
+          inArray(staff.userId, userIds),
+          isNull(staff.deletedAt),
+        ))
+        .orderBy(staff.id);
+      for (const row of staffNames) {
+        if (row.userId) {
+          const key = `${row.userId}:${row.roleKey}`;
+          if (!namesByUserAndRole.has(key)) namesByUserAndRole.set(key, row.fullName);
+        }
+      }
+    }
+
     const memberIds = memberships.map((m) => m.membershipId);
     const locsByMember = new Map<string, string[]>();
     if (memberIds.length > 0) {
@@ -417,7 +546,7 @@ export async function listInvitations(
     return memberships.map((m) => ({
       membershipId: m.membershipId,
       phone: phoneByUser.get(m.userId) ?? "(unknown)",
-      fullName: "",
+      fullName: namesByUserAndRole.get(`${m.userId}:${m.roleKey}`) ?? "",
       roleKey: m.roleKey,
       status: m.status as "invited" | "active" | "revoked",
       locationNames: locsByMember.get(m.membershipId) ?? [],
@@ -437,6 +566,16 @@ export async function listInvitations(
 // only owner of a tenant leaves nobody able to administer it.
 //
 // layer.
+// Only a PostgreSQL deadlock abort is safe to retry after transaction rollback.
+function isOwnerDelegationDeadlock(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    if ("code" in current && current.code === "40P01") return true;
+    current = "cause" in current ? current.cause : undefined;
+  }
+  return false;
+}
+
 export type RevokeStaffResult =
   | { kind: "ok"; revokedAt: Date }
   | {
@@ -445,7 +584,9 @@ export type RevokeStaffResult =
         | "membership_not_found"
         | "already_revoked"
         | "would_leave_zero_owners"
-        | "not_invited_or_active";
+        | "not_invited_or_active"
+        | "owner_required"
+        | "uncertain";
       message: string;
     };
 
@@ -463,7 +604,10 @@ export async function revokeInvitation(
   }
   const { membershipId } = parsed.data;
 
-  return withTenant(ctx.tenantId, async (tx) => {
+  const execute = (): Promise<RevokeStaffResult> => withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "owner_required", message: "Only the academy owner can manage invitations." };
+    }
     const [m] = await tx
       .select({
         id: tenantMemberships.id,
@@ -551,6 +695,19 @@ export async function revokeInvitation(
 
     return { kind: "ok", revokedAt };
   });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await execute();
+    } catch (error) {
+      // PostgreSQL has aborted a deadlock victim; withTenant returns only
+      // after its rollback. Retry the entire authority and sole-owner checks.
+      if (isOwnerDelegationDeadlock(error) && attempt < 2) continue;
+      // Commit/connection errors may have an uncertain outcome. Do not leak
+      // Drizzle SQL parameters or imply that a blind retry is always safe.
+      return { kind: "error", code: "uncertain", message: "Could not confirm the outcome. Refresh before trying again." };
+    }
+  }
+  return { kind: "error", code: "uncertain", message: "Could not confirm the outcome. Refresh before trying again." };
 }
 
 // A06 sibling (resend): the resend path signs no token directly, but
@@ -615,7 +772,7 @@ async function resendTrustGateDenies(
 // Resend — the messaging layer (WhatsApp, email) that would
 // "send the link again" is not in this codebase (the work
 // guide's "Reserve" lists R.21 / messaging for that, and 3.6's
-// Done When mentions "resend" knowing it's a no-op until the
+// Done When mentions "resend" knowing it is a no-op until the
 // messaging chain ships). The service returns ok with a flag,
 // and the UI shows "Pending — no live delivery yet" until the
 // messaging chain lands.
@@ -626,7 +783,11 @@ export async function resendInvitation(
   | { kind: "ok"; delivered: false }
   | {
       kind: "error";
-      code: "membership_not_found" | "not_invited" | "forbidden_target";
+      code:
+        | "membership_not_found"
+        | "not_invited"
+        | "forbidden_target"
+        | "uncertain";
       message: string;
     }
 > {
@@ -635,7 +796,11 @@ export async function resendInvitation(
     return { kind: "error", code: "membership_not_found", message: "Invalid membership id." };
   }
   const { membershipId } = parsed.data;
-  return withTenant(ctx.tenantId, async (tx) => {
+  try {
+  return await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "forbidden_target", message: "Only the academy owner can manage invitations." };
+    }
     const [m] = await tx
       .select({
         id: tenantMemberships.id,
@@ -688,6 +853,9 @@ export async function resendInvitation(
     });
     return { kind: "ok", delivered: false };
   });
+  } catch {
+    return { kind: "error", code: "uncertain", message: "Could not confirm the invitation reminder. Refresh and check before trying again." };
+  }
 }
 
 // R09 (2026-10-13 role-workflow audit) — deliberate reactivation of a
@@ -721,7 +889,9 @@ export type ReactivateStaffResult =
         | "membership_not_found"
         | "not_revoked"
         | "forbidden_target"
-        | "issue_failed";
+        | "issue_failed"
+        | "identity_unlinked"
+        | "uncertain";
       message: string;
     };
 
@@ -736,6 +906,9 @@ export async function reactivateInvitation(
   const { membershipId } = parsed.data;
 
   const prepared = await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error" as const, code: "forbidden_target" as const, message: "Only the academy owner can manage invitations." };
+    }
     const [m] = await tx
       .select({
         id: tenantMemberships.id,
@@ -744,6 +917,7 @@ export async function reactivateInvitation(
         homeOrdinal: roles.homeOrdinal,
         userId: tenantMemberships.userId,
         phone: users.phone,
+        betterAuthId: users.betterAuthId,
       })
       .from(tenantMemberships)
       .innerJoin(
@@ -761,7 +935,7 @@ export async function reactivateInvitation(
           isNull(tenantMemberships.deletedAt),
         ),
       )
-      .limit(1);
+      .limit(1).for("update", { of: [tenantMemberships, users] });
     if (!m) {
       return { kind: "error" as const, code: "membership_not_found" as const, message: "Membership not found." };
     }
@@ -789,7 +963,26 @@ export async function reactivateInvitation(
         )
     ).map((l) => l.name);
 
-    await tx
+    // Revoke the actual linked global Better Auth principal in this same
+    // transaction; only fall back to phone when the user is unlinked.
+    const baUserId = m.betterAuthId;
+    if (baUserId !== null) {
+      if (!baUserId) throw new Error("Invalid linked identity");
+      const [linked] = await tx.select({ id: baUser.id }).from(baUser)
+        .where(eq(baUser.id, baUserId)).limit(1);
+      if (!linked) throw new Error("Invalid linked identity");
+    } else {
+      const [byPhone] = await tx.select({ id: baUser.id }).from(baUser)
+        .where(eq(baUser.phoneNumber, m.phone)).limit(1);
+      if (byPhone) {
+        // A phone match alone cannot prove this is the target's identity.
+        return { kind: "error" as const, code: "identity_unlinked" as const,
+          message: "This account's sign-in identity needs review before access can be restored." };
+      }
+    }
+    if (baUserId !== null) await tx.delete(baSession).where(eq(baSession.userId, baUserId));
+
+    const changed = await tx
       .update(tenantMemberships)
       .set({
         status: "invited",
@@ -802,7 +995,8 @@ export async function reactivateInvitation(
           eq(tenantMemberships.id, membershipId),
           eq(tenantMemberships.status, "revoked"),
         ),
-      );
+      ).returning({ id: tenantMemberships.id });
+    if (changed.length !== 1) throw new Error("Reactivation state changed");
 
     await writeAudit(tx, {
       tenantId: asTenantId(ctx.tenantId),
@@ -823,30 +1017,20 @@ export async function reactivateInvitation(
       phone: m.phone,
       locationNames,
     };
-  });
+  }).catch(() => ({ kind: "error" as const, code: "uncertain" as const,
+    message: "Could not confirm reactivation. Refresh and check the invitation status before trying again." }));
   if (prepared.kind === "error") return prepared;
 
-  // Old sessions must not resume: revocation already blocked them, but
-  // the identity is live again now, so delete them outright. Failure to
-  // reach better-auth must not silently leave stale sessions usable —
-  // surface it and stop before issuing the fresh link.
+  // Reactivation and session deletion committed together. A later link
+  // issuance failure leaves a pending invitation that an owner can revisit.
+  let link: Awaited<ReturnType<typeof issueLoginLink>>;
   try {
-    const baUserId = await findBaUserIdByPhone(prepared.phone);
-    if (baUserId) {
-      const baCtx = await auth.$context;
-      await baCtx.internalAdapter.deleteUserSessions(baUserId);
-    }
+    link = await issueLoginLink(ctx.tenantId, membershipId, ctx);
   } catch {
-    return {
-      kind: "error",
-      code: "issue_failed",
-      message: "Could not invalidate the old sessions. Try again.",
-    };
+    return { kind: "error", code: "issue_failed", message: "Access is pending. Refresh, then ask an owner to generate and share a sign-in link." };
   }
-
-  const link = await issueLoginLink(ctx.tenantId, membershipId, ctx);
   if (link.kind === "error") {
-    return { kind: "error", code: "issue_failed", message: link.message };
+    return { kind: "error", code: "issue_failed", message: "Access is pending. Refresh, then ask an owner to generate and share a sign-in link." };
   }
   return {
     kind: "ok",

@@ -4,7 +4,8 @@ import { Skeleton } from "@/components/skeleton";
 
 export default function PlatformHomeLoading() {
   return (
-    <div className="max-w-2xl">
+    <div role="status" aria-live="polite" className="max-w-2xl">
+      <span className="sr-only">Loading the operator console…</span>
       <Skeleton w={16} h={3} className="mb-2" />
       <Skeleton w={56} h={8} className="mb-2" />
       <Skeleton w={40} h={4} />

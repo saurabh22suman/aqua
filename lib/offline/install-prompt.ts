@@ -90,6 +90,7 @@ export function isInstallableSurface(pathname: string): boolean {
  */
 export function isInstallInvitationSurface(pathname: string): boolean {
   if (!isInstallableSurface(pathname)) return false;
+  if (/^\/clubs\/[^/]+\/install\/?$/i.test(pathname)) return false;
   if (pathname === "/login" || pathname.startsWith("/login/")) return false;
   if (pathname === "/set-pin" || pathname.startsWith("/set-pin/")) return false;
   if (pathname === "/parent" || pathname.startsWith("/parent/")) return false;

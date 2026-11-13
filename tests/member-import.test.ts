@@ -52,6 +52,12 @@ beforeAll(async () => {
        ($3, $4, 'Worli', true)`,
     [locationId, tenantId, locationBId, tenantBId],
   );
+  for (const tenant of [tenantId, tenantBId]) {
+    const roleId = uuidv7();
+    await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenant]);
+    await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'members.write')", [tenant, roleId]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenant, actorId, roleId]);
+  }
 });
 
 afterAll(async () => {
@@ -62,6 +68,8 @@ afterAll(async () => {
     await admin.query("delete from member_status_transitions where tenant_id = $1", [tenant]);
     await admin.query("delete from members where tenant_id = $1", [tenant]);
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenant]);
+    await admin.query("delete from roles where tenant_id = $1", [tenant]);
     await admin.query("delete from locations where tenant_id = $1", [tenant]);
     await admin.query("delete from tenants where id = $1", [tenant]);
   }
@@ -201,7 +209,7 @@ describe("previewMemberImport (dry run)", () => {
       "Cara Missing,2015-04-12,Bandra,,",
     ].join("\n");
 
-    const preview = await previewMemberImport({ tenantId }, csv);
+    const preview = await previewMemberImport({ tenantId, userId: actorId }, csv);
     expect(preview.rows).toHaveLength(2);
     expect(preview.rows[0]!.locationId).toBe(locationId);
     expect(preview.errors).toEqual([
@@ -226,7 +234,7 @@ describe("previewMemberImport (dry run)", () => {
       "full_name,date_of_birth,location,guardian_name,guardian_phone",
       "Bela Child,2015-04-12,Worli,,",
     ].join("\n");
-    const preview = await previewMemberImport({ tenantId }, csv);
+    const preview = await previewMemberImport({ tenantId, userId: actorId }, csv);
     expect(preview.rows).toHaveLength(0);
     expect(preview.errors[0]).toMatchObject({
       rowNumber: 2,

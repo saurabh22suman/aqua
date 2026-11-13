@@ -7,12 +7,24 @@ import {
   listAnnouncements,
   listMyNotifications,
   markNotificationRead,
+  previewAnnouncementAudience,
   sendAnnouncement,
   sendAnnouncementInput,
   type AnnouncementRow,
   type NotificationRow,
   type SendAnnouncementResult,
 } from "@/lib/services/announcements";
+
+export async function previewAnnouncementAudienceAction(raw: unknown) {
+  const parsed = sendAnnouncementInput.safeParse({ ...(typeof raw === "object" && raw !== null ? raw : {}), title: "Preview", body: "Preview" });
+  if (!parsed.success) return { ok: false as const, error: "Invalid audience." };
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "messaging.send");
+  const { audience, batchId } = parsed.data;
+  return audience === "batch"
+    ? previewAnnouncementAudience(ctx, { audience, batchId: batchId! })
+    : previewAnnouncementAudience(ctx, { audience });
+}
 
 // U-06 — announcement actions. Standing preamble: (1) Zod parse,
 // (2) permission check, then the service. Composing needs
@@ -41,7 +53,8 @@ export async function listAnnouncementsAction(): Promise<AnnouncementRow[]> {
 
 export async function listMyNotificationsAction(): Promise<NotificationRow[]> {
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "members.read");
+  // Reading addressed notifications is not directory access; the service
+  // independently rechecks the live membership and recipient scope.
   return listMyNotifications(ctx);
 }
 
@@ -51,6 +64,5 @@ export async function markNotificationReadAction(
   const parsed = notificationInput.safeParse({ notificationId });
   if (!parsed.success) return { ok: false, error: "Notification not found." };
   const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "members.read");
   return markNotificationRead(ctx, parsed.data.notificationId);
 }

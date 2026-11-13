@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
-import { asTenantId, type TenantId } from "@/lib/ids";
+import { asTenantId, asUserId, type TenantId } from "@/lib/ids";
 import { listTenants } from "@/db/platform-tenants";
 import { withTenant } from "@/db/tenant";
 import { locations } from "@/db/schema";
@@ -28,6 +28,7 @@ const TENANT_IDS = {
 
 let defaultPlanId: string;
 let aliceLocationId = "";
+const actor=asUserId(uuidv7()), roleId=uuidv7(), membershipId=uuidv7();
 
 beforeAll(async () => {
   const plan = await admin.query<{ id: string }>(
@@ -54,6 +55,10 @@ beforeAll(async () => {
     ],
   );
 
+  await admin.query("insert into users(id,phone) values($1,$2)",[actor, `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'receptionist','Reception','/reception',3)",[roleId,TENANT_IDS.alice]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'members.read'),($1,$2,'members.write')",[TENANT_IDS.alice,roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,TENANT_IDS.alice,actor,roleId]);
   await withTenant(TENANT_IDS.alice, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -80,8 +85,8 @@ beforeAll(async () => {
   // createMember opens its own withTenant() internally; nesting would
   // throw, so we call it from a plain async loop.
   for (let i = 0; i < 3; i++) {
-    await createMember(
-      { tenantId: TENANT_IDS.alice, userId: undefined },
+    const created = await createMember(
+      { tenantId: TENANT_IDS.alice, userId: actor },
       {
         fullName: `List Test Alice ${RUN} ${i}`,
         dateOfBirth: "1990-01-01",
@@ -96,6 +101,7 @@ beforeAll(async () => {
         ],
       },
     );
+    if (!created.ok) throw new Error(`Member fixture failed: ${created.error}`);
   }
 });
 
@@ -108,9 +114,13 @@ afterAll(async () => {
     await admin.query("delete from guardianships where tenant_id = $1", [tid]);
     await admin.query("delete from members where tenant_id = $1", [tid]);
     await admin.query("delete from persons where tenant_id = $1", [tid]);
+    await admin.query("delete from tenant_memberships where tenant_id=$1",[tid]);
+    await admin.query("delete from role_permissions where tenant_id=$1",[tid]);
+    await admin.query("delete from roles where tenant_id=$1",[tid]);
     await admin.query("delete from locations where tenant_id = $1", [tid]);
     await admin.query("delete from tenants where id = $1", [tid]);
   }
+  await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[actor]);
   await admin.end();
 });
 

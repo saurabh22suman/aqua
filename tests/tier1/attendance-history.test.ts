@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { locations, programs } from "@/db/schema";
 import { batches } from "@/db/schema/programs";
@@ -25,6 +27,8 @@ const TZ = "Asia/Kolkata";
 const TODAY = "2026-06-15"; // fixed, so period math is deterministic regardless of when this runs
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "receptionist", allLocations: true, locationIds: [] as string[] });
 let locationId = "";
 let batchId = "";
 let memberId = "";
@@ -40,6 +44,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Attendance History', $3, $4)",
     [tenantId, `attendance-history-${RUN}`, plan.rows[0]?.id ?? null, TZ],
   );
+
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'", [uuidv7(), tenantId, actorId]);
 
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
@@ -93,7 +102,7 @@ beforeAll(async () => {
   });
 
   const created = await createMember(
-    { tenantId, userId: undefined },
+    actor(),
     {
       fullName: "History Subject",
       dateOfBirth: "1990-01-01",
@@ -113,11 +122,11 @@ beforeAll(async () => {
     memberId, batchId, enrolledOn: "2026-05-01",
   })).toEqual({ ok: true });
   await markAttendance(
-    { tenantId },
+    actor(),
     { sessionId: sessionInMonthId, memberId, status: "present", clientId: `ath-${RUN}-in` },
   );
   await markAttendance(
-    { tenantId },
+    actor(),
     { sessionId: sessionOutOfMonthId, memberId, status: "absent", clientId: `ath-${RUN}-out` },
   );
 });
@@ -133,7 +142,11 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -151,7 +164,7 @@ describe("currentMonthPeriod", () => {
 describe("getMemberAttendanceHistory", () => {
   it("includes only sessions within the period, and reports an accurate percentage", async () => {
     const history = await getMemberAttendanceHistory(
-      { tenantId },
+      actor(),
       memberId,
       currentMonthPeriod(TODAY),
     );
@@ -163,7 +176,7 @@ describe("getMemberAttendanceHistory", () => {
 
   it("reports pct null, not zero, when nothing was marked in the period", async () => {
     const history = await getMemberAttendanceHistory(
-      { tenantId },
+      actor(),
       memberId,
       { from: "2020-01-01", to: "2020-02-01" },
     );
@@ -174,7 +187,7 @@ describe("getMemberAttendanceHistory", () => {
 
 describe("getBatchAttendanceSummary", () => {
   it("aggregates across all members' marks within the period", async () => {
-    const summary = await getBatchAttendanceSummary({ tenantId }, batchId, currentMonthPeriod(TODAY));
+    const summary = await getBatchAttendanceSummary(actor(), batchId, currentMonthPeriod(TODAY));
     expect(summary).not.toBeNull();
     expect(summary!.totalMarks).toBe(1);
     expect(summary!.presentMarks).toBe(1);
@@ -182,7 +195,7 @@ describe("getBatchAttendanceSummary", () => {
   });
 
   it("returns null for a batch outside the tenant", async () => {
-    const summary = await getBatchAttendanceSummary({ tenantId }, uuidv7(), currentMonthPeriod(TODAY));
+    const summary = await getBatchAttendanceSummary(actor(), uuidv7(), currentMonthPeriod(TODAY));
     expect(summary).toBeNull();
   });
 });

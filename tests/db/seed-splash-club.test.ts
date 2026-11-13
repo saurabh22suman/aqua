@@ -220,6 +220,19 @@ describe("Splash Sports Club seeder", () => {
     expect(credentials).toHaveLength(3);
   });
 
+  it("attributes seeded registrations to the live owner membership", async () => {
+    const { rows } = await client.query<{ role_key: string; n: number }>(
+      `select r.key as role_key, count(*)::int as n from audit_log a
+       join tenants t on t.id = a.tenant_id
+       join tenant_memberships tm on tm.tenant_id = a.tenant_id and tm.user_id = a.actor_id
+       join roles r on r.id = tm.role_id and r.tenant_id = tm.tenant_id
+       where t.slug = 'splash-sports-club' and a.action = 'member.create'
+         and tm.status = 'active' and tm.deleted_at is null
+       group by r.key`,
+    );
+    expect(rows).toEqual([{ role_key: "owner", n: 8 }]);
+  });
+
   it("is idempotent — a redeploy duplicates nothing", async () => {
     const seedSplashSportsClub = await loadSeeder();
     await seedSplashSportsClub({

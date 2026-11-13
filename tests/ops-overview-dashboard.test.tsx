@@ -30,6 +30,10 @@ vi.mock("@/db/platform-overview", () => ({
 vi.mock("@/db/platform-activity", () => ({
   listPlatformActivity: () => activityMock(),
 }));
+const auditedReadMock = vi.fn(async (_operation: string, read: () => Promise<unknown>) => read());
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsGlobalRead: (...args: [string, () => Promise<unknown>]) => auditedReadMock(...args),
+}));
 
 import PlatformHome from "@/app/(platform)/ops/page";
 
@@ -88,6 +92,10 @@ describe("Overview dashboard (PR3)", () => {
     activityMock.mockResolvedValue({ rows: [], total: 0 });
 
     render(await PlatformHome());
+
+    expect(auditedReadMock.mock.calls.map(([operation]) => operation).sort()).toEqual([
+      "activity.list", "platform.metrics.summary", "tenant.health.queue",
+    ]);
 
     expect(screen.getByText("128")).toBeDefined();
     expect(screen.getByText("17")).toBeDefined();

@@ -48,17 +48,16 @@ function read(rel: string): string {
 }
 
 describe("ops form controls have a visible keyboard focus style", () => {
-  it("every audited file pairs outline-none with a focus-visible accent outline", () => {
-    // The source-grep test cannot catch the Tailwind v4 outline-none
-    // bug (outline-style: var(--tw-outline-style) → none). It
-    // remains as a lint-style guard for source-class presence,
-    // alongside tests/a11y/ops-focus-rendered.test.ts which boots a
-    // real Chromium and asserts computed style.
-    const missing = MUST_HAVE_FOCUS_VISIBLE_OUTLINE.filter(
-      (rel) =>
-        !read(rel).includes("focus-visible:outline-[var(--focus-ring)]"),
+  it("provides the shared visible focus fallback without audited source overrides", () => {
+    // Shared base styling replaces the old duplicated per-file classes.
+    // The real browser companion still verifies the actual computed ring.
+    const css = read("app/globals.css");
+    expect(css).toMatch(/:where\(a, button, input, select, textarea, \[role="button"\], \[tabindex\]\):focus-visible\s*\{\s*outline:\s*2px solid var\(--focus-ring\)/);
+    expect(css).toMatch(/outline-offset:\s*2px/);
+    const overrides = MUST_HAVE_FOCUS_VISIBLE_OUTLINE.filter((rel) =>
+      /(?:outline-none|outline-hidden|outline\s*:\s*(?:none|0)\b)/.test(read(rel)),
     );
-    expect(missing, `no focus-visible outline:\n${missing.join("\n")}`).toEqual([]);
+    expect(overrides, `audited source removes the focus outline:\n${overrides.join("\n")}`).toEqual([]);
   });
 
   it("no bare focus:outline-none remains under app/(platform)/ops", () => {

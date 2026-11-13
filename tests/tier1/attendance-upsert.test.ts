@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { batches, locations, programs } from "@/db/schema";
 import { generateSessions } from "@/lib/jobs/session-generator";
@@ -10,7 +12,7 @@ import {
   enrolMember,
   markAttendance,
 } from "@/lib/services/register";
-import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -20,6 +22,8 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "receptionist", allLocations: true, locationIds: [] as string[] });
 let sessionId = "";
 let memberA = "";
 let memberB = "";
@@ -35,6 +39,11 @@ beforeAll(async () => {
   );
 
   let mainLocationId = "";
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'", [uuidv7(), tenantId, actorId]);
+
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -73,7 +82,7 @@ beforeAll(async () => {
     { purpose: "processing" as const, policyVersion: "2026.1", evidence: { channel: "test-fixture" } },
   ];
   const a = await createMember(
-    { tenantId, userId: undefined as unknown as UserId },
+    actor(),
     {
       fullName: "Upsert Member A",
       dateOfBirth: "1990-01-01",
@@ -83,7 +92,7 @@ beforeAll(async () => {
     },
   );
   const b = await createMember(
-    { tenantId, userId: undefined as unknown as UserId },
+    actor(),
     {
       fullName: "Upsert Member B",
       dateOfBirth: "1990-01-01",
@@ -96,8 +105,8 @@ beforeAll(async () => {
   memberA = a.memberId;
   memberB = b.memberId;
 
-  await enrolMember({ tenantId }, { memberId: memberA, batchId });
-  await enrolMember({ tenantId }, { memberId: memberB, batchId });
+  await enrolMember(actor(), { memberId: memberA, batchId });
+  await enrolMember(actor(), { memberId: memberB, batchId });
 
   await withTenant(tenantId, (tx) => generateSessions(tx, tenantId, TZ));
 
@@ -121,7 +130,11 @@ afterAll(async () => {
     await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -129,7 +142,7 @@ afterAll(async () => {
 describe("attendance upsert", () => {
   it("correcting a mark with a new clientId updates the one row instead of throwing", async () => {
     await markAttendance(
-      { tenantId },
+      actor(),
       {
         sessionId,
         memberId: memberA,
@@ -140,7 +153,7 @@ describe("attendance upsert", () => {
     // a correction is a NEW user action with a NEW clientId; it must hit
     // the business key (tenant, session, member), not the clientId key
     await markAttendance(
-      { tenantId },
+      actor(),
       {
         sessionId,
         memberId: memberA,
@@ -161,7 +174,7 @@ describe("attendance upsert", () => {
     const clientId = `replay-${RUN}`;
     const mark = () =>
       markAttendance(
-        { tenantId },
+        actor(),
         { sessionId, memberId: memberB, status: "present", clientId },
       );
     await mark();

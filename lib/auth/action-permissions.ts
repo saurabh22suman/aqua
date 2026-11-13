@@ -47,6 +47,12 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   listOptedFacilitiesAction: "members.read",
   addMemberFacilityAction: "members.write",
   endMemberFacilityAction: "members.write",
+  confirmLinkBindingAction: "members.link.confirm",
+  withdrawLinkBindingAction: "members.link.confirm",
+  issueMemberActivationTokenAction: "members.link.confirm",
+  provisionMemberAccountLinkAction: "members.write",
+  enrollMemberSignInAction: "members.write",
+  withdrawGuardianAuthorizationAction: "members.link.confirm",
 
   // Attendance
   getMemberAttendanceHistoryAction: "attendance.read",
@@ -100,6 +106,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   listHolidaysAction: "settings.manage",
   addHolidayAction: "settings.manage",
   removeHolidayAction: "settings.manage",
+  reviewClosureAction: "settings.manage",
 
   // Waitlists
   addToWaitlistAction: "enquiries.write",
@@ -155,6 +162,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // Staff
   listStaffAction: "staff.read",
   createStaffAction: "staff.write",
+  searchStaffCandidatesAction: "staff.write",
   listInvitationsAction: "staff.invite",
   inviteStaffAction: "staff.invite",
   revokeInvitationAction: "staff.invite",
@@ -198,6 +206,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
 
   // Tenant settings / config
   updateBrandingAction: "settings.manage",
+  uploadBrandingAssetAction: "settings.manage",
   updateTermOverrideAction: "settings.manage",
   clearTermOverrideAction: "settings.manage",
   getTenantTimezoneAction: "members.read",
@@ -246,6 +255,7 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // C-30 — subscriptions. Owner/admin/receptionist start and manage
   // them at the desk.
   listMemberSubscriptionsAction: "members.read",
+  listMemberSubscriptionPlansAction: "members.read",
   createSubscriptionAction: "members.write",
   pauseSubscriptionAction: "members.write",
   resumeSubscriptionAction: "members.write",
@@ -274,6 +284,15 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // (payments.record), reversing is management (payments.refund).
   reversePaymentAction: "payments.refund",
   listPaymentReversalsAction: "payments.read",
+  // F01 — durable recovery. The read rides the document's read
+  // permission; discarding a prepared attempt rides the write permission
+  // the operation itself needs. A prepared attempt has no financial
+  // effect, so the discard is not a money mutation — but it is still
+  // audited and actor-scoped.
+  listPaymentRecoveryAction: "invoices.read",
+  listReversalRecoveryAction: "payments.read",
+  cancelPaymentRecoveryAction: "payments.record",
+  cancelReversalRecoveryAction: "payments.refund",
   getDailyCollectionAction: "reports.financial",
   confirmCashCountAction: "payments.record",
   getReceptionCloseSummaryAction: "payments.record",
@@ -323,11 +342,12 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   getScheduleGridAction: "attendance.read",
 
   // U-06 — announcements and in-app notifications. Composing needs
-  // messaging.send; reading one's own inbox is a member-level read.
+  // messaging.send; own-inbox actions use recipient authorization, not a directory grant.
   sendAnnouncementAction: "messaging.send",
+  previewAnnouncementAudienceAction: "messaging.send",
   listAnnouncementsAction: "members.read",
-  listMyNotificationsAction: "members.read",
-  markNotificationReadAction: "members.read",
+  // listMyNotificationsAction and markNotificationReadAction intentionally
+  // have no catalogue mapping; they recheck the addressed recipient.
 
   // U-07 — locations and business hours.
   listAdminLocationsAction: "settings.read",
@@ -353,6 +373,11 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   cancelBookingAction: "bookings.write",
   requestBookingBillAction: "payments.record",
   readBookingBillAction: "payments.record",
+
+  // Paid booking QR entry and its server-authoritative read.
+  checkInBookingAction: "bookings.write",
+  mintBookingEntryTokenAction: "bookings.read",
+  readBookingEntryPassViewAction: "bookings.read",
 
   // Batch 6 — booking price administration. Pricing is management
   // authority: `settings.manage` is owner/admin only, so the
@@ -391,5 +416,6 @@ export const PRE_AUTH_ACTIONS = new Set([
   "verifyPlatformTotpAction", // second-factor verify; first half-auth only
   "devCodeAction", // dev-only OTP peek, fails closed in production
   "issueParentLinkAction", // signed token IS the credential
+  "selectClubAction", // authenticated session + own live membership; builds tenant context only after selection
   "homeForSessionAction", // resolves which surface this session belongs to
 ]);

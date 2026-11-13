@@ -1,13 +1,16 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { shifts } from "@/db/schema/shifts";
+import { leaveRequests } from "@/db/schema/leave";
 import { staff } from "@/db/schema/staff";
+import { staffScopePredicate } from "@/lib/services/staff-scope";
 import { writeAudit } from "@/lib/audit/write";
 import {
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import { lockStaffForRoster } from "@/lib/services/staff-roster-lock";
 import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
 import { zonedWallTimeToInstant } from "@/lib/time/tz";
 import { asStaffId } from "@/lib/ids";
@@ -61,18 +64,38 @@ export async function createShift(ctx: ActionCtx, raw: unknown): Promise<ShiftRe
       return { ok: false, error: "Location not found." };
     }
 
-    const [member] = await tx
-      .select({ id: staff.id })
-      .from(staff)
-      .where(
-        and(
-          eq(staff.id, asStaffId(input.staffId)),
-          eq(staff.tenantId, ctx.tenantId),
-          isNull(staff.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (!member) return { ok: false, error: "Staff member not found." };
+    // THE PER-STAFF ROSTER MUTEX.
+    //
+    // The staff row is locked BEFORE the insert, so a leave decision
+    // for this person and this insert are totally ordered: either the
+    // insert commits first and the decision's affected-set read sees
+    // it, or the insert waits and checks the committed decision below.
+    // See lib/services/staff-roster-lock.ts.
+    //
+    // The lock helper does not filter `deleted_at` — a soft-deleted
+    // staff member may still have to be serialised against — so the
+    // "Staff member not found." answer is checked here, exactly as the
+    // old query's `isNull(staff.deletedAt)` filter checked it.
+    const member = await lockStaffForRoster(
+      tx,
+      ctx.tenantId,
+      asStaffId(input.staffId),
+    );
+    if (!member || member.deletedAt !== null) {
+      return { ok: false, error: "Staff member not found." };
+    }
+
+    const [visibleStaff] = await tx.select({ id: staff.id }).from(staff)
+      .where(and(eq(staff.tenantId, ctx.tenantId), eq(staff.id, asStaffId(input.staffId)), staffScopePredicate(tx, staff.id, access, ctx.tenantId))).limit(1);
+    if (!visibleStaff) return { ok: false, error: "Staff member not found." };
+
+    // Only the existence of overlapping approved leave matters here; do not
+    // disclose its reason, dates or other details through this response.
+    const [unavailable] = await tx.select({ id: leaveRequests.id }).from(leaveRequests)
+      .where(and(eq(leaveRequests.tenantId, ctx.tenantId), eq(leaveRequests.staffId, asStaffId(input.staffId)),
+        eq(leaveRequests.status, "approved"), lte(leaveRequests.fromDate, input.shiftDate),
+        gte(leaveRequests.toDate, input.shiftDate))).limit(1);
+    if (unavailable) return { ok: false, error: "Staff member unavailable for this date." };
 
     const timezone = await tenantTimezoneInTx(tx, ctx.tenantId);
     const startAt = zonedWallTimeToInstant(
@@ -143,6 +166,22 @@ export async function deleteShift(ctx: ActionCtx, shiftId: string): Promise<Ok |
 
   return withTenant(ctx.tenantId, async (tx) => {
     const access = await resolveLocationAccess(tx, ctx);
+    // THE PER-STAFF ROSTER MUTEX, TAKEN BEFORE THE SHIFT ROW.
+    //
+    // The lock order is staff → shift everywhere, so the staff row
+    // must be locked first — and the shift's staff id is needed to
+    // find it. It is read with a PLAIN probe (no lock): a shift's
+    // staff_id is immutable — no writer in the repository updates it
+    // — and the shift row itself is locked immediately below.
+    const [probe] = await tx
+      .select({ staffId: shifts.staffId })
+      .from(shifts)
+      .where(and(eq(shifts.id, parsed.data), eq(shifts.tenantId, ctx.tenantId)))
+      .limit(1);
+    if (!probe) return { ok: false, error: "Shift not found." };
+
+    await lockStaffForRoster(tx, ctx.tenantId, probe.staffId);
+
     const [row] = await tx
       .select()
       .from(shifts)

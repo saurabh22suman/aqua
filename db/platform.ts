@@ -54,7 +54,7 @@ function operationalTenantFilter() {
 // Identity is global and RLS-exempt by design (db/CLAUDE.md) — no scope
 // needed beyond withPlatform to map better-auth's id to the internal
 // platform user id.
-async function platformUserId(betterAuthUserId: string): Promise<UserId | null> {
+export async function platformUserId(betterAuthUserId: string): Promise<UserId | null> {
   return withPlatform(async () => {
     const rows = await db
       .select({ id: users.id })
@@ -85,7 +85,7 @@ export async function resolveTenantAccessBySlug(
       .innerJoin(tenants, eq(tenants.id, tenantMemberships.tenantId))
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(
@@ -189,40 +189,15 @@ export async function resolveLocationIds(
 // either) must not silently change or break routing.
 export async function resolveHomePath(
   betterAuthUserId: string,
+  selectedTenantId?: string,
 ): Promise<string | null> {
-  const userId = await platformUserId(betterAuthUserId);
-  if (!userId) return null;
-
-  return withUser(userId, async (tx) => {
-    const rows = await tx
-      .select({ homePath: roles.homePath })
-      .from(tenantMemberships)
-      .innerJoin(
-        tenants,
-        and(eq(tenants.id, tenantMemberships.tenantId)),
-      )
-      .innerJoin(
-        roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
-      )
-      .where(
-        and(
-          eq(tenantMemberships.userId, userId),
-          eq(tenantMemberships.status, "active"),
-          isNull(tenantMemberships.deletedAt),
-          // Tenant availability guard — a paused club has no role home to
-          // land on.
-          operationalTenantFilter(),
-        ),
-      )
-      .orderBy(roles.homeOrdinal)
-      .limit(1);
-    return rows[0]?.homePath ?? null;
-  });
+  const result = await resolveSessionForLogin(betterAuthUserId, selectedTenantId);
+  return result.kind === "ok" ? result.path : null;
 }
 
 export async function resolveDefaultMembership(
   betterAuthUserId: string,
+  selectedTenantId?: string,
 ): Promise<{
   userId: UserId;
   tenantId: TenantId;
@@ -230,7 +205,9 @@ export async function resolveDefaultMembership(
   roleKey: string;
   roleId: string;
   allLocations: boolean;
+  requiresSelection?: boolean;
 } | null> {
+  if (selectedTenantId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(selectedTenantId)) return null;
   const userId = await platformUserId(betterAuthUserId);
   if (!userId) return null;
 
@@ -250,7 +227,7 @@ export async function resolveDefaultMembership(
       )
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(
@@ -262,14 +239,17 @@ export async function resolveDefaultMembership(
           // never becomes the caller's default tenant, and a user whose
           // only club is paused resolves nothing at all.
           operationalTenantFilter(),
+          selectedTenantId ? eq(tenantMemberships.tenantId, selectedTenantId as TenantId) : undefined,
         ),
       )
-      .orderBy(roles.homeOrdinal)
-      .limit(1);
+      // Stable ordering is useful for single-club callers. A second club
+      // requires an explicit choice; priority must never select authority.
+      .orderBy(roles.homeOrdinal, tenantMemberships.createdAt)
+      .limit(2);
 
     const row = rows[0];
     if (!row) return null;
-    return { userId, ...row };
+    return { userId, ...row, ...(rows.length > 1 ? { requiresSelection: true } : {}) };
   });
 }
 
@@ -299,6 +279,7 @@ export type SessionResolution =
 
 export async function resolveSessionForLogin(
   betterAuthUserId: string,
+  selectedTenantId?: string,
 ): Promise<SessionResolution> {
   const userId = await platformUserId(betterAuthUserId);
   if (!userId) return { kind: "none" };
@@ -319,7 +300,7 @@ export async function resolveSessionForLogin(
       )
       .innerJoin(
         roles,
-        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId)),
+        and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantMemberships.tenantId), isNull(roles.deletedAt)),
       )
       .where(
         and(
@@ -345,7 +326,9 @@ export async function resolveSessionForLogin(
       (OPERATIONAL_TENANT_STATUSES as readonly string[]).includes(r.tenantStatus),
     );
     if (operational.length > 0) {
-      return { kind: "ok", path: operational[0]!.homePath };
+      const chosen = selectedTenantId ? operational.find(row => row.tenantId === selectedTenantId) : undefined;
+      if ((selectedTenantId && !chosen) || (!selectedTenantId && operational.length > 1)) return { kind: "ok", path: "/clubs" };
+      return { kind: "ok", path: (chosen ?? operational[0])!.homePath };
     }
 
     // All of the user's tenants are non-operational. Surface the

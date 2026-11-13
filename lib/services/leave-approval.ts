@@ -2,13 +2,20 @@ import { and, asc, between, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { leaveRequests, leaveTypes } from "@/db/schema/leave";
-import { shifts } from "@/db/schema/shifts";
 import { sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
 import { staff } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
 import { writeAudit } from "@/lib/audit/write";
-import { ownStaffIdInTx } from "@/lib/services/staff-self";
+import {
+  decideLeaveRequest,
+  type LeaveDecisionResult,
+} from "@/lib/services/leave-decision";
+import {
+  leaveQueuePredicate,
+  leaveSessionPredicate,
+  resolveLeaveCaller,
+} from "@/lib/services/leave-decision-scope";
 import type { ActionCtx } from "@/lib/auth/context";
 
 // V-27 — leave approval. Approving a request does two things in one
@@ -59,9 +66,7 @@ export type UncoveredSessionRow = {
   status: string;
 };
 
-export type LeaveDecisionResult =
-  | { ok: true; shiftsMarked: number }
-  | { ok: false; error: string };
+export type { LeaveDecisionResult };
 
 function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid leave decision.";
@@ -78,6 +83,31 @@ export async function listLeaveRequests(
   return withTenant(ctx.tenantId, async (tx) => {
     const conditions = [eq(leaveRequests.tenantId, ctx.tenantId)];
     if (input.status) conditions.push(eq(leaveRequests.status, input.status));
+
+    // THE CANONICAL SCOPE.
+    //
+    // The queue's visibility comes from the ONE resolver
+    // (lib/services/location-access.ts). A facility-scoped MANAGER sees
+    // exactly the requests it may DECIDE — the request's AFFECTED SHIFT
+    // rows' facilities, all of them inside its own selection, and at
+    // least one affected shift (a request with no affected shift is
+    // owner-only); a location-scoped O-08 NON-MANAGER keeps the
+    // canonical attachment-and-unlocated half; every other role keeps
+    // the whole-tenant answer it has today; and a caller without a live
+    // membership sees NOTHING.
+    const caller = await resolveLeaveCaller(tx, ctx);
+    if (caller.kind === "refused") return [];
+    const scope = leaveQueuePredicate(
+      tx,
+      {
+        staffIdColumn: leaveRequests.staffId,
+        fromDateColumn: leaveRequests.fromDate,
+        toDateColumn: leaveRequests.toDate,
+      },
+      caller,
+      ctx.tenantId,
+    );
+    if (scope) conditions.push(scope);
 
     const rows = await tx
       .select({
@@ -122,6 +152,32 @@ export async function listUncoveredSessions(
   if (!parsed.success) return [];
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // THE CANONICAL SCOPE — THE REQUEST AND THE SESSIONS.
+    //
+    // A request the caller may not see in the queue must not become
+    // readable through this by-id read, and a refused caller sees
+    // nothing at all. The request is gated by the SAME criterion the
+    // queue uses, so the two answers can never disagree about whether
+    // the caller may see this request.
+    const caller = await resolveLeaveCaller(tx, ctx);
+    if (caller.kind === "refused") return [];
+
+    const requestConditions = [
+      eq(leaveRequests.id, parsed.data.requestId),
+      eq(leaveRequests.tenantId, ctx.tenantId),
+    ];
+    const scope = leaveQueuePredicate(
+      tx,
+      {
+        staffIdColumn: leaveRequests.staffId,
+        fromDateColumn: leaveRequests.fromDate,
+        toDateColumn: leaveRequests.toDate,
+      },
+      caller,
+      ctx.tenantId,
+    );
+    if (scope) requestConditions.push(scope);
+
     const [request] = await tx
       .select({
         staffId: leaveRequests.staffId,
@@ -129,14 +185,24 @@ export async function listUncoveredSessions(
         toDate: leaveRequests.toDate,
       })
       .from(leaveRequests)
-      .where(
-        and(
-          eq(leaveRequests.id, parsed.data.requestId),
-          eq(leaveRequests.tenantId, ctx.tenantId),
-        ),
-      )
+      .where(and(...requestConditions))
       .limit(1);
     if (!request) return [];
+
+    // THE SESSIONS ARE JUDGED BY THEIR OWN LOCATION.
+    //
+    // The session's own `location_id` decides the row, never the
+    // request's: a session at a facility outside the caller's scope is
+    // not listed, and a tenant-wide session (a NULL location) is
+    // listed only while the caller's answer says `includeUnlocated`.
+    const sessionConditions = [
+      eq(sessions.tenantId, ctx.tenantId),
+      eq(sessions.coachId, request.staffId),
+      between(sessions.sessionDate, request.fromDate, request.toDate),
+      inArray(sessions.status, ["scheduled", "held"]),
+    ];
+    const sessionScope = leaveSessionPredicate(sessions.locationId, caller);
+    if (sessionScope) sessionConditions.push(sessionScope);
 
     const rows = await tx
       .select({
@@ -150,14 +216,7 @@ export async function listUncoveredSessions(
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
-      .where(
-        and(
-          eq(sessions.tenantId, ctx.tenantId),
-          eq(sessions.coachId, request.staffId),
-          between(sessions.sessionDate, request.fromDate, request.toDate),
-          inArray(sessions.status, ["scheduled", "held"]),
-        ),
-      )
+      .where(and(...sessionConditions))
       .orderBy(asc(sessions.sessionDate), asc(sessions.startsAt));
 
     return rows.map((r) => ({
@@ -177,81 +236,25 @@ async function decide(
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const input = parsed.data;
 
-  return withTenant(ctx.tenantId, async (tx) => {
-    // An owner/admin is a user with a membership, not necessarily a
-    // staff row. When the decider has no staff record, `decided_by`
-    // stays null and the audit row's actor_id carries who decided;
-    // `decided_at` is always recorded.
-    const decider = await ownStaffIdInTx(tx, ctx);
-
-    const [request] = await tx
-      .select()
-      .from(leaveRequests)
-      .where(
-        and(
-          eq(leaveRequests.id, input.requestId),
-          eq(leaveRequests.tenantId, ctx.tenantId),
-        ),
-      )
-      .for("update");
-    if (!request) return { ok: false, error: "Leave request not found." };
-    if (request.status !== "pending") {
-      return { ok: false, error: "This request has already been decided." };
-    }
-
-    const decidedAt = new Date();
-    await tx
-      .update(leaveRequests)
-      .set({
-        status: decision,
-        decidedBy: decider,
-        decidedAt,
-        decisionNote: input.note ?? null,
-        updatedBy: ctx.userId,
-        updatedAt: decidedAt,
-      })
-      .where(
-        and(
-          eq(leaveRequests.id, request.id),
-          eq(leaveRequests.tenantId, ctx.tenantId),
-        ),
-      );
-
-    let shiftsMarked = 0;
-    if (decision === "approved") {
-      const marked = await tx
-        .update(shifts)
-        .set({ status: "leave", updatedBy: ctx.userId })
-        .where(
-          and(
-            eq(shifts.tenantId, ctx.tenantId),
-            eq(shifts.staffId, request.staffId),
-            between(shifts.shiftDate, request.fromDate, request.toDate),
-            eq(shifts.status, "rostered"),
-          ),
-        )
-        .returning({ id: shifts.id });
-      shiftsMarked = marked.length;
-    }
-
+  // THE AUDIT CALL SITE STAYS HERE.
+  //
+  // The protected tier-1 audit-coverage test pins this file as the
+  // owner of the "leave.approve" / "leave.reject" audit rows
+  // (tests/tier1/tenant-audit-coverage.test.ts), so the write and the
+  // action name both live in this file. The decision calls the writer
+  // from INSIDE its own transaction, so the audit row and the decision
+  // row are still one atomic write.
+  return decideLeaveRequest(ctx, input, decision, async (tx, audit) => {
     await writeAudit(tx, {
       tenantId: ctx.tenantId,
       actorId: ctx.userId,
       requestId: ctx.requestId ?? null,
       action: decision === "approved" ? "leave.approve" : "leave.reject",
       entityType: "leave_request",
-      entityId: request.id,
-      before: { status: request.status },
-      after: {
-        status: decision,
-        decidedBy: decider,
-        decidedAt: decidedAt.toISOString(),
-        decisionNote: input.note ?? null,
-        shiftsMarked,
-      },
+      entityId: audit.entityId,
+      before: audit.before,
+      after: audit.after,
     });
-
-    return { ok: true, shiftsMarked };
   });
 }
 

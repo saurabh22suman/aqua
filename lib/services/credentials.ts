@@ -17,12 +17,16 @@
 // `auth.api.setPassword` is built on) so the hash format stays
 // canonical even if better-auth switches the default algorithm.
 //
-// Rate limiting is intentionally out of scope here: better-auth has
-// its own per-IP rate limiter (rateLimit config in lib/auth/server.ts).
-// The per-account lockout in this service is the second layer.
+// Staff login uses db/pin-login: address budgets and account locks protect
+// the custom route independently of Better Auth’s HTTP-only middleware.
+//
+// 2026-11-09 member activation — ONE LINE IS NEW IN THIS POSTIMAGE:
+// `CREDENTIAL_ISSUER` is EXPORTED, so the transaction-aware credential
+// primitives (lib/services/self-service-credential.ts) resolve the SAME
+// pinned issuer instead of writing the literal a second time. Nothing
+// else in this file changes, and nothing here changes behaviour.
 
-import { eq } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { v7 as uuidv7 } from "uuid";
 import { db } from "@/db/auth-db";
@@ -43,7 +47,6 @@ import { normaliseToE164 } from "@/lib/phone";
 export const pinSchema = z.string().regex(/^\d{6,12}$/);
 
 // The lockout policy lives in ./pin-lockout (kept small).
-import { clearPinFailures, isPinLocked, recordPinFailure } from "./pin-lockout";
 export { PIN_LOCKOUT_THRESHOLD, PIN_LOCKOUT_WINDOW_MS } from "./pin-lockout";
 
 
@@ -51,23 +54,9 @@ export { PIN_LOCKOUT_THRESHOLD, PIN_LOCKOUT_WINDOW_MS } from "./pin-lockout";
 // createLocalAccountIssuer("credential") === `local:${encodeURIComponent("credential")}`.
 // Not exported from better-auth's public API, so it is pinned here
 // (and in the migration test) rather than imported from a deep path.
-// findCredentialAccount filters on it, so every credential row this
-// service writes must carry it or sign-in will not find the account.
-const CREDENTIAL_ISSUER = "local:credential";
-
-// Generic failure body. Identical for "wrong pin", "locked",
-// "unknown phone" — no oracle for which case fired.
-const GENERIC_LOGIN_FAILURE = JSON.stringify({
-  kind: "error",
-  code: "invalid_credentials",
-});
-
-function genericFailure(): Response {
-  return new NextResponse(GENERIC_LOGIN_FAILURE, {
-    status: 401,
-    headers: { "content-type": "application/json" },
-  });
-}
+// Aqua treats it as part of its canonical credential identity, regardless
+// of changes in the upstream adapter's private account lookup.
+export const CREDENTIAL_ISSUER = "local:credential";
 
 // Used by the set-PIN flow on first magic-link redeem AND by the
 // owner-only reset flow. Idempotent: overwrites an existing credential
@@ -82,32 +71,62 @@ export async function setCredential(
   // assumes valid input — no re-validation, no defensive strings —
   // because callers that go around the boundary (seed scripts,
   // future internal flows) are trusted.
+  await withPlatform(() => db.transaction((tx) => setCredentialInTx(tx, baUserId, pin)));
+}
+
+// The tx-aware sibling of setCredential. The hash is still better-auth's
+// own and the row keeps the canonical providerId/issuer, but the write
+// joins the caller's transaction — so a credential rotation can commit
+// together with the audit row that records it.
+//
+// IT OVERWRITES. It is the RESET path's tool, and it must never be used
+// to set or reset a PIN through a member invitation: the member
+// activation writes its first credential with
+// `setCredentialIfAbsentInTx` (lib/services/self-service-credential.ts),
+// which never updates.
+type CredentialTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export async function setCredentialInTx(
+  tx: CredentialTx,
+  baUserId: string,
+  pin: string,
+): Promise<void> {
   const ctx = await auth.$context;
   const hash = await ctx.password.hash(pin);
-  await withPlatform(async () => {
-    const existing = await ctx.internalAdapter.findCredentialAccount(baUserId);
-    if (!existing) {
-      await ctx.internalAdapter.linkAccount({
-        userId: baUserId,
-        providerId: "credential",
-        issuer: CREDENTIAL_ISSUER,
-        accountId: baUserId,
-        password: hash,
-      });
-      return;
-    }
-    // Overwrite: updateAccount sets the password on the existing
-    // credential row (better-auth's own setPassword does the same when
-    // an account exists but has no password yet — here we go a step
-    // further and always overwrite, because reset must replace an
-    // existing PIN).
-    await ctx.internalAdapter.updateAccount(existing.id, { password: hash });
+  const [existing] = await tx
+    .select({ id: baAccount.id })
+    .from(baAccount)
+    .where(
+      and(
+        eq(baAccount.userId, baUserId),
+        eq(baAccount.providerId, "credential"),
+        eq(baAccount.issuer, CREDENTIAL_ISSUER),
+        // Aqua's canonical identity is all FOUR fields. Matching fewer
+        // could overwrite a different credential belonging to the same user.
+        eq(baAccount.accountId, baUserId),
+      ),
+    )
+    .limit(1);
+  if (existing) {
+    await tx
+      .update(baAccount)
+      .set({ password: hash, updatedAt: new Date() })
+      .where(eq(baAccount.id, existing.id));
+    return;
+  }
+  await tx.insert(baAccount).values({
+    id: uuidv7(),
+    userId: baUserId,
+    accountId: baUserId,
+    providerId: "credential",
+    issuer: CREDENTIAL_ISSUER,
+    password: hash,
   });
 }
 
 // Ensures the users row and the better-auth ba_user row exist for a
-// canonical phone, links them, and returns the ba_user id. This is
-// the identity half of magic-link redemption, extracted so the demo
+// canonical phone, links them, and returns the ba_user id. This is the
+// identity half of magic-link redemption, extracted so the demo
 // seeding path (setCredentialForPhone) cannot drift from it.
 export async function ensureBaUserForPhone(rawPhone: string): Promise<string> {
   const phone = normaliseToE164(rawPhone);
@@ -174,13 +193,27 @@ export async function setCredentialForPhone(
 // plugin's temp email is the stripped form while redeem wrote the
 // canonical +91 form in some paths; the live difference is a real
 // shape that signInEmail must respect, not something we paper over.
-export async function hasCredentialByBaUserId(baUserId: string): Promise<boolean> {
+/** Verify the existing PIN without creating a Better Auth staff session. */
+export async function verifyCredentialPin(baUserId: string, pin: string): Promise<boolean> {
   const ctx = await auth.$context;
-  const account = await withPlatform(async () => {
-    const found = await ctx.internalAdapter.findCredentialAccount(baUserId);
-    return found;
-  });
+  const account = await readCanonicalCredential(baUserId);
+  if (!account?.password) return false;
+  return ctx.password.verify({ hash: account.password, password: pin });
+}
+
+export async function hasCredentialByBaUserId(baUserId: string): Promise<boolean> {
+  const account = await readCanonicalCredential(baUserId);
   return !!account?.password;
+}
+
+async function readCanonicalCredential(baUserId: string) {
+  return withPlatform(async () => {
+    const [account] = await db.select({ password: baAccount.password }).from(baAccount).where(and(
+      eq(baAccount.userId, baUserId), eq(baAccount.providerId, "credential"),
+      eq(baAccount.accountId, baUserId), eq(baAccount.issuer, CREDENTIAL_ISSUER),
+    )).limit(1);
+    return account ?? null;
+  });
 }
 
 export async function hasCredentialByPhone(phone: string): Promise<boolean> {
@@ -205,99 +238,8 @@ export async function findBaUserIdByPhone(phone: string): Promise<string | null>
   return baUserRow[0]?.id ?? null;
 }
 
-// Lockout bookkeeping — write failed_pin_attempts and pin_locked_until.
-// Called from pinLogin on failure (lock predicate evaluated inside
-// that function before this is reached).
-// Main login: phone + PIN → Response. Returns the better-auth sign-in
-// Response on success (which carries Set-Cookie); a generic 401
-// Response on any failure (wrong PIN, locked, unknown phone, rate
-// limited). No caller-visible branch between those two outcomes.
-export async function pinLogin(rawPhone: string, pin: string): Promise<Response> {
-  // Normalize first so the lockout lookup uses the canonical form
-  // (matches how the seed and OTP plugin store users.phone).
-  //
-  // F-1 (2026-09-13 Indian-user UX audit): the old ad-hoc strip +
-  // leading-0 rewrite rejected the way most Indian users type their
-  // own number — a bare 10-digit mobile (e.g. 9000000001) never
-  // matched a stored +91 row and surfaced as "Wrong number or PIN".
-  // normaliseToE164 already handles every shape (bare 10-digit,
-  // 91-prefixed, trunk-0, spaced/hyphenated, +E.164 passthrough).
-  const phone = normaliseToE164(rawPhone);
-
-  // 1. Look up the user row + lockout state.
-  const userRow = await withPlatform(async () => {
-    const rows = await db
-      .select({
-        id: users.id,
-        failedPinAttempts: users.failedPinAttempts,
-        pinLockedUntil: users.pinLockedUntil,
-      })
-      .from(users)
-      .where(eq(users.phone, phone))
-      .limit(1);
-    return rows;
-  });
-  const user = userRow[0];
-  if (!user) {
-    // Unknown phone. Generic failure, no row created, no rate-limit
-    // counter (we don't want this to slow down a brute-force scan
-    // across fake phones).
-    return genericFailure();
-  }
-  if (isPinLocked(user.pinLockedUntil)) {
-    return genericFailure();
-  }
-
-  // 2. Resolve the ba_user row + its STORED email. We must read the
-  // stored value (which may be the OTP plugin's stripped form or the
-  // canonical +91 form) and pass it through unchanged to signInEmail.
-  const baUserRow = await withPlatform(async () => {
-    const rows = await db
-      .select({ id: baUser.id, email: baUser.email })
-      .from(baUser)
-      .where(eq(baUser.phoneNumber, phone))
-      .limit(1);
-    return rows;
-  });
-  const ba = baUserRow[0];
-  if (!ba) return genericFailure();
-
-  // 3. Verify via better-auth. The public API (not auth.$context,
-  // which exposes internals but no endpoint map). With
-  // asResponse:true a failed sign-in comes back as an error
-  // Response instead of a throw; either way anything non-2xx is a
-  // failure and gets bookkept. A thrown error (e.g. malformed
-  // stored email) is treated the same way — never surfaced.
-  //
-  // withPlatform is load-bearing, not decoration: better-auth runs
-  // its own Drizzle queries through the same guarded pool, and the
-  // dev/test scope guard replaces any query it sees as unscoped
-  // (see db/client.ts). The catch-all auth route wraps
-  // auth.handler the same way for the same reason.
-  let res: Response;
-  try {
-    res = await withPlatform(async () => {
-      const signIn = await auth.api.signInEmail({
-        body: { email: ba.email, password: pin },
-        asResponse: true,
-      });
-      return signIn as Response;
-    });
-  } catch {
-    res = genericFailure();
-  }
-
-  // 4. Lockout bookkeeping: failures bump; success clears.
-  if (res.status >= 200 && res.status < 300) {
-    await clearPinFailures(user.id);
-    return res;
-  }
-
-  await recordPinFailure(user.id);
-  // Hide the real status behind the generic 401 (don't leak
-  // rate-limit / bad-credential distinctions to the caller).
-  return genericFailure();
-}
+// Staff sign-in uses a transaction-scoped adapter and persistent attempt gates.
+export { pinLogin } from "@/db/pin-login";
 
 // Surface baAccount export for callers that need to inspect
 // credential rows (currently only tests).

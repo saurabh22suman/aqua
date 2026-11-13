@@ -242,6 +242,20 @@ beforeAll(async () => {
     receptionUserId,
     "+919900000202",
   ]);
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  const receptionMembership = randomUUID();
+  for (const id of [tenantId, otherTenantId]) {
+    await seedRoleTemplates(id);
+    await admin.query(
+      "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'",
+      [randomUUID(), id, managerUserId],
+    );
+  }
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='receptionist'",
+    [receptionMembership, tenantId, receptionUserId],
+  );
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, receptionMembership, locationB]);
 
   await admin.query(
     "insert into config_values(id,key,scope_type,scope_id,tenant_id,value) values($1,'access.location_scoped_staff','tenant',$2::text,$2::uuid,'true')",

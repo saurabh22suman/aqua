@@ -10,6 +10,7 @@ import { privilegedFixturePool as admin } from "../../db/privileged-fixture";
 // services, which connect as `app_login` under tenant RLS. The
 // credential is named in exactly one place; this file never names it.
 import { asTenantId, asUserId } from "@/lib/ids";
+import { seedRoleTemplates } from "@/lib/services/roles";
 
 // Batch 6 — the authorization boundary of the booking price actions.
 //
@@ -68,6 +69,11 @@ beforeAll(async () => {
     actor,
     `+9195${String(Date.now()).slice(-8)}`,
   ]);
+  await seedRoleTemplates(tenant);
+  await admin.query(
+    "insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) select $1, $2, $3, id, 'active', true from roles where tenant_id = $2 and key = 'owner'",
+    [uuidv7(), tenant, actor],
+  );
 }, 60_000);
 
 afterAll(async () => {
@@ -75,8 +81,12 @@ afterAll(async () => {
     tenant,
   ]);
   await admin.query("delete from facilities where tenant_id = $1", [tenant]);
+  await admin.query("delete from tenant_memberships where tenant_id = $1", [tenant]);
+  await admin.query("delete from role_permissions where tenant_id = $1", [tenant]);
+  await admin.query("delete from roles where tenant_id = $1", [tenant]);
   await admin.query("delete from locations where tenant_id = $1", [tenant]);
   await admin.query("delete from tenants where id = $1", [tenant]);
+  await admin.query("delete from users where id = $1 and not exists (select 1 from audit_log where actor_id = users.id)", [actor]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

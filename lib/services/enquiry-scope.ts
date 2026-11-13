@@ -24,6 +24,16 @@ import type { MemberId } from "@/lib/ids";
 // unrestricted access. Management still respects location-scoped
 // memberships for located rows and keeps the unresolved queue.
 //
+// The shared helper now distinguishes an explicit DENIAL from an empty
+// facility list (lib/services/location-access.ts). The unresolved queue
+// is reachable only when the helper says NULL-location rows are in scope:
+//
+//   • a denied caller sees nothing, even with a forged management set;
+//   • a facility-scoped manager sees its own located rows and does NOT
+//     inherit the unresolved (tenant-wide) queue;
+//   • a legacy O-08 scoped caller keeps the existing management rule,
+//     because includeUnlocated is true for that path.
+//
 // Every enquiry read in this service family resolves its visibility
 // through THESE two functions, so the rule cannot drift between the
 // list, the detail, the follow-ups, the pipeline and the aggregate.
@@ -43,14 +53,25 @@ export async function enquiryScope(tx: TenantTx, ctx: ActionCtx): Promise<Enquir
     return { management, predicate: management ? undefined : isNotNull(enquiries.locationId) };
   }
 
+  // A denial is complete: no located rows and no unresolved queue, even
+  // when the context carries a management permission set.
+  if (access.denied) {
+    return { management, predicate: sql`false` };
+  }
+
   const located =
     access.locationIds.length > 0
       ? inArray(enquiries.locationId, access.locationIds)
       : sql`false`;
+  const unresolved = access.includeUnlocated
+    ? isNull(enquiries.locationId)
+    : undefined;
   return {
     management,
     predicate: management
-      ? or(located, isNull(enquiries.locationId))
+      ? unresolved
+        ? or(located, unresolved)
+        : located
       : and(isNotNull(enquiries.locationId), located),
   };
 }
@@ -83,8 +104,8 @@ export async function visibleEnquiry(
   return readEnquiry(tx, ctx, enquiryId, false);
 }
 
-// The same read, but it LOCKS the row (FOR UPDATE) for the rest of
-// the transaction.
+// The same read, but it LOCKS the row (FOR UPDATE) for the rest of the
+// transaction.
 //
 // Use it when the decision to mutate depends on the row's CURRENT
 // state — the stage graph decides from the stage the row holds now.

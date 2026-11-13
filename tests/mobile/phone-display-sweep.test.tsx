@@ -51,6 +51,10 @@ vi.mock("@/lib/auth/context", () => ({
     permissions: new Set(),
   }),
 }));
+const liveOwner = vi.hoisted(() => ({ allowed: true }));
+vi.mock("@/lib/auth/owner-settings-page-guard", () => ({
+  requireLiveOwnerSettingsPage: async () => { if (!liveOwner.allowed) throw new Error("OWNER_DENIED"); },
+}));
 vi.mock("@/lib/auth/permission", () => ({
   requirePermission: () => {},
   // R02 (Prompt 1) — the coach Me page gates the curriculum-lead entry
@@ -107,6 +111,12 @@ const renderedText = () => document.body.textContent ?? "";
 afterEach(cleanup);
 
 describe("phone display sweep (P1-2)", () => {
+  it("does not render owner settings when the live owner check refuses", async () => {
+    liveOwner.allowed = false;
+    try {
+      await expect(OwnerSettingsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("OWNER_DENIED");
+    } finally { liveOwner.allowed = true; }
+  });
   it("formats the enquiry list phone", () => {
     const row = {
       id: "e1",
@@ -170,8 +180,7 @@ describe("phone sweep source guard", () => {
     "components/member-create-form.tsx",
     "components/enquiry-new-member-fields.tsx",
     "app/(owner)/owner/settings/page.tsx",
-    "app/(coach)/coach/me/page.tsx",
-    "app/(reception)/reception/me/page.tsx",
+    "components/staff-ui/staff-page.tsx",
   ];
   const BANNED = [
     "· ${enquiry.phone}",
@@ -190,5 +199,9 @@ describe("phone sweep source guard", () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+  it.each(["coach", "reception"])("renders %s identity through the shared formatted component", (role) => {
+    const source = readFileSync(`app/(${role})/${role}/me/page.tsx`, "utf8");
+    expect(source).toContain("<StaffIdentity name={identity?.fullName} phone={identity?.phone} />");
   });
 });

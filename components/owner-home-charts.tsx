@@ -1,79 +1,67 @@
-import Link from "next/link";
-import { AttendancePanel, CollectionsPanel } from "@/components/owner-home-chart-panels";
-import { PaymentMixPanel } from "@/components/owner-home-payment-mix";
-import { addDays, formatDateIST } from "@/lib/time/tz";
+import { CollectionsPanel } from "@/components/owner-home-chart-panels";
+import { OwnerPaymentMix } from "@/components/owner-ui/owner-payment-mix";
+import { addDays } from "@/lib/time/tz";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 import type { ChartMetric } from "@/lib/services/owner-home-charts";
 
-// Owner Home chart band — the composition: two panels, one period.
+// Owner Home — the Money band.
 //
-//   * a wide Collections / Attendance panel (one metric at a time, URL
-//     state), with the DoD/WoW/MoM comparison;
-//   * a smaller payment-mix doughnut for the selected period.
+// Money contains financial summaries: what was collected, how members
+// paid, and the drill-downs into the recorded transactions. ATTENDANCE
+// IS NOT HERE — it is an operational fact and it has its own panel
+// below the band.
 //
-// The panels themselves live in components/owner-home-chart-panels.tsx;
-// the shared comparison block, table and legend in
-// components/owner-home-chart-parts.tsx.
+// One range, one owner: the range strip above the band
+// (components/owner-home/owner-home-range.tsx) names the selected
+// range and keeps the exact instants in its disclosure. Neither panel
+// repeats the range, the comparison or the dates.
 //
-// Batch 4 (26 October 2026) — three visible fixes:
-//   * the selected period wears the PRESET ACCENT (`--accent-strong`),
-//     not the structural `marine` colour, so the control belongs to
-//     the theme in both presets (it used to stay teal in Lavender);
-//   * the month history is a labelled, one-click destination: the
-//     owner's day starts at zero on a quiet morning, and the month's
-//     figures were only one small pill away;
-//   * a phone gets a chart as well as a table: the ECharts island is
-//     `lg+` only, so below `lg` the panels carry a server-rendered SVG
-//     of the same numbers (components/owner-mini-chart.tsx).
-//
-// Owner Lavender B (27 October 2026) — the band is now "Money at a
-// glance" and the Day / Week / Month control sits ABOVE both panels,
-// so the collections panel and the payment mix always describe the
-// same period. The control keeps the metric and the facility scope in
-// the URL, so a period change never widens what the owner may read.
-
-const METRIC_LABEL: Record<ChartMetric, string> = {
-  collections: "Collections",
-  attendance: "Attendance",
-};
-
-const PERIOD_LABEL = { day: "Day", week: "Week", month: "Month" } as const;
+// The two panels share the SAME context: the same range, the same
+// facility, the same figures. The collections panel owns the comparison;
+// the payment mix owns the composition (Cash / Digital / Other).
 
 export function OwnerHomeCharts({
   data,
-  metric,
   facility,
   canReadFees,
-  today = null,
 }: {
   data: OwnerChartsData | null;
-  metric: ChartMetric;
   facility: string | null;
   canReadFees: boolean;
-  // The tenant's local today (ISO date). It is used ONLY to label the
-  // month range in the history link — the figures themselves come from
-  // the service.
+  /**
+   * Legacy inputs, accepted for compatibility and IGNORED. The band no
+   * longer switches between two metrics (attendance has its own
+   * operational panel below) and it no longer owns the range (the
+   * range strip above the band does). Existing callers and fixtures
+   * may keep passing them.
+   *
+   * @deprecated accepted and ignored — the band is financial only.
+   */
+  metric?: ChartMetric;
+  /**
+   * @deprecated accepted and ignored — the range strip owns the range.
+   */
   today?: string | null;
 }) {
   if (!data) {
+    // The Money band reads FINANCE only. Attendance has its own
+    // operational panel with its own message, so a financial failure is
+    // never reported as an attendance failure.
     return (
       <section
         data-testid="owner-home-money"
         className="mt-5 rounded-card border border-line bg-paper px-4 py-4"
+        aria-label="Money at a glance"
       >
-        <p className="text-[13.5px] font-medium">Charts are unavailable right now</p>
+        <p className="text-[13.5px] font-medium">Money figures are unavailable right now</p>
         <p className="mt-1 text-[12.5px] text-ink-3">
-          The figures above are unchanged; reload to try the charts again.
+          The collections and the payment mix for the selected range could not be
+          read. Reload to try again.
         </p>
       </section>
     );
   }
 
-  const scope = (extra: Record<string, string>) => {
-    const query = new URLSearchParams({ ...extra });
-    if (facility) query.set("facility", facility);
-    return `/owner?${query.toString()}`;
-  };
   const feesLink = (extra: Record<string, string>) => {
     const query = new URLSearchParams({
       tab: "transactions",
@@ -85,143 +73,59 @@ export function OwnerHomeCharts({
     return `/owner/fees?${query.toString()}`;
   };
 
+  // A read that SUCCEEDED and found nothing. It is not a failure: the
+  // collections card states the empty fact ONCE and the payment mix is
+  // not drawn, because a second empty card would print the same fact a
+  // second time. The authorized transactions link survives.
+  const noCollections =
+    data.collections.totalPaise === 0 && data.collections.paymentCount === 0;
+
   return (
     <section
       data-testid="owner-home-money"
       className="mt-5"
       aria-label="Money at a glance"
     >
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <div className="min-w-0">
-          <h2 className="font-display text-[17px] font-semibold">Money at a glance</h2>
-          <p className="mt-0.5 text-[12px] text-ink-3">
-            Collections and how members paid
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-ink-3">
-            Period
-          </span>
-          <Segmented
-            label="Period"
-            items={(["day", "week", "month"] as const).map((key) => ({
-              key,
-              label: PERIOD_LABEL[key],
-              href: scope({ trend: metric, period: key }),
-              active: data.period.key === key,
-            }))}
-          />
-        </div>
+      <div className="mb-3">
+        <h2 className="font-display text-[16px] font-semibold">Money at a glance</h2>
+        <p className="mt-0.5 text-[12px] text-ink-3">
+          Collections and how members paid
+        </p>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3 lg:items-start">
-        <article className="min-w-0 rounded-card border border-line bg-paper p-4 lg:col-span-2">
-          <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-            <div className="min-w-0">
-              <h3 className="font-display text-[15px] font-semibold">Trends</h3>
-              <p className="mt-0.5 text-[12.5px] text-ink-3">
-                {METRIC_LABEL[metric]} · {data.period.tabLabel} ·{" "}
-                {data.period.currentLabel} (Asia/Kolkata)
-              </p>
-              <HistoryLink
-                isMonth={data.period.key === "month"}
-                href={scope({ trend: metric, period: "month" })}
-                monthRange={monthRange(today)}
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <div className="flex items-center gap-1.5">
-                <span className="text-[11px] font-medium uppercase tracking-wider text-ink-3">
-                  Metric
-                </span>
-                <Segmented
-                  label="Metric"
-                  items={(["collections", "attendance"] as ChartMetric[]).map((key) => ({
-                    key,
-                    label: METRIC_LABEL[key],
-                    href: scope({ trend: key, period: data.period.key }),
-                    active: metric === key,
-                  }))}
-                />
-              </div>
-            </div>
-          </header>
+      {/* The money band. The split is 60/40 (3 of 5 columns), the ratio
+          the approved composition shows: the payment mix needs room for
+          the donut AND its legend side by side. At the earlier 2/3-1/3
+          split the mix card had roughly 270px of inner width at 1280px,
+          and the approved pairing could not fit — it always wrapped.
 
-          {metric === "collections" ? (
-            <CollectionsPanel data={data} feesLink={canReadFees ? feesLink : null} />
-          ) : (
-            <AttendancePanel data={data} facility={facility} />
-          )}
-        </article>
-
-        <PaymentMixPanel data={data} feesLink={canReadFees ? feesLink : null} />
-      </div>
-    </section>
-  );
-}
-
-// The month's history, as a labelled destination. A quiet morning shows
-// zero for today; the month still holds the real figures, and the link
-// names the exact range it opens. It keeps the metric and the facility
-// scope, so the jump never widens what the owner may read.
-function HistoryLink({
-  isMonth,
-  href,
-  monthRange,
-}: {
-  isMonth: boolean;
-  href: string;
-  monthRange: string | null;
-}) {
-  if (isMonth) {
-    return (
-      <p className="mt-1.5 text-[12px] font-medium text-ink-2">
-        Month history{monthRange ? ` · ${monthRange}` : ""}
-      </p>
-    );
-  }
-  return (
-    <Link
-      href={href}
-      className="mt-1.5 inline-flex min-h-[32px] items-center text-[12px] font-medium text-[var(--accent-ink)] underline-offset-2 hover:underline"
-    >
-      {monthRange ? `See this month's history (${monthRange}) →` : "See this month's history →"}
-    </Link>
-  );
-}
-
-/** The month-to-date range in IST, labelled from the tenant's today. */
-function monthRange(today: string | null): string | null {
-  if (!today || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return null;
-  const first = `${today.slice(0, 8)}01`;
-  return `${formatDateIST(first)} – ${formatDateIST(today)}`;
-}
-
-function Segmented({
-  label,
-  items,
-}: {
-  label: string;
-  items: { key: string; label: string; href: string; active: boolean }[];
-}) {
-  return (
-    <nav aria-label={label} className="flex flex-none rounded-pill border border-line bg-paper p-0.5">
-      {items.map((item) => (
-        <Link
-          key={item.key}
-          href={item.href}
-          aria-current={item.active ? "page" : undefined}
-          className={`flex min-h-[40px] items-center rounded-pill px-3 text-[12.5px] font-medium transition-colors duration-150 ${
-            // The selected control wears the PRESET accent, so the
-            // period reads as part of the theme in both presets.
-            item.active
-              ? "bg-[var(--accent-strong)] text-white"
-              : "text-ink-2 hover:text-ink"
+          The two cards are a RELATED pair: they read the same range and
+          the same scope. Their frames therefore end together, by the
+          grid's own stretch (each card is a flex column whose footer is
+          anchored at the bottom) — not by a written-down pixel height.
+          On a phone the band stacks. */}
+      <div
+        data-testid="owner-home-money-band"
+        className="grid gap-3 lg:grid-cols-5"
+      >
+        <article
+          data-testid="owner-home-money-trends"
+          className={`min-w-0 rounded-card border border-line bg-paper p-5 ${
+            noCollections ? "lg:col-span-5" : "flex flex-col lg:col-span-3"
           }`}
         >
-          {item.label}
-        </Link>
-      ))}
-    </nav>
+          <h3 className="font-display text-[16px] font-semibold">Collections</h3>
+          <CollectionsPanel data={data} feesLink={canReadFees ? feesLink : null} />
+        </article>
+
+        {noCollections ? null : (
+          <OwnerPaymentMix
+            data={data}
+            feesLink={canReadFees ? feesLink : null}
+            className="lg:col-span-2"
+          />
+        )}
+      </div>
+    </section>
   );
 }

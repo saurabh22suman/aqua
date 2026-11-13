@@ -70,6 +70,13 @@ beforeAll(async () => {
     ownerId,
     `+9194${String(Date.now()).slice(-8)}`,
   ]);
+  // The cross-tenant caller is a genuine member of its own tenant, not
+  // a phantom identity whose missing membership would mask isolation.
+  for (const tenantId of [tenantA, tenantB]) {
+    const roleId = uuidv7();
+    await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenantId]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, ownerId, roleId]);
+  }
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Main', true)",
     [locationId, tenantA],

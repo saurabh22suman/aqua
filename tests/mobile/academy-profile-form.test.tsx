@@ -28,9 +28,10 @@ afterEach(() => {
 describe("AcademyProfileForm (PR2-C1)", () => {
   it("renders the editable identity fields including GSTIN", () => {
     render(<AcademyProfileForm initial={INITIAL} />);
-    expect(screen.getByLabelText("Academy name")).toBeTruthy();
-    expect(screen.getByLabelText(/^Currency/)).toBeTruthy();
-    expect(screen.getByLabelText(/^Time zone/)).toBeTruthy();
+    expect(screen.getByLabelText("Club name")).toBeTruthy();
+    expect(screen.getByText("INR")).toBeTruthy();
+    expect(screen.getByText("India Standard Time (IST)")).toBeTruthy();
+    expect(screen.getByText(/not editable here/i)).toBeTruthy();
     expect(screen.getByLabelText(/GSTIN/)).toBeTruthy();
     expect(screen.getByRole("button", { name: /save/i })).toBeTruthy();
   });
@@ -54,7 +55,6 @@ describe("AcademyProfileForm (PR2-C1)", () => {
     );
     expect(updateTenantProfileAction).toHaveBeenCalledWith({
       name: "Aqua Worli Aquatic Club",
-      currency: "INR",
       timezone: "Asia/Kolkata",
       gstin: "NOT-A-GSTIN",
     });

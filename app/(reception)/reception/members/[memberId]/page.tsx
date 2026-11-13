@@ -1,9 +1,5 @@
 import { notFound } from "next/navigation";
-import { ShieldCheck, Users } from "lucide-react";
-import {
-  getMemberDetailAction,
-  getMemberIdCardContextAction,
-} from "@/lib/actions/people";
+import { getMemberDetailAction, getMemberIdCardContextAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
@@ -18,6 +14,14 @@ import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
 import { getNotificationDestinationsAction } from "@/lib/actions/notification-destinations";
 import { MemberNotificationDestinations } from "@/components/member-notification-destinations";
+import { BackLink } from "@/components/ui/BackLink";
+import { PersonAvatar } from "@/components/avatar";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import {
+  STAFF_CARD,
+  StaffPage,
+  StaffSection,
+} from "@/components/staff-ui/staff-page";
 
 // B3 — reception previously had no member detail page at all: a
 // receptionist who created a member (or one produced by converting an
@@ -27,7 +31,6 @@ import { MemberNotificationDestinations } from "@/components/member-notification
 // reception needs right after registration — identity, guardians,
 // consent, enrolment — not lifecycle controls or attendance history,
 // which live on the owner-side detail page.
-
 export default async function ReceptionMemberDetailPage({
   params,
 }: {
@@ -39,11 +42,10 @@ export default async function ReceptionMemberDetailPage({
   const [member, cardCtx, terminology, timezone] = await Promise.all([
     getMemberDetailAction(memberId),
     getMemberIdCardContextAction(),
-    // The id-card's eyebrow renders the closed-key `member`
-    // singular form via resolveTerm (L3 audit). Reception
-    // registers the member and prints the card in the same visit;
-    // the same terminology fetch that the owner-side page uses
-    // pays the cost here too.
+    // The id-card's eyebrow renders the closed-key `member` singular
+    // form via resolveTerm (L3 audit). Reception registers the member
+    // and prints the card in the same visit; the same terminology
+    // fetch that the owner-side page uses pays the cost here too.
     getTerminologyAction(),
     getTenantTimezoneAction(),
   ]);
@@ -52,9 +54,27 @@ export default async function ReceptionMemberDetailPage({
     ? await getNotificationDestinationsAction(memberId) : null;
 
   return (
-    <main className="px-5 pt-10 pb-8">
+    <StaffPage>
+      <BackLink href="/reception/members" label="Search" />
+
+      <div
+        className="mt-2 flex items-start gap-3"
+        data-testid="reception-member-identity"
+      >
+        <PersonAvatar name={member.fullName} seed={member.memberId} size={48} className="flex-none" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
+            {member.fullName}
+          </h1>
+          <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
+            {member.memberCode} · {member.locationName}
+            {member.isMinor ? " · minor" : ""}
+          </p>
+        </div>
+      </div>
+
       {cardCtx && terminology ? (
-        <div className="print-isolate-block">
+        <div className="print-isolate-block mt-4">
           <MemberIdCard
             tenantSlug={cardCtx.tenantSlug}
             tenantDisplayName={cardCtx.displayName}
@@ -68,13 +88,9 @@ export default async function ReceptionMemberDetailPage({
         </div>
       ) : null}
 
-      <h1 className="font-display text-[19px] font-semibold mt-6">{member.fullName}</h1>
-      <p className="mt-0.5 text-[12.5px] text-ink-3">
-        {member.memberCode} · {member.locationName}
-        {member.isMinor ? " · minor" : ""}
-      </p>
-
-      {destinations ? <MemberNotificationDestinations key={memberId} memberId={memberId} {...destinations} /> : null}
+      {destinations ? (
+        <MemberNotificationDestinations key={memberId} memberId={memberId} {...destinations} />
+      ) : null}
       <MemberEnrolmentPanel
         memberId={member.memberId}
         terminology={terminology}
@@ -98,42 +114,50 @@ export default async function ReceptionMemberDetailPage({
       />
 
       {member.isMinor ? (
-        <section className="mt-4">
-          <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-            <Users size={15} className="text-ink-3" />
-            Guardians
-          </h2>
+        <StaffSection
+          title={
+            <span className="flex items-center gap-2">
+              <OwnerIcon name="members" size={16} className="text-ink-3" />
+              Guardians
+            </span>
+          }
+        >
           {member.guardians.length === 0 ? (
             <p className="mt-2 text-[13px] text-ink-3">
-            No {resolveTerm(terminology, "guardian", 1)} on file.
-          </p>
+              No {resolveTerm(terminology, "guardian", 1)} on file.
+            </p>
           ) : (
-            <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
+            <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
               {member.guardians.map((g) => (
                 <li key={g.personId} className="px-3.5 py-2.5 text-[13px]">
-                  <span className="font-medium">{g.fullName}</span>
+                  <span className="font-medium text-ink">{g.fullName}</span>
                   <span className="text-ink-3"> — {g.relationship}</span>
                   {g.phone ? <span className="text-ink-3"> · {formatPhoneIN(g.phone)}</span> : null}
-                  {g.isPrimary ? <span className="ml-1.5 text-[11px] text-water">primary</span> : null}
+                  {g.isPrimary ? (
+                    <span className="ml-1.5 text-[12px] text-ink-2">primary</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </StaffSection>
       ) : null}
 
-      <section className="mt-4">
-        <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-          <ShieldCheck size={15} className="text-ink-3" />
-          Consent
-        </h2>
+      <StaffSection
+        title={
+          <span className="flex items-center gap-2">
+            <OwnerIcon name="lock" size={16} className="text-ink-3" />
+            Consent
+          </span>
+        }
+      >
         {member.consents.length === 0 ? (
           <p className="mt-2 text-[13px] text-ink-3">No consent on file.</p>
         ) : (
-          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
+          <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
             {member.consents.map((c, i) => (
               <li key={i} className="px-3.5 py-2.5 text-[13px]">
-                <span className="capitalize font-medium">{c.purpose}</span>
+                <span className="font-medium capitalize text-ink">{c.purpose}</span>
                 <span className="text-ink-3">
                   {" "}
                   — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"},
@@ -143,7 +167,7 @@ export default async function ReceptionMemberDetailPage({
             ))}
           </ul>
         )}
-      </section>
-    </main>
+      </StaffSection>
+    </StaffPage>
   );
 }

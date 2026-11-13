@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { batches, locations, persons, programs, staff } from "@/db/schema";
 import { generateSessions } from "@/lib/jobs/session-generator";
@@ -23,6 +24,7 @@ let tenantId: TenantId = asTenantId("");
 // coach_id itself stores the resulting staff.id, not this user id.
 let coachA: UserId = asUserId("");
 let coachB: UserId = asUserId("");
+const ownerId: UserId = asUserId(uuidv7());
 let batchAName = "";
 let batchBName = "";
 let sessionForBatchA = "";
@@ -48,6 +50,11 @@ beforeAll(async () => {
   );
   coachA = asUserId(userA.rows[0].id);
   coachB = asUserId(userB.rows[0].id);
+
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [ownerId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select gen_random_uuid(),$1,u.id,r.id,'active',true from unnest($2::uuid[]) u(id) cross join roles r where r.tenant_id=$1 and r.key='coach'", [tenantId, [coachA, coachB]]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, ownerId]);
 
   let locationId = "";
   let programId = "";
@@ -134,10 +141,14 @@ afterAll(async () => {
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [ownerId]);
   }
-  if (coachA) await admin.query("delete from users where id = $1", [coachA]);
-  if (coachB) await admin.query("delete from users where id = $1", [coachB]);
+  if (coachA) await admin.query("delete from users where id = $1 and not exists (select 1 from audit_log where actor_id=users.id)", [coachA]);
+  if (coachB) await admin.query("delete from users where id = $1 and not exists (select 1 from audit_log where actor_id=users.id)", [coachB]);
   await admin.end();
 });
 
@@ -159,7 +170,7 @@ describe("coach's own sessions are scoped, not tenant-wide", () => {
   it("a non-coach staff role (owner, receptionist, ...) still sees every session", async () => {
     const today = todayInZone(TZ);
     const rows = await listTodaySessions(
-      { tenantId, userId: coachA, roleKey: "owner" },
+      { tenantId, userId: ownerId, roleKey: "owner" },
       today,
     );
 
@@ -195,7 +206,7 @@ describe("direct access to a specific session is scoped the same way as the list
 
   it("sessionVisibleToCaller is true for a non-coach staff role regardless of assignment", async () => {
     const visible = await sessionVisibleToCaller(
-      { tenantId, userId: coachA, roleKey: "owner" },
+      { tenantId, userId: ownerId, roleKey: "owner" },
       sessionForBatchB,
     );
     expect(visible).toBe(true);

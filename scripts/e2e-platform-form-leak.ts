@@ -1,6 +1,7 @@
-// Current inventory: seven active forms. Live checks exercise the inert
-// WhatsApp phone form/native POST, actual code response and gated invite form.
-// The legacy password/TOTP component discussion below is historical context.
+// Live checks inspect inert JavaScript-disabled SSR and submit its actual
+// action fields in a native-format POST, plus an authenticated invite form.
+// The static inventory also retains the
+// legacy WhatsApp component so any remaining form stays covered.
 // H1 — credential leak check for every pre-hydration form submit
 // in the platform surface. Spawns its own dev server (matching the
 // scripts/e2e-login.ts and scripts/e2e-offline.ts pattern) and
@@ -8,9 +9,9 @@
 //
 // Three tiers:
 //
-//   Tier 1 (live submit, login only) — fills the platform login
-//   form with sentinel strings, submits with JS disabled, asserts
-//   the sentinel appears in neither the URL nor the HTML body.
+//   Tier 1 — verify the JS-disabled password form is inert, then POST
+//   its actual SSR action fields and synthetic credentials through the
+//   browser request context. Check URLs and response body for leaks.
 //   This is the most security-critical form and the only one
 //   reachable without a session; auth-gated pages redirect
 //   server-side via a `<template data-dgst="NEXT_REDIRECT">`
@@ -74,6 +75,7 @@
 
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { e2eWebEnv } from "./lib/e2e-child-env";
 import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { Pool } from "pg";
@@ -273,7 +275,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
   const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
-    env: process.env,
+    env: e2eWebEnv(process.env),
   });
   server.stdout?.on("data", data => process.stdout.write(data));
   server.stderr?.on("data", data => process.stderr.write(data));
@@ -296,31 +298,46 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       });
       await loginPage.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => undefined);
       await loginPage.waitForSelector("form", { timeout: 15_000, state: "attached" });
-      if (!await loginPage.locator('input[name="phone"]').isDisabled()) throw new Error("Pre-hydration phone form was not inert");
-      // Scope to the form that carries the phone field. The page can
-      // carry a second form — the env operator door (email +
-      // password) is rendered alongside the WhatsApp one whenever the
-      // deployment sets OPS_EMAIL + OPS_PASSWORD — and a bare
-      // locator("form") would then match more than one element and
-      // throw in strict mode.
-      const phoneForm = loginPage.locator("form").filter({
-        has: loginPage.locator('input[name="phone"]'),
+      const loginForm = loginPage.locator("form").filter({
+        has: loginPage.locator('input[name="email"]'),
       });
-      const action = await phoneForm.getAttribute("action");
-      const method = await phoneForm.getAttribute("method");
+      const method = await loginForm.getAttribute("method");
       if (method?.toLowerCase() !== "post") throw new Error("Native credential form would use GET");
-      // Force the native body format through the browser's request context,
-      // without enabling a JS-disabled field or relying on a destroyed eval
-      // context during navigation to an application/json response.
-      const native = await loginCtx.request.post(new URL(action ?? "", BASE).href, {
-        form: { intent: "request", phone: `${SENTINEL}_phone` }, headers: { origin: BASE }, timeout: 60_000,
+      const emailInput = loginForm.locator('input[name="email"]');
+      const passwordInput = loginForm.locator('input[name="password"]');
+      if ((await emailInput.isVisible()) && !(await emailInput.isDisabled()) &&
+          (await passwordInput.isVisible()) && !(await passwordInput.isDisabled())) {
+        throw new Error("JavaScript-disabled credential form is not inert");
+      }
+      const fields = await loginForm.evaluate((form) => {
+        const entries: Array<[string, string]> = [];
+        for (const [name, value] of new FormData(form as HTMLFormElement)) {
+          if (name.startsWith("$ACTION_") && typeof value === "string") entries.push([name, value]);
+        }
+        return entries;
+      });
+      if (fields.length === 0 || new Set(fields.map(([name]) => name)).size !== fields.length) {
+        throw new Error("SSR form lacks unique server-action fields");
+      }
+      const actionUrl = new URL((await loginForm.getAttribute("action")) || "", loginPage.url());
+      if (actionUrl.origin !== BASE) throw new Error("SSR login form action is not same-origin");
+      const email = `${SENTINEL.toLowerCase()}@example.invalid`;
+      const password = `${SENTINEL}_password`;
+      const native = await loginCtx.request.post(actionUrl.href, {
+        multipart: { ...Object.fromEntries(fields), email, password },
+        headers: { origin: BASE },
+        timeout: 60_000,
       });
       const finalUrl = native.url();
       const finalBody = await native.text();
       const loginLeaks: string[] = [];
-      for (const sentinel of [`${SENTINEL}_phone`]) {
+      for (const sentinel of [email, password]) {
+        if (actionUrl.href.includes(sentinel)) loginLeaks.push(`request URL contains "${sentinel}"`);
         if (finalUrl.includes(sentinel)) loginLeaks.push(`URL contains "${sentinel}"`);
         if (finalBody.includes(sentinel)) loginLeaks.push(`body contains "${sentinel}"`);
+      }
+      if ((await loginCtx.cookies()).some((cookie) => cookie.name === "platform_session")) {
+        failures.push("platform login: synthetic credentials obtained an ops session");
       }
       if (loginLeaks.length === 0) {
         console.log(`\n  ✓ platform login (inert SSR + native-format POST): no credential leak in URL or body`);
@@ -332,24 +349,6 @@ async function run(): Promise<{ failures: string[]; total: number }> {
       await loginPage.close();
       await loginCtx.close();
     }
-
-    // Exercise the active code form too: an unknown synthetic phone reaches
-    // the browser-bound challenge UI but can never authenticate. Inspect the
-    // API response, not the user's own filled input in the DOM.
-    const codeContext = await browser.newContext();
-    const codePage = await codeContext.newPage();
-    try {
-      await codePage.goto(`${BASE}/ops/login`); await codePage.waitForLoadState("networkidle");
-      await codePage.getByRole("textbox", { name: "Registered mobile number", exact: true }).fill("+919000009876");
-      await codePage.getByRole("button", { name: "Send WhatsApp code" }).click();
-      await codePage.getByRole("textbox", { name: "6-digit WhatsApp code" }).fill("927461");
-      const response = codePage.waitForResponse(request => request.url().endsWith("/ops/api/whatsapp-auth") && request.request().method() === "POST");
-      await codePage.getByRole("button", { name: "Verify code" }).click();
-      const body = await (await response).text();
-      if (codePage.url().includes("927461") || body.includes("927461")) failures.push("WhatsApp code leaked in URL/API response");
-      if ((await codeContext.cookies()).some(cookie => cookie.name === "platform_session")) failures.push("Unknown phone obtained an ops session");
-      console.log("  ✓ active WhatsApp code form: no URL/response leak and unknown phone denied");
-    } finally { await codeContext.close(); }
 
     // Tier 1.5 — auth-gated form. JS enabled (so RSC redirects
     // fire and the form renders). Seed an authed session cookie,
@@ -473,7 +472,7 @@ async function run(): Promise<{ failures: string[]; total: number }> {
 run()
   .then(({ failures, total }) => {
     if (failures.length === 0) {
-      console.log(`\n✓ H1 credential-leak check passed for all ${total} forms (live submit × 2 + source).`);
+      console.log(`\n✓ H1 credential-leak check passed for all ${total} forms (inert SSR/native-format POST, authenticated manual POST + source).`);
       process.exit(0);
     } else {
       console.error(`\n✗ H1 credential-leak check failed (${failures.length} of ${total} forms):`);

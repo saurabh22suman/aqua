@@ -34,6 +34,10 @@ vi.mock("next/navigation", () => ({
 const ownerCtx = vi.hoisted(() => ({
   value: { permissions: new Set<string>() },
 }));
+const liveOwner = vi.hoisted(() => ({ allowed: true }));
+vi.mock("@/lib/auth/owner-settings-page-guard", () => ({
+  requireLiveOwnerSettingsPage: async () => { if (!liveOwner.allowed) notFound(); },
+}));
 vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ownerCtx.value,
   requirePagePermission: (ctx: { permissions: Set<string> }, key: string) => {
@@ -69,6 +73,8 @@ const DUE: HubInvoiceRow = {
   invoiceNumber: "2026-0001",
   memberId: "22222222-2222-2222-2222-222222222222",
   memberName: "Ananya Sharma",
+  payerKind: "member",
+  payerName: "Ananya Sharma",
   totalPaise: 250_000,
   paidPaise: 0,
   outstandingPaise: 250_000,
@@ -130,8 +136,16 @@ describe("plans page guard (settings.manage)", () => {
   });
 
   it("renders for a settings.manage holder", async () => {
+    liveOwner.allowed = true;
     ownerCtx.value = { permissions: new Set(["settings.manage"]) };
     await expect(PlansPage()).resolves.toBeTruthy();
+  });
+
+  it("refuses a settings.manage holder who is not a live owner", async () => {
+    liveOwner.allowed = false;
+    ownerCtx.value = { permissions: new Set(["settings.manage"]) };
+    await expect(PlansPage()).rejects.toThrow("NEXT_NOT_FOUND");
+    liveOwner.allowed = true;
   });
 });
 

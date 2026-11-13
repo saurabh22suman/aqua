@@ -11,7 +11,6 @@ import {
   listHubTransactions,
 } from "@/lib/services/fees-hub";
 import { addDays, todayInZone } from "@/lib/time/tz";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // PR2-C8 — payment reversals. A reversal is a NEW row; the original
 // payment is never edited. The invoice's paid/outstanding figures are
@@ -78,8 +77,10 @@ beforeAll(async () => {
   await seedRoleTemplates(otherTenantId);
   await admin.query(
     "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [actorId, `+9196${String(Date.now()).slice(-8)}`],
+    [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await admin.query(
     `insert into locations (id, tenant_id, name, is_primary) values
        ($1, $2, 'Main', true), ($3, $4, 'Other', true)`,
@@ -128,8 +129,8 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [tenant]);
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
     await admin.query("delete from locations where tenant_id = $1", [tenant]);
-    await deleteAuditRowsForTenant(admin, tenant);
   }
+  await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
   await admin.query("delete from role_permissions where tenant_id = any($1::uuid[])", [
     [tenantId, otherTenantId],
   ]);
@@ -143,7 +144,7 @@ afterAll(async () => {
 });
 
 describe("payments.refund permission (PR2-C8)", () => {
-  it("is held by owner, admin and accountant — and not by receptionist or coach", async () => {
+  it("is held by owner, admin, manager and accountant — and not by receptionist or coach", async () => {
     const { rows } = await admin.query<{ role_key: string }>(
       `select r.key as role_key
          from role_permissions rp
@@ -155,6 +156,7 @@ describe("payments.refund permission (PR2-C8)", () => {
     expect(rows.map((r) => r.role_key)).toEqual([
       "accountant",
       "admin",
+      "manager",
       "owner",
     ]);
   });
@@ -257,8 +259,9 @@ describe("reversePayment", () => {
     // Every reversal in this file happened today: 40000 + 60000 + 20000.
     expect(overview.reversedPaise).toBe(120000);
     expect(overview.reversalCount).toBe(3);
-    // 100000 + 50000 recorded, minus 120000 reversed.
-    expect(overview.collectedPaise).toBe(30000);
+    // Collected is gross; reversals are reported separately.
+    expect(overview.collectedPaise).toBe(150000);
+    expect(overview.collectedPaise - overview.reversedPaise).toBe(30000);
 
     const rows = await listHubTransactions(ctx, period);
     const reversalRow = rows.find((row) => row.kind === "reversal");
@@ -267,6 +270,6 @@ describe("reversePayment", () => {
       reason: "Part refunded in cash",
     });
     const ledgerTotal = rows.reduce((sum, row) => sum + row.amountPaise, 0);
-    expect(ledgerTotal).toBe(overview.collectedPaise);
+    expect(ledgerTotal).toBe(overview.collectedPaise - overview.reversedPaise);
   });
 });

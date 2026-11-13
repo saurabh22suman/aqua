@@ -21,6 +21,19 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/nav", () => ({
   navForRole: () => [],
 }));
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (operation: string, tenant: string, read: () => Promise<unknown>, origin: string) => {
+    expect(["config.effective.read", "config.request.list", "config.chain.resolve", "config.audit.list"]).toContain(operation);
+    expect(tenant).toBe("11111111-1111-1111-1111-111111111111");
+    expect(origin).toBe("ops_page");
+    return read();
+  },
+  runOpsGlobalRead: async (operation: string, read: () => Promise<unknown>, origin: string) => {
+    expect(operation).toBe("tenant.selector.list");
+    expect(origin).toBe("ops_page");
+    return read();
+  },
+}));
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
 const OTHER_TENANT_ID = "22222222-2222-2222-2222-222222222222";

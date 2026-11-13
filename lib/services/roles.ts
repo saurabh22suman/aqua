@@ -3,6 +3,11 @@ import { withTenant, type TenantTx } from "@/db/tenant";
 import { roles } from "@/db/schema/roles";
 import { PERMISSIONS } from "@/db/seed-platform";
 import type { TenantId } from "@/lib/ids";
+import {
+  MANAGER_HOME_ORDINAL,
+  MANAGER_HOME_PATH,
+  MANAGER_PERMISSION_KEYS,
+} from "@/lib/services/manager-role-grants";
 
 const ALL_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 
@@ -15,10 +20,22 @@ const ALL_PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 // contexts outright, so a stale or accidentally assigned grant on an
 // upgraded tenant cannot re-authorize marking.
 const OWNER_EXCLUDED_PERMISSIONS = new Set(["attendance.mark"]);
+// 2026-11-09 member sign-in — the confirmation grant is NOT widened to
+// admin. The admin template is "the whole catalogue minus staff pay", so
+// without this exclusion the new privilege would land on every club's
+// administrator on every new tenant: a club-wide administrator that
+// happens to be facility-limited on ONE action is not the owner's
+// facility-scoped delegate, and the human's decision named "an OWNER, or
+// a FACILITY-LIMITED MANAGER". The owner template keeps it (the owner
+// template is the whole catalogue minus attendance.mark), and a manager
+// receives it by the owner's EXPLICIT grant on the club's own manager
+// role — visible in the trail. See
+// db/migrations/20261108210140_members_link_confirm_grant.sql.
 const ADMIN_EXCLUDED_PERMISSIONS = new Set([
   "attendance.mark",
   "staff.pay.read",
   "staff.pay.write",
+  "members.link.confirm",
 ]);
 
 const OWNER_PERMISSION_KEYS = ALL_PERMISSION_KEYS.filter(
@@ -56,6 +73,26 @@ export function roleTemplatePermissionKeys(
   return new Set(template.permissions);
 }
 
+// The template's HOME — the landing route and the tie-break priority.
+//
+// A role row alone does not unlock a workspace: the surface map
+// (lib/auth/surface-access.ts) decides which surface a signed-in member
+// may open, and home_path/home_ordinal decide where they land and which
+// membership wins when a user holds several. They are data, exactly like
+// the grants, so a caller reads them here instead of branching on a role
+// name.
+export function roleTemplateHome(
+  roleKey: string,
+): { name: string; homePath: string; homeOrdinal: number } | null {
+  const template = ROLE_TEMPLATES.find((t) => t.key === roleKey);
+  if (!template) return null;
+  return {
+    name: template.name,
+    homePath: template.homePath,
+    homeOrdinal: template.homeOrdinal,
+  };
+}
+
 // `roles.key` exists for seeding and analytics only. Nothing at runtime may
 // branch on a role key — F-04's Never. These template keys are referenced
 // by seeding code alone. homePath/homeOrdinal are the data a renamed or
@@ -81,9 +118,31 @@ const ROLE_TEMPLATES: ReadonlyArray<{
     permissions: ADMIN_PERMISSION_KEYS,
   },
   {
+    // 2026-11-09 manager rollout — the facility manager.
+    //
+    // The human's decision: "manager can perform owner operational
+    // capabilities within specifically assigned facilities"; club-wide
+    // settings and access delegation stay owner-only. The manager's
+    // GRANT SET is the 24 canonical keys (lib/services/
+    // manager-role-grants.ts), its HOME is the owner surface, and its
+    // SCOPE is its own membership's facilities (lib/services/
+    // facility-scope.ts binds this role key to them unconditionally).
+    //
+    // It is NOT the administrator template under another name: it
+    // carries no settings.read, no settings.manage, no programs.write,
+    // no staff.invite, no staff.write, no staff.pay.*, no messaging.*,
+    // no levels.write and no attendance.mark. The preset contract test
+    // pins that difference.
+    key: "manager",
+    name: "Facility Manager",
+    homePath: MANAGER_HOME_PATH,
+    homeOrdinal: MANAGER_HOME_ORDINAL,
+    permissions: [...MANAGER_PERMISSION_KEYS],
+  },
+  {
     key: "accountant",
     name: "Accountant",
-    // K3 — pre-demo fix. /parent has no nav and renders just an
+    // K3 — pre-demo fix. /parent has no nav and renders just a
     // "<h1>Parent</h1>" stub, so an authenticated accountant used to
     // land on a dead-end mislabeled page. Pointed at /owner for now:
     // the owner surface is read-mostly at the report/dashboard level
@@ -167,7 +226,7 @@ const ROLE_TEMPLATES: ReadonlyArray<{
     // A05 (2026-10-09 role/content/permission audit) — the worker is
     // self-service only: their own roster, check-in/out and leave.
     // Building, deleting or publishing the roster and approving
-    // someone else's leave are staff.roster (owner/admin), so the
+    // someone's leave are staff.roster (owner/admin), so the
     // worker template must not carry that grant.
     permissions: ["staff.self"],
   },

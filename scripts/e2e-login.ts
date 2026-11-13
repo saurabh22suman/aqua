@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { spawn, type ChildProcess } from "node:child_process";
+import { e2eWebEnv } from "./lib/e2e-child-env";
 import { createServer } from "node:net";
 import { DEMO_PIN } from "./lib/demo-credentials";
 
@@ -55,6 +56,7 @@ async function main() {
   const server = spawn("pnpm", ["next", "dev", "-p", String(PORT)], {
     stdio: "ignore",
     detached: true,
+    env: e2eWebEnv(process.env),
   });
   await waitForServer(server);
 

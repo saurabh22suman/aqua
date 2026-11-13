@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
@@ -35,6 +36,9 @@ export async function createMenuItem(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const categoryRows = await tx
       .select()
@@ -130,6 +134,9 @@ export async function updateMenuItem(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()
@@ -238,6 +245,9 @@ export async function archiveMenuItem(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()

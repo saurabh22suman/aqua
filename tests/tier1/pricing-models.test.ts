@@ -7,7 +7,6 @@ import { planShapeSchema } from "@/db/preset-definitions";
 import { withTenant } from "@/db/tenant";
 import { issueInvoiceInTx } from "@/lib/services/invoice-issue";
 import { addDays, todayInZone } from "@/lib/time/tz";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // M-06 — pricing model extension. First run is deliberately red: the
 // widened check constraints and the service validation do not exist.
@@ -20,6 +19,7 @@ const TZ = "Asia/Kolkata";
 
 const tenantId = asTenantId(uuidv7());
 const actor = asUserId(uuidv7());
+const roleId = uuidv7(), membershipId = uuidv7();
 const locationId = uuidv7();
 const activityId = uuidv7();
 const personId = uuidv7();
@@ -40,8 +40,11 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9195${String(Date.now()).slice(-8)}`,
+    `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`,
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[roleId,tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) select $1,$2,p.key from (values ('members.read'),('settings.manage'),('invoices.read')) p(key)",[tenantId,roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,tenantId,actor,roleId]);
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Main', true)",
     [locationId, tenantId],
@@ -63,7 +66,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await deleteAuditRowsForTenant(admin, tenantId);
   await admin.query("delete from invoice_line_items where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from invoices where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from subscriptions where tenant_id = $1::uuid", [tenantId]);
@@ -73,9 +75,11 @@ afterAll(async () => {
   await admin.query("delete from persons where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from facilities where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from locations where tenant_id = $1::uuid", [tenantId]);
+  await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [tenantId]);
+  await admin.query("delete from role_permissions where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from roles where tenant_id = $1::uuid", [tenantId]);
   await admin.query("delete from tenants where id = $1::uuid", [tenantId]);
-  await admin.query("delete from users where id = $1::uuid", [actor]);
+  await admin.query("delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id=users.id)", [actor]);
   await admin.end();
 });
 

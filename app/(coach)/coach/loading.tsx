@@ -1,37 +1,33 @@
 import { Skeleton } from "@/components/skeleton";
+import { StaffPage } from "@/components/staff-ui/staff-page";
 
-// Coach home cold-load. The page calls getCoachHomeAction (one DB
-// read over the coach's batches, sessions and marking progress)
-// plus a date lookup; without this file the user sees a blank
-// document for the 2–7s cold-load window. Next.js streams this
-// skeleton instead so the coach sees "Today" + a card-shaped list
-// while the data resolves.
-//
-// Shape mirrors app/(coach)/coach/page.tsx: a "Today" display
-// heading followed by 2 register-link cards (each a heading row
-// + a lane strip bar).
-
+// Coach home cold-load. Shape mirrors the staff Today page: a bounded
+// heading, the day's completion line, then two register rows.
 export default function Loading() {
   return (
-    <main className="px-5 pt-10 pb-8">
-      {/* "Today" heading */}
-      <Skeleton w={14} h={6} />
+    <StaffPage>
+      <Skeleton w={14} h={7} />
+      <Skeleton w={26} h={3} className="mt-2" />
+      <Skeleton w={30} h={3} className="mt-5" />
 
-      {/* 2 register-link cards */}
-      <ul className="mt-6 space-y-4">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-line bg-paper">
         {[0, 1].map((i) => (
-          <li
+          <div
             key={i}
-            className="bg-paper rounded-card border border-line p-4"
+            className={`px-4 py-3.5 ${i > 0 ? "border-t border-line" : ""}`}
           >
-            <div className="flex justify-between items-baseline mb-2">
+            <div className="mb-2 flex items-baseline justify-between gap-2.5">
               <Skeleton w={40} h={4} />
-              <Skeleton w={10} h={4} />
+              <Skeleton w={10} h={3} />
             </div>
             <Skeleton w={80} h={1.5} rounded="rounded-pill" />
-          </li>
+            <div className="mt-2.5 flex justify-between">
+              <Skeleton w={16} h={3} />
+              <Skeleton w={12} h={3} />
+            </div>
+          </div>
         ))}
-      </ul>
-    </main>
+      </div>
+    </StaffPage>
   );
 }

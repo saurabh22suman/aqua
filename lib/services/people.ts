@@ -12,6 +12,7 @@ import {
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import { personLocationPredicate } from "@/lib/services/person-location-scope";
 import { isMinor } from "@/lib/time/tz";
 import { asMemberId } from "@/lib/ids";
 import { writeAudit } from "@/lib/audit/write";
@@ -457,6 +458,8 @@ export async function searchPersons(
 ): Promise<PersonSearchRow[]> {
   if (!query.trim()) return [];
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const personScope = personLocationPredicate(tx, ctx.tenantId, access);
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
       .from(tenants)
@@ -475,6 +478,7 @@ export async function searchPersons(
         and(
           eq(persons.tenantId, ctx.tenantId),
           isNull(persons.deletedAt),
+          personScope,
           or(ilike(persons.fullName, term), ilike(persons.phone, term))!,
         ),
       )
@@ -495,13 +499,17 @@ export async function searchPersons(
 export type LocationOption = { id: string; name: string };
 
 export async function listLocations(ctx: ActionCtx): Promise<LocationOption[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const predicate = access.unrestricted || access.includeUnlocated
+      ? undefined
+      : locationPredicate(locations.id, access);
+    return tx
       .select({ id: locations.id, name: locations.name })
       .from(locations)
-      .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
-      .orderBy(locations.name),
-  );
+      .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt), predicate))
+      .orderBy(locations.name);
+  });
 }
 
 // Per-tenant member code generator (C-03 done-when: "codes are unique

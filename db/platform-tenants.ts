@@ -257,6 +257,7 @@ export type TenantDetail = {
   status: "trial" | "active" | "suspended" | "churned";
   planId: string | null;
   planName: string | null;
+  trialExpiresAt: Date | null;
   timezone: string;
   currency: string;
   gstin: string | null;
@@ -367,6 +368,7 @@ export async function getTenantDetail(
         ${tenants.status}              as status,
         ${tenants.planId}              as "planId",
         ${plans.name}                  as "planName",
+        ${tenants.trialExpiresAt}       as "trialExpiresAt",
         ${tenants.timezone}            as timezone,
         ${tenants.currency}            as currency,
         ${tenants.gstin}               as gstin,
@@ -406,6 +408,7 @@ export async function getTenantDetail(
       status: "trial" | "active" | "suspended" | "churned";
       planId: string | null;
       planName: string | null;
+      trialExpiresAt: string | null;
       timezone: string;
       currency: string;
       gstin: string | null;
@@ -473,6 +476,7 @@ export async function getTenantDetail(
     status: header.status,
     planId: header.planId,
     planName: header.planName,
+    trialExpiresAt: header.trialExpiresAt ? new Date(header.trialExpiresAt) : null,
     timezone: header.timezone,
     currency: header.currency,
     gstin: header.gstin,

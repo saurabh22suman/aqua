@@ -1,6 +1,7 @@
 "use client";
 
 import { PresetCard } from "./preset-card";
+import { OpsEmptyState } from "@/components/ops/ops-primitives";
 
 // Phase 2.2b — client island for the catalogue page. Receives the
 // server-rendered preview list and renders one card per preset.
@@ -53,16 +54,16 @@ export function PresetCatalogue({
 }) {
   if (entries.length === 0) {
     return (
-      <div className="mt-8 rounded-card bg-paper border border-line px-5 py-12 text-center">
-        <p className="text-[15px] font-medium text-ink">No presets yet</p>
-        <p className="mt-2 text-[13px] text-ink-3">
-          The catalogue is empty. Run the seed to populate it on a
-          fresh database.
-        </p>
-        <code className="mt-4 inline-block rounded-ctl bg-deck px-3 py-1 text-[12px] font-mono text-ink-2">
-          pnpm db:seed
-        </code>
-      </div>
+      <OpsEmptyState
+        className="mt-8"
+        title="No presets yet"
+        body={
+          <>
+            The catalogue is empty. Run the seed to populate it on a fresh
+            database.
+          </>
+        }
+      />
     );
   }
   return (

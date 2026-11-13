@@ -35,7 +35,7 @@
 //      metric and facility scope.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -60,6 +60,8 @@ vi.mock("@/components/charts/owner-chart-island", () => ({
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import { OwnerHomeRange } from "@/components/owner-home/owner-home-range";
+import { OwnerHomeAttendance } from "@/components/owner-home/owner-home-attendance";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
@@ -199,20 +201,10 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
         can={ALL_CAN}
       />,
     );
-    const tiles = screen.getAllByTestId("stat-card");
-    expect(tiles).toHaveLength(4);
-    // Collected today — money in, on the pale money surface.
-    expect(tiles[0]!.className).toContain("bg-tile-money");
-    // Overdue — the late surface, because money is past due.
-    expect(tiles[1]!.className).toContain("bg-late-soft");
-    // Active members and sessions today — the two calm pastels.
-    expect(tiles[2]!.className).toContain("bg-tile-info");
-    expect(tiles[3]!.className).toContain("bg-tile-butter");
-
-    // Each tile states its meaning with an icon, not with colour alone.
-    const chip = within(tiles[0]!).getByTestId("stat-card-icon");
-    expect(chip.className).toContain("bg-good");
-    expect(chip.querySelector("svg")).toBeTruthy();
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("Collections");
+    expect(money.textContent).toContain("₹21,000");
+    expect(money.textContent).toContain("Unavailable");
   });
 
   it("does not paint an alert on a tile whose money is not late", () => {
@@ -234,25 +226,17 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
         can={ALL_CAN}
       />,
     );
-    const tiles = screen.getAllByTestId("stat-card");
-    const overdue = tiles[1]!;
-    expect(overdue.className).not.toContain("bg-late-soft");
-    // A calm surface, and the chip is neutral rather than an alarm.
-    expect(within(overdue).getByTestId("stat-card-icon").className).not.toContain("bg-late");
-    expect(document.body.textContent).toContain("Nothing past due");
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("₹0");
+    expect(money.textContent).toContain("Unavailable");
+    expect(money.className).not.toContain("bg-late-soft");
   });
 });
 
 describe("owner Home — the chart band", () => {
   it("wears the preset accent on the selected period, not the structural marine", () => {
     render(
-      <OwnerHomeCharts
-        data={charts()}
-        metric="collections"
-        facility={null}
-        canReadFees
-        today="2026-10-26"
-      />,
+      <OwnerHomeRange data={charts()} period="month" facility={null} />,
     );
     const active = screen.getByRole("link", { name: "Month" });
     expect(active.className).toContain("bg-[var(--accent-strong)]");
@@ -273,20 +257,14 @@ describe("owner Home — the chart band", () => {
     expect(figure.getAttribute("role")).toBe("img");
     const label = figure.getAttribute("aria-label") ?? "";
     expect(label).toContain("Collections");
-    expect(label).toContain("This month");
+    expect(label).toContain("Cash, digital and other");
     // The numbers are still readable without the picture.
     expect(screen.getAllByText(/view data table/i).length).toBeGreaterThan(0);
   });
 
   it("states what a bucket without marks means on the phone chart too", () => {
     render(
-      <OwnerHomeCharts
-        data={charts()}
-        metric="attendance"
-        facility={null}
-        canReadFees
-        today="2026-10-26"
-      />,
+      <OwnerHomeAttendance data={charts()} facility={null} />,
     );
     const figure = screen.getByTestId("owner-mini-chart");
     const label = figure.getAttribute("aria-label") ?? "";
@@ -295,23 +273,13 @@ describe("owner Home — the chart band", () => {
 
   it("makes the month's history discoverable, labelled and scope-preserving", () => {
     render(
-      <OwnerHomeCharts
-        data={charts({
-          period: { ...charts().period, key: "day", tabLabel: "Today" },
-        })}
-        metric="collections"
-        facility="loc-1"
-        canReadFees
-        today="2026-10-26"
-      />,
+      <OwnerHomeRange data={charts()} period="day" facility="loc-1" />,
     );
-    const link = screen.getByRole("link", { name: /this month's history/i });
+    const link = screen.getByRole("link", { name: "Month" });
     const href = link.getAttribute("href") ?? "";
     expect(href).toContain("period=month");
     // The metric and the facility scope survive the jump.
-    expect(href).toContain("trend=collections");
     expect(href).toContain("facility=loc-1");
-    // The label says which month, not just "history".
-    expect(link.textContent).toContain("Oct 2026");
+    expect(screen.getByTestId("owner-home-range-detail").textContent).toContain("1 Oct 2026");
   });
 });

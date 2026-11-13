@@ -65,6 +65,8 @@ beforeAll(async () => {
   await bootstrapRoles(adminUri, appPassword);
   const { runMigrations } = await import("@/db/migrate");
   await runMigrations(adminUri);
+  const { seedPlatformCatalogue } = await import("@/db/seed-platform");
+  await seedPlatformCatalogue(adminUri);
 
   register = await import("@/lib/services/register");
   people = await import("@/lib/services/people");
@@ -94,6 +96,10 @@ beforeAll(async () => {
     userId,
     `+9194${String(Date.now()).slice(-8)}`,
   ]);
+  const ownerRole = uuidv7();
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [ownerRole, tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'members.read'),($1,$2,'members.write'),($1,$2,'programs.read'),($1,$2,'programs.write')", [tenantId, ownerRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, userId, ownerRole]);
   await admin.query(
     "insert into programs (id, tenant_id, name) values ($1, $2, 'Squad')",
     [programId, tenantId],
@@ -111,6 +117,8 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1::uuid", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from tenants where id = $1::uuid", [tenantId]);
     await admin.query("delete from users where id = $1::uuid", [userId]);

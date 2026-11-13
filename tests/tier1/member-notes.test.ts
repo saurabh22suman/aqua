@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { memberNotes } from "@/db/schema/member-notes";
 import { asMemberId, asTenantId, asUserId, type TenantId } from "@/lib/ids";
@@ -59,8 +60,10 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9191${String(Date.now()).slice(-8)}`,
+    `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`,
   ]);
+  await seedRoleTemplates(tenantA);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantA, actor]);
   await admin.query(
     `insert into persons (id, tenant_id, full_name, date_of_birth) values
        ($1, $2, 'Aarav Minor', '2016-04-02')`,
@@ -74,6 +77,9 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantA]);
+  await admin.query("delete from role_permissions where tenant_id=$1", [tenantA]);
+  await admin.query("delete from roles where tenant_id=$1", [tenantA]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

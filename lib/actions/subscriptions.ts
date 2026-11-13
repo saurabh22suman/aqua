@@ -2,6 +2,8 @@
 
 import { z } from "zod";
 import { requireDefaultCtx } from "@/lib/auth/context";
+import { listMemberSubscriptionPlans } from "@/lib/services/member-subscription-plan-picker";
+import type { PlanRow } from "@/lib/services/membership-plans";
 import { requirePermission } from "@/lib/auth/permission";
 import {
   cancelSubscription,
@@ -27,6 +29,14 @@ export async function listMemberSubscriptionsAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
   return listMemberSubscriptions(ctx, parsed.data.memberId);
+}
+
+export async function listMemberSubscriptionPlansAction(memberId: string): Promise<PlanRow[]> {
+  const parsed = memberIdInput.safeParse({ memberId });
+  if (!parsed.success) return [];
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "members.read");
+  return listMemberSubscriptionPlans(ctx, parsed.data.memberId);
 }
 
 export async function createSubscriptionAction(

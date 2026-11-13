@@ -56,12 +56,12 @@ afterEach(() => {
 });
 
 function expectTimeInputsShrinkable(container: HTMLElement): void {
-  const timeInputs = container.querySelectorAll<HTMLInputElement>(
-    'input[type="time"]',
-  );
-  expect(timeInputs.length).toBe(2);
-  for (const input of timeInputs) {
-    expect(input.className).toContain("min-w-0");
+  // The shared TimeField uses labelled fieldsets with three native selects.
+  const groups = Array.from(container.querySelectorAll("fieldset")).filter(group => /^(Start|End) time/i.test(group.querySelector("legend")?.textContent ?? ""));
+  expect(groups).toHaveLength(2);
+  for (const group of groups) {
+    expect(group.className).toContain("min-w-0");
+    expect(group.querySelectorAll("select")).toHaveLength(3);
   }
 }
 
@@ -102,9 +102,10 @@ describe("batch create capacity+time row wraps (F7)", () => {
       />,
     );
 
-    const capacity = screen.getByLabelText("Capacity");
-    // The field's wrapper is the labelled cell; the row is its parent.
-    expect(capacity.parentElement?.parentElement?.className).toContain("grid-cols-2");
+    expect(screen.getByLabelText("Capacity")).toBeTruthy();
+    const start = screen.getByTestId("batch-create-start");
+    expect(start.parentElement?.className).toContain("grid-cols-1");
+    expect(start.parentElement?.className).toContain("sm:grid-cols-2");
     expectTimeInputsShrinkable(container);
   });
 });
@@ -137,9 +138,10 @@ describe("batch edit capacity+time row wraps (F7)", () => {
       />,
     );
 
-    const capacity = screen.getByLabelText("Capacity");
-    // The field's wrapper is the labelled cell; the row is its parent.
-    expect(capacity.parentElement?.parentElement?.className).toContain("grid-cols-2");
+    expect(screen.getByLabelText("Capacity")).toBeTruthy();
+    const start = screen.getByTestId("edit-batch-start-b1");
+    expect(start.parentElement?.className).toContain("grid-cols-1");
+    expect(start.parentElement?.className).toContain("sm:grid-cols-2");
     expectTimeInputsShrinkable(container);
   });
 });

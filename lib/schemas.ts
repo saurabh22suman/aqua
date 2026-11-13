@@ -1,8 +1,20 @@
 import { z } from "zod";
+import { normaliseToE164 } from "./phone";
+import { isContactPhoneValid } from "./contact-phone";
+import { todayInZone } from "./time/tz";
+
+export const birthDateSchema = z.string().date().refine(
+  (date) => date <= todayInZone("Asia/Kolkata"),
+  { error: "Date of birth cannot be in the future." },
+);
+const contactPhoneSchema = z.string().trim().max(20).refine(
+  isContactPhoneValid,
+  { error: "Enter a valid phone number with country code." },
+).transform(normaliseToE164);
 
 // Matches the seeded row in policy_versions (db/seed-platform.ts) --
 // the version every consent grant captured through the UI cites.
-export const CURRENT_POLICY_VERSION = "2026.1";
+export { CURRENT_POLICY_VERSION } from "./consent-policy";
 
 // C-05: a consent grant, as captured at member registration. Shape
 // only -- the business rule "processing is required" lives in
@@ -28,11 +40,11 @@ export const guardianInputSchema = z.union([
 
 export const createMemberSchema = z.object({
   fullName: z.string().min(1).max(200),
-  phone: z.string().min(8).max(20).optional(),
+  phone: z.union([z.literal("").transform(() => undefined), contactPhoneSchema]).optional(),
   // Mandatory, not optional -- C-05. Minor status is derived from this
   // server-side (isMinor, lib/time/tz.ts); "unknown" cannot be treated
   // as "adult" by omitting it.
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateOfBirth: birthDateSchema,
   gender: z.enum(["male", "female", "other"]).optional(),
   locationId: z.string().uuid(),
   memberCode: z.string().min(1).max(50),
@@ -56,8 +68,8 @@ export const updateMemberSchema = z
   .object({
     memberId: z.string().uuid(),
     fullName: z.string().trim().min(1, "Name can't be empty.").max(200).optional(),
-    phone: z.string().trim().min(8).max(20).nullable().optional(),
-    dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    phone: contactPhoneSchema.nullable().optional(),
+    dateOfBirth: birthDateSchema.optional(),
     gender: z.enum(["male", "female", "other"]).nullable().optional(),
     locationId: z.string().uuid().optional(),
     medicalNotes: z.string().max(2000).nullable().optional(),
@@ -122,7 +134,7 @@ export const addFollowUpSchema = z.object({
 export const completeFollowUpSchema = z.string().uuid();
 
 const newMemberDetailsSchema = z.object({
-  dateOfBirth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  dateOfBirth: birthDateSchema,
   gender: z.enum(["male", "female", "other"]).optional(),
   locationId: z.string().uuid(),
   medicalNotes: z.string().max(2000).optional(),

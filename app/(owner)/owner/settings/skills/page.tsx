@@ -1,9 +1,12 @@
-import Link from "next/link";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { listSkillLaddersAction } from "@/lib/actions/skill-ladder";
 import { SkillLadderManager } from "@/components/skill-ladder-manager";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // V-09 — owner skill-ladder settings. The list is the generic
 // framework the bridge populated from the preset ladder; editing a
@@ -23,12 +26,13 @@ import { EmptyState } from "@/components/ui/EmptyState";
 export default async function OwnerSkillsPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
   const enabled = hasFeature(ctx, "swim.levels");
   const ladders = enabled ? await listSkillLaddersAction() : [];
   const canEdit = hasPermission(ctx, "levels.write");
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-2xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
         <Link
           href="/owner/settings"
@@ -39,14 +43,11 @@ export default async function OwnerSkillsPage() {
         {" / "}
         skills
       </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Skill ladder
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        The levels and skills coaches assess against, with the four-band
-        rubric. Changes are saved to the generic framework and audited;
-        the preset&apos;s own ladder stays as seeded.
-      </p>
+      <PageHeader
+        title={<>Skill ladder</>}
+        purpose={<>The levels and skills coaches assess against, with the four-band
+        rubric.</>}
+      />
       {enabled ? (
         <SkillLadderManager ladders={ladders} canEdit={canEdit} />
       ) : (
@@ -57,6 +58,6 @@ export default async function OwnerSkillsPage() {
           />
         </div>
       )}
-    </main>
+    </OwnerPage>
   );
 }

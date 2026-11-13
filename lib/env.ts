@@ -9,6 +9,16 @@ function emptyAsUndefined(value: unknown): unknown {
   return value;
 }
 
+// The strength floor for the paid-booking entry pass signing key, in
+// characters. It mirrors MIN_PRODUCTION_SECRET_CHARS in
+// lib/services/booking-entry-token.ts, which already enforces the same
+// floor at request time. The constant is duplicated rather than imported:
+// the token module deliberately does NOT import lib/env.ts (it reads
+// process.env directly so it stays usable from a process that never
+// imports the env module), and lib/env.ts must not depend on a service
+// module.
+const MIN_BOOKING_ENTRY_SECRET_CHARS = 32;
+
 const postgresUrl = z
   .string()
   .min(1)
@@ -73,6 +83,15 @@ const envSchema = z
     // production for the same reason — the parent page is a live
     // surface, not a build-only one.
     PARENT_LINK_SECRET: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
+    // The paid-booking entry pass has its OWN optional signing key (the
+    // C-45 sibling, used by lib/services/booking-entry-token.ts). It is
+    // OPTIONAL and deliberately NOT blank-normalised: the request-time
+    // signer treats a present-but-blank dedicated key as FATAL, not as
+    // "unset", so `emptyAsUndefined` here would hide a configuration the
+    // signer refuses. The strength rule lives in superRefine below,
+    // production-serving scoped, because the signer already enforces it
+    // at request time.
+    BOOKING_ENTRY_QR_SECRET: z.string().optional(),
     // OPS_EMAIL + OPS_PASSWORD — the env-only operator login (see the
     // "2026-09-11 auth feature" plan). Both optional; both-or-neither
     // when set, enforced in superRefine below. The password's 12-char
@@ -98,6 +117,7 @@ const envSchema = z
       z.enum(["mock", "capture", "cloud", "disabled"]).optional(),
     ),
     AQUA_DEPLOYMENT_STAGE: z.preprocess(emptyAsUndefined, z.enum(["development", "preview", "production"]).optional()),
+    OPS_STAGING_PASSWORD_ONLY: z.enum(["true", "false"]).default("false").transform(v => v === "true"),
     // Explicit hosted mock for a separate synthetic preview. Its origin is
     // operator configuration, never a recipient/form-controlled destination.
     WHATSAPP_CAPTURE_URL: z.preprocess(emptyAsUndefined, z.string().url().refine(value => {
@@ -205,6 +225,62 @@ const envSchema = z
           "required in production — without it, /p/[token] returns 500 on every render",
       });
     }
+    // The paid-booking entry pass signs with its OWN selected key
+    // (lib/services/booking-entry-token.ts): BOOKING_ENTRY_QR_SECRET when
+    // it is set, otherwise PARENT_LINK_SECRET. The request-time signer
+    // ALREADY refuses a missing, blank or shorter-than-32-character key
+    // when the process is production-serving — it throws on signing and
+    // returns null on verification. Without a boot rule, a deployment with
+    // such a key boots cleanly and then every mint throws while every scan
+    // answers "invalid_token": a dead lane with no named cause. This rule
+    // refuses the SAME configurations at boot, so the operator sees the
+    // cause before traffic does.
+    //
+    // Selection mirrors the signer exactly: a dedicated key that is SET
+    // wins over the parent fallback. So a strong parent does NOT rescue a
+    // weak selected dedicated key, and a weak parent does NOT block a
+    // valid selected dedicated key (the parent fallback is the parent
+    // page's own key; the entry pass only borrows it when nothing else is
+    // configured).
+    //
+    // Scope: production-serving only. `requireProductionVars` already
+    // exempts the Next production build phase (NEXT_PHASE), so `pnpm build`
+    // keeps working, and development/test machines do not sign production
+    // passes.
+    if (requireProductionVars) {
+      const dedicated = val.BOOKING_ENTRY_QR_SECRET;
+      const parent = val.PARENT_LINK_SECRET;
+      const selected =
+        dedicated !== undefined
+          ? { source: "BOOKING_ENTRY_QR_SECRET" as const, value: dedicated }
+          : parent !== undefined
+            ? { source: "PARENT_LINK_SECRET" as const, value: parent }
+            : null;
+      if (selected) {
+        // The signer trims before it measures and before it signs
+        // (requireNonBlank), so the floor is measured on the trimmed value
+        // here too: a 40-character key padded with spaces passes, a
+        // 30-character key padded to 40 does not.
+        const trimmed = selected.value.trim();
+        if (trimmed.length === 0) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [selected.source],
+            message:
+              "is set but empty/whitespace-only and is the selected booking-entry signing key — unset it or provide a strong secret of at least " +
+              `${MIN_BOOKING_ENTRY_SECRET_CHARS} characters from a cryptographically random source`,
+          });
+        } else if (trimmed.length < MIN_BOOKING_ENTRY_SECRET_CHARS) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [selected.source],
+            message:
+              "is too short to be the selected booking-entry signing key — it must be at least " +
+              `${MIN_BOOKING_ENTRY_SECRET_CHARS} characters from a cryptographically random source`,
+          });
+        }
+      }
+    }
     if (requireProductionVars && !val.BETTER_AUTH_URL) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -248,6 +324,18 @@ const envSchema = z
       });
     }
 
+    // This guard uses only deployment configuration, never a request host.
+    // Compare exact raw origin text: URL normalization would accept :443 or credentials.
+    if (val.OPS_STAGING_PASSWORD_ONLY && (
+      val.AQUA_DEPLOYMENT_STAGE !== "preview" ||
+      val.BETTER_AUTH_URL !== "https://sportsip-staging.preprabbit.in" ||
+      val.OPS_HOST !== "sportsip-staging-ops.preprabbit.in" ||
+      !val.OPS_EMAIL || !val.OPS_PASSWORD
+    )) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["OPS_STAGING_PASSWORD_ONLY"],
+        message: "requires preview stage, canonical staging app and Ops hosts, and configured operator credentials" });
+    }
+
     // DEMO_MODE in production (server phase only — `next build` is
     // exempt for the same reason BETTER_AUTH_SECRET is exempt above:
     // a developer's .env may legitimately have DEMO_MODE=true while
@@ -288,8 +376,10 @@ export type ParsedEnv = {
   BETTER_AUTH_URL?: string;
   OPS_HOST?: string;
   PARENT_LINK_SECRET?: string;
+  BOOKING_ENTRY_QR_SECRET?: string;
   OPS_EMAIL?: string;
   OPS_PASSWORD?: string;
+  OPS_STAGING_PASSWORD_ONLY: boolean;
   WHATSAPP_PROVIDER?: "mock" | "capture" | "cloud" | "disabled";
   AQUA_DEPLOYMENT_STAGE?: "development" | "preview" | "production";
   WHATSAPP_CAPTURE_URL?: string;

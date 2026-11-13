@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // R.4 (docs/five-day-work-guide.md) — session cancel / reschedule UI.
@@ -74,12 +74,9 @@ describe("SessionLifecycleControl (R.4)", () => {
     fireEvent.change(screen.getByTestId("reschedule-date"), {
       target: { value: "14/09/2026" },
     });
-    fireEvent.change(screen.getByTestId("reschedule-start"), {
-      target: { value: "18:00" },
-    });
-    fireEvent.change(screen.getByTestId("reschedule-end"), {
-      target: { value: "19:00" },
-    });
+    // The shared TimeField exposes labelled hour/minute/period controls, not an input[type=time].
+    fireEvent.change(within(screen.getByTestId("reschedule-start")).getByLabelText("Hour"), { target: { value: "6" } });
+    fireEvent.change(within(screen.getByTestId("reschedule-end")).getByLabelText("Hour"), { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: /save new time/i }));
 
     await vi.waitFor(() =>

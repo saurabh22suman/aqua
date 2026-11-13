@@ -154,7 +154,7 @@ export async function substituteCoach(
       excludeSessionId: s.id,
       tx,
     });
-    if (conflicts.conflicts.length > 0) {
+    if (conflicts.hasConflicts) {
       return {
         kind: "error",
         code: "coach_conflict",

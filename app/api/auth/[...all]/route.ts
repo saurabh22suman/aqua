@@ -2,11 +2,12 @@ import { auth } from "@/lib/auth/server";
 import { withPlatform } from "@/db/scope";
 
 async function handle(request: Request): Promise<Response> {
-  // Tenant logins use the PIN boundary; only ops supports OTP sign-in.
-  // Internal auth.api.signInEmail remains available to the scoped PIN service.
+  // Only session reads and sign-out belong on the public generic auth surface.
+  // Credential changes must use our PIN-policy and authorization boundaries.
+  // Internal auth.api calls remain available to those scoped services.
   const path = new URL(request.url).pathname;
-  if (["/sign-in/email", "/sign-in/phone-number", "/phone-number/send-otp", "/phone-number/verify", "/request-password-reset", "/reset-password"]
-    .some((endpoint) => path.endsWith(endpoint))) {
+  if (!((request.method === "GET" && path === "/api/auth/get-session") ||
+    (request.method === "POST" && path === "/api/auth/sign-out"))) {
     return Response.json({ error: "Use the Aqua sign-in or PIN recovery page." }, { status: 404 });
   }
   // better-auth does not propagate ALS; this wrap is load-bearing, do not remove

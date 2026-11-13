@@ -198,6 +198,16 @@ async function seed(options: SplashSeedOptions): Promise<SplashSeedResult> {
   const tenantId = await ensureTenant(actor);
   const locationId = await ensureLocation(tenantId);
   await ensureStaff(tenantId);
+  const owner = await db().query<{ id: string }>(
+    `select u.id from users u
+       join tenant_memberships tm on tm.user_id = u.id and tm.tenant_id = $1
+       join roles r on r.id = tm.role_id and r.tenant_id = tm.tenant_id
+      where u.phone = $2 and u.deleted_at is null and tm.status = 'active'
+        and tm.deleted_at is null and r.key = 'owner' and r.deleted_at is null`,
+    [tenantId, STAFF[0].phone],
+  );
+  if (!owner.rows[0]) throw new Error("splash club needs a live owner membership");
+  const ownerId = asUserId(owner.rows[0].id);
   await setStaffCredentials(pin);
   const batchId = await ensureBatch(tenantId, locationId);
   // The sessions the batch runs. Without them the club's calendar,
@@ -206,7 +216,7 @@ async function seed(options: SplashSeedOptions): Promise<SplashSeedResult> {
   await withTenant(tenantId, (tx) =>
     generateSessions(tx, tenantId, SPLASH.timezone),
   );
-  const memberIds = await ensureStudents(tenantId, locationId, batchId);
+  const memberIds = await ensureStudents(tenantId, locationId, batchId, ownerId);
   await ensureMonthlyPlan(tenantId, locationId);
   await ensureSubscription(tenantId, locationId, memberIds[0]!);
 
@@ -469,6 +479,7 @@ async function ensureStudents(
   tenantId: TenantId,
   locationId: string,
   batchId: string,
+  ownerId: UserId,
 ): Promise<string[]> {
   const memberIds: string[] = [];
   for (const s of STUDENTS) {
@@ -482,7 +493,7 @@ async function ensureStudents(
       continue;
     }
 
-    const result = await createMember({ tenantId, userId: undefined as never }, {
+    const result = await createMember({ tenantId, userId: ownerId }, {
       fullName: s.fullName,
       dateOfBirth: s.dob,
       memberCode: s.code,

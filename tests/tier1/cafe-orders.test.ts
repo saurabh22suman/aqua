@@ -20,13 +20,16 @@ const otherTenant = asTenantId(uuidv7());
 const loc = uuidv7();
 const otherLoc = uuidv7();
 const actor = asUserId(uuidv7());
+const ownerRole = uuidv7(), ownerMembership = uuidv7();
+const otherActor = asUserId(uuidv7()), otherRole = uuidv7(), otherMembership = uuidv7();
+const phone = () => `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`;
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 const otherPersonId = uuidv7();
 const otherMemberId = asMemberId(uuidv7());
 
 const ctx = { tenantId: tenant, userId: actor, requestId: uuidv7() };
-const otherCtx = { tenantId: otherTenant, userId: actor };
+const otherCtx = { tenantId: otherTenant, userId: otherActor };
 
 let menu: typeof import("@/lib/services/menu");
 let orders: typeof import("@/lib/services/orders");
@@ -66,6 +69,7 @@ beforeAll(async () => {
        ($3, $4, 'Cafe Orders B', 'active', 'Asia/Kolkata', null)`,
     [tenant, `k02-${RUN}`, otherTenant, `k02-b-${RUN}`],
   );
+  for (const id of [tenant, otherTenant]) await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'cafe.pos',true)", [id]);
   await admin.query(
     `insert into locations (id, tenant_id, name, is_primary) values
        ($1, $3, 'Counter', true), ($2, $4, 'Other Counter', true)`,
@@ -73,8 +77,15 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9191${String(Date.now()).slice(-8)}`,
+    phone(),
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[ownerRole,tenant]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) select $1,$2,p.key from (values ('members.read'),('invoices.read'),('invoices.write'),('payments.record'),('reports.financial'),('settings.manage')) p(key)",[tenant,ownerRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[ownerMembership,tenant,actor,ownerRole]);
+  await admin.query("insert into users(id,phone) values($1,$2)",[otherActor,phone()]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[otherRole,otherTenant]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) select $1,$2,p.key from (values ('members.read'),('invoices.read'),('invoices.write'),('payments.record'),('reports.financial'),('settings.manage')) p(key)",[otherTenant,otherRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[otherMembership,otherTenant,otherActor,otherRole]);
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Cafe Member')",
     [personId, tenant],
@@ -112,6 +123,15 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  // Privileged cleanup is restricted to these synthetic tenant IDs; audit rows remain.
+  for (const id of [tenant,otherTenant]) {
+    for (const table of ["receipts","payment_reversals","account_entries","payments","order_lines","orders","invoice_line_items","invoices","menu_items","menu_categories","members","persons","tenant_memberships","role_permissions","roles","locations"]) {
+      await admin.query(`delete from "${table}" where tenant_id=$1`,[id]);
+    }
+    await admin.query("delete from tenant_features where tenant_id=$1", [id]);
+    await admin.query("delete from tenants where id=$1",[id]);
+  }
+  await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)",[[actor,otherActor]]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

@@ -2,8 +2,8 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { TenantSignOut } from "@/components/tenant-sign-out";
+import { StaffClubInstallLink } from "@/components/staff-club-install-link";
 import { requireReception } from "@/lib/auth/surface-guard";
-import { formatPhoneIN } from "@/lib/phone";
 import { listMyShiftsAction } from "@/lib/actions/shifts";
 import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
 import {
@@ -14,11 +14,16 @@ import { MyShiftsCard } from "@/components/my-shifts-card";
 import { MyAttendanceCard } from "@/components/my-attendance-card";
 import { MyLeaveCard } from "@/components/my-leave-card";
 import { addDays, todayInZone } from "@/lib/time/tz";
+import {
+  StaffIdentity,
+  StaffPage,
+  StaffPageHeader,
+} from "@/components/staff-ui/staff-page";
+import { StaffAppearance } from "@/components/staff-ui/staff-appearance";
 
-// K2 — reception's account surface. Mirrors /coach/me: name, phone,
-// sign-out. Reception's bottom nav had three tabs (Today / Add
-// member / Enquiries) — K2 adds a fourth "Me" tab so this page is
-// reachable without burying a sign-out link inside Today.
+// K2 — reception's account surface. Mirrors /coach/me: identity, the
+// caller's own shifts/attendance/leave, sign-out. Reception's bottom
+// nav keeps its four tabs.
 export default async function ReceptionMePage() {
   await requireReception();
   const ctx = await requireDefaultCtx();
@@ -36,17 +41,12 @@ export default async function ReceptionMePage() {
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">Me</h1>
+    <StaffPage>
+      <StaffPageHeader title="Me" />
 
-      <section className="mt-5 rounded-card border border-line bg-paper p-4">
-        <p className="font-display text-[15px] font-semibold">
-          {identity?.fullName ?? "Signed in"}
-        </p>
-        <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
-        </p>
-      </section>
+      <StaffIdentity name={identity?.fullName} phone={identity?.phone} />
+
+      <StaffAppearance />
 
       <MyShiftsCard shifts={shifts} />
       <MyAttendanceCard attendance={attendance} />
@@ -56,7 +56,8 @@ export default async function ReceptionMePage() {
         requests={myLeave.requests}
       />
 
+      <StaffClubInstallLink tenantId={ctx.tenantId} />
       <TenantSignOut />
-    </main>
+    </StaffPage>
   );
 }

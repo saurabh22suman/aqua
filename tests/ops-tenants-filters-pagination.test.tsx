@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsGlobalRead: async (operation: string, read: () => Promise<unknown>, origin: string) => {
+    expect(["tenant.list", "plan.list", "preset.list"]).toContain(operation);
+    expect(origin).toBe("ops_page");
+    return read();
+  },
+}));
 
 // PR4 (ops console improvements) — plan/preset/health/trial filters
 // and pagination on the tenants list. The real filtering logic lives

@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { persons, locations, programs, batches, members } from "@/db/schema";
 import { enrolments } from "@/db/schema/scheduling";
@@ -14,7 +15,7 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const actorId: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
@@ -29,6 +30,9 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Transfer Test', $3)",
     [tenantId, `transfer-${RUN}`, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -53,7 +57,11 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -78,8 +86,8 @@ beforeEach(async () => {
         locationId,
         memberCode: `TR-${RUN}-${person!.id.slice(0, 4)}`,
         status: "active",
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: actorId,
+        updatedBy: actorId,
       })
       .returning({ id: members.id });
     memberId = m!.id;
@@ -117,8 +125,8 @@ beforeEach(async () => {
       memberId: asMemberId(memberId),
       batchId: fromBatchId,
       enrolledOn: new Date().toISOString().slice(0, 10),
-      createdBy: SYSTEM_USER,
-      updatedBy: SYSTEM_USER,
+      createdBy: actorId,
+      updatedBy: actorId,
     });
   });
 });
@@ -138,7 +146,7 @@ async function readAllEnrolments() {
 describe("transferMemberToBatch (Phase R.6)", () => {
   it("moves a member from one batch to another", async () => {
     const result = await transferMemberToBatch(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId, fromBatchId, toBatchId },
     );
     expect(result.kind).toBe("ok");
@@ -154,7 +162,7 @@ describe("transferMemberToBatch (Phase R.6)", () => {
 
   it("rejects same-batch transfer (from == to)", async () => {
     const result = await transferMemberToBatch(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId, fromBatchId, toBatchId: fromBatchId },
     );
     expect(result.kind).toBe("error");
@@ -179,15 +187,15 @@ describe("transferMemberToBatch (Phase R.6)", () => {
           locationId,
           memberCode: `TR-OTHER-${RUN}-${p!.id.slice(0, 4)}`,
           status: "active",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: actorId,
+          updatedBy: actorId,
         })
         .returning({ id: members.id });
       otherMemberId = m!.id;
     });
 
     const result = await transferMemberToBatch(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId: otherMemberId, fromBatchId, toBatchId },
     );
     expect(result.kind).toBe("error");
@@ -213,8 +221,8 @@ describe("transferMemberToBatch (Phase R.6)", () => {
           locationId,
           memberCode: `TR-FILL-${RUN}-${p!.id.slice(0, 4).replace(/-/g, "")}`,
           status: "active",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: actorId,
+          updatedBy: actorId,
         })
         .returning({ id: members.id });
       await tx.insert(enrolments).values({
@@ -222,12 +230,12 @@ describe("transferMemberToBatch (Phase R.6)", () => {
         memberId: m!.id,
         batchId: toBatchId,
         enrolledOn: new Date().toISOString().slice(0, 10),
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: actorId,
+        updatedBy: actorId,
       });
     });
     const result = await transferMemberToBatch(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId, fromBatchId, toBatchId },
     );
     expect(result.kind).toBe("error");
@@ -238,7 +246,7 @@ describe("transferMemberToBatch (Phase R.6)", () => {
 
   it("succeeds when target has spare capacity — capacity is checked on the live row only", async () => {
     const result = await transferMemberToBatch(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { memberId, fromBatchId, toBatchId },
     );
     expect(result.kind).toBe("ok");

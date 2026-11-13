@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { persons, locations, programs, members, batches } from "@/db/schema";
-import { sessions } from "@/db/schema/scheduling";
+import { sessions, attendance } from "@/db/schema/scheduling";
 import { makeupCredits } from "@/db/schema/makeup-credits";
 import { grantMakeupCredit, redeemMakeupCredit } from "@/lib/services/makeup";
 import { asTenantId, asUserId, asMemberId, type TenantId, type UserId } from "@/lib/ids";
@@ -15,7 +15,9 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const ACTOR: UserId = asUserId(uuidv7());
+const roleId = uuidv7(), membershipId = uuidv7();
+const receptionActor = asUserId(uuidv7()), receptionRole = uuidv7(), receptionMembership = uuidv7();
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
@@ -29,6 +31,14 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Makeup Test', $3)",
     [tenantId, "makeup-" + RUN, TZ],
   );
+  await admin.query("insert into users(id,phone) values($1,$2)",[ACTOR, `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[roleId,tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'programs.write'),($1,$2,'programs.read'),($1,$2,'members.read')",[tenantId,roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,tenantId,ACTOR,roleId]);
+  await admin.query("insert into users(id,phone) values($1,$2)",[receptionActor, `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'receptionist','Reception','/reception',3)",[receptionRole,tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'attendance.mark')",[tenantId,receptionRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[receptionMembership,tenantId,receptionActor,receptionRole]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -47,6 +57,7 @@ afterAll(async () => {
   if (tenantId) {
     await withTenant(tenantId, async (tx) => {
       await tx.delete(makeupCredits).where(eq(makeupCredits.tenantId, tenantId));
+      await tx.delete(attendance).where(eq(attendance.tenantId, tenantId));
       await tx.delete(sessions).where(eq(sessions.tenantId, tenantId));
       await tx.delete(members).where(eq(members.tenantId, tenantId));
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
@@ -54,7 +65,11 @@ afterAll(async () => {
       await tx.delete(programs).where(eq(programs.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1",[tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1",[tenantId]);
+    await admin.query("delete from roles where tenant_id=$1",[tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)",[[ACTOR,receptionActor]]);
   }
   await admin.end();
 });
@@ -62,6 +77,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await withTenant(tenantId, async (tx) => {
     await tx.delete(makeupCredits).where(eq(makeupCredits.tenantId, tenantId));
+    await tx.delete(attendance).where(eq(attendance.tenantId, tenantId));
     await tx.delete(sessions).where(eq(sessions.tenantId, tenantId));
     await tx.delete(members).where(eq(members.tenantId, tenantId));
   });
@@ -84,8 +100,8 @@ beforeEach(async () => {
         locationId,
         memberCode: "MKP-" + RUN + "-" + p!.id.slice(0, 4).replace(/-/g, ""),
         status: "active",
-        createdBy: SYSTEM_USER,
-        updatedBy: SYSTEM_USER,
+        createdBy: ACTOR,
+        updatedBy: ACTOR,
       })
       .returning({ id: members.id });
     memberId = m!.id;
@@ -114,13 +130,14 @@ beforeEach(async () => {
       })
       .returning({ id: sessions.id });
     sessionId = s!.id;
+    await tx.insert(attendance).values({tenantId,sessionId,memberId:asMemberId(memberId),status:"absent",clientId:uuidv7(),markedBy:ACTOR});
   });
 });
 
 describe("grantMakeupCredit (Phase R.7)", () => {
   it("grants a credit for a source absence", async () => {
     const result = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId },
     );
     expect(result.kind).toBe("ok");
@@ -132,12 +149,12 @@ describe("grantMakeupCredit (Phase R.7)", () => {
 
   it("rejects a second grant for the same source absence", async () => {
     const first = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId },
     );
     expect(first.kind).toBe("ok");
     const second = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId },
     );
     expect(second.kind).toBe("error");
@@ -148,7 +165,7 @@ describe("grantMakeupCredit (Phase R.7)", () => {
 
   it("rejects a source session that doesn't belong to this tenant", async () => {
     const result = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: uuidv7() },
     );
     expect(result.kind).toBe("error");
@@ -159,7 +176,7 @@ describe("grantMakeupCredit (Phase R.7)", () => {
 
   it("default expires_at is 60 days out", async () => {
     const result = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId },
     );
     expect(result.kind).toBe("ok");
@@ -179,7 +196,7 @@ describe("grantMakeupCredit (Phase R.7)", () => {
 describe("redeemMakeupCredit (Phase R.7)", () => {
   it("redeems a granted credit against a target session", async () => {
     const grant = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId },
     );
     expect(grant.kind).toBe("ok");
@@ -216,7 +233,7 @@ describe("redeemMakeupCredit (Phase R.7)", () => {
     });
 
     const redeem = await redeemMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: receptionActor },
       { memberId, sourceSessionId: sessionId, targetSessionId: targetId },
     );
     expect(redeem.kind).toBe("ok");
@@ -237,16 +254,16 @@ describe("redeemMakeupCredit (Phase R.7)", () => {
 
   it("rejects double-redeem of the same credit", async () => {
     await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId },
     );
     const first = await redeemMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: receptionActor },
       { memberId, sourceSessionId: sessionId, targetSessionId: sessionId },
     );
     expect(first.kind).toBe("ok");
     const second = await redeemMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: receptionActor },
       { memberId, sourceSessionId: sessionId, targetSessionId: sessionId },
     );
     expect(second.kind).toBe("error");
@@ -257,7 +274,7 @@ describe("redeemMakeupCredit (Phase R.7)", () => {
 
   it("rejects redemption when no credit exists", async () => {
     const result = await redeemMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: receptionActor },
       { memberId, sourceSessionId: sessionId, targetSessionId: sessionId },
     );
     expect(result.kind).toBe("error");
@@ -269,12 +286,12 @@ describe("redeemMakeupCredit (Phase R.7)", () => {
   it("rejects redemption of an expired credit", async () => {
     const pastDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const grant = await grantMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { memberId, sourceSessionId: sessionId, expiresAt: pastDate },
     );
     expect(grant.kind).toBe("ok");
     const result = await redeemMakeupCredit(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: receptionActor },
       { memberId, sourceSessionId: sessionId, targetSessionId: sessionId },
     );
     expect(result.kind).toBe("error");

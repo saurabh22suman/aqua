@@ -1,5 +1,7 @@
 import { BackLink } from "@/components/ui/BackLink";
 import { MemberInvoicesPanel } from "@/components/member-detail/member-invoices-panel";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import { formatPhoneIN } from "@/lib/phone";
 import type { MemberPayerView } from "@/lib/services/people";
@@ -28,15 +30,15 @@ export function MemberPayerFinance({
   timezone: string;
 }) {
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/members" label="Members" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        {payer.fullName}
-      </h1>
-      <p className="mt-0.5 text-[12.5px] text-ink-3">
-        {payer.memberCode} · {payer.locationName}
-        {payer.isMinor ? " · minor" : ""}
-      </p>
+      <PageHeader
+        className="mt-2"
+        title={payer.fullName}
+        purpose={`${payer.memberCode} · ${payer.locationName}${
+          payer.isMinor ? " · minor" : ""
+        }`}
+      />
       <dl className="mt-4 space-y-2 rounded-card border border-line bg-paper p-3.5 text-[13px]">
         <div className="flex justify-between">
           <dt className="text-ink-3">Phone</dt>
@@ -56,6 +58,6 @@ export function MemberPayerFinance({
         canReadPayments={canReadPayments}
         timezone={timezone}
       />
-    </main>
+    </OwnerPage>
   );
 }

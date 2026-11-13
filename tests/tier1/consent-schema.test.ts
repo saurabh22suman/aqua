@@ -6,7 +6,7 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { consents, locations } from "@/db/schema";
 import { createMember } from "@/lib/services/register";
-import { asTenantId, type TenantId } from "@/lib/ids";
+import { asTenantId, asUserId, type TenantId } from "@/lib/ids";
 
 // Deliberately NOT named tests/tier1/consent-minor-block.test.ts or
 // tests/tier1/consent-withdrawal-immutable.test.ts -- those are files
@@ -25,6 +25,7 @@ const POLICY_VERSION = "2026.1";
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
+const actor = asUserId(uuidv7()), roleId = uuidv7(), membershipId = uuidv7();
 
 beforeAll(async () => {
   tenantId = asTenantId(uuidv7());
@@ -35,6 +36,10 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Consent Schema', $3, $4)",
     [tenantId, `consent-schema-${RUN}`, plan.rows[0]?.id ?? null, TZ],
   );
+  await admin.query("insert into users(id,phone) values($1,$2)",[actor, `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'receptionist','Reception','/reception',3)",[roleId,tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'members.read'),($1,$2,'members.write')",[tenantId,roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,tenantId,actor,roleId]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -50,8 +55,12 @@ afterAll(async () => {
     await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id=$1",[tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1",[tenantId]);
+    await admin.query("delete from roles where tenant_id=$1",[tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[actor]);
   }
   await admin.end();
 });
@@ -81,7 +90,7 @@ async function rejectionMessage(promise: Promise<unknown>): Promise<string> {
 describe("createMember — an adult self-consents", () => {
   it("succeeds with a processing consent grant, granted_by is the person themselves", async () => {
     const result = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Adult Self",
         dateOfBirth: ADULT_DOB,
@@ -114,7 +123,7 @@ describe("createMember — an adult self-consents", () => {
     const before = await withTenant(tenantId, (tx) => tx.select().from(consents));
 
     const result = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Adult No Consent",
         dateOfBirth: ADULT_DOB,
@@ -134,7 +143,7 @@ describe("createMember — an adult self-consents", () => {
 describe("createMember — a minor requires a guardian and guardian processing consent", () => {
   it("cannot be created without a guardian — blocked, no rows created", async () => {
     const result = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Minor No Guardian",
         dateOfBirth: MINOR_DOB,
@@ -157,7 +166,7 @@ describe("createMember — a minor requires a guardian and guardian processing c
 
   it("cannot be created without processing consent, even with a guardian present — blocked, no rows created", async () => {
     const result = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Minor No Consent",
         dateOfBirth: MINOR_DOB,
@@ -175,7 +184,7 @@ describe("createMember — a minor requires a guardian and guardian processing c
 
   it("succeeds with a new guardian and processing consent — granted_by is the guardian, not the minor", async () => {
     const result = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Minor Registered",
         dateOfBirth: MINOR_DOB,
@@ -230,7 +239,7 @@ describe("createMember — a minor requires a guardian and guardian processing c
       }),
     );
 
-    const result = await createMember({ tenantId, userId: undefined }, raw);
+    const result = await createMember({ tenantId, userId: actor }, raw);
 
     // Still blocked: the real DOB says minor, no guardian was provided,
     // and the bogus isMinor:false field changed nothing.
@@ -247,7 +256,7 @@ describe("consents — immutability trigger (db/migrations/0015)", () => {
 
   beforeAll(async () => {
     const created = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Immutability Subject",
         dateOfBirth: ADULT_DOB,
@@ -266,7 +275,7 @@ describe("consents — immutability trigger (db/migrations/0015)", () => {
     personId = created.personId;
 
     const other = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Someone Else",
         dateOfBirth: ADULT_DOB,
@@ -344,7 +353,7 @@ describe("consents — immutability trigger (db/migrations/0015)", () => {
 describe("consents — at most one active grant per (tenant, person, purpose)", () => {
   it("rejects a second active processing grant for the same person", async () => {
     const created = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Double Grant Subject",
         dateOfBirth: ADULT_DOB,
@@ -378,7 +387,7 @@ describe("consents — at most one active grant per (tenant, person, purpose)", 
 
   it("allows a second grant for a DIFFERENT purpose on the same person", async () => {
     const created = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Multi Purpose Subject",
         dateOfBirth: ADULT_DOB,
@@ -414,7 +423,7 @@ describe("consents — at most one active grant per (tenant, person, purpose)", 
 
   it("allows a re-grant of the same purpose after the prior grant was withdrawn", async () => {
     const created = await createMember(
-      { tenantId, userId: undefined },
+      { tenantId, userId: actor },
       {
         fullName: "Regrant Subject",
         dateOfBirth: ADULT_DOB,

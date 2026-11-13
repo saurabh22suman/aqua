@@ -10,6 +10,19 @@ vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({ kind: "authenticated", userId: "u1" }),
 }));
 vi.mock("@/lib/params", () => ({ requireUuidParam: () => undefined }));
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (operation: string, tenant: string, read: () => Promise<unknown>, origin: string) => {
+    expect(["tenant.detail", "tenant.sample_data.state"]).toContain(operation);
+    expect(tenant).toBe("11111111-1111-1111-1111-111111111111");
+    expect(origin).toBe("ops_page");
+    return read();
+  },
+  runOpsGlobalRead: async (operation: string, read: () => Promise<unknown>, origin: string) => {
+    expect(operation).toBe("plan.list");
+    expect(origin).toBe("ops_page");
+    return read();
+  },
+}));
 
 const TENANT_ID = "11111111-1111-1111-1111-111111111111";
 

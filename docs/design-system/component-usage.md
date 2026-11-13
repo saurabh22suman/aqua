@@ -466,3 +466,26 @@ Pages consume Menu rather than calling this helper to build another dropdown.
 Internal Menu accessible-name helper. Preserves a trigger's own readable label
 and supplies the explicit fallback for icon-only triggers. Pages must provide a
 meaningful label; geometry and naming helpers do not add another visual system.
+# Additional shared UI modules
+
+These existing files support the shared controls; internal helper modules are
+not separate visual components or independently approved screens.
+
+| File | Responsibility |
+| --- | --- |
+| `components/ui/DateCalendar.tsx` | Calendar popup composition. |
+| `components/ui/DateCalendarHeader.tsx` | Calendar month and year navigation. |
+| `components/ui/calendar-day-grid.tsx` | Calendar day grid. |
+| `components/ui/calendar-viewport.ts` | Calendar viewport and popup placement. |
+| `components/ui/use-date-calendar.ts` | Calendar interaction controller. |
+| `components/ui/date-field-props.ts` | Date field props and ref helper. |
+| `components/ui/date-field-state.ts` | Date field state derivation. |
+| `components/ui/date-field-validity-control.tsx` | Native date field validity control. |
+| `components/ui/TimeField.tsx` | Time input control. |
+| `components/ui/PageHeader.tsx` | Page and section headings. |
+| `components/ui/TransientDisclosure.tsx` | Transient disclosure control. |
+| `components/ui/select-geometry.ts` | Select popup placement geometry. |
+| `components/ui/select-keyboard.ts` | Select keyboard navigation helpers. |
+| `components/ui/select-options.ts` | Native select option extraction. |
+| `components/ui/select-popup.tsx` | Select popup presentation. |
+| `components/ui/use-select-popup.ts` | Select popup interaction controller. |

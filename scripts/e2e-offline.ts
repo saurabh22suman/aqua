@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { spawn } from "node:child_process";
+import { e2eWebEnv } from "./lib/e2e-child-env";
 import { createServer } from "node:net";
 import { Pool } from "pg";
 import { env } from "@/lib/env";
@@ -68,11 +69,11 @@ async function main() {
   const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
-    env: {
+    env: e2eWebEnv({
       ...process.env,
       OFFLINE_SYNC_ENABLED: "true",
       BETTER_AUTH_URL: BASE,
-    },
+    }),
   });
   server.stdout?.on("data", data => process.stdout.write(data));
   server.stderr?.on("data", data => process.stderr.write(data));

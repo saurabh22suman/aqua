@@ -6,6 +6,7 @@ import { enrolments } from "@/db/schema/scheduling";
 import { members, persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
 import { tenants } from "@/db/schema/tenants";
+import { locations } from "@/db/schema/locations";
 import { coachStaffIdSubquery } from "@/lib/services/staff";
 import {
   locationPredicate,
@@ -18,6 +19,7 @@ export type CoachScheduleRow = {
   id: string;
   sessionDate: string;
   batchName: string;
+  locationName?: string | null;
   startsAt: Date;
   endsAt: Date;
   marked: number;
@@ -51,6 +53,7 @@ export async function listCoachSchedule(
         id: sessions.id,
         sessionDate: sessions.sessionDate,
         batchName: batches.name,
+        locationName: locations.name,
         startsAt: sessions.startsAt,
         endsAt: sessions.endsAt,
         marked: sql<number>`(
@@ -66,6 +69,7 @@ export async function listCoachSchedule(
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .leftJoin(locations, and(eq(locations.id, sessions.locationId), eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
       .where(and(...conditions))
       .orderBy(sessions.sessionDate, sessions.startsAt);
   });
@@ -150,11 +154,13 @@ export async function getCoachNextUpcoming(
   return withTenant(ctx.tenantId, async (tx) => {
     const fromDate = addDays(afterDate, 1);
     const toDate = addDays(afterDate, daysAhead);
+    const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select({
         id: sessions.id,
         sessionDate: sessions.sessionDate,
         batchName: batches.name,
+        locationName: locations.name,
         startsAt: sessions.startsAt,
         endsAt: sessions.endsAt,
         marked: sql<number>`(
@@ -170,10 +176,12 @@ export async function getCoachNextUpcoming(
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .leftJoin(locations, and(eq(locations.id, sessions.locationId), eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
       .where(
         and(
           eq(sessions.tenantId, ctx.tenantId),
           eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId!)),
+          locationPredicate(sessions.locationId, access),
           sql`${sessions.sessionDate} >= ${fromDate}`,
           sql`${sessions.sessionDate} <= ${toDate}`,
         ),

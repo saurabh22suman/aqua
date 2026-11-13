@@ -103,6 +103,10 @@ beforeAll(async () => {
     actor,
     `+9196${String(Date.now()).slice(-8)}`,
   ]);
+  const roleId = uuidv7();
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenant]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'bookings.read')", [tenant, roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenant, actor, roleId]);
   await admin.query(
     `insert into facilities (id, tenant_id, location_id, name, kind, capacity) values
        ($1, $2, $3, 'Court A', 'court', 2),
@@ -117,6 +121,9 @@ afterAll(async () => {
     tenant,
   ]);
   await admin.query("delete from config_values where tenant_id = $1", [tenant]);
+  await admin.query("delete from role_permissions where tenant_id = $1", [tenant]);
+  await admin.query("delete from tenant_memberships where tenant_id = $1", [tenant]);
+  await admin.query("delete from roles where tenant_id = $1", [tenant]);
   await admin.query("delete from facilities where tenant_id = $1", [tenant]);
   await admin.query("delete from locations where tenant_id = $1", [tenant]);
   await admin.query("delete from tenants where id = $1", [tenant]);

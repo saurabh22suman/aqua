@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { bookingPriceRules, type BookingPriceRule } from "@/db/schema/bookings";
@@ -75,6 +76,9 @@ export async function saveBookingPriceRule(
   if (windowError) return { ok: false, error: windowError };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
 
     let existing: BookingPriceRule | undefined;
@@ -225,6 +229,9 @@ export async function setBookingPriceRuleActive(
   const actorId = ctx.userId;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const [existing] = await tx
       .select()

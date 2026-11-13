@@ -59,6 +59,16 @@ function listTsFiles(dir: string): string[] {
 // (or money/attendance-adjacent) context. Adding a file to this
 // list without a comment is a code-review red flag.
 const WHITELIST = new Set([
+  // Payment recovery warnings identify an unresolved or already-recorded
+  // financial write; they must be distinguishable before another payment.
+  "components/cafe-payment-recovery-form.tsx",
+  "components/member-detail/invoice-closed-recovery.tsx",
+  "components/payment-recovery-notice.tsx",
+  // Negative amounts represent actual payment reversals in the fee ledger.
+  "components/fees/fees-transaction-list.tsx",
+  // The bar encodes actual absent attendance marks, not generic UI feedback.
+  "components/reports/owner-approved/attendance-results.tsx",
+
   // register-board.tsx — the coach's register. `late`/`good`
   // mark attendance state; the lane strip (`warn` for under-fill)
   // is the design system's own attendance-state usage.

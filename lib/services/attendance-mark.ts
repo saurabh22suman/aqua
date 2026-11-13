@@ -5,29 +5,25 @@ import { members, persons } from "@/db/schema/people";
 import { NotFoundError, type ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { locationVisible, resolveLocationAccess } from "./location-access";
-import { resourceRole } from "./resource-access";
+import { callerHasPermission, resourceRole } from "./resource-access";
 import { coachStaffIdSubquery } from "./staff";
 import { writeAudit } from "@/lib/audit/write";
 
 export async function markAttendance(ctx: ActionCtx, input: {
   sessionId: string; memberId: string; status: "present" | "absent" | "late"; clientId: string;
 }): Promise<void> {
-  // R01 — student attendance is execution work (coach / front-desk
-  // backup). Owner/Admin contexts are refused even if an old or
-  // accidentally assigned attendance.mark grant survives on their
-  // role; read/status reporting is unaffected. Fail closed with the
-  // same not-found shape the scope checks use.
-  if (ctx.roleKey === "owner" || ctx.roleKey === "admin") {
-    throw new NotFoundError();
-  }
   await withTenant(ctx.tenantId, async tx => {
+    // R01 is based on the live role, never a caller-supplied role claim.
+    // A stale or removed grant cannot authorize the mark either.
+    const role = await resourceRole(tx, ctx);
+    if (!role || role === "owner" || role === "admin" || !(await callerHasPermission(tx, ctx, "attendance.mark"))) throw new NotFoundError();
     // Serialize against cancellation/substitution and retain the session lock
     // through eligibility, write and audit. Never authorize by session alone.
     const [session] = await tx.select().from(sessions).where(and(
       eq(sessions.id, input.sessionId), eq(sessions.tenantId, ctx.tenantId))).for("update");
     if (!session || session.status === "cancelled" ||
       !locationVisible(await resolveLocationAccess(tx, ctx), session.locationId)) throw new NotFoundError();
-    if (await resourceRole(tx, ctx) === "coach") {
+    if (role === "coach") {
       const [assigned] = await tx.select({ id: sessions.id }).from(sessions).where(and(
         eq(sessions.id, session.id), eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId))));
       if (!assigned) throw new NotFoundError();

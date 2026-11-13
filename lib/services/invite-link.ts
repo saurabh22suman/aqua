@@ -1,24 +1,25 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { auth } from "@/lib/auth/server";
 import { withTenant } from "@/db/tenant";
-import { withPlatform } from "@/db/scope";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { tenants } from "@/db/schema/tenants";
 import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
+import { baUser } from "@/db/schema/better-auth";
 import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import type { InviteLinkPurpose } from "@/db/schema/invite-link-uses";
-import { writeAudit } from "@/lib/audit/write";
 import {
   verifyInviteLinkToken,
 } from "./invite-link-token";
 import {
-  ensureBaUserForPhone,
+  CREDENTIAL_ISSUER,
   hasCredentialByPhone,
+  hasCredentialByBaUserId,
   pinSchema,
-  setCredential,
 } from "./credentials";
 import { asTenantId } from "@/lib/ids";
+import { redeemStaffLinkInTx } from "@/db/staff-link-redemption";
+import { credentialHasher } from "@/lib/services/self-service-credential";
+import { createAuth } from "@/lib/auth/server";
 
 // Staff magic-link login: single-use, membership-bound invite and
 // re-login links. The parallel door to phone OTP (architecture
@@ -87,6 +88,7 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
         status: tenantMemberships.status,
         linksValidFrom: tenantMemberships.linksValidFrom,
         phone: users.phone,
+        betterAuthId: users.betterAuthId,
         roleKey: roles.key,
         tenantName: tenants.name,
         tenantStatus: tenants.status,
@@ -100,6 +102,8 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
           eq(tenantMemberships.id, claims.membershipId),
           eq(tenantMemberships.tenantId, tenantId),
           isNull(tenantMemberships.deletedAt),
+          isNull(users.deletedAt),
+          isNull(roles.deletedAt),
         ),
       )
       .limit(1);
@@ -121,6 +125,12 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
     ) {
       return { kind: "error" as const, code: "invalid" as const };
     }
+    if (m.betterAuthId !== null) {
+      if (m.betterAuthId.length === 0) return { kind: "error" as const, code: "invalid" as const };
+      const [linked] = await tx.select({ id: baUser.id }).from(baUser)
+        .where(eq(baUser.id, m.betterAuthId)).limit(1);
+      if (!linked) return { kind: "error" as const, code: "invalid" as const };
+    }
     const used = await tx
       .select({ jti: inviteLinkUses.jti })
       .from(inviteLinkUses)
@@ -130,6 +140,7 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
     return {
       kind: "ok" as const,
       phone: m.phone,
+      betterAuthId: m.betterAuthId,
       roleKey: m.roleKey,
       tenantName: m.tenantName,
       tenantStatus: m.tenantStatus,
@@ -137,7 +148,9 @@ export async function previewLoginLink(rawToken: string): Promise<PreviewLoginLi
   });
   if (tenantData.kind === "error") return tenantData;
 
-  const credentialSet = await hasCredentialByPhone(tenantData.phone);
+  const credentialSet = tenantData.betterAuthId !== null
+    ? await hasCredentialByBaUserId(tenantData.betterAuthId)
+    : await hasCredentialByPhone(tenantData.phone);
   return {
     kind: "ok",
     phone: tenantData.phone,
@@ -162,171 +175,31 @@ export type RedeemLoginLinkResult =
     }
   | { kind: "error"; code: RedeemLoginLinkError };
 
-// Redeems a login link: consumes the jti (single-use), flips
-// invited -> active, ensures the better-auth identity, optionally
-// sets the PIN, and mints a real session. Everything membership-side
-// happens in ONE tenant transaction (consume + status flip are
-// atomic -- no window where the link is spent but the membership
-// isn't active, or vice versa); identity + session happen after,
-// under withPlatform, which nests freely and never touches tenant
-// tables.
-//
-// Guard ordering (2026-09-11 auth feature):
-//   1. PIN shape, before anything else — a malformed PIN must not
-//      burn the single-use link.
-//   2. Role/credential guards, before consuming — an invite/relogin
-//      link can never overwrite an existing PIN, and only an owner
-//      membership may redeem a reset link.
-//   3. Consume + activate.
-//   4. Set credential (reset: overwrite), revoke sessions on reset,
-//      mint the session.
+// The verified link, identity, credential, activation, session and audits
+// commit together. Session creation uses the same configured Better Auth
+// factory bound to the transaction; its behavior is subject to the focused
+// adapter compatibility and rollback tests recorded in this review packet.
 export async function redeemLoginLink(
   rawToken: string,
   opts?: { pin?: string },
 ): Promise<RedeemLoginLinkResult> {
   const claims = verifyInviteLinkToken(rawToken);
   if (!claims) return { kind: "error", code: "invalid" };
-
   const pin = opts?.pin;
   if (pin !== undefined && !pinSchema.safeParse(pin).success) {
     return { kind: "error", code: "invalid_pin" };
   }
-
-  const tenantId = asTenantId(claims.tenantId);
-  const consumed = await withTenant(tenantId, async (tx) => {
-    const rows = await tx
-      .select({
-        membershipId: tenantMemberships.id,
-        status: tenantMemberships.status,
-        linksValidFrom: tenantMemberships.linksValidFrom,
-        userId: tenantMemberships.userId,
-        phone: users.phone,
-        roleKey: roles.key,
-        homePath: roles.homePath,
-        tenantStatus: tenants.status,
-      })
-      .from(tenantMemberships)
-      .innerJoin(users, eq(users.id, tenantMemberships.userId))
-      .innerJoin(roles, eq(roles.id, tenantMemberships.roleId))
-      .innerJoin(tenants, eq(tenants.id, tenantMemberships.tenantId))
-      .where(
-        and(
-          eq(tenantMemberships.id, claims.membershipId),
-          eq(tenantMemberships.tenantId, tenantId),
-          isNull(tenantMemberships.deletedAt),
-        ),
-      )
-      .limit(1);
-    const m = rows[0];
-    if (!m) return { kind: "error" as const, code: "membership_not_found" as const };
-    if (m.status === "revoked") return { kind: "error" as const, code: "revoked" as const };
-    if (m.tenantStatus !== "trial" && m.tenantStatus !== "active") {
-      return { kind: "error" as const, code: "tenant_suspended" as const };
-    }
-    // R09 — see previewLoginLink: tokens whose second predates the
-    // membership's reactivation epoch are refused even after the
-    // status flips back.
-    if (
-      m.linksValidFrom &&
-      claims.iat * 1000 + 1000 <= m.linksValidFrom.getTime()
-    ) {
-      return { kind: "error" as const, code: "invalid" as const };
-    }
-    // Defense in depth: issuance gates this, but a hand-signed token
-    // must not let a non-owner redeem a reset.
-    if (claims.purpose === "reset" && m.roleKey !== "owner") {
-      return { kind: "error" as const, code: "not_owner" as const };
-    }
-
-    // Credential lookup is a platform read; it nests inside the
-    // tenant scope without touching tenant tables.
-    const hadCredential = await hasCredentialByPhone(m.phone);
-    if (pin !== undefined && hadCredential && claims.purpose !== "reset") {
-      return { kind: "error" as const, code: "credential_already_set" as const };
-    }
-
-    // Consume first: on conflict the PK reports the double-redeem
-    // and nothing else in this transaction is reachable.
-    const used = await tx
-      .insert(inviteLinkUses)
-      .values({
-        jti: claims.jti,
-        tenantId,
-        membershipId: m.membershipId,
-        purpose: claims.purpose,
-      })
-      .onConflictDoNothing({ target: inviteLinkUses.jti })
-      .returning({ jti: inviteLinkUses.jti });
-    if (used.length === 0) return { kind: "error" as const, code: "used" as const };
-
-    if (m.status === "invited") {
-      // E-02 — the second membership-activation path (the OTP
-      // callback is the other). `.returning` keeps the audit
-      // conditional on the flip actually landing; actor is the
-      // invited user redeeming their own link.
-      const activated = await tx
-        .update(tenantMemberships)
-        .set({ status: "active", updatedAt: new Date(), updatedBy: m.userId })
-        .where(
-          and(
-            eq(tenantMemberships.id, m.membershipId),
-            eq(tenantMemberships.status, "invited"),
-          ),
-        )
-        .returning({ id: tenantMemberships.id });
-      if (activated.length > 0) {
-        await writeAudit(tx, {
-          tenantId,
-          actorType: "user",
-          actorId: m.userId,
-          action: "membership.activate",
-          entityType: "tenant_membership",
-          entityId: m.membershipId,
-          before: { status: "invited" },
-          after: { status: "active" },
-          changedFields: ["status"],
-        });
-      }
-    }
-    return {
-      kind: "ok" as const,
-      userId: m.userId,
-      phone: m.phone,
-      homePath: m.homePath,
-      hadCredential,
-    };
+  const pinHash = pin === undefined ? undefined : await (await credentialHasher()).hash(pin);
+  return redeemStaffLinkInTx({
+    claims,
+    pinHash,
+    issuer: CREDENTIAL_ISSUER,
+    mintSession: async (tx, baUserId) => {
+      const txAuth = createAuth(tx, { transactionalSession: true });
+      const txCtx = await txAuth.$context;
+      const session = await txCtx.internalAdapter.createSession(baUserId);
+      if (!session) throw new Error("Better Auth session creation failed");
+      return session.token;
+    },
   });
-  if (consumed.kind === "error") return consumed;
-
-  // Identity: the platform users row exists from the invite
-  // (defensive find-or-create); the better-auth row may not --
-  // nobody has OTP'd yet -- so create it with the same temp-email
-  // shape phone signup uses, and link the two ids. The helper is
-  // shared with demo seeding so the two paths cannot drift.
-  const sessionToken = await withPlatform(async () => {
-    const baUserId = await ensureBaUserForPhone(consumed.phone);
-
-    if (pin !== undefined) {
-      await setCredential(baUserId, pin);
-    }
-    // A successful reset revokes the owner's other sessions before
-    // the fresh one is minted: the reset may be happening because a
-    // device or session was compromised, and leaving those live
-    // would defeat the point.
-    if (claims.purpose === "reset" && pin !== undefined) {
-      const baCtx = await auth.$context;
-      await baCtx.internalAdapter.deleteUserSessions(baUserId);
-    }
-    const baCtx = await auth.$context;
-    const session = await baCtx.internalAdapter.createSession(baUserId);
-    return (session as { token: string }).token;
-  });
-
-  const needsCredential = pin === undefined && !consumed.hadCredential;
-  return {
-    kind: "ok",
-    sessionToken,
-    homePath: needsCredential ? "/set-pin" : (consumed.homePath ?? "/"),
-    needsCredential,
-  };
 }
