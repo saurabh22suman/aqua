@@ -95,9 +95,10 @@ export async function listTodaySessions(ctx: ActionCtx & { roleKey: string }, to
 }
 
 async function visibleSession(tx: TenantTx, ctx: ActionCtx & { roleKey: string }, sessionId: string) {
-  const [session] = await tx.select({ id: sessions.id, batchId: sessions.batchId, batchName: batches.name,
+  const [session] = await tx.select({ id: sessions.id, batchId: sessions.batchId, batchName: batches.name, locationName: locations.name,
     startsAt: sessions.startsAt, sessionDate: sessions.sessionDate }).from(sessions)
-    .innerJoin(batches, eq(batches.id, sessions.batchId)).where(and(
+    .innerJoin(batches, eq(batches.id, sessions.batchId))
+    .leftJoin(locations, and(eq(locations.id, sessions.locationId), eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt))).where(and(
       eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId), isNull(batches.deletedAt),
       isCoachLikeRoleKey(ctx.roleKey) ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
       locationPredicate(sessions.locationId, await resolveLocationAccess(tx, ctx)),
@@ -113,7 +114,7 @@ export type RosterRow = {
   memberId: string; name: string; code: string; status: "present" | "absent" | "late" | null;
   markedAt?: string | null; pct: number | null; isTrial: boolean;
 };
-export type RosterData = { batchName: string; startsAt: Date; offlineSyncEnabled: boolean; rows: RosterRow[] };
+export type RosterData = { batchName: string; locationName: string | null; startsAt: Date; offlineSyncEnabled: boolean; rows: RosterRow[] };
 
 export async function getRosterForSession(ctx: ActionCtx & { roleKey: string }, sessionId: string): Promise<RosterData | null> {
   return withTenant(ctx.tenantId, async tx => {
@@ -140,6 +141,6 @@ export async function getRosterForSession(ctx: ActionCtx & { roleKey: string }, 
         status: row.status as RosterRow["status"], markedAt: row.markedAt?.toISOString() ?? null,
         pct: row.totalCount ? Math.round(row.presentCount / row.totalCount * 100) : null, isTrial: row.memberStatus === "trial" });
     }
-    return { batchName: session.batchName, startsAt: session.startsAt, offlineSyncEnabled: tenant.offlineSyncEnabled, rows };
+    return { batchName: session.batchName, locationName: session.locationName, startsAt: session.startsAt, offlineSyncEnabled: tenant.offlineSyncEnabled, rows };
   });
 }

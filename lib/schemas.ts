@@ -11,6 +11,10 @@ const contactPhoneSchema = z.string().trim().max(20).refine(
   isContactPhoneValid,
   { error: "Enter a valid phone number with country code." },
 ).transform(normaliseToE164);
+const optionalContactPhoneSchema = z.union([
+  z.string().trim().length(0).transform(() => undefined),
+  contactPhoneSchema,
+]).optional();
 
 // Matches the seeded row in policy_versions (db/seed-platform.ts) --
 // the version every consent grant captured through the UI cites.
@@ -33,7 +37,7 @@ export const guardianInputSchema = z.union([
   z.object({ existingPersonId: z.string().uuid(), relationship: z.string().min(1).max(50) }),
   z.object({
     fullName: z.string().min(1).max(200),
-    phone: z.string().optional(),
+    phone: optionalContactPhoneSchema,
     relationship: z.string().min(1).max(50),
   }),
 ]);
@@ -107,7 +111,7 @@ export const enquiryStageSchema = z.enum([
 
 export const createEnquirySchema = z.object({
   fullName: z.string().min(1).max(200),
-  phone: z.string().min(8).max(20).optional(),
+  phone: optionalContactPhoneSchema,
   source: enquirySourceSchema,
   notes: z.string().max(2000).optional(),
   // R04 — capture site. Required: a counter enquiry belongs to the
@@ -145,7 +149,7 @@ const newMemberDetailsSchema = z.object({
 export const bookTrialSchema = z.object({
   enquiryId: z.string().uuid(),
   batchId: z.string().uuid(),
-  phone: z.string().min(8).max(20).optional(),
+  phone: optionalContactPhoneSchema,
   details: newMemberDetailsSchema,
 });
 

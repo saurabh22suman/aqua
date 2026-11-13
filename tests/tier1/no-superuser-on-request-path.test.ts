@@ -184,6 +184,7 @@ const ALLOWLIST = new Set([
   "tests/master-family-platform-20261113/offline-privacy-child-env.test.ts",
   // Disposable Testcontainer only: real CI seed, scoped fixture calls, exact env restoration.
   "tests/master-family-platform-20261113/offline-fixture-live-owner.test.ts",
+  "tests/master-family-platform-20261113/ux31-roster-venue-scope.test.ts",
   "scripts/e2e-parent-link-zero-js.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist
   // Ops console improvements — Testcontainers-only tests (per that

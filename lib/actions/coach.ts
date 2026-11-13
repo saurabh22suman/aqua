@@ -172,6 +172,7 @@ export async function getRosterAction(
   rawSessionId: string,
 ): Promise<{
   batchName: string;
+  locationName: string | null;
   startsAt: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
@@ -194,6 +195,7 @@ export async function getRosterAction(
 
   return {
     batchName: roster.batchName,
+    locationName: roster.locationName,
     startsAt: roster.startsAt.toISOString(),
     rows: roster.rows,
     offlineSyncEnabled: roster.offlineSyncEnabled,

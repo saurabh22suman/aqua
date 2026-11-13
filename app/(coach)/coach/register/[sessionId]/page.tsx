@@ -50,6 +50,7 @@ export default async function RegisterPage({
         {time} · {data.batchName}
       </h1>
       <p className="mt-1 text-[13px] text-ink-3">{formatDateIST(data.startsAt)}</p>
+      <p className="mt-1 break-words text-[13px] text-ink-2">{data.locationName ? `Venue: ${data.locationName}` : "Venue not recorded"}</p>
 
       <div className="mt-4">
         <RegisterBoard
