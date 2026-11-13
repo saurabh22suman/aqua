@@ -29,7 +29,7 @@ describe("type floor (PR3-C10)", () => {
       "components/member-detail/member-attendance-grid.tsx",
       "components/owner-schedule-grid.tsx",
       "components/member-subscription-panel.tsx",
-      "components/member-detail/member-invoices-panel.tsx",
+      "components/member-detail/member-invoices-content.tsx",
     ]) {
       const src = source(path);
       expect(src.includes("text-[9px]"), path).toBe(false);
@@ -42,7 +42,7 @@ describe("tap targets (PR3-C10)", () => {
   it("the subscription and invoice row actions carry the 44px floor", () => {
     for (const path of [
       "components/member-subscription-panel.tsx",
-      "components/member-detail/member-invoices-panel.tsx",
+      "components/member-detail/member-invoices-content.tsx",
     ]) {
       const src = source(path);
       expect(src.includes("min-h-11"), path).toBe(true);
