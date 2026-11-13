@@ -1,3 +1,4 @@
+import { StaffInboxLink } from "@/components/announcements/staff-inbox-link";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 import { notFound } from "next/navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
@@ -66,6 +67,8 @@ export default async function WorkerHomePage() {
       />
 
       <StaffIdentity name={identity?.fullName} phone={identity?.phone} />
+
+      <StaffInboxLink href="/worker/announcements" />
 
       <StaffAppearance />
 

@@ -127,6 +127,7 @@ const OWNER_ICON_BY_HREF: Record<string, OwnerIconName> = {
   // The mock's bell is the notification symbol; announcements is the
   // owner's notification-shaped destination.
   "/owner/announcements": "bell",
+  "/owner/inbox": "bell",
   "/owner/staff": "staff",
   "/owner/reports": "reports",
   "/owner/settings": "settings",

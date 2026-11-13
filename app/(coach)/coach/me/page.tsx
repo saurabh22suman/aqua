@@ -1,3 +1,4 @@
+import { StaffInboxLink } from "@/components/announcements/staff-inbox-link";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { TenantSignOut } from "@/components/tenant-sign-out";
@@ -48,6 +49,8 @@ export default async function CoachMePage() {
       <StaffPageHeader title="Me" />
 
       <StaffIdentity name={identity?.fullName} phone={identity?.phone} />
+
+      <StaffInboxLink href="/coach/announcements" />
 
       <StaffAppearance />
 

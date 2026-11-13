@@ -43,6 +43,7 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
       // same route (no second implementation). Desktop only: the mobile
       // bottom nav stays at the four-item design contract.
       { href: "/owner/announcements", label: "Announcements", iconName: "megaphone" },
+      { href: "/owner/inbox", label: "Announcements inbox", iconName: "megaphone" },
       { href: "/owner/staff", label: "Staff", iconName: "briefcase" },
     ],
   },
@@ -143,6 +144,9 @@ export function filterOwnerNavItems(
   permissions: ReadonlySet<string>,
 ): NavItem[] {
   return items.filter((item) => {
+    // Senders with roster-read access have an inbox on the compose page. Readers
+    // reach only addressed notifications; this entry grants no send access.
+    if (item.href === "/owner/inbox") return !(permissions.has("messaging.send") && permissions.has("members.read"));
     const gate = OWNER_NAV_PERMISSION_GATES[item.href];
     return !gate || permissions.has(gate);
   });
