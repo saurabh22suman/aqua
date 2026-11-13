@@ -212,6 +212,7 @@ describe("C01 finance-shaped owner navigation", () => {
       "/owner",
       "/owner/members",
       "/owner/fees",
+      "/owner/inbox",
       "/owner/reports",
     ]);
   });
@@ -239,7 +240,7 @@ describe("C01 finance-shaped owner navigation", () => {
       .ownerSidebarGroupsForPermissions(all)
       .flatMap((group) => group.items.map((item) => item.href));
     expect(sidebarHrefs).toEqual(
-      nav.OWNER_SIDEBAR_GROUPS.flatMap((group) => group.items.map((item) => item.href)),
+      nav.OWNER_SIDEBAR_GROUPS.flatMap((group) => group.items.map((item) => item.href)).filter((href) => href !== "/owner/inbox"),
     );
   });
 });

@@ -162,7 +162,7 @@ export default async function FeesPage({
               tone="money"
             />
             </div>
-            <div role="group" aria-label="Current balances" className="grid min-w-0 grid-cols-2 gap-3 lg:col-span-2">
+            <div role="group" aria-label="Current balances" className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3 lg:col-span-2">
             <StatCard
               label="Outstanding now"
               value={formatINR(overview.outstandingPaise)}

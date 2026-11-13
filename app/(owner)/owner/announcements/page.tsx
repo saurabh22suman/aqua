@@ -75,7 +75,7 @@ export default async function AnnouncementsPage() {
 
         <section
           aria-label="Sent history"
-          className="rounded-card border border-line bg-paper p-5"
+          className="min-w-0 rounded-card border border-line bg-paper p-5 [overflow-wrap:anywhere]"
         >
           <SectionHeading title="Sent history" />
           {announcements.length === 0 ? (
@@ -87,7 +87,7 @@ export default async function AnnouncementsPage() {
               {announcements.map((announcement) => (
                 <li key={announcement.id} className="py-3">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-[14px] font-medium text-ink">
+                    <span className="min-w-0 text-[14px] font-medium text-ink">
                       {announcement.title}
                     </span>
                     <span data-testid="announcement-state">

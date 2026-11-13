@@ -9,7 +9,7 @@ export async function SelfInboxPage({ audience }: { audience: "member" | "guardi
   if (!resolver) notFound();
   const rows = await resolver.read((tx, scope) => readSelfNotificationsInTx(tx, scope));
   const mark = markSelfNotificationAction.bind(null, audience);
-  return <main className="mx-auto w-full max-w-xl px-4 py-8"><h1 className="mb-4 text-xl font-semibold text-ink">Announcements</h1>
+  return <main className="mx-auto w-full min-w-0 max-w-xl px-4 py-8 [overflow-wrap:anywhere]"><h1 className="mb-4 text-xl font-semibold text-ink">Announcements</h1>
     {rows.length === 0 ? <p>Nothing yet. Announcements sent to you appear here.</p> : <ul className="divide-y divide-line">{rows.map((row) => <li key={row.id} className="py-4"><h2 className="font-medium">{row.title}</h2><p className="whitespace-pre-wrap">{row.body}</p><p>{formatDateTimeIST(row.createdAt)}</p>{row.readAt ? <span>Read</span> : <form action={mark}><input type="hidden" name="notificationId" value={row.id} /><button className="min-h-11 underline" type="submit">Mark read</button></form>}</li>)}</ul>}
   </main>;
 }

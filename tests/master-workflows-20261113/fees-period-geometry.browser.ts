@@ -33,6 +33,26 @@ async function main() {
           }
           console.log(`${width}px ${name}: ${result.available.toFixed(1)}px available, ${result.required.toFixed(1)}px required`);
         }
+        const balances = page.getByRole("group", { name: "Current balances" });
+        await balances.waitFor({ state: "visible" });
+        const geometry = await balances.locator('[data-testid="stat-card"]').evaluateAll((cards) => cards.map((card) => {
+          const value = card.querySelector<HTMLElement>(".kpi");
+          if (!value) throw new Error("Balance card missing value");
+          const range = document.createRange();
+          range.selectNodeContents(value);
+          const lines = new Set(Array.from(range.getClientRects()).filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+          const cardRect = card.getBoundingClientRect();
+          const valueRect = value.getBoundingClientRect();
+          return { value: value.textContent, scrollWidth: value.scrollWidth, clientWidth: value.clientWidth, lines: lines.size, top: cardRect.top, valueRight: valueRect.right, cardRight: cardRect.right };
+        }));
+        if (geometry.length !== 2) throw new Error(`${width}px: expected two current balance cards`);
+        for (const item of geometry) {
+          if (!item.value?.includes("₹") || item.scrollWidth > item.clientWidth || item.lines !== 1 || item.valueRight > item.cardRight + 0.5) {
+            throw new Error(`${width}px: balance value clips or wraps (${JSON.stringify(item)})`);
+          }
+        }
+        if (width >= 390 && Math.abs(geometry[0]!.top - geometry[1]!.top) > 1) throw new Error(`${width}px: balance cards no longer share a row`);
+        console.log(`${width}px balances: ${JSON.stringify(geometry)}`);
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
         if (overflow) throw new Error(`${width}px: horizontal page overflow`);
       } finally { await context.close(); }
