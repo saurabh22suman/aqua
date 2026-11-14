@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtemp, mkdir, rm, rmdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import sharp from "sharp";
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { fixture } from "@/tests/remediation-20261112/fixture";
@@ -87,7 +88,7 @@ it("rolls back imported bytes if the system audit insert fails", async () => {
 
 it("runs the inventory and explicit directory import through the actual CLI", async () => {
   const g = await fixture();
-  const directory = await mkdtemp("/tmp/opencode/branding-cli-");
+  const directory = await mkdtemp(join(tmpdir(), "branding-cli-")).catch(async (error: unknown) => { await g.cleanup(); throw error; });
   const path = join(directory, "tenant-branding", g.tenantId, "logo");
   const run = (args: string[]) => new Promise<number>((resolve, reject) => {
     const child = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "scripts/branding-maintenance.ts", ...args], { stdio: "ignore" });
@@ -117,7 +118,7 @@ it("runs the inventory and explicit directory import through the actual CLI", as
 }, 30000);
 
 it("bounds directory reads and refuses traversal or escaping symlinks", async () => {
-  const directory = await mkdtemp("/tmp/opencode/branding-source-");
+  const directory = await mkdtemp(join(tmpdir(), "branding-source-"));
   const root = join(directory, "root");
   const outside = join(directory, "outside");
   await mkdir(root);
