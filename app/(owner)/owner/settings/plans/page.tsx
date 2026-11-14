@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { notFound } from "next/navigation";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
@@ -9,6 +10,8 @@ import {
 import { listActivitiesAction } from "@/lib/actions/activities";
 import { listLocationsAction } from "@/lib/actions/people";
 import { PlanManager } from "@/components/plan-manager";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // C-29 — owner surface for membership plans: preset templates become
 // sellable plans once priced; custom plans can be added directly.
@@ -19,6 +22,7 @@ import { PlanManager } from "@/components/plan-manager";
 export default async function PlansPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
   if (!hasPermission(ctx, "settings.manage")) notFound();
   const [templates, plans, locations, activities] = await Promise.all([
     listPlanTemplatesAction(),
@@ -28,7 +32,7 @@ export default async function PlansPage() {
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-2xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
         <Link
           href="/owner/settings"
@@ -39,13 +43,10 @@ export default async function PlansPage() {
         {" / "}
         plans
       </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Membership plans
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        What the academy sells: durations, session packs and one-time
-        plans. Subscriptions are started from a member&apos;s page.
-      </p>
+      <PageHeader
+        title={<>Membership plans</>}
+        purpose={<>Subscriptions are started from a member&apos;s page.</>}
+      />
       <div className="mt-5">
         <PlanManager
           templates={templates}
@@ -58,6 +59,6 @@ export default async function PlansPage() {
           }))}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

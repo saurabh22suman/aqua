@@ -1,9 +1,14 @@
-import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { payments } from "@/db/schema/payments";
 import { paymentReversals } from "@/db/schema/payment-reversals";
-import { invoices, type InvoiceStatus, type InvoiceSource } from "@/db/schema/invoices";
+import {
+  invoices,
+  type InvoiceStatus,
+  type InvoiceSource,
+  type InvoicePayerKind,
+} from "@/db/schema/invoices";
 import { members, persons } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
@@ -28,6 +33,13 @@ import type { PaymentMethod } from "@/db/schema/payments";
 // no surface here.
 //
 // All reads are location-scoped through the standard O-08 predicate.
+//
+// WR-1 / Option A — a guest invoice (a walk-in bill) has no member,
+// so every member join in this file is a LEFT join and every row
+// carries the PAYER's display name: the member's name for a member
+// payer, the invoice's guest name for a guest payer. The collection
+// and outstanding totals never joined members, so guest money was
+// always in them — that part of the reconciliation does not move.
 
 export type FeesOverview = {
   from: string | null;
@@ -48,8 +60,12 @@ export type FeesOverview = {
 export type HubInvoiceRow = {
   id: string;
   invoiceNumber: string;
-  memberId: string;
-  memberName: string;
+  // WR-1 — a guest invoice has no member.
+  memberId: string | null;
+  memberName: string | null;
+  // Which kind of payer this document names, and the name to show.
+  payerKind: InvoicePayerKind;
+  payerName: string;
   totalPaise: number;
   paidPaise: number;
   outstandingPaise: number;
@@ -62,6 +78,7 @@ export type HubInvoiceRow = {
 
 export type HubTransactionRow = {
   id: string;
+  paymentId?: string;
   receivedAt: string;
   amountPaise: number;
   method: PaymentMethod;
@@ -69,6 +86,8 @@ export type HubTransactionRow = {
   invoiceNumber: string | null;
   memberId: string | null;
   memberName: string | null;
+  // WR-1 — the payer's display name for this payment.
+  payerName: string | null;
   locationName: string;
   receivedByName: string | null;
   // PR2-C9 — reversals appear as their own negative rows so the
@@ -80,6 +99,8 @@ export type HubTransactionRow = {
 export const feesInvoiceFilterInput = z.object({
   status: z.enum(["dues", "all"]).default("all"),
   locationId: z.string().uuid().optional(),
+  search: z.string().trim().max(120).optional(),
+  invoiceStatus: z.enum(["issued", "partial"]).optional(),
 });
 
 export const feesTransactionsInput = z.object({
@@ -104,9 +125,13 @@ const DUES_STATUSES: InvoiceStatus[] = ["issued", "partial"];
 export type DeskDueRow = {
   id: string;
   invoiceNumber: string;
-  memberName: string;
-  memberCode: string;
+  // WR-1 — a guest due has no member, no member code and no phone.
+  memberName: string | null;
+  memberCode: string | null;
   phone: string | null;
+  // The name to show for whoever is billed: the member's name for a
+  // member payer, the guest's name for a walk-in payer.
+  payerName: string;
   dueOn: string;
   outstandingPaise: number;
   overdue: boolean;
@@ -143,16 +168,20 @@ export async function listDeskDues(
         memberName: persons.fullName,
         memberCode: members.memberCode,
         phone: persons.phone,
+        guestName: invoices.guestName,
         dueOn: invoices.dueOn,
         totalPaise: invoices.totalPaise,
         paidPaise: invoices.paidPaise,
       })
       .from(invoices)
-      .innerJoin(
+      // WR-1 — a guest invoice has no member, so the member join is a
+      // LEFT join: an unpaid walk-in bill is a due like any other and
+      // must not vanish from the counter's list.
+      .leftJoin(
         members,
         and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)),
       )
-      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(persons, eq(persons.id, members.personId))
       .where(and(...conditions))
       .orderBy(asc(invoices.dueOn), asc(invoices.createdAt))
       .limit(limit);
@@ -163,6 +192,7 @@ export async function listDeskDues(
       memberName: row.memberName,
       memberCode: row.memberCode,
       phone: row.phone,
+      payerName: row.memberName ?? row.guestName ?? "",
       dueOn: row.dueOn,
       outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
       overdue: row.dueOn < today,
@@ -288,10 +318,19 @@ export async function getFeesOverview(
     return {
       from: period.from,
       to: period.to,
-      // Net of reversals: the ledger's negative rows are subtracted
-      // here so the headline reconciles with the transaction list.
-      collectedPaise:
-        toSafePaise(BigInt(collected?.paise ?? "0") - BigInt(reversed?.paise ?? "0")),
+      // GROSS captured payments for the period. A reversal is
+      // ledger-only and is NEVER netted into this figure — the
+      // approved contract says so twice: docs/design-system/screens.md
+      // (/owner/fees): "A reversal is stated beside the total and is
+      // ledger-only: it is never netted into the collected figure",
+      // and docs/design-system/flows.md O1: "it is ledger-only, and it
+      // is never netted into the collected total". The reversed total
+      // is stated BESIDE it (reversedPaise / reversalCount) and the
+      // ledger carries the reversal rows, so the owner sees the
+      // correction without the collection figure being rewritten.
+      // This matches the owner home chart, the daily collection report
+      // and daily_rollups, which are all gross too.
+      collectedPaise: toSafePaise(collected?.paise ?? "0"),
       paymentCount: Number(collected?.count ?? 0),
       reversedPaise: toSafePaise(reversed?.paise ?? "0"),
       reversalCount: Number(reversed?.count ?? 0),
@@ -322,6 +361,11 @@ export async function listHubInvoices(
     if (parsed.data.locationId) {
       conditions.push(eq(invoices.locationId, parsed.data.locationId));
     }
+    if (parsed.data.invoiceStatus) conditions.push(eq(invoices.status, parsed.data.invoiceStatus));
+    if (parsed.data.search) {
+      const term = `%${parsed.data.search.replace(/[\\%_]/g, "\\$&")}%`;
+      conditions.push(or(ilike(invoices.invoiceNumber, term), ilike(persons.fullName, term), ilike(persons.phone, term), ilike(invoices.guestName, term))!);
+    }
     const predicate = locationPredicate(invoices.locationId, access);
     if (predicate) conditions.push(predicate);
 
@@ -331,6 +375,8 @@ export async function listHubInvoices(
         invoiceNumber: invoices.invoiceNumber,
         memberId: invoices.memberId,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
+        payerKind: invoices.payerKind,
         totalPaise: invoices.totalPaise,
         paidPaise: invoices.paidPaise,
         status: invoices.status,
@@ -340,11 +386,14 @@ export async function listHubInvoices(
         locationName: locations.name,
       })
       .from(invoices)
-      .innerJoin(
+      // WR-1 — a guest invoice has no member, so the member join is a
+      // LEFT join: a walk-in bill is a row of the owner's ledger like
+      // any other, and it must not disappear from it.
+      .leftJoin(
         members,
         and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)),
       )
-      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(persons, eq(persons.id, members.personId))
       .innerJoin(locations, eq(locations.id, invoices.locationId))
       .where(and(...conditions))
       .orderBy(
@@ -357,6 +406,8 @@ export async function listHubInvoices(
       invoiceNumber: r.invoiceNumber,
       memberId: r.memberId,
       memberName: r.memberName,
+      payerKind: r.payerKind as InvoicePayerKind,
+      payerName: r.memberName ?? r.guestName ?? "",
       totalPaise: toSafePaise(r.totalPaise),
       paidPaise: toSafePaise(r.paidPaise),
       outstandingPaise: toSafePaise(r.totalPaise - r.paidPaise),
@@ -369,12 +420,34 @@ export async function listHubInvoices(
   });
 }
 
-export async function listHubTransactions(
+export const HUB_TRANSACTION_LIMIT = 200;
+
+export type HubTransactionPage = {
+  rows: HubTransactionRow[];
+  /** Every row the filter matches — not only the page shown. */
+  totalCount: number;
+  /** True when `rows` is a prefix of the matching rows. */
+  truncated: boolean;
+  limit: number;
+};
+
+/**
+ * The transaction ledger page.
+ *
+ * The rows are the newest matching entries; the count is the number
+ * of entries the filter matches IN FULL, so a screen that shows the
+ * first N can say so honestly instead of implying the list is
+ * exhaustive (the overview's collected figure covers every payment in
+ * the period, so a silent truncation made the two disagree).
+ */
+export async function listHubTransactionsPage(
   ctx: ActionCtx,
   raw: unknown,
-): Promise<HubTransactionRow[]> {
+): Promise<HubTransactionPage> {
   const parsed = feesTransactionsInput.safeParse(raw);
-  if (!parsed.success) return [];
+  if (!parsed.success) {
+    return { rows: [], totalCount: 0, truncated: false, limit: HUB_TRANSACTION_LIMIT };
+  }
 
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
@@ -412,9 +485,13 @@ export async function listHubTransactions(
         invoiceNumber: invoices.invoiceNumber,
         memberId: payments.memberId,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
         locationName: locations.name,
         receiverName: userNameFor(payments.tenantId, payments.receivedBy),
         receiverRole: userRoleNameFor(payments.tenantId, payments.receivedBy),
+        // The number of payments the filter matches, counted before
+        // the limit — so a truncated page can say what it left out.
+        matchingCount: sql<number>`count(*) over ()::int`,
       })
       .from(payments)
       .leftJoin(
@@ -429,7 +506,7 @@ export async function listHubTransactions(
       .innerJoin(locations, eq(locations.id, payments.locationId))
       .where(and(...conditions))
       .orderBy(desc(payments.receivedAt))
-      .limit(200);
+      .limit(HUB_TRANSACTION_LIMIT);
 
     // PR2-C9 — reversal rows, joined back to the payment for location
     // scoping and display context. Negative amount so the list nets.
@@ -451,6 +528,7 @@ export async function listHubTransactions(
     const reversalRows = await tx
       .select({
         id: paymentReversals.id,
+        paymentId: payments.id,
         reversedAt: paymentReversals.createdAt,
         amountPaise: paymentReversals.amountPaise,
         reason: paymentReversals.reason,
@@ -458,9 +536,13 @@ export async function listHubTransactions(
         invoiceNumber: invoices.invoiceNumber,
         memberId: payments.memberId,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
         locationName: locations.name,
         receiverName: userNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
         receiverRole: userRoleNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
+        // The number of reversals the filter matches, counted before
+        // the limit — the other half of the honest total.
+        matchingCount: sql<number>`count(*) over ()::int`,
       })
       .from(paymentReversals)
       .innerJoin(
@@ -482,11 +564,12 @@ export async function listHubTransactions(
       .innerJoin(locations, eq(locations.id, payments.locationId))
       .where(and(...reversalConditions))
       .orderBy(desc(paymentReversals.createdAt))
-      .limit(200);
+      .limit(HUB_TRANSACTION_LIMIT);
 
     const combined: HubTransactionRow[] = [
       ...rows.map((r) => ({
         id: r.id,
+        paymentId: r.id,
         receivedAt: r.receivedAt.toISOString(),
         amountPaise: toSafePaise(r.amountPaise),
         method: r.method as PaymentMethod,
@@ -494,6 +577,9 @@ export async function listHubTransactions(
         invoiceNumber: r.invoiceNumber,
         memberId: r.memberId,
         memberName: r.memberName,
+        // WR-1 — a guest payment has no member, so the payer's name
+        // comes from the invoice it settled.
+        payerName: r.memberName ?? r.guestName ?? null,
         locationName: r.locationName,
         receivedByName: userLabel(r.receiverName, r.receiverRole),
         kind: "payment" as const,
@@ -501,6 +587,7 @@ export async function listHubTransactions(
       })),
       ...reversalRows.map((r) => ({
         id: r.id,
+        paymentId: r.paymentId,
         receivedAt: r.reversedAt.toISOString(),
         amountPaise: -toSafePaise(r.amountPaise),
         method: r.method as PaymentMethod,
@@ -508,6 +595,7 @@ export async function listHubTransactions(
         invoiceNumber: r.invoiceNumber,
         memberId: r.memberId,
         memberName: r.memberName,
+        payerName: r.memberName ?? r.guestName ?? null,
         locationName: r.locationName,
         receivedByName: userLabel(r.receiverName, r.receiverRole),
         kind: "reversal" as const,
@@ -515,6 +603,26 @@ export async function listHubTransactions(
       })),
     ].sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
 
-    return combined.slice(0, 200);
+    const page = combined.slice(0, HUB_TRANSACTION_LIMIT);
+    const totalCount =
+      Number(rows[0]?.matchingCount ?? 0) +
+      Number(reversalRows[0]?.matchingCount ?? 0);
+    return {
+      rows: page,
+      totalCount,
+      truncated: totalCount > page.length,
+      limit: HUB_TRANSACTION_LIMIT,
+    };
   });
+}
+
+/**
+ * The ledger rows alone. The same read as listHubTransactionsPage,
+ * without the count — for callers that only need the rows.
+ */
+export async function listHubTransactions(
+  ctx: ActionCtx,
+  raw: unknown,
+): Promise<HubTransactionRow[]> {
+  return (await listHubTransactionsPage(ctx, raw)).rows;
 }

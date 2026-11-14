@@ -2,25 +2,15 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// The platform (ops) login must offer the ENV operator door.
-//
-// The backend has had it since "env-only ops login" (slices 1/12 +
-// 11/12): when OPS_EMAIL + OPS_PASSWORD are set, db/platform-auth.ts
-// routes the platform login to db/platform-auth-env.ts, the password
-// is compared in constant time and the session is created fully
-// authenticated — no TOTP, no registered operator phone, no WhatsApp
-// message.
-//
-// The WhatsApp form replaced the email + password form on this page
-// and left app/(platform)/ops/login/login-form.tsx in the tree
-// unrendered. The door was therefore unreachable from the browser:
-// a deployment that set the variables had a working door in the code
-// and no way through it. This test pins that the page offers the
-// env door exactly when the deployment configures it.
+// The current Ops door is the password form, independently of env operator
+// configuration. An authenticated or partially authenticated session redirects
+// before rendering; the retired WhatsApp door must not reappear.
+const auth = vi.hoisted(() => ({ kind: "not_found" }));
 
 vi.mock("@/lib/actions/platform-auth", () => ({
-  platformAuthStatusAction: async () => ({ kind: "unauthenticated" }),
+  platformAuthStatusAction: async () => ({ kind: auth.kind }),
 }));
+vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`REDIRECT:${path}`); } }));
 vi.mock("@/app/(platform)/ops/login/login-form", () => ({
   PlatformLoginForm: () => <div data-testid="platform-login-form" />,
 }));
@@ -45,6 +35,7 @@ async function renderLoginPage() {
 
 describe("platform login page — the env operator door", () => {
   beforeEach(() => {
+    auth.kind = "not_found";
     vi.stubEnv("OPS_EMAIL", undefined);
     vi.stubEnv("OPS_PASSWORD", undefined);
   });
@@ -61,16 +52,24 @@ describe("platform login page — the env operator door", () => {
     expect(screen.getByTestId("platform-login-form")).toBeTruthy();
   });
 
-  it("keeps the WhatsApp door alongside it", async () => {
+  it("does not render the retired WhatsApp door", async () => {
     vi.stubEnv("OPS_EMAIL", "ops@thepreprabbit.in");
     vi.stubEnv("OPS_PASSWORD", "a-twelve-character-secret");
     await renderLoginPage();
-    expect(screen.getByTestId("whatsapp-auth-form")).toBeTruthy();
+    expect(screen.queryByTestId("whatsapp-auth-form")).toBeNull();
   });
 
-  it("does not offer the env door when the deployment does not configure it", async () => {
+  it("offers the operator password form even without env credentials", async () => {
     await renderLoginPage();
-    expect(screen.queryByTestId("platform-login-form")).toBeNull();
-    expect(screen.getByTestId("whatsapp-auth-form")).toBeTruthy();
+    expect(screen.getByTestId("platform-login-form")).toBeTruthy();
+    expect(screen.queryByTestId("whatsapp-auth-form")).toBeNull();
   });
+
+  it.each([["authenticated", "/ops"], ["unauthenticated", "/ops/verify"]])(
+    "redirects %s before rendering the login form", async (kind, destination) => {
+      auth.kind = kind;
+      await expect(renderLoginPage()).rejects.toThrow(`REDIRECT:${destination}`);
+      expect(screen.queryByTestId("platform-login-form")).toBeNull();
+    },
+  );
 });

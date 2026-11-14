@@ -34,6 +34,8 @@ function invoice(overrides: Partial<HubInvoiceRow>): HubInvoiceRow {
     invoiceNumber: "2026-0001",
     memberId: "44444444-4444-4444-8444-444444444444",
     memberName: "Ananya Sharma",
+    payerKind: "member",
+    payerName: overrides.memberName ?? "Ananya Sharma",
     totalPaise: 250_000,
     paidPaise: 0,
     outstandingPaise: 250_000,

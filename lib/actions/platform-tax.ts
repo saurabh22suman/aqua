@@ -5,10 +5,17 @@ import { opsAction } from "@/db/ops-action";
 import { setPlatformScopedConfigValue } from "@/db/config-admin";
 import { GST_RATE_KEY, getTenantTaxConfig } from "@/lib/services/tax";
 import {
-  platformAuthStatusAction,
   requireOpsAdminAction,
 } from "@/lib/actions/platform-auth";
 import { asTenantId, asUserId } from "@/lib/ids";
+import {
+  auditUnavailable,
+  recordOpsMutationTrace,
+  recordOpsRejection,
+  recordOpsThrownFailure,
+  runOpsRead,
+} from "@/lib/auth/ops-operation";
+import { randomUUID } from "node:crypto";
 
 // GST rate configuration in the ops console. Owner-visible read of the
 // rate happens through the registry; setting it is money semantics and
@@ -25,10 +32,11 @@ const setRateInput = z.object({
 
 export async function getTenantTaxConfigAction(tenantId: string) {
   const parsed = tenantIdInput.safeParse(tenantId);
-  if (!parsed.success) return null;
-  const status = await platformAuthStatusAction();
-  if (status.kind !== "authenticated") return null;
-  return getTenantTaxConfig(asTenantId(parsed.data));
+  if (!parsed.success) {
+    await recordOpsRejection("tax.read", "invalid");
+    return null;
+  }
+  return runOpsRead("tax.read", parsed.data, () => getTenantTaxConfig(asTenantId(parsed.data)));
 }
 
 export async function setTenantTaxRateAction(
@@ -36,14 +44,26 @@ export async function setTenantTaxRateAction(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = setRateInput.safeParse(raw);
   if (!parsed.success) {
+    await recordOpsMutationTrace("tax.set", "invalid");
     return { ok: false, error: "Enter a rate between 0% and 100%." };
   }
   if (parsed.data.scopeType !== "tenant" && !parsed.data.scopeId) {
+    await recordOpsMutationTrace("tax.set", "invalid", {
+      tenantId: parsed.data.tenantId,
+    });
     return { ok: false, error: "Missing scope reference." };
   }
 
-  const status = await requireOpsAdminAction();
+  let status: Awaited<ReturnType<typeof requireOpsAdminAction>>;
+  try {
+    status = await requireOpsAdminAction();
+  } catch {
+    auditUnavailable("tax.set", randomUUID());
+  }
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tax.set", "denied", {
+      tenantId: parsed.data.tenantId,
+    });
     return {
       ok: false,
       error:
@@ -81,7 +101,20 @@ export async function setTenantTaxRateAction(
         actorId: asUserId(status.userId),
         reason: "GST rate set from the ops console",
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tax.set", error, {
+      tenantId: parsed.data.tenantId,
+    });
+    throw error;
+  });
 
-  return result.ok ? { ok: true } : { ok: false, error: result.error };
+  if (!result.ok) {
+    // The boundary/refusal name stays `tax.set`; the committed success row
+    // is the existing domain `config.set` event (inherited, not rewritten).
+    await recordOpsMutationTrace("tax.set", "error", {
+      tenantId: parsed.data.tenantId,
+    });
+    return { ok: false, error: result.error };
+  }
+  return { ok: true };
 }

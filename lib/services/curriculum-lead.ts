@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, eq, isNull } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { staff } from "@/db/schema/staff";
@@ -46,7 +47,9 @@ export type CurriculumLeadResult =
         | "no_login"
         | "membership_inactive"
         | "role_missing"
-        | "not_delegatable";
+        | "not_delegatable"
+        | "owner_required"
+        | "uncertain";
       message: string;
     };
 
@@ -163,7 +166,11 @@ export async function setCurriculumLead(
   staffId: string,
   enabled: boolean,
 ): Promise<CurriculumLeadResult> {
-  return withTenant(ctx.tenantId, async (tx) => {
+  try {
+  return await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "owner_required", message: "Only the academy owner can delegate curriculum access." };
+    }
     const target = await loadDelegationTarget(tx, ctx.tenantId, staffId);
     if (!target) {
       return { kind: "error", code: "not_found", message: "Staff member not found." };
@@ -234,4 +241,7 @@ export async function setCurriculumLead(
 
     return { kind: "ok", isLead: enabled };
   });
+  } catch {
+    return { kind: "error", code: "uncertain", message: "Could not confirm the change. Refresh and check the staff record before trying again." };
+  }
 }

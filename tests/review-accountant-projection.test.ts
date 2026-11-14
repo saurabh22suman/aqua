@@ -35,6 +35,7 @@ let nav: typeof import("@/lib/nav");
 
 const tenantId = asTenantId(randomUUID());
 const userId = asUserId(randomUUID());
+const ownerUserId = asUserId(randomUUID());
 const locationA = randomUUID();
 const locationB = randomUUID();
 const memberA = randomUUID();
@@ -69,7 +70,7 @@ const scopedAccountant = {
   allLocations: false,
   locationIds: [locationA],
 };
-const owner = { tenantId, userId, roleKey: "owner", allLocations: true, locationIds: [] };
+const owner = { tenantId, userId: ownerUserId, roleKey: "owner", allLocations: true, locationIds: [] };
 // The owner's production ctx always carries the resolved grant set; the
 // direct action adapter reads it.
 const ownerAction = {
@@ -94,7 +95,17 @@ beforeAll(async () => {
     "insert into tenants(id,slug,name,status) values($1,$2,'Review accountant','active')",
     [tenantId, `review-accountant-${tenantId}`],
   );
-  await admin.query("insert into users(id,phone) values($1,'+919000007001')", [userId]);
+  await admin.query("insert into users(id,phone) values($1,'+919000007001'),($2,'+919000007004')", [userId, ownerUserId]);
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='accountant'",
+    [randomUUID(), tenantId, userId],
+  );
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'",
+    [randomUUID(), tenantId, ownerUserId],
+  );
   await admin.query(
     "insert into locations(id,tenant_id,name,is_primary) values($1,$3,'A',true),($2,$3,'B',false)",
     [locationA, locationB, tenantId],
@@ -201,6 +212,7 @@ describe("C01 finance-shaped owner navigation", () => {
       "/owner",
       "/owner/members",
       "/owner/fees",
+      "/owner/inbox",
       "/owner/reports",
     ]);
   });
@@ -228,7 +240,7 @@ describe("C01 finance-shaped owner navigation", () => {
       .ownerSidebarGroupsForPermissions(all)
       .flatMap((group) => group.items.map((item) => item.href));
     expect(sidebarHrefs).toEqual(
-      nav.OWNER_SIDEBAR_GROUPS.flatMap((group) => group.items.map((item) => item.href)),
+      nav.OWNER_SIDEBAR_GROUPS.flatMap((group) => group.items.map((item) => item.href)).filter((href) => href !== "/owner/inbox"),
     );
   });
 });

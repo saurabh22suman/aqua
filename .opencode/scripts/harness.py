@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Aqua's local harness. Never resets data or stops someone else's process."""
 import argparse
+from contextlib import contextmanager
 import fcntl
 import hashlib
 import json
@@ -17,7 +18,8 @@ from urllib.parse import quote, urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 KEY = hashlib.sha256(str(ROOT).encode()).hexdigest()[:10]
-STATE = Path.home() / '.local/state/aqua-harness' / KEY
+GLOBAL_STATE = Path.home() / '.local/state/aqua-harness'
+STATE = GLOBAL_STATE / KEY
 PROFILE = ROOT / '.env.aqua-harness-test.local'
 
 
@@ -86,8 +88,11 @@ def next_processes():
         try:
             if (p / 'cwd').resolve() != ROOT:
                 continue
-            command = (p / 'cmdline').read_bytes().replace(b'\0', b' ').decode(errors='replace')
-            if 'next-server' in command or 'next dev' in command or 'next build' in command or 'next start' in command:
+            argv = (p / 'cmdline').read_bytes().decode(errors='replace').split('\0')
+            executable = Path(argv[0]).name
+            next_cli = (len(argv) > 2 and Path(argv[1]).name == 'next'
+                        and argv[2] in ('dev', 'build', 'start'))
+            if executable.startswith('next-server') or next_cli:
                 found.append(int(p.name))
         except (FileNotFoundError, PermissionError, ProcessLookupError):
             pass
@@ -152,6 +157,31 @@ def prepare_test(port):
     print('Private profile:', PROFILE.name, '(ignored by Git; mode 0600)')
 
 
+@contextmanager
+def heavy_job(mode):
+    """Serialize harness work across Aqua worktrees; never kill or wait on an owner."""
+    if mode == 'doctor':
+        yield
+        return
+    GLOBAL_STATE.mkdir(parents=True, exist_ok=True)
+    with (GLOBAL_STATE / 'heavy-job.lock').open('a+') as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError('Another Aqua heavy job owns the machine-wide slot; '
+                             'wait for that job to finish, do not stop its process')
+        lock.seek(0)
+        lock.truncate()
+        lock.write(json.dumps({'pid': os.getpid(), 'worktree': str(ROOT), 'mode': mode}))
+        lock.flush()
+        try:
+            yield
+        finally:
+            lock.seek(0)
+            lock.truncate()
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('mode', choices=['doctor', 'prepare-test', 'quick', 'test', 'release'])
@@ -160,7 +190,7 @@ def main():
     p.add_argument('tests', nargs='*', help='Focused Vitest test paths (test mode only)')
     a = p.parse_args()
     STATE.mkdir(parents=True, exist_ok=True)
-    with (STATE / 'verification.lock').open('w') as lock:
+    with (STATE / 'verification.lock').open('w') as lock, heavy_job(a.mode):
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -171,7 +201,7 @@ def main():
             print('Node:', call(['node', '--version'], capture=True).stdout.strip())
             print('pnpm:', call(['pnpm', '--version'], capture=True).stdout.strip())
             print('Existing Next processes:', next_processes(), '(builds require another worktree or a stopped dev server)')
-            print('Paused owner handoff:', 'present' if (ROOT / 'docs/handoffs/owner-dashboard-composition.md').exists() else 'not present')
+            print('Historical owner handoff (not current task status):', 'present' if (ROOT / 'docs/handoffs/owner-dashboard-composition.md').exists() else 'not present')
             if Path(a.profile).exists():
                 print('Disposable test DB:', db_identity(checked_test_env(a.profile)))
             else:

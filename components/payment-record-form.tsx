@@ -1,23 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { listMembersAction } from "@/lib/actions/people";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
-import { recordPaymentAction } from "@/lib/actions/payments";
-import { parseRupeesToPaise } from "@/lib/payment-qr";
-import { formatINR } from "@/lib/money/format";
-import { formatDateIST } from "@/lib/time/tz";
 import type { InvoiceRow } from "@/lib/services/invoices";
 import type { MemberListRow } from "@/lib/services/people";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { formatINR } from "@/lib/money/format";
+import { formatDateIST } from "@/lib/time/tz";
+import { PaymentRecordRecoveryForm } from "@/components/reception/payment-record-recovery-form";
 
 // PR2-C3 — the counter recording half of /reception/collect-payment.
-// A receptionist finds the member, picks an open invoice and records
-// cash or UPI through the existing recordPayment service (no parallel
-// money path). UPI requires its reference; the server's refusal is
-// shown verbatim.
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+// The picker is deliberately thin: find the member, choose an open
+// invoice, and let the recovery form own the payment attempt. Every
+// method the service accepts is offered in that form — cash, UPI, bank
+// transfer, card terminal and other — because a collection that cannot be
+// recorded honestly is either mis-booked or lost.
 
 function openInvoices(invoices: InvoiceRow[]): InvoiceRow[] {
   return invoices.filter(
@@ -34,18 +34,20 @@ export function PaymentRecordForm() {
   const [member, setMember] = useState<MemberListRow | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
   const [invoiceId, setInvoiceId] = useState("");
-  const [amountText, setAmountText] = useState("");
-  const [method, setMethod] = useState<"cash" | "upi">("cash");
-  const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const searching = useRef(false);
+  const composing = useRef(false);
+  const memberRequest = useRef(0);
 
   const selectedInvoice =
     invoices?.find((invoice) => invoice.id === invoiceId) ?? null;
-  const amountPaise = parseRupeesToPaise(amountText);
 
   async function search() {
+    if (searching.current || paymentBusy || composing.current || !query.trim()) return;
+    searching.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -53,73 +55,57 @@ export function PaymentRecordForm() {
     } catch {
       setError("Could not search members.");
     } finally {
+      searching.current = false;
       setBusy(false);
     }
   }
 
   async function chooseMember(next: MemberListRow) {
+    if (searching.current || paymentBusy) return;
+    const request = ++memberRequest.current;
     setMember(next);
     setResults(null);
     setInvoices(null);
     setInvoiceId("");
-    setMessage(null);
     setError(null);
+    setPaymentMessage(null);
     try {
       const rows = openInvoices(await listMemberInvoicesAction(next.memberId));
+      if (request !== memberRequest.current) return;
       setInvoices(rows);
       const first = rows[0];
-      if (first) {
-        setInvoiceId(first.id);
-        setAmountText((first.outstandingPaise / 100).toFixed(2));
-      }
+      if (first) setInvoiceId(first.id);
     } catch {
+      if (request !== memberRequest.current) return;
       setError("Could not load invoices for this member.");
     }
   }
 
-  function submit() {
-    if (!selectedInvoice) return;
-    if (amountPaise === null || amountPaise <= 0n) {
-      setError("Enter an amount like 2500 or 2500.50.");
-      return;
+  function handleChildBusy(next: boolean) {
+    setPaymentBusy(next);
+    if (next) {
+      // A new submission clears the previous list-refresh error; the
+      // outcome message is replaced by the new result.
+      setError(null);
+      setPaymentMessage(null);
     }
-    if (method !== "cash" && reference.trim().length === 0) {
-      setError("A UPI payment needs its reference (UTR / transaction id).");
-      return;
+  }
+
+  async function refreshAfterRecord(): Promise<number | null | undefined> {
+    try {
+      const rows = openInvoices(
+        await listMemberInvoicesAction(member!.memberId),
+      );
+      const current = rows.find((row) => row.id === invoiceId);
+      setInvoices(rows);
+      setInvoiceId(current?.id ?? "");
+      return current?.outstandingPaise ?? null;
+    } catch {
+      setError(
+        "Payment recorded, but the invoice list could not be refreshed. Check the member's invoices before recording another payment.",
+      );
+      return undefined;
     }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    void (async () => {
-      try {
-        const result = await recordPaymentAction({
-          invoiceId: selectedInvoice.id,
-          amountPaise: Number(amountPaise),
-          method,
-          ...(method === "cash" ? {} : { reference: reference.trim() }),
-        });
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-        setMessage(
-          result.invoiceStatus === "paid"
-            ? "Payment recorded. Invoice is now paid."
-            : "Payment recorded. Invoice is now partially paid.",
-        );
-        const rows = openInvoices(
-          await listMemberInvoicesAction(member!.memberId),
-        );
-        setInvoices(rows);
-        setInvoiceId(rows[0]?.id ?? "");
-        setAmountText(rows[0] ? (rows[0].outstandingPaise / 100).toFixed(2) : "");
-        setReference("");
-      } catch {
-        setError("The payment could not be recorded. Try again.");
-      } finally {
-        setBusy(false);
-      }
-    })();
   }
 
   return (
@@ -129,45 +115,70 @@ export function PaymentRecordForm() {
           Record a payment
         </h2>
         <p className="mt-1 text-[12.5px] text-ink-3">
-          Cash or UPI against an open invoice — the same ledger the owner
-          sees.
+          Cash, UPI, card or bank transfer against an open invoice — the
+          same ledger the owner sees.
         </p>
       </div>
 
-      <div>
-        <label className="block" htmlFor="payment-member-search">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Find member
-          </span>
-          <div className="flex gap-2">
-            <input
-              id="payment-member-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Name, phone or member code"
-              className={inputClass}
-              data-testid="payment-member-search"
-            />
-            <button
-              type="button"
-              onClick={() => void search()}
-              disabled={busy || query.trim().length === 0}
-              className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
-            >
-              Search
-            </button>
-          </div>
-        </label>
+      <form onSubmit={(event) => { event.preventDefault(); void search(); }}>
+        {/* Owner redesign (C2) — the shared labelled controls. The
+            journey (search → choose a member → choose an invoice →
+            record) and the test ids are unchanged. */}
+        <Field id="payment-member-search" label="Find member">
+          {() => (
+            /* The row STACKS on a phone and sits side by side from the
+             * `sm` breakpoint up.
+             *
+             * Measured in the browser (not guessed): at 390px the field's
+             * content box was 188px wide and the placeholder "Name,
+             * phone or member code" needs 223px of advance, so the
+             * placeholder was clipped by 35px — and by 65px at 360px.
+             * Letting the field shrink beside the button cannot fix
+             * that: the placeholder needs the WHOLE measure.
+             *
+             * So on a phone the button sits UNDER the field and the
+             * field keeps the full width; from `sm` up the row is the
+             * familiar field-and-button pair again. The journey, the
+             * action, the values, the recovery path and the shared
+             * primitives are unchanged. */
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Input
+                id="payment-member-search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onCompositionStart={() => { composing.current = true; }}
+                onCompositionEnd={() => { composing.current = false; }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (composing.current || event.nativeEvent.isComposing)) event.preventDefault();
+                }}
+                placeholder="Name, phone or member code"
+                data-testid="payment-member-search"
+                className="w-full sm:min-w-0 sm:flex-1"
+              />
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={busy || paymentBusy || query.trim().length === 0}
+                className="w-full sm:w-auto sm:flex-none"
+              >
+                Search
+              </Button>
+            </div>
+          )}
+        </Field>
 
         {results ? (
           results.length === 0 ? (
-            <p className="mt-2 text-[12.5px] text-ink-3">No members found.</p>
+            <p role="status" className="mt-2 text-[12.5px] text-ink-3">No members found.</p>
           ) : (
+            <>
+            <p role="status" className="mt-2 text-[12.5px] text-ink-3">{results.length} {results.length === 1 ? "member" : "members"} found.</p>
             <ul className="mt-2 space-y-1">
               {results.map((row) => (
                 <li key={row.memberId}>
                   <button
                     type="button"
+                    disabled={busy || paymentBusy}
                     onClick={() => void chooseMember(row)}
                     data-testid={`payment-member-${row.memberId}`}
                     className="w-full min-h-11 rounded-ctl border border-line px-3 py-2 text-left text-[13px] text-ink hover:border-[var(--accent-strong)]"
@@ -176,13 +187,15 @@ export function PaymentRecordForm() {
                     <span className="ml-2 font-mono text-[11.5px] text-ink-3">
                       {row.memberCode}
                     </span>
+                    <span className="ml-2 text-[11.5px] text-ink-3">{row.locationName}</span>
                   </button>
                 </li>
               ))}
             </ul>
+            </>
           )
         ) : null}
-      </div>
+      </form>
 
       {member ? (
         <div>
@@ -191,6 +204,7 @@ export function PaymentRecordForm() {
             <span className="ml-2 font-mono text-[11.5px] text-ink-3">
               {member.memberCode}
             </span>
+            <span className="ml-2 text-[11.5px] text-ink-3">{member.locationName}</span>
           </p>
 
           {invoices === null ? (
@@ -205,11 +219,11 @@ export function PaymentRecordForm() {
                 <li key={invoice.id}>
                   <button
                     type="button"
+                    disabled={paymentBusy}
                     onClick={() => {
                       setInvoiceId(invoice.id);
-                      setAmountText((invoice.outstandingPaise / 100).toFixed(2));
                       setError(null);
-                      setMessage(null);
+                      setPaymentMessage(null);
                     }}
                     data-testid={`payment-invoice-${invoice.id}`}
                     className={`w-full min-h-11 rounded-ctl border px-3 py-2 text-left text-[13px] ${
@@ -225,6 +239,7 @@ export function PaymentRecordForm() {
                     <span className="ml-2 text-[11.5px] text-ink-3">
                       due {formatDateIST(invoice.dueOn)}
                     </span>
+                    <span className="ml-2 text-[11.5px] text-ink-3">{invoice.locationName}</span>
                   </button>
                 </li>
               ))}
@@ -234,71 +249,14 @@ export function PaymentRecordForm() {
       ) : null}
 
       {selectedInvoice ? (
-        <div className="space-y-3 border-t border-line pt-3">
-          <label className="block" htmlFor="payment-amount">
-            <span className="block text-[12px] font-medium text-ink-2 mb-1">
-              Amount (₹)
-            </span>
-            <input
-              id="payment-amount"
-              value={amountText}
-              onChange={(event) => setAmountText(event.target.value)}
-              inputMode="decimal"
-              className={inputClass}
-              data-testid="payment-amount"
-            />
-          </label>
-
-          <fieldset>
-            <legend className="text-[12px] font-medium text-ink-2 mb-1">
-              Method
-            </legend>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-[13px] text-ink">
-                <input
-                  type="radio"
-                  name="payment-method"
-                  checked={method === "cash"}
-                  onChange={() => setMethod("cash")}
-                />
-                Cash
-              </label>
-              <label className="flex items-center gap-2 text-[13px] text-ink">
-                <input
-                  type="radio"
-                  name="payment-method"
-                  checked={method === "upi"}
-                  onChange={() => setMethod("upi")}
-                />
-                UPI
-              </label>
-            </div>
-          </fieldset>
-
-          {method === "upi" ? (
-            <label className="block" htmlFor="payment-reference">
-              <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                UPI reference (UTR / transaction id)
-              </span>
-              <input
-                id="payment-reference"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                className={inputClass}
-                data-testid="payment-reference"
-              />
-            </label>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy}
-            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-          >
-            {busy ? "Recording…" : "Record payment"}
-          </button>
-        </div>
+        <PaymentRecordRecoveryForm
+          key={selectedInvoice.id}
+          invoice={selectedInvoice}
+          onRecorded={refreshAfterRecord}
+          searchBusy={busy}
+          onBusyChange={handleChildBusy}
+          onMessage={setPaymentMessage}
+        />
       ) : null}
 
       {error ? (
@@ -309,9 +267,9 @@ export function PaymentRecordForm() {
           {error}
         </p>
       ) : null}
-      {message ? (
+      {paymentMessage ? (
         <p role="status" className="text-[12.5px] text-ink-2">
-          {message}
+          {paymentMessage}
         </p>
       ) : null}
     </section>

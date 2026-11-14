@@ -11,8 +11,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({
     kind: "authenticated",
-    role: "operator",
+    role: "admin",
+    userId: "11111111-1111-7111-8111-111111111111",
   }),
+}));
+vi.mock("@/db/ops-operation-writer", () => ({
+  appendOpsBoundaryEvent: async (operation: string, outcome: string, _actor: string, _correlation: string, tenant: string | undefined, origin: string) => {
+    expect(["tenant.list", "plan.list", "preset.list"]).toContain(operation);
+    expect(outcome).toBe("success");
+    expect(tenant).toBeUndefined();
+    expect(origin).toBe("ops_page");
+  },
 }));
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {

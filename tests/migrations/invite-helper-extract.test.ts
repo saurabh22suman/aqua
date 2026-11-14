@@ -60,10 +60,10 @@ async function ensurePlatformActor(): Promise<UserId> {
 
 const RUN = Date.now().toString(36);
 
-const tenants: { tenantId: TenantId; phone: string }[] = [];
+const tenants: { tenantId: TenantId; phone: string; ownerId: UserId }[] = [];
 
 afterAll(async () => {
-  for (const { tenantId, phone } of tenants) {
+  for (const { tenantId, phone, ownerId } of tenants) {
     await admin.query("delete from attendance where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from sessions where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from enrolments where tenant_id = $1::uuid", [tenantId]);
@@ -78,11 +78,12 @@ afterAll(async () => {
     // user (activation actor); drop them before the user delete.
     await deleteAuditRowsForTenant(admin, tenantId);
     await admin.query("delete from users where phone = $1", [phone]);
+    await admin.query("delete from users where id = $1", [ownerId]);
     await admin.query("delete from tenants where id = $1::uuid", [tenantId]);
   }
 });
 
-async function seedTenant(label: string): Promise<{ tenantId: TenantId; locationId: string; phone: string }> {
+async function seedTenant(label: string): Promise<{ tenantId: TenantId; locationId: string; phone: string; ownerId: UserId }> {
   const tenantId = asTenantId(uuidv7());
   const slug = `prC-${label}-${RUN}-${uuidv7().slice(0, 8)}`;
   await admin.query(
@@ -90,6 +91,11 @@ async function seedTenant(label: string): Promise<{ tenantId: TenantId; location
     [tenantId, slug, `PR C ${label}`],
   );
   await seedRoleTemplates(tenantId);
+  const ownerId = asUserId(uuidv7());
+  await admin.query("insert into users (id, phone) values ($1, $2)", [ownerId, `fixture-owner-${uuidv7()}`]);
+  const ownerRole = await admin.query<{ id: string }>("select id from roles where tenant_id = $1 and key = 'owner'", [tenantId]);
+  if (!ownerRole.rows[0]) throw new Error("owner role missing");
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [uuidv7(), tenantId, ownerId, ownerRole.rows[0].id]);
   const locationId = uuidv7();
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Main', true)",
@@ -101,22 +107,15 @@ async function seedTenant(label: string): Promise<{ tenantId: TenantId; location
   const runDigits = Date.now().toString().slice(-4);
   const uuidDigits = parseInt(uuidv7().slice(0, 2), 16).toString();
   const phone = `+9190${runDigits}${uuidDigits}`;
-  tenants.push({ tenantId, phone });
-  return { tenantId, locationId, phone };
+  tenants.push({ tenantId, phone, ownerId });
+  return { tenantId, locationId, phone, ownerId };
 }
 
 describe("inviteStaff + redemption → persons + staff rows are reachable", () => {
   it("after invite + activate, the membership links to a persons row and a staff row", async () => {
-    const { tenantId, phone } = await seedTenant("staffInvite");
-    const sysUserId: UserId = asUserId("00000000-0000-0000-0000-000000000000");
-    // E-02 — audit_log.actor_id FKs to users(id); the sentinel
-    // inviter needs a real row before the audited invite runs.
-    await admin.query(
-      "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-      [sysUserId, `prc-system-${RUN}`],
-    );
+    const { tenantId, phone, ownerId } = await seedTenant("staffInvite");
     const result = await inviteStaff(
-      { tenantId, userId: sysUserId },
+      { tenantId, userId: ownerId },
       { phone, fullName: "Coach Re", roleKey: "coach", locationIds: [] },
     );
     expect(result.kind).toBe("ok");
@@ -159,7 +158,7 @@ describe("inviteStaff + redemption → persons + staff rows are reachable", () =
 
     // Coach appears in listCoaches — the batch coach picker would
     // surface this row immediately, no second "create staff" form.
-    const options = await listCoaches({ tenantId });
+    const options = await listCoaches({ tenantId, userId: ownerId });
     expect(options.find((o) => o.staffId === staffRows[0]!.id)?.fullName).toBe("Coach Re");
   });
 });
@@ -225,7 +224,7 @@ describe("inviteOwner → owner who also coaches can be assigned to a batch", ()
   });
 
   it("an owner with staffType='coach' can be assigned to a batch (the audit-gap fix in action)", async () => {
-    const { tenantId, phone } = await seedTenant("ownerAssign");
+    const { tenantId, phone, ownerId } = await seedTenant("ownerAssign");
     const actorId = await ensurePlatformActor();
     const result = await inviteOwner(tenantId, {
       phone,
@@ -239,7 +238,7 @@ describe("inviteOwner → owner who also coaches can be assigned to a batch", ()
     const staffId = result.staffId!;
 
     // The batch coach picker surfaces this coach.
-    const options = await listCoaches({ tenantId });
+    const options = await listCoaches({ tenantId, userId: ownerId });
     expect(options.find((o) => o.staffId === staffId)).toBeTruthy();
 
     // Seed a program + batch and assign the owner-coach to it.

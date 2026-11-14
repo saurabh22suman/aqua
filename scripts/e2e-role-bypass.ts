@@ -67,6 +67,7 @@
 // Run: pnpm e2e:role-bypass
 
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { e2eWebEnv } from "./lib/e2e-child-env";
 import { createServer } from "node:net";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -142,7 +143,7 @@ async function buildAndStart(
   console.log("building production bundle…");
   execFileSync("pnpm", ["next", "build"], {
     stdio: "inherit",
-    env: { ...env, NODE_ENV: "production" },
+    env: e2eWebEnv({ ...env, NODE_ENV: "production" }),
   });
   // PR1-C8 — /api/health requires a fresh worker heartbeat in
   // production, and this e2e starts the web process only. Record the
@@ -158,7 +159,7 @@ async function buildAndStart(
   const server = spawn("pnpm", ["next", "start", "-p", String(PORT)], {
     stdio: ["ignore", "inherit", "inherit"],
     detached: true,
-    env,
+    env: e2eWebEnv(env),
   });
   for (let i = 0; i < 180; i++) {
     try {

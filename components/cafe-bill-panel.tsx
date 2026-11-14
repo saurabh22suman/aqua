@@ -4,6 +4,7 @@ import { CafePaymentPanel } from "@/components/cafe-payment-panel";
 import { formatINR } from "@/lib/money/format";
 import type { CafeBill } from "@/lib/services/cafe-billing";
 import type { PaymentMethod } from "@/components/cafe-order-shared";
+import { BillingIssuerDetails } from "@/components/billing-issuer-details";
 
 // K-08 — the itemized bill: the order's snapshotted lines, the
 // subtotal/GST/total maths, and the amount due, all in integer paise
@@ -16,7 +17,7 @@ export function CafeBillPanel({
   onPaid,
 }: {
   bill: CafeBill;
-  onPaid: (method: PaymentMethod) => void;
+  onPaid: (method: PaymentMethod, billId?: string) => void;
 }) {
   return (
     <section
@@ -33,6 +34,7 @@ export function CafeBillPanel({
           {bill.invoiceNumber}
         </p>
       </div>
+      <BillingIssuerDetails issuer={bill.issuer} />
 
       <ul className="divide-y divide-line" data-testid="cafe-bill-lines">
         {bill.lines.map((line, index) => (

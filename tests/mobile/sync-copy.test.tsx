@@ -112,11 +112,9 @@ describe("register header count chips (PR3-C6)", () => {
         offlineSyncEnabled={false}
       />,
     );
-    const chips = screen.getAllByTestId("count-chip");
-    expect(chips.length).toBeGreaterThanOrEqual(2);
-    const text = chips.map((c) => c.textContent).join(" ");
-    expect(text).toContain("0 marked");
-    expect(text).toContain("2 left");
+    // The marked total is now stated once as text; the remaining count is the chip.
+    expect(screen.getByText(/of 2 marked/).textContent).toMatch(/0\s+of 2 marked/);
+    expect(screen.getByTestId("count-chip").textContent).toContain("2 left");
   });
 });
 });

@@ -1,9 +1,12 @@
-import { and, eq, ne, sql, inArray } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { batches } from "@/db/schema/programs";
 import { sessions } from "@/db/schema/scheduling";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { TenantId } from "@/lib/ids";
+import { locationPredicate, locationVisible, resolveLocationAccess } from "./location-access";
+import { resourceRole } from "./resource-access";
+import { coachStaffIdSubquery } from "./staff";
 
 // Phase R.2 — coach conflict detection. A coach double-booked
 // across overlapping sessions warns at assignment time. The
@@ -49,6 +52,8 @@ export type SessionConflict = {
 };
 
 export type SessionConflictCheckResult = {
+  // Availability may block a write without disclosing the other site's records.
+  hasConflicts: boolean;
   conflicts: SessionConflict[];
 };
 
@@ -66,6 +71,8 @@ export async function detectCoachConflicts(
     return { conflicts: [] };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const coach = await resourceRole(tx, ctx) === "coach";
     // The four rows-touched predicates:
     //   1. tenant scope (RLS would also catch this; the explicit
     //      check keeps the WHERE self-documenting)
@@ -73,15 +80,11 @@ export async function detectCoachConflicts(
     //   3. excludeBatchId when supplied
     //   4. deleted_at is null
     // The two overlap predicates:
-    //   5. daysOfWeek && unrolled days of week — implemented by
-    //      fetching candidate days as int[] and matching via
-    //      sql.raw('<daysOfWeek column> && <int[]>')
+    //   5. daysOfWeek overlap, with the array passed as a bound value
     //   6. time-window overlap: candidate.start < existing.end and
     //      existing.start < candidate.end, the canonical
     //      interval-overlap predicate
-    const daysArray = `ARRAY[${args.daysOfWeek.join(",")}]::int[]`;
-    const startTimeLit = `'${args.startTime}'::time`;
-    const endTimeLit = `'${args.endTime}'::time`;
+    const daysArray = `{${args.daysOfWeek.join(",")}}`;
     const rows = await tx
       .select({
         id: batches.id,
@@ -93,12 +96,14 @@ export async function detectCoachConflicts(
         and(
           eq(batches.tenantId, ctx.tenantId as TenantId),
           eq(batches.coachId, args.coachId as never),
+          locationPredicate(batches.locationId, access),
+          coach ? eq(batches.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
           args.excludeBatchId
             ? ne(batches.id, args.excludeBatchId as never)
             : sql`true`,
           sql`${batches.deletedAt} is null`,
-          sql.raw(`${batches.daysOfWeek.name} && ${daysArray}`),
-          sql.raw(`${batches.startTime.name} < ${endTimeLit} and ${startTimeLit} < ${batches.endTime.name}`),
+          sql`${batches.daysOfWeek} && ${daysArray}::int[]`,
+          sql`${batches.startTime} < ${args.endTime}::time and ${args.startTime}::time < ${batches.endTime}`,
         ),
       );
 
@@ -149,16 +154,19 @@ export async function detectSessionConflicts(
   },
 ): Promise<SessionConflictCheckResult> {
   if (!args.coachId) {
-    return { conflicts: [] };
+    return { hasConflicts: false, conflicts: [] };
   }
   if (args.endsAt <= args.startsAt) {
     // Invalid range — caller will already have rejected on
     // end<=start; return empty here so the conflict check is
     // not the one to fail the request on a malformed input.
-    return { conflicts: [] };
+    return { hasConflicts: false, conflicts: [] };
   }
 
   const runCheck = async (tx: TenantTx): Promise<SessionConflictCheckResult> => {
+    const access = await resolveLocationAccess(tx, ctx);
+    if (!access.unrestricted && access.denied) return { hasConflicts: false, conflicts: [] };
+    const coach = await resourceRole(tx, ctx) === "coach";
     // The overlap predicate is the canonical interval-overlap
     // form: existing.startsAt < candidate.endsAt AND
     //        candidate.startsAt < existing.endsAt.
@@ -175,12 +183,14 @@ export async function detectSessionConflicts(
         sessionDate: sessions.sessionDate,
         startsAt: sessions.startsAt,
         endsAt: sessions.endsAt,
+        locationId: sessions.locationId,
       })
       .from(sessions)
       .where(
         and(
           eq(sessions.tenantId, ctx.tenantId as TenantId),
           eq(sessions.coachId, args.coachId as never),
+          coach ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
           eq(sessions.sessionDate, args.sessionDate),
           sql`${sessions.status} <> 'cancelled'`,
           args.excludeSessionId
@@ -191,14 +201,14 @@ export async function detectSessionConflicts(
         ),
       );
 
-    const conflicts: SessionConflict[] = rows.map((r) => ({
+    const conflicts: SessionConflict[] = rows.filter(r => locationVisible(access, r.locationId)).map((r) => ({
       sessionId: r.id,
       batchId: r.batchId,
       sessionDate: r.sessionDate,
       startsAt: r.startsAt.toISOString(),
       endsAt: r.endsAt.toISOString(),
     }));
-    return { conflicts };
+    return { hasConflicts: rows.length > 0, conflicts };
   };
 
   // If a transaction is supplied, run inside it (no nested
@@ -208,5 +218,3 @@ export async function detectSessionConflicts(
   }
   return withTenant(ctx.tenantId, runCheck);
 }
-
-void inArray;

@@ -98,6 +98,16 @@ beforeAll(async () => {
        ($1, '+919400000101'), ($2, '+919400000102')`,
     [ownerUser, scopedUser],
   );
+  const scopedMembership = randomUUID();
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'",
+    [randomUUID(), tenantId, ownerUser],
+  );
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='admin'",
+    [scopedMembership, tenantId, scopedUser],
+  );
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, scopedMembership, locA]);
   await admin.query(
     `insert into platform_users (id, email, name, password_hash, password_salt, role, status)
      values ($1, $2, 'Owner UI Operator', 'h', 's', 'admin', 'active')`,

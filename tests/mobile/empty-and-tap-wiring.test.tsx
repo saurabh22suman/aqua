@@ -69,7 +69,9 @@ describe("EmptyState wiring", () => {
   it("members board with no members shows the designed empty state", () => {
     render(<MembersBoard initialMembers={[]} />);
     expect(screen.getByText("No members yet.")).toBeTruthy();
-    expect(screen.getByText("Add your first member").closest("a")).not.toBeNull();
+    // The create action is owned by the directory page header, not duplicated in the board.
+    expect(screen.getByText("Add your first member to start building the roster.")).toBeTruthy();
+    expect(screen.queryByRole("link", {name:/add your first member/i})).toBeNull();
   });
 
   it("register with zero enrolled shows the empty state and a route back", () => {

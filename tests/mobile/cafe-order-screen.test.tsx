@@ -38,6 +38,8 @@ vi.mock("@/lib/actions/orders", () => ({
   requestCafeBillAction,
 }));
 vi.mock("@/lib/actions/payments", () => ({ recordPaymentAction }));
+// A fresh bill may be paid only after its recovery lookup succeeds.
+vi.mock("@/lib/actions/payment-intents", () => ({listPaymentRecoveryAction:vi.fn(async () => ({open:null,lastCommitted:null})),cancelPaymentRecoveryAction:vi.fn()}));
 vi.mock("@/lib/actions/people", () => ({ listMembersAction }));
 
 import { CafeOrderScreen } from "@/components/cafe-order-screen";
@@ -268,6 +270,7 @@ describe("CafeOrderScreen — request bill and collect payment", () => {
       "INV-2026-0001",
     );
 
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
 
     await screen.findByTestId("cafe-receipt");
@@ -275,6 +278,8 @@ describe("CafeOrderScreen — request bill and collect payment", () => {
       invoiceId: "inv1",
       amountPaise: 26250,
       method: "cash",
+      idempotencyKey: expect.any(String),
+      observedIntentId: null,
     });
     expect(screen.getByTestId("cafe-receipt").textContent).toContain(
       "INV-2026-0001",
@@ -290,6 +295,7 @@ describe("CafeOrderScreen — request bill and collect payment", () => {
     renderScreen();
     await reachPaymentPhase();
 
+    await vi.waitFor(() => expect((screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
 
     const alert = await screen.findByTestId("cafe-payment-error");

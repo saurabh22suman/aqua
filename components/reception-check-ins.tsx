@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import {
   getRosterAction,
   markAttendanceSessionAction,
@@ -13,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { StatusBadge, ATTENDANCE_MARK_TONE } from "@/components/ui/StatusBadge";
 import { SkeletonLine } from "@/components/skeleton";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { formatTimeIST } from "@/lib/time/tz";
 
 // U-08 — reception's "Today's check-ins" panel. Built only from the
@@ -53,7 +53,12 @@ export function ReceptionCheckIns({
   const [markError, setMarkError] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
 
-  const totalCheckedIn = sessions.reduce((n, s) => n + s.marked, 0);
+  // The server's marked count includes absent marks: it is register
+  // completion, not a count of people present. Once loaded, the roster
+  // provides the current count, including confirmed local updates.
+  const markedFor = (session: TodaySession) =>
+    roster[session.id]?.filter((row) => row.status !== null).length ?? session.marked;
+  const totalMarked = sessions.reduce((n, s) => n + markedFor(s), 0);
 
   async function toggle(sessionId: string) {
     setMarkError(null);
@@ -111,12 +116,13 @@ export function ReceptionCheckIns({
   return (
     <section className="mt-6" data-testid="reception-checkins">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-display text-[14px] font-semibold">
+        <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
+          <OwnerIcon name="calendar" size={16} className="text-ink-3" />
           Today&apos;s check-ins
         </h2>
         {sessions.length > 0 ? (
           <span className="text-[12px] text-ink-3">
-            {totalCheckedIn} checked in
+            {totalMarked} marked
           </span>
         ) : null}
       </div>
@@ -132,13 +138,14 @@ export function ReceptionCheckIns({
         <ul className="mt-3 space-y-4">
           {sessions.map((s) => {
             const open = openId === s.id;
-            const pct = s.total > 0 ? Math.round((s.marked / s.total) * 100) : 0;
+            const marked = markedFor(s);
+            const pct = s.total > 0 ? Math.round((marked / s.total) * 100) : 0;
             const fill =
-              s.marked === 0 ? "bg-water" : pct < 50 ? "bg-warn" : "bg-good";
+              marked === 0 ? "bg-water" : pct < 50 ? "bg-warn" : "bg-good";
             const rows = roster[s.id];
             return (
               <li key={s.id}>
-                <div className="bg-paper rounded-card border border-line">
+                <div className="rounded-2xl border border-line bg-paper">
                   <button
                     type="button"
                     onClick={() => toggle(s.id)}
@@ -147,18 +154,19 @@ export function ReceptionCheckIns({
                     className="w-full min-h-[56px] px-4 py-3 text-left"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="text-[15px] font-display font-semibold">
+                      <span className="text-[15px] font-medium leading-snug text-ink">
                         {formatTimeIST(s.startsAt)} {s.batchName}
+                        {s.locationName ? <span className="block text-[12px] font-normal text-ink-3">{s.locationName}</span> : null}
                       </span>
-                      <span className="flex items-center gap-1 text-[13px] text-ink-3 flex-none">
+                      <span className="flex flex-none items-center gap-1 text-[13px] text-ink-3">
                         {s.total === 0
                           ? "No one enrolled"
-                          : `${s.marked} / ${s.total} checked in`}
-                        {open ? (
-                          <ChevronUp size={16} aria-hidden="true" />
-                        ) : (
-                          <ChevronDown size={16} aria-hidden="true" />
-                        )}
+                          : `${marked} / ${s.total} marked`}
+                        <OwnerIcon
+                          name="down"
+                          size={16}
+                          className={open ? "rotate-180" : undefined}
+                        />
                       </span>
                     </div>
                     {s.total > 0 ? (
@@ -193,6 +201,7 @@ export function ReceptionCheckIns({
                               className="flex min-h-[44px] items-center gap-3 py-2"
                             >
                               <PersonAvatar
+                                name={row.name}
                                 seed={row.memberId}
                                 size={32}
                                 className="flex-none"

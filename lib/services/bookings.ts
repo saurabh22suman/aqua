@@ -24,7 +24,8 @@ import type { ActionCtx } from "@/lib/auth/context";
 //
 // Overlap is the database's job. createBooking NEVER reads for a
 // conflict before inserting — the btree_gist EXCLUDE constraint
-// (bookings_no_overlap_excl) decides, and SQLSTATE 23P01 comes back
+// (bookings_whole_child_no_overlap_excl) decides using whole/child
+// UUID ranges, and SQLSTATE 23P01 comes back
 // as one friendly sentence. Every mutation writes audit_log in the
 // same transaction; price and the advance window are re-resolved
 // inside the insert's transaction.
@@ -112,7 +113,11 @@ export async function createBooking(
           isNull(facilities.deletedAt),
         ),
       )
-      .limit(1);
+      .limit(1)
+      // Serialize competing inserts for this resource before they enter the
+      // exclusion index. Different facilities remain independent; the index
+      // still decides whether whole-resource and sub-unit slots conflict.
+      .for("no key update");
     if (!facility || !locationVisible(access, facility.locationId)) {
       return { ok: false, error: "Facility not found." };
     }
@@ -140,7 +145,7 @@ export async function createBooking(
 
     if (input.memberId) {
       const [member] = await tx
-        .select({ id: members.id })
+        .select({ id: members.id, locationId: members.locationId })
         .from(members)
         .where(
           and(
@@ -150,7 +155,9 @@ export async function createBooking(
           ),
         )
         .limit(1);
-      if (!member) return { ok: false, error: "Member not found." };
+      if (!member || !locationVisible(access, member.locationId)) {
+        return { ok: false, error: "Member not found." };
+      }
     }
 
     const price = await resolveBookingPriceInTx(

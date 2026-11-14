@@ -91,6 +91,11 @@ describe("U-04 schedule grid", () => {
     expect(container.querySelectorAll(".min-w-\\[520px\\]").length).toBe(0);
   });
 
+  it("does not offer batch management without permission", () => {
+    render(<OwnerScheduleGrid view="week" locations={[]} sessions={[]} days={WEEK} monthCells={null} prevHref="#" nextHref="#" todayHref="#" />);
+    expect(document.querySelector('a[href="/owner/programs"]')).toBeNull();
+  });
+
   it("shows day-level empty states and the batch editor path when the week is empty", () => {
     render(
       <OwnerScheduleGrid
@@ -102,6 +107,7 @@ describe("U-04 schedule grid", () => {
         prevHref="#"
         nextHref="#"
         todayHref="#"
+        canManagePrograms
       />,
     );
     expect(document.body.textContent).toMatch(/no sessions scheduled in this week/i);

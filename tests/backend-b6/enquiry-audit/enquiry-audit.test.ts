@@ -202,6 +202,29 @@ beforeAll(async () => {
     "+919900000102",
   ]);
 
+  // The live membership, not the caller's asserted role, determines access.
+  // Keep reception restricted to A and the foreign owner in the other tenant.
+  const ownerRole = randomUUID(), receptionRole = randomUUID(), foreignRole = randomUUID();
+  const receptionMembership = randomUUID();
+  await admin.query(
+    `insert into roles(id,tenant_id,key,name,home_path,home_ordinal)
+     values ($1,$4,'owner','Owner','/owner',0),
+            ($2,$4,'receptionist','Reception','/reception',3),
+            ($3,$5,'owner','Owner','/owner',0)`,
+    [ownerRole, receptionRole, foreignRole, tenantId, otherTenantId],
+  );
+  await admin.query(
+    `insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations)
+     values ($1,$4,$6,$8,'active',true), ($2,$4,$7,$9,'active',false),
+            ($3,$5,$6,$10,'active',true)`,
+    [randomUUID(), receptionMembership, randomUUID(), tenantId, otherTenantId,
+      managerUserId, receptionUserId, ownerRole, receptionRole, foreignRole],
+  );
+  await admin.query(
+    "insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)",
+    [randomUUID(), tenantId, receptionMembership, locationA],
+  );
+
   // Location-scoped staff access ON, so a reception caller really is
   // confined to location A.
   await admin.query(

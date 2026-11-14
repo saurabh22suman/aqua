@@ -1,8 +1,10 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
+import { hasOpenOrders } from "@/lib/services/facility-billing-settings-core";
 import { GSTIN_RE } from "@/lib/gst";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -10,9 +12,19 @@ import type { ActionCtx } from "@/lib/auth/context";
 // GSTIN are the tenant's identity fields; before this service the only
 // way to fix a typo'd GSTIN was a platform operator or a migration.
 //
+// Currency is INR-only in this release (docs/project-scope.md §6.5:
+// "All currency in INR"; lib/money/format.ts formats INR only). An
+// existing non-INR tenant row remains readable and is never rewritten;
+// an explicit unsupported code is refused rather than coerced. Omitting
+// the field (a read-only editor) leaves the stored value unchanged.
+//
 // The GSTIN snapshot rule is untouched: invoices store their own
 // `gstin` at issue time (lib/services/invoice-issue.ts), so editing
 // the profile never rewrites an issued document.
+
+export const SUPPORTED_CURRENCY = "INR" as const;
+export const UNSUPPORTED_CURRENCY_MESSAGE =
+  "Only INR is supported for the academy profile in this release.";
 
 export type TenantProfile = {
   name: string;
@@ -23,7 +35,7 @@ export type TenantProfile = {
 
 export type UpdateTenantProfileResult =
   | { kind: "ok" }
-  | { kind: "error"; code: "invalid" | "not_found"; message: string };
+  | { kind: "error"; code: "invalid" | "not_found" | "owner_required" | "open_orders"; message: string };
 
 // Same construction as the ops create form: a DateTimeFormat with the
 // candidate zone throws RangeError for an unknown identifier, which is
@@ -42,8 +54,10 @@ const updateSchema = z.object({
   currency: z
     .string()
     .trim()
-    .length(3, "Currency must be a 3-letter ISO 4217 code.")
-    .regex(/^[A-Z]{3}$/, "Currency must be uppercase letters.")
+    .refine(
+      (value) => value === SUPPORTED_CURRENCY,
+      UNSUPPORTED_CURRENCY_MESSAGE,
+    )
     .optional(),
   timezone: z
     .string()
@@ -98,6 +112,10 @@ export async function updateTenantProfile(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "owner_required", message: "Only the academy owner can change the academy profile." };
+    }
     const rows = await tx
       .select({
         name: tenants.name,
@@ -131,6 +149,17 @@ export async function updateTenantProfile(
     if (input.gstin !== undefined) {
       const next = input.gstin === "" ? null : input.gstin;
       if (next !== current.gstin) {
+        if (await hasOpenOrders(tx, ctx.tenantId, undefined, true)) {
+          return { kind: "error", code: "open_orders", message: "Finish billing or void open café orders at the affected site before changing its billing identity." };
+        }
+        const incompatible = await tx.execute(sql`
+          select 1 from location_billing_settings s
+          where s.tenant_id = ${ctx.tenantId} and s.facility_billing_enabled
+            and s.mode = 'inherit' and ${next}::text is not null
+            and s.state_code <> left(${next}::text, 2) limit 1`);
+        if (incompatible.rows.length > 0) {
+          return { kind: "error", code: "invalid", message: "GSTIN state must match each inheriting enabled site." };
+        }
         changes.gstin = next;
         changedFields.push("gstin");
       }

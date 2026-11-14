@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import {
   ATTENDANCE_GRID_DAYS,
   gridDays,

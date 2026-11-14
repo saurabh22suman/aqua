@@ -100,8 +100,10 @@ describe("owner shell — the header", () => {
     const bar = screen.getByTestId("owner-top-bar");
     expect(bar.className).toContain("sticky");
     expect(bar.className).toContain("top-0");
-    // Compact: shorter than the previous 64px row.
-    expect(bar.className).toContain("min-h-14");
+    // Compact while preserving a 44px minimum target; actual geometry is browser-reviewed.
+    const height = Number(bar.className.match(/min-h-\[(\d+)px\]/)?.[1]);
+    expect(height).toBeGreaterThanOrEqual(44);
+    expect(height).toBeLessThan(64);
     // The record search is still the header's job.
     expect(within(bar).getByTestId("global-search-input")).toBeTruthy();
     // And the owner can see where they are.

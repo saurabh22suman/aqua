@@ -30,6 +30,9 @@ export const tenants = pgTable(
     timezone: text("timezone").notNull().default("Asia/Kolkata"),
     currency: text("currency").notNull().default("INR"),
     gstin: text("gstin"),
+    billingLegalName: text("billing_legal_name"),
+    billingLegalAddress: jsonb("billing_legal_address").$type<Record<string, unknown>>(),
+    billingStateCode: text("billing_state_code"),
     branding: jsonb("branding")
       .notNull()
       .default({})

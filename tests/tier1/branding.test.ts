@@ -28,7 +28,9 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const OWNER_USER: UserId = asUserId(uuidv7());
+const ownerRoleId = uuidv7();
+const ownerMembershipId = uuidv7();
 
 let tenantId: TenantId = asTenantId("");
 
@@ -41,23 +43,28 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Branding Test', $3, $4)",
     [tenantId, `branding-${RUN}`, plan?.id ?? null, TZ],
   );
-  // E-02 — audit_log.actor_id FKs to users(id). The suite's
-  // SYSTEM_USER sentinel needs a real row before any audited
-  // mutation runs; production ctx.userId always resolves to one.
+  // The settings mutation uses a real synthetic Owner, not a system sentinel.
   await admin.query(
     "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [SYSTEM_USER, `system-branding-${RUN}`],
+    [OWNER_USER, `+9198${String(BigInt("0x" + OWNER_USER.replaceAll("-", "").slice(-12)) % 100_000_000n).padStart(8, "0")}`],
   );
+  // Real, active Owner authority for this synthetic settings fixture.
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRoleId, tenantId]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [ownerMembershipId, tenantId, OWNER_USER, ownerRoleId]);
+  await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, 'settings.manage')", [tenantId, ownerRoleId]);
 });
 
 afterAll(async () => {
   if (tenantId) {
     await deleteAuditRowsForTenant(admin, tenantId);
+    await admin.query("delete from tenant_memberships where tenant_id = $1 and user_id = $2 and role_id = $3", [tenantId, OWNER_USER, ownerRoleId]);
+    await admin.query("delete from role_permissions where tenant_id = $1 and role_id = $2", [tenantId, ownerRoleId]);
+    await admin.query("delete from roles where tenant_id = $1 and id = $2", [tenantId, ownerRoleId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.query(
     "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
-    [SYSTEM_USER],
+    [OWNER_USER],
   );
   await admin.end();
 });
@@ -84,7 +91,7 @@ describe("getBranding (Phase 2.9)", () => {
 describe("updateBranding (Phase 2.9)", () => {
   it("writes displayName, shortName, accent on a fresh tenant", async () => {
     const result = await updateBranding(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { displayName: "Salt Lake Aquatics", shortName: "SLA", accent: "mango" },
     );
     expect(result.kind).toBe("ok");
@@ -97,7 +104,7 @@ describe("updateBranding (Phase 2.9)", () => {
   it("accepts every approved accent key — six in the picker, never a free-text hex", async () => {
     for (const key of ACCENT_KEYS) {
       const result = await updateBranding(
-        { tenantId, userId: SYSTEM_USER },
+        { tenantId, userId: OWNER_USER },
         { accent: key },
       );
       expect(result.kind).toBe("ok");
@@ -125,7 +132,7 @@ describe("updateBranding (Phase 2.9)", () => {
     // it explicitly so the UI shows a helpful error rather than
     // shipping a tenant with a blank corner mark.
     const result = await updateBranding(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { shortName: "" },
     );
     expect(result.kind).toBe("error");
@@ -136,7 +143,7 @@ describe("updateBranding (Phase 2.9)", () => {
 
   it("rejects an accent that is not in the frozen ACCENT_KEYS list", async () => {
     const result = await updateBranding(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       // Bypassing the type-level enum to test the runtime guard
       // (same shape as a tampered client reaching a Server Action).
       { accent: "neon-pink" as never },
@@ -149,7 +156,7 @@ describe("updateBranding (Phase 2.9)", () => {
 
   it("persists updatedBy — every mutation is traceable to an actor", async () => {
     await updateBranding(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { displayName: "After Audit" },
     );
     const row = (
@@ -158,7 +165,7 @@ describe("updateBranding (Phase 2.9)", () => {
         [tenantId],
       )
     ).rows[0];
-    expect(row?.updated_by).toBe(SYSTEM_USER);
+    expect(row?.updated_by).toBe(OWNER_USER);
   });
 });
 
@@ -171,7 +178,7 @@ describe("updateBranding writes an audit row (E-02)", () => {
     const requestId = uuidv7();
 
     const result = await updateBranding(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: OWNER_USER, requestId },
       { displayName: "Audited Aquatics", accent: "marine" },
     );
     expect(result.kind).toBe("ok");
@@ -200,7 +207,7 @@ describe("updateBranding writes an audit row (E-02)", () => {
     expect(row.entity_type).toBe("tenant");
     expect(row.entity_id).toBe(tenantId);
     expect(row.actor_type).toBe("staff");
-    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.actor_id).toBe(OWNER_USER);
     expect(row.source).toBe("web");
     expect(row.request_id).toBe(requestId);
     expect(row.before).toEqual({ displayName: "Old Name", shortName: "OLD", accent: "mango" });
@@ -215,7 +222,7 @@ describe("updateBranding writes an audit row (E-02)", () => {
   it("writes zero rows when the mutation is rejected as invalid", async () => {
     const requestId = uuidv7();
     const result = await updateBranding(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: OWNER_USER, requestId },
       { accent: "neon-pink" as never },
     );
     expect(result.kind).toBe("error");

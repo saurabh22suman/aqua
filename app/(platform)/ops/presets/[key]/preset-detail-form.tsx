@@ -7,6 +7,9 @@ import {
   applyPresetAction,
   type ApplyPresetActionResult,
 } from "@/lib/actions/platform-preset-apply";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
 
 // Phase 2.2b — applyPreset client island. Lives on /ops/presets/[key].
 //
@@ -100,7 +103,7 @@ export function PresetDetailForm({
     <form action={formAction} method="post" suppressHydrationWarning className="mt-8 space-y-4">
       <input type="hidden" name="featureKey" value={presetKey} />
       <input type="hidden" name="locationId" value={selectedLocation?.id ?? ""} />
-      <section className="rounded-card bg-paper border border-line p-5 space-y-4">
+      <OpsCard className="space-y-4 p-5">
         <div>
           <h2 className="font-display text-[16px] font-semibold text-ink">
             Apply to a location
@@ -128,11 +131,11 @@ export function PresetDetailForm({
               first.
             </p>
           ) : (
-            <select
+            <Select
+              data-testid="ops-preset-tenant-select"
               name="tenantId"
               value={tenantId}
               onChange={(e) => onTenantChange(e.target.value)}
-              className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
             >
               {tenants.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -142,7 +145,7 @@ export function PresetDetailForm({
                     : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </label>
 
@@ -157,10 +160,9 @@ export function PresetDetailForm({
                 at provisioning; add one before applying a preset.
               </p>
             ) : (
-              <select
+              <Select
                 value={selectedLocation?.id ?? ""}
                 onChange={(e) => setLocationId(e.target.value)}
-              className="w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
                 {tenantLocations.map((l) => (
                   <option key={l.id} value={l.id}>
@@ -170,7 +172,7 @@ export function PresetDetailForm({
                     {l.eligible ? "" : " · not offered"}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
           </label>
         ) : null}
@@ -209,35 +211,32 @@ export function PresetDetailForm({
             stay with the first preset.
           </p>
         ) : null}
-      </section>
+      </OpsCard>
 
       {error ? (
-        <p
-          role="alert"
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-        >
+        <OpsPanel tone="error" title="The preset was not applied">
           {error}
-        </p>
+        </OpsPanel>
       ) : null}
 
       <div className="flex items-center gap-3">
-        <button
+        <Button
           type="submit"
+          variant="primary"
           disabled={
             isPending ||
             tenants.length === 0 ||
             !selectedLocation ||
             locationIneligible
           }
-          className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60 transition-colors duration-150"
         >
           {isPending
             ? "Applying…"
             : `Apply ${presetName} to ${selectedLocation?.name ?? "this location"}`}
-        </button>
+        </Button>
         <Link
           href="/ops/presets"
-          className="rounded-pill px-4 py-2.5 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
+          className={buttonClasses({ variant: "secondary" })}
         >
           Cancel
         </Link>

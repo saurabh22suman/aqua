@@ -79,6 +79,7 @@ const mocks = vi.hoisted(() => ({
   ctx: { permissions: new Set<string>(), features: new Set<string>() },
   attendance: vi.fn(),
   enquiries: vi.fn(),
+  dashboard: vi.fn(),
 }));
 
 vi.mock("@/lib/auth/surface-guard", () => ({
@@ -90,7 +91,7 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@/lib/actions/dashboard", () => ({
-  getOwnerDashboardAction: async () => dashboardFixture,
+  getOwnerDashboardAction: (...args: unknown[]) => mocks.dashboard(...args),
 }));
 
 vi.mock("@/lib/actions/branding", () => ({
@@ -130,18 +131,22 @@ vi.mock("@/lib/actions/owner-insights", () => ({
 }));
 
 import OwnerHomePage from "@/app/(owner)/owner/page";
+import { OwnerInsightsHome } from "@/components/owner-insights-home/owner-insights-home";
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.ctx.permissions = new Set([
     "dashboard.view",
     "reports.operational",
+    "reports.financial",
     "members.read",
     "enquiries.read",
+    "invoices.read",
   ]);
-  mocks.ctx.features = new Set(["reports", "members", "enquiries"]);
+  mocks.ctx.features = new Set(["reports", "members", "enquiries", "billing"]);
   mocks.attendance.mockResolvedValue(attendanceFixture);
   mocks.enquiries.mockResolvedValue(enquiryFixture);
+  mocks.dashboard.mockResolvedValue(dashboardFixture);
 });
 
 afterEach(() => {
@@ -149,24 +154,14 @@ afterEach(() => {
 });
 
 describe("Owner Home — the insights wiring", () => {
-  it("reads both insight models with the selected facility as the location scope", async () => {
+  it("keeps the dashboard facility scope and does not read retired Home insights", async () => {
     render(
       await OwnerHomePage({ searchParams: Promise.resolve({ facility: FACILITY }) }),
     );
 
-    expect(mocks.attendance).toHaveBeenCalledTimes(1);
-    expect(mocks.enquiries).toHaveBeenCalledTimes(1);
-    for (const call of [
-      mocks.attendance.mock.calls[0]![0],
-      mocks.enquiries.mock.calls[0]![0],
-    ]) {
-      const input = call as { from: string; to: string; locationId?: string };
-      // The facility narrows the read; it is never dropped.
-      expect(input.locationId).toBe(FACILITY);
-      // A real 30-day window ending today (exclusive end).
-      expect(input.from).toBe("2026-09-27");
-      expect(input.to).toBe("2026-10-27");
-    }
+    expect(mocks.dashboard).toHaveBeenCalledWith({facility:FACILITY});
+    expect(mocks.attendance).not.toHaveBeenCalled();
+    expect(mocks.enquiries).not.toHaveBeenCalled();
   });
 
   it("never reads the insight models for a caller without the operational-reports grant", async () => {
@@ -182,17 +177,17 @@ describe("Owner Home — the insights wiring", () => {
     expect(text).not.toContain("Enquiries by current stage");
   });
 
-  it("degrades a failed read to an unavailable panel instead of breaking the page", async () => {
-    mocks.attendance.mockRejectedValue(new Error("connection reset"));
+  it("keeps unavailable insights truthful when the retained component is used directly", async () => {
 
     render(await OwnerHomePage({ searchParams: Promise.resolve({}) }));
 
     const text = document.body.textContent ?? "";
     // The page is still there…
-    expect(text).toContain("Collected today");
-    // …and the failed read says it could not be read, which is not the
-    // same as "nothing happened".
-    expect(text).toMatch(/could not be read/i);
-    expect(text).not.toMatch(/no batch ran/i);
+    expect(text).toContain("Collections");
+    expect(text).not.toContain("Enquiries by current stage");
+    cleanup();
+    render(<OwnerInsightsHome data={{from:"2026-09-27",to:"2026-10-27",enquiries:null}} />);
+    expect(document.body.textContent).toMatch(/could not be read/i);
+    expect(document.body.textContent).not.toMatch(/no enquiries created/i);
   });
 });

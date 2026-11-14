@@ -62,8 +62,7 @@ describe("createShutdownHandler", () => {
     await shutdown("SIGTERM");
 
     expect(exit).toHaveBeenCalledWith(0);
-    expect(log.mock.calls.some((c) => String(c[0]).includes("boss stop failed"))).toBe(
-      true,
-    );
+    expect(log.mock.calls.some((c) => String(c[0]).includes("code=drain_failed"))).toBe(true);
+    expect(log.mock.calls.some((c) => String(c[0]).includes("boss stop failed"))).toBe(false);
   });
 });

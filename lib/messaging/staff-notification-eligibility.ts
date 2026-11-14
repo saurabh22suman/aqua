@@ -20,7 +20,7 @@ export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsap
     .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, row.tenantId)))
     .where(and(eq(tenantMemberships.tenantId, row.tenantId), eq(tenantMemberships.userId, row.recipientUserId),
       invitation ? eq(tenantMemberships.id, invitation) : eq(roles.key, row.recipientRole!),
-      inArray(tenantMemberships.status, invitation ? ["invited", "active"] : ["active"]), isNull(tenantMemberships.deletedAt)));
+      inArray(tenantMemberships.status, invitation ? ["invited", "active"] : ["active"]), isNull(tenantMemberships.deletedAt), isNull(users.deletedAt), isNull(roles.deletedAt)));
   for (const membership of memberships) {
     if (normaliseToE164(membership.phone) !== row.phone) continue;
     if (invitation) return true;
@@ -37,6 +37,7 @@ export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsap
       if (!batch) continue;
       locationId = batch.locationId; coachId = batch.coachId;
     }
+    if (row.scopeBatchId && locationId === null && !membership.allLocations) continue;
     if (locationId && !membership.allLocations) {
       const [site] = await tx.select({ id: membershipLocations.id }).from(membershipLocations).where(and(
         eq(membershipLocations.tenantId, row.tenantId), eq(membershipLocations.membershipId, membership.id),

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isOpsHost } from "@/lib/ops-host";
-import { APEX_ALLOWLIST, OPS_ALLOWLIST, isAllowed } from "@/lib/surface-paths";
+import { APEX_ALLOWLIST, OPS_ALLOWLIST, isAllowed, isScopedBillingReceiptPath } from "@/lib/surface-paths";
 
 // Host-based route-group gating. Two rules:
 //
@@ -72,7 +72,7 @@ export function middleware(request: NextRequest): NextResponse {
   }
 
   const allowlist = surface === "ops" ? OPS_ALLOWLIST : APEX_ALLOWLIST;
-  if (isAllowed(pathname, allowlist)) {
+  if (isAllowed(pathname, allowlist) || (surface === "apex" && isScopedBillingReceiptPath(pathname))) {
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set("x-request-id", requestId);
     return withRequestId(

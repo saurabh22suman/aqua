@@ -4,6 +4,7 @@ import { useState } from "react";
 import { recordAssessmentAction } from "@/lib/actions/assessments";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
+import Link from "next/link";
 import type { MemberProgress } from "@/lib/services/skill-progress";
 
 // V-10 — the one-tap assess board. Each node is one row; the four band
@@ -84,6 +85,9 @@ export function AssessmentBoard({
         {progress.memberCode} · tap a band to save it. One tap, one
         assessment.
       </p>
+      <Link href="/coach/curriculum" className="inline-flex min-h-11 items-center text-[13px] text-ink-2 underline underline-offset-2">
+        View curriculum
+      </Link>
 
       {!canAssess ? (
         <div className="mt-4 rounded-card border border-line bg-paper px-4 py-3">
@@ -128,11 +132,14 @@ export function AssessmentBoard({
                     {rows.map((node) => (
                       <li key={node.id}>
                         <p className="text-[14px] font-medium">{node.name}</p>
-                        {node.rubric["4"] ? (
-                          <p className="mt-0.5 text-[11.5px] text-ink-3">
-                            Band 4: {node.rubric["4"]}
-                          </p>
-                        ) : null}
+                        <details className="mt-1 text-[12px] text-ink-2">
+                          <summary className="min-h-11 cursor-pointer content-center">View band criteria</summary>
+                          <ul className="space-y-1 pb-2">
+                            {[1, 2, 3, 4].map((band) => (
+                              <li key={band}>Band {band}: {node.rubric[String(band)] || "Not specified"}</li>
+                            ))}
+                          </ul>
+                        </details>
                         <div className="mt-1.5 grid grid-cols-4 gap-1.5">
                           {[1, 2, 3, 4].map((band) => {
                             const active = bands[node.id] === band;

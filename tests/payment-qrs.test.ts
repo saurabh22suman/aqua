@@ -52,6 +52,9 @@ beforeAll(async () => {
     ownerId,
     `+9194${String(Date.now()).slice(-8)}`,
   ]);
+  const ownerRoleId = uuidv7();
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRoleId, tenantA]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [uuidv7(), tenantA, ownerId, ownerRoleId]);
 }, 240_000);
 
 afterAll(async () => {

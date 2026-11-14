@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MapPin } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Select } from "@/components/ui/Select";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { navigateFacility } from "@/components/facility-navigation";
 import {
   FACILITY_COOKIE,
   isFacilityScopedPath,
@@ -41,11 +43,28 @@ export function FacilitySwitcher({
 }: {
   locations: { id: string; name: string }[];
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const visible = locations.length > 1 && isFacilityScopedPath(pathname);
-  const [current, setCurrent] = useState(() => searchParams.get("facility") ?? "all");
+  const dailyClose = pathname === "/owner/reports/collections" && searchParams.get("view") !== "trends";
+  const visible = locations.length > 1 && isFacilityScopedPath(pathname) && !dailyClose;
+  // The URL is the scope the page is rendered with, so the CONTROL must
+  // always show the URL's facility — including after a Back navigation,
+  // which re-renders this component with a new search param WITHOUT
+  // remounting it. A state that is only written by onChange would keep
+  // showing the facility the operator just navigated away from, while the
+  // page below is scoped by the URL: the control would be lying.
+  const urlFacility = searchParams.get("facility") ?? "all";
+  const [current, setCurrent] = useState(urlFacility);
+  // The WHOLE selected facility, for the control's title. The visible
+  // label may be shortened or ellipsised; the scope never is.
+  const selectedLabel =
+    current === "all"
+      ? "All facilities"
+      : (locations.find((location) => location.id === current)?.name ??
+        "All facilities");
+  useEffect(() => {
+    setCurrent(urlFacility);
+  }, [urlFacility]);
 
   // A page opened from the sidebar carries no `?facility=`, so adopt the
   // remembered choice and put it in the URL — the server already scoped
@@ -57,9 +76,12 @@ export function FacilitySwitcher({
     setCurrent(remembered);
     const next = new URLSearchParams(searchParams.toString());
     next.set("facility", remembered);
-    router.replace(`${pathname}?${next.toString()}`);
-  }, [pathname, router, searchParams, visible]);
+    navigateFacility(`${pathname}?${next.toString()}`, true);
+  }, [pathname, searchParams, visible]);
 
+  if (locations.length === 1 && isFacilityScopedPath(pathname) && !dailyClose) {
+    return <span className="block truncate text-xs text-ink-2" title={locations[0]!.name}>{locations[0]!.name}</span>;
+  }
   if (!visible) return null;
 
   function onChange(value: string) {
@@ -73,7 +95,7 @@ export function FacilitySwitcher({
     }
     setCurrent(value);
     const query = next.toString();
-    router.push(query ? `${pathname}?${query}` : pathname);
+    navigateFacility(query ? `${pathname}?${query}` : pathname);
   }
 
   return (
@@ -81,14 +103,31 @@ export function FacilitySwitcher({
       <label htmlFor="facility-switcher" className="sr-only">
         Facility
       </label>
-      <div className="flex items-center gap-2 rounded-ctl border border-line bg-paper px-3 min-h-[44px]">
-        <MapPin size={14} className="text-ink-3 flex-none" aria-hidden="true" />
-        <select
+      {/* The shared PICKER: the 10px control radius, 16px control text
+          and the very lightly tinted picker surface. It opens the shared
+          listbox — our own dropdown — instead of the operating system's,
+          and it draws the chevron that says the row is a choice.
+          On a phone the control is the COMPACT 44px one, so the owner
+          header stays the approved compact row; on a desktop it is the
+          standard 48px control.
+
+          The pin is the shared Owner glyph. It is drawn AFTER the
+          control and lifted above it (z-10), because the control's own
+          positioned, opaque surface would otherwise paint over a pin
+          that sits in front of it. It never takes a pointer.
+
+          The control's title carries the WHOLE selected facility, so a
+          label that is shortened on purpose (or a long name that the
+          control ellipsises) never loses the scope in scope. */}
+      <div className="relative">
+        <Select
           id="facility-switcher"
           data-testid="facility-switcher"
           value={current}
           onChange={(e) => onChange(e.target.value)}
-          className="flex-1 bg-transparent text-[16px] min-h-[44px]"
+          aria-label="Facility"
+          title={selectedLabel}
+          className="min-h-11 pl-9 pr-8 lg:min-h-12"
         >
           <option value="all">All facilities</option>
           {locations.map((l) => (
@@ -96,7 +135,12 @@ export function FacilitySwitcher({
               {l.name}
             </option>
           ))}
-        </select>
+        </Select>
+        <OwnerIcon
+          name="pin"
+          size={16}
+          className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-ink-3"
+        />
       </div>
     </div>
   );

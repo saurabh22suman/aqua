@@ -49,12 +49,11 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const SLUG_PREFIX = `act-${RUN}`;
 
+const operatorIds: string[] = [];
 beforeAll(async () => {
-  // Wipe in dependency order. platform_sessions → platform_users →
-  // platform_audit_log.
-  await admin.query("delete from platform_sessions");
-  await admin.query("delete from platform_audit_log");
-  await admin.query("delete from platform_users");
+  const plans = await admin.query<{key:string}>("select key from plans where key='starter' and status='active' and available_for_new_tenants=true");
+  if (plans.rows.length !== 1) throw new Error("Expected seeded active Starter signup offer");
+  happyInput.planKey = plans.rows[0]!.key;
 });
 
 afterAll(async () => {
@@ -84,15 +83,9 @@ afterAll(async () => {
     );
     await admin.query("delete from roles where tenant_id = $1", [r.id]);
     await admin.query("delete from locations where tenant_id = $1", [r.id]);
-    await admin.query(
-      "delete from platform_audit_log where tenant_id = $1",
-      [r.id],
-    );
     await admin.query("delete from tenants where id = $1", [r.id]);
   }
-  await admin.query("delete from platform_sessions");
-  await admin.query("delete from platform_audit_log");
-  await admin.query("delete from platform_users");
+  await admin.query("delete from platform_sessions where user_id=any($1::uuid[])",[operatorIds]);
   await admin.end();
 });
 
@@ -109,6 +102,7 @@ async function provisionActiveAdmin(label: string) {
     password,
     role: "admin",
   });
+  operatorIds.push(id);
   await markTotpEnrolled(id);
   await clearPlatformSessionCookie();
   const login = await platformLogin({ email, password });
@@ -170,7 +164,7 @@ const happyInput: CreateTenantFormInput = {
   name: "Action Test Academy",
   slug: `${SLUG_PREFIX}-default`,
   timezone: "Asia/Kolkata",
-  planKey: "standard",
+  planKey: "starter",
   currency: "INR",
   locationName: "Main",
   locationIsPrimary: true,
@@ -265,6 +259,7 @@ describe("createTenantAction", () => {
       password,
       role: "admin",
     });
+    operatorIds.push(u.id);
     await markTotpEnrolled(u.id);
     await clearPlatformSessionCookie();
     const login = await platformLogin({ email, password });

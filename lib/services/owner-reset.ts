@@ -4,7 +4,6 @@ import { tenantMemberships } from "@/db/schema/memberships";
 import { roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
 import { persons } from "@/db/schema/people";
-import { writeAudit } from "@/lib/audit/write";
 import {
   issueOwnerResetLink,
   type IssueLoginLinkResult,
@@ -77,23 +76,5 @@ export async function issueTenantOwnerResetLink(
 ): Promise<IssueLoginLinkResult> {
   // A06 — the authenticated issuer ctx is forwarded so the service can
   // enforce the issuer-target trust gate before signing anything.
-  const result = await issueOwnerResetLink(ctx.tenantId, membershipId, ctx);
-  if (result.kind !== "ok") return result;
-
-  await withTenant(ctx.tenantId, async (tx) => {
-    await writeAudit(tx, {
-      tenantId: ctx.tenantId,
-      actorId: ctx.userId ?? null,
-      requestId: ctx.requestId ?? null,
-      action: "owner.reset_link_issued",
-      entityType: "tenant_membership",
-      entityId: membershipId,
-      after: {
-        phone: result.phone,
-        expiresAt: result.expiresAt.toISOString(),
-      },
-    });
-  });
-
-  return result;
+  return issueOwnerResetLink(ctx.tenantId, membershipId, ctx);
 }

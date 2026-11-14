@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { orders, orderLines } from "@/db/schema/orders";
@@ -6,6 +6,7 @@ import { payments } from "@/db/schema/payments";
 import { invoices } from "@/db/schema/invoices";
 import { writeAudit } from "@/lib/audit/write";
 import { issueInvoiceInTx } from "@/lib/services/invoice-issue";
+import { isFeatureEnabledForTenant } from "@/db/features";
 import {
   locationVisible,
   resolveLocationAccess,
@@ -19,6 +20,9 @@ import {
   type VoidOrderResult,
 } from "@/lib/services/orders-core";
 import type { ActionCtx } from "@/lib/auth/context";
+import { billingAddressSchema, type BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { GSTIN_RE, GST_STATE_NAMES } from "@/lib/gst";
+import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // K-03 — the café → invoice bridge and the void path. See
 // lib/services/orders.ts for the module's public surface; this file is
@@ -26,6 +30,42 @@ import type { ActionCtx } from "@/lib/auth/context";
 // rule. finalizeOrder issues exactly one invoice (source 'cafe') from
 // the order's snapshotted lines and links it; voidOrder is terminal,
 // keeps the lines, and refuses while a captured payment exists.
+//
+// F06 (staging blocker, 29 October 2026) — the café module's
+// entitlement. `cafe.pos` is an INTERNAL feature: the standard plan's
+// baseline grants every GA feature, so the café is not entitled until an
+// operator says so. The reception shortcut already hid the café when the
+// entitlement was off, but the direct page and its actions kept taking
+// orders and issuing bills behind it. The human's policy: with the
+// module off there is NO new creation, no finalization and no new bill
+// issuance; money that is already issued stays collectible.
+//
+// So the gate sits on the ISSUANCE, not on the reads: a bill that was
+// already issued is still returned and can still be collected, and the
+// staff cancellation of an unpaid invoiced café order stays exactly as
+// it was (F11 — an explicit exception, not a general invoice void).
+export const CAFE_FEATURE_KEY = "cafe.pos";
+
+export const CAFE_MODULE_OFF_ERROR =
+  "The café module is switched off for this tenant, so a new café bill cannot be issued. A bill that was already issued can still be collected.";
+
+export const CAFE_MODULE_OFF_CREATE_ERROR =
+  "The café module is switched off for this tenant, so a new café order cannot be started. A bill that was already issued can still be collected.";
+
+/**
+ * Is the café module switched on for this tenant?
+ *
+ * The effective set is the SAME resolution the runtime uses
+ * (db/features.ts): the plan baseline, overridden by the tenant's own
+ * rows, with an expired override falling through to the plan. It is
+ * resolved before the caller's transaction opens, so a refused bill
+ * never starts one.
+ */
+export async function cafeModuleEnabled(
+  tenantId: ActionCtx["tenantId"],
+): Promise<boolean> {
+  return isFeatureEnabledForTenant(tenantId, CAFE_FEATURE_KEY);
+}
 
 export async function finalizeOrder(
   ctx: ActionCtx,
@@ -35,12 +75,18 @@ export async function finalizeOrder(
   if (!parsed.success) return { ok: false, error: "Invalid order." };
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
   const actorId = ctx.userId;
+  const moduleEnabled = await cafeModuleEnabled(ctx.tenantId);
 
   return withTenant(ctx.tenantId, async (tx) => {
+    await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
     const access = await resolveLocationAccess(tx, ctx);
     const order = await lockedOrder(tx, ctx.tenantId, parsed.data);
     if (!order || !locationVisible(access, order.locationId)) {
       return { ok: false, error: "Order not found." };
+    }
+    const identity = await resolveBillingIdentityInTx(tx, ctx.tenantId, order.locationId);
+    if (!identity || identity.version !== order.issuerSnapshotVersion) {
+      return { ok: false, error: "The order issuer snapshot is incompatible with the site billing configuration." };
     }
     if (order.status === "voided") {
       return { ok: false, error: "This order is void." };
@@ -77,6 +123,27 @@ export async function finalizeOrder(
       .where(eq(tenants.id, ctx.tenantId));
     const issuedOn = todayInZone(tenantRow?.timezone ?? "Asia/Kolkata");
 
+    // F06 — no NEW café bill while the module is off. The gate is
+    // ENTITLEMENT-based and unconditional: db/features.ts resolves an
+    // explicit force-off and a missing entitlement even when the tenant
+    // has no plan, and fixture compatibility is not an authorization for a
+    // service bypass. The location guard above already answered for an
+    // order the caller may not see.
+    if (!moduleEnabled) {
+      return { ok: false, error: CAFE_MODULE_OFF_ERROR };
+    }
+
+    let pinnedIssuer: BillingIssuer | undefined;
+    if (order.issuerSnapshotVersion === 1) {
+      const address = billingAddressSchema.safeParse(order.issuerLegalAddress);
+      const state = order.issuerStateCode;
+      const gstin = order.issuerGstin;
+      if (!order.issuerLegalName?.trim() || !address.success || !state || !(state in GST_STATE_NAMES) ||
+        (order.issuerRegistrationMode === "registered" ? !gstin || !GSTIN_RE.test(gstin) || !gstin.startsWith(state) : order.issuerRegistrationMode !== "unregistered" || gstin !== null)) {
+        return { ok: false, error: "The order issuer snapshot is invalid." };
+      }
+      pinnedIssuer = { legalName: order.issuerLegalName, legalAddress: address.data, stateCode: state, gstin };
+    }
     const issued = await issueInvoiceInTx(
       tx,
       {
@@ -94,6 +161,8 @@ export async function finalizeOrder(
         })),
       },
       actorId,
+      ctx.requestId ?? null,
+      pinnedIssuer,
     );
     if (!issued.ok) return { ok: false, error: issued.error };
 
@@ -158,6 +227,12 @@ export async function voidOrder(
     // Refund path first: a captured payment must be handled before the
     // order can be voided. Never row-edit a paid record.
     if (order.invoiceId) {
+      // Collection locks this invoice too. Read captured payments only after
+      // taking the same lock, so a concurrent collection cannot be missed.
+      const [invoice] = await tx.select({ id: invoices.id }).from(invoices)
+        .where(and(eq(invoices.id, order.invoiceId), eq(invoices.tenantId, ctx.tenantId)))
+        .for("update");
+      if (!invoice) return { ok: false, error: "This order's invoice was not found." };
       const captured = await tx
         .select({ id: payments.id })
         .from(payments)

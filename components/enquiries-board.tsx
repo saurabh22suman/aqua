@@ -1,23 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { createEnquiryAction } from "@/lib/actions/enquiries";
 import type { EnquiryRow } from "@/lib/services/enquiries";
-import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
+import { OwnerCreateAction } from "@/components/owner-ui/owner-create-action";
+import { Button } from "@/components/ui/Button";
 import {
-  StatusBadge,
-  ENQUIRY_STAGE_TONE,
-} from "@/components/ui/StatusBadge";
-import { formatPhoneIN } from "@/lib/phone";
+  EnquiryCaptureCard,
+  type CaptureSource,
+} from "@/components/enquiry-capture-card";
+import { EnquiryList, type EnquiriesListVariant } from "@/components/enquiries-list";
+import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
+import type { OverdueFollowUp } from "@/lib/services/enquiries";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
+import { formatDateIST } from "@/lib/time/tz";
+import { isOptionalContactPhoneValid } from "@/lib/contact-phone";
 
-const SOURCES = ["walk-in", "phone", "referral", "online", "other"] as const;
+/**
+ * Which surface this board is serving.
+ *
+ * `front-desk` — reception's own capture-first board. This is the
+ * default so the reception journey is unchanged.
+ *
+ * `oversight` — the owner's board. Owner oversight leads (the current
+ * enquiries first, with their drill-down) and the routine capture is
+ * secondary, available when the owner is covering reception.
+ */
+export type EnquiriesBoardVariant = EnquiriesListVariant;
+type EnquiryReturn = {token:string; namespace:string; search:string; stage:string};
+let enquiryReturn: EnquiryReturn | null = null;
 
 export function EnquiriesBoard({
   initialEnquiries,
   detailHrefPrefix = "/owner/enquiries",
   locations,
   canWrite,
+  variant = "front-desk",
+  overdueFollowUps = [],
+  navigationNamespace,
 }: {
   initialEnquiries: EnquiryRow[];
   detailHrefPrefix?: string;
@@ -25,19 +45,109 @@ export function EnquiriesBoard({
   // the caller's allowed locations come from the server page.
   locations: Array<{ id: string; name: string }>;
   canWrite: boolean;
+  variant?: EnquiriesBoardVariant;
+  overdueFollowUps?: OverdueFollowUp[];
+  navigationNamespace?: string;
 }) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
+  const [search, setSearch] = useState("");
+  const [stage, setStage] = useState("active");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [source, setSource] = useState<(typeof SOURCES)[number]>("walk-in");
+  const [source, setSource] = useState<CaptureSource>("walk-in");
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(variant === "front-desk");
+  // The EXPLICIT intents. Both counters start at 0, so nothing is
+  // focused on arrival and reception's always-visible capture is never
+  // focused at all: only a press by the owner moves the focus.
+  const [openIntent, setOpenIntent] = useState(0);
+  const [closeIntent, setCloseIntent] = useState(0);
+  // The real name field of the capture card, and the area that holds
+  // the owner's create action. Both are typed DOM references — no
+  // timer, no history and no cache is involved.
+  const nameFieldRef = useRef<HTMLInputElement>(null);
+  const phoneFieldRef = useRef<HTMLInputElement>(null);
+  const actionAreaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (phoneError) phoneFieldRef.current?.focus();
+  }, [phoneError]);
+  useEffect(() => {
+    if (variant !== "oversight" || !navigationNamespace || !enquiryReturn) return;
+    if (window.history.state?.aquaEnquiryToken !== enquiryReturn.token || enquiryReturn.namespace !== navigationNamespace) return;
+    setSearch(enquiryReturn.search);
+    setStage(enquiryReturn.stage);
+  }, [navigationNamespace,variant]);
+  function remember(nextSearch:string,nextStage:string) {
+    if (!navigationNamespace || variant !== "oversight") return;
+    const token = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+    enquiryReturn = {token,namespace:navigationNamespace,search:nextSearch,stage:nextStage};
+    window.history.replaceState({...window.history.state,aquaEnquiryToken:token},"");
+  }
+  const term = search.trim().toLocaleLowerCase();
+  const visibleEnquiries = variant === "oversight" ? enquiries.filter((enquiry) => {
+    const matchesStage = stage === "all" || (stage === "active" ? enquiry.stage !== "converted" && enquiry.stage !== "lost" : enquiry.stage === stage);
+    return matchesStage && (!term || `${enquiry.fullName} ${enquiry.phone ?? ""}`.toLocaleLowerCase().includes(term));
+  }) : enquiries;
+  const filters = variant === "oversight" ? <div className="flex flex-wrap items-end gap-2">
+    <label className="min-w-0 flex-1 text-[13px] text-ink-2">Search enquiries<input value={search} onChange={event => { setSearch(event.target.value); remember(event.target.value,stage); }} type="search" className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-ink" /></label>
+    <label className="text-[13px] text-ink-2">Stage<select value={stage} onChange={event => { setStage(event.target.value); remember(search,event.target.value); }} className="mt-1 block min-h-11 rounded-ctl border border-line bg-paper px-3 text-ink"><option value="active">Active</option><option value="all">All history</option>{Object.entries(ENQUIRY_STAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+  </div> : null;
+  const list = visibleEnquiries.length === 0 && (term || stage !== "all") && enquiries.length > 0
+    ? <p className="text-[13px] text-ink-2">No enquiries match these filters.</p>
+    : <EnquiryList enquiries={visibleEnquiries} detailHrefPrefix={detailHrefPrefix} variant={variant} />;
+  const visibleOverdue = overdueFollowUps.filter((followUp) => visibleEnquiries.some((enquiry) => enquiry.id === followUp.enquiryId));
+  const dueList = variant === "oversight" && visibleOverdue.length > 0 ? <section className="rounded-card border border-line bg-paper p-4">
+    <h2 className="font-display text-[16px] font-semibold">Overdue follow-ups</h2>
+    <ul className="divide-y divide-line">{visibleOverdue.map((followUp) => <li key={followUp.id} className="py-2">
+      <Link href={`${detailHrefPrefix}/${followUp.enquiryId}`} aria-label={`Follow up ${followUp.enquiryName}`} className="inline-flex min-h-11 flex-col justify-center text-[13px] text-ink">
+        <span>{followUp.enquiryName} · due {formatDateIST(followUp.dueAt)}</span>
+        {followUp.note ? <span className="text-ink-2">{followUp.note}</span> : null}
+      </Link>
+    </li>)}</ul>
+  </section> : null;
+
+  // Opening the capture on the owner's page: the card opens BELOW the
+  // list, so on a long list it opens off-screen. The owner's own press
+  // is the intent — the field is focused and brought into the viewport
+  // so the capture is where the owner can see it.
+  //
+  // The scroll uses the BROWSER'S OWN default: asking for
+  // `behavior: "smooth"` forces an animated scroll on every reader,
+  // including the ones who asked the platform for reduced motion
+  // (docs/design-system/motion.md — "Never force smooth scrolling").
+  // The default scroll honours that preference without a special case.
+  useEffect(() => {
+    if (openIntent === 0) return;
+    const field = nameFieldRef.current;
+    if (!field) return;
+    field.focus();
+    field.scrollIntoView({ block: "center" });
+  }, [openIntent]);
+
+  // Closing the capture returns the focus to the SAME create action
+  // that opened it, so the owner never loses their place. The shared
+  // action does not forward a ref, so the element is found inside this
+  // board's own area by the shared marker it renders.
+  useEffect(() => {
+    if (closeIntent === 0) return;
+    const action = actionAreaRef.current?.querySelector<HTMLButtonElement>(
+      "[data-owner-create-action]",
+    );
+    action?.focus();
+  }, [closeIntent]);
 
   async function submit() {
     if (!fullName.trim() || !locationId) return;
-    setBusy(true);
     setError(null);
+    if (!isOptionalContactPhoneValid(phone)) {
+      setPhoneError("Enter a valid phone number.");
+      return;
+    }
+    setPhoneError(null);
+    setBusy(true);
     try {
       const enquiry = await createEnquiryAction({
         fullName: fullName.trim(),
@@ -65,130 +175,85 @@ export function EnquiriesBoard({
             ? "No site is configured yet — ask the owner to add one before capturing enquiries."
             : "Your role can view enquiries but not capture them."}
         </p>
-        <EnquiryList
-          enquiries={enquiries}
-          detailHrefPrefix={detailHrefPrefix}
-        />
+        {filters}
+        {dueList}
+        {list}
+      </div>
+    );
+  }
+
+  const capture = (
+    <EnquiryCaptureCard
+      fullName={fullName}
+      phone={phone}
+      source={source}
+      locationId={locationId}
+      locations={locations}
+      error={error}
+      phoneError={phoneError}
+      busy={busy}
+      nameFieldRef={nameFieldRef}
+      phoneFieldRef={phoneFieldRef}
+      onFullName={setFullName}
+      onPhone={(value) => { setPhone(value); setPhoneError(null); }}
+      onSource={setSource}
+      onLocationId={setLocationId}
+      onSubmit={() => void submit()}
+    />
+  );
+
+  if (variant === "oversight") {
+    // Owner oversight leads; the routine capture stays secondary.
+    return (
+      <div className="space-y-4" ref={actionAreaRef}>
+        {filters}
+        {dueList}
+        {list}
+        {/* The ONE create action for enquiries: the shared floating
+            action on a phone and the labelled action on a desktop — the
+            SAME control the other owner pages use, not a second shape
+            and not an ordinary boxed button. It OPENS the capture panel
+            and never submits it. While its own panel is open the action
+            is hidden, so the owner never has two ways in and the
+            floating action never covers the form; the close control
+            lives with the panel it closes. */}
+        {captureOpen ? (
+          <div id="enquiry-capture" className="mt-3">
+            <div className="flex justify-end">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setCaptureOpen(false);
+                  setCloseIntent((n) => n + 1);
+                }}
+                aria-expanded={true}
+                aria-controls="enquiry-capture"
+              >
+                Close enquiry capture
+              </Button>
+            </div>
+            {capture}
+          </div>
+        ) : (
+          <OwnerCreateAction
+            kind="button"
+            onClick={() => {
+              setCaptureOpen(true);
+              setOpenIntent((n) => n + 1);
+            }}
+            label="Add enquiry"
+            testId="enquiries-create-action"
+          />
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-card border border-line bg-paper p-3.5 space-y-2">
-        <p className="text-[13px] font-medium">Quick capture</p>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Name</span>
-          <input
-            type="text"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Name"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-            data-testid="enquiry-capture-name"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (optional)"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          />
-        </label>
-        <label className="block">
-          <span className="block text-[12px] text-ink-3 mb-1">Source</span>
-          <select
-            value={source}
-            onChange={(e) => setSource(e.target.value as (typeof SOURCES)[number])}
-            aria-label="Source"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          >
-            {SOURCES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
-        {locations.length > 1 ? (
-          <label className="block">
-            <span className="block text-[12px] text-ink-3 mb-1">Site</span>
-            <select
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-              aria-label="Site"
-              className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-              data-testid="enquiry-capture-location"
-            >
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <button
-          type="button"
-          onClick={submit}
-          disabled={busy || !fullName.trim() || !locationId}
-          className="min-h-11 w-full rounded-ctl bg-[var(--accent-strong)] py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
-          data-testid="enquiry-capture-submit"
-        >
-          {busy ? "Saving…" : "Capture enquiry"}
-        </button>
-        {error ? (
-          <p role="alert" className="text-[12px] text-ink-2">
-            {error}
-          </p>
-        ) : null}
-      </div>
-
+      {capture}
       <EnquiryList enquiries={enquiries} detailHrefPrefix={detailHrefPrefix} />
     </div>
-  );
-}
-
-function EnquiryList({
-  enquiries,
-  detailHrefPrefix,
-}: {
-  enquiries: EnquiryRow[];
-  detailHrefPrefix: string;
-}) {
-  return (
-    <ul data-testid="enquiries-list">
-      {enquiries.length === 0 ? (
-        <li className="rounded-ctl border border-line bg-paper px-4 py-8 text-center">
-          <p className="text-[14px] font-medium">No enquiries yet</p>
-          <p className="mt-1 text-[12.5px] text-ink-3">
-            Capture a walk-in, phone call, or online lead above — name and source only at first contact.
-          </p>
-        </li>
-      ) : (
-        enquiries.map((e) => (
-          <li key={e.id} className="border-b border-line last:border-0">
-            <Link href={`${detailHrefPrefix}/${e.id}`} className="flex items-center gap-3 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-medium">{e.fullName}</p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  {e.source}
-                  {e.phone ? ` · ${formatPhoneIN(e.phone)}` : ""}
-                  {/* R04 — only management sees an unassigned row; the
-                      label makes the review state explicit. */}
-                  {e.locationId ? "" : " · Unassigned site"}
-                </p>
-              </div>
-              <StatusBadge tone={ENQUIRY_STAGE_TONE[e.stage] ?? "neutral"}>
-                {ENQUIRY_STAGE_LABELS[e.stage]}
-              </StatusBadge>
-            </Link>
-          </li>
-        ))
-      )}
-    </ul>
   );
 }

@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/auth/ops-operation", () => ({
+  runOpsRead: async (operation: string, tenant: string, read: () => Promise<unknown>, origin: string) => {
+    expect(["tenant.header", "tenant.messaging.summary"]).toContain(operation);
+    expect(tenant).toBe("11111111-1111-1111-1111-111111111111");
+    expect(origin).toBe("ops_page");
+    return read();
+  },
+}));
 
 // PR4 (ops console improvements) — every existing tenant-detail panel
 // grouped into tabs (Overview / Configuration / Entitlements /
@@ -42,7 +50,7 @@ afterEach(() => {
 });
 
 describe("Tenant detail — layout and tab bar", () => {
-  it("renders all six tabs with the correct hrefs", async () => {
+  it("renders all eight tabs with the correct hrefs", async () => {
     vi.doMock("next/navigation", () => ({
       usePathname: () => `/ops/tenants/${TENANT_ID}`,
       notFound: () => {
@@ -69,10 +77,12 @@ describe("Tenant detail — layout and tab bar", () => {
     expect(links.map((l) => l.getAttribute("href"))).toEqual([
       `/ops/tenants/${TENANT_ID}`,
       `/ops/tenants/${TENANT_ID}/configuration`,
+      `/ops/tenants/${TENANT_ID}/tax`,
       `/ops/tenants/${TENANT_ID}/entitlements`,
       `/ops/tenants/${TENANT_ID}/locations`,
       `/ops/tenants/${TENANT_ID}/messaging`,
       `/ops/tenants/${TENANT_ID}/audit`,
+      `/ops/tenants/${TENANT_ID}/diagnostics`,
     ]);
   });
 

@@ -29,6 +29,7 @@ import type { CoachRosterRow, CoachScheduleRow } from "@/lib/services/coach-sche
 export type TodaySession = {
   id: string;
   batchName: string;
+  locationName?: string | null;
   startsAt: string;
   endsAt: string;
   marked: number;
@@ -48,7 +49,7 @@ export async function getTodayAction(): Promise<{
   const today = todayInZone(tenant.timezone);
 
   const rows = await listTodaySessions(
-    { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+    ctx,
     today,
   );
 
@@ -56,6 +57,7 @@ export async function getTodayAction(): Promise<{
     sessions: rows.map((r) => ({
       id: r.id,
       batchName: r.batchName,
+      locationName: r.locationName,
       startsAt: r.startsAt.toISOString(),
       endsAt: r.endsAt.toISOString(),
       marked: r.marked,
@@ -89,11 +91,11 @@ export async function getCoachHomeAction(): Promise<{
 
   const [todayRows, nextRow] = await Promise.all([
     listTodaySessions(
-      { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+      ctx,
       today,
     ),
     getCoachNextUpcoming(
-      { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+      ctx,
       today,
       7,
     ),
@@ -103,6 +105,7 @@ export async function getCoachHomeAction(): Promise<{
     sessions: todayRows.map((r) => ({
       id: r.id,
       batchName: r.batchName,
+      locationName: r.locationName,
       startsAt: r.startsAt.toISOString(),
       endsAt: r.endsAt.toISOString(),
       marked: r.marked,
@@ -112,6 +115,7 @@ export async function getCoachHomeAction(): Promise<{
       ? {
           id: nextRow.id,
           batchName: nextRow.batchName,
+          locationName: nextRow.locationName,
           startsAt: nextRow.startsAt.toISOString(),
           endsAt: nextRow.endsAt.toISOString(),
           marked: nextRow.marked,
@@ -143,7 +147,7 @@ export async function getScheduleAction(raw: {
   const to = addDays(from, daysAhead - 1);
 
   const rows = await listCoachSchedule(
-    { tenantId: ctx.tenantId, userId: ctx.userId, roleKey: ctx.roleKey },
+    ctx,
     from,
     to,
   );
@@ -168,6 +172,7 @@ export async function getRosterAction(
   rawSessionId: string,
 ): Promise<{
   batchName: string;
+  locationName: string | null;
   startsAt: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
@@ -190,6 +195,7 @@ export async function getRosterAction(
 
   return {
     batchName: roster.batchName,
+    locationName: roster.locationName,
     startsAt: roster.startsAt.toISOString(),
     rows: roster.rows,
     offlineSyncEnabled: roster.offlineSyncEnabled,

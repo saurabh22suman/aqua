@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { resolveConfigInTx, type ResolvedConfig } from "@/db/config";
 import { locations } from "@/db/schema/locations";
@@ -6,6 +6,9 @@ import { facilities } from "@/db/schema/preset-engine";
 import { tenants } from "@/db/schema/tenants";
 import { gstDocumentKind } from "@/lib/gst";
 import type { TenantId } from "@/lib/ids";
+import type { ActionCtx } from "@/lib/auth/context";
+import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
+import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // The GST rate key and the ops-side read that shows every level of its
 // resolution: tenant default, per facility, per activity. The console
@@ -25,6 +28,22 @@ export async function isGstRegistered(tenantId: TenantId): Promise<boolean> {
       .from(tenants)
       .where(eq(tenants.id, tenantId));
     return gstDocumentKind(row?.gstin ?? null) === "tax_invoice";
+  });
+}
+
+// A quote is scoped to a live physical site and the current caller, not the
+// tenant-wide registration. null means unavailable, never a tax-free quote.
+export async function siteTaxRegistration(ctx: ActionCtx, locationIds: string[]): Promise<Record<string, boolean | null>> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
+    const access = await resolveLocationAccess(tx, ctx);
+    const result: Record<string, boolean | null> = {};
+    for (const id of new Set(locationIds)) {
+      if (!locationVisible(access, id)) continue;
+      const identity = await resolveBillingIdentityInTx(tx, ctx.tenantId, id);
+      result[id] = identity ? (identity.version === 1 ? identity.issuer.gstin !== null : identity.gstin !== null) : null;
+    }
+    return result;
   });
 }
 

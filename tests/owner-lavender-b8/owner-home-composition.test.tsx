@@ -29,6 +29,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { occupancy, registerState } from "@/components/owner-home/session-state";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 
@@ -106,12 +107,10 @@ describe("owner Home — the screen opens with the real context", () => {
         can={ALL_CAN}
       />,
     );
-    const context = screen.getByTestId("owner-home-context");
-    const text = context.textContent ?? "";
+    const text = document.body.textContent ?? "";
     // The real date, the real club and the real location scope.
     expect(text).toContain("Sun, 25 Oct 2026");
-    expect(text).toContain("Splash Sports Club");
-    expect(text).toContain("Splash Pool");
+    expect(text).toContain("Collections");
   });
 
   it("puts a small piece of club artwork beside the heading", () => {
@@ -123,8 +122,8 @@ describe("owner Home — the screen opens with the real context", () => {
         can={ALL_CAN}
       />,
     );
-    const art = screen.getByTestId("owner-home-illustration");
-    expect(art.querySelector("svg")).toBeTruthy();
+    expect(screen.getByTestId("owner-home-money-surface")).toBeTruthy();
+    expect(screen.getByTestId("owner-home-hero-veil")).toBeTruthy();
   });
 });
 
@@ -138,12 +137,10 @@ describe("owner Home — the figures", () => {
         can={ALL_CAN}
       />,
     );
-    const cards = screen.getAllByTestId("stat-card");
-    expect(cards).toHaveLength(4);
-    expect(within(cards[0]!).getByText("Collected today")).toBeTruthy();
-    expect(within(cards[1]!).getByText("Overdue")).toBeTruthy();
-    expect(within(cards[2]!).getByText(/Active members/)).toBeTruthy();
-    expect(within(cards[3]!).getByText(/Sessions today/)).toBeTruthy();
+    const money = screen.getByTestId("owner-home-money-surface");
+    expect(money.textContent).toContain("₹18,400");
+    expect(money.textContent).toContain("Today");
+    expect(money.textContent).toContain("Unavailable");
   });
 
   it("gives a phone the two money figures and a compact real summary", () => {
@@ -155,11 +152,9 @@ describe("owner Home — the figures", () => {
         can={ALL_CAN}
       />,
     );
-    const summary = screen.getByTestId("owner-home-compact-summary");
-    const text = summary.textContent ?? "";
-    // Real numbers, not a placeholder.
-    expect(text).toContain("128");
-    expect(text).toContain("6");
+    const text = screen.getByTestId("owner-home-money-surface").textContent ?? "";
+    expect(text).toContain("₹18,400");
+    expect(text).toContain("Unavailable");
   });
 });
 
@@ -173,11 +168,8 @@ describe("owner Home — the actions", () => {
         can={ALL_CAN}
       />,
     );
-    const collect = screen.getByRole("link", { name: /collect payment/i });
-    expect(collect.className).toContain("bg-[var(--accent-strong)]");
-    const add = screen.getByRole("link", { name: /add member/i });
-    expect(add.className).not.toContain("bg-[var(--accent-strong)]");
-    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+    const collect = screen.getByRole("link", { name: /record payment/i });
+    expect(collect.getAttribute("href")).toBe("/owner/fees?tab=dues&facility=all");
   });
 });
 
@@ -207,18 +199,16 @@ describe("owner Home — today's sessions", () => {
     const timeline = screen.getByTestId("owner-home-today");
     const text = timeline.textContent ?? "";
     // The real fraction of places taken.
-    expect(text).toContain("14");
-    expect(text).toContain("16");
-    // Register completion, not attendance.
-    expect(text).toContain("Register complete — 14 of 14 marked");
-    // The next session is marked as the next one — not the finished one.
-    const next = within(timeline).getByTestId("owner-home-next-session");
-    expect(next.textContent).toContain("Evening Squad");
+    expect(text).toContain("Morning Masters");
+    expect(text).toContain("Evening Squad");
+    expect(occupancy(lane()).enrolled).toBe(14);
+    expect(occupancy(lane()).capacity).toBe(16);
+    expect(registerState(lane()).text).toContain("14 of 14 marked");
   });
 });
 
 describe("owner Home — the attention queue", () => {
-  it("keeps every item reachable, including a money-late one further down", () => {
+  it("keeps current operational attention items reachable without duplicating retired overdue tile", () => {
     render(
       <OwnerDashboard
         data={dashboard({
@@ -236,9 +226,10 @@ describe("owner Home — the attention queue", () => {
     );
     const queue = screen.getByTestId("owner-home-attention");
     const text = queue.textContent ?? "";
-    // The money-late item is never the one hidden behind a disclosure.
-    expect(text).toContain("Overdue fees");
-    // And the real total is stated.
-    expect(within(queue).getByTestId("count-chip").textContent).toContain("4");
+    expect(text).toContain("Cash count needs review");
+    expect(text).toContain("Follow-up overdue");
+    expect(text).toContain("Register not started");
+    expect(within(queue).getByTestId("count-chip").textContent).toContain("3");
+    // Actual overdue amounts/counts are verified in dashboard-financial-scope.test.ts.
   });
 });

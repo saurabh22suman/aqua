@@ -69,13 +69,13 @@ describe("U-08 reception check-ins panel", () => {
     );
   });
 
-  it("shows today's sessions with checked-in counts", () => {
+  it("shows today's sessions with register completion counts", () => {
     render(<ReceptionCheckIns sessions={[SESSION]} canMark />);
     expect(screen.getByTestId("checkin-session-s1").textContent).toContain(
-      "1 / 2 checked in",
+      "1 / 2 marked",
     );
     expect(screen.getByTestId("reception-checkins").textContent).toContain(
-      "1 checked in",
+      "1 marked",
     );
   });
 

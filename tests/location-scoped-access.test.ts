@@ -9,9 +9,8 @@ import { asTenantId, asUserId } from "@/lib/ids";
 
 // O-08 (docs/ops-platform-design.md §8) — location-scoped staff access.
 // This is an ACCESS-CONTROL boundary inside one business, not tenant
-// isolation. The proof: with the key OFF nothing changes; with it ON a
-// receptionist attached to one location lists only their members and
-// cannot reach another location's member, session or register by id.
+// isolation. An explicitly restricted receptionist stays scoped with the
+// key OFF or ON; all-location Owner and Reception remain unrestricted.
 
 type PeopleModule = typeof import("@/lib/services/people");
 type RegisterModule = typeof import("@/lib/services/register");
@@ -28,6 +27,7 @@ let invitations: InvitationsModule;
 const tenantId = asTenantId(uuidv7());
 const ownerUserId = asUserId(uuidv7());
 const receptionUserId = asUserId(uuidv7());
+const allReceptionUserId = asUserId(uuidv7());
 const platformUserId = asUserId(uuidv7());
 const ownerMembershipId = uuidv7();
 const receptionMembershipId = uuidv7();
@@ -62,6 +62,7 @@ const ownerCtx = {
   locationIds: [],
   roleKey: "owner",
 };
+const allReception = { ...scopedReception, userId: allReceptionUserId, allLocations: true, locationIds: [] as string[] };
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer("postgres:16").start();
@@ -116,6 +117,11 @@ beforeAll(async () => {
   );
   const ownerRoleId = roles.rows.find((r) => r.key === "owner")!.id;
   const receptionRoleId = roles.rows.find((r) => r.key === "receptionist")!.id;
+  await admin.query("insert into users(id,phone) values($1,$2)", [allReceptionUserId, `+9195${String(Date.now()).slice(-8)}`]);
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",
+    [uuidv7(), tenantId, allReceptionUserId, receptionRoleId],
+  );
 
   await admin.query(
     `insert into tenant_memberships (id, tenant_id, user_id, role_id, all_locations, status)
@@ -189,13 +195,18 @@ afterAll(async () => {
 });
 
 describe("O-08 location-scoped staff access", () => {
-  it("changes nothing while the key is off (default)", async () => {
+  it("keeps explicitly restricted reception scoped while the key is off", async () => {
     const members = await people.listMembers(scopedReception, {});
-    expect(members).toHaveLength(2);
-    expect(await people.getMemberDetail(scopedReception, memberB)).not.toBeNull();
+    expect(members.map((m) => m.memberId)).toEqual([memberA]);
+    expect(await people.getMemberDetail(scopedReception, memberB)).toBeNull();
 
     const sessions = await register.listTodaySessions(scopedReception, DATE);
-    expect(sessions).toHaveLength(2);
+    expect(sessions.map((s) => s.id)).toEqual([sessionA]);
+    for (const ctx of [ownerCtx, allReception]) {
+      expect(await people.listMembers(ctx, {})).toHaveLength(2);
+      expect(await people.getMemberDetail(ctx, memberB)).not.toBeNull();
+      expect(await register.listTodaySessions(ctx, DATE)).toHaveLength(2);
+    }
   });
 
   it("scopes lists and by-id paths when the key is on", async () => {
@@ -208,6 +219,11 @@ describe("O-08 location-scoped staff access", () => {
       actorId: platformUserId,
     });
     expect(enabled.ok).toBe(true);
+    for (const ctx of [ownerCtx, allReception]) {
+      expect(await people.listMembers(ctx, {})).toHaveLength(2);
+      expect(await people.getMemberDetail(ctx, memberB)).not.toBeNull();
+      expect(await register.listTodaySessions(ctx, DATE)).toHaveLength(2);
+    }
 
     const members = await people.listMembers(scopedReception, {});
     expect(members.map((m) => m.memberId)).toEqual([memberA]);
@@ -308,7 +324,7 @@ describe("O-08 location-scoped staff access", () => {
     expect(links.rows.map((r) => r.location_id)).toEqual([locA]);
   });
 
-  it("restores tenant-wide visibility when the key is turned off", async () => {
+  it("retains explicit restriction when the key is turned off again", async () => {
     const disabled = await configAdmin.setPlatformTenantConfigValue({
       tenantId,
       key: KEY,
@@ -317,6 +333,7 @@ describe("O-08 location-scoped staff access", () => {
     });
     expect(disabled.ok).toBe(true);
     const members = await people.listMembers(scopedReception, {});
-    expect(members).toHaveLength(2);
+    expect(members.map((m) => m.memberId)).toEqual([memberA]);
+    expect(await people.getMemberDetail(scopedReception, memberB)).toBeNull();
   });
 });

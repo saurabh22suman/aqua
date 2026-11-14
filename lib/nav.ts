@@ -1,4 +1,5 @@
 import type { NavItem } from "@/components/bottom-nav";
+import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import {
   surfaceForRole,
   type TenantSurface,
@@ -42,6 +43,7 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
       // same route (no second implementation). Desktop only: the mobile
       // bottom nav stays at the four-item design contract.
       { href: "/owner/announcements", label: "Announcements", iconName: "megaphone" },
+      { href: "/owner/inbox", label: "Announcements inbox", iconName: "megaphone" },
       { href: "/owner/staff", label: "Staff", iconName: "briefcase" },
     ],
   },
@@ -55,7 +57,7 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
     // label changed.
     label: "Scheduling",
     items: [
-      { href: "/owner/programs", label: "Programs & batches", iconName: "calendar-days" },
+      { href: "/owner/programs", label: "Programs & batches", iconName: "calendar-days", activePrefixes: ["/owner/batches"] },
       // R10 (2026-10-13 role-workflow audit) — scheduling management and
       // the read-only grid were reachable only by drilling through
       // Programs. They stay owner/admin-only (Programs gate is
@@ -67,12 +69,11 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
     ],
   },
   {
-    label: "Insights",
-    items: [{ href: "/owner/reports", label: "Reports", iconName: "file-text" }],
-  },
-  {
     label: "Account",
-    items: [{ href: "/owner/settings", label: "Settings", iconName: "settings" }],
+    items: [
+      { href: "/owner/reports", label: "Reports", iconName: "file-text" },
+      { href: "/owner/settings", label: "Settings", iconName: "settings" },
+    ],
   },
 ];
 
@@ -84,14 +85,22 @@ export const TENANT_SURFACE_NAV: Record<TenantSurface, NavItem[]> = {
     { href: "/owner/settings", label: "Settings", iconName: "settings" },
   ],
   coach: [
-    { href: "/coach", label: "Today", iconName: "list-checks", exact: true },
+    // The coach reaches the register FROM Today, and the register lives
+    // under a different URL prefix (/coach/register). `activePrefixes`
+    // is the declared way to say "this child route belongs to this
+    // destination"; without it the register lit no tab at all.
+    { href: "/coach", label: "Today", iconName: "list-checks", exact: true, activePrefixes: ["/coach/register"] },
     { href: "/coach/schedule", label: "Schedule", iconName: "calendar-days" },
     { href: "/coach/members", label: "Members", iconName: "users" },
     { href: "/coach/me", label: "Me", iconName: "user-round" },
   ],
   reception: [
     { href: "/reception", label: "Today", iconName: "calendar-days", exact: true },
-    { href: "/reception/members/new", label: "Add member", iconName: "user-plus" },
+    // The member DIRECTORY, not a second create destination. The
+    // contextual "+" on the directory (and the labelled desktop create)
+    // is the one create path; a tab pointing at the same create URL
+    // would offer the same task twice on one screen.
+    { href: "/reception/members", label: "Members", iconName: "users" },
     { href: "/reception/enquiries", label: "Enquiries", iconName: "clipboard-list" },
     { href: "/reception/me", label: "Me", iconName: "user-round" },
   ],
@@ -135,6 +144,9 @@ export function filterOwnerNavItems(
   permissions: ReadonlySet<string>,
 ): NavItem[] {
   return items.filter((item) => {
+    // Senders with roster-read access have an inbox on the compose page. Readers
+    // reach only addressed notifications; this entry grants no send access.
+    if (item.href === "/owner/inbox") return !(permissions.has("messaging.send") && permissions.has("members.read"));
     const gate = OWNER_NAV_PERMISSION_GATES[item.href];
     return !gate || permissions.has(gate);
   });
@@ -142,20 +154,35 @@ export function filterOwnerNavItems(
 
 export function ownerNavForPermissions(
   permissions: ReadonlySet<string>,
+  terminology?: TerminologyState,
 ): NavItem[] {
-  return filterOwnerNavItems(TENANT_SURFACE_NAV.owner, permissions);
+  return labelMemberDestinations(filterOwnerNavItems(TENANT_SURFACE_NAV.owner, permissions), terminology);
 }
 
 export function ownerSidebarGroupsForPermissions(
   permissions: ReadonlySet<string>,
+  terminology?: TerminologyState,
 ): OwnerSidebarGroup[] {
   return OWNER_SIDEBAR_GROUPS.map((group) => ({
     label: group.label,
-    items: filterOwnerNavItems(group.items, permissions),
+    items: labelMemberDestinations(filterOwnerNavItems(group.items, permissions), terminology),
   })).filter((group) => group.items.length > 0);
 }
 
-export function navForRole(roleKey: string): NavItem[] {
+function labelMemberDestinations(items: NavItem[], terminology?: TerminologyState): NavItem[] {
+  if (!terminology) return items;
+  const memberRoutes = new Set(["/owner/members", "/coach/members", "/reception/members"]);
+  return items.map(item => memberRoutes.has(item.href) ? { ...item, label: titleCase(resolveTerm(terminology, "member", "other")) } : item);
+}
+
+export function navForRole(roleKey: string, terminology?: TerminologyState): NavItem[] {
   const surface = surfaceForRole(roleKey);
-  return surface ? TENANT_SURFACE_NAV[surface] : [];
+  return surface ? labelMemberDestinations(TENANT_SURFACE_NAV[surface], terminology) : [];
+}
+
+/** Read one owner navigation gate without exporting the mutable registry. */
+export function ownerNavPermissionGate(href: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(OWNER_NAV_PERMISSION_GATES, href)
+    ? OWNER_NAV_PERMISSION_GATES[href]
+    : undefined;
 }

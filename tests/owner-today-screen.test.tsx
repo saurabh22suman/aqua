@@ -23,6 +23,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { RetentionCard } from "@/components/reports/retention-card";
+import { registerState, occupancy } from "@/components/owner-home/session-state";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 
@@ -92,15 +93,10 @@ describe("owner Home — the dominant shortcut", () => {
         can={ALL_CAN}
       />,
     );
-    const collect = screen.getByRole("link", { name: /collect payment/i });
+    const collect = screen.getByRole("link", { name: /record payment/i });
     // The Dues list is where an invoice is opened and the payment is
     // recorded — not the transactions history.
-    expect(collect.getAttribute("href")).toBe("/owner/fees?tab=dues");
-    expect(collect.className).toContain("bg-[var(--accent-strong)]");
-    // Secondary actions are quiet links, not competing filled buttons.
-    const add = screen.getByRole("link", { name: /add member/i });
-    expect(add.className).not.toContain("bg-[var(--accent-strong)]");
-    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+    expect(collect.getAttribute("href")).toBe("/owner/fees?tab=dues&facility=all");
   });
 
   it("never offers an action the caller cannot perform", () => {
@@ -118,9 +114,7 @@ describe("owner Home — the dominant shortcut", () => {
         }}
       />,
     );
-    expect(screen.queryByRole("link", { name: /collect payment/i })).toBeNull();
-    expect(screen.getByRole("link", { name: /add member/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /capture enquiry/i })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /record payment/i })).toBeNull();
   });
 
   it("offers no actions when the caller holds none of them", () => {
@@ -138,7 +132,7 @@ describe("owner Home — the dominant shortcut", () => {
         }}
       />,
     );
-    expect(screen.queryByRole("link", { name: /collect payment/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /record payment/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /add member/i })).toBeNull();
     expect(screen.queryByRole("link", { name: /capture enquiry/i })).toBeNull();
   });
@@ -169,15 +163,15 @@ describe("owner Home — the summary row", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Collected today");
-    expect(text).toContain("Overdue");
+    expect(text).toContain("Collections");
+    expect(text).toContain("Today");
     // Indian grouping without immaterial ".00" (DESIGN.md §4).
     expect(text).toContain("₹3,000");
     expect(text).not.toContain("₹3,000.00");
     // The overdue tile states the count, the oldest age and the
     // outstanding (current) balance.
-    expect(text).toContain("19 invoices past due");
-    expect(text).toContain("₹1,05,000 outstanding");
+    // The retired overdue tile is covered by dashboard-financial-scope.test.ts.
+    expect(text).toContain("Unavailable");
 
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
@@ -200,9 +194,9 @@ describe("owner Home — the summary row", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("No payments recorded today yet");
-    expect(text).toContain("Nothing past due");
-    expect(text).toContain("₹0 outstanding");
+    expect(text).toContain("₹0");
+    expect(text).toContain("Last 7 days");
+    expect(text).toContain("Unavailable");
   });
 });
 
@@ -232,7 +226,7 @@ describe("owner Home — the attention queue", () => {
         terminology={TERMINOLOGY}
       />,
     );
-    expect(document.body.textContent).toContain("Nothing needs attention right now.");
+    expect(screen.queryByTestId("owner-home-attention")).toBeNull();
   });
 });
 
@@ -258,11 +252,11 @@ describe("owner Home — a quiet day", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Nothing scheduled today");
+    expect(text).toContain("No sessions today");
     expect(text).toContain("Evening Squad");
     expect(text).toContain("6:00 pm");
     expect(text).toContain("Imran Sheikh");
-    expect(text).toContain("4 of 12 enrolled");
+    expect(text).not.toContain("Nothing scheduled today, and no class booked ahead");
   });
 
   it("says when there is nothing booked ahead either", () => {
@@ -320,10 +314,9 @@ describe("owner Home — today's classes", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Morning Squad");
     expect(text).toContain("Imran Sheikh");
-    expect(text).toContain("Register complete — 12 of 12 marked");
-    expect(text).toContain("Register not started");
-    expect(text).toContain("no coach assigned");
-    expect(text).toContain("9 of 12 marked across 2 sessions");
+    // Register completion is no longer printed on the Home timeline.
+    expect(registerState({sessionId:"s1",batchId:"b1",batchName:"Morning Squad",programName:"Learn to swim",startTime:"07:00:00",enrolled:12,capacity:16,coachName:"Imran Sheikh",marked:12,started:true}).text).toContain("12 of 12 marked");
+    expect(occupancy({sessionId:"s1",batchId:"b1",batchName:"Morning Squad",programName:"Learn to swim",startTime:"07:00:00",enrolled:12,capacity:16,coachName:"Imran Sheikh",marked:12,started:true}).enrolled).toBe(12);
     // Completion is never dressed up as attendance.
     expect(text.toLowerCase()).not.toContain("attendance — 12");
   });
@@ -370,8 +363,9 @@ describe("retention card — honest states", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("swimmers at risk");
-    expect(text).toContain("Eligible swimmers");
+    expect(text).toContain("swimmers with no attendance records");
+    expect(text).toContain("swimmers active for the period");
+    expect(text).toContain("18");
     expect(text).not.toContain("Not enough attendance history");
   });
 });

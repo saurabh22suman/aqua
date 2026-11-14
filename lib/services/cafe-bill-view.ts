@@ -12,6 +12,8 @@ import { gstDocumentKind, type GstDocumentKind } from "@/lib/gst";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { OrderStatus } from "@/db/schema/orders";
 import type { InvoiceStatus } from "@/db/schema/invoices";
+import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
 
 // K-08 — the itemized café bill, split from the billing-flow service
 // (lib/services/cafe-billing.ts) for the 300-line rule. The types +
@@ -43,6 +45,7 @@ export type CafeBillLine = {
 };
 
 export type CafeBill = {
+  issuer?: BillingIssuer | null;
   orderId: string;
   status: OrderStatus;
   memberId: string;
@@ -167,6 +170,7 @@ export async function readBill(
       ok: true,
       alreadyBilled: false,
       bill: {
+        issuer: invoiceIssuerSnapshot(invoice),
         orderId: order.id,
         status: order.status,
         memberId: order.memberId,

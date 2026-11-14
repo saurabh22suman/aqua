@@ -25,10 +25,15 @@ export async function EnquiryFunnelCard({ rows }: { rows: EnquiryFunnelRow[] }) 
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
-          {titleCase(resolveTerm(terminology, "enquiry", "other"))} funnel
-        </h2>
-        <span className="text-[12px] text-ink-3">{totalAll} in period</span>
+        <div className="min-w-0">
+          <h2 className="font-display text-[16px] font-semibold">
+            Current enquiry stages
+          </h2>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            {titleCase(resolveTerm(terminology, "enquiry", "other"))} funnel by source
+          </p>
+        </div>
+        <span className="flex-none text-[12px] text-ink-3">{totalAll} in period</span>
       </header>
       {totalAll === 0 ? (
         <p className="mt-2 text-[13px] text-ink-3">No enquiries captured in this period.</p>

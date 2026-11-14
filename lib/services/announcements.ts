@@ -1,7 +1,8 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { z } from "zod";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
+import type { SelfScope } from "@/lib/auth/self-scope";
 import {
   announcements,
   notifications,
@@ -11,12 +12,11 @@ import { batches } from "@/db/schema/programs";
 import { writeAudit } from "@/lib/audit/write";
 import type { ActionCtx } from "@/lib/auth/context";
 import { resolveAudienceUserIds } from "@/lib/services/announcement-audience";
-import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
-import {
-  callerHasPermission,
-  callerIsLegacySystem,
-} from "@/lib/services/resource-access";
-import { enqueueAnnouncementNotifications } from "@/lib/messaging/notification-events";
+import { locationVisible, locationPredicate, resolveLocationAccess, resolveCallerMembership } from "@/lib/services/location-access";
+import { callerHasPermission } from "@/lib/services/resource-access";
+import { enqueueAnnouncementNotifications, resolveAnnouncementNotificationTargets } from "@/lib/messaging/notification-events";
+import { members } from "@/db/schema/people";
+import { enrolments } from "@/db/schema/scheduling";
 
 // U-06 — announcements and the in-app notification fan-out.
 //
@@ -52,6 +52,41 @@ export const sendAnnouncementInput = z
 
 export type SendAnnouncementInput = z.input<typeof sendAnnouncementInput>;
 
+export type AnnouncementAudiencePreviewInput =
+  | { audience: "all" | "parents"; batchId?: never }
+  | { audience: "batch"; batchId: string };
+export type AnnouncementAudiencePreview =
+  | { ok: true; asOf: string; inApp: { eligibleCount: number; exclusions?: { unlinked: number; revokedOrPending: number } }; whatsapp: { eligibleCount: number; exclusions?: { noDestination: number; noConsent: number; revokedOrOutOfScope: number } } }
+  | { ok: false; error: string };
+
+async function canAddressAudience(tx: TenantTx, ctx: ActionCtx, audience: AnnouncementAudience, batchId?: string): Promise<boolean> {
+  if (!ctx.userId || !(await callerHasPermission(tx, ctx, "messaging.send"))) return false;
+  const membership = await resolveCallerMembership(tx, ctx);
+  if (!membership || membership.status !== "active" || membership.deleted) return false;
+  const canManage = await callerHasPermission(tx, ctx, "settings.manage");
+  if (audience !== "batch") return canManage && membership.allLocations;
+  if (!batchId) return false;
+  const [batch] = await tx.select({ locationId: batches.locationId }).from(batches)
+    .where(and(eq(batches.id, batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt))).limit(1);
+  if (!batch) return false;
+  const access = await resolveLocationAccess(tx, ctx);
+  return locationVisible(access, batch.locationId) && (canManage || batch.locationId !== null);
+}
+
+export async function previewAnnouncementAudience(ctx: ActionCtx, input: AnnouncementAudiencePreviewInput): Promise<AnnouncementAudiencePreview> {
+  const parsed = sendAnnouncementInput.safeParse({ ...input, title: "Preview", body: "Preview" });
+  if (!parsed.success || !ctx.userId) return { ok: false, error: "Invalid audience." };
+  return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await canAddressAudience(tx, ctx, input.audience, input.audience === "batch" ? input.batchId : undefined))) return { ok: false, error: "Not authorized." };
+    const userIds = await resolveAudienceUserIds(tx, ctx.tenantId, input.audience, input.audience === "batch" ? input.batchId : undefined);
+    const targets = await resolveAnnouncementNotificationTargets(tx, { tenantId: ctx.tenantId, ...input });
+    const phones = new Set<string>();
+    for (const target of targets.memberTargets) for (const contact of target.targets) phones.add(contact.phone);
+    for (const target of targets.staffTargets) phones.add(target.phone);
+    return { ok: true, asOf: new Date().toISOString(), inApp: { eligibleCount: userIds.length }, whatsapp: { eligibleCount: phones.size } };
+  });
+}
+
 export type SendAnnouncementResult =
   | { ok: true; id: string; recipientCount: number; whatsappRecipientCount?: number }
   | { ok: false; error: string };
@@ -76,6 +111,43 @@ export type NotificationRow = {
   createdAt: string;
 };
 
+// Only call inside resolveSelfScope(...).read: that transaction rechecks and
+// holds the live account/link/child authority while this projection runs.
+export async function readSelfNotificationsInTx(tx: TenantTx, scope: SelfScope): Promise<NotificationRow[]> {
+  const subjectIds = scope.audience === "member" ? (scope.memberId ? [scope.memberId] : []) : scope.childMemberIds;
+  if (!subjectIds.length) return [];
+  const enrolled = await tx.selectDistinct({ batchId: enrolments.batchId }).from(enrolments)
+    .innerJoin(members, and(eq(members.id, enrolments.memberId), eq(members.tenantId, scope.tenantId), eq(members.status, "active"), isNull(members.deletedAt)))
+    .innerJoin(batches, and(eq(batches.id, enrolments.batchId), eq(batches.tenantId, scope.tenantId), isNull(batches.deletedAt)))
+    .where(and(eq(enrolments.tenantId, scope.tenantId), inArray(enrolments.memberId, subjectIds)));
+  const batchIds = enrolled.map((row) => row.batchId);
+  const rows = await tx.select({ id: notifications.id, title: notifications.title, body: notifications.body,
+    announcementId: notifications.announcementId, readAt: notifications.readAt, createdAt: notifications.createdAt,
+    audience: announcements.audience, batchId: announcements.batchId })
+    .from(notifications).innerJoin(announcements, and(eq(announcements.id, notifications.announcementId), eq(announcements.tenantId, scope.tenantId)))
+    .where(and(eq(notifications.tenantId, scope.tenantId), eq(notifications.userId, scope.userId), or(
+      eq(announcements.audience, "all"),
+      scope.audience === "guardian" ? eq(announcements.audience, "parents") : sql`false`,
+      batchIds.length ? and(eq(announcements.audience, "batch"), inArray(announcements.batchId, batchIds)) : sql`false`,
+    )))
+    .orderBy(desc(notifications.createdAt)).limit(50);
+  return rows.map((row) => ({ id: row.id, title: row.title, body: row.body, announcementId: row.announcementId, readAt: row.readAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString() }));
+}
+
+// Caller must supply the authoritative scope from resolver.read, not its
+// preliminary scope. The read and audit share the resolver transaction.
+export async function markSelfNotificationReadInTx(tx: TenantTx, scope: SelfScope, id: string): Promise<{ ok: boolean }> {
+  if (!z.string().uuid().safeParse(id).success) return { ok: false };
+  const visible = await readSelfNotificationsInTx(tx, scope);
+  if (!visible.some((row) => row.id === id)) return { ok: false };
+  const [row] = await tx.update(notifications).set({ readAt: new Date() }).where(and(
+    eq(notifications.id, id), eq(notifications.tenantId, scope.tenantId), eq(notifications.userId, scope.userId),
+  )).returning({ id: notifications.id });
+  if (!row) return { ok: false };
+  await writeAudit(tx, { tenantId: scope.tenantId, actorId: scope.userId, action: "notification.read", entityType: "notification", entityId: row.id });
+  return { ok: true };
+}
+
 export async function sendAnnouncement(
   ctx: ActionCtx,
   raw: unknown,
@@ -87,6 +159,9 @@ export async function sendAnnouncement(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await canAddressAudience(tx, ctx, input.audience, input.batchId))) {
+      return { ok: false, error: "Not authorized for this audience." };
+    }
     // R03 (2026-10-09 role/content/permission audit) — a sender without
     // settings.manage (e.g. reception, which holds messaging.send) may
     // only reach a batch at a location visible to them; academy-wide
@@ -94,9 +169,7 @@ export async function sendAnnouncement(
     // legacy/system callers keep the old behaviour — the action layer
     // remains the authorization boundary, the same trust model as
     // resolveLocationAccess.
-    const canManage =
-      callerIsLegacySystem(ctx) ||
-      (await callerHasPermission(tx, ctx, "settings.manage"));
+    const canManage = await callerHasPermission(tx, ctx, "settings.manage");
 
     if (!canManage && input.audience !== "batch") {
       return {
@@ -231,22 +304,39 @@ export async function listAnnouncements(ctx: ActionCtx): Promise<AnnouncementRow
 
 export async function listMyNotifications(ctx: ActionCtx): Promise<NotificationRow[]> {
   if (!ctx.userId) return [];
-  return withTenant(ctx.tenantId, async (tx) =>
-    (
+  return withTenant(ctx.tenantId, (tx) => listMyNotificationsInTx(tx, ctx));
+}
+
+async function listMyNotificationsInTx(tx: TenantTx, ctx: ActionCtx): Promise<NotificationRow[]> {
+    if (!ctx.userId) return [];
+    const membership = await resolveCallerMembership(tx, ctx);
+    if (!membership || membership.status !== "active" || membership.deleted) return [];
+    const access = await resolveLocationAccess(tx, ctx);
+    const batchLocation = locationPredicate(batches.locationId, access);
+    return (
       await tx
         .select({
           id: notifications.id,
           title: notifications.title,
           body: notifications.body,
           announcementId: notifications.announcementId,
+          audience: announcements.audience,
+          batchId: batches.id,
+          batchLocationId: batches.locationId,
+          batchDeletedAt: batches.deletedAt,
           readAt: notifications.readAt,
           createdAt: notifications.createdAt,
         })
         .from(notifications)
+        .leftJoin(announcements, and(eq(announcements.id, notifications.announcementId), eq(announcements.tenantId, ctx.tenantId)))
+        .leftJoin(batches, and(eq(batches.id, announcements.batchId), eq(batches.tenantId, ctx.tenantId)))
         .where(
           and(
             eq(notifications.tenantId, ctx.tenantId),
             eq(notifications.userId, ctx.userId!),
+            or(isNull(notifications.announcementId), eq(announcements.audience, "all"),
+              and(eq(announcements.audience, "batch"), isNull(batches.deletedAt),
+                sql`${batches.id} is not null`, batchLocation)),
           ),
         )
         .orderBy(desc(notifications.createdAt))
@@ -258,8 +348,7 @@ export async function listMyNotifications(ctx: ActionCtx): Promise<NotificationR
       announcementId: r.announcementId,
       readAt: r.readAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
-    })),
-  );
+    }));
 }
 
 export async function markNotificationRead(
@@ -271,6 +360,8 @@ export async function markNotificationRead(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    const visible = await listMyNotificationsInTx(tx, ctx);
+    if (!visible.some((row) => row.id === parsed.data)) return { ok: false, error: "Notification not found." };
     const rows = await tx
       .update(notifications)
       .set({ readAt: new Date() })

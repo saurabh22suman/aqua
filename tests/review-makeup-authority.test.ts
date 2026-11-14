@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
+import { addDays, todayInZone } from "@/lib/time/tz";
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;
@@ -168,6 +169,20 @@ beforeAll(async () => {
     "insert into users(id,phone) values($1,$4),($2,$5),($3,$6)",
     [ownerUser, coachUser, receptionUser, phone("9401"), phone("9402"), phone("9403")],
   );
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  const receptionMembership = randomUUID();
+  for (const [membership, user, role, allLocations] of [
+    [randomUUID(), ownerUser, "owner", true],
+    [randomUUID(), coachUser, "coach", true],
+    [receptionMembership, receptionUser, "receptionist", false],
+  ] as const) {
+    await admin.query(
+      "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',$5 from roles where tenant_id=$2 and key=$4",
+      [membership, tenantId, user, role, allLocations],
+    );
+  }
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, receptionMembership, locA]);
 
   const coachPerson = randomUUID();
   await admin.query(
@@ -200,9 +215,10 @@ beforeAll(async () => {
   await seedSession(sAbsentSource, batchOther, locA, "2026-09-15", "held");
   await seedSession(sHiddenSource, batchOther, locA, "2026-09-16", "held");
   await seedSession(sSeedSource, batchOther, locA, "2026-09-17", "held");
-  await seedSession(sTargetA, batchOther, locA, "2026-11-10");
-  await seedSession(sCancelledA, batchOther, locA, "2026-11-11", "cancelled");
-  await seedSession(sTargetB, batchB, locB, "2026-11-12");
+  const today = todayInZone("Asia/Kolkata");
+  await seedSession(sTargetA, batchOther, locA, addDays(today, 1));
+  await seedSession(sCancelledA, batchOther, locA, addDays(today, 2), "cancelled");
+  await seedSession(sTargetB, batchB, locB, addDays(today, 3));
   await seedSession(sPastTarget, batchOther, locA, "2020-01-15");
 
   await seedMember(assignedMember, "Makeup Assigned", locA);

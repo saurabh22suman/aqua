@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ({
-    permissions: new Set(["reports.financial", "reports.operational"]),
+    tenantId: "tenant-1", userId: "user-1",
+    permissions: new Set(["reports.financial", "reports.operational", "invoices.read"]),
+    features: new Set(["reports", "billing"]),
   }),
   requirePagePermission: (ctx: unknown) => ctx,
 }));
@@ -125,13 +127,11 @@ describe("ReportsPage resilience (PR1-C1)", () => {
     render(await ReportsPage({}));
 
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Attendance by batch");
-    expect(text).toContain("Attendance trend");
     expect(text).toContain("Enquiry funnel");
-    expect(screen.getAllByRole("alert").length).toBeGreaterThanOrEqual(2);
     expect(text).toContain("Collections");
-    expect(text).toContain("Revenue by plan");
-    expect(text).toContain("couldn't load");
+    expect(text).toContain("Plan revenue unavailable.");
+    expect(screen.getByRole("link", { name: "Attendance report" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Collections report" })).toBeTruthy();
     consoleError.mockRestore();
   });
 
@@ -143,16 +143,15 @@ describe("ReportsPage resilience (PR1-C1)", () => {
     expect(screen.queryAllByRole("alert")).toHaveLength(0);
     const text = document.body.textContent ?? "";
     for (const heading of [
-      "Attendance by batch",
-      "Attendance trend",
       "Collections",
-      "Revenue by plan",
+      "Collections by membership plan",
       "Enquiry funnel",
-      "Retention",
+      "Attendance records to review",
       "Coach load",
       "Facility utilisation",
     ]) {
       expect(text).toContain(heading);
     }
+    expect(screen.getByRole("link", { name: "Attendance report" })).toBeTruthy();
   });
 });

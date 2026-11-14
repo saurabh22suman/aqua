@@ -149,7 +149,7 @@ describe("lib/env", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("BETTER_AUTH_SECRET", "a-real-secret");
     vi.stubEnv("BETTER_AUTH_URL", "https://example.com");
-    vi.stubEnv("PARENT_LINK_SECRET", "a-parent-secret");
+    vi.stubEnv("PARENT_LINK_SECRET", "synthetic-parent-secret-at-least-32-characters");
 
     const { env } = await loadEnv();
     expect(env.NODE_ENV).toBe("production");

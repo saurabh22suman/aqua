@@ -8,9 +8,23 @@ import { z } from "zod";
 // change, a staff action, or anything malformed is refused before it
 // reaches storage.
 //
-// `.strict()` matters: an unexpected key is a sign the entry was not
-// produced by this app's own attendance path, and it is refused rather
-// than stored.
+// The admission rules, precisely:
+//
+//   * the status must be one of present | absent | late — this closed
+//     enum is what refuses a forged payment or refund row;
+//   * the entry must carry the signed-in scope and an expiry;
+//   * lib/offline/idb.ts refuses the write outright when the entry's
+//     scope is not the active identity's, or when either expiry has
+//     passed.
+//
+// An unexpected EXTRA key is not refused: zod's default object
+// parsing strips unknown keys, so the row that reaches storage holds
+// exactly the attendance shape. That was measured, not assumed — see
+// tests/backend-validation-20261029/e-jobs-privacy/queue-admission-identity.test.ts,
+// which pins the stored shape, the preserved identity and the refused
+// cases. Stripping is deliberate: refusing an entry because it
+// carries one harmless extra field would lose a mark the coach
+// actually made.
 
 export const offlineQueueEntrySchema = z.object({
   /** Idempotency key for the server-side mark. */

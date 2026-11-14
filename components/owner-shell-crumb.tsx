@@ -24,7 +24,6 @@ export function OwnerShellCrumb({
   const pathname = usePathname();
   const activeHref = findActiveHref(pathname, items);
   const label = items.find((item) => item.href === activeHref)?.label ?? "Overview";
-
   return (
     <p
       data-testid="owner-shell-crumb"

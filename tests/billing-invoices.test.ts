@@ -96,6 +96,20 @@ beforeAll(async () => {
     actorId,
     `+9194${String(Date.now()).slice(-8)}`,
   ]);
+  // Each context is a real owner of its own tenant, including the foreign
+  // tenant used to prove invoices and receipts remain isolated.
+  for (const tenantId of [tenantGst, tenantNoGst, tenantB]) {
+    const roleId = uuidv7();
+    await admin.query(
+      "insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",
+      [roleId, tenantId],
+    );
+    await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'settings.manage')", [tenantId, roleId]);
+    await admin.query(
+      "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",
+      [uuidv7(), tenantId, actorId, roleId],
+    );
+  }
   await admin.query(
     `insert into locations (id, tenant_id, name, is_primary) values
        ($1, $4, 'Worli', true), ($2, $5, 'Bandra', true), ($3, $6, 'Elsewhere', true)`,

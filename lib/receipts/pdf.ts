@@ -118,6 +118,31 @@ export function renderPdf(
     `<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}endstream`,
   ];
 
+  return serializePdf(objects);
+}
+
+/** Additional pages share the same standard fonts; the legacy serializer stays deterministic. */
+export function renderPdfPages(pages: PdfOp[][]): Buffer {
+  if (pages.length === 1) return renderPdf(pages[0]);
+  if (pages.length === 0) throw new Error("A PDF requires at least one page");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Kids [${pages.map((_, i) => `${5 + i * 2} 0 R`).join(" ")}] /Count ${pages.length} >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+  ];
+  for (const [index, page] of pages.entries()) {
+    const content = buildContentStream(page);
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A4_WIDTH_PT} ${A4_HEIGHT_PT}] ` +
+        `/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6 + index * 2} 0 R >>`,
+      `<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}endstream`,
+    );
+  }
+  return serializePdf(objects);
+}
+
+function serializePdf(objects: string[]): Buffer {
   let body = "";
   const offsets: number[] = [];
   const header = "%PDF-1.4\n";

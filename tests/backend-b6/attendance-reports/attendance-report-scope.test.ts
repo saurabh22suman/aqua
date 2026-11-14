@@ -141,24 +141,11 @@ describe("attendance report — location scope", () => {
     expect(rows).toEqual([]);
   });
 
-  // CHARACTERIZATION — the service's fail-closed default, not a
-  // contract anybody should rely on.
-  //
-  // A context with no resolved identity cannot be location-scoped, so
-  // the service falls back to "no locations at all", which the O-08
-  // predicate turns into tenant-wide batches only.
-  //
-  // This used to be the ATTENTION report action's effective
-  // behaviour: the action passed a narrowed `{ tenantId }` context
-  // and the caller saw this set instead of their own location. The
-  // action now forwards the complete authorised context (see
-  // lib/actions/owner-reports.ts), so no request path reaches this
-  // branch any more. The test stays because the default is real: a
-  // future adapter that narrows the context again would silently
-  // produce this set, and this is the fingerprint of that failure.
-  it("shows only tenant-wide batches to a caller with no resolved identity", async () => {
+  // With scoped staff enabled, a context without a resolved identity
+  // sees no rows, including tenant-wide rows. It is not a system actor.
+  it("denies all batches to a caller with no resolved identity", async () => {
     const rows = await getAttendanceReport(scoped.tenantOnlyCtx, PERIOD);
 
-    expect(rows.map((r) => r.batchName)).toEqual(["Tenant Wide Batch"]);
+    expect(rows).toEqual([]);
   });
 });

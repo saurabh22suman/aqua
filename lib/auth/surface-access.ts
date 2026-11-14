@@ -29,7 +29,7 @@ export const SURFACE_RECEPTION = "reception" as const;
 // R08 (2026-10-13 role-workflow audit) — the human Worker now has a
 // real self-service surface (/worker: own shifts, check-in, leave)
 // instead of being routed through the parent placeholder. Parent stays
-// a bearer-link read (/p/[token]) with no tenant session surface.
+// a bearer-link read (/p/[token]) outside this gate.
 export const SURFACE_WORKER = "worker" as const;
 export const SURFACE_PARENT = "parent" as const;
 
@@ -56,10 +56,21 @@ export type TenantSurface =
 const TENANT_ROLE_TO_SURFACE: Record<string, TenantSurface | null> = {
   owner: SURFACE_OWNER,
   admin: SURFACE_OWNER,
+  // 2026-11-09 manager rollout — the facility manager works in the
+  // OWNER surface. The human's decision is owner-equivalent FACILITY
+  // operations: the manager exercises the owner's operational powers
+  // inside its own facilities, so its pages, navigation and route
+  // guards are the owner's. It is a DELEGATE, not a coach: it is not
+  // mapped to the coach surface and never sees the coach's own-surface
+  // pages. What bounds it is not this map but its own membership's
+  // facilities (lib/services/facility-scope.ts) and the absence of the
+  // owner-only grants (settings.*, programs.write, staff.invite) from
+  // its role.
+  manager: SURFACE_OWNER,
   // K3 follow-up: accountant routes through the owner surface because
   // their permission set (reports.financial, invoices.write,
-  // payments.record) lives there. A dedicated accountant surface is
-  // a separate, deliberate product decision.
+  // payments.record) lives there. A dedicated accountant surface is a
+  // separate, deliberate product decision.
   accountant: SURFACE_OWNER,
   receptionist: SURFACE_RECEPTION,
   coach: SURFACE_COACH,

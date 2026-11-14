@@ -70,11 +70,11 @@ describe("MembersBoard facility navigation (FE-03)", () => {
     );
 
     const search = screen.getByLabelText("Search members") as HTMLInputElement;
-    const status = screen.getByTestId("members-status-filter") as HTMLSelectElement;
+    const status = screen.getByRole("button", { name: "Active" });
     fireEvent.change(search, { target: { value: "Anita" } });
-    fireEvent.change(status, { target: { value: "active" } });
+    fireEvent.click(status);
     expect(search.value).toBe("Anita");
-    expect(status.value).toBe("active");
+    expect(status.getAttribute("aria-pressed")).toBe("true");
 
     rerender(
       <MembersBoard
@@ -86,9 +86,7 @@ describe("MembersBoard facility navigation (FE-03)", () => {
     expect((screen.getByTestId("members-search") as HTMLInputElement).value).toBe(
       "",
     );
-    expect(
-      (screen.getByTestId("members-status-filter") as HTMLSelectElement).value,
-    ).toBe("");
+    expect(screen.getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Bhav B")).toBeTruthy();
   });
 

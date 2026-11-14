@@ -87,7 +87,7 @@ describe("U-05 global search results", () => {
     );
     expect(document.body.textContent).toContain("Members");
     expect(document.body.textContent).toContain("Enquiries");
-    expect(document.body.textContent).toContain("Payments");
+    expect(document.body.textContent).toContain("Invoices & payments");
   });
 
   it("never renders a kind the caller is not entitled to", async () => {

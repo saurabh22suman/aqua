@@ -2,20 +2,9 @@
 //
 // The env operator sign-in, END TO END through the Server Action.
 //
-// The env door itself has been covered at the database layer
-// (tests/auth/platform-env-login.test.ts: platformLogin →
-// loginWithEnvOperator → a 2FA-passed session + an audit row). What
-// was NOT covered was the action in front of it: loginPlatformAction
-// parsed the form and then returned "Use your registered phone and
-// WhatsApp code to sign in." for EVERY input, so the email + password
-// form the ops login page renders could never reach the door. The
-// deployed operator saw that message with the right credentials.
-//
-// This file pins the action: the correct credentials authenticate and
-// the session cookie authenticates afterwards; a wrong password is
-// refused without a session; an unknown email is refused
-// identically (no account enumeration); and with no env credentials
-// configured the password door stays closed exactly as before.
+// Pins the real configured-operator password and TOTP flow through the
+// action. Wrong credentials do not create a session, unknown email and
+// wrong password agree, and the DB fallback refuses an unknown operator.
 //
 // vi.resetModules + dynamic import are load-bearing: lib/env parses
 // process.env at import time, so the stub must exist before the
@@ -23,7 +12,9 @@
 
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import { env } from "@/lib/env";
+import { currentTotp } from "./totp-fixture";
 
 const { cookieJar } = vi.hoisted(() => ({ cookieJar: new Map<string, string>() }));
 
@@ -55,7 +46,7 @@ vi.mock("next/navigation", () => ({
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
-const OPS_EMAIL = "ops-action-test@example.com";
+const OPS_EMAIL = `ops-action-${randomUUID()}@example.com`;
 const OPS_PASSWORD = "a-twelve-character-secret";
 
 function form(values: Record<string, string>) {
@@ -101,19 +92,26 @@ afterAll(async () => {
 
 describe("loginPlatformAction — the env operator door", () => {
   it("authenticates with the configured credentials and hands back a working session", async () => {
-    const { loginPlatformAction, platformAuthStatusAction } = await import(
+    const { provisionPlatformUser, markTotpEnrolled } = await import("@/db/platform-auth");
+    const operator = await provisionPlatformUser({ email: OPS_EMAIL, password: OPS_PASSWORD, name: "Test operator", role: "admin" });
+    await markTotpEnrolled(operator.id);
+    const { loginPlatformAction, platformAuthStatusAction, verifyPlatformTotpAction } = await import(
       "@/lib/actions/platform-auth"
     );
     const { PLATFORM_COOKIE_NAME } = await import("@/lib/auth/platform-cookie");
 
     await expect(
       loginPlatformAction(null, form({ email: OPS_EMAIL, password: OPS_PASSWORD })),
-    ).rejects.toEqual(new RedirectSignal("/ops"));
+    ).rejects.toEqual(new RedirectSignal("/ops/verify"));
 
     // The session cookie is set, and it authenticates: the platform
     // session resolves to the operator, not just to some token.
     const token = cookieJar.get(PLATFORM_COOKIE_NAME);
     expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(await platformAuthStatusAction()).toMatchObject({ kind: "unauthenticated" });
+    const pending = await admin.query<{ second_factor_passed: boolean }>("select second_factor_passed from platform_sessions where user_id = $1", [operator.id]);
+    expect(pending.rows).toEqual([{ second_factor_passed: false }]);
+    await expect(verifyPlatformTotpAction(null, form({ code: currentTotp(operator.totpSecret) }))).rejects.toEqual(new RedirectSignal("/ops"));
     expect(await platformAuthStatusAction()).toMatchObject({
       kind: "authenticated",
       role: "admin",
@@ -172,9 +170,7 @@ describe("loginPlatformAction — the env operator door", () => {
   });
 
   it("keeps the password door closed when no env credentials are configured", async () => {
-    // Without the env door the platform signs in with a WhatsApp
-    // code sent to a registered phone. The password door must say so
-    // and must not create a session.
+    // With the env door absent, this unknown DB operator is refused.
     vi.stubEnv("OPS_EMAIL", "");
     vi.stubEnv("OPS_PASSWORD", "");
     vi.resetModules();
@@ -186,7 +182,7 @@ describe("loginPlatformAction — the env operator door", () => {
       await loginPlatformAction(null, form({ email: OPS_EMAIL, password: OPS_PASSWORD })),
     ).toEqual({
       kind: "error",
-      message: "Use your registered phone and WhatsApp code to sign in.",
+      message: "Wrong email or password.",
     });
     expect(cookieJar.get(PLATFORM_COOKIE_NAME)).toBeUndefined();
   });

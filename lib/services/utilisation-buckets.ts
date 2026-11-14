@@ -130,7 +130,7 @@ export function addBookingToBuckets(
   let guard = 0;
   while (
     (dateIso < endParts.dateIso ||
-      (dateIso === endParts.dateIso && hour < endParts.hour)) &&
+      (dateIso === endParts.dateIso && hour <= endParts.hour)) &&
     guard < 24 * 365
   ) {
     const bucket = buckets.get(hourKey(booking.facilityId, dateIso, hour));

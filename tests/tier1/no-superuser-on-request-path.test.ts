@@ -178,6 +178,13 @@ const ALLOWLIST = new Set([
   "scripts/e2e-offline.ts",
   "scripts/e2e-offline-disabled.ts",
   "scripts/e2e-platform-form-leak.ts",
+  // These exact e2e test/setup files only blank or check privileged child environment values.
+  "scripts/lib/e2e-child-env.ts",
+  "tests/master-family-platform-20261113/e2e-child-env.test.ts",
+  "tests/master-family-platform-20261113/offline-privacy-child-env.test.ts",
+  // Disposable Testcontainer only: real CI seed, scoped fixture calls, exact env restoration.
+  "tests/master-family-platform-20261113/offline-fixture-live-owner.test.ts",
+  "tests/master-family-platform-20261113/ux31-roster-venue-scope.test.ts",
   "scripts/e2e-parent-link-zero-js.ts",
   "tests/tier1/no-superuser-on-request-path.test.ts", // this file: names the string in comments/allowlist
   // Ops console improvements — Testcontainers-only tests (per that
@@ -337,6 +344,10 @@ const ALLOWLIST = new Set([
   // never imported by the app (the no-superuser test's own header
   // documents this exact class).
   "scripts/db-backup.ts",
+  // Review remediation: privileged connections seed/read synthetic fixtures
+  // only. The services/routes under test retain app_login scoped transactions.
+  "tests/remediation-20261112/fixture.ts",
+  "tests/remediation-20261112/p1-pin-login.test.ts",
 ]);
 
 function filesReferencingMigrationUrl(): string[] {

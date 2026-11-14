@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // W1-6 (docs/role-surfaces-plan.md) — the owner facility switcher and
@@ -14,6 +14,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.hoisted(() => vi.fn());
 const replace = vi.hoisted(() => vi.fn());
+const navigateFacility = vi.hoisted(() => vi.fn());
+vi.mock("@/components/facility-navigation", () => ({ navigateFacility }));
+vi.mock("@/db/tenant", () => ({ withTenant: async () => true }));
+vi.mock("@/lib/services/staff", () => ({ getCurrentStaffIdentity: async () => null }));
 const { LOCATIONS, FACILITY_2 } = vi.hoisted(() => ({
   FACILITY_2: "22222222-2222-7222-8222-222222222222",
   LOCATIONS: [
@@ -49,6 +53,9 @@ vi.mock("@/lib/actions/people", () => ({
 }));
 vi.mock("@/lib/actions/terminology", () => ({
   getTerminologyAction: async () => ({ overrides: {}, locale: "en" }),
+}));
+vi.mock("@/lib/services/terminology", () => ({
+  getTerminology: async () => ({ overrides: {}, locale: "en" }),
 }));
 vi.mock("@/lib/auth/surface-guard", () => ({
   requireOwner: async () => ({
@@ -166,31 +173,33 @@ describe("facility switcher (W1-6)", () => {
     fireEvent.change(screen.getByTestId("facility-switcher"), {
       target: { value: FACILITY_2 },
     });
-    expect(push).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
+    expect(navigateFacility).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
     expect(document.cookie).toContain(`aqua_facility=${encodeURIComponent(FACILITY_2)}`);
   });
 
   it("adopts a remembered cookie when the URL has no choice", () => {
     document.cookie = `aqua_facility=${encodeURIComponent(FACILITY_2)}; path=/`;
     render(<FacilitySwitcher locations={LOCATIONS} />);
-    expect(replace).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`);
+    expect(navigateFacility).toHaveBeenCalledWith(`/owner/members?facility=${FACILITY_2}`, true);
     document.cookie = "aqua_facility=; path=/; max-age=0";
   });
 });
 
 describe("owner members page reads ?facility= (W1-6)", () => {
   it("passes the facility filter to the list action", async () => {
-    await MembersPage({
+    const page = await MembersPage({
       searchParams: Promise.resolve({ facility: FACILITY_2 }),
     });
-    expect(listMembersAction).toHaveBeenCalledWith({ locationId: FACILITY_2 });
+    render(page);
+    await waitFor(() => expect(listMembersAction).toHaveBeenCalledWith({ locationId: FACILITY_2 }));
   });
 
   it("ignores a malformed facility value", async () => {
-    await MembersPage({
+    const page = await MembersPage({
       searchParams: Promise.resolve({ facility: "not-a-uuid" }),
     });
-    expect(listMembersAction).toHaveBeenCalledWith({});
+    render(page);
+    await waitFor(() => expect(listMembersAction).toHaveBeenCalledWith({ locationId: undefined }));
   });
 });
 
@@ -203,13 +212,11 @@ describe("owner layout hosts the switcher (W1-6)", () => {
 });
 
 describe("consolidated per-facility view (W1-6)", () => {
-  it("shows the breakdown on Home", () => {
+  it("does not invent a per-site breakdown on the current Home", () => {
     render(
       <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
     );
-    expect(document.body.textContent).toContain("Worli Main");
-    expect(document.body.textContent).toContain("Bandra Annex");
-    expect(document.body.textContent).toContain("20 active");
-    expect(document.body.textContent).toContain("no attendance yet");
+    expect(document.body.textContent).not.toContain("80% attendance");
+    expect(document.body.textContent).toContain("Today’s sessions");
   });
 });

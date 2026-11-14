@@ -1,9 +1,11 @@
-import { randomUUID } from "node:crypto";
-import { and, eq, gte, lt, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { payments } from "@/db/schema/payments";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
+import { tenantMemberships } from "@/db/schema/memberships";
+import { roles } from "@/db/schema/roles";
+import { users } from "@/db/schema/users";
 import { getOwnerCharts } from "@/lib/services/owner-home-charts";
 import { resolveOwnerPeriod, type OwnerPeriodKey } from "@/lib/time/owner-periods";
 import { asTenantId, asUserId } from "@/lib/ids";
@@ -59,9 +61,18 @@ export async function readChartParity(args: {
 }): Promise<ChartParity> {
   const { tenantId, nowMs } = args;
   const scope = asTenantId(tenantId);
+  const owner = await withTenant(scope, async (tx) => {
+    const [row] = await tx.select({ userId: tenantMemberships.userId }).from(tenantMemberships)
+      .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, scope), eq(roles.key, "owner"), isNull(roles.deletedAt)))
+      .innerJoin(users, and(eq(users.id, tenantMemberships.userId), isNull(users.deletedAt)))
+      .where(and(eq(tenantMemberships.tenantId, scope), eq(tenantMemberships.status, "active"), eq(tenantMemberships.allLocations, true), isNull(tenantMemberships.deletedAt)))
+      .limit(1);
+    return row;
+  });
+  if (!owner) throw new Error("A live all-location owner is required for demo chart parity.");
   const ctx = {
     tenantId: scope,
-    userId: asUserId(randomUUID()),
+    userId: asUserId(owner.userId),
     roleKey: "owner",
     allLocations: true,
     locationIds: [] as string[],

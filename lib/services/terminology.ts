@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
@@ -131,6 +132,9 @@ export async function updateTermOverride(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "invalid", message: "Only the academy owner can change this setting." };
+    }
     const current = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
     const keyOverrides: LocaleOverrides = {
       ...current.overrides[input.key],
@@ -206,6 +210,9 @@ export async function clearTermOverride(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "invalid", message: "Only the academy owner can change this setting." };
+    }
     const current = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
     const previous = current.overrides[input.key]?.en ?? null;
     const next: TerminologyOverrides = { ...current.overrides };

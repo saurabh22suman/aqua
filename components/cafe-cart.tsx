@@ -20,11 +20,13 @@ export function CafeCart({
   placed,
   onQty,
   taxRegistered,
+  disabled = false,
 }: {
   lines: CartLine[];
   placed: PlacedOrder | null;
   onQty: (itemId: string, delta: number) => void;
   taxRegistered: boolean;
+  disabled?: boolean;
 }) {
   const totals = cartTotals(lines, taxRegistered);
   const locked = placed !== null;
@@ -60,6 +62,7 @@ export function CafeCart({
                       size="sm"
                       variant="ghost"
                       onClick={() => onQty(item.id, -1)}
+                      disabled={disabled}
                       aria-label={`Decrease ${item.name}`}
                     >
                       <Minus size={16} strokeWidth={2} />
@@ -74,6 +77,7 @@ export function CafeCart({
                       size="sm"
                       variant="ghost"
                       onClick={() => onQty(item.id, 1)}
+                      disabled={disabled}
                       aria-label={`Increase ${item.name}`}
                     >
                       <Plus size={16} strokeWidth={2} />

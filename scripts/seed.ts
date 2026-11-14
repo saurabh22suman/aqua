@@ -57,6 +57,19 @@ async function main() {
   // is updated to afterwards (onConflictDoNothing skips existing rows,
   // it doesn't update them).
   await ensureLoginUsers(tenantId);
+  const actors = await adminPool.query<{ user_id: string; role_key: string }>(
+    `select u.id as user_id, r.key as role_key from users u
+     join tenant_memberships tm on tm.user_id = u.id and tm.tenant_id = $1
+     join roles r on r.id = tm.role_id and r.tenant_id = tm.tenant_id
+     where u.phone = any($2::text[]) and u.deleted_at is null
+       and tm.status = 'active' and tm.deleted_at is null and r.deleted_at is null`,
+    [tenantId, ["+919000000001", "+919000000005"]],
+  );
+  const ownerId = actors.rows.find((row) => row.role_key === "owner")?.user_id;
+  const receptionistId = actors.rows.find((row) => row.role_key === "receptionist")?.user_id;
+  if (!ownerId || !receptionistId) throw new Error("seed: live demo owner and receptionist memberships are required");
+  const ownerCtx = { tenantId, userId: asUserId(ownerId) };
+  const receptionistCtx = { tenantId, userId: asUserId(receptionistId) };
   const coachUser = await adminPool.query<{ id: string }>(
     "select id from users where phone = '+919000000002'",
   );
@@ -177,7 +190,7 @@ async function main() {
       continue;
     }
     const created = await createMember(
-      { tenantId, userId: undefined as unknown as UserId },
+      ownerCtx,
       {
         fullName: `Synthetic Member ${String(i).padStart(2, "0")}`,
         // Adult -- this data exists for attendance/offline-sync testing,
@@ -199,8 +212,10 @@ async function main() {
   console.log(`members seeded → ${memberIds.length}`);
 
   for (const memberId of memberIds) {
-    await enrolMember({ tenantId }, { memberId, batchId: batchIds[0] });
-    await enrolMember({ tenantId }, { memberId, batchId: batchIds[1] });
+    for (const batchId of batchIds) {
+      const result = await enrolMember(ownerCtx, { memberId, batchId });
+      if (!result.ok) throw new Error(`seed: enrolMember failed — ${result.error}`);
+    }
   }
 
   const createdSessions = await withTenant(tenantId, (tx) =>
@@ -219,11 +234,11 @@ async function main() {
   );
   const sessionId = morning[0].id;
 
-  const before = await countAttendanceForSession({ tenantId }, sessionId);
+  const before = await countAttendanceForSession(receptionistCtx, sessionId);
 
   let marked = 0;
   for (let i = 0; i < memberIds.length; i++) {
-    await markAttendance({ tenantId }, {
+    await markAttendance(receptionistCtx, {
       sessionId,
       memberId: memberIds[i],
       status: "present",
@@ -232,10 +247,10 @@ async function main() {
     marked++;
   }
 
-  const afterFirst = await countAttendanceForSession({ tenantId }, sessionId);
+  const afterFirst = await countAttendanceForSession(receptionistCtx, sessionId);
 
   for (let i = 0; i < memberIds.length; i++) {
-    await markAttendance({ tenantId }, {
+    await markAttendance(receptionistCtx, {
       sessionId,
       memberId: memberIds[i],
       status: "present",
@@ -243,7 +258,7 @@ async function main() {
     });
   }
 
-  const afterReplay = await countAttendanceForSession({ tenantId }, sessionId);
+  const afterReplay = await countAttendanceForSession(receptionistCtx, sessionId);
 
   console.log(`register ${sessionId} (${morning[0].sessionDate})`);
   console.log(`  before            → ${before}`);
@@ -389,4 +404,3 @@ async function ensureDemoStaff(
     return asStaffId(staffRow!.id);
   });
 }
-

@@ -9,6 +9,7 @@ import { createMember } from "@/lib/services/register";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import { asTenantId, asUserId, type TenantId } from "@/lib/ids";
 import { privilegedFixturePool as admin } from "./db/privileged-fixture";
+import { seedRoleTemplates } from "@/lib/services/roles";
 
 // Owner Home chart aggregation, end to end against the disposable test DB:
 // the facility scope can only narrow, the periods reconcile with the
@@ -36,7 +37,7 @@ const restrictedA = {
   roleKey: "admin",
   allLocations: false,
   locationIds: [] as string[],
-  permissions: new Set(["dashboard.view", "reports.financial", "payments.read"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "payments.read", "invoices.read"]),
 };
 
 beforeAll(async () => {
@@ -56,8 +57,16 @@ beforeAll(async () => {
     locationA = rows[0]!.id;
     locationB = rows[1]!.id;
   });
+  const scopedMembership = randomUUID();
+  const phone = () => `+91${String(BigInt("0x" + randomUUID().replaceAll("-", "").slice(0, 12)) % 9_000_000_000n + 1_000_000_000n)}`;
+  await admin.query("insert into users(id,phone) values($1,$2),($3,$4)", [owner.userId, phone(), restrictedA.userId, phone()]);
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'reports',true),($1,'billing',true)", [tenantId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [randomUUID(), tenantId, owner.userId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='admin'", [scopedMembership, tenantId, restrictedA.userId]);
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, scopedMembership, locationA]);
   const a = await createMember(
-    { tenantId },
+    { tenantId, userId: owner.userId },
     {
       fullName: "Chart Member A",
       dateOfBirth: "1990-01-01",
@@ -71,7 +80,7 @@ beforeAll(async () => {
   if (!a.ok) throw new Error(a.error);
   memberA = a.memberId;
   const b = await createMember(
-    { tenantId },
+    { tenantId, userId: owner.userId },
     {
       fullName: "Chart Member B",
       dateOfBirth: "1990-01-01",
@@ -135,9 +144,15 @@ afterAll(async () => {
     await admin.query("delete from consents where tenant_id = $1", [tenantId]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
+    await admin.query("delete from membership_locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from config_values where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)", [[owner.userId, restrictedA.userId]]);
   }
   await admin.end();
 });

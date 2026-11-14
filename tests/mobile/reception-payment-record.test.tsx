@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // PR2-C3 — the reception payment screen must RECORD a counter payment,
@@ -20,6 +20,11 @@ vi.mock("@/lib/actions/invoices", () => ({
 const recordPaymentAction = vi.fn();
 vi.mock("@/lib/actions/payments", () => ({
   recordPaymentAction: (...args: unknown[]) => recordPaymentAction(...args),
+}));
+const listPaymentRecoveryAction = vi.hoisted(() => vi.fn(async () => ({ open: null, lastCommitted: null })));
+vi.mock("@/lib/actions/payment-intents", () => ({
+  listPaymentRecoveryAction,
+  cancelPaymentRecoveryAction: vi.fn(),
 }));
 
 import { PaymentRecordForm } from "@/components/payment-record-form";
@@ -46,6 +51,8 @@ const INVOICE = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  listPaymentRecoveryAction.mockReset();
+  listPaymentRecoveryAction.mockResolvedValue({ open: null, lastCommitted: null });
 });
 
 async function pickMemberAndInvoice() {
@@ -61,7 +68,29 @@ async function pickMemberAndInvoice() {
   fireEvent.click(screen.getByTestId("payment-invoice-inv-1"));
 }
 
+// Recovery readiness, not elapsed time, determines whether a payment click is accepted.
+async function clickReadyRecordPayment() {
+  const button = screen.getByRole("button", { name: /record payment/i });
+  await waitFor(() => expect(button).toHaveProperty("disabled", false));
+  fireEvent.click(button);
+}
+
 describe("PaymentRecordForm (PR2-C3)", () => {
+  it("retries the recorded payment with its original key and observed intent", async () => {
+    const key = "11111111-1111-4111-8111-111111111111";
+    const intentId = "22222222-2222-4222-8222-222222222222";
+    listPaymentRecoveryAction.mockResolvedValue({ open: null, lastCommitted: {
+      intentId, idempotencyKey: key, committedAt: "2026-09-21T11:00:00Z", resultId: "pay-1", invoiceStatus: "partial",
+    } } as never);
+    recordPaymentAction.mockResolvedValue({ ok: true, id: "pay-1", invoiceStatus: "partial" });
+    render(<PaymentRecordForm />);
+    await pickMemberAndInvoice();
+    fireEvent.click(await screen.findByRole("button", { name: "Retry the same payment" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Retry the same payment" })[0]!);
+    await waitFor(() => expect(recordPaymentAction).toHaveBeenCalledWith({
+      invoiceId: "inv-1", amountPaise: 250000, method: "cash", idempotencyKey: key, observedIntentId: intentId,
+    }));
+  });
   it("searches a member, lists open invoices and records cash", async () => {
     recordPaymentAction.mockResolvedValue({
       ok: true,
@@ -73,13 +102,15 @@ describe("PaymentRecordForm (PR2-C3)", () => {
     await pickMemberAndInvoice();
     expect(document.body.textContent).toMatch(/₹2,500\.00 outstanding/);
 
-    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    await clickReadyRecordPayment();
 
-    expect(recordPaymentAction).toHaveBeenCalledWith({
+    await waitFor(() => expect(recordPaymentAction).toHaveBeenCalledWith({
       invoiceId: "inv-1",
       amountPaise: 250000,
       method: "cash",
-    });
+      idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      observedIntentId: null,
+    }));
     expect(await screen.findByRole("status")).toHaveProperty(
       "textContent",
       "Payment recorded. Invoice is now paid.",
@@ -91,7 +122,7 @@ describe("PaymentRecordForm (PR2-C3)", () => {
     await pickMemberAndInvoice();
 
     fireEvent.click(screen.getByRole("radio", { name: /upi/i }));
-    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    await clickReadyRecordPayment();
 
     expect(recordPaymentAction).not.toHaveBeenCalled();
     expect(document.body.textContent).toMatch(/reference/i);
@@ -104,14 +135,16 @@ describe("PaymentRecordForm (PR2-C3)", () => {
       id: "pay-2",
       invoiceStatus: "partial",
     });
-    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    await clickReadyRecordPayment();
 
-    expect(recordPaymentAction).toHaveBeenCalledWith({
+    await waitFor(() => expect(recordPaymentAction).toHaveBeenCalledWith({
       invoiceId: "inv-1",
       amountPaise: 250000,
       method: "upi",
       reference: "UTR-42",
-    });
+      idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/i),
+      observedIntentId: null,
+    }));
     expect(await screen.findByRole("status")).toHaveProperty(
       "textContent",
       "Payment recorded. Invoice is now partially paid.",
@@ -126,7 +159,7 @@ describe("PaymentRecordForm (PR2-C3)", () => {
     render(<PaymentRecordForm />);
     await pickMemberAndInvoice();
 
-    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    await clickReadyRecordPayment();
 
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",

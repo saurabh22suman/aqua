@@ -110,6 +110,7 @@ beforeAll(async () => {
        ($2,$3,'receptionist','Receptionist','/reception',3)`,
     [ownerRoleId, receptionRoleId, tenantId],
   );
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'messaging.send'),($1,$2,'settings.manage'),($1,$3,'messaging.send')", [tenantId, ownerRoleId, receptionRoleId]);
   const ownerMembership = randomUUID();
   const receptionMembership = randomUUID();
   await admin.query(

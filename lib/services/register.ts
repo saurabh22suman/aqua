@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, persons } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
+import { locations } from "@/db/schema/locations";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
 import type { ActionCtx } from "@/lib/auth/context";
@@ -33,28 +34,36 @@ export async function markAttendance(ctx: LocationAwareCtx, input: Parameters<ty
 
 export async function enrolMember(ctx: LocationAwareCtx, input: { memberId: string; batchId: string; enrolledOn?: string }):
 Promise<{ ok: true } | { ok: false; error: string }> {
-  return withTenant(ctx.tenantId, async tx => {
-    const [batch] = await tx.select({ capacity: batches.capacity, locationId: batches.locationId }).from(batches)
-      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt))).for("update");
-    if (!batch || !locationVisible(await resolveLocationAccess(tx, ctx), batch.locationId)) return { ok: false, error: "Batch not found." };
-    if (!await visibleMember(tx, ctx, input.memberId)) return { ok: false, error: "Member not found." };
-    const [existing] = await tx.select({ id: enrolments.id }).from(enrolments).where(and(
-      eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, input.batchId), eq(enrolments.memberId, asMemberId(input.memberId)))).limit(1);
-    if (!existing) {
-      const [{ n }] = await tx.select({ n: sql<number>`count(distinct ${enrolments.memberId})::int` }).from(enrolments)
-        .where(and(eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, input.batchId)));
-      if (n >= batch.capacity) return { ok: false, error: `This batch is full (capacity ${batch.capacity}).` };
-    }
-    const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    const enrolledOn = input.enrolledOn ?? todayInZone(tenant.timezone);
-    const [inserted] = await tx.insert(enrolments).values({ tenantId: ctx.tenantId, memberId: asMemberId(input.memberId),
-      batchId: input.batchId, enrolledOn, createdBy: ctx.userId, updatedBy: ctx.userId,
-    }).onConflictDoNothing().returning({ id: enrolments.id });
-    if (inserted) await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId,
-      actorType: ctx.userId ? "user" : "system", requestId: ctx.requestId, action: "member.enrol",
-      entityType: "enrolment", entityId: inserted.id, after: { memberId: input.memberId, batchId: input.batchId, enrolledOn } });
-    return { ok: true };
-  });
+  return withTenant(ctx.tenantId, async tx => enrolMemberInTx(tx, ctx, input));
+}
+
+// The transaction body of enrolMember, shared with the enquiry trial
+// booking (lib/services/enquiry-conversion.ts). withTenant() cannot
+// nest (db/scope.ts), so a caller that already owns a transaction needs
+// the body rather than a second transaction. Same rules, refusals and
+// audit row; only the transaction boundary moves.
+export async function enrolMemberInTx(tx: TenantTx, ctx: LocationAwareCtx, input: { memberId: string; batchId: string; enrolledOn?: string }):
+Promise<{ ok: true } | { ok: false; error: string }> {
+  const [batch] = await tx.select({ capacity: batches.capacity, locationId: batches.locationId }).from(batches)
+    .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt))).for("update");
+  if (!batch || !locationVisible(await resolveLocationAccess(tx, ctx), batch.locationId)) return { ok: false, error: "Batch not found." };
+  if (!await visibleMember(tx, ctx, input.memberId)) return { ok: false, error: "Member not found." };
+  const [existing] = await tx.select({ id: enrolments.id }).from(enrolments).where(and(
+    eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, input.batchId), eq(enrolments.memberId, asMemberId(input.memberId)))).limit(1);
+  if (!existing) {
+    const [{ n }] = await tx.select({ n: sql<number>`count(distinct ${enrolments.memberId})::int` }).from(enrolments)
+      .where(and(eq(enrolments.tenantId, ctx.tenantId), eq(enrolments.batchId, input.batchId)));
+    if (n >= batch.capacity) return { ok: false, error: `This batch is full (capacity ${batch.capacity}).` };
+  }
+  const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
+  const enrolledOn = input.enrolledOn ?? todayInZone(tenant.timezone);
+  const [inserted] = await tx.insert(enrolments).values({ tenantId: ctx.tenantId, memberId: asMemberId(input.memberId),
+    batchId: input.batchId, enrolledOn, createdBy: ctx.userId, updatedBy: ctx.userId,
+  }).onConflictDoNothing().returning({ id: enrolments.id });
+  if (inserted) await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId,
+    actorType: ctx.userId ? "user" : "system", requestId: ctx.requestId, action: "member.enrol",
+    entityType: "enrolment", entityId: inserted.id, after: { memberId: input.memberId, batchId: input.batchId, enrolledOn } });
+  return { ok: true };
 }
 
 export async function countAttendanceForSession(ctx: ActionCtx, sessionId: string): Promise<number> {
@@ -68,16 +77,17 @@ export async function countAttendanceForSession(ctx: ActionCtx, sessionId: strin
   });
 }
 
-export type TodaySessionRow = { id: string; batchName: string; startsAt: Date; endsAt: Date; marked: number; total: number };
+export type TodaySessionRow = { id: string; batchName: string; locationName: string | null; startsAt: Date; endsAt: Date; marked: number; total: number };
 
 export async function listTodaySessions(ctx: ActionCtx & { roleKey: string }, today: string): Promise<TodaySessionRow[]> {
   return withTenant(ctx.tenantId, async tx => tx.select({
-    id: sessions.id, batchName: batches.name, startsAt: sessions.startsAt, endsAt: sessions.endsAt,
+    id: sessions.id, batchName: batches.name, locationName: locations.name, startsAt: sessions.startsAt, endsAt: sessions.endsAt,
     marked: sql<number>`(select count(*)::int from ${attendance} a where a.session_id = ${sessions.id})`,
     total: sql<number>`(select count(distinct e.member_id)::int from ${enrolments} e join ${members} m on m.id=e.member_id
       where e.batch_id=${sessions.batchId} and e.enrolled_on<=${today} and e.tenant_id=${ctx.tenantId}
       and m.status in ('active','trial') and m.deleted_at is null)`,
-  }).from(sessions).innerJoin(batches, eq(batches.id, sessions.batchId)).where(and(
+  }).from(sessions).innerJoin(batches, eq(batches.id, sessions.batchId))
+    .leftJoin(locations, and(eq(locations.id, sessions.locationId), eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt))).where(and(
     eq(sessions.tenantId, ctx.tenantId), eq(sessions.sessionDate, today),
     isCoachLikeRoleKey(ctx.roleKey) ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
     locationPredicate(sessions.locationId, await resolveLocationAccess(tx, ctx)),
@@ -85,9 +95,10 @@ export async function listTodaySessions(ctx: ActionCtx & { roleKey: string }, to
 }
 
 async function visibleSession(tx: TenantTx, ctx: ActionCtx & { roleKey: string }, sessionId: string) {
-  const [session] = await tx.select({ id: sessions.id, batchId: sessions.batchId, batchName: batches.name,
+  const [session] = await tx.select({ id: sessions.id, batchId: sessions.batchId, batchName: batches.name, locationName: locations.name,
     startsAt: sessions.startsAt, sessionDate: sessions.sessionDate }).from(sessions)
-    .innerJoin(batches, eq(batches.id, sessions.batchId)).where(and(
+    .innerJoin(batches, eq(batches.id, sessions.batchId))
+    .leftJoin(locations, and(eq(locations.id, sessions.locationId), eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt))).where(and(
       eq(sessions.id, sessionId), eq(sessions.tenantId, ctx.tenantId), isNull(batches.deletedAt),
       isCoachLikeRoleKey(ctx.roleKey) ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
       locationPredicate(sessions.locationId, await resolveLocationAccess(tx, ctx)),
@@ -103,7 +114,7 @@ export type RosterRow = {
   memberId: string; name: string; code: string; status: "present" | "absent" | "late" | null;
   markedAt?: string | null; pct: number | null; isTrial: boolean;
 };
-export type RosterData = { batchName: string; startsAt: Date; offlineSyncEnabled: boolean; rows: RosterRow[] };
+export type RosterData = { batchName: string; locationName: string | null; startsAt: Date; offlineSyncEnabled: boolean; rows: RosterRow[] };
 
 export async function getRosterForSession(ctx: ActionCtx & { roleKey: string }, sessionId: string): Promise<RosterData | null> {
   return withTenant(ctx.tenantId, async tx => {
@@ -130,6 +141,6 @@ export async function getRosterForSession(ctx: ActionCtx & { roleKey: string }, 
         status: row.status as RosterRow["status"], markedAt: row.markedAt?.toISOString() ?? null,
         pct: row.totalCount ? Math.round(row.presentCount / row.totalCount * 100) : null, isTrial: row.memberStatus === "trial" });
     }
-    return { batchName: session.batchName, startsAt: session.startsAt, offlineSyncEnabled: tenant.offlineSyncEnabled, rows };
+    return { batchName: session.batchName, locationName: session.locationName, startsAt: session.startsAt, offlineSyncEnabled: tenant.offlineSyncEnabled, rows };
   });
 }

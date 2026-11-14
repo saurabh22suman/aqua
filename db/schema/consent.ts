@@ -39,6 +39,15 @@ export const guardianships = pgTable(
       t.minorId,
       t.guardianId,
     ),
+    // 2026-11-09 member sign-in — the composite-FK TARGET KEY the link
+    // tables need: guardian_child_links references
+    // guardianships (id, tenant_id), and a FOREIGN KEY may only
+    // reference columns that carry a unique constraint. persons and
+    // members both already carry `unique (id, tenant_id)`; guardianships
+    // was the odd one out. Logically a no-op (id is already the primary
+    // key); it exists so the key is expressible. The matching DDL is in
+    // db/migrations/20261108210134_member_self_links.sql.
+    unique("guardianships_id_tenant_key").on(t.id, t.tenantId),
     index("guardianships_tenant_minor_live_idx")
       .on(t.tenantId, t.minorId)
       .where(sql`deleted_at is null`),

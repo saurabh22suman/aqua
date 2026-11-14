@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // V-10 — assessments from the register. The action layer is
 // zod -> permission levels.assess -> service; the service records the
@@ -44,6 +44,7 @@ const memberAPerson = uuidv7();
 const memberB = asMemberId(uuidv7());
 const memberBPerson = uuidv7();
 
+const coachPerson = uuidv7(), coachStaff = uuidv7(), program = uuidv7(), batch = uuidv7();
 const frameworkA = uuidv7();
 const levelA = uuidv7();
 const skillA = uuidv7();
@@ -86,7 +87,7 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9194${String(Date.now()).slice(-8)}`,
+    `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`,
   ]);
   await admin.query(
     `insert into persons (id, tenant_id, full_name) values
@@ -110,6 +111,14 @@ beforeAll(async () => {
     ],
   );
 
+  await seedRoleTemplates(tenantA);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='coach'", [uuidv7(), tenantA, actor]);
+  await admin.query("insert into persons(id,tenant_id,full_name) values($1,$2,'Synthetic assessor')", [coachPerson, tenantA]);
+  await admin.query("insert into staff(id,tenant_id,person_id,user_id,staff_type) values($1,$2,$3,$4,'coach')", [coachStaff, tenantA, coachPerson, actor]);
+  await admin.query("insert into programs(id,tenant_id,name) values($1,$2,'Assessment programme')", [program, tenantA]);
+  await admin.query("insert into batches(id,tenant_id,program_id,name,capacity,days_of_week,start_time,end_time,location_id,coach_id) values($1,$2,$3,'Assessment batch',10,ARRAY[1],'10:00','11:00',$4,$5)", [batch, tenantA, program, locA, coachStaff]);
+  await admin.query("insert into enrolments(id,tenant_id,member_id,batch_id,enrolled_on) values($1,$2,$3,$4,'2026-01-01')", [uuidv7(), tenantA, memberA, batch]);
+
   await admin.query(
     `insert into skill_frameworks (id, tenant_id, activity_type_key, name)
      values ($1, $2, 'swimming', 'Swimming skill ladder')`,
@@ -129,8 +138,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await deleteAuditRowsForTenant(admin, tenantA);
-  await deleteAuditRowsForTenant(admin, tenantB);
   await admin.query("delete from assessments where tenant_id in ($1, $2)", [
     tenantA,
     tenantB,
@@ -143,6 +150,13 @@ afterAll(async () => {
     "delete from skill_frameworks where tenant_id in ($1, $2)",
     [tenantA, tenantB],
   );
+  await admin.query("delete from enrolments where tenant_id=$1", [tenantA]);
+  await admin.query("delete from batches where tenant_id=$1", [tenantA]);
+  await admin.query("delete from staff where tenant_id=$1", [tenantA]);
+  await admin.query("delete from programs where tenant_id=$1", [tenantA]);
+  await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantA]);
+  await admin.query("delete from role_permissions where tenant_id=$1", [tenantA]);
+  await admin.query("delete from roles where tenant_id=$1", [tenantA]);
   await admin.query("delete from members where tenant_id in ($1, $2)", [
     tenantA,
     tenantB,
@@ -156,7 +170,7 @@ afterAll(async () => {
     tenantB,
   ]);
   await admin.query("delete from tenants where id in ($1, $2)", [tenantA, tenantB]);
-  await admin.query("delete from users where id = $1", [actor]);
+  await admin.query("delete from users where id = $1 and not exists (select 1 from audit_log where actor_id=users.id)", [actor]);
   await admin.end();
 });
 

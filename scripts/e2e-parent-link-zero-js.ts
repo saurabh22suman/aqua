@@ -29,42 +29,14 @@
 
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { loadDotEnv } from "../lib/load-env";
+import { e2eWebEnv } from "./lib/e2e-child-env";
 import { setTimeout as sleep } from "node:timers/promises";
 import { createHmac, randomUUID } from "node:crypto";
 import { Pool } from "pg";
 
-// Minimal .env loader so this script can be invoked directly via
-// `tsx` (which does not auto-load Next.js env files). We only need
-// DATABASE_URL, MIGRATION_DATABASE_URL, and PARENT_LINK_SECRET — the
-// three vars this test reads. We deliberately do NOT pull in
-// `dotenv` (or Next's loadEnvConfig) to keep the script's blast
-// radius small.
-(function loadDotEnv() {
-  const path = resolve(process.cwd(), ".env");
-  let text: string;
-  try {
-    text = readFileSync(path, "utf8");
-  } catch {
-    return;
-  }
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const eq = line.indexOf("=");
-    if (eq < 0) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    if (!(key in process.env)) process.env[key] = value;
-  }
-})();
+// The shared loader preserves exported values and respects AQUA_NO_DOTENV.
+loadDotEnv();
 
 const PORT = 3221;
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -221,7 +193,7 @@ async function main(): Promise<void> {
   // not be imported outside of pages/_document" on /404.
   execFileSync("pnpm", ["next", "build"], {
     stdio: "inherit",
-    env: { ...process.env, NODE_ENV: "production" },
+    env: e2eWebEnv({ ...process.env, NODE_ENV: "production" }),
   });
 
   // PARENT_LINK_SECRET must match what lib/services/parent-link.ts
@@ -237,7 +209,7 @@ async function main(): Promise<void> {
     server = spawn("pnpm", ["next", "start", "-p", String(PORT)], {
       stdio: "ignore",
       detached: true,
-      env: { ...process.env, PARENT_LINK_SECRET: secret },
+      env: e2eWebEnv({ ...process.env, PARENT_LINK_SECRET: secret }),
     });
     await waitForServer();
 

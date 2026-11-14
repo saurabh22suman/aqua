@@ -66,7 +66,9 @@ describe("ReceptionTodayPage — no coach link, check-ins panel present (F5, U-0
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("Junior TTS");
-    expect(text).toContain("2 / 16 checked in");
+    // The aggregate includes absent marks, so it measures register completion.
+    expect(text).toContain("2 / 16 marked");
+    expect(text).not.toContain("2 / 16 checked in");
     expect(text).toContain("Today's check-ins");
   });
 

@@ -77,7 +77,16 @@
   --breakpoint-wide: 1180px;
 
   --radius-card: 20px;
-  --radius-ctl: 14px;
+  /* The approved OpenPen owner surface radius. Owner routes remap
+   * --radius-card to this below, so Ops and other roles keep their own
+   * 20px card while the owner composition matches the reference. */
+  --radius-owner: 16px;
+  /* The CONTROL radius — the human-approved 10px (owner redesign,
+   * 27 October 2026). Every control the owner presses or types in wears
+   * it: action buttons, text fields, selects, date and time pickers.
+   * Cards keep their own radius (--radius-card, 20px) and the pill
+   * keeps its own, so the three never blur into one. */
+  --radius-ctl: 10px;
   --radius-pill: 9999px;
 
   --shadow-1: 0 1px 2px rgba(15, 31, 28, 0.05);
@@ -145,6 +154,25 @@
    * without the row pretending to be selected. */
   --surface-nav-hover: #D9E8DC;
 
+  /* ── Owner OpenPen navigation (29 October 2026) ───────────────────
+   * The owner shell is the only consumer of these. Lavender paints a
+   * deep-plum owner sidebar and Mint a pale-green one; both are declared
+   * here so the owner markup never branches on the preset. They are
+   * owner scoped (not --color-sidebar) because Ops and the auth panel
+   * keep the existing pastel sidebar. */
+  --owner-nav-surface: #E0EEE5;
+  --owner-nav-ink: #244536;
+  --owner-nav-muted: #526B5D;
+  --owner-nav-hover: #D3E5D9;
+  --owner-nav-active: #FFFFFF;
+  --owner-nav-active-ink: #1F5E3A;
+  --owner-nav-focus: #1F5E3A;
+  --owner-nav-border: color-mix(in srgb, var(--owner-nav-ink) 18%, transparent);
+  /* The owner money/decision surfaces. The meaning stays in the words
+   * and the reserved status tokens; these are surfaces only. */
+  --surface-owner-money: #E7F4EE;
+  --surface-owner-decision: #FFFFFF;
+
   /* ── Owner Home surfaces (approved Lavender Option B) ────────────
    * Two extra surfaces the approved owner home needs, declared in
    * BOTH presets so the page markup never branches on the theme:
@@ -159,6 +187,44 @@
   --surface-featured: #EAF3EC;
   --surface-attention: #FBF3EC;
   --surface-attention-border: #F0E1D2;
+
+  /* ── Owner shell metrics (Owner light, 2 November 2026) ─────────────
+   * ONE definition of the phone chrome, so the shell, the bottom
+   * navigation and the floating create action cannot drift apart:
+   *
+   *   --owner-nav-h           the bottom navigation height (64px)
+   *   --owner-fab-size        the round floating action (56px)
+   *   --owner-fab-gap         the gap between the navigation and it
+   *   --owner-fab-bottom      where the floating action sits
+   *   --owner-content-bottom  the clearance the content reserves below
+   *
+   * The floating action is a phone-only surface; the desktop shell has
+   * no bottom navigation, so it reserves nothing there. */
+  --owner-nav-h: 64px;
+  --owner-fab-size: 56px;
+  --owner-fab-gap: 16px;
+  --owner-fab-bottom: calc(
+    var(--owner-nav-h) + var(--owner-fab-gap) + env(safe-area-inset-bottom)
+  );
+  --owner-content-bottom: calc(
+    var(--owner-nav-h) + env(safe-area-inset-bottom)
+  );
+
+  /* ── Owner typography (Owner light, 2 November 2026) ─────────────────
+   * The human approved ONE type treatment for the owner product:
+   * Instrument Sans 400 for body, rows and controls, 500 for headings.
+   * The application still carries the earlier heavy display face
+   * (Bricolage Grotesque) for every heading, so the owner tree
+   * REDIRECTS the shared display utility to the body face.
+   *
+   * It is scoped to [data-owner-surface] on purpose: Ops, coach,
+   * reception, the public pages and the auth panel keep the face they
+   * have today, and no other role's typography moves.
+   *
+   * --owner-heading-weight is the approved heading weight. Headings
+   * inside the owner tree render at it, so the emphasis between body
+   * text (400) and a heading (500) stays meaningful. */
+  --owner-heading-weight: 500;
 
   /* ── Chart surface tokens ─────────────────────────────────────────
    * The ECharts canvas is painted from CSS variables, not from baked
@@ -216,6 +282,58 @@
   --icon-size-lg: 20px;
   --icon-stroke: 1.8;
   --icon-stroke-active: 2.2;
+
+  /* ── The shared control contract (owner redesign, 27 October 2026) ──
+   * The human approved ONE control system for both presets:
+   *
+   *   "Standard action buttons, text fields, selects, date and time
+   *    pickers share a 48px height, 10px radius, 16px control text and
+   *    consistent horizontal padding. Long actions may wrap and grow;
+   *    do not clip them to meet a numeric height. Compact table and
+   *    tertiary controls retain at least 44px effective targets."
+   *
+   * and the tint rule:
+   *
+   *   "Neutral entry/search fields; very lightly tinted pickers; a
+   *    slightly stronger theme tint for secondary action buttons; solid
+   *    theme colour for the primary action."
+   *
+   * The three surfaces below are `color-mix()` expressions over
+   * `--accent-strong`, so they follow the preset (Mint Garden or
+   * Lavender Club) without being restated per preset — the same rule
+   * the semantic surface layer already follows. The tints are SURFACE
+   * colours: meaning stays in the ink and in the reserved status
+   * tokens, and colour is never the only cue.
+   *
+   * --control-height-sm / --control-height-md are the Tailwind
+   * `min-h-11` / `min-h-12` scale values; --radius-ctl (10px) is the
+   * `rounded-ctl` utility every control wears. */
+  --control-text: 16px;
+  --control-padding-x: 16px;
+  /* The neutral entry/search border. An ordinary text field is PAPER
+   * ON PAPER, so its border is the only persistent visible outline:
+   * it has to carry the 3:1 that DESIGN.md §1 requires of the
+   * non-text information that identifies a control. The independent
+   * review (27 October 2026) measured the first derivation — 24% of
+   * the accent — at 1.47:1 / 1.54:1, which is below that floor.
+   *
+   * The boundary is therefore derived from the INK at 55%, which is a
+   * neutral hairline (not a coloured block) and clears 3:1 against
+   * paper, the canvas and the tinted picker surface in BOTH presets.
+   * The hover state is stronger still, and the focused state is the
+   * theme's accent. No new colour is introduced: the mix names two
+   * tokens that already exist. */
+  --control-border: color-mix(in srgb, var(--color-ink) 55%, var(--color-paper));
+  --control-border-hover: color-mix(in srgb, var(--color-ink) 68%, var(--color-paper));
+  /* The entry/search surface itself stays neutral (paper). */
+  --control-surface: var(--color-paper);
+  /* A picker (a select, a date/time field) is tinted very lightly so
+   * it reads as a choice, not as free text. */
+  --control-surface-picker: color-mix(in srgb, var(--accent-strong) 5%, var(--color-paper));
+  /* A secondary action button wears a slightly stronger theme tint —
+   * clearly quieter than the solid primary, clearly present. */
+  --control-surface-action: color-mix(in srgb, var(--accent-strong) 10%, var(--color-paper));
+  --control-surface-action-hover: color-mix(in srgb, var(--accent-strong) 16%, var(--color-paper));
 
   --z-nav: 30;
   --z-sticky: 30;
@@ -291,6 +409,22 @@
   --selected-ink: #4C326F;
   --surface-nav-hover: #E4DCF2;
 
+  /* Owner OpenPen navigation. The reference's lavender workspace has a
+   * deep plum sidebar and a light content canvas; Mint keeps the pale
+   * green surface declared in :root. */
+  --owner-nav-surface: #302044;
+  --owner-nav-ink: #EFE9F9;
+  --owner-nav-muted: #D5C8E6;
+  --owner-nav-hover: #3D2B55;
+  --owner-nav-active: #FFFFFF;
+  --owner-nav-active-ink: #4C326F;
+  /* Dark goldenrod clears 3:1 against BOTH the white active pill and the
+   * deep-plum sidebar, so the keyboard ring is visible on every row. */
+  --owner-nav-focus: #B8860B;
+  --owner-nav-border: color-mix(in srgb, #FFFFFF 18%, transparent);
+  --surface-owner-money: #EEE8F8;
+  --surface-owner-decision: #FFFFFF;
+
   /* Owner Home surfaces — declared in both presets so the page markup
    * never branches on the theme. */
   --surface-featured: #F2EDF9;
@@ -323,6 +457,120 @@
   --chart-5: #41525A;
 }
 
+/* ── Owner scope (OpenPen, 29 October 2026) ───────────────────────────
+ * Only the owner tree wears this attribute. It remaps two shared tokens
+ * for owner surfaces WITHOUT changing the generic preset values Ops and
+ * other roles consume:
+ *   - owner cards use the reference 16px radius;
+ *   - the selected navigation row aliases the owner nav pill tokens, so
+ *     the sidebar is white/plum in Lavender and white/forest in Mint.
+ * No palette token is restated here. */
+[data-owner-surface] {
+  --radius-card: var(--radius-owner);
+  /* The heavy Owner display treatment is removed HERE and nowhere else:
+   * every owner heading asks for the shared `font-display` utility, and
+   * inside the owner tree that utility now resolves to the body face
+   * (Instrument Sans). Ops, coach, reception, the public pages and the
+   * auth panel keep the face they have today. */
+  --font-display: var(--font-sans);
+  --owner-nav-surface: #FFFFFF;
+  --owner-nav-ink: var(--color-ink);
+  --owner-nav-muted: var(--color-ink-3);
+  --owner-nav-hover: var(--accent-soft);
+  --owner-nav-active: var(--accent-soft);
+  --owner-nav-active-ink: var(--accent-ink);
+  --owner-nav-focus: var(--accent-strong);
+  --owner-nav-border: var(--color-line);
+  --selected-surface: var(--accent-soft);
+  --selected-ink: var(--accent-ink);
+  --owner-hero: var(--accent-strong);
+  --owner-hero-ink: #FFFFFF;
+  --owner-overdue-surface: #FCEBE8;
+  --owner-shortcut-surface: #FFFFFF;
+  --owner-action-members: #E5F1E3;
+  --owner-action-payment: #F6EAE1;
+  --owner-action-booking: #E5EDF8;
+  --owner-action-enquiry: #EEE8F8;
+}
+
+/* Owner sidebar keyboard focus. The global ring token is tuned for the
+ * light content surfaces; on the deep-plum sidebar (and the white active
+ * pill) it is too low-contrast. Only controls inside the owner sidebar
+ * take the owner-nav ring; the width/offset stay with the global rule. */
+[data-owner-surface] [data-testid="owner-sidebar"] :is(a, button, summary):focus-visible {
+  outline-color: var(--owner-nav-focus);
+}
+
+/* The owner headings carry the approved weight (500). It is a scoped
+ * rule, not a global reset: the body, the rows, the controls and every
+ * other role keep their own weights, and the difference between 400
+ * body text and a 500 heading stays a meaningful cue. */
+[data-owner-surface] :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--owner-heading-weight);
+}
+
+/* The owner product has TWO real weights: Instrument Sans 400 for body
+ * text and 500 for headings, labels, figures and controls (the
+ * approved mock). The application asks for 600 in a number of places —
+ * and it loads ONLY the 400 and 500 faces — so a 600 request is drawn
+ * as a SYNTHESISED (faux) weight rather than the real face. Inside the
+ * owner tree that request is mapped onto the real 500: the figures, the
+ * labels and the wordmark carry the approved weight, and no other role's
+ * typography moves. */
+[data-owner-surface] :is(.font-semibold, .kpi) {
+  font-weight: var(--owner-heading-weight);
+}
+
+/* The floating create action reserves room for itself — but ONLY on a
+ * page that carries one. A page without an action keeps the plain
+ * navigation clearance, so no page is given empty space it does not
+ * need. The marker is set by components/owner-ui/owner-create-action. */
+[data-owner-surface]:has([data-owner-create-action]) {
+  --owner-content-bottom: calc(
+    var(--owner-nav-h) + var(--owner-fab-gap) + var(--owner-fab-size) +
+      env(safe-area-inset-bottom)
+  );
+}
+
+[data-owner-surface] .owner-facility > div { padding: 0; }
+[data-owner-surface] .owner-facility [data-testid="facility-switcher"] { min-width: 0; }
+
+/* ── Staff scope (coach, reception, worker) ────────────────────────────
+ * The staff page frame is the approved light Owner language — Instrument
+ * Sans 400/500 and a 16px card — but the SHARED interiors it hosts
+ * (register board, member create form, assessment board, enquiry
+ * capture card, payment record form, the member panels) ask for the
+ * shared `font-display` utility and the shared 20px card radius. Inside
+ * the staff shell that mixed the heavy display face and the wider
+ * radius into the staff language.
+ *
+ * This is the SAME scoped correction the owner surface already uses,
+ * on the marker the three staff layouts already carry
+ * (`data-staff-surface`): the shared display utility is redirected to
+ * the body face and the card radius to the approved 16px, inside the
+ * staff tree ONLY. No palette, surface, accent, control-radius or pill
+ * token is restated here, so Owner, Ops, the public pages and the auth
+ * panel cannot move. */
+[data-staff-surface] {
+  --radius-card: var(--radius-owner);
+  --font-display: var(--font-sans);
+}
+
+/* The staff tree carries the same two real weights as the owner tree:
+ * 400 for body, rows and controls; 500 for headings, labels, figures
+ * and controls. The application asks for 600 in a number of places and
+ * loads ONLY the 400 and 500 faces, so a 600 request is drawn as a
+ * SYNTHESISED (faux) weight rather than the real face. Inside the
+ * staff tree that request is mapped onto the real 500; every other
+ * role's typography stays exactly as it is. */
+[data-staff-surface] :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: var(--owner-heading-weight);
+}
+
+[data-staff-surface] :is(.font-semibold, .kpi) {
+  font-weight: var(--owner-heading-weight);
+}
+
 /* Focus fallback for controls that do not opt into the ring with a
  * utility class (selects, hand-rolled buttons, date fields). The
  * :where() keeps specificity at 0 so any component-level
@@ -332,6 +580,15 @@
   :where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  /* Native selection controls inherit the preset's action accent, so an
+   * unstyled checkbox/radio cannot fall back to browser blue. `:where()`
+   * keeps specificity at zero, so an explicit `accent-*` utility (the
+   * shared Checkbox, consent controls) still wins. Geometry, hit area,
+   * disabled state and consent values are untouched. */
+  :where(input[type="checkbox"], input[type="radio"]) {
+    accent-color: var(--accent-strong);
   }
 }
 
@@ -411,7 +668,7 @@ html {
  *
  * The card carries `data-print-isolate="member-id-card"`; its
  * wrapper carries `.print-isolate-block`. Print rules below hide every
- * other top-level child of <main> and all app chrome (bottom nav,
+ * unrelated branch of <main> and all app chrome (bottom nav,
  * headers). The card itself stays visible at its on-screen size. */
 @media print {
   /* Hide app chrome that wraps the page. */
@@ -422,10 +679,9 @@ html {
     display: none !important;
   }
 
-  /* Hide every direct child of <main> except the print-isolate
-   * wrapper. This keeps the rest of the detail page off the printout
-   * without having to mark every other section. */
-  main:has([data-print-isolate]) > *:not(.print-isolate-block) {
+  /* Keep the isolate and its ancestor path, but hide unrelated branches
+   * at every depth so nested shells do not expose surrounding details. */
+  main:has([data-print-isolate]) *:not([data-print-isolate]):not([data-print-isolate] *):not(:has([data-print-isolate])) {
     display: none !important;
   }
 
@@ -447,4 +703,96 @@ html {
   .id-card header {
     display: flex !important;
   }
+}
+
+/* Slate & Amber — approved dark palette, 12 November 2026.
+ * Colour-only overrides. Existing markup, geometry, typography, breakpoints
+ * and the two light presets retain their original declarations.
+ */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-deck: #15181C;
+  --color-paper: #202429;
+  --color-ink: #F3F0E9;
+  --color-ink-2: #D3D0CA;
+  --color-ink-3: #B6BAC0;
+  --color-marine: #E4D6BE;
+  --color-water: #7CCACA;
+  --color-water-soft: #203739;
+  --color-line: #3E454E;
+  --color-sidebar: #1B1E23;
+  --color-tile-money: #23362C;
+  --color-tile-info: #252F3D;
+  --color-tile-butter: #3D3423;
+
+  /* Status meanings are preserved; their ink becomes readable on dark. */
+  --color-good: #97DDAD;
+  --color-good-soft: #223C2D;
+  --color-late: #FFAAA1;
+  --color-late-soft: #482926;
+  --color-warn: #FFD185;
+  --color-warn-soft: #40341E;
+
+  --accent: #FFC15B;
+  --accent-soft: #3E3220;
+  --accent-ink: #FFCE7B;
+  --accent-strong: #FFC15B;
+  --focus-ring: #FFD185;
+  --action-surface-hover: #FFD185;
+  --action-foreground: #251C0D;
+  --surface-inverse: #30363E;
+  --text-inverse: #F3F0E9;
+  --selected-surface: #3E3220;
+  --selected-ink: #FFCE7B;
+  --surface-nav-hover: #2B3037;
+  --surface-owner-money: #26352D;
+  --surface-owner-decision: #202429;
+  --surface-featured: #292F36;
+  --surface-attention: #352724;
+  --surface-attention-border: #58403A;
+  --tint-butter: #3A3325;
+  --tint-powder: #303244;
+
+  --owner-nav-surface: #1B1E23;
+  --owner-nav-ink: #F3F0E9;
+  --owner-nav-muted: #B6BAC0;
+  --owner-nav-hover: #2B3037;
+  --owner-nav-active: #3E3220;
+  --owner-nav-active-ink: #FFCE7B;
+  --owner-nav-focus: #FFD185;
+  --owner-nav-border: #3E454E;
+
+  --chart-1: #91CDA6;
+  --chart-2: #7CCACA;
+  --chart-3: #EAC681;
+  --chart-4: #D4A3C7;
+  --chart-5: #A8B7C3;
+
+/* Owner-local tokens would otherwise retain the light surface literals. */
+& [data-owner-surface] {
+  --owner-nav-surface: #1B1E23;
+  --owner-hero: #292F36;
+  --owner-hero-ink: #F3F0E9;
+  --owner-overdue-surface: #482926;
+  --owner-shortcut-surface: #202429;
+  --owner-action-members: #26382D;
+  --owner-action-payment: #3B3023;
+  --owner-action-booking: #293447;
+  --owner-action-enquiry: #353047;
+}
+
+/* Existing shared primary/destructive buttons ask for white explicitly.
+ * Keep their classes and size; use dark ink on the bright dark-mode fills.
+ */
+& .text-white:is(
+  [class~="bg-[var(--accent-strong)]"], .bg-accent, .bg-late, .bg-good, .bg-warn
+) {
+  color: #251C0D;
+}
+
+/* Marine is light inverse ink in this preset; modal scrims stay dark. */
+& [class~="backdrop:bg-marine/45"]::backdrop,
+& [class~="bg-marine/30"] {
+  background-color: rgb(0 0 0 / 60%);
+}
 }

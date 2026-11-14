@@ -64,3 +64,20 @@ export const pwaManifest: MetadataRoute.Manifest = {
     { src: PWA_ICONS.maskable512, sizes: "512x512", type: "image/png", purpose: "maskable" },
   ],
 };
+
+/** A new, explicitly selected club install; never mutates the legacy app id. */
+export function tenantInstallManifest(input: { tenantId: string; name: string; iconDigest: string | null; source: "staff" | "member" | "guardian" }): MetadataRoute.Manifest | null {
+  if (typeof input.tenantId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(input.tenantId) || (input.iconDigest !== null && !/^[a-f0-9]{64}$/.test(input.iconDigest)) || !input.name.trim() || !["staff", "member", "guardian"].includes(input.source)) return null;
+  const base = `/clubs/${input.tenantId}`;
+  return {
+    id: `${base}/install`,
+    name: input.name,
+    short_name: input.name.slice(0, 40),
+    start_url: `${base}/launch`,
+    scope: "/",
+    display: "standalone",
+    theme_color: PWA_THEME_COLOR,
+    background_color: PWA_BACKGROUND_COLOR,
+    icons: [192, 512].map((size) => ({ src: input.iconDigest ? `${base}/icon/${input.iconDigest}/${size}?source=${input.source}` : size === 192 ? PWA_ICONS.any192 : PWA_ICONS.any512, sizes: `${size}x${size}`, type: "image/png", purpose: "any" as const })),
+  };
+}

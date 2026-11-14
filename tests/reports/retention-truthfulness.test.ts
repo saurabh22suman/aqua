@@ -27,10 +27,11 @@ import { randomUUID } from "node:crypto";
 import type { IsolatedDb } from "@/tests/helpers/isolated-db";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { RetentionReport } from "@/lib/services/owner-reports";
-import type { TenantId } from "@/lib/ids";
+import { asUserId, type TenantId, type UserId } from "@/lib/ids";
 
 let db: IsolatedDb;
 const seededTenants: string[] = [];
+const ownerByTenant = new Map<string, UserId>();
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -56,6 +57,12 @@ async function seedTenant(options: {
     "insert into tenants (id, slug, name, status) values ($1, $2, 'Retention Test', 'active')",
     [tenantId, `retention-${tenantId}`],
   );
+  const ownerId = asUserId(randomUUID());
+  const ownerRole = randomUUID();
+  ownerByTenant.set(tenantId, ownerId);
+  await db.admin.query("insert into users (id, phone) values ($1, $2)", [ownerId, `retention-owner-${ownerId}`]);
+  await db.admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRole, tenantId]);
+  await db.admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [randomUUID(), tenantId, ownerId, ownerRole]);
   await db.admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Test', true)",
     [locationId, tenantId],
@@ -107,7 +114,7 @@ type RetentionFn = (ctx: ActionCtx) => Promise<RetentionReport>;
 let getRetentionReport: RetentionFn;
 
 async function retentionFor(tenantId: TenantId) {
-  return getRetentionReport({ tenantId } as ActionCtx);
+  return getRetentionReport({ tenantId, userId: ownerByTenant.get(tenantId) } as ActionCtx);
 }
 
 beforeAll(async () => {
@@ -143,7 +150,10 @@ afterAll(async () => {
     await db.admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await db.admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await db.admin.query("delete from programs where tenant_id = $1", [tenantId]);
+    await db.admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await db.admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await db.admin.query("delete from tenants where id = $1", [tenantId]);
+    await db.admin.query("delete from users where id = $1", [ownerByTenant.get(tenantId)]);
   }
   await db.stop();
 });

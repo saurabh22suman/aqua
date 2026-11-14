@@ -14,6 +14,7 @@ import { getOwnerCharts } from "@/lib/services/owner-home-charts";
 import { asTenantId, asUserId, type TenantId } from "@/lib/ids";
 import { applyDemoHistory } from "@/scripts/demo-history/apply";
 import { privilegedFixturePool as admin } from "./db/privileged-fixture";
+import { seedRoleTemplates } from "@/lib/services/roles";
 
 // The apply path, end to end against the disposable test DB: the write
 // lands, a repeat run adds nothing, the money balances, and the owner's
@@ -32,7 +33,7 @@ const owner = {
   roleKey: "owner",
   allLocations: true,
   locationIds: [] as string[],
-  permissions: new Set(["dashboard.view", "reports.financial", "payments.read"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "payments.read", "invoices.read"]),
 };
 
 beforeAll(async () => {
@@ -50,6 +51,10 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone, gstin) values ($1, $2, 'Aqua Worli', $3, $4)",
     [tenantId, `demo-academy`, TZ, "27AAPFU0939F1ZV"],
   );
+  await admin.query("insert into users(id,phone) values($1,$2)", [owner.userId, `+91${String(BigInt('0x' + owner.userId.replaceAll('-', '').slice(0, 12)) % 9000000000n + 1000000000n)}`]);
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [randomUUID(), tenantId, owner.userId]);
+  await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'reports',true),($1,'billing',true)", [tenantId]);
   await withTenant(tenantId, async (tx) => {
     const [location] = await tx
       .insert(locations)
@@ -91,7 +96,7 @@ beforeAll(async () => {
 
   for (let index = 0; index < 12; index++) {
     const created = await createMember(
-      { tenantId },
+      { tenantId, userId: owner.userId },
       {
         fullName: `History Member ${index + 1}`,
         dateOfBirth: "1990-01-01",
@@ -151,7 +156,12 @@ afterAll(async () => {
     ]) {
       await admin.query(`delete from ${table} where tenant_id = $1`, [tenantId]);
     }
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
+    await admin.query("delete from tenant_features where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [owner.userId]);
   }
   await admin.end();
 }, 120_000);

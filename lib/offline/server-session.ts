@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth/server";
 import { NotFoundError, requireDefaultCtx } from "@/lib/auth/context";
+import { ClubSelectionRequired } from "@/lib/auth/active-club";
 import { withPlatform } from "@/db/scope";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
@@ -23,7 +24,7 @@ export async function offlineSessionState(): Promise<{ authenticated: boolean; i
     const scope = createHash("sha256").update(`${ctx.tenantId}:${ctx.userId}:${ctx.membershipId}:${session.session.id}`).digest("hex");
     return { authenticated: true, identity: { scope, expiresAt: session.session.expiresAt.getTime() } };
   } catch (error) {
-    if (error instanceof NotFoundError) return { authenticated: false, identity: null };
+    if (error instanceof NotFoundError || error instanceof ClubSelectionRequired) return { authenticated: false, identity: null };
     throw error;
   }
 }

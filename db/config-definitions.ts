@@ -33,7 +33,7 @@ export const CONFIG_KEYS = {
     visibility: "owner_edit",
     risk: "safe",
     description:
-      "The share of a member's recorded marks that can be absences before the monthly low-attendance alert fires. 0-100.",
+      "Monthly attendance percentage below which the low-attendance alert fires (present and late marks divided by all marked sessions). At least four marks are required; 0-100.",
   },
   // 2026-09-14 — the GST rate, in basis points (1800 = 18%). Plan
   // prices are GST-exclusive; invoices apply this rate at issue and

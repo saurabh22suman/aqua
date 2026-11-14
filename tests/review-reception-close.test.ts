@@ -85,6 +85,7 @@ const DUE_KEYS = [
   "memberName",
   "outstandingPaise",
   "overdue",
+  "payerName",
   "phone",
 ].sort();
 
@@ -332,6 +333,7 @@ describe("M02 — desk dues queue", () => {
     expect(dues.map((d) => d.id)).toEqual([invoiceA1, invoiceA3]);
     const [first, second] = dues;
     expect(first?.memberName).toBe("Synthetic A");
+    expect(first?.payerName).toBe("Synthetic A");
     expect(first?.memberCode).toBe("A-100");
     expect(first?.phone).toBe("+919000007201");
     expect(first?.outstandingPaise).toBe(150000);
@@ -345,6 +347,23 @@ describe("M02 — desk dues queue", () => {
     // The fully paid invoice (and B's invoice) never appear.
     expect(dues.some((d) => d.outstandingPaise === 0)).toBe(false);
     expect(dues.some((d) => d.memberCode === "B-200")).toBe(false);
+  });
+
+  it("shows a guest payer only at the receptionist's assigned location", async () => {
+    const guestInvoice = randomUUID();
+    await admin.query(
+      `insert into invoices(id,tenant_id,location_id,member_id,payer_kind,guest_name,invoice_number,financial_year,issued_on,due_on,subtotal_paise,tax_paise,total_paise,paid_paise,status)
+       values($1,$2,$3,null,'guest','Synthetic Walk-in',$4,'2026-27',$5,$6,42000,0,42000,0,'issued')`,
+      [guestInvoice, tenantId, locationB, `G-${guestInvoice.slice(0, 8)}`, today, futureDueOn],
+    );
+    try {
+      expect((await feesHub.listDeskDues(receptionA)).some(row => row.id === guestInvoice)).toBe(false);
+      const guest = (await feesHub.listDeskDues(receptionB)).find(row => row.id === guestInvoice);
+      expect(guest).toMatchObject({ id: guestInvoice, payerName: "Synthetic Walk-in", memberName: null, memberCode: null, phone: null, outstandingPaise: 42000 });
+      expect(Object.keys(guest!).sort()).toEqual(DUE_KEYS);
+    } finally {
+      await admin.query("delete from invoices where id=$1 and tenant_id=$2", [guestInvoice, tenantId]);
+    }
   });
 
   it("shows a B-only receptionist B's dues only", async () => {

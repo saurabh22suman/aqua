@@ -59,6 +59,10 @@ export type InlineEditFieldProps = {
   // always keep the stored form, so formatting never round-trips into
   // a write.
   formatAs?: "phone";
+  // MF-05 — readers (members.read without members.write) get the same
+  // formatted value as plain text and no edit control. Existing consumers
+  // keep the editable default unless they explicitly opt in.
+  readOnly?: boolean;
 };
 
 type SaveStatus =
@@ -79,6 +83,7 @@ export function InlineEditField({
   className,
   valueClassName,
   formatAs,
+  readOnly = false,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -247,6 +252,22 @@ export function InlineEditField({
         ? formatDateIST(displayValue)
         : displayValue;
   const isEmpty = !shown;
+
+  if (readOnly) {
+    return (
+      <div className={className}>
+        <span
+          className={
+            shown
+              ? valueClassName ?? "text-[13px]"
+              : "text-[13px] text-ink-3"
+          }
+        >
+          {shown || "—"}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>

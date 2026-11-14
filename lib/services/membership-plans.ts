@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
@@ -8,7 +9,7 @@ import {
 import { planShapes } from "@/db/schema/preset-engine";
 import { facilities } from "@/db/schema/preset-engine";
 import { locations } from "@/db/schema/locations";
-import { auditLog } from "@/db/schema/audit";
+import { auditActorOf, writeAudit as writeSharedAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import type { ActionCtx } from "@/lib/auth/context";
 
@@ -192,6 +193,9 @@ export async function activatePlanFromShape(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const shapeRows = await tx
       .select()
       .from(planShapes)
@@ -288,6 +292,9 @@ export async function createPlan(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const scope = await resolvePlanScope(
       tx,
       ctx.tenantId,
@@ -339,6 +346,9 @@ export async function updatePlan(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const { id, amountPaise, ...rest } = parsed.data;
     const patch: Partial<typeof membershipPlans.$inferInsert> = {
       ...rest,
@@ -373,6 +383,9 @@ export async function archivePlan(
   planId: string,
 ): Promise<PlanMutationResult> {
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const rows = await tx
       .update(membershipPlans)
       .set({ isActive: false, updatedAt: new Date(), updatedBy: ctx.userId })
@@ -464,10 +477,11 @@ async function writeAudit(
   entityId: string,
   after: Record<string, unknown>,
 ): Promise<void> {
-  if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  // E-01 — the ONE audit writer (lib/audit/write.ts) applies the actor
+  // model in one place.
+  await writeSharedAudit(tx, {
     tenantId: ctx.tenantId,
-    actorId: ctx.userId,
+    ...auditActorOf(ctx),
     action,
     entityType: "membership_plan",
     entityId,

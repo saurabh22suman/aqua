@@ -1,3 +1,10 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
+import { createHash } from "node:crypto";
+import { prepareBrandingImage } from "@/lib/branding/prepare-image";
+import { hasBrandingPngRow, replaceBrandingPng } from "@/lib/services/branding-png-store";
+import { validAsset } from "@/lib/branding/asset-reference";
+export { readBrandingLogo } from "@/lib/services/branding-asset-read";
+export { prepareBrandingImage } from "@/lib/branding/prepare-image";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
@@ -24,13 +31,10 @@ export {
 // `tenants.branding` (jsonb), so adding more branding keys
 // later is a column-shape change alone, not a migration.
 //
-// Marks (wordmark / square mark uploads) are intentionally NOT
-// in this service yet. The 2.9 Done When — "a tenant with no
-// upload still renders a correct mark everywhere" — is met by
-// the inline-SVG initials fallback in components/branding/, no
-// upload path required. The upload path itself needs the R2
-// client (F-17's setup, also referenced by C-07 documents) — a
-// dependency question, raised separately and not in this PR.
+// Logo and install-icon uploads are processed into PNGs and stored
+// in tenant-scoped PostgreSQL. Bytes, references and audit records
+// commit together; the initials fallback
+// remains available when no logo has been uploaded.
 //
 // Architecture § 7.5 calls for an ACCENTS map frozen in code
 // (six values, no free-text hex). The runtime-accent rule is
@@ -46,7 +50,7 @@ const inputSchema = z.object({
   displayName: z.string().trim().min(1).max(200).optional(),
   shortName: z.string().trim().min(1).max(40).optional(),
   accent: z.enum(ACCENT_KEYS as unknown as [AccentKey, ...AccentKey[]]).optional(),
-});
+}).strict();
 
 export type UpdateBrandingInput = z.input<typeof inputSchema>;
 
@@ -63,6 +67,7 @@ export type BrandingData = {
   // shortName is unset). Empty when even the fallback is empty
   // (only possible on a tenant with no usable name input).
   initials: string;
+  logoUrl?: string | null;
 };
 
 export type UpdateBrandingResult =
@@ -79,7 +84,10 @@ type StoredBranding = {
   displayName?: unknown;
   shortName?: unknown;
   accent?: unknown;
+  logo?: unknown;
+  installIcon?: unknown;
 };
+
 
 function normaliseStored(raw: StoredBranding | null | undefined): {
   displayName: string | null;
@@ -138,7 +146,10 @@ async function readBrandingFromTx(
     })
     .from(tenants)
     .where(eq(tenants.id, tenantId));
-  return brandDataFrom(row?.tenantName ?? "", row?.branding);
+  const brand = brandDataFrom(row?.tenantName ?? "", row?.branding);
+  const raw = (row?.branding ?? {}) as StoredBranding;
+  const logo = validAsset(raw.logo, tenantId, "logo");
+  return { ...brand, logoUrl: logo ? `/clubs/${tenantId}/branding/logo/${logo.sha256}?source=staff` : null };
 }
 
 export async function getBranding(
@@ -167,10 +178,15 @@ export async function updateBranding(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "invalid", message: "Only the academy owner can change this setting." };
+    }
     const [existing] = await tx
       .select({ branding: tenants.branding })
       .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId));
+      .where(eq(tenants.id, ctx.tenantId))
+      .for("update");
+    const rawBranding = (existing?.branding ?? {}) as StoredBranding;
     const merged = normaliseStored(
       (existing?.branding ?? {}) as StoredBranding,
     );
@@ -194,7 +210,7 @@ export async function updateBranding(
     await tx
       .update(tenants)
       .set({
-        branding: after,
+        branding: { ...after, ...(rawBranding.logo !== undefined ? { logo: rawBranding.logo } : {}), ...(rawBranding.installIcon !== undefined ? { installIcon: rawBranding.installIcon } : {}) },
         updatedBy: ctx.userId,
         updatedAt: new Date(),
       })
@@ -219,4 +235,39 @@ export async function updateBranding(
 
     return { kind: "ok" } as const;
   });
+}
+
+/** Replace the tenant's current PNG, reference and audit atomically. */
+export async function uploadBrandingAsset(input: {
+  ctx: ActionCtx;
+  kind: "logo" | "install_icon";
+  bytes: Uint8Array;
+  mime: string;
+}): Promise<{ ok: boolean }> {
+  const { ctx, kind } = input;
+  if (!ctx.userId || (kind !== "logo" && kind !== "install_icon")) return { ok: false };
+  const authorized = await withTenant(ctx.tenantId, (tx) => callerIsLiveOwnerForSettingsOrDelegation(tx, ctx));
+  if (!authorized) return { ok: false };
+  const image = await prepareBrandingImage(input);
+  if (!image.ok) return { ok: false };
+  const sha256 = createHash("sha256").update(image.png).digest("hex");
+  const objectKey = `tenant-branding/${ctx.tenantId}/${kind}/${sha256}.png`;
+  try { return await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) return { ok: false };
+    const [row] = await tx.select({ branding: tenants.branding }).from(tenants).where(eq(tenants.id, ctx.tenantId)).for("update");
+    if (!row) return { ok: false };
+    const raw = (row.branding ?? {}) as StoredBranding;
+    const previous = normaliseStored(raw);
+    const logo = validAsset(raw.logo, ctx.tenantId, "logo");
+    const installIcon = validAsset(raw.installIcon, ctx.tenantId, "install_icon");
+    // Never replace or discard an unmigrated or malformed legacy reference.
+    if ((raw.logo != null && (!logo || !(await hasBrandingPngRow(tx, ctx.tenantId, "logo", logo.sha256)))) ||
+        (raw.installIcon != null && (!installIcon || !(await hasBrandingPngRow(tx, ctx.tenantId, "install_icon", installIcon.sha256))))) return { ok: false };
+    const field = kind === "logo" ? "logo" : "installIcon";
+    const next = { ...previous, ...(logo ? { logo } : {}), ...(installIcon ? { installIcon } : {}), [field]: { objectKey, sha256, contentType: "image/png" } };
+    await replaceBrandingPng(tx, ctx.tenantId, kind, sha256, image.png);
+    await tx.update(tenants).set({ branding: next, updatedBy: ctx.userId, updatedAt: new Date() }).where(eq(tenants.id, ctx.tenantId));
+    await writeAudit(tx, { tenantId: asTenantId(ctx.tenantId), actorType: "staff", actorId: ctx.userId ?? null, action: "branding.asset.update", entityType: "tenant", entityId: ctx.tenantId, before: { [field]: kind === "logo" ? logo : installIcon }, after: { [field]: next[field] }, changedFields: [field], requestId: ctx.requestId ?? null });
+    return { ok: true };
+  }); } catch { return { ok: false }; }
 }

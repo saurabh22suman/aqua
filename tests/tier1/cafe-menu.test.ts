@@ -56,9 +56,20 @@ beforeAll(async () => {
     actor,
     `+9190${String(Date.now()).slice(-8)}`,
   ]);
+  for (const tenantId of [tenantA, tenantB]) {
+    const roleId = uuidv7();
+    await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenantId]);
+    for (const permission of ["settings.read", "settings.manage"]) {
+      await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,$3)", [tenantId, roleId, permission]);
+    }
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, actor, roleId]);
+  }
 }, 60_000);
 
 afterAll(async () => {
+  await admin.query("delete from role_permissions where tenant_id = any($1::uuid[])", [[tenantA, tenantB]]);
+  await admin.query("delete from tenant_memberships where tenant_id = any($1::uuid[])", [[tenantA, tenantB]]);
+  await admin.query("delete from roles where tenant_id = any($1::uuid[])", [[tenantA, tenantB]]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

@@ -31,6 +31,9 @@ export async function createMemberInTx(tx: TenantTx, ctx: ActionCtx, input: Crea
 > {
   const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
   if (!tenant) return { ok: false, error: "Tenant not found." };
+  if (input.dateOfBirth > todayInZone(tenant.timezone)) {
+    return { ok: false, error: "Date of birth cannot be in the future." };
+  }
   if (!locationVisible(await resolveLocationAccess(tx, ctx), input.locationId)) {
     return { ok: false, error: "That location is not available to you." };
   }

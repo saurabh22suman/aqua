@@ -6,7 +6,34 @@ import { staff } from "@/db/schema/staff";
 import { enrolments, sessions } from "@/db/schema/scheduling";
 import { tenants } from "@/db/schema/tenants";
 import type { TenantId } from "@/lib/ids";
-import { enqueueMemberNotification, enqueueStaffNotification } from "./notification-enqueue";
+import { enqueueMemberNotification, enqueueStaffNotification, enqueueResolvedMemberNotification,
+  enqueueResolvedStaffNotification, memberNotificationTargets, staffNotificationTargets } from "./notification-enqueue";
+
+/** Read-only destination resolution shared by preview and transactional enqueue. */
+export async function resolveAnnouncementNotificationTargets(tx: TenantTx, input: {
+  tenantId: TenantId; audience: string; batchId?: string;
+}) {
+  const membersInAudience = input.batchId
+    ? await tx.selectDistinct({ id: members.id }).from(members).innerJoin(enrolments, and(
+      eq(enrolments.memberId, members.id), eq(enrolments.tenantId, input.tenantId), eq(enrolments.batchId, input.batchId)))
+      .where(and(eq(members.tenantId, input.tenantId), eq(members.status, "active"), isNull(members.deletedAt)))
+    : await tx.select({ id: members.id }).from(members).where(and(eq(members.tenantId, input.tenantId),
+      eq(members.status, "active"), isNull(members.deletedAt)));
+  const audience = input.audience === "parents" ? "guardians" as const : "selected" as const;
+  const memberTargets = [];
+  for (const member of membersInAudience) memberTargets.push({ memberId: member.id,
+    targets: await memberNotificationTargets(tx, { tenantId: input.tenantId, audience }, member.id) });
+  let scope: { allStaff?: boolean; locationId?: string | null; coachUserId?: string | null; batchId?: string } | null = null;
+  if (input.audience === "all") scope = { allStaff: true };
+  else if (input.batchId) {
+    const [batch] = await tx.select({ locationId: batches.locationId, coachUserId: staff.userId }).from(batches)
+      .leftJoin(staff, and(eq(staff.id, batches.coachId), eq(staff.tenantId, input.tenantId), isNull(staff.deletedAt)))
+      .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, input.tenantId), isNull(batches.deletedAt))).limit(1);
+    if (batch) scope = { ...batch, batchId: input.batchId };
+  }
+  const staffTargets = scope ? await staffNotificationTargets(tx, { tenantId: input.tenantId }, scope) : [];
+  return { memberTargets, staffTargets, scope };
+}
 
 export async function enqueueAnnouncementNotifications(tx: TenantTx, input: {
   tenantId: TenantId; announcementId: string; title: string; body: string; audience: string; batchId?: string;
@@ -15,21 +42,10 @@ export async function enqueueAnnouncementNotifications(tx: TenantTx, input: {
   const event = { tenantId: input.tenantId, eventKey: `announcement:${input.announcementId}`,
     audience: input.audience === "parents" ? "guardians" as const : "selected" as const,
     body: `${tenant?.name ?? "Aqua"}: ${input.title}\n\n${input.body}` };
-  const targets = input.batchId
-    ? await tx.selectDistinct({ id: members.id }).from(members).innerJoin(enrolments, and(
-      eq(enrolments.memberId, members.id), eq(enrolments.tenantId, input.tenantId), eq(enrolments.batchId, input.batchId)))
-      .where(and(eq(members.tenantId, input.tenantId), eq(members.status, "active"), isNull(members.deletedAt)))
-    : await tx.select({ id: members.id }).from(members).where(and(eq(members.tenantId, input.tenantId),
-      eq(members.status, "active"), isNull(members.deletedAt)));
+  const { memberTargets, staffTargets, scope } = await resolveAnnouncementNotificationTargets(tx, input);
   let count = 0;
-  for (const target of targets) count += await enqueueMemberNotification(tx, event, target.id);
-  if (input.audience === "all") count += await enqueueStaffNotification(tx, event, { allStaff: true });
-  else if (input.batchId) {
-    const [batch] = await tx.select({ locationId: batches.locationId, userId: staff.userId }).from(batches)
-      .leftJoin(staff, and(eq(staff.id, batches.coachId), eq(staff.tenantId, input.tenantId), isNull(staff.deletedAt)))
-      .where(eq(batches.id, input.batchId)).limit(1);
-    if (batch) count += await enqueueStaffNotification(tx, event, { locationId: batch.locationId, coachUserId: batch.userId, batchId: input.batchId });
-  }
+  for (const target of memberTargets) count += await enqueueResolvedMemberNotification(tx, event, target.memberId, target.targets);
+  if (scope) count += await enqueueResolvedStaffNotification(tx, event, scope, staffTargets);
   return count;
 }
 

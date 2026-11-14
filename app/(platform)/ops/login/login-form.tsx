@@ -5,6 +5,9 @@ import {
   loginPlatformAction,
   type PlatformLoginResult,
 } from "@/lib/actions/platform-auth";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { OpsPanel } from "@/components/ops/ops-primitives";
 
 // H1 — pre-hydration submit goes to the server action endpoint via
 // POST (the action's own URL), not to the current URL via GET. The
@@ -12,6 +15,10 @@ import {
 // React has hydrated. useActionState lets the form render the action's
 // returned error inline; on success the action calls redirect() and
 // the browser navigates.
+//
+// Ops redesign (28 October 2026): the fields are the SHARED Input and
+// the submit is the SHARED Button, so the sign-in screen carries the
+// same control metrics as every other console form.
 export function PlatformLoginForm() {
   const [state, formAction, isPending] = useActionState(loginPlatformAction, {
     kind: "error",
@@ -24,62 +31,34 @@ export function PlatformLoginForm() {
     // suppress the case-only hydration warning React raises for
     // server-action forms (POST vs post).
     <form action={formAction} method="post" suppressHydrationWarning className="space-y-4">
-      <Field
-        label="Email"
-        name="email"
-        type="email"
-        autoComplete="username"
-        required
-      />
-      <Field
-        label="Password"
-        name="password"
-        type="password"
-        autoComplete="current-password"
-        required
-      />
+      <label className="block">
+        <span className="mb-1 block text-[13px] font-medium text-ink-2">Email</span>
+        <Input
+          type="email"
+          name="email"
+          autoComplete="username"
+          required
+        />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-[13px] font-medium text-ink-2">
+          Password
+        </span>
+        <Input
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          required
+        />
+      </label>
       {error ? (
-        <p
-          role="alert"
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-        >
+        <OpsPanel tone="error" role="alert">
           {error}
-        </p>
+        </OpsPanel>
       ) : null}
-      <button
-        type="submit"
-        disabled={isPending}
-        className="w-full rounded-pill py-3 text-[15px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
-      >
+      <Button type="submit" variant="primary" className="w-full" disabled={isPending}>
         {isPending ? "Signing in…" : "Continue"}
-      </button>
+      </Button>
     </form>
-  );
-}
-
-function Field({
-  label,
-  name,
-  type,
-  autoComplete,
-  required,
-}: {
-  label: string;
-  name: string;
-  type: string;
-  autoComplete?: string;
-  required?: boolean;
-}) {
-  return (
-    <label className="block">
-      <span className="block text-[13px] font-medium text-ink-2">{label}</span>
-      <input
-        type={type}
-        name={name}
-        autoComplete={autoComplete}
-        required={required}
-          className="mt-1 w-full rounded-ctl border border-line bg-paper px-4 py-3 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-      />
-    </label>
   );
 }

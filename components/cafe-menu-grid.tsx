@@ -13,10 +13,12 @@ export function CafeLocationSwitcher({
   locations,
   locationId,
   onSelect,
+  disabled = false,
 }: {
   locations: { id: string; name: string }[];
   locationId: string;
   onSelect: (locationId: string) => void;
+  disabled?: boolean;
 }) {
   if (locations.length < 2) return null;
   return (
@@ -27,6 +29,7 @@ export function CafeLocationSwitcher({
           size="sm"
           variant={location.id === locationId ? "primary" : "secondary"}
           onClick={() => onSelect(location.id)}
+          disabled={disabled}
           aria-pressed={location.id === locationId}
         >
           {location.name}

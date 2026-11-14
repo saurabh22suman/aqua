@@ -26,7 +26,7 @@ describe("U-01 attendance trend", () => {
       />,
     );
     expect(screen.getByRole("img", { name: /attendance percentage by day/i })).toBeTruthy();
-    expect(document.querySelectorAll("path.stroke-water").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll("line.stroke-water")).toHaveLength(1);
     expect(document.body.textContent).toMatch(/present/i);
   });
 
@@ -77,7 +77,7 @@ describe("U-01 plan-wise revenue", () => {
         ]}
       />,
     );
-    expect(screen.getByRole("img", { name: /collections by membership plan/i })).toBeTruthy();
+    expect(screen.getByRole("list", { name: /collections by membership plan/i })).toBeTruthy();
     expect(document.body.textContent).toContain("Monthly");
     expect(document.body.textContent).toContain("Term");
   });
@@ -86,7 +86,7 @@ describe("U-01 plan-wise revenue", () => {
     render(<PlanRevenueCard rows={[]} />);
     // The audit: "0 plans" reads as "no plans are configured", which is a
     // different claim. The card now says what the report measures.
-    expect(document.body.textContent).toMatch(/no plan-linked collections in this period/i);
+    expect(document.body.textContent).toMatch(/no collections linked to a membership plan in this period/i);
   });
 });
 

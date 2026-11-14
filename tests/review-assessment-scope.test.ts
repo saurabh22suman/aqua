@@ -144,6 +144,14 @@ beforeAll(async () => {
     "insert into users(id,phone) values($1,$4),($2,$5),($3,$6)",
     [ownerUser, coachUser, otherCoachUser, phone("9501"), phone("9502"), phone("9503")],
   );
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  for (const [user, role] of [[ownerUser, "owner"], [coachUser, "coach"], [otherCoachUser, "coach"]] as const) {
+    await admin.query(
+      "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key=$4",
+      [randomUUID(), tenantId, user, role],
+    );
+  }
 
   await seedStaff(coachStaff, coachUser, "Review Assess Coach");
   await seedStaff(otherCoachStaff, otherCoachUser, "Review Assess Other Coach");

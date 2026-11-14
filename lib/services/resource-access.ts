@@ -5,10 +5,10 @@ import { batches } from "@/db/schema/programs";
 import { enrolments } from "@/db/schema/scheduling";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { rolePermissions, roles } from "@/db/schema/roles";
+import { users } from "@/db/schema/users";
 import type { ActionCtx } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { coachStaffIdSubquery } from "./staff";
-import { roleTemplatePermissionKeys } from "./roles";
 import { locationVisible, resolveLocationAccess } from "./location-access";
 
 // R02 (2026-10-13 role-workflow audit) — the Curriculum Lead works the
@@ -20,29 +20,23 @@ export function isCoachLikeRoleKey(roleKey: string | null | undefined): boolean 
   return roleKey === "coach" || roleKey === "curriculum_lead";
 }
 
-// Service calls retain the authenticated resource context. Identity-free
-// contexts are deliberate internal/system callers, never action adapters.
+// Service calls retain authenticated resource context. System callers must
+// identify themselves explicitly; missing identity is not system authority.
 export async function resourceRole(tx: TenantTx, ctx: ActionCtx): Promise<string | null> {
-  if (ctx.roleKey) return isCoachLikeRoleKey(ctx.roleKey) ? "coach" : ctx.roleKey;
   if (!ctx.userId) return null;
   const [membership] = await tx.select({ key: roles.key }).from(tenantMemberships)
     .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, ctx.tenantId)))
+    .innerJoin(users, eq(users.id, tenantMemberships.userId))
     .where(and(eq(tenantMemberships.tenantId, ctx.tenantId), eq(tenantMemberships.userId, ctx.userId),
-      eq(tenantMemberships.status, "active"), isNull(tenantMemberships.deletedAt)))
+      eq(tenantMemberships.status, "active"), isNull(tenantMemberships.deletedAt), isNull(roles.deletedAt), isNull(users.deletedAt)))
     .orderBy(asc(roles.homeOrdinal), asc(tenantMemberships.createdAt)).limit(1);
   return isCoachLikeRoleKey(membership?.key) ? "coach" : membership?.key ?? null;
 }
 
-// A caller that arrives through a Server Action always carries the
-// request-resolved permission set. A caller with a role key but no
-// permission set is a synthetic/legacy service caller whose role
-// template is the seed contract. A caller with an actor id but no role
-// context at all is a pre-context internal/system call (older service
-// fixtures); the action layer remains the authorization boundary, so
-// services accept it but must still enforce resource scope. A caller
-// with neither actor nor role is refused.
+// A system caller opts in explicitly and has no human identity or role
+// claims. Incomplete human contexts never gain system authority.
 export function callerIsLegacySystem(ctx: ActionCtx): boolean {
-  return !ctx.roleKey && !ctx.permissions;
+  return ctx.systemActor === true && !ctx.userId && !ctx.roleKey && !ctx.permissions;
 }
 
 export async function callerHasPermission(
@@ -50,15 +44,9 @@ export async function callerHasPermission(
   ctx: ActionCtx,
   permissionKey: string,
 ): Promise<boolean> {
-  // An authoritative resolved set wins even when it LACKS the key: a
-  // tenant may revoke a template permission from an edited role, and
-  // falling through to the template would silently restore it.
-  if (ctx.permissions) return ctx.permissions.has(permissionKey);
-  if (ctx.roleKey) {
-    const template = roleTemplatePermissionKeys(ctx.roleKey);
-    if (template) return template.has(permissionKey);
-  }
   if (!ctx.userId) return false;
+  // Request context may narrow authority, never supply or revive a grant.
+  if (ctx.permissions && !ctx.permissions.has(permissionKey)) return false;
   const [row] = await tx
     .select({ key: rolePermissions.permissionKey })
     .from(tenantMemberships)
@@ -66,6 +54,7 @@ export async function callerHasPermission(
       roles,
       and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, ctx.tenantId)),
     )
+    .innerJoin(users, eq(users.id, tenantMemberships.userId))
     .innerJoin(
       rolePermissions,
       and(
@@ -79,6 +68,8 @@ export async function callerHasPermission(
         eq(tenantMemberships.userId, ctx.userId),
         eq(tenantMemberships.status, "active"),
         isNull(tenantMemberships.deletedAt),
+        isNull(roles.deletedAt),
+        isNull(users.deletedAt),
         eq(rolePermissions.permissionKey, permissionKey),
       ),
     )
