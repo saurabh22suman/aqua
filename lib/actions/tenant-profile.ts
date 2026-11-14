@@ -40,7 +40,7 @@ const updateFormSchema = z.object({
     )
     .optional(),
   timezone: z.string().trim().min(1, "Time zone is required.").max(60),
-  gstin: z.string().trim().max(15, "GSTIN is at most 15 characters."),
+  gstin: z.string().trim().max(15, "GSTIN is at most 15 characters.").optional(),
 });
 
 export type UpdateTenantProfileActionInput = z.input<typeof updateFormSchema>;

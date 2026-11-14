@@ -113,7 +113,11 @@ export async function createBooking(
           isNull(facilities.deletedAt),
         ),
       )
-      .limit(1);
+      .limit(1)
+      // Serialize competing inserts for this resource before they enter the
+      // exclusion index. Different facilities remain independent; the index
+      // still decides whether whole-resource and sub-unit slots conflict.
+      .for("no key update");
     if (!facility || !locationVisible(access, facility.locationId)) {
       return { ok: false, error: "Facility not found." };
     }

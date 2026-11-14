@@ -226,7 +226,18 @@ describe("E-05 — emit enqueues onto the ingest queue", () => {
     const boss = createAppScopedBoss();
     await boss.start();
     try {
-      const jobs = await boss.fetch<ActivityIngestJobData>(ACTIVITY_INGEST_QUEUE);
+      // Queue fixtures from other tests or local browser checks may be waiting.
+      // Give only this synthetic tenant's emitted job a fixture-only priority;
+      // fetch it through the ordinary worker API without touching other jobs.
+      const fixturePriority = 2147483647;
+      await admin.query(
+        "update pgboss.job set priority = $1 where name = $2 and data->>'tenantId' = $3",
+        [fixturePriority, ACTIVITY_INGEST_QUEUE, tenantId],
+      );
+      const jobs = await boss.fetch<ActivityIngestJobData>(ACTIVITY_INGEST_QUEUE, {
+        minPriority: fixturePriority,
+        maxPriority: fixturePriority,
+      });
       const match = jobs.find((job) => job.data.tenantId === tenantId);
       expect(match).toBeDefined();
       expect(match!.data.events).toHaveLength(1);

@@ -13,6 +13,7 @@ export function OptionalWorkspaceGuide({
   regionLabel = "Optional register guide",
   itemLabel = "Register check",
   startCollapsed = false,
+  preferenceKey,
 }: {
   items: GuideItem[];
   title?: string;
@@ -20,12 +21,34 @@ export function OptionalWorkspaceGuide({
   regionLabel?: string;
   itemLabel?: string;
   startCollapsed?: boolean;
+  preferenceKey?: string;
 }) {
-  const [mode, setMode] = useState<"intro" | "steps" | "closed">(startCollapsed ? "closed" : "intro");
+  const [mode, setMode] = useState<"intro" | "steps" | "closed" | "retired" | "pending">(preferenceKey ? "pending" : startCollapsed ? "closed" : "intro");
   const [index, setIndex] = useState(0);
+  const [storageError, setStorageError] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const reopenRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  const retired = useRef(false);
+
+  useEffect(() => {
+    retired.current = false;
+    try {
+      if (preferenceKey && localStorage.getItem(`aqua:guide:${preferenceKey}`) === "dismissed") {
+        retired.current = true; setMode("retired");
+      } else setMode(startCollapsed ? "closed" : "intro");
+    } catch { setStorageError(true); setMode(startCollapsed ? "closed" : "intro"); }
+  }, [preferenceKey, startCollapsed]);
+
+  useEffect(() => {
+    const open = () => { setIndex(0); setMode("steps"); };
+    window.addEventListener("aqua:open-workspace-guide", open);
+    if (window.location.hash === "#workspace-guide") {
+      open();
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}`);
+    }
+    return () => window.removeEventListener("aqua:open-workspace-guide", open);
+  }, []);
 
   useEffect(() => {
     if (mode === "steps") headingRef.current?.focus();
@@ -33,11 +56,21 @@ export function OptionalWorkspaceGuide({
       reopenRef.current?.focus();
       returnFocus.current = false;
     }
+    if (mode === "retired" && returnFocus.current) {
+      const target = document.querySelector<HTMLElement>("main h1");
+      if (target && !target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+      target?.focus(); returnFocus.current = false;
+    }
   }, [mode, index]);
 
   const close = () => {
     returnFocus.current = true;
-    setMode("closed");
+    setMode(retired.current ? "retired" : "closed");
+  };
+  const retire = () => {
+    if (!preferenceKey) return;
+    try { localStorage.setItem(`aqua:guide:${preferenceKey}`, "dismissed"); retired.current = true; setStorageError(false); close(); }
+    catch { setStorageError(true); }
   };
   const start = () => {
     setIndex(0);
@@ -45,8 +78,9 @@ export function OptionalWorkspaceGuide({
   };
   const item = items[index];
 
+  if (mode === "retired" || mode === "pending") return null;
   if (mode === "closed") {
-    return <div className="mt-4"><button type="button" ref={reopenRef} onClick={start} className={buttonClasses({ size: "sm" })}>Show me around</button></div>;
+    return <div className="mt-4"><button type="button" ref={reopenRef} onClick={start} className={buttonClasses({ size: "sm" })}>Show me around</button>{preferenceKey ? <Button onClick={retire} variant="ghost" size="sm">Don’t show again</Button> : null}{storageError ? <p role="alert">Could not save this preference on this device.</p> : null}</div>;
   }
 
   return (
@@ -69,6 +103,7 @@ export function OptionalWorkspaceGuide({
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button onClick={start} size="sm">Show me around</Button>
                 <Button onClick={close} variant="ghost" size="sm">Skip for now</Button>
+                {preferenceKey ? <Button onClick={retire} variant="ghost" size="sm">Don’t show again</Button> : null}
               </div>
             </>
           ) : (
@@ -84,9 +119,11 @@ export function OptionalWorkspaceGuide({
                   <Button onClick={close} size="sm">Finish guide</Button>
                 )}
                 <Button onClick={close} variant="ghost" size="sm">Close guide</Button>
+                {preferenceKey ? <Button onClick={retire} variant="ghost" size="sm">Don’t show again</Button> : null}
               </div>
             </>
           )}
+          {storageError ? <p role="alert">Could not save this preference on this device.</p> : null}
         </div>
       </div>
     </section>

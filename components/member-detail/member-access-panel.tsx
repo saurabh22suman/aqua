@@ -157,9 +157,9 @@ export function MemberAccessPanel({
         <div className="mt-3">
           <p className="text-[15px] font-medium text-ink">No sign-in link yet</p>
           <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
-            This page manages the links that already exist. A club account has
-            to be enrolled for {read.memberName} before an invitation can be
-            issued, and this page does not create accounts.
+            To set up sign-in, an authorised staff member first links or creates
+            the account, then confirms the pairing and creates a private invitation.
+            If the setup form is not available to you, ask an authorised staff member.
           </p>
         </div>
       ) : (

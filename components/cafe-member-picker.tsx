@@ -126,7 +126,9 @@ export function CafeMemberPicker({
             <li key={row.memberId}>
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => {
+                  if (disabled) return;
                   onSelect(row);
                   setResults([]);
                   setSearched(false);

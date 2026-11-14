@@ -175,13 +175,14 @@ owner shell. Entry: `/owner`.
 | `/owner/reports` | `reports.operational` | Operational reports: attendance, funnel, retention, coach load, utilisation | populated · insufficient history · empty · error per card · loading |
 | `/owner/reports/collections` | `reports.financial` | Daily collections and the cash count | populated · not confirmed · confirmed · closed · reopen refused |
 | `/owner/settings` | `settings.manage` | Grouped settings, account block, sign-out | populated · category open · setup incomplete · empty categories |
-| `/owner/settings/academy` | `settings.manage` | Academy profile: name, currency, time zone, GSTIN | populated · validation error · saved |
+| `/owner/settings/academy` | `settings.manage` and live Owner | Club identity and separate legal billing default: address, state and GSTIN | populated · incomplete default · validation error · open orders · review · saved · unsaved draft · uncertain save |
 | `/owner/settings/activities` | `settings.manage` | The activities this academy offers | populated · empty · saved |
 | `/owner/settings/alerts` | `settings.manage` | Absence alert thresholds | populated · validation error · saved |
-| `/owner/settings/branding` | `settings.manage` | Display name, short name, accent | populated · validation error · saved |
+| `/owner/settings/branding` | `settings.manage` and live Owner | Display name, short name, accent, club logo and install icon | initials fallback · populated · invalid image · upload failure · saved |
 | `/owner/settings/configuration` | `settings.manage` | Request a platform-owned setting change | populated · pending request · rejected |
 | `/owner/settings/holidays` | `settings.manage` | Days the academy is closed | populated · empty · saved |
 | `/owner/settings/locations` | `settings.manage` | Locations, addresses and business hours | populated · single site · multi site · validation error · saved |
+| `/owner/settings/locations/[locationId]` | `settings.manage` and live Owner | Named physical-site billing: club inheritance, registered or unregistered override; explicit enablement; future bills only | legacy billing · saved draft · enabled · state mismatch · invalid fields · open orders · issuer review · reset · unsaved draft · uncertain save · not found |
 | `/owner/settings/menu` | `settings.manage` | The café menu | populated · empty · archived item |
 | `/owner/settings/payment-qrs` | `settings.manage` | Payment QR codes the payer scans | populated · empty · inactive · validation error |
 | `/owner/settings/plans` | `settings.manage` | Membership plans the academy sells | populated · empty · archived plan |

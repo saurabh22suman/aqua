@@ -21,6 +21,7 @@ import {
   StaffPageHeader,
 } from "@/components/staff-ui/staff-page";
 import { StaffAppearance } from "@/components/staff-ui/staff-appearance";
+import { OpenWorkspaceGuideLink } from "@/components/onboarding/guide-help-button";
 
 // K2 — reception's account surface. Mirrors /coach/me: identity, the
 // caller's own shifts/attendance/leave, sign-out. Reception's bottom
@@ -60,6 +61,7 @@ export default async function ReceptionMePage() {
       />
 
       <StaffClubInstallLink tenantId={ctx.tenantId} />
+      {ctx.roleKey === "receptionist" ? <OpenWorkspaceGuideLink homeHref="/reception" /> : null}
       <TenantSignOut />
     </StaffPage>
   );

@@ -11,6 +11,7 @@ import { listLocations } from "@/lib/services/people";
 import { getBranding } from "@/lib/services/branding";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { getTerminology } from "@/lib/services/terminology";
+import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
 import {
   ownerNavForPermissions,
   ownerSidebarGroupsForPermissions,
@@ -67,6 +68,12 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
     withTenant(ctx.tenantId, (tx) => callerIsLiveOwnerForSettingsOrDelegation(tx, ctx)),
     getTerminology(ctx),
   ]);
+  // The generic location list can include every named site for callers
+  // allowed to see unlocated records. A picker must use named-site access.
+  const pickerLocations = liveOwner && ctx.allLocations !== false ? locations : await withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    return locations.filter((location) => locationVisible(access, location.id));
+  });
   // U-10 — responsive shell: sidebar + top bar (with global search,
   // U-05) at lg, the existing bottom nav below it. C01 — both lists
   // are permission-filtered: the Accountant gets Home (→ Fees),
@@ -93,12 +100,13 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
     <OwnerShell
       navItems={ownerNavForPermissions(ctx.permissions, terminology).filter((item) => liveOwner || item.href !== "/owner/settings")}
       sidebarGroups={sidebarGroups}
-      locations={locations}
+      locations={pickerLocations}
       clubName={branding.displayName ?? branding.fallbackDisplayName}
       clubLogoUrl={branding.logoUrl}
       tenantId={ctx.tenantId}
       accountName={identity?.fullName ?? null}
       accountLabel={ownerRoleLabel(ctx.roleKey)}
+      guideHomeHref={ctx.permissions.has("dashboard.view") ? "/owner" : undefined}
     >
       {children}
     </OwnerShell>

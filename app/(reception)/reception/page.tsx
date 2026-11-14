@@ -6,6 +6,7 @@ import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
 import { CountChip } from "@/components/ui/CountChip";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { formatFullDateIST, todayInZone } from "@/lib/time/tz";
@@ -52,7 +53,9 @@ export default async function ReceptionTodayPage() {
       />
 
       <OptionalWorkspaceGuide
+        key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
         startCollapsed
+        preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
         title="A look around reception"
         intro="Explore the areas shown here at your own pace. This guide makes no changes."
         regionLabel="Optional reception guide"

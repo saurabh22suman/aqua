@@ -10,7 +10,7 @@ import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
 import { brandDataFrom } from "@/lib/services/branding";
 import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
-import { renderReceiptPdf } from "@/lib/receipts/receipt-document";
+import { renderIssuedReceipt } from "@/lib/receipts/render-issued-receipt";
 import { gstDocumentKind, placeOfSupplyForGstin } from "@/lib/gst";
 import { methodLabel } from "@/lib/services/payments";
 import type { PaymentMethod } from "@/db/schema/payments";
@@ -21,6 +21,7 @@ import type { TenantTx } from "@/db/tenant";
 import type { SelfScope } from "@/lib/auth/self-scope";
 import { billingSubjectInTx } from "@/lib/services/self-billing";
 import { toSafePaise } from "@/lib/money/safe-paise";
+import { receiptIssuer } from "@/lib/receipts/issuer-snapshot";
 
 // C-39 — branded receipts. Generated lazily on first read and stored
 // against the payment record; the unique (tenant_id, payment_id) makes
@@ -112,11 +113,12 @@ async function loadReceiptRow(
   };
 }
 
-function buildReceiptPdf(row: ReceiptRow, sacCode: string | null): Buffer {
+function buildReceiptPdf(row: ReceiptRow, sacCode: string | null): Promise<Buffer> {
   const brand = brandDataFrom(row.tenantName, row.branding);
   const invoiceTotal = toSafePaise(row.invoice.totalPaise);
   const invoicePaid = toSafePaise(row.invoice.paidPaise);
-  return renderReceiptPdf({
+  return renderIssuedReceipt({
+    supplier: receiptIssuer(row.invoice),
     tenantDisplayName: brand.displayName ?? brand.fallbackDisplayName,
     initials: brand.initials,
     accent: brand.accent,
@@ -173,7 +175,12 @@ async function serveOrCreateReceipt(
     )
     .limit(1);
 
-  const pdf = buildReceiptPdf(row, sacRows[0]?.sacCode ?? null);
+  let pdf: Buffer;
+  try {
+    pdf = await buildReceiptPdf(row, sacRows[0]?.sacCode ?? null);
+  } catch {
+    return { ok: false, error: "The saved invoice details could not be rendered. Please contact the club." };
+  }
 
   // Race-safe: the second concurrent read generates too, but only one
   // insert lands, and both callers return a real document.

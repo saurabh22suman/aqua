@@ -1,10 +1,13 @@
-import { and, eq, exists, inArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { TenantTx } from "@/db/tenant";
 import { staffLocations } from "@/db/schema/staff-locations";
+import { locations } from "@/db/schema/locations";
+import { withTenant } from "@/db/tenant";
 import type { TenantId } from "@/lib/ids";
 import {
   resolveLocationAccess,
+  locationVisible,
   type LocationAccess,
   type LocationAwareCtx,
 } from "./location-access";
@@ -29,6 +32,19 @@ export type StaffScopeCtx = LocationAwareCtx;
 // The day board uses it to choose the legacy answer versus the manager's
 // record-evidence answer (see lib/services/staff-attendance-list.ts).
 export type StaffScope = LocationAccess;
+
+/** Orientation label based on live membership scope, never a permission grant. */
+export async function staffSiteContext(ctx: StaffScopeCtx): Promise<string> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const rows = await tx.select({ id: locations.id, name: locations.name }).from(locations)
+      .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt))).orderBy(asc(locations.name));
+    const visible = rows.filter((row) => locationVisible(access, row.id));
+    if (!visible.length) return "No assigned facilities";
+    if (visible.length === 1) return visible[0]!.name;
+    return access.unrestricted ? "All facilities" : `${visible.length} assigned facilities`;
+  });
+}
 
 // Resolve the caller's staff scope through the one shared choke point.
 export async function resolveStaffScope(

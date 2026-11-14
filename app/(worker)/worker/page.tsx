@@ -1,5 +1,7 @@
 import { StaffInboxLink } from "@/components/announcements/staff-inbox-link";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
+import { GuideHelpButton } from "@/components/onboarding/guide-help-button";
 import { notFound } from "next/navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { hasPermission } from "@/lib/auth/permission";
@@ -54,7 +56,9 @@ export default async function WorkerHomePage() {
       />
 
       <OptionalWorkspaceGuide
+        key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
         startCollapsed
+        preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
         title="Explore your workday"
         intro="A quick look at this page, whenever you want it."
         regionLabel="Optional worker guide"
@@ -81,6 +85,7 @@ export default async function WorkerHomePage() {
       />
 
       <StaffClubInstallLink tenantId={ctx.tenantId} />
+      <GuideHelpButton homeHref="/worker" />
       <TenantSignOut />
     </StaffPage>
   );

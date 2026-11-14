@@ -58,7 +58,8 @@ export function focusField(id: string): void {
 
 /** The canonical form of the number, shown when the field is left. */
 function formatLocal(value: string): string {
-  return formatPhoneIN(normaliseToE164(value));
+  const canonical = normaliseToE164(value);
+  return /^\+91\d{10}$/.test(canonical) ? formatPhoneIN(canonical) : value;
 }
 
 /** Enter in a field submits the form, and only the form. */

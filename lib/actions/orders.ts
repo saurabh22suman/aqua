@@ -24,6 +24,7 @@ import {
 const createInput = z.object({
   locationId: z.string().uuid(),
   memberId: z.string().uuid().nullish(),
+  expectedTaxRegistered: z.boolean().optional(),
   lines: z
     .array(
       z.object({

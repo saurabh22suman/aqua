@@ -79,6 +79,9 @@ export function FacilitySwitcher({
     navigateFacility(`${pathname}?${next.toString()}`, true);
   }, [pathname, searchParams, visible]);
 
+  if (locations.length === 1 && isFacilityScopedPath(pathname) && !dailyClose) {
+    return <span className="block truncate text-xs text-ink-2" title={locations[0]!.name}>{locations[0]!.name}</span>;
+  }
   if (!visible) return null;
 
   function onChange(value: string) {

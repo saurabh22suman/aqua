@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { fixture } from "@/tests/remediation-20261112/fixture";
-import { updateBranding } from "@/lib/services/branding";
+import { getBranding, readBrandingLogo, updateBranding } from "@/lib/services/branding";
 
 let f: Awaited<ReturnType<typeof fixture>>;
 beforeAll(async () => { f = await fixture(); });
@@ -21,11 +21,13 @@ it("rejects client-provided asset keys instead of accepting or silently ignoring
   expect(result.kind).toBe("error");
 });
 
-it("does not retain a reference from a different tenant", async () => {
+it("preserves but never exposes a reference from a different tenant", async () => {
   const digest = "b".repeat(64);
   const logo = { objectKey: `tenant-branding/${f.otherTenant}/logo/${digest}.png`, sha256: digest, contentType: "image/png" };
   await f.admin.query("update tenants set branding = $1 where id = $2", [JSON.stringify({ accent: "mango", logo }), f.tenantId]);
   expect((await updateBranding(f.context(), { displayName: "Tenant A" })).kind).toBe("ok");
   const row = await f.admin.query<{ branding: { logo?: unknown } }>("select branding from tenants where id = $1", [f.tenantId]);
-  expect(row.rows[0]?.branding.logo).toBeUndefined();
+  expect(row.rows[0]?.branding.logo).toEqual(logo);
+  expect((await getBranding({ tenantId: f.tenantId })).logoUrl).toBeNull();
+  expect(await readBrandingLogo({ tenantId: f.tenantId }, digest)).toBeNull();
 });

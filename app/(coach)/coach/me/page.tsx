@@ -24,6 +24,7 @@ import {
   StaffPageHeader,
 } from "@/components/staff-ui/staff-page";
 import { StaffAppearance } from "@/components/staff-ui/staff-appearance";
+import { OpenWorkspaceGuideLink } from "@/components/onboarding/guide-help-button";
 
 // K2 — coach's account surface. The bottom nav's "Me" tab lands here.
 // The identity block is the caller's own name/phone; the three
@@ -87,6 +88,7 @@ export default async function CoachMePage() {
       ) : null}
 
       <StaffClubInstallLink tenantId={ctx.tenantId} />
+      {ctx.roleKey === "coach" ? <OpenWorkspaceGuideLink homeHref="/coach" /> : null}
       <TenantSignOut />
     </StaffPage>
   );

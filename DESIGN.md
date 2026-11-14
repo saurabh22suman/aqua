@@ -2,6 +2,17 @@
 
 **The visual system for Aqua. Loaded on every UI task. Non-negotiable.**
 
+## Current theme amendment — 14 November 2026
+
+The human approved three selectable presets: **Mint Garden**, **Lavender Club**,
+and **Slate & Amber**. This supersedes the older two-light-preset-only statements
+below. All three use one component tree, typography, spacing, control order and
+responsive layout. Theme changes may change colours, never item positions.
+`lib/theme/themes.ts` and `app/globals.css` are the current token implementation; use
+existing semantic tokens and verify actual contrast, including the dark preset.
+Action accents remain distinct from money/attendance status meanings. Theme is
+a personal display preference, never an authorization or tenant selector.
+
 ## Design program — 2026-10-26
 
 The current program is defined in `docs/design-system/` (README,

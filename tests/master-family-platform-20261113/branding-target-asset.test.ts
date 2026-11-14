@@ -1,38 +1,39 @@
-import { createHash } from "node:crypto";
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { fixture } from "@/tests/remediation-20261112/fixture";
 import { withTenant } from "@/db/tenant";
-import { readTargetLogo as read } from "@/lib/services/branding-target-asset";
-import { readTargetIcon } from "@/lib/services/branding-target-asset";
+import { readTargetIcon, readTargetLogo } from "@/lib/services/branding-target-asset";
+import { uploadBrandingAsset } from "@/lib/services/branding";
 import sharp from "sharp";
-import type { ObjectStore } from "@/lib/storage/object-store";
 
 let f: Awaited<ReturnType<typeof fixture>>;
 beforeAll(async () => { f = await fixture(); });
 afterAll(async () => { await f.cleanup(); });
 it("reads only a tenant-bound current digest and rejects missing or tampered bytes", async () => {
-  const bytes = new Uint8Array([1, 2, 3]);
-  const digest = createHash("sha256").update(bytes).digest("hex");
-  const logo = { objectKey: `tenant-branding/${f.tenantId}/logo/${digest}.png`, sha256: digest, contentType: "image/png" };
-  await f.admin.query("update tenants set branding=$1 where id=any($2::uuid[])", [JSON.stringify({ logo }), [f.tenantId, f.otherTenant]]);
-  const store: ObjectStore = { getObject: vi.fn(async () => bytes), putObject: vi.fn(), listObjects: vi.fn(async () => []), deleteObject: vi.fn() };
-  expect(await withTenant(f.tenantId, (tx) => read(tx, f.tenantId, digest, store))).toEqual(bytes);
-  expect(await withTenant(f.otherTenant, (tx) => read(tx, f.otherTenant, digest, store))).toBeNull();
-  expect(await withTenant(f.tenantId, (tx) => read(tx, f.tenantId, "a".repeat(64), store))).toBeNull();
-  vi.mocked(store.getObject).mockResolvedValueOnce(new Uint8Array([9]));
-  expect(await withTenant(f.tenantId, (tx) => read(tx, f.tenantId, digest, store))).toBeNull();
+  const bytes = await sharp({ create: { width: 20, height: 20, channels: 4, background: "#123456" } }).png().toBuffer();
+  expect(await uploadBrandingAsset({ ctx: f.context(), kind: "logo", bytes, mime: "image/png" })).toEqual({ ok: true });
+  const row = await f.admin.query<{ branding: { logo: { sha256: string } } }>("select branding from tenants where id=$1", [f.tenantId]);
+  const digest = row.rows[0]!.branding.logo.sha256;
+  expect(await withTenant(f.tenantId, (tx) => readTargetLogo(tx, f.tenantId, digest))).not.toBeNull();
+  expect(await withTenant(f.otherTenant, (tx) => readTargetLogo(tx, f.otherTenant, digest))).toBeNull();
+  expect(await withTenant(f.tenantId, (tx) => readTargetLogo(tx, f.tenantId, "a".repeat(64)))).toBeNull();
+  const other = await sharp({ create: { width: 20, height: 20, channels: 4, background: "#abcdef" } }).png().toBuffer();
+  await f.admin.query("update branding_assets set png=$2 where tenant_id=$1 and kind='logo'", [f.tenantId, other]);
+  expect(await withTenant(f.tenantId, (tx) => readTargetLogo(tx, f.tenantId, digest))).toBeNull();
 });
 it("derives real icon sizes only from the requested tenant's current canonical blob", async () => {
   const bytes = await sharp({ create: { width: 512, height: 512, channels: 4, background: "#000000" } }).png().toBuffer();
-  const digest = createHash("sha256").update(bytes).digest("hex");
-  const icon = { objectKey: `tenant-branding/${f.tenantId}/install_icon/${digest}.png`, sha256: digest, contentType: "image/png" };
-  await f.admin.query("update tenants set branding=$1 where id=any($2::uuid[])", [JSON.stringify({ installIcon: icon }), [f.tenantId, f.otherTenant]]);
-  const store: ObjectStore = { getObject: vi.fn(async () => bytes), putObject: vi.fn(), listObjects: vi.fn(async () => []), deleteObject: vi.fn() };
-  for (const size of [192, 512] as const) {
-    const png = await withTenant(f.tenantId, (tx) => readTargetIcon(tx, f.tenantId, digest, size, store));
-    expect(png).not.toBeNull();
-    const metadata = await sharp(png!).metadata();
-    expect([metadata.width, metadata.height]).toEqual([size, size]);
-  }
-  expect(await withTenant(f.otherTenant, (tx) => readTargetIcon(tx, f.otherTenant, digest, 192, store))).toBeNull();
+  // Use a new fixture so the intentionally corrupted logo in the preceding test is irrelevant.
+  const g = await fixture();
+  try {
+    expect(await uploadBrandingAsset({ ctx: g.context(), kind: "install_icon", bytes, mime: "image/png" })).toEqual({ ok: true });
+    const row = await g.admin.query<{ branding: { installIcon: { sha256: string } } }>("select branding from tenants where id=$1", [g.tenantId]);
+    const digest = row.rows[0]!.branding.installIcon.sha256;
+    for (const size of [192, 512] as const) {
+      const png = await withTenant(g.tenantId, (tx) => readTargetIcon(tx, g.tenantId, digest, size));
+      expect(png).not.toBeNull();
+      const metadata = await sharp(png!).metadata();
+      expect([metadata.width, metadata.height]).toEqual([size, size]);
+    }
+    expect(await withTenant(g.otherTenant, (tx) => readTargetIcon(tx, g.otherTenant, digest, 192))).toBeNull();
+  } finally { await g.cleanup(); }
 });

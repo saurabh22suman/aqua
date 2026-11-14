@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/locations";
 import type { LocationAdminRow } from "@/lib/services/locations";
 import { BusinessHoursEditor } from "@/components/settings/business-hours-editor";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 // U-07 — the location editor. Each location is one card: name, kind
 // and address, with the business-hours editor beneath. For a
@@ -226,6 +227,7 @@ function LocationCard({
         </div>
       </div>
     </details>
+      <Link href={`/owner/settings/locations/${location.id}`} aria-label={`Financial settings for ${location.name}`} className="inline-flex min-h-12 items-center text-[14px] text-[var(--accent-ink)] underline underline-offset-2">Financial settings</Link>
     </section>
   );
 }

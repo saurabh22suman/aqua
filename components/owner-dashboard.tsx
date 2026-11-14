@@ -103,7 +103,9 @@ export function OwnerDashboard({
   facility = null,
   artworkIdentity,
   period = "last7",
+  guideKey,
 }: {
+  guideKey?: string;
   data: OwnerDashboardData;
   branding: BrandingData;
   terminology: TerminologyState;
@@ -199,7 +201,9 @@ export function OwnerDashboard({
         today={data.today}
       />
       <OptionalWorkspaceGuide
+        key={guideKey}
         startCollapsed
+        preferenceKey={guideKey}
         title="A look around today"
         intro="Explore the overview at your own pace. This guide makes no changes."
         regionLabel="Optional daily overview guide"

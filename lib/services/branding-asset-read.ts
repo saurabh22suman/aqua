@@ -3,15 +3,14 @@ import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import type { ActionCtx } from "@/lib/auth/context";
 import { validAsset } from "@/lib/branding/asset-reference";
-import { getObjectStore, type ObjectStore } from "@/lib/storage/object-store";
+import { readBrandingPng } from "@/lib/services/branding-png-store";
 
 /** Caller supplies a server-resolved tenant; stale asset versions fail closed. */
-export async function readBrandingLogo(ctx: Pick<ActionCtx, "tenantId">, digest: string, store: ObjectStore = getObjectStore()): Promise<Uint8Array | null> {
+export async function readBrandingLogo(ctx: Pick<ActionCtx, "tenantId">, digest: string): Promise<Uint8Array | null> {
   if (!/^[a-f0-9]{64}$/.test(digest)) return null;
-  const ref = await withTenant(ctx.tenantId, async (tx) => {
+  try { return await withTenant(ctx.tenantId, async (tx) => {
     const [row] = await tx.select({ branding: tenants.branding }).from(tenants).where(eq(tenants.id, ctx.tenantId));
-    return validAsset(row?.branding?.logo, ctx.tenantId, "logo");
-  });
-  if (!ref || ref.sha256 !== digest) return null;
-  try { return await store.getObject(ref.objectKey); } catch { return null; }
+    const ref = validAsset(row?.branding?.logo, ctx.tenantId, "logo");
+    return ref && ref.sha256 === digest ? readBrandingPng(tx, ctx.tenantId, "logo", digest) : null;
+  }); } catch { return null; }
 }

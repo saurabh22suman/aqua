@@ -13,6 +13,7 @@ import { CafeMemberPicker } from "@/components/cafe-member-picker";
 import { CafeReceipt } from "@/components/cafe-payment-panel";
 import { CafeBillPanel } from "@/components/cafe-bill-panel";
 import { createOrderAction, requestCafeBillAction } from "@/lib/actions/orders";
+import { listMenuAction } from "@/lib/actions/menu";
 import {
   WALK_IN_NOTE,
   type CartLine,
@@ -44,12 +45,14 @@ export function CafeOrderScreen({
   locations,
   terminology,
   taxRegistered,
+  taxRegistrationByLocation,
 }: {
   categories: MenuCategoryRow[];
   items: MenuItemRow[];
   locations: LocationOption[];
   terminology: TerminologyState;
-  taxRegistered: boolean;
+  taxRegistered: boolean | null;
+  taxRegistrationByLocation?: Record<string, boolean | null>;
 }) {
   const menuLocations = useMemo(() => {
     const ids: string[] = [];
@@ -63,6 +66,7 @@ export function CafeOrderScreen({
   }, [items, locations]);
 
   const [locationId, setLocationId] = useState(menuLocations[0]?.id ?? "");
+  const [taxBySite, setTaxBySite] = useState(taxRegistrationByLocation);
   const [qty, setQty] = useState<Record<string, number>>({});
   const [member, setMember] = useState<MemberListRow | null>(null);
   const [placed, setPlaced] = useState<PlacedOrder | null>(null);
@@ -78,6 +82,7 @@ export function CafeOrderScreen({
   }, [bill?.invoiceId]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
 
   const itemById = useMemo(
     () => new Map(items.map((item) => [item.id, item])),
@@ -98,8 +103,27 @@ export function CafeOrderScreen({
 
   const billable = placed ? placed.memberId !== null : member !== null;
   const locked = placed !== null;
+  const editingLocked = locked || busy;
+  const selectedTax = taxBySite ? taxBySite[locationId] ?? null : menuLocations.length === 1 ? taxRegistered : null;
+
+  async function quoteStillCurrent(): Promise<boolean> {
+    if (selectedTax === null || !locationId) {
+      setError("Select a facility with complete billing settings before placing an order.");
+      return false;
+    }
+    // Legacy single-site callers without a site map retain their existing contract.
+    if (!taxBySite) return true;
+    const refreshed = await listMenuAction({ locationId });
+    if (refreshed.taxRegistered !== selectedTax) {
+      setTaxBySite((previous) => ({ ...previous, [locationId]: refreshed.taxRegistered }));
+      setError("Facility billing has changed. Review the updated quote before continuing.");
+      return false;
+    }
+    return true;
+  }
 
   function changeQty(itemId: string, delta: number) {
+    if (editingLocked || submitting.current) return;
     setQty((prev) => {
       const next = Math.max(0, (prev[itemId] ?? 0) + delta);
       const copy = { ...prev };
@@ -110,6 +134,7 @@ export function CafeOrderScreen({
   }
 
   function reset() {
+    if (busy || submitting.current) return;
     setQty({});
     setMember(null);
     setPlaced(null);
@@ -120,12 +145,15 @@ export function CafeOrderScreen({
   }
 
   async function placeOrder() {
-    if (lines.length === 0) return;
+    if (lines.length === 0 || submitting.current) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
+      if (!(await quoteStillCurrent())) return;
       const result = await createOrderAction({
         locationId,
+        ...(taxBySite && selectedTax !== null ? { expectedTaxRegistered: selectedTax } : {}),
         memberId: member?.memberId ?? null,
         lines: lines.map((line) => ({ itemId: line.item.id, qty: line.qty })),
       });
@@ -141,22 +169,27 @@ export function CafeOrderScreen({
     } catch {
       setError("The order could not be saved. Try again.");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
 
   async function requestBill() {
+    if (submitting.current) return;
     if (!billable || lines.length === 0) {
       setError(WALK_IN_NOTE);
       return;
     }
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
       let current = placed;
       if (!current) {
+        if (!(await quoteStillCurrent())) return;
         const created = await createOrderAction({
           locationId,
+          ...(taxBySite && selectedTax !== null ? { expectedTaxRegistered: selectedTax } : {}),
           memberId: member?.memberId ?? null,
           lines: lines.map((line) => ({ itemId: line.item.id, qty: line.qty })),
         });
@@ -180,6 +213,7 @@ export function CafeOrderScreen({
     } catch {
       setError("The bill could not be raised. Try again.");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
@@ -223,7 +257,14 @@ export function CafeOrderScreen({
       <CafeLocationSwitcher
         locations={menuLocations}
         locationId={locationId}
-        onSelect={setLocationId}
+        disabled={editingLocked}
+        onSelect={(id) => {
+          if (editingLocked || submitting.current || id === locationId) return;
+          setQty({});
+          setMember(null);
+          setError(null);
+          setLocationId(id);
+        }}
       />
 
       {visibleItems.length === 0 ? (
@@ -237,22 +278,23 @@ export function CafeOrderScreen({
           <CafeMenuGrid
             categories={activeCategories}
             items={visibleItems}
-            locked={locked}
+            locked={editingLocked}
             onAdd={(itemId) => changeQty(itemId, 1)}
           />
 
-          <CafeCart
-            lines={lines}
-            placed={placed}
-            onQty={changeQty}
-            taxRegistered={taxRegistered}
-          />
+          {selectedTax === null ? (
+            <CafeErrorNote message="Facility billing is unavailable. Ask the owner to check this site's billing settings." />
+          ) : (
+            <CafeCart lines={lines} placed={placed} onQty={changeQty} taxRegistered={selectedTax} disabled={busy} />
+          )}
 
           {!locked ? (
             <CafeMemberPicker
               member={member}
               terminology={terminology}
-              onSelect={setMember}
+              onSelect={(next) => {
+                if (!editingLocked && !submitting.current) setMember(next);
+              }}
               disabled={busy}
             />
           ) : null}
@@ -273,7 +315,7 @@ export function CafeOrderScreen({
                 size="lg"
                 className="w-full"
                 onClick={placeOrder}
-                disabled={busy || lines.length === 0}
+                disabled={busy || lines.length === 0 || selectedTax === null}
               >
                 Place order
               </Button>
@@ -283,7 +325,7 @@ export function CafeOrderScreen({
               size="lg"
               className="w-full"
               onClick={requestBill}
-              disabled={busy || lines.length === 0 || !billable}
+              disabled={busy || lines.length === 0 || !billable || (!locked && selectedTax === null)}
             >
               {busy ? "Working…" : "Request bill"}
             </Button>
@@ -293,6 +335,7 @@ export function CafeOrderScreen({
                 size="md"
                 className="w-full"
                 onClick={reset}
+                disabled={busy}
               >
                 Start a new order
               </Button>

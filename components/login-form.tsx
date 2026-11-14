@@ -49,9 +49,11 @@ export function LoginForm() {
   }
 
   function showCanonical() {
-    setPhone((current) =>
-      current.trim().length > 0 ? formatPhoneIN(normalise(current)) : current,
-    );
+    setPhone((current) => {
+      const canonical = normalise(current);
+      return /^\+?[\d\s()-]+$/.test(current) && /^\+[1-9]\d{7,14}$/.test(canonical)
+        ? formatPhoneIN(canonical) : current;
+    });
   }
 
   const pinValid = PIN_RULE.test(pin);

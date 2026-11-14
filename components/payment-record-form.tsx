@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { listMembersAction } from "@/lib/actions/people";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
 import type { InvoiceRow } from "@/lib/services/invoices";
@@ -38,11 +38,16 @@ export function PaymentRecordForm() {
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const searching = useRef(false);
+  const composing = useRef(false);
+  const memberRequest = useRef(0);
 
   const selectedInvoice =
     invoices?.find((invoice) => invoice.id === invoiceId) ?? null;
 
   async function search() {
+    if (searching.current || paymentBusy || composing.current || !query.trim()) return;
+    searching.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -50,11 +55,14 @@ export function PaymentRecordForm() {
     } catch {
       setError("Could not search members.");
     } finally {
+      searching.current = false;
       setBusy(false);
     }
   }
 
   async function chooseMember(next: MemberListRow) {
+    if (searching.current || paymentBusy) return;
+    const request = ++memberRequest.current;
     setMember(next);
     setResults(null);
     setInvoices(null);
@@ -63,10 +71,12 @@ export function PaymentRecordForm() {
     setPaymentMessage(null);
     try {
       const rows = openInvoices(await listMemberInvoicesAction(next.memberId));
+      if (request !== memberRequest.current) return;
       setInvoices(rows);
       const first = rows[0];
       if (first) setInvoiceId(first.id);
     } catch {
+      if (request !== memberRequest.current) return;
       setError("Could not load invoices for this member.");
     }
   }
@@ -86,9 +96,10 @@ export function PaymentRecordForm() {
       const rows = openInvoices(
         await listMemberInvoicesAction(member!.memberId),
       );
+      const current = rows.find((row) => row.id === invoiceId);
       setInvoices(rows);
-      setInvoiceId(rows[0]?.id ?? "");
-      return rows[0]?.outstandingPaise ?? null;
+      setInvoiceId(current?.id ?? "");
+      return current?.outstandingPaise ?? null;
     } catch {
       setError(
         "Payment recorded, but the invoice list could not be refreshed. Check the member's invoices before recording another payment.",
@@ -109,7 +120,7 @@ export function PaymentRecordForm() {
         </p>
       </div>
 
-      <div>
+      <form onSubmit={(event) => { event.preventDefault(); void search(); }}>
         {/* Owner redesign (C2) — the shared labelled controls. The
             journey (search → choose a member → choose an invoice →
             record) and the test ids are unchanged. */}
@@ -135,14 +146,18 @@ export function PaymentRecordForm() {
                 id="payment-member-search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onCompositionStart={() => { composing.current = true; }}
+                onCompositionEnd={() => { composing.current = false; }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (composing.current || event.nativeEvent.isComposing)) event.preventDefault();
+                }}
                 placeholder="Name, phone or member code"
                 data-testid="payment-member-search"
                 className="w-full sm:min-w-0 sm:flex-1"
               />
               <Button
-                type="button"
+                type="submit"
                 variant="secondary"
-                onClick={() => void search()}
                 disabled={busy || paymentBusy || query.trim().length === 0}
                 className="w-full sm:w-auto sm:flex-none"
               >
@@ -154,14 +169,16 @@ export function PaymentRecordForm() {
 
         {results ? (
           results.length === 0 ? (
-            <p className="mt-2 text-[12.5px] text-ink-3">No members found.</p>
+            <p role="status" className="mt-2 text-[12.5px] text-ink-3">No members found.</p>
           ) : (
+            <>
+            <p role="status" className="mt-2 text-[12.5px] text-ink-3">{results.length} {results.length === 1 ? "member" : "members"} found.</p>
             <ul className="mt-2 space-y-1">
               {results.map((row) => (
                 <li key={row.memberId}>
                   <button
                     type="button"
-                    disabled={paymentBusy}
+                    disabled={busy || paymentBusy}
                     onClick={() => void chooseMember(row)}
                     data-testid={`payment-member-${row.memberId}`}
                     className="w-full min-h-11 rounded-ctl border border-line px-3 py-2 text-left text-[13px] text-ink hover:border-[var(--accent-strong)]"
@@ -170,13 +187,15 @@ export function PaymentRecordForm() {
                     <span className="ml-2 font-mono text-[11.5px] text-ink-3">
                       {row.memberCode}
                     </span>
+                    <span className="ml-2 text-[11.5px] text-ink-3">{row.locationName}</span>
                   </button>
                 </li>
               ))}
             </ul>
+            </>
           )
         ) : null}
-      </div>
+      </form>
 
       {member ? (
         <div>
@@ -185,6 +204,7 @@ export function PaymentRecordForm() {
             <span className="ml-2 font-mono text-[11.5px] text-ink-3">
               {member.memberCode}
             </span>
+            <span className="ml-2 text-[11.5px] text-ink-3">{member.locationName}</span>
           </p>
 
           {invoices === null ? (
@@ -219,6 +239,7 @@ export function PaymentRecordForm() {
                     <span className="ml-2 text-[11.5px] text-ink-3">
                       due {formatDateIST(invoice.dueOn)}
                     </span>
+                    <span className="ml-2 text-[11.5px] text-ink-3">{invoice.locationName}</span>
                   </button>
                 </li>
               ))}

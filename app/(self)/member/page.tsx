@@ -5,6 +5,7 @@ import { SelfHome } from "@/components/self-home";
 import { readSelfHome } from "@/lib/services/self-home";
 import { billingSubjectInTx } from "@/lib/services/self-billing";
 import { isBillingDeadlock } from "@/lib/services/self-billing-errors";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 
 // THE MEMBER HOME.
 //
@@ -29,8 +30,8 @@ export default async function MemberHomePage() {
   const resolver = await resolveSelfScope("member", null);
   if (!resolver) redirect("/member/sign-in");
   try {
-    const { view, scopeKind, tenantId } = await resolver.read(async (tx, scope) => ({
-      view: await readSelfHome(tx, scope, "member"), scopeKind: scope.kind, tenantId: scope.tenantId,
+    const { view, scopeKind, tenantId, guideKey } = await resolver.read(async (tx, scope) => ({
+      view: await readSelfHome(tx, scope, "member"), scopeKind: scope.kind, tenantId: scope.tenantId, guideKey: guidePreferenceKey(scope.tenantId, scope.userId, "member"),
     }));
     // Separate transaction: a billing-only deadlock must not abort the home read.
     let canViewOwnBilling: boolean | null = null;
@@ -38,7 +39,7 @@ export default async function MemberHomePage() {
       try { canViewOwnBilling = await resolver.read(async (tx, scope) => (await billingSubjectInTx(tx, scope)) !== null); }
       catch (error) { if (!isBillingDeadlock(error)) throw error; }
     }
-    return <SelfHome view={view} audience="member" scopeKind={scopeKind} tenantId={tenantId} canViewOwnBilling={canViewOwnBilling} />;
+    return <SelfHome view={view} audience="member" scopeKind={scopeKind} tenantId={tenantId} canViewOwnBilling={canViewOwnBilling} guideKey={guideKey} />;
   } catch (error) {
     if (error instanceof NotFoundError) redirect("/member/sign-in");
     throw error;

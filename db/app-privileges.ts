@@ -103,6 +103,16 @@ export async function restrictAppPrivileges(client: Client): Promise<void> {
       revoke delete on public.guardian_child_links from app_user;
     end if;
   end $$`);
+  // Repeat bootstrap grants must preserve immutable current PNG bytes and
+  // append-only registration versions. PNG replacement needs DELETE.
+  await client.query(`do $$ begin
+    if to_regclass('public.branding_assets') is not null then
+      revoke update on public.branding_assets from app_user;
+    end if;
+    if to_regclass('public.billing_registrations') is not null then
+      revoke update, delete on public.billing_registrations from app_user;
+    end if;
+  end $$`);
   // Showcase rows are append-only; deployment reconciliation must retain this.
   await client.query(`do $$ begin if to_regclass('public.showcase_decisions_seq') is not null then
     revoke all on sequence public.showcase_decisions_seq from app_user; end if; end $$`);

@@ -1,6 +1,4 @@
-import { eq } from "drizzle-orm";
 import { z } from "zod";
-import { tenants } from "@/db/schema/tenants";
 import { invoices, invoiceLineItems } from "@/db/schema/invoices";
 import { writeAudit } from "@/lib/audit/write";
 import { resolveConfigInTx } from "@/db/config";
@@ -14,6 +12,8 @@ import type { UserId } from "@/lib/ids";
 import { enqueueMemberNotification } from "@/lib/messaging/notification-enqueue";
 import { formatINR } from "@/lib/money/format";
 import { toSafePaise } from "@/lib/money/safe-paise";
+import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
+import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
 
 // C-32 — issue an invoice inside a caller's transaction. Used by the
 // owner/reception flow (lib/services/invoices.ts) and by the nightly
@@ -116,6 +116,7 @@ export async function issueInvoiceInTx(
   raw: IssueInvoiceInput,
   actorId: UserId | null,
   requestId: string | null = null,
+  pinnedIssuer?: BillingIssuer,
 ): Promise<IssueInvoiceResult> {
   const parsed = issueInvoiceInputSchema.safeParse(raw);
   if (!parsed.success) {
@@ -131,12 +132,11 @@ export async function issueInvoiceInTx(
     return { ok: false, error: "The due date cannot precede the issue date." };
   }
 
-  const [tenantRow] = await tx
-    .select({ gstin: tenants.gstin })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId));
-  if (!tenantRow) return { ok: false, error: "Tenant not found." };
-  const gstin = tenantRow.gstin;
+  const identity = await resolveBillingIdentityInTx(tx, tenantId, input.locationId);
+  if (!identity) return { ok: false, error: "The facility billing identity is incomplete or invalid." };
+  if (pinnedIssuer && identity.version !== 1) return { ok: false, error: "The order billing identity is incompatible with the site." };
+  const issuer = identity.version === 1 ? (pinnedIssuer ?? identity.issuer) : null;
+  const gstin = issuer ? issuer.gstin : identity.version === 0 ? identity.gstin : null;
   const documentKind = gstDocumentKind(gstin);
 
   const { value: sacCode } = await resolveConfigInTx<string>(
@@ -230,6 +230,13 @@ export async function issueInvoiceInTx(
       status: "issued",
       source: input.source,
       gstin,
+      ...(issuer ? {
+        issuerSnapshotVersion: 1,
+        issuerLegalName: issuer.legalName,
+        issuerLegalAddress: issuer.legalAddress,
+        issuerStateCode: issuer.stateCode,
+        issuerRegistrationMode: gstin ? "registered" : "unregistered",
+      } : {}),
       notes: input.notes ?? null,
       createdBy: actorId,
       updatedBy: actorId,

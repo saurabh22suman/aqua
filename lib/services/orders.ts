@@ -1,8 +1,7 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { orders, orderLines } from "@/db/schema/orders";
 import { menuItems } from "@/db/schema/menu";
-import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
 import { gstDocumentKind } from "@/lib/gst";
 import {
@@ -20,6 +19,7 @@ import {
   type VoidOrderResult,
 } from "@/lib/services/orders-core";
 import type { ActionCtx } from "@/lib/auth/context";
+import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // K-02/K-03 — counter order capture and the café → invoice bridge.
 //
@@ -51,6 +51,7 @@ export async function createOrder(
   const actorId = ctx.userId;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
     const access = await resolveLocationAccess(tx, ctx);
     if (!locationVisible(access, input.locationId)) {
       return { ok: false, error: "Location not found." };
@@ -85,11 +86,13 @@ export async function createOrder(
     // invoice that matches the order exactly. (Zeroing at invoice time
     // instead would silently break the order↔invoice equality the
     // café payment rules depend on.)
-    const [tenantRow] = await tx
-      .select({ gstin: tenants.gstin })
-      .from(tenants)
-      .where(eq(tenants.id, ctx.tenantId));
-    const registered = gstDocumentKind(tenantRow?.gstin ?? null) === "tax_invoice";
+    const identity = await resolveBillingIdentityInTx(tx, ctx.tenantId, input.locationId);
+    if (!identity) return { ok: false, error: "The facility billing identity is incomplete or invalid." };
+    const gstin = identity.version === 1 ? identity.issuer.gstin : identity.gstin;
+    const registered = gstDocumentKind(gstin) === "tax_invoice";
+    if (input.expectedTaxRegistered !== undefined && input.expectedTaxRegistered !== registered) {
+      return { ok: false, error: "Facility billing has changed. Review the updated quote before continuing." };
+    }
 
     const lines = input.lines.map((line) => {
       const item = byId.get(line.itemId)!;
@@ -119,6 +122,14 @@ export async function createOrder(
         memberId: input.memberId ? asMemberId(input.memberId) : null,
         status: "placed",
         channel: "counter",
+        ...(identity.version === 1 ? {
+          issuerSnapshotVersion: 1,
+          issuerLegalName: identity.issuer.legalName,
+          issuerLegalAddress: identity.issuer.legalAddress,
+          issuerStateCode: identity.issuer.stateCode,
+          issuerGstin: identity.issuer.gstin,
+          issuerRegistrationMode: gstin ? "registered" : "unregistered",
+        } : {}),
         servedBy: actorId,
         createdBy: actorId,
         updatedBy: actorId,

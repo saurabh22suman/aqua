@@ -3,6 +3,9 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 vi.mock("@/lib/auth/surface-guard", () => ({requireOwner: async () => ({permissions:new Set(["reports.financial"])}), requirePagePermission: vi.fn()}));
 vi.mock("@/lib/auth/owner-settings-page-guard", () => ({isLiveOwnerForSettings: async () => false}));
+// This period-control unit fixture supplies an authorised named facility;
+// live cross-tenant/site refusal is exercised by selected-facility-access tests.
+vi.mock("@/lib/services/selected-facility-access", () => ({canSelectFacility: async () => true}));
 vi.mock("@/lib/auth/permission", () => ({hasPermission: () => false}));
 vi.mock("next/headers", () => ({cookies: async () => ({get: () => undefined})}));
 vi.mock("@/lib/actions/tenant-timezone", () => ({getTenantTimezoneAction: async () => "Asia/Kolkata"}));

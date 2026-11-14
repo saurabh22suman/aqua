@@ -31,6 +31,8 @@ type GuardianChoice =
   | { mode: "existing"; personId: string; label: string }
   | { mode: "new" };
 
+type ValidationIssue = { key: string; id: string; testId: string; label: string; message: string };
+
 export function MemberCreateForm({
   locations,
   initialLocationId,
@@ -76,6 +78,7 @@ export function MemberCreateForm({
   const [error, setError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState(false);
   const [guardianPhoneError, setGuardianPhoneError] = useState(false);
+  const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [discardDestination, setDiscardDestination] = useState<string | null>(null);
@@ -98,6 +101,7 @@ export function MemberCreateForm({
       if (!(link instanceof HTMLAnchorElement) || link.target || link.hasAttribute("download")) return;
       const destination = new URL(link.href, window.location.href);
       if (destination.origin !== window.location.origin || destination.href === window.location.href) return;
+      if (link.closest("[data-member-error-summary]") && destination.pathname === window.location.pathname && destination.search === window.location.search && destination.hash) return;
       event.preventDefault();
       event.stopPropagation();
       if (!busy) {
@@ -166,40 +170,21 @@ export function MemberCreateForm({
 
   async function submit() {
     setError(null);
-    setPhoneError(false);
-    setGuardianPhoneError(false);
-    if (!fullName.trim() || !dateOfBirth || !locationId) {
-      setError("Full name, date of birth and location are required.");
-      focusField(!fullName.trim() ? "member-full-name" : "member-dob");
-      return;
-    }
-    if (futureDob || !parseCalendarDate(dateOfBirth)) {
-      setError(futureDob ? "Date of birth cannot be in the future." : "Choose a valid date of birth.");
-      focusField("member-dob");
-      return;
-    }
-    if (!isOptionalContactPhoneValid(phone)) {
-      setPhoneError(true);
-      focusField("member-phone");
-      return;
-    }
-    if (minor === true && guardian.mode !== "existing" && guardianName.trim() && relationship.trim() && !isOptionalContactPhoneValid(guardianPhone)) {
-      setGuardianPhoneError(true);
-      focusField("guardian-phone");
-      return;
-    }
-    if (!consentGiven) {
-      setError(
-        `Consent to data processing is required before a ${memberLabel} can be registered.`,
-      );
-      focusField("consent-checkbox");
-      return;
-    }
-    if (minor === true && guardianMissing) {
-      setError("A guardian is required to register a minor — select an existing one or enter their details.");
-      focusField("guardian-search");
-      return;
-    }
+    const next: ValidationIssue[] = [];
+    const add = (key: string, id: string, testId: string, label: string, message: string) => next.push({ key, id, testId, label, message });
+    if (!fullName.trim()) add("name", "member-full-name-field", "member-full-name", "Full name", "Enter a full name.");
+    if (!dateOfBirth || futureDob || !parseCalendarDate(dateOfBirth)) add("dob", "member-dob", "member-dob", "Date of birth", futureDob ? "Date of birth cannot be in the future." : "Choose a valid date of birth.");
+    if (!locationId) add("location", "member-location-field", "member-location", "Location", "Choose a location.");
+    const invalidPhone = !isOptionalContactPhoneValid(phone);
+    const invalidGuardianPhone = minor === true && guardian.mode !== "existing" && Boolean(guardianName.trim() && relationship.trim()) && !isOptionalContactPhoneValid(guardianPhone);
+    setPhoneError(invalidPhone); setGuardianPhoneError(invalidGuardianPhone);
+    if (invalidPhone) add("phone", "member-phone-field", "member-phone", "Phone", "Enter a valid phone number.");
+    if (invalidGuardianPhone) add("guardianPhone", "guardian-new-phone-field", "guardian-phone", "Guardian phone", "Enter a valid phone number.");
+    if (!consentGiven) add("consent", "member-consent-processing", "consent-checkbox", "Data processing consent", `Consent to data processing is required before a ${memberLabel} can be registered.`);
+    if (minor === true && guardianMissing) add("guardian", "guardian-search-field", "guardian-search", "Guardian", "Select a guardian or enter their name and relationship.");
+    if (minor === true && guardian.mode === "existing" && !relationship.trim()) add("relationship", "guardian-relationship-field", "guardian-relationship", "Guardian relationship", "Enter the guardian relationship.");
+    setIssues(next);
+    if (next.length) { focusField(next[0].testId); return; }
 
     setBusy(true);
     try {
@@ -251,6 +236,10 @@ export function MemberCreateForm({
     // it pins above, so the last section can always scroll clear of
     // both. Everything stays visible and reachable.
     <div className="space-y-5">
+      {issues.length ? <section data-member-error-summary aria-labelledby="member-errors-heading" className="rounded-ctl border border-line bg-paper p-4">
+        <h2 id="member-errors-heading" className="font-semibold">Check the following details</h2>
+        <ul className="mt-2 list-inside list-disc text-[13px] text-ink-2">{issues.map((issue) => <li key={issue.key}><a href={`#${issue.id}`} className="inline-flex min-h-11 items-center underline underline-offset-2" onClick={(event) => { event.preventDefault(); focusField(issue.testId); }}>{issue.label}</a></li>)}</ul>
+      </section> : null}
       <section className="space-y-2.5">
         {/* OpenPen owner reference — full name first, then paired fields at
             ≥sm so the editor reads as a bounded form rather than a long
@@ -258,13 +247,13 @@ export function MemberCreateForm({
         <h2 className="font-display text-[16px] font-semibold">
           Personal details
         </h2>
-        <Field id="member-full-name-field" label="Full name">
+        <Field id="member-full-name-field" label="Full name" error={issues.find((issue) => issue.key === "name")?.message}>
           {(field) => (
             <Input
               {...field}
               type="text"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => { setFullName(e.target.value); setIssues((current) => current.filter((issue) => issue.key !== "name")); }}
               placeholder="Full name"
               data-testid="member-full-name"
             />
@@ -277,19 +266,19 @@ export function MemberCreateForm({
                 {...field}
                 type="tel"
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); setPhoneError(false); }}
+                onChange={(e) => { setPhone(e.target.value); setPhoneError(false); setIssues((current) => current.filter((issue) => issue.key !== "phone")); }}
                 placeholder="Phone (optional)"
                 data-testid="member-phone"
               />
             )}
           </Field>
-          <Field id="member-dob" label="Date of birth" required error={futureDob ? "Date of birth cannot be in the future." : undefined}>
+          <Field id="member-dob" label="Date of birth" required error={futureDob ? "Date of birth cannot be in the future." : issues.find((issue) => issue.key === "dob")?.message}>
             {(field) => (
               <DateField
                 {...field}
                 value={dateOfBirth}
                 maxIsoDate={today}
-                onChange={setDateOfBirth}
+                onChange={(value) => { setDateOfBirth(value); setIssues((current) => current.filter((issue) => !["dob", "guardian", "guardianPhone", "relationship"].includes(issue.key))); }}
                 data-testid="member-dob"
               />
             )}
@@ -304,12 +293,13 @@ export function MemberCreateForm({
               />
             )}
           </Field>
-          <Field id="member-location-field" label="Location">
+          <Field id="member-location-field" label="Location" error={issues.find((issue) => issue.key === "location")?.message}>
             {(field) => (
               <Select
                 {...field}
                 value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
+                onChange={(e) => { setLocationId(e.target.value); setIssues((current) => current.filter((issue) => issue.key !== "location")); }}
+                data-testid="member-location"
               >
                 {initialLocation === "" ? <option value="" disabled>Choose a location</option> : null}
                 {locations.map((l) => (
@@ -377,6 +367,7 @@ export function MemberCreateForm({
               <Field
                 id="guardian-search-field"
                 label={`Search existing ${resolveTerm(terminology, "guardian", "other")}`}
+                error={issues.find((issue) => issue.key === "guardian")?.message}
               >
                 {(field) => (
                   <Input
@@ -398,6 +389,7 @@ export function MemberCreateForm({
                         onClick={() => {
                           setGuardian({ mode: "existing", personId: r.personId, label: r.fullName });
                           setGuardianResults([]);
+                          setIssues((current) => current.filter((issue) => issue.key !== "guardian" && issue.key !== "guardianPhone"));
                         }}
                         className="w-full text-left px-3 py-3 min-h-[44px] text-[14px] hover:bg-deck"
                       >
@@ -418,7 +410,7 @@ export function MemberCreateForm({
                     {...field}
                     type="text"
                     value={guardianName}
-                    onChange={(e) => setGuardianName(e.target.value)}
+                    onChange={(e) => { setGuardianName(e.target.value); setIssues((current) => current.filter((issue) => issue.key !== "guardian")); }}
                     placeholder="Guardian full name"
                     data-testid="guardian-new-name"
                   />
@@ -430,7 +422,7 @@ export function MemberCreateForm({
                     {...field}
                     type="tel"
                     value={guardianPhone}
-                    onChange={(e) => { setGuardianPhone(e.target.value); setGuardianPhoneError(false); }}
+                    onChange={(e) => { setGuardianPhone(e.target.value); setGuardianPhoneError(false); setIssues((current) => current.filter((issue) => issue.key !== "guardianPhone")); }}
                     placeholder="Guardian phone (optional)"
                     data-testid="guardian-phone"
                   />
@@ -442,13 +434,14 @@ export function MemberCreateForm({
           <Field
             id="guardian-relationship-field"
             label={`Relationship to ${memberLabel}`}
+            error={issues.find((issue) => issue.key === "relationship")?.message}
           >
             {(field) => (
               <Input
                 {...field}
                 type="text"
                 value={relationship}
-                onChange={(e) => setRelationship(e.target.value)}
+                onChange={(e) => { setRelationship(e.target.value); setIssues((current) => current.filter((issue) => issue.key !== "guardian" && issue.key !== "relationship")); }}
                 placeholder={`Relationship to ${memberLabel} (e.g. mother, father)`}
                 data-testid="guardian-relationship"
               />
@@ -467,11 +460,12 @@ export function MemberCreateForm({
         </section>
       ) : null}
 
-      <section className="space-y-2">
-        <h2 className="font-display text-[16px] font-semibold">Consent</h2>
+      <section className="space-y-2" aria-labelledby="member-consent-heading">
+        <h2 id="member-consent-heading" className="font-display text-[16px] font-semibold">Consent</h2>
         <MemberConsentChoices minor={minor} memberLabel={memberLabel}
           processing={consentGiven} communications={communicationsGiven}
-          onProcessing={setConsentGiven} onCommunications={setCommunicationsGiven} />
+          processingError={issues.find((issue) => issue.key === "consent")?.message}
+          onProcessing={(checked) => { setConsentGiven(checked); if (checked) setIssues((current) => current.filter((issue) => issue.key !== "consent")); }} onCommunications={setCommunicationsGiven} />
       </section>
 
       {error ? (

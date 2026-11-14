@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { orders, orderLines } from "@/db/schema/orders";
@@ -20,6 +20,9 @@ import {
   type VoidOrderResult,
 } from "@/lib/services/orders-core";
 import type { ActionCtx } from "@/lib/auth/context";
+import { billingAddressSchema, type BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { GSTIN_RE, GST_STATE_NAMES } from "@/lib/gst";
+import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // K-03 — the café → invoice bridge and the void path. See
 // lib/services/orders.ts for the module's public surface; this file is
@@ -75,10 +78,15 @@ export async function finalizeOrder(
   const moduleEnabled = await cafeModuleEnabled(ctx.tenantId);
 
   return withTenant(ctx.tenantId, async (tx) => {
+    await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
     const access = await resolveLocationAccess(tx, ctx);
     const order = await lockedOrder(tx, ctx.tenantId, parsed.data);
     if (!order || !locationVisible(access, order.locationId)) {
       return { ok: false, error: "Order not found." };
+    }
+    const identity = await resolveBillingIdentityInTx(tx, ctx.tenantId, order.locationId);
+    if (!identity || identity.version !== order.issuerSnapshotVersion) {
+      return { ok: false, error: "The order issuer snapshot is incompatible with the site billing configuration." };
     }
     if (order.status === "voided") {
       return { ok: false, error: "This order is void." };
@@ -125,6 +133,17 @@ export async function finalizeOrder(
       return { ok: false, error: CAFE_MODULE_OFF_ERROR };
     }
 
+    let pinnedIssuer: BillingIssuer | undefined;
+    if (order.issuerSnapshotVersion === 1) {
+      const address = billingAddressSchema.safeParse(order.issuerLegalAddress);
+      const state = order.issuerStateCode;
+      const gstin = order.issuerGstin;
+      if (!order.issuerLegalName?.trim() || !address.success || !state || !(state in GST_STATE_NAMES) ||
+        (order.issuerRegistrationMode === "registered" ? !gstin || !GSTIN_RE.test(gstin) || !gstin.startsWith(state) : order.issuerRegistrationMode !== "unregistered" || gstin !== null)) {
+        return { ok: false, error: "The order issuer snapshot is invalid." };
+      }
+      pinnedIssuer = { legalName: order.issuerLegalName, legalAddress: address.data, stateCode: state, gstin };
+    }
     const issued = await issueInvoiceInTx(
       tx,
       {
@@ -143,6 +162,7 @@ export async function finalizeOrder(
       },
       actorId,
       ctx.requestId ?? null,
+      pinnedIssuer,
     );
     if (!issued.ok) return { ok: false, error: issued.error };
 

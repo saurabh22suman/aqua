@@ -56,3 +56,5 @@ export * from "./whatsapp";
 export * from "./member-self";
 export * from "./self-service-session";
 export * from "./showcase";
+export * from "./branding-assets";
+export * from "./billing-registrations";

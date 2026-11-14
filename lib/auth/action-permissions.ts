@@ -216,6 +216,13 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
   // management-only (same shape as branding).
   getTenantProfileAction: "settings.read",
   updateTenantProfileAction: "settings.manage",
+  // The services additionally require the caller's live Owner membership.
+  getClubBillingDefaultAction: "settings.manage",
+  getSiteBillingSettingAction: "settings.manage",
+  saveClubBillingDefaultAction: "settings.manage",
+  saveSiteBillingSettingAction: "settings.manage",
+  resetSiteBillingSettingAction: "settings.manage",
+  createBillingRegistrationAction: "settings.manage",
   // PR2-C4 — owner recovery: listing owners is a management read;
   // minting the reset link needs staff.invite (owner/admin), and the
   // service still enforces an active-owner target.

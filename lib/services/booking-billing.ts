@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { bookings } from "@/db/schema/bookings";
@@ -18,6 +18,7 @@ import {
   type BookingBillResult,
 } from "@/lib/services/booking-bill-view";
 import type { ActionCtx } from "@/lib/auth/context";
+import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // FINAL DECISION (2026-11-05, completion pass): WR-9 is now DECIDED for this
 // release. An already-paid invoice is kept AS ISSUED and paid buyer/name
@@ -380,6 +381,9 @@ export async function requestBookingBill(
   );
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // Match settings/order issuance lock order before taking the booking row.
+    const anchor = await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
+    if (anchor.rows.length !== 1) return { ok: false, error: "Tenant not found." };
     const context = await loadBooking(tx, ctx, parsed.data, {
       forUpdate: true,
     });
@@ -499,7 +503,6 @@ export async function requestBookingBill(
 
     const [tenantRow] = await tx
       .select({
-        gstin: tenants.gstin,
         timezone: tenants.timezone,
       })
       .from(tenants)
@@ -514,7 +517,10 @@ export async function requestBookingBill(
     if (!moduleEnabled) {
       return { ok: false, error: BOOKING_MODULE_OFF_ERROR };
     }
-    const documentKind = gstDocumentKind(tenantRow.gstin);
+    const identity = await resolveBillingIdentityInTx(tx, ctx.tenantId, booking.locationId);
+    if (!identity) return { ok: false, error: "The facility billing identity is incomplete or invalid." };
+    const gstin = identity.version === 1 ? identity.issuer.gstin : identity.gstin;
+    const documentKind = gstDocumentKind(gstin);
 
     const { value: sacCode } = await resolveConfigInTx<string>(
       tx,

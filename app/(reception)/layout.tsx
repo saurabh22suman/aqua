@@ -7,6 +7,7 @@ import { canAccessSurface, SURFACE_RECEPTION } from "@/lib/auth/surface-access";
 import { TENANT_SURFACE_NAV } from "@/lib/nav";
 import { getBranding } from "@/lib/services/branding";
 import { StaffClubContext } from "@/components/staff-ui/staff-club-context";
+import { staffSiteContext } from "@/lib/services/staff-scope";
 
 // See app/(owner)/layout.tsx. Reception surface: receptionist only
 // (today). Owner/admin have the owner surface; coach has the coach
@@ -22,13 +23,13 @@ export default async function ReceptionLayout({ children }: { children: ReactNod
   if (!canAccessSurface(ctx.roleKey, SURFACE_RECEPTION)) {
     notFound();
   }
-  const brand = await getBranding(ctx);
+  const [brand, siteLabel] = await Promise.all([getBranding(ctx), staffSiteContext(ctx)]);
   return (
     <div
       data-staff-surface
       className="min-h-dvh pb-[calc(4rem+env(safe-area-inset-bottom))]"
     >
-      <StaffClubContext clubName={brand.displayName ?? brand.fallbackDisplayName} clubLogoUrl={brand.logoUrl} />
+      <StaffClubContext clubName={brand.displayName ?? brand.fallbackDisplayName} clubLogoUrl={brand.logoUrl} roleLabel={ctx.roleKey} siteLabel={siteLabel} />
       {children}
       <StaffBottomNav
         items={TENANT_SURFACE_NAV.reception}

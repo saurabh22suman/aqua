@@ -49,7 +49,7 @@ export type MemberListRow = {
 };
 
 // C-06 done-when covers "list with search and filters" -- search is a
-// substring match on name or phone; filters are status and location.
+// substring match on name, phone or member code; filters are status and location.
 // deletedAt is null on both sides (a member row and its person row can
 // only be soft-deleted together, but there's no cross-table guarantee
 // of that yet, so both are checked).
@@ -93,7 +93,7 @@ export async function listMembers(
     }
     if (filters.search?.trim()) {
       const term = `%${filters.search.trim()}%`;
-      conditions.push(or(ilike(persons.fullName, term), ilike(persons.phone, term))!);
+      conditions.push(or(ilike(persons.fullName, term), ilike(persons.phone, term), ilike(members.memberCode, term))!);
     }
 
     // O-08 — when location scoping is on, the list is constrained to

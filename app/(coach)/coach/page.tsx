@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 import { getCoachHomeAction } from "@/lib/actions/coach";
 import {
   formatFullDateIST,
@@ -41,7 +42,7 @@ function sessionNoun(count: number): string {
 // assigned roster at /coach/members. Register state is completion —
 // marks recorded out of the people expected — never attendance.
 export default async function CoachTodayPage() {
-  await requireCoach();
+  const ctx = await requireCoach();
   const { sessions, next } = await getCoachHomeAction();
   const today = todayInZone("Asia/Kolkata");
 
@@ -52,7 +53,9 @@ export default async function CoachTodayPage() {
     <StaffPage>
       <StaffPageHeader title="Today" meta={formatFullDateIST(today)} />
       <OptionalWorkspaceGuide
+        key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
         startCollapsed
+        preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
         title="Explore your coach home"
         intro="A quick look at this page, whenever you want it."
         regionLabel="Optional coach guide"

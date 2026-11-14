@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 // Exact reviewed sources and their authority/caller graph. This is a
 // change detector, not a substitute for per-query security review.
 const DIGESTS: Record<string, string> = {
+  "components/onboarding/guide-preference-key.ts": "75d00a90aefa7bec6d5bb76ff79141453991604aa09cd8655f0c07d9bb55ef90",
   "lib/services/member-link-authority.ts": "599ed6c9fe2e219cd9509ac43a46e90660034b25a240ba0b771b6385d5cb4c04",
   "lib/services/facility-scope.ts": "924378b4d4ecb6000478a59a31aa61c14254209bb318c3ef4fe569eb183c7781",
   "db/self-service-account.ts": "d3c15313369666c07ef7e837bfaf4db5bea999ea558cc676275bdd9521415d0f",
@@ -18,8 +19,8 @@ const DIGESTS: Record<string, string> = {
   "lib/actions/member-link-binding.ts": "deaa23b4032aa6cdb0024cce15df23b930a5337f2d46907d6a517fafb568f05c",
   "lib/services/member-link-binding.ts": "ee47973c1717b1cb0a857d8c619a206f0237dbfe33fdcc331d0e9964281f1a9e",
   "app/(owner)/owner/members/[memberId]/access/page.tsx": "c55aa36250d35e81a32673f6a9757cd718328bcb18e676e0f724cd7297bae918",
-  "app/(self)/member/page.tsx": "aecf00c4eacfc829a63be6399a4cf3301a1b6b403e334e3dc2d1ff1daa2c90c7",
-  "app/(self)/family/page.tsx": "b005164fc2070c974d2aa9ea877a3b084d5d38ff1e72ba44287371c86b0f3b46",
+  "app/(self)/member/page.tsx": "b6ac473b3b457ed57a75cc20b6785ab65916fe1a4660344e2598a232cbf0c4df",
+  "app/(self)/family/page.tsx": "a431d9f9f7eb3881de78e4f48eab9131b260aea418440411b7ac5ee783a7a8b8",
   "app/(self)/member/billing/page.tsx": "72ba2d9fb75094b5ecb596888cc970089488763a149b69cae6482457aabd43f7",
   "app/(self)/family/billing/[memberId]/page.tsx": "3ea6e74f3c26f5d9b08d561727a2dafa5699c7491fdf930693cb5ea03fc9d004",
   "app/(self)/family/showcase/[memberId]/page.tsx": "0f968809106096db2154e2a9f8295526d9da81b65cb0a838ae6d7a186f44280f",
@@ -41,7 +42,7 @@ export const REVIEWED_LOCATION_CONTRACTS: Readonly<Record<string, Contract>> = {
   "lib/services/member-link-binding.ts": { source: ["ee47973c1717b1cb0a857d8c619a206f0237dbfe33fdcc331d0e9964281f1a9e"], dependencies: [...staff, "lib/services/self-service-link-facts.ts", "lib/actions/member-link-binding.ts"], reason: "live staff facility authority and current subject link facts" },
   "lib/services/member-link-readmodel.ts": { source: ["3f9b180b693cf75d11f1162759083cf3854387070c444427c7d31473b08669ab"], dependencies: [...staff, "lib/services/self-service-link-facts.ts", "app/(owner)/owner/members/[memberId]/access/page.tsx"], reason: "one member with live staff grant and facility authority" },
   "lib/services/self-billing.ts": { source: ["c6ccd733978d4727092bb637f8f47c51cbc6211bb94b2fcbc996d7d86b9eb7a3"], dependencies: [...self, "db/self-service-account.ts", "app/(self)/member/billing/page.tsx", "app/(self)/family/billing/[memberId]/page.tsx"], reason: "resolver-scoped member or guardian link and subject rechecked" },
-  "lib/services/self-home.ts": { source: ["762c88b9eeaa6b37150e8356c6af682461360bf546084e8a32c332fa8efacf05"], dependencies: [...self, "lib/branding/asset-reference.ts", "app/(self)/member/page.tsx", "app/(self)/family/page.tsx", "app/(self)/family/billing/[memberId]/page.tsx", "app/(self)/family/showcase/[memberId]/page.tsx"], reason: "resolver-scoped member or linked children only" },
+  "lib/services/self-home.ts": { source: ["762c88b9eeaa6b37150e8356c6af682461360bf546084e8a32c332fa8efacf05"], dependencies: [...self, "components/onboarding/guide-preference-key.ts", "lib/branding/asset-reference.ts", "app/(self)/member/page.tsx", "app/(self)/family/page.tsx", "app/(self)/family/billing/[memberId]/page.tsx", "app/(self)/family/showcase/[memberId]/page.tsx"], reason: "resolver-scoped member or linked children only" },
   "lib/services/showcase/publication-query.ts": { source: ["0666306d3b4504eb1a1c70bbb606272b48e14ccfa9e412f53371bbbb7ce3f232"], dependencies: ["lib/services/showcase/publication.ts", "lib/services/showcase/visibility.ts", "lib/services/showcase/link-token.ts", "lib/services/showcase/public-view.ts", "lib/services/self-service-link-facts.ts", "lib/services/facility-scope.ts"], reason: "publication snapshot bound to tenant and current subject decision" },
   "lib/services/showcase/subject.ts": { source: ["e753fd50813ec98216d5bafe22c21de13bb19540575e5e133cb56b5e3bd77e79"], dependencies: [...self, "lib/services/showcase/state.ts", "lib/services/showcase/decision.ts", "lib/services/showcase/eligibility.ts", "app/(self)/member/showcase/page.tsx", "app/(self)/family/showcase/[memberId]/page.tsx"], reason: "live member or guardian source link and subject identity" },
 };

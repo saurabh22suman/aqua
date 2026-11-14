@@ -52,6 +52,8 @@ COPY --from=build /app/worker ./worker
 COPY --from=build /app/scripts/db-backup.ts ./scripts/db-backup.ts
 COPY --from=build /app/scripts/lib/db-backup.ts ./scripts/lib/db-backup.ts
 COPY --from=build /app/scripts/enrol-ops-authenticator.ts ./scripts/enrol-ops-authenticator.ts
+COPY --from=build /app/scripts/branding-maintenance.ts ./scripts/branding-maintenance.ts
+COPY --from=build /app/scripts/branding-maintenance-core.ts ./scripts/branding-maintenance-core.ts
 COPY --from=build /app/tsconfig.json ./tsconfig.json
 COPY --from=build /app/package.json ./package.json
 

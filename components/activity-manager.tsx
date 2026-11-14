@@ -253,21 +253,10 @@ function ActivityRowEditor({
         <span className="text-[14px] font-medium text-ink">
           {activity.name}
           <span className="ml-2 text-[12px] text-ink-3">
-            {ACTIVITY_KIND_LABELS[activity.kind]} · capacity {activity.capacity}
+            {ACTIVITY_KIND_LABELS[activity.kind]} · capacity {activity.capacity} · {activity.subUnits.length} {activity.subUnits.length === 1 ? "sub-unit" : "sub-units"}
             {activity.isSample ? " · sample" : ""}
           </span>
         </span>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => {
-            if (!window.confirm(`Delete "${activity.name}"?`)) return;
-            onRun(() => deleteActivityAction({ id: activity.id }));
-          }}
-          className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
-        >
-          Delete
-        </button>
       </div>
 
       {activity.subUnits.length > 0 ? (
@@ -292,9 +281,14 @@ function ActivityRowEditor({
         </div>
       ) : null}
 
+      <details className="mt-2">
+        <summary className="min-h-11 cursor-pointer py-3 text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
+          Add sub-unit to {activity.name}
+        </summary>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Input
           value={newSubUnit}
+          disabled={pending}
           onChange={(e) => setNewSubUnit(e.target.value)}
           aria-label={`Add sub-unit to ${activity.name}`}
           placeholder="Add sub-unit"
@@ -305,17 +299,21 @@ function ActivityRowEditor({
           disabled={pending || !newSubUnit.trim()}
           onClick={() => {
             const value = newSubUnit.trim();
-            setNewSubUnit("");
-            onRun(() => addSubUnitAction({ activityId: activity.id, name: value }));
+            onRun(async () => {
+              const result = await addSubUnitAction({ activityId: activity.id, name: value });
+              if (result.ok) setNewSubUnit("");
+              return result;
+            });
           }}
           className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1.5 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
         >
           Add
         </button>
       </div>
+      </details>
 
       <details className="mt-2">
-        <summary className="cursor-pointer text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
+        <summary className="min-h-11 cursor-pointer py-3 text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
           Edit
         </summary>
         <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -376,6 +374,18 @@ function ActivityRowEditor({
           >
           {pending ? "Saving…" : "Save"}
         </Button>
+        <button
+          type="button"
+          disabled={pending}
+          aria-label={`Delete ${activity.name}`}
+          onClick={() => {
+            if (!window.confirm(`Delete "${activity.name}"?`)) return;
+            onRun(() => deleteActivityAction({ id: activity.id }));
+          }}
+          className="ml-2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 py-1 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
+        >
+          Delete
+        </button>
       </details>
 
       {message ? (

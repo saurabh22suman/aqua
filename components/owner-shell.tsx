@@ -6,12 +6,11 @@ import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { FacilitySwitcher } from "@/components/facility-switcher";
 import { GlobalSearch } from "@/components/global-search";
 import { OwnerChromeOffset } from "@/components/owner-chrome-offset";
-import { OwnerAccountControl } from "@/components/owner-home/owner-account-control";
+import { AccountAvatar, OwnerAccountControl } from "@/components/owner-home/owner-account-control";
 import { OwnerShellCrumb } from "@/components/owner-shell-crumb";
 import { OwnerSideNav } from "@/components/owner-side-nav";
 import { TenantSignOut } from "@/components/tenant-sign-out";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
-import { PersonAvatar } from "@/components/avatar";
 import { ClubMark } from "@/components/branding/club-mark";
 import type { OwnerSidebarGroup } from "@/lib/nav";
 
@@ -78,6 +77,7 @@ export function OwnerShell({
   clubLogoUrl = null,
   accountName = null,
   tenantId,
+  guideHomeHref,
   accountLabel = "Account",
   children,
 }: {
@@ -96,6 +96,7 @@ export function OwnerShell({
   // shared PersonAvatar.
   accountName?: string | null;
   tenantId?: string;
+  guideHomeHref?: string;
   // The club's branding initials. Accepted for the callers that already
   // pass them, but NOT drawn in an account control: the academy mark is
   // branding, and an account control is a person.
@@ -169,7 +170,7 @@ export function OwnerShell({
                 {clubName}
               </p>
               <p className="mt-0.5 text-[12px] text-[var(--owner-nav-muted)]">
-                {accountLabel === "Manager" ? "Manager workspace" : "Owner workspace"}
+                {accountLabel === "Club owner" ? "Owner" : accountLabel} workspace
               </p>
               </div>
             </div>
@@ -196,21 +197,21 @@ export function OwnerShell({
           {/* The account row is a PERSON control: the mark is the signed-in
               person's own initials (the shared PersonAvatar — the name's
               graphemes on the theme tint), never the club's branding
-              initials. A user with no name on file draws the primitive's
-              honest unknown ("?"). */}
+              initials. A user with no name on file gets an account icon. */}
           {hasSettingsDestination ? (
             <Link
               href="/owner/settings"
+              aria-label={`Account — ${accountLabel}`}
               className="flex min-h-11 items-center gap-2.5 rounded-ctl px-1.5 py-1.5 motion-fast transition-colors hover:bg-[var(--owner-nav-hover)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--owner-nav-focus)]"
             >
-              <PersonAvatar name={accountName ?? ""} size={32} className="flex-none" />
+              <AccountAvatar name={accountName} />
               <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--owner-nav-ink)]">
                 {accountLabel}
               </span>
             </Link>
           ) : (
             <div className="flex items-center gap-2.5 px-1.5 py-1.5">
-              <PersonAvatar name={accountName ?? ""} size={32} className="flex-none" />
+              <AccountAvatar name={accountName} />
               <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium text-[var(--owner-nav-ink)]">
                 {accountLabel}
               </span>
@@ -243,7 +244,7 @@ export function OwnerShell({
               the header and BOTH search instances stay mounted. */}
           <div role="group" aria-label="Club and facility" className="flex min-w-0 flex-1 items-center gap-2 lg:block lg:max-w-60 lg:flex-initial lg:shrink">
             {clubLogoUrl ? <span className="lg:hidden"><ClubMark name={clubName ?? "Club workspace"} logoUrl={clubLogoUrl} size={24} /></span> : null}
-            <span title={clubName ?? "Club workspace"} className="min-w-0 flex-1 truncate text-sm font-medium lg:hidden">{clubName ?? "Club workspace"}</span>
+            <span className="min-w-0 flex-1 lg:hidden"><span title={clubName ?? "Club workspace"} className="block truncate text-sm font-medium">{clubName ?? "Club workspace"}</span><span className="block truncate text-xs text-ink-2">{accountLabel}</span></span>
             <div className="owner-facility min-w-0 max-w-[10.5rem] shrink-0 lg:mt-2 lg:w-full lg:max-w-none">
               {/* URL state can wait without replacing the workspace. */}
               <Suspense
@@ -262,7 +263,7 @@ export function OwnerShell({
           </div>
           <div className="hidden lg:block"><ThemeToggle compact /></div>
           <div data-testid="owner-header-account" className="flex-none">
-            <OwnerAccountControl accountName={accountName} tenantId={tenantId} />
+            <OwnerAccountControl accountName={accountName} tenantId={tenantId} guideHomeHref={guideHomeHref} />
           </div>
         </header>
 

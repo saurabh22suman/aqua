@@ -82,6 +82,7 @@ export default async function ReceptionCafePage() {
             locations={locations}
             terminology={terminology}
             taxRegistered={menu.taxRegistered}
+            taxRegistrationByLocation={menu.taxRegistrationByLocation}
           />
         ) : null}
       </div>

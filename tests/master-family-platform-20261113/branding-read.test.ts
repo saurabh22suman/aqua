@@ -1,8 +1,7 @@
-import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
+import sharp from "sharp";
 import { fixture } from "@/tests/remediation-20261112/fixture";
-import { getBranding } from "@/lib/services/branding";
-import * as branding from "@/lib/services/branding";
-import type { ObjectStore } from "@/lib/storage/object-store";
+import { getBranding, readBrandingLogo, uploadBrandingAsset } from "@/lib/services/branding";
 let f: Awaited<ReturnType<typeof fixture>>;
 beforeAll(async () => { f = await fixture(); });
 afterAll(async () => { await f.cleanup(); });
@@ -10,22 +9,19 @@ it("exposes a same-origin URL only for an asset bound to the selected tenant", a
   const digest = "c".repeat(64);
   const logo = { objectKey: `tenant-branding/${f.tenantId}/logo/${digest}.png`, sha256: digest, contentType: "image/png" };
   await f.admin.query("update tenants set branding=$1 where id=$2", [JSON.stringify({ logo }), f.tenantId]);
-  const own = await getBranding({ tenantId: f.tenantId }) as unknown as { logoUrl?: string | null };
-  expect(own.logoUrl).toBe(`/clubs/${f.tenantId}/branding/logo/${digest}?source=staff`);
+  expect((await getBranding({ tenantId: f.tenantId })).logoUrl).toBe(`/clubs/${f.tenantId}/branding/logo/${digest}?source=staff`);
   await f.admin.query("update tenants set branding=$1 where id=$2", [JSON.stringify({ logo }), f.otherTenant]);
-  const other = await getBranding({ tenantId: f.otherTenant }) as unknown as { logoUrl?: string | null };
-  expect(other.logoUrl ?? null).toBeNull();
+  expect((await getBranding({ tenantId: f.otherTenant })).logoUrl ?? null).toBeNull();
 });
-
 it("only serves the selected tenant's current asset version", async () => {
-  const digest = "d".repeat(64);
-  const logo = { objectKey: `tenant-branding/${f.tenantId}/logo/${digest}.png`, sha256: digest, contentType: "image/png" };
-  await f.admin.query("update tenants set branding=$1 where id=$2", [JSON.stringify({ logo }), f.tenantId]);
-  const bytes = new Uint8Array([1, 2, 3]);
-  const store: ObjectStore = { putObject: vi.fn(), getObject: vi.fn(async () => bytes), listObjects: vi.fn(async () => []), deleteObject: vi.fn() };
-  type Read = (ctx: { tenantId: typeof f.tenantId }, digest: string, store: ObjectStore) => Promise<Uint8Array | null>;
-  const read = (branding as unknown as { readBrandingLogo?: Read }).readBrandingLogo ?? (async () => null);
-  expect(await read({ tenantId: f.tenantId }, digest, store)).toEqual(bytes);
-  expect(await read({ tenantId: f.tenantId }, "e".repeat(64), store)).toBeNull();
-  expect(await read({ tenantId: f.otherTenant }, digest, store)).toBeNull();
+  const g = await fixture();
+  try {
+    const bytes = await sharp({ create: { width: 20, height: 20, channels: 4, background: "#123456" } }).png().toBuffer();
+    expect(await uploadBrandingAsset({ ctx: g.context(), kind: "logo", bytes, mime: "image/png" })).toEqual({ ok: true });
+    const url = (await getBranding({ tenantId: g.tenantId })).logoUrl!;
+    const digest = url.match(/\/logo\/([a-f0-9]{64})/)![1]!;
+    expect(await readBrandingLogo({ tenantId: g.tenantId }, digest)).not.toBeNull();
+    expect(await readBrandingLogo({ tenantId: g.tenantId }, "e".repeat(64))).toBeNull();
+    expect(await readBrandingLogo({ tenantId: g.otherTenant }, digest)).toBeNull();
+  } finally { await g.cleanup(); }
 });

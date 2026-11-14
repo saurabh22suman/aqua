@@ -9,6 +9,7 @@ import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { listPlansAction } from "@/lib/actions/membership-plans";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
 import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import {
   getFeesOverviewAction,
   listHubInvoicesAction,
@@ -60,8 +61,6 @@ export default async function FeesPage({
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.financial");
-  // Plans management is settings.manage; reads stay open.
-  const canManageSettings = hasPermission(ctx, "settings.manage") && await isLiveOwnerForSettings(ctx);
   const params = searchParams ? await searchParams : {};
   const tab = resolveTab(params.tab);
   const cookieStore = await cookies();
@@ -69,6 +68,14 @@ export default async function FeesPage({
     params.facility,
     cookieStore.get(FACILITY_COOKIE)?.value,
   );
+  if (facility && !(await canSelectFacility(ctx, facility))) {
+    const recovery = new URLSearchParams({ tab, facility: "all" });
+    if (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) recovery.set("from", params.from);
+    if (params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to)) recovery.set("to", params.to);
+    return <OwnerPage><PageHeader title="Facility unavailable" purpose="This facility is unavailable for your account." /><Link href={`/owner/fees?${recovery.toString()}`} className={buttonClasses({ variant: "secondary", size: "md" })}>View available facilities</Link></OwnerPage>;
+  }
+  // Plans management is settings.manage; reads stay open.
+  const canManageSettings = hasPermission(ctx, "settings.manage") && await isLiveOwnerForSettings(ctx);
   const timezone = await getTenantTimezoneAction();
   const period =
     params.from && params.to

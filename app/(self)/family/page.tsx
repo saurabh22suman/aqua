@@ -3,6 +3,7 @@ import { NotFoundError } from "@/lib/auth/context";
 import { resolveSelfScope } from "@/lib/auth/self-scope";
 import { SelfHome } from "@/components/self-home";
 import { readSelfHome } from "@/lib/services/self-home";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 
 // THE FAMILY HOME.
 //
@@ -28,12 +29,13 @@ export default async function FamilyHomePage() {
   const resolver = await resolveSelfScope("guardian", null);
   if (!resolver) redirect("/family/sign-in");
   try {
-    const { view, scopeKind, tenantId } = await resolver.read(async (tx, scope) => ({
+    const { view, scopeKind, tenantId, guideKey } = await resolver.read(async (tx, scope) => ({
       view: await readSelfHome(tx, scope, "guardian"),
       scopeKind: scope.kind,
       tenantId: scope.tenantId,
+      guideKey: guidePreferenceKey(scope.tenantId, scope.userId, "guardian"),
     }));
-    return <SelfHome view={view} audience="guardian" scopeKind={scopeKind} tenantId={tenantId} />;
+    return <SelfHome view={view} audience="guardian" scopeKind={scopeKind} tenantId={tenantId} guideKey={guideKey} />;
   } catch (error) {
     if (error instanceof NotFoundError) redirect("/family/sign-in");
     throw error;

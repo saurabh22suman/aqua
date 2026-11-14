@@ -2,8 +2,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// PR2-C1 — the academy profile form must let the owner fix a typo'd
-// GSTIN and show the server's field error without losing the input.
+// Club identity and billing have separate editors. Profile saves must preserve
+// draft/error behavior and must never overwrite the billing editor's GSTIN.
 
 const updateTenantProfileAction = vi.fn();
 vi.mock("@/lib/actions/tenant-profile", () => ({
@@ -26,37 +26,37 @@ afterEach(() => {
 });
 
 describe("AcademyProfileForm (PR2-C1)", () => {
-  it("renders the editable identity fields including GSTIN", () => {
+  it("renders identity fields without a competing GSTIN editor", () => {
     render(<AcademyProfileForm initial={INITIAL} />);
     expect(screen.getByLabelText("Club name")).toBeTruthy();
     expect(screen.getByText("INR")).toBeTruthy();
     expect(screen.getByText("India Standard Time (IST)")).toBeTruthy();
     expect(screen.getByText(/not editable here/i)).toBeTruthy();
-    expect(screen.getByLabelText(/GSTIN/)).toBeTruthy();
+    expect(screen.queryByLabelText(/GSTIN/)).toBeNull();
     expect(screen.getByRole("button", { name: /save/i })).toBeTruthy();
   });
 
-  it("submits the trimmed values and shows the server's GSTIN error", async () => {
+  it("submits trimmed identity without GSTIN and retains the draft on server refusal", async () => {
     updateTenantProfileAction.mockResolvedValue({
       kind: "error",
       code: "invalid",
-      message: "GSTIN format is invalid.",
+      message: "Club name is invalid.",
     });
     render(<AcademyProfileForm initial={INITIAL} />);
 
-    fireEvent.change(screen.getByLabelText(/GSTIN/), {
-      target: { value: "NOT-A-GSTIN" },
+    fireEvent.change(screen.getByLabelText("Club name"), {
+      target: { value: "  Updated Club  " },
     });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     expect(await screen.findByRole("alert")).toHaveProperty(
       "textContent",
-      "GSTIN format is invalid.",
+      "Club name is invalid.",
     );
+    expect((screen.getByLabelText("Club name") as HTMLInputElement).value).toBe("  Updated Club  ");
     expect(updateTenantProfileAction).toHaveBeenCalledWith({
-      name: "Aqua Worli Aquatic Club",
+      name: "Updated Club",
       timezone: "Asia/Kolkata",
-      gstin: "NOT-A-GSTIN",
     });
   });
 

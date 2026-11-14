@@ -3,6 +3,7 @@ import { gstDocumentLabel, placeOfSupplyForGstin } from "@/lib/gst";
 import { formatDateIST } from "@/lib/time/tz";
 import type { InvoiceDetail } from "@/lib/services/invoices";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
+import { BillingIssuerDetails } from "@/components/billing-issuer-details";
 
 // Owner redesign (C2) — the invoice state is a readable word in the
 // shared status pill, not the raw database value in a hand-rolled chip.
@@ -55,6 +56,7 @@ export function InvoiceSummary({
         {detail.gstin ? ` · GSTIN ${detail.gstin}` : ""}
         {placeOfSupply ? ` · place of supply ${placeOfSupply}` : ""}
       </p>
+      <BillingIssuerDetails issuer={detail.issuer} />
 
       <table className="mt-2 w-full text-[12px]">
         <thead>

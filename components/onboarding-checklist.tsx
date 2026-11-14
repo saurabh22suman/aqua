@@ -20,7 +20,7 @@ import type { OnboardingChecklist } from "@/lib/services/onboarding-checklist";
 // so. The state is read from the items themselves (`nextIncomplete`),
 // so no progress figure is faked and no stored state is mutated.
 
-export function OnboardingChecklistView({ data }: { data: OnboardingChecklist }) {
+export function OnboardingChecklistView({ data, guideKey }: { data: OnboardingChecklist; guideKey?: string }) {
   const nextIncomplete = data.items.find((it) => !it.complete);
   const unavailable = data.items.length === 0;
   const allDone = !unavailable && nextIncomplete === undefined;
@@ -40,7 +40,7 @@ export function OnboardingChecklistView({ data }: { data: OnboardingChecklist })
       {unavailable ? (
         <p className="mt-4 max-w-2xl text-sm text-ink-2">Register checks are unavailable with your current access.</p>
       ) : (
-        <OptionalWorkspaceGuide items={data.items.map(({ key, title, detail, complete }) => ({ key, title, detail, complete }))} />
+        <OptionalWorkspaceGuide key={guideKey} preferenceKey={guideKey} items={data.items.map(({ key, title, detail, complete }) => ({ key, title, detail, complete }))} />
       )}
 
       {!unavailable && <section

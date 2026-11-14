@@ -1,4 +1,4 @@
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { invoices } from "@/db/schema/invoices";
@@ -51,6 +51,7 @@ export async function createInvoiceForSubscription(
 
   try {
     return await withTenant(ctx.tenantId, async (tx) => {
+      await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
       const access = await resolveLocationAccess(tx, ctx);
       const rows = await tx
         .select({

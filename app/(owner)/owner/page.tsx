@@ -9,6 +9,7 @@ import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 import { OwnerLink } from "@/components/owner-ui/owner-link";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
@@ -44,7 +45,9 @@ export default async function OwnerHomePage({
         <h1 className="text-2xl font-semibold text-ink">Overview unavailable</h1>
         <p className="mt-2 text-ink-3">Reports are not available for this club.</p>
         <OptionalWorkspaceGuide
+          key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
           startCollapsed
+          preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
           title="About this overview"
           intro="This guide makes no changes."
           regionLabel="Optional unavailable overview guide"
@@ -145,6 +148,7 @@ export default async function OwnerHomePage({
       // picture stable for the visit: a re-render or a hydration pass
       // never swaps the art under the owner.
       illustrationSeed={ctx.tenantId}
+      guideKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
 
     />
   );

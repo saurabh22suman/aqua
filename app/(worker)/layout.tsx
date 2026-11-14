@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { getBranding } from "@/lib/services/branding";
 import { StaffClubContext } from "@/components/staff-ui/staff-club-context";
+import { staffSiteContext } from "@/lib/services/staff-scope";
 
 // A05 — the worker route group's frame. Like the other surfaces'
 // layouts, this only steers the unauthenticated visitor to /login;
@@ -16,6 +17,6 @@ export default async function WorkerLayout({ children }: { children: ReactNode }
     if (error instanceof ClubSelectionRequired) redirect("/clubs");
     redirect("/login");
   }
-  const brand = await getBranding(ctx);
-  return <div data-staff-surface className="min-h-dvh"><StaffClubContext clubName={brand.displayName ?? brand.fallbackDisplayName} clubLogoUrl={brand.logoUrl} />{children}</div>;
+  const [brand, siteLabel] = await Promise.all([getBranding(ctx), staffSiteContext(ctx)]);
+  return <div data-staff-surface className="min-h-dvh"><StaffClubContext clubName={brand.displayName ?? brand.fallbackDisplayName} clubLogoUrl={brand.logoUrl} roleLabel={ctx.roleKey} siteLabel={siteLabel} />{children}</div>;
 }

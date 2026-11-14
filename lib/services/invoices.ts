@@ -16,6 +16,8 @@ import type { ActionCtx } from "@/lib/auth/context";
 import { toSafePaise } from "@/lib/money/safe-paise";
 import type { InvoiceStatus, InvoiceSource } from "@/db/schema/invoices";
 import type { InvoicePayerKind } from "@/db/schema/invoices";
+import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
+import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
 
 // C-32 — invoice reads. Location-scoped (O-08): a scoped receptionist
 // sees only their own facility's documents. The write paths live in
@@ -44,6 +46,7 @@ export type InvoiceRow = {
   status: InvoiceStatus;
   source: InvoiceSource;
   gstin: string | null;
+  issuer?: BillingIssuer | null;
   locationId: string;
   locationName: string;
   subscriptionId: string | null;
@@ -99,6 +102,7 @@ function toRow(row: InvoiceJoinRow): InvoiceRow {
     status: inv.status as InvoiceStatus,
     source: inv.source as InvoiceSource,
     gstin: inv.gstin,
+    issuer: invoiceIssuerSnapshot(inv),
     locationId: inv.locationId,
     locationName: row.locationName,
     subscriptionId: inv.subscriptionId,

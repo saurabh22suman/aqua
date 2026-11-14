@@ -11,6 +11,8 @@ import { locationVisible, resolveLocationAccess } from "@/lib/services/location-
 import type { ActionCtx } from "@/lib/auth/context";
 import type { InvoiceStatus } from "@/db/schema/invoices";
 import type { InvoicePayerKind } from "@/db/schema/invoices";
+import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
 
 // FINAL DECISION (2026-11-05, completion pass): WR-9 is now DECIDED for this
 // release. An already-paid invoice is kept AS ISSUED and paid buyer/name
@@ -63,6 +65,7 @@ import type { InvoicePayerKind } from "@/db/schema/invoices";
 // already reads; no new table, no new join, no new query.
 
 export type BookingBill = {
+  issuer?: BillingIssuer | null;
   bookingId: string;
   facilityName: string;
   subUnitName: string | null;
@@ -331,6 +334,7 @@ export async function buildBill(
     ok: true,
     alreadyBilled: true,
     bill: {
+      issuer: invoiceIssuerSnapshot(invoice),
       bookingId: booking.id,
       facilityName,
       subUnitName,

@@ -21,6 +21,7 @@ import {
   type PaymentMethod,
 } from "@/components/cafe-order-shared";
 import type { BookingBill } from "@/lib/services/booking-billing";
+import { BillingIssuerDetails } from "@/components/billing-issuer-details";
 
 // V-04 — the booking bill: the facility/time header, the single
 // invoice line, the subtotal/GST/total maths (all integer paise,
@@ -86,6 +87,7 @@ export function BookingBillPanel({
       data-testid="booking-bill"
       data-amount-due={bill.amountDuePaise}
     >
+      <BillingIssuerDetails issuer={bill.issuer} />
       <div>
         <p className="text-[12px] text-ink-3">
           Bill for {bill.payerName || "guest"}

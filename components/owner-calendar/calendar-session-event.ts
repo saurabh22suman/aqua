@@ -74,7 +74,7 @@ export function sessionToCalendarEvent(
     status: session.status,
     capacityFillClass,
     capacityPercent: percent,
-    capacityLabel: `${session.enrolled} / ${session.capacity}`,
+    capacityLabel: `${session.enrolled} / ${session.capacity} enrolled`,
     resourceLabel: `${coach} · ${location}`,
     // The coach is the exclusive resource. A location is not: several
     // batches may share one location at the same time.

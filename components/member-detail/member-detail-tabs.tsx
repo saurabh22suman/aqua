@@ -1,7 +1,9 @@
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { OwnerLink } from "@/components/owner-ui/owner-link";
 
-// U-03 — the member 360 tabs. Payments / Progress / Notes / Documents
-// are real tabs. Progress was deliberately absent while M-03/V-10 were
+// U-03 — the member 360 tabs. Documents remains available for old links,
+// but is not promoted as a peer while document uploads are unavailable.
+// Progress was deliberately absent while M-03/V-10 were
 // other workstreams; V-11 wires it to the generic framework's
 // assessments.
 //
@@ -46,12 +48,17 @@ export function MemberDetailTabs({
       <SegmentedTabs
         ariaLabel="Member sections"
         active={active}
-        tabs={TABS.map((tab) => ({
+        tabs={TABS.filter((tab) => tab.key !== "documents" || active === "documents").map((tab) => ({
           key: tab.key,
           label: tab.label,
           href: `/owner/members/${memberId}?tab=${tab.key}${scope}`,
         }))}
       />
+      {active !== "documents" ? (
+        <OwnerLink href={`/owner/members/${memberId}?tab=documents${scope}`} className="mt-2 inline-flex min-h-11 items-center text-[12px] text-ink-3 underline underline-offset-2">
+          Documents
+        </OwnerLink>
+      ) : null}
     </div>
   );
 }

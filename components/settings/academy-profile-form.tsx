@@ -10,16 +10,13 @@ import { updateTenantProfileAction } from "@/lib/actions/tenant-profile";
 // Owner OpenPen management lane (29 October 2026).
 //
 // Academy profile editor, bounded to 700px. The reference groups the
-// academy's identity apart from its billing details; the GSTIN field is
-// the reason this screen exists, and its notice states that a change
-// affects future invoices only. Validation stays on the server and the
-// field error is shown verbatim.
+// academy's identity apart from its billing details. The separate club
+// billing editor owns GSTIN so profile saves cannot overwrite it.
 
 type ProfileState = {
   name: string;
   currency: string;
   timezone: string;
-  gstin: string;
 };
 
 export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
@@ -55,7 +52,6 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
         // value would be refused. This keeps every other edit available
         // without silently rewriting or converting the stored currency.
         timezone: state.timezone.trim(),
-        gstin: state.gstin.trim(),
       });
       if (result.kind === "error") setError(result.message);
       else setSavedAt(new Date());
@@ -126,24 +122,6 @@ export function AcademyProfileForm({ initial }: { initial: ProfileState }) {
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block" htmlFor="academy-gstin">
-            <span className="mb-1 block text-[13px] font-medium text-ink-2">
-              GSTIN (optional)
-            </span>
-            <Input
-              id="academy-gstin"
-              type="text"
-              maxLength={15}
-              {...field("gstin")}
-            />
-          </label>
-        </div>
-
-        <p className="mt-3 border-l-[3px] border-[var(--accent)] bg-deck px-3.5 py-2.5 text-[12.5px] text-ink-2">
-          Changing GSTIN affects future invoices only. Already-issued documents
-          keep the GSTIN they were issued with.
-        </p>
       </div>
 
       {error ? (

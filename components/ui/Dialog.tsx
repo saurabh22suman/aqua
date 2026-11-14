@@ -89,7 +89,7 @@ export function Dialog({
       )}
     >
       <div className="flex items-start gap-3 border-b border-line px-5 py-4">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
           <h2 id={titleId} className="font-display text-[16px] font-semibold">
             {title}
           </h2>

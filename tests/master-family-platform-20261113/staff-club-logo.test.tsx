@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+vi.mock("next/navigation", () => ({ usePathname: () => "/worker" }));
 import { StaffClubContext } from "@/components/staff-ui/staff-club-context";
 
 it("shows the authorized club logo beside the club name and falls back when the asset fails", () => {

@@ -13,6 +13,7 @@ export const uuid = z.string().uuid();
 export const createOrderInput = z.object({
   locationId: uuid,
   memberId: uuid.nullish(),
+  expectedTaxRegistered: z.boolean().optional(),
   lines: z
     .array(
       z.object({

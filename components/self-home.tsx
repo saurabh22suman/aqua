@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { GuideHelpButton } from "@/components/onboarding/guide-help-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { MEMBER_STATUS_TONE, StatusBadge } from "@/components/ui/StatusBadge";
 import { SelfSignOut } from "@/components/self-sign-out";
@@ -32,12 +33,14 @@ export function SelfHome({
   scopeKind,
   tenantId,
   canViewOwnBilling = null,
+  guideKey,
 }: {
   view: SelfHomeView & { clubLogoUrl?: string | null };
   audience: "member" | "guardian";
   scopeKind: "self_session" | "staff_session";
   tenantId: string;
   canViewOwnBilling?: boolean | null;
+  guideKey?: string;
 }) {
   const family = audience === "guardian";
   const duplicateNames = new Set(view.entries.filter((entry, index, all) =>
@@ -77,7 +80,7 @@ export function SelfHome({
             </h1>
             </div>
           </div>
-          <SelfSignOut audience={audience} />
+          <div className="flex flex-wrap items-center gap-3"><GuideHelpButton homeHref={family ? "/family" : "/member"} /><SelfSignOut audience={audience} /></div>
         </header>
 
         <Link href={`/clubs/${tenantId}/install?source=${scopeKind === "staff_session" ? "staff" : audience}`} prefetch={false} className="mt-4 inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">
@@ -85,7 +88,9 @@ export function SelfHome({
         </Link>
 
         <OptionalWorkspaceGuide
+          key={guideKey}
           startCollapsed
+          preferenceKey={guideKey}
           items={guideItems}
           title={family ? "Explore your family view" : "Explore your member view"}
           intro="Take a quick look at this page. You can skip the guide and reopen it here."

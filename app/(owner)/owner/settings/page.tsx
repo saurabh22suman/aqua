@@ -12,6 +12,7 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
 import { SetupDisclosure } from "@/components/settings/setup-disclosure";
 import {
@@ -107,6 +108,8 @@ export default async function Page({
             Open each step to review or change its details.
           </p>
           <OptionalWorkspaceGuide
+            key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
+            preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
             title="A little help with club setup"
             intro="Review these setup areas at your own pace. The guide does not change your settings."
             regionLabel="Optional club setup guide"

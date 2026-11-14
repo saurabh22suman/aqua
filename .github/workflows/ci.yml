@@ -70,6 +70,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Read the generated Unicode receipt text, rather than only its PDF bytes.
+      - name: Install receipt extraction tool
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
       # Real Chromium binary for tests/a11y/ops-focus-rendered.test.ts
       # (PR #176) and the scripts/e2e-*.ts drivers below. `pnpm install`
       # only installs the `playwright` package, not the browsers; this
