@@ -75,7 +75,7 @@ describe("member overview polish", () => {
     expect(input).toHaveProperty("value", "9876543210");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit phone" })).toBeTruthy());
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Edit phone" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Edit phone" })));
   });
   it("cancels with Escape and returns focus without saving", async () => {
     render(await MemberDetailPage({ params: Promise.resolve({ memberId: member.memberId }) }));
