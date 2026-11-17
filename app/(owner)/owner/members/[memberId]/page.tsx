@@ -19,7 +19,7 @@ import { MemberEnrolmentPanel } from "@/components/member-enrolment-panel";
 import { MemberSubscriptionPanel } from "@/components/member-subscription-panel";
 import { MemberInvoicesPanel } from "@/components/member-detail/member-invoices-panel";
 import { MemberFacilitiesPanel } from "@/components/member-facilities-panel";
-import { MakeupCreditsPanel } from "@/components/makeup-credits-panel";
+import { OwnerMemberTools, DeferredMakeupCreditsPanel } from "@/components/member-detail/owner-member-tools";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { formatDateIST } from "@/lib/time/tz";
@@ -215,8 +215,7 @@ export default async function MemberDetailPage({
             reads={overview}
           />
 
-          <details className="rounded-[18px] border border-line bg-paper p-4">
-            <summary className="min-h-11 cursor-pointer font-display text-[15px] font-semibold text-ink">Other {resolveTerm(terminology, "member", 1)} tools</summary>
+          <OwnerMemberTools label={`Other ${resolveTerm(terminology, "member", 1)} tools`}>
             <MemberTools
               member={member}
               terminology={terminology}
@@ -225,7 +224,7 @@ export default async function MemberDetailPage({
               canRedeem={canRedeem}
               reads={overview}
             />
-          </details>
+          </OwnerMemberTools>
         </div>
       ) : null}
       {tab === "payments" && !hasPermission(ctx, "invoices.read") ? <p role="alert" className="mt-4 text-[13px] text-ink-2">You do not have access to invoices.</p> : null}
@@ -373,7 +372,7 @@ function MemberTools({
               locations={locations}
               canWrite={canWrite}
             />
-            {panels.makeup ? <MakeupCreditsPanel
+            {panels.makeup ? <DeferredMakeupCreditsPanel
               key={member.memberId}
               memberId={member.memberId}
               canGrant={canGrant}
