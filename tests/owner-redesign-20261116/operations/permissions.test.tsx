@@ -9,7 +9,7 @@ vi.mock("@/lib/auth/permission", () => ({ hasPermission: (ctx: { permissions: Se
 vi.mock("@/db/tenant", () => ({ withTenant: async () => [{ timezone: "Asia/Kolkata" }] }));
 vi.mock("@/lib/services/attendance-history", () => ({ currentMonthPeriod: () => ({ from: "2026-11-01", to: "2026-11-30" }), getBatchAttendanceSummary: async () => ({ batchName: "Beginners", pct: null, sessionCount: 0 }) }));
 vi.mock("@/lib/actions/waitlist", () => ({ listWaitlistAction: mocks.waitlist }));
-vi.mock("@/lib/actions/programs", () => ({ listBatchesAction: async () => [{ id: "batch", name: "Beginners", programName: "Coaching", locationName: "Club" }] }));
+vi.mock("@/lib/actions/programs", () => ({ listBatchesAction: async () => [{ id: "batch", name: "Beginners", programName: "Coaching", locationName: "Club", startTime: "07:00:00", endTime: "08:00:00", coachName: "Coach Lee", capacity: 12 }] }));
 vi.mock("@/lib/actions/terminology", () => ({ getTerminologyAction: async () => ({locale:"en",overrides:{}}) }));
 vi.mock("@/lib/terminology/keys", async (original) => ({ ...await original<typeof import("@/lib/terminology/keys")>(), resolveTerm: () => "members" }));
 vi.mock("@/components/waitlist-board", () => ({ WaitlistBoard: () => <div>Waitlist</div> }));

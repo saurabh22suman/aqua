@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { asUserId } from "@/lib/ids";
 import { createLead, getLead, markLeadConverted, transitionLead } from "@/db/platform-leads";
-import { convertLead } from "@/db/platform-lead-conversion";
+import { convertLead as provisionLead } from "@/db/platform-lead-conversion";
 import { asTenantId } from "@/lib/ids";
 import { opsAction } from "@/db/ops-action";
 
@@ -11,6 +11,15 @@ import { opsAction } from "@/db/ops-action";
 const admin = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL });
 const actorId = asUserId(uuidv7());
 const run = uuidv7().replaceAll("-", "");
+const leadIds = new Set<string>();
+const tenantIds = new Set<string>();
+const actorIds = new Set<string>([actorId]);
+
+const convertLead: typeof provisionLead = async (...args) => {
+  const result = await provisionLead(...args);
+  if (result.kind === "ok") tenantIds.add(result.tenantId);
+  return result;
+};
 
 beforeAll(async () => {
   await admin.query(
@@ -23,7 +32,31 @@ beforeAll(async () => {
 afterAll(async () => {
   await admin.query("drop trigger if exists ops_provision_test_fail on platform_leads");
   await admin.query("drop function if exists ops_provision_test_fail()");
-  await admin.end();
+  try {
+    const linked = await admin.query<{ trial_tenant_id: string | null; converted_tenant_id: string | null }>(
+      "select trial_tenant_id, converted_tenant_id from platform_leads where id = any($1::uuid[])",
+      [[...leadIds]],
+    );
+    for (const row of linked.rows) {
+      if (row.trial_tenant_id) tenantIds.add(row.trial_tenant_id);
+      if (row.converted_tenant_id) tenantIds.add(row.converted_tenant_id);
+    }
+    await admin.query("delete from platform_audit_log where actor_id = any($1::uuid[])", [[...actorIds]]);
+    await admin.query("delete from platform_leads where id = any($1::uuid[])", [[...leadIds]]);
+    for (const id of tenantIds) {
+      for (const table of ["batches", "programs", "facility_sub_units", "facilities", "skill_levels", "skills", "plan_shapes", "message_templates", "location_presets", "tenant_features", "role_permissions", "roles", "leave_types", "locations"]) {
+        await admin.query(`delete from ${table} where tenant_id = $1`, [id]);
+      }
+      await admin.query("delete from tenants where id = $1", [id]);
+    }
+    await admin.query("delete from platform_users where id = any($1::uuid[])", [[...actorIds]]);
+    for (const [table, ids] of [["platform_leads", [...leadIds]], ["tenants", [...tenantIds]], ["platform_users", [...actorIds]]] as const) {
+      const remaining = await admin.query(`select id from ${table} where id = any($1::uuid[])`, [ids]);
+      expect(remaining.rows).toHaveLength(0);
+    }
+  } finally {
+    await admin.end();
+  }
 });
 
 async function lead() {
@@ -35,6 +68,7 @@ async function lead() {
     qualification: { locations: 2 },
   }, { actorId });
   if (result.kind !== "ok") throw new Error(result.message);
+  leadIds.add(result.leadId);
   return result.leadId;
 }
 
@@ -89,6 +123,7 @@ describe("atomic lead provisioning", () => {
   it("rejects business completion of an unlinked lead without a reason", async () => {
     const leadId = await lead();
     const tenantId = asTenantId(uuidv7());
+    tenantIds.add(tenantId);
     await admin.query("insert into tenants (id, slug, name, status) values ($1, $2, 'Test tenant', 'trial')", [tenantId, `unlinked-${run}`]);
     const result = await markLeadConverted(leadId, tenantId, { actorId });
     expect(result.kind).toBe("error");
@@ -116,6 +151,7 @@ describe("atomic lead provisioning", () => {
     expect(provisioned.kind).toBe("ok");
     if (provisioned.kind !== "ok") return;
     const otherId = asTenantId(uuidv7());
+    tenantIds.add(otherId);
     await admin.query("insert into tenants (id, slug, name, status) values ($1, $2, 'Other', 'trial')", [otherId, `other-${run}`]);
     const attempt = await transitionLead(leadId, { status: "trial", trialTenantId: otherId }, { actorId });
     expect(attempt.kind).toBe("error");
@@ -156,6 +192,7 @@ describe("atomic lead provisioning", () => {
     if (provisioned.kind !== "ok") return;
     const tenantId = asTenantId(provisioned.tenantId);
     const suspended = asUserId(uuidv7());
+    actorIds.add(suspended);
     await admin.query(`insert into platform_users (id, email, name, password_hash, password_salt, role, status)
       values ($1, $2, 'Suspended', 'h', 's', 'admin', 'suspended')`, [suspended, `suspended-${run}@platform.test`]);
     expect((await markLeadConverted(leadId, tenantId, { actorId: suspended, reason: "Agreed" })).kind).toBe("error");
@@ -171,6 +208,7 @@ describe("atomic lead provisioning", () => {
   it("rechecks operator authority after waiting for the lead lock", async () => {
     const leadId = await lead();
     const operator = asUserId(uuidv7());
+    actorIds.add(operator);
     await admin.query(`insert into platform_users (id, email, name, password_hash, password_salt, role, status)
       values ($1, $2, 'Waiting operator', 'h', 's', 'admin', 'active')`, [operator, `wait-${run}@platform.test`]);
     const lock = await admin.connect();
@@ -215,9 +253,30 @@ describe("atomic lead provisioning", () => {
   it("refuses a generic transition from a suspended administrator", async () => {
     const leadId = await lead();
     const operator = asUserId(uuidv7());
+    actorIds.add(operator);
     await admin.query(`insert into platform_users (id, email, name, password_hash, password_salt, role, status)
       values ($1, $2, 'Suspended operator', 'h', 's', 'admin', 'suspended')`, [operator, `transition-denied-${run}@platform.test`]);
     expect((await transitionLead(leadId, { status: "qualified" }, { actorId: operator })).kind).toBe("error");
     expect((await getLead(leadId))?.status).toBe("lead");
+  });
+
+  it("resumes a linked trial without provisioning, activating or extending the tenant", async () => {
+    const leadId = await lead();
+    const tenantId = asTenantId(uuidv7());
+    tenantIds.add(tenantId);
+    const deadline = "2030-06-15T12:30:00.000Z";
+    await admin.query("insert into tenants (id, slug, name, status, trial_expires_at) values ($1, $2, 'Resume tenant', 'trial', $3)", [tenantId, `resume-${run}`, deadline]);
+    expect((await transitionLead(leadId, { status: "trial", trialTenantId: tenantId }, { actorId })).kind).toBe("ok");
+    expect((await transitionLead(leadId, { status: "lapsed" }, { actorId })).kind).toBe("ok");
+    const before = await admin.query("select id, status, trial_expires_at from tenants where id = $1", [tenantId]);
+    const countBefore = await admin.query("select count(*)::text as n from tenants");
+    expect((await transitionLead(leadId, { status: "trial", trialTenantId: tenantId }, { actorId })).kind).toBe("ok");
+    const after = await admin.query("select id, status, trial_expires_at from tenants where id = $1", [tenantId]);
+    const countAfter = await admin.query("select count(*)::text as n from tenants");
+    expect(after.rows).toEqual(before.rows);
+    expect(after.rows[0].status).toBe("trial");
+    expect(after.rows[0].trial_expires_at.toISOString()).toBe(deadline);
+    expect(countAfter.rows).toEqual(countBefore.rows);
+    expect(await getLead(leadId)).toMatchObject({ status: "trial", trialTenantId: tenantId });
   });
 });

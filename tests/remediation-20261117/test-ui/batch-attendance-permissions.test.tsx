@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({notFound:()=>{throw new Error("not found");}}
 vi.mock("@/db/tenant", () => ({withTenant:async()=>[{timezone:"Asia/Kolkata"}]}));
 vi.mock("@/lib/services/attendance-history", () => ({currentMonthPeriod:()=>({from:"2026-11-01",to:"2026-11-30"}),getBatchAttendanceSummary:state.summary}));
 vi.mock("@/lib/services/coach-schedule", () => ({listUpcomingSessions:state.upcoming}));
-vi.mock("@/lib/actions/programs", () => ({listBatchesAction:async()=>[{id:"batch",name:"Batch A",programName:"Swim",locationName:"Club"}]}));
+vi.mock("@/lib/actions/programs", () => ({listBatchesAction:async()=>[{id:"batch",name:"Batch A",programName:"Swim",locationName:"Club",startTime:"07:00:00",endTime:"08:00:00",coachName:"Coach Lee",capacity:12}]}));
 vi.mock("@/lib/actions/waitlist", () => ({listWaitlistAction:async()=>[]}));
 vi.mock("@/lib/actions/terminology", () => ({getTerminologyAction:async()=>({overrides:{},locale:"en"})}));
 import Page from "@/app/(owner)/owner/batches/[batchId]/page";

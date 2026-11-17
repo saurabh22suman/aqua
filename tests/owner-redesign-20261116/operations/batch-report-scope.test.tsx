@@ -8,7 +8,7 @@ vi.mock("@/lib/auth/permission", () => ({ hasPermission: (_ctx: unknown, permiss
 vi.mock("@/db/tenant", () => ({ withTenant: async () => [{ timezone: "Asia/Kolkata" }] }));
 vi.mock("@/lib/services/attendance-history", () => ({ currentMonthPeriod: () => ({ from: "2026-11-01", to: "2026-12-01" }), getBatchAttendanceSummary: async () => ({ batchName: "Beginners", pct: null, sessionCount: 0 }) }));
 vi.mock("@/lib/actions/waitlist", () => ({ listWaitlistAction: vi.fn() }));
-vi.mock("@/lib/actions/programs", () => ({ listBatchesAction: async () => [{ id: "batch", name: "Beginners", programName: "Coaching", locationName: "Club" }] }));
+vi.mock("@/lib/actions/programs", () => ({ listBatchesAction: async () => [{ id: "batch", name: "Beginners", programName: "Coaching", locationName: "Club", startTime: "07:00:00", endTime: "08:00:00", coachName: "Coach Lee", capacity: 12 }] }));
 vi.mock("@/lib/actions/terminology", () => ({ getTerminologyAction: async () => ({ locale: "en", overrides: {} }) }));
 vi.mock("@/components/waitlist-board", () => ({ WaitlistBoard: () => null }));
 vi.mock("@/lib/services/selected-facility-access", () => ({ canSelectFacility: async () => true }));

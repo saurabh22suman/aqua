@@ -12,22 +12,24 @@ import OwnerNewMemberPage from "@/app/(owner)/owner/members/new/page";
 import ReceptionNewMemberPage from "@/app/(reception)/reception/members/new/page";
 import ReceptionMembersPage from "@/app/(reception)/reception/members/page";
 afterEach(cleanup);
-it("uses stable multisport owner terms despite a club swimming override", async () => {
+it("uses stable multisport owner terms despite a club player override", async () => {
   const tree = await MembersPage({});
   const directory = tree.props.children;
   render(await directory.type(directory.props));
   expect(await screen.findByRole("heading",{name:"Members"})).toBeTruthy();
   expect(screen.getByRole("link",{name:/add member/i})).toBeTruthy();
 });
-it("uses stable Owner terms while preserving Reception custom terms", async () => {
+it("uses stable Owner and Reception terms despite the player override", async () => {
   const view = render(await OwnerNewMemberPage({}));
   expect(screen.getByRole("heading",{name:"Add member"})).toBeTruthy();
   view.unmount();
   render(await ReceptionNewMemberPage());
-  expect(screen.getByRole("heading",{name:"Add player"})).toBeTruthy();
+  expect(screen.getByRole("heading",{name:"Add member"})).toBeTruthy();
+  expect(screen.queryByRole("heading",{name:"Add player"})).toBeNull();
 });
-it("uses the configured term in reception directory", async () => {
+it("uses stable member terms in the reception directory despite the player override", async () => {
   render(await ReceptionMembersPage({}));
-  expect(screen.getByRole("heading",{name:"Find a player"})).toBeTruthy();
-  expect(screen.getByLabelText("Search players")).toBeTruthy();
+  expect(screen.getByRole("heading",{name:"Find a member"})).toBeTruthy();
+  expect(screen.getByLabelText("Search members")).toBeTruthy();
+  expect(screen.queryByLabelText("Search players")).toBeNull();
 });

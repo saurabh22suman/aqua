@@ -178,7 +178,6 @@ const convertLeadFormInput = z.object({
   locationName: z.string().trim().min(1).max(200).optional(),
   planKey: z.string().trim().max(60).optional(),
   preset: z.string().trim().max(60).optional(),
-  trialExpiresAt: z.string().datetime().optional(),
 });
 
 export async function completeLeadAction(leadId: string, tenantId: string, reason: string): Promise<LeadMutationResult> {

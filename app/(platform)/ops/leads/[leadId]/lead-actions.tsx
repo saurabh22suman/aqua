@@ -59,6 +59,7 @@ export function LeadActions({
       const result: LeadMutationResult = await transitionLeadAction(leadId, {
         status,
         ...(reason ? { lostReason: reason } : {}),
+        ...(status === "trial" && linkedTenantId ? { trialTenantId: linkedTenantId } : {}),
       });
       if (result.kind !== "ok") setError(result.message);
       router.refresh();
@@ -117,6 +118,17 @@ export function LeadActions({
                   Mark {status.replace("_", " ")}
                 </Button>
               ))}
+              {linkedTenantId && currentStatus !== "trial" ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => move("trial")}
+                >
+                  Resume trial
+                </Button>
+              ) : null}
             </div>
             <div className="mt-4 flex flex-wrap items-end gap-2">
               <label className="block min-w-0 grow">
