@@ -1,5 +1,8 @@
 import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
+import { resolveTenantFeatureKeys } from "@/db/features";
+import { ForbiddenError } from "@/lib/auth/permission";
+import { callerHasPermission } from "@/lib/services/resource-access";
 import { payments } from "@/db/schema/payments";
 import { paymentReversals } from "@/db/schema/payment-reversals";
 import { attendance, sessions } from "@/db/schema/scheduling";
@@ -131,15 +134,29 @@ export async function getOwnerCharts(
   ctx: ActionCtx,
   options: OwnerChartsOptions = {},
 ): Promise<OwnerChartsData> {
-  const period = resolveOwnerPeriod(options.period ?? "day", options.now);
+  if (!ctx.userId && !ctx.roleKey) throw new ForbiddenError("reports.financial", "role_grant_missing");
+  const features = await resolveTenantFeatureKeys(ctx.tenantId);
+  if (!features.includes("reports")) throw new ForbiddenError("reports.financial", "feature_disabled");
+  if (!features.includes("billing")) throw new ForbiddenError("invoices.read", "feature_disabled");
+  const period = resolveOwnerPeriod(options.period ?? "last7", options.now);
   const locationId = options.locationId;
   // Only buckets that have started: a period-to-date axis must not show
   // future slots as if they were empty data.
+  //
+  // The "Last 7 days" window is a count of CALENDAR DATES, so all
+  // seven dates belong to it — today is the last one, and it is simply
+  // empty (or unknown, for attendance) until the day fills in. At
+  // exactly 00:00 IST the strict filter would drop today and the range
+  // would come back with six dates instead of seven. The Day, Week and
+  // Month axes keep their existing future-slot behaviour.
   const bucketDefs = periodBuckets(period).filter(
-    (bucket) => bucket.startIso < period.current.toIso,
+    (bucket) => period.key === "last7" || bucket.startIso < period.current.toIso,
   );
 
   return withTenant(ctx.tenantId, async (tx) => {
+    for (const permission of ["reports.financial", "invoices.read"]) {
+      if (!(await callerHasPermission(tx, ctx, permission))) throw new ForbiddenError(permission, "role_grant_missing");
+    }
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
       .from(tenants)

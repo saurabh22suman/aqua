@@ -3,13 +3,19 @@ import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, persons } from "@/db/schema/people";
 import { enquiries } from "@/db/schema/enquiries";
 import { invoices } from "@/db/schema/invoices";
+import { payments } from "@/db/schema/payments";
 import type { ActionCtx } from "@/lib/auth/context";
 import { surfaceForRole } from "@/lib/auth/surface-access";
 import { formatINR } from "@/lib/money/format";
+import { toSafePaise } from "@/lib/money/safe-paise";
 import {
   locationPredicate,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import {
+  enquiryConditions,
+  enquiryScope,
+} from "@/lib/services/enquiry-scope";
 
 // U-05 — R1 global search. One read-only surface across members,
 // enquiries and invoices, no cross-entity index: LIKE over the
@@ -116,6 +122,19 @@ async function searchEnquiries(
   ctx: GlobalSearchCtx,
   term: string,
 ): Promise<SearchRow[]> {
+  // The SAME visibility rule the enquiries list applies
+  // (lib/services/enquiry-scope.ts): an enquiry belongs to a site, a
+  // non-management caller sees only located enquiries inside its allowed
+  // locations, and an unresolved enquiry (location_id IS NULL) stays in
+  // the management review queue.
+  //
+  // Before this, the search box applied neither the location scope nor
+  // the management rule, so it could surface another site's enquiries and
+  // the unresolved queue that the list deliberately hides - two surfaces
+  // of the same tenant disagreeing about what the caller may see. The
+  // shared helper is used READ-ONLY here; the rule stays owned by the
+  // enquiry service family.
+  const { predicate } = await enquiryScope(tx, ctx);
   const rows = await tx
     .select({
       id: enquiries.id,
@@ -126,9 +145,9 @@ async function searchEnquiries(
     .from(enquiries)
     .where(
       and(
-        eq(enquiries.tenantId, ctx.tenantId),
-        isNull(enquiries.deletedAt),
-        or(ilike(enquiries.fullName, term), ilike(enquiries.phone, term))!,
+        ...enquiryConditions(ctx, predicate, [
+          or(ilike(enquiries.fullName, term), ilike(enquiries.phone, term))!,
+        ]),
       ),
     )
     .orderBy(desc(enquiries.createdAt))
@@ -145,16 +164,15 @@ async function searchPayments(
   tx: TenantTx,
   ctx: GlobalSearchCtx,
   term: string,
-): Promise<Array<SearchRow & { memberId: string }>> {
+): Promise<Array<SearchRow & { locationId: string }>> {
   const access = await resolveLocationAccess(tx, ctx);
   const conditions = [
     eq(invoices.tenantId, ctx.tenantId),
-    isNull(members.deletedAt),
-    isNull(persons.deletedAt),
     or(
       ilike(invoices.invoiceNumber, term),
       ilike(persons.fullName, term),
       ilike(persons.phone, term),
+      ilike(invoices.guestName, term),
     )!,
   ];
   const predicate = locationPredicate(invoices.locationId, access);
@@ -163,24 +181,35 @@ async function searchPayments(
   const rows = await tx
     .select({
       id: invoices.id,
-      memberId: invoices.memberId,
+      locationId: invoices.locationId,
       invoiceNumber: invoices.invoiceNumber,
       totalPaise: invoices.totalPaise,
       memberName: persons.fullName,
+      guestName: invoices.guestName,
     })
     .from(invoices)
-    .innerJoin(members, eq(members.id, invoices.memberId))
-    .innerJoin(persons, eq(persons.id, members.personId))
+    .leftJoin(members, and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId), isNull(members.deletedAt)))
+    .leftJoin(persons, and(eq(persons.id, members.personId), eq(persons.tenantId, ctx.tenantId), isNull(persons.deletedAt)))
     .where(and(...conditions))
     .orderBy(desc(invoices.issuedOn))
     .limit(SEARCH_RESULT_LIMIT_PER_KIND);
 
   return rows.map((r) => ({
     id: r.id,
-    memberId: r.memberId,
+    locationId: r.locationId,
     title: `Invoice ${r.invoiceNumber}`,
-    subtitle: `${formatINR(Number(r.totalPaise))} · ${r.memberName}`,
+    subtitle: `Invoice total ${formatINR(toSafePaise(r.totalPaise))} · ${r.memberName ?? r.guestName ?? "Payer unavailable"}`,
   }));
+}
+
+async function searchPaymentReferences(tx: TenantTx, ctx: GlobalSearchCtx, term: string): Promise<SearchRow[]> {
+  const access = await resolveLocationAccess(tx, ctx);
+  const conditions = [eq(payments.tenantId, ctx.tenantId), eq(payments.status, "captured"), ilike(payments.reference, term)];
+  const predicate = locationPredicate(payments.locationId, access);
+  if (predicate) conditions.push(predicate);
+  const rows = await tx.select({id: payments.id, reference: payments.reference, amount: payments.amountPaise})
+    .from(payments).where(and(...conditions)).orderBy(desc(payments.receivedAt)).limit(SEARCH_RESULT_LIMIT_PER_KIND);
+  return rows.map((row) => ({id: row.id, title: `Payment ${row.reference ?? ""}`, subtitle: `Received ${formatINR(toSafePaise(row.amount))}`}));
 }
 
 export async function globalSearch(
@@ -214,15 +243,18 @@ export async function globalSearch(
     if (kinds.includes("payment")) {
       const paymentRows = await searchPayments(tx, ctx, term);
       for (const r of paymentRows) {
-        // A payment has no page of its own in R1; it deep-links to the
-        // member's ledger where the invoice rows render (C-32).
         hits.push({
           kind: "payment",
           id: r.id,
           title: r.title,
           subtitle: r.subtitle,
-          href: `${base}/members/${r.memberId}`,
+          href: base === "/reception" ? `/reception/collect-payment?invoice=${encodeURIComponent(r.id)}` : `/owner/invoices/${encodeURIComponent(r.id)}?facility=${encodeURIComponent(r.locationId)}`,
         });
+      }
+      if (ctx.permissions.has("payments.read")) {
+        for (const r of await searchPaymentReferences(tx, ctx, term)) {
+          hits.push({kind:"payment", id:r.id, title:r.title, subtitle:r.subtitle, href:`/api/receipts/${encodeURIComponent(r.id)}`});
+        }
       }
     }
 

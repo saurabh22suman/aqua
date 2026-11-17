@@ -3,6 +3,8 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { asUserId } from "@/lib/ids";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { locations, persons } from "@/db/schema";
 import { createMember } from "@/lib/services/register";
@@ -19,6 +21,8 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let tenantId: TenantId = asTenantId("");
+const actor = () => ({ tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] });
+const actorId = asUserId(uuidv7());
 let locationId = "";
 
 beforeAll(async () => {
@@ -30,6 +34,9 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Staff Records', $3, $4)",
     [tenantId, `staff-records-${RUN}`, plan.rows[0]?.id ?? null, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -47,7 +54,11 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -55,13 +66,13 @@ afterAll(async () => {
 describe("createStaff", () => {
   it("creates a new person and a staff row for them", async () => {
     const result = await createStaff(
-      { tenantId, userId: undefined },
+      actor(),
       { fullName: "New Coach", staffType: "coach" },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const rows = await listStaff({ tenantId, userId: undefined }, { staffType: "coach" });
+    const rows = await listStaff(actor(), { staffType: "coach" });
     expect(rows.some((r) => r.id === result.staffId && r.fullName === "New Coach")).toBe(true);
   });
 
@@ -71,13 +82,13 @@ describe("createStaff", () => {
     );
 
     const ok = await createStaff(
-      { tenantId, userId: undefined },
+      actor(),
       { existingPersonId: person.id, staffType: "worker" },
     );
     expect(ok.ok).toBe(true);
 
     const missing = await createStaff(
-      { tenantId, userId: undefined },
+      actor(),
       { existingPersonId: uuidv7(), staffType: "worker" },
     );
     expect(missing.ok).toBe(false);
@@ -88,13 +99,13 @@ describe("createStaff", () => {
       tx.insert(persons).values({ tenantId, fullName: "Dup Type Person" }).returning({ id: persons.id }),
     );
     const first = await createStaff(
-      { tenantId, userId: undefined },
+      actor(),
       { existingPersonId: person.id, staffType: "accountant" },
     );
     expect(first.ok).toBe(true);
 
     const second = await createStaff(
-      { tenantId, userId: undefined },
+      actor(),
       { existingPersonId: person.id, staffType: "accountant" },
     );
     expect(second.ok).toBe(false);
@@ -102,7 +113,7 @@ describe("createStaff", () => {
 
   it("one person can be both a coach and a member", async () => {
     const member = await createMember(
-      { tenantId, userId: undefined },
+      actor(),
       {
         fullName: "Coach Who Swims",
         dateOfBirth: "1990-01-01",
@@ -116,7 +127,7 @@ describe("createStaff", () => {
     if (!member.ok) throw new Error("fixture failed: " + member.error);
 
     const staffResult = await createStaff(
-      { tenantId, userId: undefined },
+      actor(),
       { existingPersonId: member.personId, staffType: "coach" },
     );
     expect(staffResult.ok).toBe(true);
@@ -130,8 +141,8 @@ describe("createStaff", () => {
 
 describe("listStaff", () => {
   it("filters by staffType", async () => {
-    await createStaff({ tenantId, userId: undefined }, { fullName: "Filter Worker", staffType: "worker" });
-    const workers = await listStaff({ tenantId, userId: undefined }, { staffType: "worker" });
+    await createStaff(actor(), { fullName: "Filter Worker", staffType: "worker" });
+    const workers = await listStaff(actor(), { staffType: "worker" });
     expect(workers.every((r) => r.staffType === "worker")).toBe(true);
     expect(workers.length).toBeGreaterThan(0);
   });

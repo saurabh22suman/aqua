@@ -3,11 +3,14 @@ import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
+import { PersonAvatar } from "@/components/avatar";
 import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
+import { StaffPage } from "@/components/staff-ui/staff-page";
 
 export default async function ReceptionEnquiryDetailPage({
   params,
@@ -22,18 +25,25 @@ export default async function ReceptionEnquiryDetailPage({
     listLocationsAction(),
     listBatchesAction(),
     // L3 audit — see owner-side page for the rationale.
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
   if (!enquiry) notFound();
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <StaffPage>
       <BackLink href="/reception/enquiries" label="Enquiries" />
-      <h1 className="font-display text-[19px] font-semibold">{enquiry.fullName}</h1>
-      <p className="mt-0.5 text-[12.5px] text-ink-3">
-        {enquiry.source}
-        {enquiry.phone ? ` · ${formatPhoneIN(enquiry.phone)}` : ""}
-      </p>
+      <div className="flex items-start gap-3">
+        <PersonAvatar name={enquiry.fullName} size={44} className="flex-none" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
+            {enquiry.fullName}
+          </h1>
+          <p className="mt-0.5 text-[12.5px] text-ink-3">
+            {enquiry.source}
+            {enquiry.phone ? ` · ${formatPhoneIN(enquiry.phone)}` : ""}
+          </p>
+        </div>
+      </div>
       <div className="mt-4">
         <EnquiryDetailView
           enquiry={enquiry}
@@ -43,6 +53,6 @@ export default async function ReceptionEnquiryDetailPage({
           terminology={terminology}
         />
       </div>
-    </main>
+    </StaffPage>
   );
 }

@@ -59,6 +59,7 @@ const scopedFacilityB = uuidv7();
 
 const actor = asUserId(uuidv7());
 const otherActor = asUserId(uuidv7());
+const scopedActor = asUserId(uuidv7());
 
 const ctx = { tenantId: tenant, userId: actor, requestId: uuidv7() };
 const otherCtx = {
@@ -68,7 +69,7 @@ const otherCtx = {
 };
 const scopedCtx = {
   tenantId: scopedTenant,
-  userId: actor,
+  userId: scopedActor,
   requestId: uuidv7(),
   allLocations: false,
   locationIds: [scopedLocA],
@@ -147,12 +148,26 @@ beforeAll(async () => {
       `+9194${String(Date.now()).slice(-8)}`,
     ],
   );
+  await admin.query("insert into users(id,phone) values($1,$2)", [scopedActor, `+9195${String(Date.now()).slice(-8)}`]);
+  for (const [tenantId, userId] of [[tenant, actor], [otherTenant, otherActor], [scopedTenant, actor]] as const) {
+    const roleId = uuidv7();
+    await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenantId]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, userId, roleId]);
+    if (tenantId === scopedTenant) {
+      const membershipId = uuidv7();
+      await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',false)", [membershipId, tenantId, scopedActor, roleId]);
+      await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [uuidv7(), tenantId, membershipId, scopedLocA]);
+    }
+  }
 }, 60_000);
 
 afterAll(async () => {
   for (const id of [tenant, otherTenant, scopedTenant]) {
     await admin.query("delete from booking_price_rules where tenant_id = $1", [id]);
     await admin.query("delete from config_values where tenant_id = $1", [id]);
+    await admin.query("delete from membership_locations where tenant_id = $1", [id]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [id]);
+    await admin.query("delete from roles where tenant_id = $1", [id]);
     await admin.query("delete from facilities where tenant_id = $1", [id]);
     await admin.query("delete from locations where tenant_id = $1", [id]);
     await admin.query("delete from tenants where id = $1", [id]);

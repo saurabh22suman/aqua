@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import { RotateCcw, Save } from "lucide-react";
 import {
@@ -256,25 +257,25 @@ export function TerminologyForm({
                 <div className="mt-3 grid grid-cols-2 gap-2.5">
                   <label className="block">
                     <span className="block text-[12px] text-ink-3 mb-1">Singular</span>
-                    <input
+                    <Input
                       type="text"
                       value={oneInput}
                       onChange={(e) => setRow(row.key, { one: e.target.value })}
                       placeholder={defaults.one}
                       maxLength={60}
-                      className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+                      className="w-full border"
                       data-testid={`term-${row.key}-one`}
                     />
                   </label>
                   <label className="block">
                     <span className="block text-[12px] text-ink-3 mb-1">Plural</span>
-                    <input
+                    <Input
                       type="text"
                       value={otherInput}
                       onChange={(e) => setRow(row.key, { other: e.target.value })}
                       placeholder={defaults.other}
                       maxLength={60}
-                      className="w-full rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px] min-h-[44px]"
+                      className="w-full border"
                       data-testid={`term-${row.key}-other`}
                     />
                   </label>

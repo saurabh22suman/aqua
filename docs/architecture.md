@@ -332,13 +332,15 @@ Mechanical guarantees, not code review: `tests/tier1/user-scope.test.ts` proves 
 
 Tenant-staff login remains phone + PIN. **Decision, 2026-10-07:** self-service recovery uses a WhatsApp OTP, then New PIN / Re-enter PIN / Save. Durable challenges are hashed, rate-limited, browser- and purpose-bound, and single-use; saving revokes that identity's existing sessions. Public Better Auth email/phone sign-in and OTP verification doors are blocked; internal email/password APIs remain the credential store behind the scoped PIN service (`disableSignUp: true`).
 
+**Staging implementation drift, observed 2026-11-13:** the platform-staff row below records the earlier policy, not the currently staged implementation. Staging prerequisite `f2045f8` disabled legacy Ops WhatsApp login; the request and verify routes refuse that purpose, and the current Ops sign-in uses password and authenticator. This note records the discrepancy; it does not establish a new product policy. Tenant PIN recovery remains a separate WhatsApp purpose. Mock capture is non-production only.
+
 | Actor | Method |
 |---|---|
 | Owner / coach / admin | Phone + PIN, or magic link (first login: set-PIN screen), session cookie, **30-day sliding expiry** (personal phones; `session.expiresIn` in `lib/auth/server.ts`) |
 | Receptionist | Same doors, session hard-capped at **12h from login** (shared front-desk device; enforced in `sessionExists()` + `requireDefaultCtx()`/`requireCtx()` via `isSessionExpiredForRole()`, because better-auth has no per-role session concept) |
 | Parent | **No account.** Signed magic link, single-purpose, 7-day expiry |
 | Walk-in customer | No account. Booking reference plus phone |
-| Platform staff | Separate table and session; registered phone + WhatsApp OTP (decision 2026-10-07). Phone provisioning is explicit. Password/TOTP and the env-only credential door are no longer exposed by web actions; legacy DB helpers remain for historical tooling/tests. Mock capture is non-production only; production requires a real configured transport |
+| Platform staff | **Historical 2026-10-07 policy; see staged-implementation drift above:** separate table and session; registered phone + WhatsApp OTP. The earlier policy described password/TOTP and the env-only credential door as no longer exposed; this no longer describes the staged implementation. |
 
 A person can belong to multiple tenants (a coach working at two academies). Identity is global; membership is per tenant.
 

@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Skills editor cold-load. Shape mirrors /owner/settings/skills: the
 // breadcrumb, heading, intro line, then one framework block (level
@@ -6,7 +7,7 @@ import { Skeleton } from "@/components/skeleton";
 // land while the framework query resolves.
 export default function Loading() {
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-2xl">
       <Skeleton w={32} h={3} />
       <Skeleton w={36} h={5} className="mt-2" />
       <Skeleton w={72} h={3} className="mt-2" />
@@ -25,6 +26,6 @@ export default function Loading() {
           <Skeleton w={32} h={3} className="mt-2" />
         </div>
       </div>
-    </main>
+    </OwnerPage>
   );
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Owner-UI review P2 (2026-10-13) — a failed coverage read is not "no
@@ -23,23 +23,38 @@ import { LeaveDecisionControls } from "@/components/leave-decision-controls";
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("LeaveDecisionControls recovery (P2)", () => {
   it("distinguishes a failed coverage read from an empty one and retries", async () => {
+    let rejectFirst!: (error: Error) => void;
+    let resolveRetry!: (sessions: []) => void;
     listUncoveredSessionsAction
-      .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce([]);
+      .mockImplementationOnce(() => new Promise((_, reject) => { rejectFirst = reject; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveRetry = resolve; }));
     render(<LeaveDecisionControls requestId="r1" />);
 
     fireEvent.click(screen.getByRole("button", { name: /review/i }));
+    expect(listUncoveredSessionsAction).toHaveBeenCalledTimes(1);
+    expect(listUncoveredSessionsAction).toHaveBeenNthCalledWith(1, { requestId: "r1" });
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => { rejectFirst(new Error("offline")); });
     await waitFor(() =>
       expect(screen.getByText(/could not check coverage/i)).toBeTruthy(),
     );
     expect(screen.queryByText(/none — no sessions/i)).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    const retry = screen.getByRole("button", { name: /retry/i }) as HTMLButtonElement;
+    await waitFor(() => expect(retry.disabled).toBe(false));
+    fireEvent.click(retry);
+    expect(listUncoveredSessionsAction).toHaveBeenCalledTimes(2);
+    expect(listUncoveredSessionsAction).toHaveBeenNthCalledWith(2, { requestId: "r1" });
+    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect((screen.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText(/none — no sessions/i)).toBeNull();
+    await act(async () => { resolveRetry([]); });
     await waitFor(() =>
       expect(screen.getByText(/none — no sessions/i)).toBeTruthy(),
     );
@@ -52,6 +67,7 @@ describe("LeaveDecisionControls recovery (P2)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /review/i }));
     await waitFor(() => expect(screen.getByText(/none — no sessions/i)).toBeTruthy());
+    await waitFor(() => expect((screen.getByRole("button", { name: /approve/i }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /approve/i }));
 
     await waitFor(() =>

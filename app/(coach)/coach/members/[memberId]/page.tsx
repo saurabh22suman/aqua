@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Phone, Stethoscope, Users } from "lucide-react";
 import { getCoachMemberDetailAction } from "@/lib/actions/coach";
 import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { listMemberAlertsAction } from "@/lib/actions/absence-alerts";
@@ -11,7 +10,15 @@ import { requireCoach } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { formatPhoneIN } from "@/lib/phone";
 import { BackLink } from "@/components/ui/BackLink";
+import { PersonAvatar } from "@/components/avatar";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { buttonClasses } from "@/components/ui/Button";
 import { requireUuidParam } from "@/lib/params";
+import {
+  STAFF_CARD,
+  StaffPage,
+  StaffSection,
+} from "@/components/staff-ui/staff-page";
 
 // Coach member detail — the coach-scoped subset of the member's
 // record. The page is intentionally narrow: name, code, batches
@@ -42,65 +49,67 @@ export default async function CoachMemberDetailPage({
   ]);
   if (!m) notFound();
   const canAssess = ladderEnabled && hasPermission(ctx, "levels.assess");
+  const hasLadder =
+    ladderEnabled && (progress?.frameworks.some((f) => f.nodes.length > 0) ?? false);
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <StaffPage>
       <BackLink href="/coach/members" label="Members" />
 
-      <h1 className="font-display text-[19px] font-semibold leading-tight">
-        {m.fullName}
-      </h1>
-      <p className="mt-0.5 text-[12.5px] text-ink-3">
-        {m.memberCode}
-        {m.isMinor ? " · minor" : ""}
-        {m.batches.length > 0 ? ` · ${m.batches.join(", ")}` : ""}
-      </p>
-
-      <section className="mt-5 rounded-card border border-line bg-paper p-4 space-y-3">
-        <div className="flex items-start gap-2.5">
-          <Phone size={15} className="text-ink-3 mt-0.5 flex-none" aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wide text-ink-3 font-medium">
-              Phone
-            </p>
-            <p className="mt-0.5 text-[14px] font-mono">
-              {m.phone ? (
-                formatPhoneIN(m.phone)
-              ) : (
-                <span className="text-ink-3">No phone on file</span>
-              )}
-            </p>
-          </div>
+      <div className="flex items-start gap-3" data-testid="coach-member-identity">
+        <PersonAvatar name={m.fullName} seed={m.memberId} size={48} className="flex-none" />
+        <div className="min-w-0 flex-1">
+          <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
+            {m.fullName}
+          </h1>
+          <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
+            {m.memberCode}
+            {m.isMinor ? " · minor" : ""}
+            {m.batches.length > 0 ? ` · ${m.batches.join(", ")}` : ""}
+          </p>
         </div>
-        <div className="flex items-start gap-2.5">
-          <Stethoscope size={15} className="text-ink-3 mt-0.5 flex-none" aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-wide text-ink-3 font-medium">
-              Medical notes
-            </p>
-            <p className="mt-0.5 text-[13.5px] leading-snug">
-              {m.medicalNotes ?? <span className="text-ink-3">None on file.</span>}
-            </p>
-          </div>
+      </div>
+
+      <section className={`mt-4 space-y-3 p-4 ${STAFF_CARD}`}>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+            Phone
+          </p>
+          <p className="mt-0.5 text-[14px] text-ink">
+            {m.phone ? (
+              formatPhoneIN(m.phone)
+            ) : (
+              <span className="text-ink-3">No phone on file</span>
+            )}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">
+            Medical notes
+          </p>
+          <p className="mt-0.5 text-[13.5px] leading-snug text-ink">
+            {m.medicalNotes ?? <span className="text-ink-3">None on file.</span>}
+          </p>
         </div>
       </section>
 
       <AbsenceAlertsList alerts={alerts} />
 
       {m.isMinor && m.guardians.length > 0 ? (
-        <section className="mt-4">
-          <h2 className="flex items-center gap-1.5 font-display text-[14px] font-semibold">
-            <Users size={15} className="text-ink-3" />
-            Guardians
-          </h2>
-          <p className="mt-1 text-[12px] text-ink-3">
-            Who to call if something goes wrong.
-          </p>
-          <ul className="mt-2 divide-y divide-line rounded-card border border-line bg-paper">
+        <StaffSection
+          title={
+            <span className="flex items-center gap-1.5">
+              <OwnerIcon name="members" size={16} className="text-ink-3" />
+              Guardians
+            </span>
+          }
+          meta="Who to call"
+        >
+          <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
             {m.guardians.map((g, i) => (
               <li key={i} className="px-3.5 py-2.5 text-[13px]">
-                <p className="font-medium">{g.fullName}</p>
-                <p className="mt-0.5 font-mono text-ink-2">
+                <p className="font-medium text-ink">{g.fullName}</p>
+                <p className="mt-0.5 text-ink-2">
                   {g.phone ? (
                     formatPhoneIN(g.phone)
                   ) : (
@@ -110,35 +119,47 @@ export default async function CoachMemberDetailPage({
               </li>
             ))}
           </ul>
-        </section>
+        </StaffSection>
       ) : null}
 
-      <section className="mt-5">
-        <h2 className="font-display text-[14px] font-semibold">Attendance</h2>
+      <StaffSection
+        title={
+          <span className="flex items-center gap-1.5">
+            <OwnerIcon name="calendar" size={16} className="text-ink-3" />
+            Attendance
+          </span>
+        }
+      >
         <MemberAttendanceGrid
           rows={m.attendance.rows}
           today={m.attendance.today}
           scopeNote="Counts only sessions from batches you coach."
           registerBasePath="/coach/register"
         />
-      </section>
+      </StaffSection>
 
       {ladderEnabled ? (
-        <section className="mt-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="font-display text-[14px] font-semibold">Progress</h2>
-            {canAssess ? (
+        <StaffSection
+          title={
+            <span className="flex items-center gap-1.5">
+              <OwnerIcon name="reports" size={16} className="text-ink-3" />
+              Progress
+            </span>
+          }
+          action={
+            canAssess && hasLadder ? (
               <Link
                 href={`/coach/members/${m.memberId}/assess`}
-                className="inline-flex min-h-[44px] items-center rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
+                className={buttonClasses({ variant: "primary", size: "sm" })}
               >
                 Record assessment
               </Link>
-            ) : null}
-          </div>
+            ) : null
+          }
+        >
           <MemberProgressPanel progress={progress} />
-        </section>
+        </StaffSection>
       ) : null}
-    </main>
+    </StaffPage>
   );
 }

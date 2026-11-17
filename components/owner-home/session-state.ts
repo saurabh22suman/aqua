@@ -2,18 +2,22 @@ import type { TodaysLane } from "@/lib/services/dashboard";
 
 // Owner Home — the day's sessions, as pure rules.
 //
-// The timeline has to say three things about a session, and each of
-// them has to be TRUE:
+// The approved row (3 November 2026) states: the time, the class with a
+// readable COACH and the SESSION'S OWN venue, and ONE truthful state
+// pill. Its facts are:
 //
-//   * how many places are taken (a fraction of the batch capacity,
-//     with over-capacity flagged separately);
-//   * what state the REGISTER is in — completion, never attendance;
-//   * whether the session is the one coming up next.
+//   * the session's recorded status when the read supplies one — the
+//     real enum is scheduled | held | cancelled (a `completed` value is
+//     still honoured for compatibility);
+//   * otherwise the session's CLOCK window (real timestamps): Earlier
+//     today / Scheduled now / Starts in N min / Scheduled;
+//   * otherwise the legacy `started` flag: Started / Scheduled.
 //
-// The third one is the trap. A session that has started is not
-// necessarily still running, so "in progress" is claimed only when the
-// register says so (marks recorded and the roster not yet complete).
-// Everything else is stated as what it is.
+// "Scheduled now" is a statement about the clock window, never recorded
+// attendance, and register completion is NEVER recast as session
+// progress or as attendance. The register and occupancy helpers below
+// stay truthful on their own terms; the row uses the session's venue
+// (never a batch's), and an over-capacity batch is still SAID.
 //
 // The rules live here, apart from the markup, so a test can read them
 // without a DOM and the timeline cannot state one thing on one screen
@@ -108,4 +112,65 @@ export function placesBooked(lanes: readonly TodaysLane[]): {
     }),
     { enrolled: 0, capacity: 0 },
   );
+}
+
+/**
+ * Optional UI display fields agreed for the session row while the read-model
+ * DTO proposal is reviewed independently. They are OPTIONAL: a legacy row
+ * without them still renders truthfully, and no value is ever invented.
+ */
+export type TodaysLaneDisplay = TodaysLane & {
+  /** The real instant the session starts (ISO), when the read provides it. */
+  startsAt?: string;
+  /** The real instant it ends, or null when unknown. */
+  endsAt?: string | null;
+  /** The batch's facility name, when the read provides it. */
+  locationName?: string | null;
+  /** The session's existing lifecycle status, when the read provides it. */
+  status?: string;
+};
+
+export type SessionStateTone = "neutral" | "good" | "warn" | "late";
+
+/**
+ * The session's state as the row may TRUTHFULLY state it.
+ *
+ *   * a real recorded status is used as-is: the schema's enum is
+ *     scheduled | held | cancelled, so "Held" is shown for a held
+ *     session; `completed` is still honoured for compatibility. None of
+ *     these is ever inferred from register completion or a passed end
+ *     time;
+ *   * with real timestamps: "Earlier today" once the window has passed,
+ *     "Scheduled now" while the clock window is open (a CLOCK statement, not
+ *     recorded attendance), "Starts in N min" inside the hour, else
+ *     "Scheduled";
+ *   * without timestamps (legacy rows) the existing `started` flag decides:
+ *     "Started" or "Scheduled".
+ */
+export function sessionStateFor(
+  lane: TodaysLaneDisplay,
+  now: number = Date.now(),
+): { text: string; tone: SessionStateTone } {
+  // The RECORDED fact outranks every clock inference. `held` is the real
+  // "the session took place" value in the schema (scheduled|held|cancelled);
+  // `completed` is kept for compatibility with earlier read models.
+  if (lane.status === "held") return { text: "Held", tone: "good" };
+  if (lane.status === "completed") return { text: "Completed", tone: "good" };
+  if (lane.status === "cancelled") return { text: "Cancelled", tone: "late" };
+  const startsAt = lane.startsAt ? Date.parse(lane.startsAt) : Number.NaN;
+  const endsAt = lane.endsAt ? Date.parse(lane.endsAt) : Number.NaN;
+  if (Number.isFinite(startsAt)) {
+    if (Number.isFinite(endsAt) && now >= endsAt) {
+      return { text: "Earlier today", tone: "neutral" };
+    }
+    if (now >= startsAt) return { text: "Scheduled now", tone: "good" };
+    const minutesUntil = Math.ceil((startsAt - now) / 60_000);
+    if (minutesUntil <= 60) {
+      return { text: `Starts in ${minutesUntil} min`, tone: "good" };
+    }
+    return { text: "Scheduled", tone: "neutral" };
+  }
+  return lane.started
+    ? { text: "Started", tone: "neutral" }
+    : { text: "Scheduled", tone: "neutral" };
 }

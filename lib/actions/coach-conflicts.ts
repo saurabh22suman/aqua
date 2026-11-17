@@ -42,7 +42,7 @@ export async function checkCoachConflictsAction(
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "programs.read");
   return detectCoachConflicts(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
+    ctx,
     {
       coachId: input.coachId,
       daysOfWeek: input.daysOfWeek,

@@ -47,7 +47,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-vi.mock("@/lib/auth/context", () => ({
+vi.mock("@/lib/auth/context", () => ({ NotFoundError: class NotFoundError extends Error {},
   requireDefaultCtx: async () => COACH_CTX,
 }));
 

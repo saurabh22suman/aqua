@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { persons, locations } from "@/db/schema";
 import { createStaff, listStaff } from "@/lib/services/staff";
@@ -20,7 +21,7 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const actorId: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 
@@ -34,6 +35,9 @@ beforeAll(async () => {
     [tenantId, `staff-${RUN}`, plan?.id ?? null, TZ],
   );
 
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await withTenant(tenantId, async (tx) => {
     await tx.insert(locations).values({ tenantId, name: "Main", isPrimary: true });
   });
@@ -44,7 +48,11 @@ afterAll(async () => {
     await admin.query("delete from staff where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -67,7 +75,7 @@ async function makePerson(label: string): Promise<PersonId> {
 
 describe("listStaff (Phase 3.5)", () => {
   it("returns an empty list on a fresh tenant", async () => {
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER });
+    const rows = await listStaff({ tenantId, userId: actorId });
     expect(rows).toEqual([]);
   });
 
@@ -75,29 +83,29 @@ describe("listStaff (Phase 3.5)", () => {
     const a = await makePerson("Apple");
     const b = await makePerson("Banana");
     await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: a, staffType: "coach" },
     );
     await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: b, staffType: "receptionist" },
     );
 
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER });
+    const rows = await listStaff({ tenantId, userId: actorId });
     const names = rows.map((r) => r.fullName).sort();
     expect(names).toContain("Coach Apple");
     expect(names).toContain("Coach Banana");
   });
 
   it("orders by name — the directory list is alphabetical", async () => {
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER });
+    const rows = await listStaff({ tenantId, userId: actorId });
     const names = rows.map((r) => r.fullName);
     const sorted = [...names].sort();
     expect(names).toEqual(sorted);
   });
 
   it("filters by staffType when supplied", async () => {
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER }, { staffType: "coach" });
+    const rows = await listStaff({ tenantId, userId: actorId }, { staffType: "coach" });
     for (const r of rows) {
       expect(r.staffType).toBe("coach");
     }
@@ -108,7 +116,7 @@ describe("listStaff (Phase 3.5)", () => {
     // afterAll on the previous test, so we cannot inspect that
     // side. Instead: confirm the same query against this
     // fixture returns only THIS tenant's rows by re-reading.
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER });
+    const rows = await listStaff({ tenantId, userId: actorId });
     expect(rows.every((r) => r.id.startsWith("00000000") === false)).toBe(true); // non-nil brand
     expect(rows.every((r) => typeof r.fullName === "string" && r.fullName.length > 0)).toBe(true);
   });
@@ -118,7 +126,7 @@ describe("createStaff (Phase 3.5)", () => {
   it("creates a staff record and links it to an existing person", async () => {
     const personId = await makePerson("Create-A");
     const result = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: personId, staffType: "worker" },
     );
     expect(result.ok).toBe(true);
@@ -129,25 +137,25 @@ describe("createStaff (Phase 3.5)", () => {
 
   it("creates a new person + staff row when given a name (the 'this person is not yet in the system' branch)", async () => {
     const result = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { fullName: "Brand New Staff", staffType: "accountant" },
     );
     expect(result.ok).toBe(true);
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER }, { staffType: "accountant" });
+    const rows = await listStaff({ tenantId, userId: actorId }, { staffType: "accountant" });
     expect(rows.some((r) => r.fullName === "Brand New Staff")).toBe(true);
   });
 
   it("rejects a duplicate staff row for the same person + type", async () => {
     const personId = await makePerson("Dup-B");
     await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: personId, staffType: "coach" },
     );
     // Second create with the same personId + staffType must
     // fail (a person can be both coach AND receptionist, but
     // cannot hold two coach rows).
     const second = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: personId, staffType: "coach" },
     );
     expect(second.ok).toBe(false);
@@ -159,17 +167,17 @@ describe("createStaff (Phase 3.5)", () => {
   it("a single person can be both a coach and a receptionist (C-04 Done When)", async () => {
     const personId = await makePerson("Both");
     const coach = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: personId, staffType: "coach" },
     );
     const reception = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: personId, staffType: "receptionist" },
     );
     expect(coach.ok).toBe(true);
     expect(reception.ok).toBe(true);
 
-    const rows = await listStaff({ tenantId, userId: SYSTEM_USER });
+    const rows = await listStaff({ tenantId, userId: actorId });
     const both = rows.filter((r) => r.personId === personId);
     expect(both).toHaveLength(2);
     const types = both.map((r) => r.staffType).sort();
@@ -178,7 +186,7 @@ describe("createStaff (Phase 3.5)", () => {
 
   it("rejects an unknown staffType — the type column is a closed enum", async () => {
     const result = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       // Bypass the type-level enum to test the runtime guard.
       { fullName: "Sneak", staffType: "sneak" as never },
     );
@@ -189,7 +197,7 @@ describe("createStaff (Phase 3.5)", () => {
     // Fabricate a person id that the calling tenant cannot see.
     const fakeId = uuidv7();
     const result = await createStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { existingPersonId: fakeId, staffType: "coach" },
     );
     expect(result.ok).toBe(false);

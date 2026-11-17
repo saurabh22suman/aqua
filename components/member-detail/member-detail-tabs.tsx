@@ -1,50 +1,30 @@
-import Link from "next/link";
+import { TransientDisclosure } from "@/components/ui/TransientDisclosure";
 
-// U-03 — the member 360 tabs. Payments / Progress / Notes / Documents
-// are real tabs. Progress was deliberately absent while M-03/V-10 were
-// other workstreams; V-11 wires it to the generic framework's
-// assessments.
-//
-// Plain links with `?tab=`, so every tab is a server render.
+export type MemberTab = "overview" | "payments" | "progress" | "notes" | "documents";
 
-export type MemberTab =
-  | "overview"
-  | "payments"
-  | "progress"
-  | "notes"
-  | "documents";
-
-const TABS: Array<{ key: MemberTab; label: string }> = [
-  { key: "overview", label: "Overview" },
-  { key: "payments", label: "Payments" },
-  { key: "progress", label: "Progress" },
-  { key: "notes", label: "Notes" },
-  { key: "documents", label: "Documents" },
-];
-
-export function MemberDetailTabs({
-  memberId,
-  active,
-}: {
+export function MemberDetailTabs({ memberId, active, facilityScope, accessHref, canReadInvoices = true, canReadProgress = true }: {
   memberId: string;
   active: MemberTab;
+  facilityScope?: string;
+  accessHref?: string;
+  canReadInvoices?: boolean;
+  canReadProgress?: boolean;
 }) {
+  const scope = facilityScope ? `&facility=${encodeURIComponent(facilityScope)}` : "";
+  const href = (tab: MemberTab) => `/owner/members/${memberId}?tab=${tab}${scope}`;
+  const moreActive = active === "notes" || active === "documents";
+  const tabClass = "inline-flex min-h-11 items-center justify-center border-b-2 px-2 text-[13px] font-medium";
   return (
-    <nav aria-label="Member sections" className="mt-4 flex flex-wrap gap-2">
-      {TABS.map((tab) => (
-        <Link
-          key={tab.key}
-          href={`/owner/members/${memberId}?tab=${tab.key}`}
-          aria-current={active === tab.key ? "page" : undefined}
-          className={`flex min-h-[44px] items-center rounded-pill border px-3.5 text-[13px] ${
-            active === tab.key
-              ? "border-ink bg-ink text-paper"
-              : "border-line bg-paper text-ink-2"
-          }`}
-        >
-          {tab.label}
-        </Link>
+    <nav aria-label="Member sections" className="relative mt-4 flex border-b border-line">
+      {([ ["overview", "Overview"], ...(canReadInvoices ? [["payments", "Fees"] as const] : []), ...(canReadProgress ? [["progress", "Progress"] as const] : []) ] as const).map(([key, label]) => (
+        <a key={key} href={href(key)} aria-current={active === key ? "page" : undefined} className={`${tabClass} ${active === key ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>{label}</a>
       ))}
+      <TransientDisclosure key={`${memberId}:${active}:${facilityScope ?? ""}`} className="group relative" trigger="More" triggerClassName={`${tabClass} cursor-pointer list-none ${moreActive ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>
+        <div className="absolute right-0 z-20 min-w-52 rounded-card border border-line bg-paper p-2 shadow-lg">
+          <a href={href("notes")} aria-current={active === "notes" ? "page" : undefined} className="flex min-h-11 items-center rounded-ctl px-3 text-[13px] text-ink">Notes</a>
+          {accessHref ? <a href={accessHref} data-testid="member-access-entry" className="flex min-h-11 items-center rounded-ctl px-3 text-[13px] text-ink">Member and family access</a> : null}
+        </div>
+      </TransientDisclosure>
     </nav>
   );
 }

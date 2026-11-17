@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+import { ClubSelectionRequired } from "@/lib/auth/active-club";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { requireDefaultCtx, sessionExists } from "@/lib/auth/context";
@@ -26,6 +28,15 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+async function checkInContext() {
+  try {
+    return await sessionExists() ? await requireDefaultCtx() : null;
+  } catch (error) {
+    if (error instanceof ClubSelectionRequired) redirect("/clubs");
+    throw error;
+  }
+}
+
 export default async function PremisesCheckInPage({
   params,
 }: {
@@ -33,7 +44,8 @@ export default async function PremisesCheckInPage({
 }) {
   const { token } = await params;
 
-  if (!(await sessionExists())) {
+  const ctx = await checkInContext();
+  if (!ctx) {
     return (
       <Shell title="Sign in first">
         <p className="mt-2 text-[13.5px] text-ink-3">
@@ -50,7 +62,6 @@ export default async function PremisesCheckInPage({
     );
   }
 
-  const ctx = await requireDefaultCtx();
   requirePermission(ctx, "staff.self");
   const view = await resolvePremisesCheckIn(ctx, token);
 

@@ -35,9 +35,9 @@ import { THEME_COOKIE } from "@/lib/theme/storage";
 import { FACILITY_COOKIE } from "@/lib/facility";
 
 function loginRequest(body: unknown): Request {
-  return new Request("http://localhost:3000/api/login/pin", {
+  return new Request(`${new URL(process.env.BETTER_AUTH_URL!).origin}/api/login/pin`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", origin: new URL(process.env.BETTER_AUTH_URL!).origin, host: new URL(process.env.BETTER_AUTH_URL!).host },
     body: JSON.stringify(body),
   });
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { activeClubFromHeaders } from "@/lib/auth/active-club";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth/server";
 import { withPlatform } from "@/db/scope";
@@ -24,7 +25,7 @@ export async function homeForSessionAction(): Promise<SessionResolution> {
   const h = await headers();
   const session = await withPlatform(() => auth.api.getSession({ headers: h }));
   if (!session?.user) return { kind: "none" };
-  return resolveSessionForLogin(session.user.id);
+  return resolveSessionForLogin(session.user.id, activeClubFromHeaders(h));
 }
 
 export async function devCodeAction(rawPhone: string): Promise<string | null> {

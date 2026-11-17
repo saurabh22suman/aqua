@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { OwnerLink } from "@/components/owner-ui/owner-link";
+import { Input } from "@/components/ui/Input";
 import {
   approveLeaveRequestAction,
   listUncoveredSessionsAction,
@@ -17,6 +19,14 @@ import { formatDateIST, formatTimeIST } from "@/lib/time/tz";
 // to arrange a substitute. The decision records who and why (the note
 // is optional here but carried into the audit row and the staff view).
 
+// Refusal details come from the authorized server result. A malformed date
+// must not become a misleading link or break the existing error message.
+function isWorkDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 export function LeaveDecisionControls({ requestId }: { requestId: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -24,11 +34,13 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
   const [coverageFailed, setCoverageFailed] = useState(false);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [attendanceWorkDates, setAttendanceWorkDates] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
 
   function review() {
     setOpen(true);
     setError(null);
+    setAttendanceWorkDates([]);
     if (sessions !== null && !coverageFailed) return;
     setCoverageFailed(false);
     setSessions(null);
@@ -43,6 +55,8 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
   }
 
   function decide(kind: "approved" | "rejected") {
+    setError(null);
+    setAttendanceWorkDates([]);
     startTransition(async () => {
       try {
         const result =
@@ -57,6 +71,7 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
               });
         if (!result.ok) {
           setError(result.error);
+          setAttendanceWorkDates([...new Set((result.attendanceWorkDates ?? []).filter(isWorkDate))]);
           return;
         }
         setOpen(false);
@@ -121,17 +136,30 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
         <span className="mb-1 block text-[11px] text-ink-3">
           Note (shown to the staff member)
         </span>
-        <input
+        <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
         />
       </label>
 
       {error ? (
-        <p role="alert" className="mt-1 text-[12.5px] text-ink-2">
-          {error}
-        </p>
+        <div role="alert" className="mt-1 text-[12.5px] text-ink-2">
+          <p>{error}</p>
+          {attendanceWorkDates.length > 0 ? (
+            <ul className="mt-1 space-y-1">
+              {attendanceWorkDates.map((date) => (
+                <li key={date}>
+                  <OwnerLink
+                    href={`/owner/staff/attendance?date=${encodeURIComponent(date)}`}
+                    className="inline-flex min-h-11 items-center underline underline-offset-2"
+                  >
+                    Open staff attendance for {formatDateIST(`${date}T12:00:00Z`)}
+                  </OwnerLink>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="mt-2 flex flex-wrap gap-2">
@@ -152,7 +180,7 @@ export function LeaveDecisionControls({ requestId }: { requestId: string }) {
         <Button
           variant="ghost"
           disabled={pending}
-          onClick={() => setOpen(false)}
+          onClick={() => { setOpen(false); setError(null); setAttendanceWorkDates([]); }}
         >
           Cancel
         </Button>

@@ -1,3 +1,4 @@
+import { ClubSelectionRequired } from "@/lib/auth/active-club";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
@@ -16,7 +17,8 @@ import { requireDefaultCtx } from "@/lib/auth/context";
 export default async function ParentLayout({ children }: { children: ReactNode }) {
   try {
     await requireDefaultCtx();
-  } catch {
+  } catch (error) {
+    if (error instanceof ClubSelectionRequired) redirect("/clubs");
     redirect("/login");
   }
   return <div className="min-h-dvh">{children}</div>;

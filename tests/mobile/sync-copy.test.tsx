@@ -5,7 +5,8 @@ import { cleanup, render, screen } from "@testing-library/react";import { afterE
 // "synced never" (and "synced HH:MM" anywhere), which reads as a
 // failure state on a fresh register and never says where the data
 // actually is. The hook now exposes the persisted-time label (or
-// null); the component says "Saved at HH:MM" / "Saved on this phone".
+// null); the component distinguishes an acknowledged save from the
+// initially server-loaded register and pending device writes.
 
 type HookState = {
   savedAtLabel: string | null;
@@ -59,12 +60,13 @@ describe("register sync label (F31)", () => {
     expect(screen.queryByText(/synced/i)).toBeNull();
   });
 
-  it("says 'Saved on this phone' before the first sync, never 'synced never'", () => {
+  it("describes the server-loaded register before the first local save", () => {
     state.savedAtLabel = null;
     render(
       <RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />,
     );
-    expect(screen.getByText(/Saved on this phone/)).toBeTruthy();
+    expect(screen.getByText(/Loaded from server · no pending marks/)).toBeTruthy();
+    expect(screen.queryByText(/Saved on this phone/)).toBeNull();
     expect(screen.queryByText(/never/i)).toBeNull();
   });
 
@@ -112,11 +114,9 @@ describe("register header count chips (PR3-C6)", () => {
         offlineSyncEnabled={false}
       />,
     );
-    const chips = screen.getAllByTestId("count-chip");
-    expect(chips.length).toBeGreaterThanOrEqual(2);
-    const text = chips.map((c) => c.textContent).join(" ");
-    expect(text).toContain("0 marked");
-    expect(text).toContain("2 left");
+    // The marked total is now stated once as text; the remaining count is the chip.
+    expect(screen.getByText(/of 2 marked/).textContent).toMatch(/0\s+of 2 marked/);
+    expect(screen.getByTestId("count-chip").textContent).toContain("2 left");
   });
 });
 });

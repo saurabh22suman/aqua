@@ -1,5 +1,7 @@
 "use server";
 
+import { ACTIVE_CLUB_COOKIE } from "@/lib/auth/active-club";
+
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/server";
@@ -43,5 +45,6 @@ export async function logoutTenantAction(): Promise<void> {
   const store = await cookies();
   store.delete(THEME_COOKIE);
   store.delete(FACILITY_COOKIE);
+  store.delete(ACTIVE_CLUB_COOKIE);
   redirect("/login");
 }

@@ -54,7 +54,7 @@ describe("MemberAttendanceGrid", () => {
   it("shows the summary: percentage and sessions attended", () => {
     render(<MemberAttendanceGrid rows={ROWS} today={TODAY} />);
     expect(screen.getByText("67%")).toBeTruthy();
-    expect(screen.getByText("4 of 6 sessions attended")).toBeTruthy();
+    expect(screen.getByText("4 of 6 marked sessions attended")).toBeTruthy();
     expect(screen.getByText("Last 15 days")).toBeTruthy();
   });
 
@@ -70,7 +70,7 @@ describe("MemberAttendanceGrid", () => {
       screen.getByRole("button", { name: "13 Sept 2026, absent" }),
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "1 Sept 2026, no session" }),
+      screen.getByRole("button", { name: "1 Sept 2026, no record" }),
     ).toBeTruthy();
   });
 
@@ -94,9 +94,9 @@ describe("MemberAttendanceGrid", () => {
     expect(screen.getByText("absent")).toBeTruthy();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "1 Sept 2026, no session" }),
+      screen.getByRole("button", { name: "1 Sept 2026, no record" }),
     );
-    expect(screen.getByText("No session marked this day.")).toBeTruthy();
+    expect(screen.getByText("No attendance record for this day. A session may be unmarked.")).toBeTruthy();
   });
 
   it("lists every session when a day has more than one", () => {

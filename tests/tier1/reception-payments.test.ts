@@ -5,7 +5,6 @@ import { env } from "@/lib/env";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { recordPayment } from "@/lib/services/payments";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // PR2-C3 — receptionist counter payments. The permission audit first:
 // the receptionist template already holds payments.record,
@@ -28,9 +27,12 @@ const subscriptionId = uuidv7();
 const invoiceA = uuidv7();
 const invoiceB = uuidv7();
 const actorId = asUserId(uuidv7());
+const otherActorId = asUserId(uuidv7());
+const membershipId = uuidv7(), otherMembershipId = uuidv7();
+const phone = () => `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`;
 
 const ctx = { tenantId, userId: actorId };
-const otherCtx = { tenantId: otherTenantId, userId: actorId };
+const otherCtx = { tenantId: otherTenantId, userId: otherActorId };
 
 const TOTAL = 250000;
 
@@ -52,9 +54,11 @@ beforeAll(async () => {
   await seedRoleTemplates(tenantId);
   await seedRoleTemplates(otherTenantId);
   await admin.query(
-    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [actorId, `+9197${String(Date.now()).slice(-8)}`],
+    "insert into users (id, phone) values ($1, $2), ($3, $4)",
+    [actorId, phone(), otherActorId, phone()],
   );
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'",[membershipId,tenantId,actorId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'",[otherMembershipId,otherTenantId,otherActorId]);
   await admin.query(
     `insert into locations (id, tenant_id, name, is_primary) values
        ($1, $2, 'Main', true), ($3, $4, 'Other', true)`,
@@ -99,6 +103,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   for (const tenant of [tenantId, otherTenantId]) {
+    await admin.query("delete from receipts where tenant_id = $1", [tenant]);
     await admin.query("delete from payments where tenant_id = $1", [tenant]);
     await admin.query("delete from invoices where tenant_id = $1", [tenant]);
     await admin.query("delete from subscriptions where tenant_id = $1", [tenant]);
@@ -106,7 +111,7 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [tenant]);
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
     await admin.query("delete from locations where tenant_id = $1", [tenant]);
-    await deleteAuditRowsForTenant(admin, tenant);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenant]);
   }
   await admin.query("delete from role_permissions where tenant_id = any($1::uuid[])", [
     [tenantId, otherTenantId],
@@ -117,6 +122,7 @@ afterAll(async () => {
   await admin.query("delete from tenants where id = any($1::uuid[])", [
     [tenantId, otherTenantId],
   ]);
+  await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)", [[actorId,otherActorId]]);
   await admin.end();
 });
 

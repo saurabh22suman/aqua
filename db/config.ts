@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { withTenant, type TenantTx } from "./tenant";
 import { withPlatformAdmin } from "./scope";
@@ -250,14 +251,24 @@ export type SetConfigResult =
   | { ok: true; scopeType: ConfigScopeType; scopeId: string | null }
   | { ok: false; error: string };
 
-export async function setTenantConfigValue(params: {
+type SetTenantConfigParams = {
   tenantId: TenantId;
   key: ConfigKeyName;
   value: unknown;
   locationId?: string;
   actorId?: UserId;
   reason?: string;
-}): Promise<SetConfigResult> {
+};
+
+export function setTenantConfigValue(params: SetTenantConfigParams): Promise<SetConfigResult> {
+  return setTenantConfigValueImpl(params, false);
+}
+
+export function setOwnerTenantConfigValue(params: SetTenantConfigParams): Promise<SetConfigResult> {
+  return setTenantConfigValueImpl(params, true);
+}
+
+async function setTenantConfigValueImpl(params: SetTenantConfigParams, ownerOnly: boolean): Promise<SetConfigResult> {
   // Widened deliberately: no key is `dangerous` yet, but the guard is
   // real for the day one is.
   // O-07 — tenant writes are owner_edit only. owner_read keys are
@@ -285,6 +296,9 @@ export async function setTenantConfigValue(params: {
   const scopeId = params.locationId ?? (params.tenantId as string);
 
   return withTenant(params.tenantId, async (tx) => {
+    if (ownerOnly && !(await callerIsLiveOwnerForSettingsOrDelegation(tx, { tenantId: params.tenantId, userId: params.actorId }))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const tenantRows = await tx
       .select({ id: tenants.id })
       .from(tenants)

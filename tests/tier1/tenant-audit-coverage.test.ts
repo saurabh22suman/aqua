@@ -60,7 +60,7 @@ describe("tenant audit call sites (E-02)", () => {
     { file: "lib/services/staff-invitations.ts", action: '"staff.invitation.revoke"' },
     { file: "lib/services/staff-invitations.ts", action: '"staff.invitation.resend"' },
     { file: "db/membership-activation.ts", action: '"membership.activate"' },
-    { file: "lib/services/invite-link.ts", action: '"membership.activate"' },
+    { file: "db/staff-link-redemption.ts", action: '"membership.activate"' },
     { file: "lib/services/shift-templates.ts", action: '"shift_template.create"' },
     { file: "lib/services/shifts.ts", action: '"shift.create"' },
     { file: "lib/services/shifts.ts", action: '"shift.delete"' },
@@ -75,6 +75,15 @@ describe("tenant audit call sites (E-02)", () => {
     { file: "lib/services/leave-approval.ts", action: '"leave.approve"' },
     { file: "lib/services/leave-approval.ts", action: '"leave.reject"' },
   ];
+
+  it("the invite redemption entry delegates to the audited transaction", () => {
+    const entry = readFileSync(join(ROOT, "lib/services/invite-link.ts"), "utf8");
+    const writer = readFileSync(join(ROOT, "db/staff-link-redemption.ts"), "utf8");
+    expect(entry).toContain('from "@/db/staff-link-redemption"');
+    expect(entry).toContain("redeemStaffLinkInTx(");
+    expect(writer).toContain("withTenant(tenantId, async (tx) =>");
+    expect(writer).toContain("writeAudit(tx,");
+  });
 
   it("every site calls writeAudit with a named action", () => {
     for (const { file, action } of EXPECTED) {

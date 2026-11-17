@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import {
@@ -15,6 +15,12 @@ import type {
   MakeupSessionOption,
 } from "@/lib/services/makeup";
 import { formatDateIST } from "@/lib/time/tz";
+import { Select } from "@/components/ui/Select";
+import {
+  isFailedSeed,
+  seedForMember,
+  type MemberMakeupSeed,
+} from "@/components/member-detail/member-panel-initial-data";
 
 // R.7 (docs/five-day-work-guide.md) — makeup credits on the member
 // detail page. Grant from an excused absence; redeem against another
@@ -37,8 +43,12 @@ export function MakeupCreditsPanel({
   memberId,
   canGrant,
   canRedeem,
+  initialData,
 }: {
   memberId: string;
+  // Owner overview only: the already-authorized server read. Absent for every
+  // other consumer, which keeps its own mount read.
+  initialData?: MemberMakeupSeed;
   canGrant: boolean;
   // R10 (2026-10-13 role-workflow audit) — redemption rides
   // attendance.mark (coach/front desk); the owner grants the credit
@@ -46,37 +56,85 @@ export function MakeupCreditsPanel({
   canRedeem: boolean;
 }) {
   const router = useRouter();
-  const [credits, setCredits] = useState<MakeupCreditRow[] | null>(null);
-  const [sources, setSources] = useState<MakeupSessionOption[]>([]);
-  const [targets, setTargets] = useState<MakeupSessionOption[]>([]);
-  const [sourcePick, setSourcePick] = useState("");
-  const [targetPick, setTargetPick] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const seed = seedForMember(initialData, memberId);
+  const seeded = seed && !isFailedSeed(seed) ? seed : null;
+  const [credits, setCredits] = useState<MakeupCreditRow[] | null>(
+    seeded ? seeded.credits : null,
+  );
+  const [sources, setSources] = useState<MakeupSessionOption[]>(
+    seeded ? seeded.sources : [],
+  );
+  const [targets, setTargets] = useState<MakeupSessionOption[]>(
+    seeded ? seeded.targets : [],
+  );
+  const [sourcePick, setSourcePick] = useState(
+    seeded ? (seeded.sources[0]?.sessionId ?? "") : "",
+  );
+  const [targetPick, setTargetPick] = useState(
+    seeded ? (seeded.targets[0]?.sessionId ?? "") : "",
+  );
+  const [error, setError] = useState<string | null>(
+    seed && isFailedSeed(seed) ? "Could not load makeup credits." : null,
+  );
+  // Stale-response guard: a late read for another member is ignored.
+  const currentMember = useRef(memberId);
+  currentMember.current = memberId;
+  const loadEpoch = useRef(0);
+  const appliedSeed = useRef<typeof seed>(seed);
   const [busy, setBusy] = useState(false);
 
   async function load() {
+    const at = memberId;
+    const run = ++loadEpoch.current;
     setError(null);
     try {
       const [c, s, t] = await Promise.all([
-        listMakeupCreditsAction(memberId),
-        listMakeupSourcesAction(memberId),
-        listMakeupTargetsAction(memberId),
+        listMakeupCreditsAction(at),
+        listMakeupSourcesAction(at),
+        listMakeupTargetsAction(at),
       ]);
+      if (at !== currentMember.current || run !== loadEpoch.current) return;
       setCredits(c);
       setSources(s);
       setTargets(t);
       setSourcePick(s[0]?.sessionId ?? "");
       setTargetPick(t[0]?.sessionId ?? "");
     } catch (err) {
+      if (at !== currentMember.current || run !== loadEpoch.current) return;
       setError(err instanceof Error ? err.message : "Could not load makeup credits.");
       setCredits([]);
     }
   }
 
   useEffect(() => {
-    load();
+    // A usable seed for THIS member is already the authoritative read.
+    if (seedForMember(initialData, memberId)) return;
+    // A member change must never show the previous member's credits.
+    setCredits(null);
+    setError(null);
+    void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [memberId]);
+  }, [memberId, initialData]);
+
+  // A fresh server seed for the same member still applies.
+  useEffect(() => {
+    const current = seedForMember(initialData, memberId);
+    if (!current || appliedSeed.current === current) return;
+    appliedSeed.current = current;
+    // A newer authoritative read: an older pending one must not win.
+    loadEpoch.current += 1;
+    if (isFailedSeed(current)) {
+      setError("Could not load makeup credits.");
+      setCredits(null);
+      return;
+    }
+    setError(null);
+    setCredits(current.credits);
+    setSources(current.sources);
+    setTargets(current.targets);
+    setSourcePick(current.sources[0]?.sessionId ?? "");
+    setTargetPick(current.targets[0]?.sessionId ?? "");
+  }, [initialData, memberId]);
 
   async function run(fn: () => Promise<{ kind: "ok" } | { kind: "error"; message: string }>) {
     setBusy(true);
@@ -103,7 +161,20 @@ export function MakeupCreditsPanel({
         Makeup credits
       </h2>
 
-      {credits === null ? (
+      {error && credits === null ? (
+        // A failed or refused read is stated, never left looking like a load
+        // that never finished or an empty list.
+        <div className="mt-2.5">
+          <p className="text-[12px] text-ink-2">{error}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="mt-2 inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2"
+          >
+            Retry
+          </button>
+        </div>
+      ) : credits === null ? (
         <p className="mt-2.5 text-[13px] text-ink-3">Loading…</p>
       ) : (
         <div className="mt-2.5 space-y-3">
@@ -139,19 +210,22 @@ export function MakeupCreditsPanel({
           {canGrant ? (
             sources.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={sourcePick}
-                  onChange={(e) => setSourcePick(e.target.value)}
-                  className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="makeup-source"
-                  aria-label="Excused absence"
-                >
-                  {sources.map((s) => (
-                    <option key={s.sessionId} value={s.sessionId}>
-                      {formatDateIST(s.sessionDate)} — {s.batchName}
-                    </option>
-                  ))}
-                </select>
+                {/* P2 (independent review) — the flex sizing lives on a
+                    lane-owned wrapper around the shared primitive. */}
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={sourcePick}
+                    onChange={(e) => setSourcePick(e.target.value)}
+                    data-testid="makeup-source"
+                    aria-label="Excused absence"
+                  >
+                    {sources.map((s) => (
+                      <option key={s.sessionId} value={s.sessionId}>
+                        {formatDateIST(s.sessionDate)} — {s.batchName}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
                 <button
                   type="button"
                   onClick={() =>
@@ -182,19 +256,20 @@ export function MakeupCreditsPanel({
           {available.length > 0 && targets.length > 0 ? (
             canRedeem ? (
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={targetPick}
-                  onChange={(e) => setTargetPick(e.target.value)}
-                  className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-                  data-testid="makeup-target"
-                  aria-label="Makeup session"
-                >
-                  {targets.map((t) => (
-                    <option key={t.sessionId} value={t.sessionId}>
-                      {formatDateIST(t.sessionDate)} — {t.batchName}
-                    </option>
-                  ))}
-                </select>
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={targetPick}
+                    onChange={(e) => setTargetPick(e.target.value)}
+                    data-testid="makeup-target"
+                    aria-label="Makeup session"
+                  >
+                    {targets.map((t) => (
+                      <option key={t.sessionId} value={t.sessionId}>
+                        {formatDateIST(t.sessionDate)} — {t.batchName}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
                 <button
                   type="button"
                   onClick={() =>

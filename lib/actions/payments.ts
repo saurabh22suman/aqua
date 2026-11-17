@@ -21,6 +21,27 @@ const recordInput = z.object({
   amountPaise: z.number().int().positive().max(MAX_PAYMENT_PAISE),
   method: z.enum(["cash", "upi", "bank_transfer", "card", "other"]),
   reference: z.string().trim().min(1).max(120).optional(),
+  // F01 — a public payment request MUST carry its operation key. The
+  // service keeps it optional for trusted internal callers, but a
+  // browser request without one is refused before any write.
+  idempotencyKey: z
+    .string({
+      error:
+        "A payment needs its one-time operation key. Refresh and try again.",
+    })
+    .uuid(
+      "A payment needs its one-time operation key. Refresh and try again.",
+    ),
+  // The recovery read must supply the last committed intent it saw
+  // (null = none). A browser that omits this is refused rather than
+  // starting a new operation from an unchecked snapshot.
+  observedIntentId: z
+    .string({
+      error:
+        "Check the document for an earlier attempt before recording.",
+    })
+    .uuid("Check the document for an earlier attempt before recording.")
+    .nullable(),
 });
 const invoiceInput = z.object({ invoiceId: z.string().uuid() });
 

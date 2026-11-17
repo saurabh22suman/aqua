@@ -3,6 +3,7 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { EnquiriesBoard } from "@/components/enquiries-board";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
+import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
 
 export default async function ReceptionEnquiriesPage() {
   const ctx = await requireReception();
@@ -12,8 +13,11 @@ export default async function ReceptionEnquiriesPage() {
   ]);
 
   return (
-    <main className="px-5 pt-10 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">Enquiries</h1>
+    <StaffPage>
+      <StaffPageHeader
+        title="Enquiries"
+        meta="Capture a walk-in, then follow it through."
+      />
       <div className="mt-4">
         <EnquiriesBoard
           initialEnquiries={enquiries}
@@ -22,6 +26,6 @@ export default async function ReceptionEnquiriesPage() {
           canWrite={hasPermission(ctx, "enquiries.write")}
         />
       </div>
-    </main>
+    </StaffPage>
   );
 }

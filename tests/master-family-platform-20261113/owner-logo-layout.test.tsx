@@ -1,0 +1,24 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it, vi } from "vitest";
+const captured = vi.hoisted(() => ({ props: {} as Record<string, unknown>, terms: { overrides: { member: "Athlete" } }, nav: vi.fn(() => []), sidebar: vi.fn(() => []) }));
+vi.mock("@/components/owner-shell", () => ({ OwnerShell: (props: Record<string, unknown>) => { captured.props = props; return <main>{props.children as React.ReactNode}</main>; }, ownerRoleLabel: () => "Owner" }));
+vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => ({ tenantId: "tenant-a", roleKey: "owner", permissions: new Set(), features: new Set() }) }));
+vi.mock("@/lib/auth/surface-access", () => ({ canAccessSurface: () => true, SURFACE_OWNER: "owner" }));
+vi.mock("@/lib/services/people", () => ({ listLocations: async () => [] }));
+vi.mock("@/lib/services/branding", () => ({ getBranding: async () => ({ displayName: "Example Club", logoUrl: "/clubs/a/branding/logo/test?source=staff" }) }));
+vi.mock("@/lib/services/staff", () => ({ getCurrentStaffIdentity: async () => ({ fullName: "Person Name" }) }));
+vi.mock("@/lib/services/terminology", () => ({ getTerminology: async () => captured.terms }));
+vi.mock("@/db/tenant", () => ({ withTenant: async (_id: string, callback: (tx: object) => unknown) => callback({}) }));
+vi.mock("@/lib/services/owner-authority", () => ({ callerIsLiveOwnerForSettingsOrDelegation: async () => true }));
+vi.mock("@/lib/nav", () => ({ ownerNavForPermissions: captured.nav, ownerSidebarGroupsForPermissions: captured.sidebar }));
+vi.mock("@/components/owner-ui/owner-navigation", () => ({ ownerSidebarGroupsWithBookings: () => [] }));
+import OwnerLayout from "@/app/(owner)/layout";
+it("passes the authorized club mark separately from the signed-in person", async () => {
+  renderToStaticMarkup(await OwnerLayout({ children: <p>Content</p> }));
+  expect(captured.props.clubLogoUrl).toBe("/clubs/a/branding/logo/test?source=staff");
+  expect(captured.props.accountName).toBe("Person Name");
+  expect(captured.props.clubName).toBe("Example Club");
+  expect(captured.props.tenantId).toBe("tenant-a");
+  expect(captured.nav).toHaveBeenCalledWith(expect.any(Set), captured.terms);
+  expect(captured.sidebar).toHaveBeenCalledWith(expect.any(Set), captured.terms);
+});

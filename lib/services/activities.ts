@@ -1,12 +1,13 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { facilities, facilitySubUnits } from "@/db/schema/preset-engine";
 import { locations } from "@/db/schema/locations";
-import { auditLog } from "@/db/schema/audit";
+import { auditActorOf, writeAudit as writeSharedAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import { ACTIVITY_KINDS, type ActivityKind } from "@/lib/activities";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // Activity catalog (decision 2026-09-14) — "activities" are what the
 // schema calls `facilities`: a pool, court, table or café counter under
@@ -122,7 +123,7 @@ export async function listActivities(
 }
 
 export async function createActivity(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = createActivityInput.safeParse(raw);
@@ -133,6 +134,9 @@ export async function createActivity(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const locationRows = await tx
       .select({ id: locations.id })
       .from(locations)
@@ -194,7 +198,7 @@ export async function createActivity(
 }
 
 export async function updateActivity(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = updateActivityInput.safeParse(raw);
@@ -205,6 +209,9 @@ export async function updateActivity(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const { id, ...patch } = parsed.data;
     const set: Partial<typeof facilities.$inferInsert> = {
       ...patch,
@@ -241,10 +248,13 @@ export async function updateActivity(
 }
 
 export async function deleteActivity(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   activityId: string,
 ): Promise<ActivityMutationResult> {
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const now = new Date();
     const rows = await tx
       .update(facilities)
@@ -278,7 +288,7 @@ export async function deleteActivity(
 }
 
 export async function addSubUnit(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = addSubUnitInput.safeParse(raw);
@@ -289,6 +299,9 @@ export async function addSubUnit(
     };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const activityRows = await tx
       .select({ id: facilities.id })
       .from(facilities)
@@ -329,7 +342,7 @@ export async function addSubUnit(
 }
 
 export async function removeSubUnit(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = subUnitIdInput.safeParse(raw);
@@ -337,6 +350,9 @@ export async function removeSubUnit(
     return { ok: false, error: "Invalid sub-unit reference." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const rows = await tx
       .update(facilitySubUnits)
       .set({ deletedAt: new Date(), updatedAt: new Date(), updatedBy: ctx.userId })
@@ -368,6 +384,8 @@ function dedupe(names: string[]): string[] {
 
 type Tx = Parameters<Parameters<typeof withTenant>[1]>[0];
 
+// E-01 — the ONE audit writer (lib/audit/write.ts) applies the actor
+// model (actor_type, actor_id, source, request_id) in one place.
 async function writeAudit(
   tx: Tx,
   ctx: ActionCtx,
@@ -375,10 +393,9 @@ async function writeAudit(
   entityId: string,
   after: Record<string, unknown>,
 ): Promise<void> {
-  if (!ctx.userId) return;
-  await tx.insert(auditLog).values({
+  await writeSharedAudit(tx, {
     tenantId: ctx.tenantId,
-    actorId: ctx.userId,
+    ...auditActorOf(ctx),
     action,
     entityType: "activity",
     entityId,

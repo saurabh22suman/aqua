@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from "node:fs";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // P1-4, P1-5, P1-6, P1-8, P1-9 + the cheap P2 copy fixes from the
@@ -29,6 +29,7 @@ vi.mock("next/link", async () => {
 });
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/owner",
 }));
 vi.mock("@/lib/actions/tenant-auth", () => ({ logoutTenantAction: vi.fn() }));
 vi.mock("@/lib/actions/people", () => ({ updateMemberAction: vi.fn() }));
@@ -56,6 +57,8 @@ vi.mock("@/lib/actions/coach", () => ({
 }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { OwnerAccountControl } from "@/components/owner-home/owner-account-control";
+import { registerState } from "@/components/owner-home/session-state";
 import { CoachRosterSearch } from "@/components/coach-roster-search";
 import { AttendanceReportCard } from "@/components/reports/attendance-report-card";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
@@ -136,16 +139,15 @@ const TERMINOLOGY = { overrides: {}, locale: "en" } as const;
 afterEach(cleanup);
 
 describe("owner dashboard affordances (P1-4, P1-5, P1-7)", () => {
-  it("offers one-tap sign-out in the header", () => {
-    render(
-      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
-    );
+  it("offers sign-out through the shared account control", () => {
+    render(<OwnerAccountControl />);
+    fireEvent.click(screen.getByText("Account"));
     expect(screen.getByRole("button", { name: /sign out/i })).toBeTruthy();
   });
 
   it("every needs-attention row is linked, so every row carries the chevron (PR3-C3)", () => {
     render(
-      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
+      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} can={{addMember:false,recordPayment:false,captureEnquiry:false,readFees:true,viewSchedule:false}} />,
     );
     expect(document.querySelectorAll(".lucide-chevron-right")).toHaveLength(
       DASHBOARD.needsAttention.length,
@@ -154,12 +156,12 @@ describe("owner dashboard affordances (P1-4, P1-5, P1-7)", () => {
 
   it("links to Fees from the home quick actions (PR3-C3)", () => {
     render(
-      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
+      <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} can={{addMember:false,recordPayment:true,captureEnquiry:false,readFees:true,viewSchedule:false}} />,
     );
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    expect(hrefs).toContain("/owner/fees");
+    expect(hrefs).toContain("/owner/fees?tab=dues&facility=all");
   });
 
   it("renders lane times in 12-hour IST format", () => {
@@ -191,8 +193,8 @@ describe("owner dashboard today consistency (F-2)", () => {
     );
     const text = document.body.textContent ?? "";
     expect(text).not.toContain("Nothing scheduled today");
-    expect(text).toContain("1 session scheduled");
-    expect(text).toContain("no members enrolled yet");
+    expect(text).toContain("Junior TTS");
+    expect(registerState(sessionNoEnrolments.todaysLanes[0]!).text).toBe("No one enrolled yet");
   });
 
   it("says 'Nothing scheduled today' only when there are truly no lanes", () => {

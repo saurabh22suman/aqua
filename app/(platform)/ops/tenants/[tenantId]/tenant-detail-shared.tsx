@@ -5,10 +5,14 @@ import Link from "next/link";
 // page split into Overview / Configuration / Entitlements / Locations
 // / Messaging / Audit routes.
 
+// The zone is NAMED: the deployed container runs in UTC, and an
+// inherited zone rendered these in the wrong clock — and a DATE can
+// differ by a day (20:41 UTC is already the next day in IST).
 export const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   day: "2-digit",
   month: "short",
   year: "numeric",
+  timeZone: "Asia/Kolkata",
 });
 
 export const DATETIME_FMT = new Intl.DateTimeFormat("en-IN", {
@@ -16,6 +20,7 @@ export const DATETIME_FMT = new Intl.DateTimeFormat("en-IN", {
   month: "short",
   hour: "2-digit",
   minute: "2-digit",
+  timeZone: "Asia/Kolkata",
 });
 
 export function SectionHeader({

@@ -34,8 +34,12 @@ const RUN = Date.now().toString(36);
 const SLUG_PREFIX = `create-${RUN}`;
 
 let actorId: UserId;
+let signupPlanKey: string;
 
 beforeAll(async () => {
+  const plans = await admin.query<{key:string}>("select key from plans where key='starter' and status='active' and available_for_new_tenants=true");
+  if (plans.rows.length !== 1) throw new Error("Expected seeded active Starter signup offer");
+  signupPlanKey = plans.rows[0]!.key;
   // For the actor id, mint a real platform_users row so any FK-like
   // audit relationship stays consistent. The tenant.created_by /
   // tenant.updated_by columns aren't foreign-keyed today, but the
@@ -106,7 +110,7 @@ function baseInput(slug: string): CreateTenantInput {
     name: "Create Test Academy",
     slug,
     timezone: "Asia/Kolkata",
-    planKey: "standard",
+    planKey: signupPlanKey,
     currency: "INR",
     locationName: "Main",
     locationIsPrimary: true,
@@ -199,7 +203,7 @@ describe("createTenant", () => {
       name: "Create Test Academy",
       slug,
       timezone: "Asia/Kolkata",
-      planKey: "standard",
+      planKey: signupPlanKey,
       currency: "INR",
       locationName: "Main",
       locationIsPrimary: true,
@@ -374,7 +378,7 @@ describe("createTenant", () => {
     expect(Number(auditCount.count)).toBe(1);
   });
 
-  it("seeds all seven role templates in the same transaction as tenant creation", async () => {
+  it("seeds all eight role templates in the same transaction as tenant creation", async () => {
     const slug = uniqueSlug("roles");
     const tenantId = await expectOk(await createTenant(baseInput(slug), { actorId }));
 
@@ -385,7 +389,7 @@ describe("createTenant", () => {
       )
     ).rows;
     expect(rows.map((r) => r.key)).toEqual(
-      ["accountant", "admin", "coach", "curriculum_lead", "owner", "receptionist", "worker"],
+      ["accountant", "admin", "coach", "curriculum_lead", "manager", "owner", "receptionist", "worker"],
     );
     expect(rows.every((r) => r.is_system)).toBe(true);
 

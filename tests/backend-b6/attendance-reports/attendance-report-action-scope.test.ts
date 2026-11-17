@@ -59,9 +59,9 @@ function callerCtx(
   return {
     userId: fixture.ownerCtx.userId!,
     tenantId: fixture.tenantId,
-    membershipId: "b6-membership",
+    membershipId: fixture.ownerMembershipId,
     roleKey: "owner",
-    roleId: "b6-role",
+    roleId: fixture.ownerRoleId,
     slug: "",
     allLocations: opts.allLocations,
     locationIds: opts.locationIds,

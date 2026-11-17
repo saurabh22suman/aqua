@@ -10,6 +10,10 @@ import { invoices } from "@/db/schema/invoices";
 import { subscriptions } from "@/db/schema/subscriptions";
 import { membershipPlans } from "@/db/schema/membership-plans";
 import { dayRangeUtc } from "@/lib/time/tz";
+import {
+  locationPredicate,
+  resolveLocationAccess,
+} from "@/lib/services/location-access";
 import type { ReportPeriod } from "@/lib/services/owner-reports";
 import type { ActionCtx } from "@/lib/auth/context";
 import { toSafePaise } from "@/lib/money/safe-paise";
@@ -64,6 +68,14 @@ export async function getOperationalAnalytics(
 ): Promise<OperationalAnalytics> {
   const locationId = options.locationId;
   return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — the caller's resolved location access governs this read,
+    // exactly as it governs the owner dashboard (A07), the fees hub and
+    // the owner home charts. An explicit locationId may only narrow the
+    // allowed set further, never widen it.
+    const access = await resolveLocationAccess(tx, ctx);
+    const batchPredicate = locationPredicate(batches.locationId, access);
+    const memberPredicate = locationPredicate(members.locationId, access);
+
     const trendRows = await tx
       .select({
         date: sql<string>`${sessions.sessionDate}::text`,
@@ -86,6 +98,7 @@ export async function getOperationalAnalytics(
           gte(sessions.sessionDate, period.from),
           lt(sessions.sessionDate, period.to),
           ...(locationId ? [eq(batches.locationId, locationId)] : []),
+          ...(batchPredicate ? [batchPredicate] : []),
         ),
       )
       .groupBy(sessions.sessionDate)
@@ -101,6 +114,7 @@ export async function getOperationalAnalytics(
         and(
           eq(members.tenantId, ctx.tenantId),
           isNull(members.deletedAt),
+          ...(memberPredicate ? [memberPredicate] : []),
           ...(locationId
             ? [
                 or(
@@ -156,12 +170,19 @@ export async function getMoneyAnalytics(
     const { fromUtc } = dayRangeUtc(period.from, timezone);
     const { fromUtc: endUtc } = dayRangeUtc(period.to, timezone);
 
+    // O-08 — the caller's resolved location access governs this money
+    // read, exactly as it governs the fees hub and the owner home
+    // charts. An explicit locationId may only narrow it further.
+    const access = await resolveLocationAccess(tx, ctx);
+    const paymentPredicate = locationPredicate(payments.locationId, access);
+
     const paymentWindow = and(
       eq(payments.tenantId, ctx.tenantId),
       eq(payments.status, "captured"),
       gte(payments.receivedAt, fromUtc),
       lt(payments.receivedAt, endUtc),
       ...(locationId ? [eq(payments.locationId, locationId)] : []),
+      ...(paymentPredicate ? [paymentPredicate] : []),
     );
 
     // The tenant-local day is computed in a derived table so the

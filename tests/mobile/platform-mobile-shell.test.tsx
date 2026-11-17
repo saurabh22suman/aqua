@@ -15,8 +15,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({
     kind: "authenticated",
-    role: "operator",
+    role: "viewer",
+    userId: "11111111-1111-7111-8111-111111111111",
   }),
+}));
+vi.mock("@/db/ops-operation-writer", () => ({
+  appendOpsBoundaryEvent: async (operation: string, outcome: string, _actor: string, _correlation: string, tenant: string | undefined, origin: string) => {
+    expect(["platform.metrics.summary", "tenant.health.queue", "activity.list"]).toContain(operation);
+    expect(outcome).toBe("success");
+    expect(tenant).toBeUndefined();
+    expect(origin).toBe("ops_page");
+  },
 }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/ops",
@@ -61,6 +70,7 @@ describe("PlatformLayout mobile shell (F1)", () => {
       "/ops/features",
       "/ops/presets",
     ]);
+    expect(links.map((l) => l.getAttribute("href"))).not.toContain("/ops/operators");
   });
 
   it("puts sign-out in the mobile header (not a fifth nav item)", async () => {
@@ -100,9 +110,11 @@ describe("PlatformLayout desktop sidebar", () => {
       "/ops/tenants",
       "/ops/leads",
       "/ops/features",
+      "/ops/catalogue",
       "/ops/presets",
       "/ops/whatsapp",
       "/ops/activity",
     ]);
+    expect(links.map((l) => l.getAttribute("href"))).not.toContain("/ops/operators");
   });
 });

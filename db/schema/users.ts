@@ -1,5 +1,6 @@
 import { v7 as uuidv7 } from "uuid";
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, check, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { auditColumns, softDelete } from "./_shared";
 import type { UserId, PersonId } from "@/lib/ids";
 
@@ -15,10 +16,13 @@ export const users = pgTable("users", {
   betterAuthId: text("better_auth_id").unique(),
   personId: uuid("person_id").$type<PersonId>(),
   phone: text("phone").notNull().unique(),
+  credentialEpoch: bigint("credential_epoch", { mode: "bigint" }).notNull().default(0n),
   failedPinAttempts: integer("failed_pin_attempts").notNull().default(0),
   pinLockedUntil: timestamp("pin_locked_until", { withTimezone: true }),
   ...softDelete,
   ...auditColumns,
-});
+}, (t) => [
+  check("users_credential_epoch_nonnegative", sql`${t.credentialEpoch} >= 0`),
+]);
 
 export type User = typeof users.$inferSelect;

@@ -1,6 +1,8 @@
 import { auditLog, type AuditActorType, type AuditSource } from "@/db/schema/audit";
 import type { TenantTx } from "@/db/tenant";
+import type { ActionCtx } from "@/lib/auth/context";
 import type { TenantId, UserId } from "@/lib/ids";
+import { z } from "zod";
 
 // E-01 — the one audit writer. Every tenant-side mutation goes
 // through this helper so the actor model (actor_type, nullable
@@ -26,6 +28,33 @@ export type AuditWriteInput = {
   source?: AuditSource;
   requestId?: string | null;
 };
+
+// The actor model for a tenant-side mutation.
+//
+// A human remains a human even when optional context claims are absent.
+// A system actor must opt in explicitly and carry no human claims.
+export function auditActor(
+  ctx: Pick<ActionCtx, "userId" | "roleKey" | "permissions" | "systemActor" | "allLocations" | "locationIds">,
+): { actorId: string | null; actorType: AuditActorType } {
+  if (ctx.systemActor === true && ctx.userId === undefined && ctx.roleKey === undefined &&
+      ctx.permissions === undefined && ctx.allLocations === undefined && ctx.locationIds === undefined) {
+    return { actorId: null, actorType: "system" };
+  }
+  if (ctx.systemActor === undefined && z.string().uuid().safeParse(ctx.userId).success) {
+    return { actorId: ctx.userId!, actorType: "user" };
+  }
+  throw new Error("Invalid audit actor");
+}
+
+// The actor + request attribution for a tenant-side mutation.
+export function auditActorOf(ctx: ActionCtx): {
+  actorId: string | null;
+  actorType: AuditActorType;
+  requestId: string | null;
+} {
+  const actor = auditActor(ctx);
+  return { ...actor, requestId: ctx.requestId ?? null };
+}
 
 export async function writeAudit(
   tx: TenantTx,

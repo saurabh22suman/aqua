@@ -23,7 +23,7 @@ export async function runAbsenceAlertsJob(tenantId: TenantId): Promise<void> {
   });
   if (!active) return;
 
-  const result = await detectAbsenceAlerts({ tenantId });
+  const result = await detectAbsenceAlerts({ tenantId, systemActor: true });
   console.log(
     `[alerts.absence] tenant ${tenantId}: ${result.inserted} alert(s) inserted (${result.candidates} candidate(s))`,
   );

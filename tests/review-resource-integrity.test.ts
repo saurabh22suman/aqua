@@ -13,18 +13,21 @@ let status: typeof import("@/lib/services/member-status");
 let transfer: typeof import("@/lib/services/transfer");
 const tenantId = asTenantId(randomUUID());
 const userId = asUserId(randomUUID());
+const ownerId = asUserId(randomUUID());
+const markerId = asUserId(randomUUID());
+const coachId = asUserId(randomUUID());
 const locationA = randomUUID(), locationB = randomUUID();
 const memberA = randomUUID(), memberB = randomUUID(), missingMember = randomUUID();
 const batchA = randomUUID(), batchB = randomUUID(), fullBatch = randomUUID();
 const sessionA = randomUUID(), sessionB = randomUUID();
 const sourceId = randomUUID();
 const scoped = { tenantId, userId, roleKey: "receptionist", allLocations: false, locationIds: [locationA] };
-const owner = { tenantId, userId, roleKey: "owner", allLocations: true, locationIds: [] };
+const owner = { tenantId, userId: ownerId, roleKey: "owner", allLocations: true, locationIds: [] };
 // R01 — student attendance is marked by coach/reception, not owner.
 // The integration seeding below uses a reception-shaped context; the
 // owner-read-only behaviour is pinned in
 // tests/review-role-workflow-corrections.test.ts (R01).
-const marker = { tenantId, userId, roleKey: "receptionist", allLocations: true, locationIds: [] };
+const marker = { tenantId, userId: markerId, roleKey: "receptionist", allLocations: true, locationIds: [] };
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer("postgres:16").start();
@@ -39,8 +42,21 @@ beforeAll(async () => {
   await seedPlatformCatalogue(url);
   admin = new Pool({ connectionString: url });
   await admin.query("insert into tenants(id,slug,name,status) values($1,$2,'Review resources','active')", [tenantId, `review-${tenantId}`]);
-  await admin.query("insert into users(id,phone) values($1,'+919000006001')", [userId]);
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,'+919000006001'),($2,'+919000006002'),($3,'+919000006003'),($4,'+919000006004')", [userId, ownerId, markerId, coachId]);
+  const scopedMembership = randomUUID();
+  for (const [id, role, all, membership] of [
+    [userId, "receptionist", false, scopedMembership],
+    [ownerId, "owner", true, randomUUID()],
+    [markerId, "receptionist", true, randomUUID()],
+    [coachId, "coach", false, randomUUID()],
+  ] as const) {
+    await admin.query(`insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations)
+      select $1,$2,$3,id,'active',$4 from roles where tenant_id=$2 and key=$5`, [membership, tenantId, id, all, role]);
+  }
   await admin.query("insert into locations(id,tenant_id,name,is_primary) values($1,$3,'A',true),($2,$3,'B',false)", [locationA, locationB, tenantId]);
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, scopedMembership, locationA]);
   const personA = randomUUID(), personB = randomUUID();
   await admin.query("insert into persons(id,tenant_id,full_name,date_of_birth) values($1,$3,'Synthetic A','1990-01-01'),($2,$3,'Synthetic B','1990-01-01')", [personA, personB, tenantId]);
   await admin.query("insert into members(id,tenant_id,person_id,location_id,member_code,status) values($1,$3,$4,$6,'A','active'),($2,$3,$5,$7,'B','active')", [memberA, memberB, tenantId, personA, personB, locationA, locationB]);
@@ -78,7 +94,7 @@ describe("review resource and roster closure", () => {
     expect(await history.getBatchAttendanceSummary(scoped, batchB, { from: "2026-09-01", to: "2026-11-01" })).toBeNull();
     expect(await enrolment.listMemberEnrolments(scoped, memberB)).toEqual([]);
     expect((await history.getMemberAttendanceHistory(owner, memberB, { from: "2026-09-01", to: "2026-11-01" })).rows).toHaveLength(1);
-    const unassignedCoach = { ...owner, roleKey: "coach" };
+    const unassignedCoach = { ...owner, userId: coachId, roleKey: "coach", allLocations: false };
     expect((await history.getMemberAttendanceHistory(unassignedCoach, memberB, { from: "2026-09-01", to: "2026-11-01" })).rows).toEqual([]);
     expect(await history.getBatchAttendanceSummary(unassignedCoach, batchB, { from: "2026-09-01", to: "2026-11-01" })).toBeNull();
   });
@@ -155,7 +171,7 @@ describe("review resource and roster closure", () => {
     await admin.query("update members set status='left' where id=$1", [memberB]);
     await admin.query("delete from attendance where member_id=$1", [memberA]);
     // The inactive member has a recent mark; the sole active member has none.
-    await admin.query("update sessions set session_date=current_date where id=$1", [sessionB]);
+    await admin.query("update sessions set session_date=(now() at time zone 'Asia/Kolkata')::date, starts_at=now()-interval '2 hours', ends_at=now()-interval '1 hour' where id=$1", [sessionB]);
     // A risk claim needs the member to have been around for the whole
     // window (owner UX audit 2026-10-24): someone who joined inside
     // the window had no chance to attend the sessions before they

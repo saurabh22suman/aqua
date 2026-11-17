@@ -1,0 +1,287 @@
+{
+  "origin": "https://github.com/google/fonts",
+  "commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+  "scope": "Server-only receipt embedding; not client fonts or app theme changes",
+  "fonts": [
+    {
+      "family": "NotoSans",
+      "file": "NotoSans.ttf",
+      "source_path": "ofl/notosans/NotoSans[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "bfb7bb691513f12e734dc346c03a03f784912432d7e3fa8e56efcf906fe86b3d",
+      "bytes": 2049096,
+      "license": "NotoSans-OFL.txt",
+      "license_sha256": "cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a"
+    },
+    {
+      "family": "NotoSansDevanagari",
+      "file": "NotoSansDevanagari.woff2",
+      "source_path": "package/files/noto-sans-devanagari-devanagari-400-normal.woff2",
+      "sha256": "841e6295d545f120934d082c3122ad7938a918e90f44152da5079e688ba94a54",
+      "bytes": 56296,
+      "license": "NotoSansDevanagari-Fontsource-OFL.txt",
+      "license_sha256": "79c44862256af9a67fc23df7c45ae289e730c7f6d4f8fb8ef593bd3c314b6d6d",
+      "source_package": "@fontsource/noto-sans-devanagari",
+      "source_version": "5.3.0",
+      "source_tarball": "https://registry.npmjs.org/@fontsource/noto-sans-devanagari/-/noto-sans-devanagari-5.3.0.tgz",
+      "source_tarball_sha256": "8d42be0e944481b61e68c7702037d4143e96bf48dbb72d19ea05d0cacc1323d5",
+      "transformation": "FontTools 4.61.1 WOFF2 decode/re-encode with no table transformations; avoids PDFKit fontkit composite glyph offset failure; original glyph coverage retained",
+      "source_origin": "Fontsource 5.3.0 npm distribution; per-face provenance overrides original family collection origin",
+      "input_woff2_sha256": "f86f14cbd1004f5795689ee9cc70d5d87d915f5135b30283525c1c7b8f0eb192"
+    },
+    {
+      "family": "NotoSansKannada",
+      "file": "NotoSansKannada.woff2",
+      "source_path": "package/files/noto-sans-kannada-kannada-400-normal.woff2",
+      "sha256": "434c4be28272151cd173dfa4e8a0d134266cbac4e66f8f84c6fdbc8d8b504b88",
+      "bytes": 31632,
+      "license": "NotoSansKannada-Fontsource-OFL.txt",
+      "license_sha256": "9c599f3447330d7339871ffeb177d9f4c87a5bf4ead932b8705ae055990adf96",
+      "source_package": "@fontsource/noto-sans-kannada",
+      "source_version": "5.3.0",
+      "source_tarball": "https://registry.npmjs.org/@fontsource/noto-sans-kannada/-/noto-sans-kannada-5.3.0.tgz",
+      "source_tarball_sha256": "628593afcffb70cb37242995a1d6bfb7ffdeddb3c96cb5a2f693af5d4ab56f8f",
+      "transformation": "FontTools 4.61.1 WOFF2 decode/re-encode with no table transformations; avoids PDFKit fontkit composite glyph offset failure; original glyph coverage retained",
+      "source_origin": "Fontsource 5.3.0 npm distribution; per-face provenance overrides original family collection origin",
+      "input_woff2_sha256": "34bf66abc80e683d140f2109f703a546662f932a285ee4ef69cf4462e6df34dd"
+    },
+    {
+      "family": "NotoSansGujarati",
+      "file": "NotoSansGujarati.ttf",
+      "source_path": "ofl/notosansgujarati/NotoSansGujarati[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "9901d8552f1dd5d2c50dbd4caa6f6e174e74e8264f06594ab259ae6e7b1ac428",
+      "bytes": 672904,
+      "license": "NotoSansGujarati-OFL.txt",
+      "license_sha256": "c0b88977aa18b5e4fd05d646d560da89fde61b6581fa4507cb00dd90bd1bf7d4"
+    },
+    {
+      "family": "NotoSansGurmukhi",
+      "file": "NotoSansGurmukhi.ttf",
+      "source_path": "ofl/notosansgurmukhi/NotoSansGurmukhi[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "1e6f728fa620e566f842d81e220265813faa12771214765d289c98e035adc5f2",
+      "bytes": 268608,
+      "license": "NotoSansGurmukhi-OFL.txt",
+      "license_sha256": "3f7451b7e2c8381be0c5712f7b0dd5c2d75fe787ae16a99f18b7fa45627a0fde"
+    },
+    {
+      "family": "NotoSansBengali",
+      "file": "NotoSansBengali.ttf",
+      "source_path": "ofl/notosansbengali/NotoSansBengali[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "dcd42978094e584a849c84a51450eeac40c8826057d566ea6d4b9627a403a05a",
+      "bytes": 463668,
+      "license": "NotoSansBengali-OFL.txt",
+      "license_sha256": "754f0e221aa7d5a915489f3bf1f20fe53ddc35ab2834a4d91656d78f9622de70"
+    },
+    {
+      "family": "NotoSansTamil",
+      "file": "NotoSansTamil.ttf",
+      "source_path": "ofl/notosanstamil/NotoSansTamil[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "aa3a9b321f4b0bb2c40203ffbde9af89713227866e0e13f76e5b9eeea727cf88",
+      "bytes": 340668,
+      "license": "NotoSansTamil-OFL.txt",
+      "license_sha256": "f8ff8ce7d0a81bf8d5e121c635ef027250c531f2fd37d5988b8dd6e45f19d7f1"
+    },
+    {
+      "family": "NotoSansTelugu",
+      "file": "NotoSansTelugu.ttf",
+      "source_path": "ofl/notosanstelugu/NotoSansTelugu[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "e618af7bf999df192ed4f388eba2e563f2b5015034e9cbb317b5bd793bd7334d",
+      "bytes": 888808,
+      "license": "NotoSansTelugu-OFL.txt",
+      "license_sha256": "481c72a8f1b4f645a7e6b10326be41b2da2c15cb470ff48a07fab773eed00102"
+    },
+    {
+      "family": "NotoSansMalayalam",
+      "file": "NotoSansMalayalam.ttf",
+      "source_path": "ofl/notosansmalayalam/NotoSansMalayalam[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "312e0e7c3cc15fa09eb42a8f749eeb246b593ed420e3c81aafe8d910c3a6fb56",
+      "bytes": 504204,
+      "license": "NotoSansMalayalam-OFL.txt",
+      "license_sha256": "1df18163a0bf60f02131401ba1609df90051f40c4047684dda1c8a2e9586f7f2"
+    },
+    {
+      "family": "NotoSansOriya",
+      "file": "NotoSansOriya.ttf",
+      "source_path": "ofl/notosansoriya/NotoSansOriya[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "910342275d619081b896b4ed25fd9ad6ff320c25591b810de1fcc4beb153ba82",
+      "bytes": 613116,
+      "license": "NotoSansOriya-OFL.txt",
+      "license_sha256": "c90ff15ade263a49148e35af34e9c177c6d56881e81260b29f10123e9e227eca"
+    },
+    {
+      "family": "NotoSansArabic",
+      "file": "NotoSansArabic.ttf",
+      "source_path": "ofl/notosansarabic/NotoSansArabic[wdth,wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e",
+      "bytes": 844676,
+      "license": "NotoSansArabic-OFL.txt",
+      "license_sha256": "07fc70bfeb985cc1a87a8587d0a0c80bab11c86c9dc3fd95b6f0cb332f983e96"
+    },
+    {
+      "family": "NotoSansOlChiki",
+      "file": "NotoSansOlChiki.ttf",
+      "source_path": "ofl/notosansolchiki/NotoSansOlChiki[wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "c9c31988656f49eccec9588825ab3b5045099c2f850ef98f356f976e8a596b4d",
+      "bytes": 91152,
+      "license": "NotoSansOlChiki-OFL.txt",
+      "license_sha256": "b30754bbe6bea30b666a60d513ae80435a197979c9500e8380f83acd99dc763b"
+    },
+    {
+      "family": "NotoSansMeeteiMayek",
+      "file": "NotoSansMeeteiMayek.ttf",
+      "source_path": "ofl/notosansmeeteimayek/NotoSansMeeteiMayek[wght].ttf",
+      "source_commit": "29b4ec6df2522a8aee279414b78a07910b065874",
+      "sha256": "d56eb6d54ad8aad3570b7ee07f64866832a04f29bce6e5f183918c9eaf008fac",
+      "bytes": 95616,
+      "license": "NotoSansMeeteiMayek-OFL.txt",
+      "license_sha256": "5dbbaac416c9c5021f3409d1157419c0bfe5089ef39a373c49a632eefdc639d8"
+    }
+  ],
+  "bold_fonts": {
+    "origin": "https://github.com/notofonts/noto-fonts",
+    "commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+    "license_sha256": "0dab92d0544f7b233403f14b84a663bdbfa746982eda629e7f4f9ffe1b036feb",
+    "fonts": [
+      {
+        "family": "NotoSans",
+        "file": "NotoSans-Bold.ttf",
+        "sha256": "c976e4b1b99edc88775377fcc21692ca4bfa46b6d6ca6522bfda505b28ff9d6a",
+        "bytes": 575740,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSans/NotoSans-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansDevanagari",
+        "file": "NotoSansDevanagari-Bold.woff2",
+        "sha256": "51c7fb78f3160ebb648f2a539294c207319a3bb5cf9b465d9ac10fdfaf93168b",
+        "bytes": 59932,
+        "source_path": "package/files/noto-sans-devanagari-devanagari-700-normal.woff2",
+        "license": "NotoSansDevanagari-Fontsource-OFL.txt",
+        "source_package": "@fontsource/noto-sans-devanagari",
+        "source_version": "5.3.0",
+        "source_tarball": "https://registry.npmjs.org/@fontsource/noto-sans-devanagari/-/noto-sans-devanagari-5.3.0.tgz",
+        "source_tarball_sha256": "8d42be0e944481b61e68c7702037d4143e96bf48dbb72d19ea05d0cacc1323d5",
+        "license_sha256": "79c44862256af9a67fc23df7c45ae289e730c7f6d4f8fb8ef593bd3c314b6d6d",
+        "transformation": "FontTools 4.61.1 WOFF2 decode/re-encode with no table transformations; avoids PDFKit fontkit composite glyph offset failure; original glyph coverage retained",
+        "source_origin": "Fontsource 5.3.0 npm distribution; per-face provenance overrides original family collection origin",
+        "input_woff2_sha256": "6a68069c959d7f3c02f4062dd9be85327448b5d753e95455b1c0320f37f68fc1"
+      },
+      {
+        "family": "NotoSansKannada",
+        "file": "NotoSansKannada-Bold.woff2",
+        "sha256": "12d3a2ac22fe68b38cf54cadde992044ed07031419b3e1031300ef4eabb515c0",
+        "bytes": 32188,
+        "source_path": "package/files/noto-sans-kannada-kannada-700-normal.woff2",
+        "license": "NotoSansKannada-Fontsource-OFL.txt",
+        "source_package": "@fontsource/noto-sans-kannada",
+        "source_version": "5.3.0",
+        "source_tarball": "https://registry.npmjs.org/@fontsource/noto-sans-kannada/-/noto-sans-kannada-5.3.0.tgz",
+        "source_tarball_sha256": "628593afcffb70cb37242995a1d6bfb7ffdeddb3c96cb5a2f693af5d4ab56f8f",
+        "license_sha256": "9c599f3447330d7339871ffeb177d9f4c87a5bf4ead932b8705ae055990adf96",
+        "transformation": "FontTools 4.61.1 WOFF2 decode/re-encode with no table transformations; avoids PDFKit fontkit composite glyph offset failure; original glyph coverage retained",
+        "source_origin": "Fontsource 5.3.0 npm distribution; per-face provenance overrides original family collection origin",
+        "input_woff2_sha256": "c686004d6aff1c797b4a241cf8e92a1b486ae27a7bcaba12c7ff9b48f869004c"
+      },
+      {
+        "family": "NotoSansGujarati",
+        "file": "NotoSansGujarati-Bold.ttf",
+        "sha256": "dfa02697acd99735fab0082a0387ff7c2c9288227e80c0d277479cf29dd4cb4e",
+        "bytes": 208708,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansGujarati/NotoSansGujarati-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansGurmukhi",
+        "file": "NotoSansGurmukhi-Bold.ttf",
+        "sha256": "3330d107d9756f6d43091a520fcbc0105176fb970fa7e23d5e84e602c968bb75",
+        "bytes": 53004,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansGurmukhi/NotoSansGurmukhi-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansBengali",
+        "file": "NotoSansBengali-Bold.ttf",
+        "sha256": "7ad632c41ae1ac0931bfffb703470df0fd03e76bcb78f1fcd023d35fbed5ea8e",
+        "bytes": 209084,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansBengali/NotoSansBengali-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansTamil",
+        "file": "NotoSansTamil-Bold.ttf",
+        "sha256": "61ccb56bafc7f8316644b91a91ebb3a878c238238ac14cb6ea2f19fa01e9d504",
+        "bytes": 77428,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansTamil/NotoSansTamil-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansTelugu",
+        "file": "NotoSansTelugu-Bold.ttf",
+        "sha256": "e7c717097993e71944ef221f520a9d79db05e9c7652f4b037e1801c96379ca22",
+        "bytes": 205304,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansTelugu/NotoSansTelugu-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansMalayalam",
+        "file": "NotoSansMalayalam-Bold.ttf",
+        "sha256": "bcc3ec37c2675a952fc336a5483c53f2f7e417c958b668cfeda170dc51bd998e",
+        "bytes": 117236,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansMalayalam/NotoSansMalayalam-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansOriya",
+        "file": "NotoSansOriya-Bold.ttf",
+        "sha256": "c0d1eb7ecdeafc860c04066d1d22f6406645a5c165c469d527762cd76b05453f",
+        "bytes": 92940,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansOriya/NotoSansOriya-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansArabic",
+        "file": "NotoSansArabic-Bold.ttf",
+        "sha256": "ed2711b387750ae991b6a980b8dd16fdd65e6702b97e9f52adf3a8edf09ef4df",
+        "bytes": 248468,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansArabic/NotoSansArabic-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansOlChiki",
+        "file": "NotoSansOlChiki-Bold.ttf",
+        "sha256": "fbbe90147815d422c3bb9e104d224caea5ef87e7e1fc81571752ed5bf5a4fb14",
+        "bytes": 14508,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansOlChiki/NotoSansOlChiki-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      },
+      {
+        "family": "NotoSansMeeteiMayek",
+        "file": "NotoSansMeeteiMayek-Bold.ttf",
+        "sha256": "0b3119baddf7f4011a438fbc7a7985259a696f8dc308202f06869b059c481382",
+        "bytes": 16908,
+        "source_commit": "ffebf8c1ee449e544955a7e813c54f9b73848eac",
+        "source_path": "hinted/ttf/NotoSansMeeteiMayek/NotoSansMeeteiMayek-Bold.ttf",
+        "license": "Noto-static-bold-OFL.txt"
+      }
+    ]
+  }
+}

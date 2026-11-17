@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // U-07 — the locations editor. A single-location tenant sees its own
@@ -61,10 +61,10 @@ describe("U-07 locations editor", () => {
     });
     render(<LocationManager initial={[WORLI, ANDHERI]} canWrite />);
     expect(document.body.textContent).toMatch(/add another location/i);
-    // One open day per location (Monday) = two time inputs each.
-    await waitFor(() =>
-      expect(document.querySelectorAll("li input[type='time']").length).toBe(4),
-    );
+    // One open day per location; each opening/closing TimeField has editable controls.
+    await waitFor(() => expect(screen.getAllByRole("group",{name:"Monday opening time"})).toHaveLength(2));
+    const groups = [...screen.getAllByRole("group",{name:"Monday opening time"}),...screen.getAllByRole("group",{name:"Monday closing time"})];
+    for (const group of groups) expect((within(group).getByLabelText("Hour") as HTMLSelectElement).disabled).toBe(false);
   });
 
   it("read-only staff see the data but no save controls", async () => {

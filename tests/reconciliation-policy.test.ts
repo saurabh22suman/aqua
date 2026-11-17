@@ -38,8 +38,7 @@ const locA = uuidv7();
 const RUN = Date.now().toString(36);
 
 const ownerCtx = { tenantId: tenantA, userId: ownerUser };
-// Manually-constructed ctx (no DB-backed role resolution needed here
-// — reconciliation.ts reads permissions straight off
+// Manually-constructed ctx (reconciliation.ts reads permissions straight off
 // ctx.permissions, exactly what the action layer hands it after
 // requireDefaultCtx() resolves the caller's role grants). No
 // settings.manage — the receptionist-permission shape Fix A's
@@ -87,6 +86,11 @@ beforeAll(async () => {
     "insert into users (id, phone) values ($1, $2), ($3, $4)",
     [ownerUser, `+9197${phone}`, receptionistUser, `+9198${phone}`],
   );
+  const ownerRole = uuidv7(), receptionRole = uuidv7(), receptionMembership = uuidv7();
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$3,'owner','Owner','/owner',0),($2,$3,'receptionist','Reception','/reception',3)", [ownerRole, receptionRole, tenantA]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'payments.record'),($1,$2,'settings.manage'),($1,$3,'payments.record')", [tenantA, ownerRole, receptionRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$3,$4,$6,'active',true),($2,$3,$5,$7,'active',false)", [uuidv7(), receptionMembership, tenantA, ownerUser, receptionistUser, ownerRole, receptionRole]);
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [uuidv7(), tenantA, receptionMembership, locA]);
 }, 240_000);
 
 afterAll(async () => {

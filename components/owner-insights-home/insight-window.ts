@@ -30,12 +30,9 @@ export function insightWindow(today: string): InsightWindow {
   };
 }
 
-/** The human range, with the tenant's own timezone named. */
-export function insightWindowLabel(
-  window: InsightWindow,
-  timezone: string,
-): string {
-  return `${formatPeriodRangeIST(window.from, window.to)} (${timezone})`;
+/** The included calendar days of the exclusive-end window. */
+export function insightWindowLabel(window: InsightWindow): string {
+  return formatPeriodRangeIST(window.from, window.to);
 }
 
 /**

@@ -3,10 +3,12 @@ import { Pool } from "pg";
 import { eq } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { batches, enrolments, locations, programs } from "@/db/schema";
 import { createMember, enrolMember } from "@/lib/services/register";
-import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // tenants has FORCE row level security, so fixture rows must be created
 // through the privileged migration pool, never the app pool.
@@ -16,6 +18,8 @@ const RUN = Date.now().toString(36);
 const CAPACITY = 2;
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] });
 let batchId = "";
 let mainLocationId = "";
 const memberIds: string[] = [];
@@ -31,6 +35,11 @@ beforeAll(async () => {
   );
 
   let programId = "";
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
+
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -59,7 +68,7 @@ beforeAll(async () => {
 
   for (let i = 0; i < 3; i++) {
     const created = await createMember(
-      { tenantId, userId: undefined as unknown as UserId },
+      actor(),
       {
         fullName: `Capacity Member ${i}`,
         dateOfBirth: "1990-01-01",
@@ -85,7 +94,11 @@ afterAll(async () => {
     await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -95,8 +108,8 @@ afterAll(async () => {
 // at all -- a batch at capacity would silently oversell.
 describe("enrolMember refuses to oversell a batch's capacity", () => {
   it("fills a 2-capacity batch with exactly 2 members", async () => {
-    const a = await enrolMember({ tenantId }, { memberId: memberIds[0], batchId });
-    const b = await enrolMember({ tenantId }, { memberId: memberIds[1], batchId });
+    const a = await enrolMember(actor(), { memberId: memberIds[0], batchId });
+    const b = await enrolMember(actor(), { memberId: memberIds[1], batchId });
     expect(a.ok).toBe(true);
     expect(b.ok).toBe(true);
 
@@ -107,7 +120,7 @@ describe("enrolMember refuses to oversell a batch's capacity", () => {
   });
 
   it("refuses the enrolment that would exceed capacity, with a clear message", async () => {
-    const result = await enrolMember({ tenantId }, { memberId: memberIds[2], batchId });
+    const result = await enrolMember(actor(), { memberId: memberIds[2], batchId });
 
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.error).toMatch(/full|capacity/i);
@@ -120,7 +133,7 @@ describe("enrolMember refuses to oversell a batch's capacity", () => {
 
   it("re-enrolling an already-enrolled member on a new date is not blocked by capacity", async () => {
     const result = await enrolMember(
-      { tenantId },
+      actor(),
       { memberId: memberIds[0], batchId, enrolledOn: "2030-01-01" },
     );
     expect(result.ok).toBe(true);
@@ -163,7 +176,7 @@ describe("enrolMember under real concurrency", () => {
     const raceMemberIds: string[] = [];
     for (let i = 0; i < contenders; i++) {
       const created = await createMember(
-        { tenantId, userId: undefined as unknown as UserId },
+        actor(),
         {
           fullName: `Race Member ${i}`,
           dateOfBirth: "1990-01-01",
@@ -180,7 +193,7 @@ describe("enrolMember under real concurrency", () => {
 
     const results = await Promise.all(
       raceMemberIds.map((memberId) =>
-        enrolMember({ tenantId }, { memberId, batchId: raceBatchId }),
+        enrolMember(actor(), { memberId, batchId: raceBatchId }),
       ),
     );
 

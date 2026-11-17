@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
@@ -17,7 +18,7 @@ import {
   updateCategoryInput,
   uuid,
 } from "@/lib/services/menu-core";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import type {
   MenuCategoryRow,
   MenuItemRow,
@@ -38,7 +39,7 @@ export * from "./menu-item-list";
 export type { MenuCategoryRow, MenuItemRow, MenuMutationResult };
 
 export async function createMenuCategory(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = categoryInput.safeParse(raw);
@@ -47,6 +48,9 @@ export async function createMenuCategory(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     if (!locationVisible(access, input.locationId)) {
       return { ok: false, error: "Location not found." };
@@ -97,7 +101,7 @@ export async function createMenuCategory(
 }
 
 export async function updateMenuCategory(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = updateCategoryInput.safeParse(raw);
@@ -106,6 +110,9 @@ export async function updateMenuCategory(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()
@@ -178,7 +185,7 @@ export async function updateMenuCategory(
 }
 
 export async function archiveMenuCategory(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = z.object({ categoryId: uuid }).safeParse(raw);
@@ -186,6 +193,9 @@ export async function archiveMenuCategory(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()

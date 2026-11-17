@@ -74,6 +74,10 @@ export const GST_STATE_NAMES: Readonly<Record<string, string>> = {
   "38": "Ladakh",
 };
 
+/** Display order is independent of numeric-looking object key enumeration. */
+export const GST_STATE_OPTIONS = Object.entries(GST_STATE_NAMES)
+  .sort(([, a], [, b]) => a.localeCompare(b, "en-IN"));
+
 export function placeOfSupplyForGstin(
   gstin: string | null,
 ): string | null {

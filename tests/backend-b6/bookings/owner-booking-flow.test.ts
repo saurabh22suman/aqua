@@ -10,6 +10,7 @@ import { privilegedFixturePool as admin } from "../../db/privileged-fixture";
 // services, which connect as `app_login` under tenant RLS. The
 // credential is named in exactly one place; this file never names it.
 import { asTenantId, asUserId } from "@/lib/ids";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import {
   addDays,
   todayInZone,
@@ -141,6 +142,14 @@ beforeAll(async () => {
       `+9193${String(Date.now()).slice(-8)}`,
     ],
   );
+  for (const [id, user] of [[tenant, actor], [otherTenant, otherActor], [scopedTenant, actor]] as const) {
+    await seedRoleTemplates(id);
+    await admin.query(
+      "insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) select $1, $2, $3, id, 'active', true from roles where tenant_id = $2 and key = 'owner'",
+      [uuidv7(), id, user],
+    );
+  }
+  await admin.query("insert into tenant_features (tenant_id, feature_key, enabled) values ($1, 'pool.booking', true)", [tenant]);
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Flow Member')",
     [personId, tenant],
@@ -163,8 +172,13 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [id]);
     await admin.query("delete from locations where tenant_id = $1", [id]);
     await admin.query("delete from persons where tenant_id = $1", [id]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [id]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [id]);
+    await admin.query("delete from roles where tenant_id = $1", [id]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [id]);
     await admin.query("delete from tenants where id = $1", [id]);
   }
+  await admin.query("delete from users where id = any($1::uuid[]) and not exists (select 1 from audit_log where actor_id = users.id)", [[actor, otherActor]]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});
@@ -262,7 +276,7 @@ describe("B6 owner booking flow", () => {
     expect(Number(audit.rows[0]?.n)).toBe(1);
   });
 
-  it("records a walk-in but refuses to bill it", async () => {
+  it("bills a walk-in once as a guest without inventing a member", async () => {
     const created = await bookings.createBooking(ctx, {
       facilityId: facilityA,
       walkInName: "Walk-in Guest",
@@ -273,9 +287,29 @@ describe("B6 owner booking flow", () => {
     if (!created.ok) return;
 
     const billed = await billing.requestBookingBill(ctx, created.bookingId);
-    expect(billed.ok).toBe(false);
-    if (billed.ok) return;
-    expect(billed.error).toMatch(/member/i);
+    expect(billed.ok).toBe(true);
+    if (!billed.ok) return;
+    const again = await billing.requestBookingBill(ctx, created.bookingId);
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    expect(again.bill.invoiceId).toBe(billed.bill.invoiceId);
+    const { rows } = await admin.query(
+      `select i.id, i.tenant_id, i.location_id, i.member_id, i.payer_kind, i.guest_name,
+              i.total_paise::text, b.id as booking_id, b.invoice_id
+         from bookings b join invoices i on i.id=b.invoice_id and i.tenant_id=b.tenant_id
+        where b.id=$1`,
+      [created.bookingId],
+    );
+    expect(rows).toEqual([expect.objectContaining({
+      id: billed.bill.invoiceId, tenant_id: tenant, location_id: locA,
+      member_id: null, payer_kind: "guest", guest_name: "Walk-in Guest",
+      total_paise: String(PRICE), booking_id: created.bookingId, invoice_id: billed.bill.invoiceId,
+    })]);
+    const { rows: counts } = await admin.query<{ n: string }>(
+      "select count(*)::text as n from invoices where tenant_id=$1 and payer_kind='guest' and guest_name=$2",
+      [tenant, "Walk-in Guest"],
+    );
+    expect(counts[0]?.n).toBe("1");
   });
 
   it("lets exactly one of two concurrent requests for the same slot win", async () => {

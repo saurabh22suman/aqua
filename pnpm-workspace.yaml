@@ -1,5 +1,11 @@
 packages: []
 
+overrides:
+  'next@15.5.28>postcss': 8.5.23
+  '@esbuild-kit/core-utils@3.3.2>esbuild': 0.25.12
+  'archiver-utils@5.0.2>glob': 14.0.2
+  '@typescript-eslint/typescript-estree@8.70.1>minimatch': 11.0.8
+
 allowBuilds:
   cpu-features: true
   esbuild: true

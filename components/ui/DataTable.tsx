@@ -19,6 +19,7 @@ export function DataTable<T>({
   empty,
   onRowClick,
   testId = "data-table",
+  scrollLabel = "Data table",
 }: {
   columns: ReadonlyArray<DataTableColumn<T>>;
   rows: ReadonlyArray<T>;
@@ -26,13 +27,21 @@ export function DataTable<T>({
   empty?: ReactNode;
   onRowClick?: (row: T) => void;
   testId?: string;
+  /** Human name for the bounded horizontal scroll region. */
+  scrollLabel?: string;
 }) {
   if (rows.length === 0) {
     return <>{empty ?? <EmptyState title="Nothing here yet" />}</>;
   }
 
   return (
-    <div className="overflow-x-auto" data-testid={testId}>
+    <div
+      className="overflow-x-auto focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+      data-testid={testId}
+      role="region"
+      aria-label={scrollLabel}
+      tabIndex={0}
+    >
       <table className="w-full min-w-[640px] text-[13px]">
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-[0.1em] text-ink-3">

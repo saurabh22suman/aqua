@@ -26,6 +26,7 @@ const idSchema = z.object({
 const batchSchema = z.object({
   batchId: z.string().uuid(),
 });
+const promoteSchema = batchSchema.extend({ expectedEntryId: z.string().uuid() });
 
 export async function addToWaitlistAction(raw: unknown): Promise<WaitlistResult> {
   const parsed = idSchema.safeParse(raw);
@@ -62,15 +63,15 @@ export async function getWaitlistHeadAction(raw: unknown): Promise<WaitlistHead 
   if (!parsed.success) return null;
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.read");
-  return getWaitlistHead(ctx, parsed);
+  return getWaitlistHead(ctx, parsed.data);
 }
 
 export async function promoteHeadAction(raw: unknown): Promise<WaitlistResult> {
-  const parsed = batchSchema.safeParse(raw);
+  const parsed = promoteSchema.safeParse(raw);
   if (!parsed.success) {
     return { kind: "error", code: "invalid", message: "Invalid promote." };
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "enquiries.write");
-  return promoteHead(ctx, parsed);
+  return promoteHead(ctx, parsed.data);
 }

@@ -21,7 +21,7 @@ import {
   type WalletMutationResult,
 } from "@/lib/services/wallet-core";
 import type { AccountEntryDirection, AccountEntrySourceType } from "@/db/schema/account-entries";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // K-05 — the member wallet ledger (fast-follow after Release 1).
 //
@@ -45,7 +45,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 export * from "./wallet-core";
 
 export async function topUp(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WalletMutationResult> {
   const parsed = topUpInput.safeParse(raw);
@@ -148,7 +148,7 @@ export async function topUp(
 }
 
 async function mutate(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
   direction: AccountEntryDirection,
   sourceType: AccountEntrySourceType,
@@ -166,6 +166,12 @@ async function mutate(
   const actorId = ctx.userId;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — the caller's resolved location access governs the ledger,
+    // exactly as it governs the top-up above it. The member's own
+    // location decides: a charge or a refund against a member at
+    // another site is not visible to this caller, and the answer is
+    // the same "not found" the rest of the money layer uses.
+    const access = await resolveLocationAccess(tx, ctx);
     const locked = await lockMemberForEntry(
       tx,
       ctx.tenantId,
@@ -173,6 +179,9 @@ async function mutate(
       input.idempotencyKey,
     );
     if (locked.status === "missing") {
+      return { ok: false, error: "Member not found." };
+    }
+    if (!locationVisible(access, locked.locationId)) {
       return { ok: false, error: "Member not found." };
     }
     if (locked.status === "replay") return replayResult(locked.entry);
@@ -210,14 +219,14 @@ async function mutate(
 }
 
 export async function charge(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WalletMutationResult> {
   return mutate(ctx, raw, "debit", "charge", "wallet.charge");
 }
 
 export async function refund(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WalletMutationResult> {
   return mutate(ctx, raw, "credit", "refund", "wallet.refund");
@@ -239,12 +248,18 @@ export async function balanceOf(
   const id = asMemberId(parsed.data);
 
   return withTenant(ctx.tenantId, async (tx) => {
+    // O-08 — a balance is the member's money at a site; the caller's
+    // location access decides whether this caller may read it.
+    const access = await resolveLocationAccess(tx, ctx);
     const memberRows = await tx
-      .select({ id: members.id })
+      .select({ id: members.id, locationId: members.locationId })
       .from(members)
       .where(and(eq(members.tenantId, ctx.tenantId), eq(members.id, id)))
-      .limit(1);
+      .limit(1).for("share");
     if (!memberRows[0]) throw new Error("Member not found.");
+    if (!locationVisible(access, memberRows[0].locationId)) {
+      throw new Error("Member not found.");
+    }
 
     const derived = await deriveBalance(tx, ctx.tenantId, id);
     const [latest] = await tx

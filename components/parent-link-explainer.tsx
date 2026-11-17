@@ -20,11 +20,12 @@ export function ParentLinkExplainer() {
       </h1>
       <p className="mt-2 text-[13.5px] text-ink-3 leading-snug">
         Your academy shares a private link on WhatsApp — it opens your
-        child&apos;s attendance, next session and updates. No app, no
-        password, no account needed.
+        child&apos;s next session, this month&apos;s attendance, their membership
+        plan and any outstanding fees. No app, no password, no account needed.
       </p>
       <p className="mt-4 text-[13px] text-ink-3 leading-snug">
-        Don&apos;t have it yet? Ask your academy to send it again.
+        Anyone who has the link can open the page until it expires. Don&apos;t
+        have it yet? Ask your academy to send it again.
       </p>
       <Link
         href="/login"

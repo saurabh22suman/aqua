@@ -3,6 +3,7 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool } from "pg";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { e2eWebEnv } from "../../scripts/lib/e2e-child-env";
 
 // Self-contained, synthetic and disposable. Never seeds or resets the demo DB.
 export async function runOfflinePrivacy() {
@@ -31,7 +32,7 @@ export async function runOfflinePrivacy() {
     const { setupOfflineFixture, setOfflineSyncEnabled } = await import("../../scripts/lib/offline-fixture");
     const fixture = await setupOfflineFixture(admin, `privacy-${Date.now()}`, 2);
     await setOfflineSyncEnabled(admin, fixture.tenantId, true);
-    server = spawn("pnpm", ["dev", "--port", String(port)], { env: process.env, detached: true, stdio: "pipe" });
+    server = spawn("pnpm", ["dev", "--port", String(port)], { env: e2eWebEnv(process.env), detached: true, stdio: "pipe" });
     server.stdout?.on("data", data => process.stdout.write(data));
     server.stderr?.on("data", data => process.stderr.write(data));
     for (let attempt = 0; attempt < 120; attempt++) {

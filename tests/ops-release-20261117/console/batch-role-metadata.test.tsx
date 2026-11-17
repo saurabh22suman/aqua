@@ -1,0 +1,37 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { expect, it, vi } from "vitest";
+const state = vi.hoisted(() => ({ attendance: false, summary: vi.fn(), sessions: vi.fn() }));
+vi.mock("@/lib/auth/surface-guard", () => ({ requireOwner: async () => {}, requirePagePermission: () => {} }));
+vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => ({ tenantId: "t" }) }));
+vi.mock("@/lib/auth/permission", () => ({ hasPermission: (_ctx: unknown, permission: string) => permission === "attendance.read" && state.attendance, hasFeature: () => false }));
+vi.mock("@/db/tenant", () => ({ withTenant: async () => [{ timezone: "Asia/Kolkata" }] }));
+vi.mock("@/lib/actions/programs", () => ({ listBatchesAction: async () => [{ id: "b", name: "Morning", programName: "Swimming", locationName: "Bay", coachName: "Coach Lee", capacity: 12, startTime: "07:00", endTime: "08:00", daysOfWeek: [1, 3] }] }));
+vi.mock("@/lib/services/attendance-history", () => ({ currentMonthPeriod: () => ({ from: "2026-11-01", to: "2026-12-01" }), getBatchAttendanceSummary: state.summary }));
+vi.mock("@/lib/services/coach-schedule", () => ({ listUpcomingSessions: state.sessions }));
+vi.mock("@/lib/services/register", () => ({ getRosterForSession: vi.fn() }));
+vi.mock("@/lib/actions/waitlist", () => ({ listWaitlistAction: vi.fn() }));
+vi.mock("@/lib/actions/terminology", () => ({ getTerminologyAction: async () => ({}) }));
+vi.mock("@/lib/terminology/owner-terms", () => ({ ownerTerminology: () => ({ overrides: {}, locale: "en" }) }));
+vi.mock("@/lib/services/selected-facility-access", () => ({ canSelectFacility: async () => true }));
+vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("not found"); }, usePathname: () => "/owner/batches/b" }));
+import BatchDetailPage from "@/app/(owner)/owner/batches/[batchId]/page";
+it("shows existing batch metadata without reading attendance for program-only roles", async () => {
+  state.attendance = false; state.summary.mockClear(); state.sessions.mockClear();
+  const html = renderToStaticMarkup(await BatchDetailPage({ params: Promise.resolve({ batchId: "b" }) }));
+  expect(html).toContain("Swimming");
+  expect(html).toContain("07:00");
+  expect(html).toContain("08:00");
+  expect(html).toContain("Coach Lee");
+  expect(html).toContain("12");
+  expect(state.summary).not.toHaveBeenCalled();
+  expect(state.sessions).not.toHaveBeenCalled();
+});
+it("retains the independently authorized attendance read", async () => {
+  state.attendance = true;
+  state.summary.mockResolvedValue({ pct: null, sessionCount: 0 });
+  state.sessions.mockResolvedValue([]);
+  const html = renderToStaticMarkup(await BatchDetailPage({ params: Promise.resolve({ batchId: "b" }) }));
+  expect(html).toContain("Coach Lee");
+  expect(state.summary).toHaveBeenCalled();
+  expect(html).toContain("attendance");
+});

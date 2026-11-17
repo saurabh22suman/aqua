@@ -309,10 +309,17 @@ describe("PR2-C4 — tenant-side co-owner reset", () => {
 
   it("cannot target another tenant's membership", async () => {
     const otherTenant = asTenantId(uuidv7());
+    const beforeAudit = await admin.query("select count(*)::int as n from audit_log where tenant_id = $1", [tenantId]);
+    const beforeUses = await admin.query("select count(*)::int as n from invite_link_uses where tenant_id = $1", [tenantId]);
+    const beforeOutbox = await admin.query("select count(*)::int as n from whatsapp_notification_outbox where tenant_id = $1", [tenantId]);
     const result = await issueTenantOwnerResetLink(
       { tenantId: otherTenant, userId: ownerUserId },
       ownerMembershipId,
     );
-    expect(result).toMatchObject({ kind: "error", code: "membership_not_found" });
+    expect(result).toMatchObject({ kind: "error", code: "forbidden_target" });
+    expect(result).not.toHaveProperty("token");
+    expect((await admin.query("select count(*)::int as n from audit_log where tenant_id = $1", [tenantId])).rows).toEqual(beforeAudit.rows);
+    expect((await admin.query("select count(*)::int as n from invite_link_uses where tenant_id = $1", [tenantId])).rows).toEqual(beforeUses.rows);
+    expect((await admin.query("select count(*)::int as n from whatsapp_notification_outbox where tenant_id = $1", [tenantId])).rows).toEqual(beforeOutbox.rows);
   });
 });

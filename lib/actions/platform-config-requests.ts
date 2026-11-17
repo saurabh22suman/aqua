@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { resolveConfigChangeRequest } from "@/db/config-requests";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
@@ -31,6 +32,7 @@ export async function resolveConfigChangeRequestAction(
     applyValue: formData.get("applyValue") === "on",
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("config.request.resolve", "invalid");
     return {
       ok: false,
       error: surface.error.issues[0]?.message ?? "Invalid resolution.",
@@ -39,6 +41,7 @@ export async function resolveConfigChangeRequestAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("config.request.resolve", "denied");
     return {
       ok: false,
       error:
@@ -48,7 +51,7 @@ export async function resolveConfigChangeRequestAction(
     };
   }
 
-  return opsAction(
+  const result = await opsAction(
     {
       scope: "config.request.resolve",
       actorId: asUserId(status.userId),
@@ -64,5 +67,12 @@ export async function resolveConfigChangeRequestAction(
         applyValue: surface.data.applyValue,
         actorId: asUserId(status.userId),
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("config.request.resolve", error);
+    throw error;
+  });
+  if (!result.ok) {
+    await recordOpsMutationTrace("config.request.resolve", "error");
+  }
+  return result;
 }

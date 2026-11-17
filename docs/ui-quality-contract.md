@@ -5,6 +5,13 @@ are defects to track, not an instruction to silently redesign every route.
 DESIGN.md owns visual tokens and approved compositions; this file owns behavioral
 acceptance and evidence. Do not duplicate token values here.
 
+## Current preset acceptance — 14 November 2026
+
+The approved Mint Garden, Lavender Club and Slate & Amber presets share the same
+layout and keyboard order. This supersedes historical two-preset wording below.
+Compare measured geometry across all three; use semantic status text as well as
+colour and verify rendered contrast in each preset.
+
 ## Shared shell and scrolling
 
 - Owner desktop shell has a viewport-bound sidebar that stays visible while the

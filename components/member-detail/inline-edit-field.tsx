@@ -6,7 +6,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Pencil } from "lucide-react";
+import Pencil from "lucide-react/dist/esm/icons/pencil.mjs";
 import { updateMemberAction } from "@/lib/actions/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
@@ -59,6 +59,13 @@ export type InlineEditFieldProps = {
   // always keep the stored form, so formatting never round-trips into
   // a write.
   formatAs?: "phone";
+  // MF-05 — readers (members.read without members.write) get the same
+  // formatted value as plain text and no edit control. Existing consumers
+  // keep the editable default unless they explicitly opt in.
+  readOnly?: boolean;
+  alwaysShowEdit?: boolean;
+  explicitCommit?: boolean;
+  ownerRow?: boolean;
 };
 
 type SaveStatus =
@@ -79,7 +86,12 @@ export function InlineEditField({
   className,
   valueClassName,
   formatAs,
+  readOnly = false,
+  alwaysShowEdit = false,
+  explicitCommit = false,
+  ownerRow = false,
 }: InlineEditFieldProps) {
+  const controlType = field === "dateOfBirth" ? "date" : type;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [displayValue, setDisplayValue] = useState(value);
@@ -93,6 +105,16 @@ export function InlineEditField({
   // slower earlier request cannot land after a newer one and restore
   // an older value.
   const commitChain = useRef<Promise<unknown>>(Promise.resolve());
+  const explicitPending = useRef(false);
+  const editButtonRef = useRef<HTMLButtonElement | null>(null);
+  const returnFocus = useRef(false);
+
+  useEffect(() => {
+    if (!editing && returnFocus.current) {
+      returnFocus.current = false;
+      editButtonRef.current?.focus();
+    }
+  }, [editing]);
 
   useEffect(() => {
     // Sync when the canonical prop changes (parent re-fetch, navigation
@@ -100,18 +122,20 @@ export function InlineEditField({
     // optimistic displayValue when commit() exits edit mode. A failed
     // save keeps `draft` so the attempted value is not lost.
     setDisplayValue(value);
-    setDraft((current) => (status.kind === "error" ? current : value));
+    // An explicit editor owns its draft until Save/Cancel. A refreshed
+    // canonical value is still kept for Cancel, without erasing that draft.
+    setDraft((current) => (status.kind === "error" || (explicitCommit && editing) ? current : value));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
-      if (inputRef.current instanceof HTMLInputElement && type === "text") {
+      if (inputRef.current instanceof HTMLInputElement && controlType === "text") {
         inputRef.current.select();
       }
     }
-  }, [editing, type]);
+  }, [editing, controlType]);
 
   useEffect(() => {
     if (status.kind !== "saved") return;
@@ -159,6 +183,42 @@ export function InlineEditField({
   }
 
   async function commit(newValue: string) {
+    if (explicitCommit) {
+      if (explicitPending.current) return;
+      if (controlType === "date" && !newValue) {
+        setStatus({ kind: "error", message: "Choose a valid date of birth." });
+        return;
+      }
+      if (newValue === displayValue && status.kind !== "error") {
+        returnFocus.current = true;
+        setEditing(false);
+        setStatus({ kind: "idle" });
+        return;
+      }
+      explicitPending.current = true;
+      setStatus({ kind: "saving" });
+      const patch = payloadFor(newValue);
+      const run = commitChain.current.then(() => updateMemberAction(patch), () => updateMemberAction(patch));
+      commitChain.current = run.catch(() => undefined);
+      try {
+        const result = await run;
+        if (!result.ok) {
+          setStatus({ kind: "error", message: result.error });
+          return;
+        }
+        const stored = result.value ? persistedValue({ ...patch, ...result.value }, newValue) : newValue;
+        setDisplayValue(stored);
+        setDraft(stored);
+        setStatus({ kind: "saved" });
+        returnFocus.current = true;
+        setEditing(false);
+      } catch (err) {
+        setStatus({ kind: "error", message: err instanceof Error ? err.message : "Save failed" });
+      } finally {
+        explicitPending.current = false;
+      }
+      return;
+    }
     if (newValue === displayValue && status.kind !== "error") {
       setEditing(false);
       setStatus({ kind: "idle" });
@@ -201,10 +261,17 @@ export function InlineEditField({
   }
 
   function handleKeyDown(e: KeyboardEvent) {
-    if (e.key === "Enter" && type !== "textarea") {
+    if (explicitCommit) {
+      if (e.key === "Escape" && !explicitPending.current) {
+        e.preventDefault();
+        cancelEdit();
+      }
+      return;
+    }
+    if (e.key === "Enter" && controlType !== "textarea") {
       e.preventDefault();
       // Same rule as blur: an incomplete date is a cancel.
-      if (type === "date" && !draft) {
+      if (controlType === "date" && !draft) {
         setDraft(displayValue);
         return;
       }
@@ -218,11 +285,12 @@ export function InlineEditField({
   }
 
   function handleBlur() {
+    if (explicitCommit) return;
     if (status.kind === "saving") return;
     if (!editing) return;
     // An incomplete/cleared date is a cancel, not a wipe — DOB is
     // required, and emitting "" would optimistically blank the field.
-    if (type === "date" && !draft) {
+    if (controlType === "date" && !draft) {
       setDraft(displayValue);
       setEditing(false);
       return;
@@ -237,24 +305,53 @@ export function InlineEditField({
     setEditing(true);
   }
 
+  function cancelEdit() {
+    if (explicitPending.current) return;
+    setDraft(displayValue);
+    setStatus({ kind: "idle" });
+    returnFocus.current = true;
+    setEditing(false);
+  }
+
 
   // Empty fields style the placeholder as editable and keep the pencil
   // visible. Dates read as `22 Aug`, never raw ISO; the draft stays ISO.
   const shown =
     formatAs === "phone"
       ? formatPhoneIN(displayValue)
-      : type === "date" && displayValue
+      : controlType === "date" && displayValue
         ? formatDateIST(displayValue)
         : displayValue;
   const isEmpty = !shown;
+  const ownerLabel = field === "phone" ? "phone" : FIELD_LABELS[field];
+  const ownerShown = type === "select" ? options?.find((option) => option.value === shown)?.label ?? shown : shown;
+
+  if (readOnly) {
+    return (
+      <div className={className}>
+        <span
+          className={
+            ownerRow
+              ? "block break-words [overflow-wrap:anywhere] text-[14px] text-ink"
+              : shown
+              ? valueClassName ?? "text-[13px]"
+              : "text-[13px] text-ink-3"
+          }
+        >
+          {ownerRow ? ownerShown || "Not provided" : shown || "—"}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
-      <div className="group inline-flex items-center gap-1">
+      <div className={ownerRow ? "group flex min-w-0 w-full flex-wrap items-center justify-between gap-x-2 gap-y-2" : explicitCommit ? "group inline-flex max-w-full flex-wrap items-center gap-1" : "group inline-flex items-center gap-1"}>
         {editing ? (
+          <>
           <InlineEditControl
             field={field}
-            type={type}
+            type={controlType}
             draft={draft}
             options={options}
             placeholder={placeholder}
@@ -263,19 +360,28 @@ export function InlineEditField({
             onCommit={(value) => void commit(value)}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
+            explicitCommit={explicitCommit}
+            disabled={explicitCommit && status.kind === "saving"}
           />
+          {explicitCommit ? <div className="flex flex-wrap gap-1">
+            <button type="button" disabled={status.kind === "saving"} onClick={() => void commit(draft)} className="min-h-11 min-w-11 rounded-ctl px-3 text-[13px] text-ink-2 disabled:opacity-60">{status.kind === "saving" ? "Saving…" : "Save"}</button>
+            <button type="button" disabled={status.kind === "saving"} onClick={cancelEdit} className="min-h-11 min-w-11 rounded-ctl px-3 text-[13px] text-ink-2 disabled:opacity-60">Cancel</button>
+          </div> : null}
+          </>
         ) : (
           <>
-            <span className={isEmpty ? "text-[13px] text-[var(--accent-ink)] underline underline-offset-2" : valueClassName ?? "text-[13px]"}>
-              {shown || placeholder || "—"}
+            <span className={ownerRow ? "min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-[14px] text-ink" : isEmpty ? "text-[13px] text-[var(--accent-ink)] underline underline-offset-2" : valueClassName ?? "text-[13px]"}>
+              {ownerRow ? ownerShown || "Not provided" : shown || placeholder || "—"}
             </span>
             <button
               type="button"
+              ref={editButtonRef}
               onClick={enterEdit}
-              aria-label={`Edit ${FIELD_LABELS[field] ?? field}`}
-              className={`flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-ctl text-ink-3 transition-opacity duration-150 hover:bg-deck focus-visible:bg-deck ${isEmpty ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"}`}
+              aria-label={ownerRow ? `${isEmpty ? "Add" : "Edit"} ${ownerLabel}` : `Edit ${FIELD_LABELS[field] ?? field}`}
+              className={`flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-ctl px-2 text-[12px] text-ink-3 hover:bg-deck focus-visible:bg-deck ${alwaysShowEdit || isEmpty ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"}`}
             >
               <Pencil size={14} />
+              {ownerRow ? (isEmpty ? "Add" : "Edit") : alwaysShowEdit ? "Edit" : null}
             </button>
           </>
         )}

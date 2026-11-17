@@ -3,9 +3,10 @@ import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import type { RosterRow } from "@/lib/actions/coach";
 import { formatTimeIST } from "@/lib/time/tz";
 import { activateOfflineIdentity, storedOfflineIdentity, enqueueMark, kvDelete, kvGet, queueForIdentity,
-  queueDelete, scopedKvSet } from "@/lib/offline/idb";
+  scopedQueueDelete, scopedKvSet } from "@/lib/offline/idb";
 import type { OfflineIdentity } from "@/lib/offline/identity";
 import { runOfflineLifecycle } from "@/lib/offline/client-session";
+import { replayAttendance } from "@/lib/offline/replay";
 
 export type Mark = "present" | "absent" | "late";
 type LastError = { at: number; message: string };
@@ -17,8 +18,10 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
   offlineSyncEnabled: boolean, identity?: OfflineIdentity | null) {
   const [marks, setMarks] = useState<Record<string, Mark>>(initialStatuses);
   const [pending, setPending] = useState(0), [saving, setSaving] = useState(0);
+  const [retryable, setRetryable] = useState(0);
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [lastError, setLastError] = useState<LastError | null>(null);
+  const [review, setReview] = useState<Array<{ clientId: string; memberId: string }>>([]);
   const [online, setOnline] = useState(true), [sessionEnded, setSessionEnded] = useState(false);
   const running = useRef(false), inFlight = useRef(0);
   const waiters = useRef<Array<() => void>>([]);
@@ -40,6 +43,14 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
     if (!identity) return;
     const mine = (await queueForIdentity(identity)).filter(entry => entry.sessionId === sessionId);
     setPending(mine.length);
+    const blocked = new Set<string>();
+    let available = 0;
+    for (const entry of mine) {
+      if (entry.review) blocked.add(entry.memberId);
+      else if (!blocked.has(entry.memberId)) available++;
+    }
+    setRetryable(available);
+    setReview(mine.filter(entry => entry.review).map(({ clientId, memberId }) => ({ clientId, memberId })));
     if (mine.length) setMarks(current => {
       const next = { ...current };
       for (const entry of mine) next[entry.memberId] = entry.status;
@@ -52,28 +63,13 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
     if (running.current || !navigator.onLine || !offlineAvailable || !identity) return;
     running.current = true;
     try {
-      for (const entry of await queueForIdentity(identity)) {
-        // Server verifies this session-bound scope again before its mutation.
-        let timeout: ReturnType<typeof setTimeout> | undefined;
-        try {
-          const result = await Promise.race([
-            markAttendanceSessionAction({ sessionId: entry.sessionId, memberId: entry.memberId,
-              status: entry.status, clientId: entry.clientId, offlineScope: identity.scope }),
-            new Promise<never>((_resolve, reject) => { timeout = setTimeout(() => reject(new Error("Sync timed out. Retry when connected.")), 8000); }),
-          ]);
-          if (!result.ok) throw new Error(result.error ?? "Could not sync attendance.");
-          await queueDelete(entry.clientId);
-          const at = Date.now();
-          await scopedKvSet(identity, "lastSynced", { at });
-          await kvDelete(`${identity.scope}:lastError`);
-          setLastSynced(at); setLastError(null);
-        } catch (error) {
-          fail(error);
-          await scopedKvSet(identity, "lastError", { at: Date.now(), message: error instanceof Error ? error.message : String(error) }).catch(() => {});
-          await enqueueMark({ ...entry, attempts: entry.attempts + 1 }).catch(() => {});
-          break;
-        } finally { if (timeout) clearTimeout(timeout); }
+      const result = await replayAttendance(identity);
+      if (result.lastSyncedAt !== undefined) {
+        await scopedKvSet(identity, "lastSynced", { at: result.lastSyncedAt });
+        setLastSynced(result.lastSyncedAt);
       }
+      if (result.error) fail(new Error(result.error));
+      else { await kvDelete(`${identity.scope}:lastError`); setLastError(null); }
       await refreshFromQueue();
     } catch (error) { fail(error); }
     finally { running.current = false; }
@@ -86,7 +82,7 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
   useEffect(() => {
     const connected = () => { setOnline(true); if (offlineAvailable) void flush.current(); };
     const disconnected = () => setOnline(false);
-    const ended = () => { setSessionEnded(true); setMarks({}); setPending(0); };
+    const ended = () => { setSessionEnded(true); setMarks({}); setPending(0); setRetryable(0); setReview([]); };
     const cleared = (event: Event) => {
       if (identity && (event as CustomEvent<{ scope: string }>).detail?.scope === identity.scope) ended();
     };
@@ -105,7 +101,7 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
         const last = await kvGet<{ at: number }>(`${active.scope}:lastSynced`);
         if (last) setLastSynced(last.at);
         const error = await kvGet<LastError>(`${active.scope}:lastError`);
-        if (error) setLastError(error);
+        if (error && (!last || error.at >= last.at)) setLastError(error);
       }).catch(fail);
     }
     const tick = setInterval(() => {
@@ -144,8 +140,19 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
       });
   }
   const markedCount = useMemo(() => Object.values(marks).filter(Boolean).length, [marks]);
-  return { marks, mark, markedCount, pending, online, saving, waitForPendingWrites,
+  return { marks, mark, markedCount, pending, retryable, online, saving, waitForPendingWrites, review,
+    discardReview: async (clientId: string) => {
+      if (!identity) return;
+      const memberId = review.find(entry => entry.clientId === clientId)?.memberId;
+      if (!memberId || !await scopedQueueDelete(identity, clientId)) return;
+      setMarks(current => {
+        const next = { ...current };
+        if (initialStatuses[memberId]) next[memberId] = initialStatuses[memberId]; else delete next[memberId];
+        return next;
+      });
+      await refreshFromQueue();
+    },
     savedAtLabel: lastSynced ? formatTimeIST(new Date(lastSynced)) : null,
-    hasActiveFailure: lastError !== null && (!lastSynced || lastError.at > lastSynced),
+    hasActiveFailure: lastError !== null,
     retrySync: () => flush.current(), offlineAvailable, sessionEnded };
 }

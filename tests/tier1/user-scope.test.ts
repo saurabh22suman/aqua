@@ -175,9 +175,14 @@ describe("pre-tenant resolution — user-scoped RLS (F-06 follow-up)", () => {
     await admin.query("update roles set name = 'Founder', key = 'founder-renamed' where id = $1", [roleXId]);
 
     const home = await resolveHomePath(`uscope-ba-a-${RUN}`);
-    expect(home).toBe("/owner");
+    expect(home).toBe("/clubs");
+    const unselected = await resolveDefaultMembership(`uscope-ba-a-${RUN}`);
+    expect(unselected?.requiresSelection).toBe(true);
+    expect(await resolveHomePath(`uscope-ba-a-${RUN}`, tenantX)).toBe("/owner");
+    expect(await resolveDefaultMembership(`uscope-ba-a-${RUN}`, tenantY)).toMatchObject({tenantId: tenantY});
+    expect(await resolveDefaultMembership(`uscope-ba-a-${RUN}`, uuidv7())).toBeNull();
 
-    const membership = await resolveDefaultMembership(`uscope-ba-a-${RUN}`);
+    const membership = await resolveDefaultMembership(`uscope-ba-a-${RUN}`, tenantX);
     expect(membership?.tenantId).toBe(tenantX);
     expect(membership?.roleKey).toBe("founder-renamed");
   });

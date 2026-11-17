@@ -11,7 +11,7 @@ export function StickyActionBar({
 }) {
   return (
     <div
-      className={`sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-20 -mx-5 border-t border-line bg-paper/95 px-5 py-3 backdrop-blur ${className}`}
+      className={`sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-20 -mx-4 border-t border-line bg-paper/95 px-4 py-3 backdrop-blur lg:-mx-7 lg:px-7 ${className}`}
       data-testid="sticky-action-bar"
     >
       {children}

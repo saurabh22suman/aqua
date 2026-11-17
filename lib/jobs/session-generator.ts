@@ -10,6 +10,7 @@ import {
   zonedWallTimeToInstant,
 } from "@/lib/time/tz";
 import { isHoliday } from "@/lib/services/holidays";
+import { lockTenantSchedule } from "@/lib/services/scheduling-lock";
 
 const DAYS_AHEAD = 28;
 
@@ -31,6 +32,7 @@ export async function generateSessions(
   tenantId: TenantId,
   tenantTimezone: string,
 ): Promise<number> {
+  await lockTenantSchedule(tx, tenantId);
   const activeBatches = await tx
     .select()
     .from(batches)

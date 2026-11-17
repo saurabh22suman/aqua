@@ -15,6 +15,7 @@ import {
   type ReactivateStaffResult,
   type RevokeStaffResult,
 } from "@/lib/services/staff-invitations";
+import { MANAGER_ROLE_KEY } from "@/lib/services/manager-role-grants";
 
 // Phase 3.6 — server actions for the staff invitations
 // surface. parse-then-permission preamble (standing rule);
@@ -34,20 +35,45 @@ export async function listInvitationsAction(): Promise<ListInvitationsRow[]> {
   return listInvitations({ tenantId: ctx.tenantId });
 }
 
-const inviteSchema = z.object({
-  phone: z
-    .string()
-    .trim()
-    .min(1, "Phone is required.")
-    .max(40, "Phone is too long."),
-  fullName: z
-    .string()
-    .trim()
-    .min(1, "Name is required.")
-    .max(200, "Name is too long."),
-  roleKey: z.enum(STAFF_INVITABLE_ROLES),
-  locationIds: z.array(z.string().uuid()).max(50).default([]),
-});
+const inviteSchema = z
+  .object({
+    phone: z
+      .string()
+      .trim()
+      .min(1, "Phone is required.")
+      .max(40, "Phone is too long."),
+    fullName: z
+      .string()
+      .trim()
+      .min(1, "Name is required.")
+      .max(200, "Name is too long."),
+    roleKey: z.enum(STAFF_INVITABLE_ROLES),
+    locationIds: z.array(z.string().uuid()).max(50).default([]),
+    managerAllLocations: z.boolean().default(false),
+  })
+  // An empty facility selection is valid only with an explicit tenant-wide choice.
+  .superRefine((value, ctx) => {
+    if (value.roleKey !== MANAGER_ROLE_KEY) return;
+    if (value.managerAllLocations && value.locationIds.length > 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["locationIds"], message: "Choose the whole academy or selected facilities, not both." });
+      return;
+    }
+    if (!value.managerAllLocations && value.locationIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["locationIds"],
+        message: "Choose at least one facility for the manager.",
+      });
+      return;
+    }
+    if (new Set(value.locationIds).size !== value.locationIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["locationIds"],
+        message: "The same facility was chosen twice.",
+      });
+    }
+  });
 
 export type InviteStaffActionInput = z.input<typeof inviteSchema>;
 
@@ -101,7 +127,8 @@ export async function resendInvitationAction(
         | "membership_not_found"
         | "not_invited"
         | "invalid"
-        | "forbidden_target";
+        | "forbidden_target"
+        | "uncertain";
       message: string;
     }
 > {

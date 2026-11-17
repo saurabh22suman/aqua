@@ -135,6 +135,13 @@ export async function updateFeature(
       // succeed: only the second one wins, the first's audit row
       // still reflects its own change rather than a "self-update"
       // on the second writer's input.
+      //
+      // The lock is what makes the audit trail a chain. Without it, two
+      // concurrent editors both read the SAME previous row before either
+      // writes, so both audit rows record the same stale `before` value
+      // and the second row's `before` no longer matches what it actually
+      // overwrote. The lock makes the second transaction re-read the
+      // committed row, so its `before` is the first edit's `after`.
       const rows = await tx
         .select({
           key: features.key,
@@ -144,7 +151,8 @@ export async function updateFeature(
         })
         .from(features)
         .where(eq(features.key, input.key))
-        .limit(1);
+        .limit(1)
+        .for("update");
       const previous = rows[0];
       if (!previous) {
         return {

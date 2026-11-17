@@ -329,14 +329,19 @@ describe("A06 owner credential issuance authority", () => {
     expect(JSON.stringify(rows)).not.toContain(result.token);
   });
 
-  it("lets an Administrator mint lower-trust staff links and an Owner target Owner", async () => {
+  it("refuses an Administrator staff link without side effects and allows an Owner", async () => {
     mocks.ctx.mockResolvedValue(adminCtx);
+    const beforeAudit = await auditCount();
+    const beforeOutbox = await outboxFor(coachMembershipId);
+    const beforeUsage = await usageCount();
     const coachLink = await inviteActions.issueLoginLinkAction(
       coachMembershipId,
     );
-    expect(coachLink.kind).toBe("ok");
-    if (coachLink.kind === "ok") expect(coachLink.purpose).toBe("relogin");
-    expect(await outboxFor(coachMembershipId)).toBeGreaterThan(0);
+    expect(coachLink).toMatchObject({ kind: "error", code: "forbidden_target" });
+    expect(coachLink).not.toHaveProperty("token");
+    expect(await auditCount()).toBe(beforeAudit);
+    expect(await outboxFor(coachMembershipId)).toBe(beforeOutbox);
+    expect(await usageCount()).toBe(beforeUsage);
 
     mocks.ctx.mockResolvedValue(ownerCtx);
     const ownerLink = await inviteActions.issueLoginLinkAction(

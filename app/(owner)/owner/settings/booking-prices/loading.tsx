@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Owner booking-prices cold-load. The page resolves the facility
 // catalogue and the price rules before it can render, so without this
@@ -9,7 +10,7 @@ import { Skeleton } from "@/components/skeleton";
 
 export default function Loading() {
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-2xl">
       <div className="flex items-center gap-2">
         <Skeleton w={14} h={3} />
         <Skeleton w={18} h={3} />
@@ -32,6 +33,6 @@ export default function Loading() {
         <Skeleton w={64} h={4} className="mt-3" />
         <Skeleton w={56} h={4} className="mt-2" />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

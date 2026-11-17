@@ -51,7 +51,7 @@ const restrictedAdmin: ReviewCtx = {
   roleKey: "admin",
   allLocations: false,
   locationIds: [locA],
-  permissions: new Set(["dashboard.view"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read"]),
 };
 
 const unrestrictedOwner: ReviewCtx = {
@@ -60,7 +60,7 @@ const unrestrictedOwner: ReviewCtx = {
   roleKey: "owner",
   allLocations: true,
   locationIds: [],
-  permissions: new Set(["dashboard.view"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read"]),
 };
 
 beforeAll(async () => {
@@ -89,6 +89,20 @@ beforeAll(async () => {
     "insert into users(id, phone) values ($1,'+919820700101'),($2,'+919820700102')",
     [adminUserId, ownerUserId],
   );
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  const adminMembershipId = randomUUID();
+  await admin.query(
+    `insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations)
+     select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='admin'`,
+    [adminMembershipId, tenantId, adminUserId],
+  );
+  await admin.query(
+    `insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations)
+     select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'`,
+    [randomUUID(), tenantId, ownerUserId],
+  );
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, adminMembershipId, locA]);
   await admin.query(
     "insert into programs(id,tenant_id,name) values($1,$2,'RD Program')",
     [programId, tenantId],
@@ -239,6 +253,7 @@ describe("review dashboard location scope (A07)", () => {
     );
 
     const ownerAll = await dashboard.getOwnerDashboard(unrestrictedOwner, {});
+    if (!ownerAll.money) throw new Error("Owner money must be available for this scope test");
     expect(ownerAll.money.collectedTodayPaise).toBe(150000);
     expect(ownerAll.money.collectedTodayCount).toBe(2);
     expect(ownerAll.money.outstandingPaise).toBe(350000);
@@ -248,6 +263,7 @@ describe("review dashboard location scope (A07)", () => {
     expect(ownerAll.needsAttention.some((item) => item.title === "Overdue fees")).toBe(true);
 
     const scopedA = await dashboard.getOwnerDashboard(restrictedAdmin, {});
+    if (!scopedA.money) throw new Error("Scoped money must be available for this scope test");
     expect(scopedA.money.collectedTodayPaise).toBe(100000);
     expect(scopedA.money.collectedTodayCount).toBe(1);
     expect(scopedA.money.outstandingPaise).toBe(100000);
@@ -264,6 +280,7 @@ describe("review dashboard location scope (A07)", () => {
     const scopedAtoB = await dashboard.getOwnerDashboard(restrictedAdmin, {
       locationId: locB,
     });
+    if (!scopedAtoB.money) throw new Error("Narrowed money must be available for this scope test");
     expect(scopedAtoB.money.collectedTodayPaise).toBe(0);
     expect(scopedAtoB.money.outstandingPaise).toBe(0);
     expect(scopedAtoB.money.overduePaise).toBe(0);
@@ -331,18 +348,18 @@ describe("review dashboard location scope (A07)", () => {
 // markers below), and the wording guards read the file that owns the
 // wording.
 describe("owner Home composition and labels", () => {
-  it("leads with the context, then the summary, then the dominant action, then the workspace, then one trend panel", () => {
+  it("orders the actual header, permission-gated collections, sessions and attention", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
     const context = src.indexOf("<OwnerHomeHeader");
-    const summary = src.indexOf("<OwnerHomeMetrics");
-    const action = src.indexOf("<OwnerHomeActions");
+    const summary = src.indexOf("<OwnerHomeMoney");
+    const sessions = src.indexOf("<OwnerHomeTimeline");
     const attention = src.indexOf("<OwnerHomeAttention");
-    const trend = src.indexOf("<OwnerHomeCharts");
     expect(context).toBeGreaterThan(-1);
     expect(summary).toBeGreaterThan(context);
-    expect(action).toBeGreaterThan(summary);
-    expect(attention).toBeGreaterThan(action);
-    expect(trend).toBeGreaterThan(attention);
+    expect(sessions).toBeGreaterThan(summary);
+    expect(attention).toBeGreaterThan(sessions);
+    expect(src).toContain("can.readFees && data.money ? <OwnerHomeMoney");
+    expect(src).toContain("can.recordPayment && can.readFees ? fees.dues : null");
     // The old gross-only label and the phantom facilities heading are gone.
     expect(src).not.toContain("Payments recorded today");
     expect(src).not.toContain("Today's facilities");

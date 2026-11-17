@@ -54,6 +54,13 @@ beforeAll(async () => {
     ownerUserId,
     `+9194${String(Date.now()).slice(-8)}`,
   ]);
+  // Both positive request paths use this owner in their respective tenant;
+  // tenant isolation is still checked between independently scoped rows.
+  for (const tenantId of [tenantA, tenantB]) {
+    const roleId = uuidv7();
+    await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenantId]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, ownerUserId, roleId]);
+  }
   await admin.query(
     `insert into platform_users (id, email, name, password_hash, password_salt, role, status)
      values ($1, $2, 'O-07 Operator', 'h', 's', 'admin', 'active')`,

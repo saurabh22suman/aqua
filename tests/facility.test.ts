@@ -26,7 +26,10 @@ describe("facility value resolution", () => {
 
   it("falls back to the cookie when the URL is silent", () => {
     expect(resolveFacilityValue(undefined, ID)).toBe(ID);
-    expect(resolveFacilityValue("all", ID)).toBe(ID);
+  });
+
+  it("clears the cookie filter when the URL explicitly selects all", () => {
+    expect(resolveFacilityValue("all", ID)).toBeUndefined();
   });
 
   it("drops malformed values from both sources", () => {
@@ -104,4 +107,3 @@ describe("ECharts axis money formatting", () => {
     expect(compactPaiseINR(10000000)).toBe("₹1L");
   });
 });
-

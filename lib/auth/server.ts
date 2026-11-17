@@ -2,14 +2,25 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { phoneNumber } from "better-auth/plugins";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { TenantTx } from "@/db/tenant";
 import { db } from "@/db/auth-db";
 import { betterAuthSchema } from "../../db/schema/better-auth";
 import { linkBetterAuthUser } from "../../db/platform";
 import { activateInvitedMemberships } from "../../db/membership-activation";
 import { deliverOtp } from "./otp-delivery";
 
-export function createAuth(authDb: NodePgDatabase<Record<string, never>>) {
+export function createAuth(
+  authDb: NodePgDatabase<Record<string, never>> | TenantTx,
+  options?: { transactionalSession?: true },
+) {
+  // Better Auth 1.7.1 ORs this environment variable with the options flag.
+  // A transaction-scoped factory must not publish telemetry outside the DB.
+  const telemetry = process.env.BETTER_AUTH_TELEMETRY;
+  if (options?.transactionalSession && telemetry && telemetry !== "0" && telemetry.toLowerCase() !== "false") {
+    throw new Error("Transactional authentication is unavailable");
+  }
   return betterAuth({
+    ...(options?.transactionalSession ? { telemetry: { enabled: false } } : {}),
     database: drizzleAdapter(authDb, {
       provider: "pg",
       schema: betterAuthSchema,

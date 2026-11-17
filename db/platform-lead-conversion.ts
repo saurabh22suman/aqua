@@ -1,9 +1,14 @@
+import { eq } from "drizzle-orm";
 import { withPlatformAdmin } from "./scope";
 import { locations } from "./schema/locations";
-import { createTenant } from "./platform-tenant-create";
-import { getLead, transitionLead, type LeadQualification } from "./platform-leads";
+import { createTenantInput, provisionTenantInTransaction } from "./platform-tenant-create";
+import { finishTenantProvisioning } from "./platform-tenant-provision";
+import { platformLeads } from "./schema/platform-leads";
+import { tenants } from "./schema/tenants";
+import { type LeadQualification } from "./platform-leads";
 import { recordOpsAudit } from "./ops-action";
-import type { TenantId, UserId } from "@/lib/ids";
+import { actorIsActiveAdmin } from "./platform-tenant-commercial";
+import type { UserId } from "@/lib/ids";
 
 // O-10 (docs/ops-platform-design.md §7) — lead → tenant conversion,
 // carrying the qualification answers forward: the sport selects the
@@ -60,6 +65,7 @@ export type ConvertLeadResult =
       kind: "error";
       code: "invalid" | "not_found" | "already_converted" | "provision_failed";
       message: string;
+      tenantId?: string;
     };
 
 export async function convertLead(
@@ -67,109 +73,96 @@ export async function convertLead(
   input: ConvertLeadInput,
   ctx: { actorId: UserId },
 ): Promise<ConvertLeadResult> {
-  const lead = await getLead(leadId);
-  if (!lead) {
-    return { kind: "error", code: "not_found", message: "Lead not found." };
-  }
-  if (lead.status === "converted" || lead.trialTenantId !== null) {
-    return {
-      kind: "error",
-      code: "already_converted",
-      message: "This lead already has a tenant.",
-    };
-  }
-
-  const selectedPreset = input.preset ?? presetForQualification(lead.qualification);
-  const timezone = input.timezone ?? "Asia/Kolkata";
-  const currency = input.currency ?? "INR";
-
-  const created = await createTenant(
-    {
+  const transaction = await withPlatformAdmin(async (tx) => {
+    const [lead] = await tx.select().from(platformLeads)
+      .where(eq(platformLeads.id, leadId)).for("update");
+    if (!lead) {
+      return { kind: "error" as const, code: "not_found" as const, message: "Lead not found." };
+    }
+    if (!(await actorIsActiveAdmin(tx, ctx.actorId))) {
+      return { kind: "error" as const, code: "invalid" as const, message: "An active administrator is required." };
+    }
+    const linked = lead.convertedTenantId ?? lead.trialTenantId;
+    if (linked) {
+      return {
+        kind: "error" as const, code: "already_converted" as const,
+        tenantId: linked, message: "This lead already has a tenant; use the linked tenant.",
+      };
+    }
+    if (lead.status === "converted") {
+      return { kind: "error" as const, code: "already_converted" as const, message: "This lead is already converted." };
+    }
+    const preset = input.preset ?? presetForQualification(lead.qualification);
+    const parsed = createTenantInput.safeParse({
       name: lead.businessName,
       slug: input.slug,
-      timezone,
+      timezone: input.timezone,
       planKey: input.planKey,
-      currency,
+      currency: input.currency,
       gstin: input.gstin,
       locationName: input.locationName ?? lead.city ?? "Main Location",
       locationIsPrimary: true,
-      presetKey: selectedPreset,
-    },
-    { actorId: ctx.actorId },
-  );
-  if (created.kind !== "ok") {
-    return {
-      kind: "error",
-      code: "provision_failed",
-      message: created.message ?? "Tenant provisioning failed.",
-    };
-  }
-
-  const presetResult = {
-    applied: created.presetApplied,
-    warning: created.presetWarning,
-  };
-
-  // The qualification's location count (data-driven extra sites).
-  const qualificationLocations =
-    typeof lead.qualification["locations"] === "number"
-      ? lead.qualification["locations"]
-      : 1;
-  const extraLocations = Math.max(0, Math.min(49, qualificationLocations - 1));
-  if (extraLocations > 0) {
-    await withPlatformAdmin(async (tx) => {
-      for (let i = 0; i < extraLocations; i += 1) {
-        await tx.insert(locations).values({
-          tenantId: created.tenantId as TenantId,
-          name: `Location ${i + 2}`,
-          kind: "club",
-          isPrimary: false,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        });
-      }
-      await recordOpsAudit(tx, {
-        action: "platform_lead.convert",
-        actorId: ctx.actorId,
-        tenantId: created.tenantId,
-        targetType: "tenant",
-        targetId: created.tenantId,
-        detail: { extraLocations },
-      });
+      presetKey: preset,
     });
-  }
-
-  // The lead moves to trial with the provisioned tenant recorded; the
-  // later "mark converted" step is a separate, deliberate action.
-  const now = new Date();
-  const trialEnds = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-  const moved = await transitionLead(
-    leadId,
-    {
+    if (!parsed.success) {
+      return { kind: "error" as const, code: "invalid" as const, message: parsed.error.issues[0]?.message ?? "Invalid tenant details." };
+    }
+    const created = await provisionTenantInTransaction(tx, parsed.data, ctx);
+    if (created.kind !== "ok") {
+      return { kind: "error" as const, code: "provision_failed" as const, message: created.message };
+    }
+    const count = typeof lead.qualification.locations === "number" ? lead.qualification.locations : 1;
+    const extraLocations = Math.max(0, Math.min(49, count - 1));
+    for (let i = 0; i < extraLocations; i += 1) {
+      await tx.insert(locations).values({
+        tenantId: created.tenantId,
+        name: `Location ${i + 2}`,
+        kind: "club",
+        isPrimary: false,
+        createdBy: ctx.actorId,
+        updatedBy: ctx.actorId,
+      });
+    }
+    const now = new Date();
+    const deadline = new Date(now.getTime() + 14 * 86400000);
+    await tx.update(tenants).set({ trialExpiresAt: deadline })
+      .where(eq(tenants.id, created.tenantId));
+    await tx.update(platformLeads).set({
       status: "trial",
       trialTenantId: created.tenantId,
-      trialStartsAt: now.toISOString(),
-      trialExpiresAt: trialEnds.toISOString(),
-    },
-    ctx,
-  );
-
-  // Even if the lead transition somehow fails, the tenant exists and is
-  // audited; surface the failure rather than pretending.
-  if (moved.kind !== "ok") {
+      trialStartsAt: now,
+      trialExpiresAt: deadline,
+      updatedAt: now,
+      updatedBy: ctx.actorId,
+    }).where(eq(platformLeads.id, leadId));
+    await recordOpsAudit(tx, {
+      action: "platform_lead.convert",
+      actorId: ctx.actorId,
+      tenantId: created.tenantId,
+      targetType: "platform_lead",
+      targetId: leadId,
+      before: { status: lead.status },
+      after: { status: "trial", trialTenantId: created.tenantId },
+      detail: { extraLocations, trialExpiresAt: deadline.toISOString() },
+    });
     return {
-      kind: "error",
-      code: "provision_failed",
-      message: `Tenant provisioned but the lead could not be updated: ${moved.message}`,
+      kind: "ok" as const,
+      tenantId: created.tenantId,
+      preset,
+      timezone: parsed.data.timezone,
+      locationsCreated: 1 + extraLocations,
     };
-  }
-
-  return {
-    kind: "ok",
-    tenantId: created.tenantId,
-    preset: selectedPreset,
-    presetApplied: presetResult.applied,
-    presetWarning: presetResult.warning,
-    locationsCreated: 1 + extraLocations,
-  };
+  }).catch((error: unknown) => {
+    let cause: unknown = error;
+    for (let i = 0; i < 5 && cause && typeof cause === "object"; i += 1) {
+      if ("code" in cause && cause.code === "23505" && "constraint" in cause && cause.constraint === "tenants_slug_key") {
+        return { kind: "error" as const, code: "provision_failed" as const, message: "A tenant with this slug already exists." };
+      }
+      cause = "cause" in cause ? cause.cause : null;
+    }
+    throw error;
+  });
+  if (transaction.kind !== "ok") return transaction;
+  const provisioning = await finishTenantProvisioning({ tenantId: transaction.tenantId, timezone: transaction.timezone, presetKey: transaction.preset, actorId: ctx.actorId }).catch(() => ({ presetApplied: false, presetWarning: "Tenant created; preset or schedule follow-up failed. Review the tenant and retry setup." }));
+  return { kind: "ok", tenantId: transaction.tenantId, preset: transaction.preset, locationsCreated: transaction.locationsCreated, presetApplied: provisioning.presetApplied, presetWarning: provisioning.presetWarning };
 }

@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   getEnquiryStageBreakdown: vi.fn(),
 }));
 
-vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: mocks.ctx }));
+vi.mock("@/lib/auth/context", () => ({ NotFoundError: class NotFoundError extends Error {}, requireDefaultCtx: mocks.ctx }));
 vi.mock("@/lib/auth/permission", () => ({
   requirePermission: mocks.permission,
   ForbiddenError: class ForbiddenError extends Error {},

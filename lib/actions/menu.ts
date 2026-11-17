@@ -16,7 +16,7 @@ import {
   type MenuItemRow,
   type MenuMutationResult,
 } from "@/lib/services/menu";
-import { isGstRegistered } from "@/lib/services/tax";
+import { siteTaxRegistration } from "@/lib/services/tax";
 
 // K-01 — menu actions. Reads ride settings.read (reception has it so
 // the counter can render the menu), writes need settings.manage
@@ -65,22 +65,25 @@ export type MenuView = {
   items: MenuItemRow[];
   // The counter preview needs this to quote the same document the
   // billing path will issue (PR1-C4).
-  taxRegistered: boolean;
+  taxRegistered: boolean | null;
+  taxRegistrationByLocation: Record<string, boolean | null>;
 };
 
 export async function listMenuAction(raw: unknown): Promise<MenuView> {
   const parsed = listInput.safeParse(raw);
   if (!parsed.success) {
-    return { categories: [], items: [], taxRegistered: false };
+    return { categories: [], items: [], taxRegistered: null, taxRegistrationByLocation: {} };
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.read");
-  const [categories, items, taxRegistered] = await Promise.all([
+  const [categories, items] = await Promise.all([
     listMenuCategories(ctx, parsed.data),
     listMenuItems(ctx, parsed.data),
-    isGstRegistered(ctx.tenantId),
   ]);
-  return { categories, items, taxRegistered };
+  const ids = parsed.data.locationId ? [parsed.data.locationId] : [...new Set(items.map((item) => item.locationId))];
+  const taxRegistrationByLocation = await siteTaxRegistration(ctx, ids);
+  const selected = parsed.data.locationId ?? (ids.length === 1 ? ids[0] : undefined);
+  return { categories, items, taxRegistered: selected ? taxRegistrationByLocation[selected] ?? null : null, taxRegistrationByLocation };
 }
 
 export async function createMenuCategoryAction(

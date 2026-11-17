@@ -1,5 +1,4 @@
 import { Client } from "pg";
-import { v7 as uuidv7 } from "uuid";
 import {
   SWIMMING_PRESET_DEFINITION,
   MULTI_SPORT_PRESET_DEFINITION,
@@ -12,6 +11,7 @@ import {
 START_FROM_SCRATCH_PRESET_DEFINITION,
 } from "./preset-definitions-r22";
 import { CONFIG_KEYS } from "./config-definitions";
+import { seedSaasPlans } from "./seed-saas-plans";
 
 // Phase 2.1 — preset catalogue seed entries. Authored as
 // constants in db/preset-definitions.ts and
@@ -307,7 +307,8 @@ export const FEATURES: ReadonlyArray<{
 // The closed platform permission list. Invariant: every `module` value is
 // an F-01 feature key — that is the explicit feature mapping that
 // resolution (b) depends on. NOTE: the F-04 task text says "29 rows" but
-// lists 30; the list below is the verbatim list, all 30 rows.
+// lists 30; the list below is the verbatim list, all 36 rows as of the
+// 2026-11-09 member sign-in chain (35 before members.link.confirm).
 export const PERMISSIONS: ReadonlyArray<{
   key: string;
   module: string;
@@ -352,6 +353,15 @@ export const PERMISSIONS: ReadonlyArray<{
   // seeded Curriculum Lead role (and owner/admin through their full
   // grant set); ordinary coaches assess without editing the framework.
   { key: "levels.write", module: "swim.levels", description: "Maintain the academy curriculum framework and rubrics" },
+  // 2026-11-09 member sign-in — the authority to CONFIRM that an account
+  // is a member's account. A NEW key, not a reuse: members.write is
+  // "create and edit member records", and a confirmation edits no member
+  // record — it edits a link's attestation. Reusing it would hand the
+  // privilege to every role that can edit a member (the receptionist
+  // holds it), which is a widening nobody decided. The module is
+  // 'members', which is always-on, so the grant fails closed on the ROLE
+  // GRANT alone.
+  { key: "members.link.confirm", module: "members", description: "Confirm or withdraw a member's sign-in account link when the account's number and the club's record differ" },
 ];
 
 export async function seedPermissions(
@@ -470,32 +480,8 @@ export async function seedPlatformCatalogue(
       );
     }
 
-    // price_paise stays NULL: the pricing-model decision (scope §2.5) is
-    // deliberately not encoded here. Never seed a price.
-    await client.query(
-      `insert into plans (id, key, name, status, price_paise, currency, is_default, sort_order)
-       values ($1, 'standard', 'Standard', 'active', null, 'INR', true, 0)
-       on conflict (key) do update
-         set name = excluded.name,
-             status = excluded.status,
-             price_paise = null,
-             currency = excluded.currency,
-             is_default = excluded.is_default,
-             sort_order = excluded.sort_order,
-             updated_at = now()`,
-      [uuidv7()],
-    );
-
-    // mechanical rule: every ga feature, empty limits. The internal
-    // features are catalogued but unplanned — a maturity gate, not a tier.
-    await client.query(
-      `insert into plan_features (plan_id, feature_key, limits)
-       select p.id, f.key, '{}'::jsonb
-       from plans p
-       cross join features f
-       where p.key = 'standard' and f.status = 'ga'
-       on conflict do nothing`,
-    );
+    // Expanded catalogue is atomic and never wipes recorded commercial values.
+    await seedSaasPlans(client);
 
     await client.query(
       `update tenants

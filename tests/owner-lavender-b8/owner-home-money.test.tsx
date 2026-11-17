@@ -2,24 +2,19 @@
 //
 // Owner Lavender B — "Money at a glance".
 //
-// The approved board puts ONE Day/Week/Month control above the two
-// money panels (collections and payment mix), so the two panels always
-// describe the same period. The scope rules are unchanged and are
-// asserted here as well:
+// The retained range control sits above the two money panels (collections
+// and payment mix), so both panels describe the same period and scope:
 //
-//   * the control keeps the metric and the facility scope;
+//   * the control keeps the facility scope;
 //   * the drill-downs carry the same dates and the same facility;
 //   * a period with no money says so instead of drawing an empty ring;
 //   * a failed read says "unavailable", never ₹0.
 //
-// RED status at the time of writing: the period control lived inside
-// the wide trends panel, so the payment mix — which sits beside it —
-// was not visibly driven by it, and there was no "Money at a glance"
-// heading above the band.
 
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { OwnerHomeCharts } from "@/components/owner-home-charts";
+import { OwnerHomeRange } from "@/components/owner-home/owner-home-range";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
 
 function data(overrides: Partial<OwnerChartsData> = {}): OwnerChartsData {
@@ -90,42 +85,44 @@ afterEach(cleanup);
 describe("owner Home — money at a glance", () => {
   it("puts ONE period control above both money panels", () => {
     render(
-      <OwnerHomeCharts
+      <><OwnerHomeRange data={data()} period="week" facility="loc-1" /><OwnerHomeCharts
         data={data()}
         metric="collections"
         facility="loc-1"
         canReadFees
-      />,
+      /></>,
     );
     const band = screen.getByTestId("owner-home-money");
     expect(within(band).getByText("Money at a glance")).toBeTruthy();
-    // Exactly one period control, and it belongs to the band.
-    const periods = within(band).getByRole("navigation", { name: "Period" });
+    // Exactly one range control is composed alongside the money band.
+    const periods = screen.getByRole("navigation", { name: "Range" });
     const labels = within(periods)
       .getAllByRole("link")
       .map((link) => link.textContent);
-    expect(labels).toEqual(["Day", "Week", "Month"]);
+    expect(labels).toEqual(["Day", "Last 7 days", "Month"]);
     // Both panels live inside the same band, so they always describe
     // the same period.
     expect(within(band).getByText("Payment mix")).toBeTruthy();
-    expect(within(band).getByText("Trends")).toBeTruthy();
+    expect(within(band).getByText("Collections")).toBeTruthy();
+    expect(screen.getByTestId("owner-home-range-detail").textContent).toContain("26 Oct 2026");
   });
 
-  it("keeps the metric and the facility scope on every period link", () => {
+  it("keeps facility scope on range links and dates on the transaction drill-down", () => {
     render(
-      <OwnerHomeCharts
+      <><OwnerHomeRange data={data()} period="week" facility="loc-1" /><OwnerHomeCharts
         data={data()}
         metric="collections"
         facility="loc-1"
         canReadFees
-      />,
+      /></>,
     );
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
     );
-    expect(hrefs).toContain("/owner?trend=collections&period=day&facility=loc-1");
-    expect(hrefs).toContain("/owner?trend=collections&period=month&facility=loc-1");
-    expect(hrefs).toContain("/owner?trend=attendance&period=week&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=day&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=last7&facility=loc-1");
+    expect(hrefs).toContain("/owner?period=month&facility=loc-1");
+    expect(hrefs.some(href => href?.includes("from=2026-10-26") && href.includes("to=2026-10-29") && href.includes("facility=loc-1"))).toBe(true);
   });
 
   it("says there is no mix instead of drawing an empty ring", () => {
@@ -153,8 +150,8 @@ describe("owner Home — money at a glance", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("No payments captured in this period");
-    expect(text).toContain("No collections in this period");
+    expect(text).toContain("No payments recorded in this period");
+    expect(screen.queryByText("Payment mix")).toBeNull();
   });
 
   it("states that the charts are unavailable instead of showing zero", () => {
@@ -167,7 +164,7 @@ describe("owner Home — money at a glance", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    expect(text).toContain("Charts are unavailable right now");
+    expect(text).toContain("Money figures are unavailable right now");
     expect(text).not.toContain("₹0");
   });
 });

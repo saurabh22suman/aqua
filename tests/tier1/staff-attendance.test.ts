@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { asStaffId, asTenantId, asUserId } from "@/lib/ids";
 import { formatWallTime24hIST, todayInZone } from "@/lib/time/tz";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // V-24 — staff attendance. Written before
 // lib/services/staff-attendance.ts exists: the first run is
@@ -68,11 +68,14 @@ beforeAll(async () => {
     "insert into users (id, phone) values ($1, $2), ($3, $4)",
     [
       coachUser,
-      `+9196${String(Date.now()).slice(-8)}`,
+      `+9196${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`,
       deskUser,
-      `+9197${String(Date.now()).slice(-8)}`,
+      `+9197${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`,
     ],
   );
+  await seedRoleTemplates(tenant);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='coach'", [uuidv7(), tenant, coachUser]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'", [uuidv7(), tenant, deskUser]);
   await admin.query(
     `insert into persons (id, tenant_id, full_name) values
        ($1, $2, 'Coach Attendance'), ($3, $2, 'Desk Attendance')`,
@@ -91,8 +94,11 @@ afterAll(async () => {
   await admin.query("delete from staff where tenant_id = $1", [tenant]);
   await admin.query("delete from persons where tenant_id = $1", [tenant]);
   await admin.query("delete from locations where tenant_id = $1", [tenant]);
+  await admin.query("delete from tenant_memberships where tenant_id=$1", [tenant]);
+  await admin.query("delete from role_permissions where tenant_id=$1", [tenant]);
+  await admin.query("delete from roles where tenant_id=$1", [tenant]);
   await admin.query("delete from tenants where id = $1", [tenant]);
-  await deleteAuditRowsForTenant(admin, tenant);
+  await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)", [[coachUser, deskUser]]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

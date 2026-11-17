@@ -29,6 +29,8 @@ const tenant2 = asTenantId(uuidv7());
 const loc = uuidv7();
 const loc2 = uuidv7();
 const actor = asUserId(uuidv7());
+const role = uuidv7(), role2 = uuidv7();
+const membership = uuidv7(), membership2 = uuidv7();
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 
@@ -73,8 +75,11 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9195${String(Date.now()).slice(-8)}`,
+    `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`,
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0),($3,$4,'owner','Owner','/owner',0)",[role,tenant,role2,tenant2]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) select r.tenant_id,r.id,p.key from roles r cross join (values ('bookings.read'),('bookings.write')) p(key) where r.id=any($1::uuid[])",[[role,role2]]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true),($5,$6,$3,$7,'active',true)",[membership,tenant,actor,role,membership2,tenant2,role2]);
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Overlap Member')",
     [personId, tenant],
@@ -121,9 +126,13 @@ afterAll(async () => {
     await admin.query("delete from facilities where tenant_id = $1", [t]);
     await admin.query("delete from members where tenant_id = $1", [t]);
     await admin.query("delete from persons where tenant_id = $1", [t]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [t]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [t]);
+    await admin.query("delete from roles where tenant_id = $1", [t]);
     await admin.query("delete from locations where tenant_id = $1", [t]);
     await admin.query("delete from tenants where id = $1", [t]);
   }
+  await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actor]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

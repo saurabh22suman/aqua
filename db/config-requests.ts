@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { withTenant } from "./tenant";
 import { withPlatformAdmin } from "./scope";
@@ -31,6 +32,9 @@ export async function requestConfigChange(
   input: { key: string; requestedValue: string; note?: string },
 ): Promise<ConfigChangeRequestResult> {
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const keyRows = await tx
       .select({ visibility: configKeys.visibility })
       .from(configKeys)

@@ -7,35 +7,41 @@ import { formatDateIST } from "@/lib/time/tz";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { BackLink } from "@/components/ui/BackLink";
 import { buttonClasses } from "@/components/ui/Button";
+import { STAFF_CARD, StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
+import Link from "next/link";
 
 // M02 — the desk's read-only dues call list: issued/partial invoices
 // with an outstanding balance for the caller's locations, overdue
 // first. No totals, no mutations — the owner decides concessions.
-
+//
+// WR-1 / Option A — a walk-in bill with an outstanding balance is a due
+// too, and it appears here: the desk must see the money the counter
+// has not collected yet. A guest due has no member code and no phone,
+// so there is nobody to call — the row says so instead of offering a
+// call that cannot happen.
 export default async function ReceptionDuesPage() {
-  await requireReception();
+  const ctx = await requireReception();
   const dues = await listDeskDuesAction();
+  const canCollect = hasPermission(ctx, "payments.record") && hasFeature(ctx, "billing");
 
   return (
-    <main className="px-5 pt-10 pb-8 max-w-lg">
+    <StaffPage className="max-w-xl">
       <BackLink href="/reception" label="Today" />
-      <h1 className="font-display text-[22px] font-semibold text-marine">
-        Dues
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Pending fee payments for your counter, overdue first. Call the family
-        and record the payment when it comes in.
-      </p>
+      <StaffPageHeader
+        title="Dues"
+        meta="Pending fee payments for your counter, overdue first. Call the family and record the payment when it comes in."
+      />
 
       {dues.length === 0 ? (
-        <div className="mt-8 rounded-card border border-line bg-paper px-4 py-8 text-center">
+        <div className={`mt-6 px-4 py-8 text-center ${STAFF_CARD}`}>
           <p className="text-[15px] font-medium text-ink">No dues right now</p>
           <p className="mt-1.5 text-[13px] text-ink-3">
             Every invoice for your location is settled.
           </p>
         </div>
       ) : (
-        <ul className="mt-6 overflow-hidden rounded-card border border-line bg-paper divide-y divide-line">
+        <ul className={`mt-5 divide-y divide-line ${STAFF_CARD}`}>
           {dues.map((due) => (
             <li
               key={due.id}
@@ -44,11 +50,11 @@ export default async function ReceptionDuesPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="truncate text-[14px] font-medium text-ink">
-                    {due.memberName}
+                  <p className="break-words text-[14px] font-medium text-ink">
+                    {due.payerName}
                   </p>
                   <p className="mt-0.5 text-[12px] text-ink-3">
-                    {due.memberCode}
+                    {due.memberCode ?? "Walk-in"}
                     {due.phone ? (
                       <>
                         {" · "}
@@ -66,7 +72,7 @@ export default async function ReceptionDuesPage() {
                   </p>
                 </div>
                 <div className="flex-none text-right">
-                  <p className="font-mono text-[14px] text-ink">
+                  <p className="font-mono text-[14px] tabular-nums text-ink">
                     {formatINR(due.outstandingPaise)}
                   </p>
                   <div className="mt-1">
@@ -82,7 +88,7 @@ export default async function ReceptionDuesPage() {
                   {due.phone ? (
                     <a
                       href={`tel:${due.phone}`}
-                      aria-label={`Call ${due.memberName}`}
+                      aria-label={`Call ${due.payerName}`}
                       className={buttonClasses({
                         variant: "secondary",
                         size: "sm",
@@ -93,12 +99,13 @@ export default async function ReceptionDuesPage() {
                       Call
                     </a>
                   ) : null}
+                  {canCollect ? <Link href={`/reception/collect-payment?invoice=${encodeURIComponent(due.id)}`} aria-label={`Collect payment for ${due.payerName}`} className={buttonClasses({variant:"secondary", size:"sm", className:"mt-2"})}>Collect</Link> : null}
                 </div>
               </div>
             </li>
           ))}
         </ul>
       )}
-    </main>
+    </StaffPage>
   );
 }
