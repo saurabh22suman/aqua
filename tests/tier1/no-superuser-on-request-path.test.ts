@@ -56,6 +56,10 @@ import { describe, expect, it } from "vitest";
 //                            the production build's /p/[token] response
 //                            ships zero <script> tags.
 const ALLOWLIST = new Set([
+  // Disposable Ops regression setup, failure injection and lock barriers only.
+  "tests/ops-release-20261117-authority/lifecycle-authority.test.ts",
+  "tests/ops-release-20261117-provisioning/atomicity.test.ts",
+  "tests/ops-release-20261117-provisioning/postcommit.test.ts",
   "db/migrate.ts",
   "db/migrations/20260904090000_makeup_credits.sql",
   "db/migrations/20260904100000_tenant_holidays.sql",
