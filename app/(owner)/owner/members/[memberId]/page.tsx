@@ -1,7 +1,7 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { isLiveOwnerForSettings } from "@/lib/auth/owner-settings-page-guard";
 import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
-import ClipboardCheck from "lucide-react/dist/esm/icons/clipboard-check.mjs";
 import {
   getMemberDetailAction,
   getMemberIdCardContextAction,
@@ -22,11 +22,12 @@ import { MemberFacilitiesPanel } from "@/components/member-facilities-panel";
 import { MakeupCreditsPanel } from "@/components/makeup-credits-panel";
 import { ParentLinkPanel } from "@/components/parent-link-panel";
 import { MemberIdCard } from "@/components/member-id-card";
-import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import { formatDateIST } from "@/lib/time/tz";
+import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
+import type { MemberStatus } from "@/db/schema/people";
 import { InlineEditField } from "@/components/member-detail/inline-edit-field";
+import { PersonAvatar } from "@/components/avatar";
 import { MemberDetailTabs, type MemberTab } from "@/components/member-detail/member-detail-tabs";
-import { MemberProfileSections } from "@/components/member-detail/member-profile-sections";
 import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
 import { MemberNotesPanel } from "@/components/member-detail/member-notes-panel";
 import { MemberDocumentsPanel } from "@/components/member-detail/member-documents-panel";
@@ -35,17 +36,18 @@ import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { OwnerLink } from "@/components/owner-ui/owner-link";
 import { MembersReturnLink } from "@/components/members-return-link";
 import { BackLink } from "@/components/ui/BackLink";
-import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
+import { SectionHeading } from "@/components/ui/PageHeader";
 import { buttonClasses } from "@/components/ui/Button";
-import { StatusBadge, MEMBER_STATUS_TONE } from "@/components/ui/StatusBadge";
 import { requireUuidParam } from "@/lib/params";
 import { getNotificationDestinationsAction } from "@/lib/actions/notification-destinations";
 import { MemberNotificationDestinations } from "@/components/member-notification-destinations";
 import { MemberPayerFinance } from "@/components/member-detail/member-payer-finance";
 import { readOwnerMemberInitialPanels } from "@/components/member-detail/owner-member-initial-panels";
+import { OwnerMemberSummary } from "@/components/member-detail/owner-member-summary";
+import { enrolmentFacilityLabel } from "@/components/member-detail/enrolment-facility-label";
+import { MemberManagementLink } from "@/components/member-detail/member-management-link";
 import { MemberEditEntryLink } from "@/components/member-detail/member-edit-entry";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
 import { formatINR } from "@/lib/money/format";
@@ -66,7 +68,7 @@ function resolveTab(value: string | undefined): MemberTab {
 // Documents. Payments reuses the C-32/C-33 invoice panel.
 
 type ResolvedOverview = {
-  attendance: Awaited<ReturnType<typeof getMemberAttendanceHistoryAction>>;
+  attendance: Awaited<ReturnType<typeof getMemberAttendanceHistoryAction>> | null;
   card: Awaited<ReturnType<typeof getMemberIdCardContextAction>>;
   opted: Awaited<ReturnType<typeof listOptedFacilitiesAction>>;
   locations: Awaited<ReturnType<typeof listLocationsAction>>;
@@ -102,7 +104,7 @@ export default async function MemberDetailPage({
   // into it is shown only to a staff member who holds the grant that page
   // asks for. The page behind the link authorizes the read again.
   const canManageAccess = hasPermission(ctx, "members.link.confirm");
-  const accessHref = `/owner/members/${memberId}/access`;
+  const accessHref = `/owner/members/${memberId}/access?facility=${facilityScope}`;
 
   // C01/R02 — Accountant: skip the 360's reads, render the payer view.
   if (hasPermission(ctx, "invoices.read") && !hasPermission(ctx, "attendance.read")) {
@@ -128,7 +130,7 @@ export default async function MemberDetailPage({
   // returned: a missing or foreign member can never paint a skeleton.
   const [member, terminology, timezone] = await Promise.all([
     getMemberDetailAction(memberId),
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
     getTenantTimezoneAction(),
   ]);
   if (!member) notFound();
@@ -137,12 +139,15 @@ export default async function MemberDetailPage({
   // only when the swim.levels module is on; the panel renders the
   // honest empty state otherwise.
   const progressEnabled = hasFeature(ctx, "swim.levels");
+  const canReadProgress = hasPermission(ctx, "levels.read");
   const progress =
-    tab === "progress" && progressEnabled
+    tab === "progress" && progressEnabled && canReadProgress
       ? await getMemberProgressAction(member.memberId)
       : null;
 
   const canWrite = hasPermission(ctx, "members.write");
+  const canReadPrograms = hasPermission(ctx, "programs.read");
+  const canReadAttendance = hasPermission(ctx, "attendance.read");
   const canWaitlist = hasPermission(ctx, "enquiries.write");
   const canGrant = hasPermission(ctx, "programs.write");
   const canRedeem = hasPermission(ctx, "attendance.mark");
@@ -160,11 +165,11 @@ export default async function MemberDetailPage({
   if (tab === "overview") {
     const [attendance, card, opted, locations, panels, destinations, outstanding] =
       await Promise.all([
-        getMemberAttendanceHistoryAction(memberId),
+        canReadAttendance ? getMemberAttendanceHistoryAction(memberId) : Promise.resolve(null),
         getMemberIdCardContextAction(),
         listOptedFacilitiesAction(memberId),
         listLocationsAction(),
-        readOwnerMemberInitialPanels(memberId),
+        readOwnerMemberInitialPanels(memberId, { canReadPrograms, canReadAttendance }),
         canWrite ? getNotificationDestinationsAction(memberId) : Promise.resolve(null),
         hasPermission(ctx, "invoices.read")
           ? listMemberInvoicesAction(memberId).then(rows => formatINR(rows.filter(row => row.status === "issued" || row.status === "partial").reduce((sum, row) => sum + BigInt(row.outstandingPaise), 0n))).catch(() => null)
@@ -176,82 +181,42 @@ export default async function MemberDetailPage({
   return (
 
     <OwnerPage>
-      <MembersReturnLink>
+      <MembersReturnLink namespace={editNamespace} facility={facilityScope}>
         <BackLink
           href="/owner/members"
           label={titleCase(resolveTerm(terminology, "member", "other"))}
         />
       </MembersReturnLink>
-      <div className="rounded-card border border-line bg-paper p-4">
-      <PageHeader
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            <InlineEditField
-              value={member.fullName}
-              field="fullName"
-              memberId={member.memberId}
-              type="text"
-              snapshot={member}
-              readOnly={!canWrite}
-              valueClassName="font-display text-[22px] font-semibold text-ink"
-            />
-            <StatusBadge tone={MEMBER_STATUS_TONE[member.status] ?? "neutral"}>
-              {MEMBER_STATUS_LABELS[member.status]}
-            </StatusBadge>
-          </span>
-        }
-        purpose={`${member.memberCode} · ${member.locationName}${
-          member.isMinor ? " · minor" : ""
-        } · joined ${formatDateIST(member.joinedOn)}`}
-        action={
-          canManageAccess || canWrite ? (
-            <>
-              {canManageAccess ? (
-                <OwnerLink
-                  href={accessHref}
-                  className="inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-ink-2 underline underline-offset-2"
-                  data-testid="member-access-entry"
-                >
-                  <ClipboardCheck size={14} aria-hidden="true" />
-                  Member and family access
-                </OwnerLink>
-              ) : null}
-              {canWrite ? (
-                <MemberEditEntryLink
-                  href={editHref}
-                  namespace={editNamespace}
-                  memberId={memberId}
-                  facility={facilityScope}
-                  className={buttonClasses({ variant: "secondary", size: "md" })}
-                >
-                  <Pencil size={14} aria-hidden="true" />
-                  Edit details
-                </MemberEditEntryLink>
-              ) : null}
-            </>
-          ) : undefined
-        }
-      />
-
-      <MemberDetailTabs
-        memberId={member.memberId}
-        active={tab}
-        facilityScope={facilityScope}
-      />
-      </div>
+      <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5" aria-label="Member identity">
+        <div className="flex items-center gap-3">
+          <PersonAvatar name={member.fullName} seed={member.personId} size={58} className="shrink-0 !rounded-[20px]" />
+          <div className="min-w-0">
+            <h1 className="break-words font-display text-[24px] font-semibold leading-tight text-ink lg:text-[27px]">{member.fullName}</h1>
+            <p className="mt-1 break-words text-[12px] text-ink-3">{member.memberCode} · {member.locationName}{member.isMinor ? " · minor" : ""}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex min-h-11 flex-wrap items-center justify-between gap-x-3 border-t border-line pt-2">
+          <span className="text-[12px] text-ink-3">Joined {formatDateIST(member.joinedOn)}</span>
+          {canWrite ? <MemberEditEntryLink href={editHref} namespace={editNamespace} memberId={memberId} facility={facilityScope} className={buttonClasses({ variant: "secondary", size: "sm" })}><Pencil size={14} aria-hidden="true" />Edit details</MemberEditEntryLink> : null}
+        </div>
+      </section>
+      <MemberDetailTabs memberId={member.memberId} active={tab} facilityScope={facilityScope} accessHref={canManageAccess ? accessHref : undefined} canReadInvoices={hasPermission(ctx, "invoices.read")} canReadProgress={canReadProgress} />
 
       {tab === "overview" && overview ? (
-        <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-6 lg:grid-cols-2 lg:items-start">
+        <div className="mt-4 space-y-4">
           <OverviewSections
             member={member}
             memberId={memberId}
+            editHref={editHref}
+            facilityScope={facilityScope}
             terminology={terminology}
             canWrite={canWrite}
+            canReadPrograms={canReadPrograms}
             canWaitlist={canWaitlist}
             reads={overview}
           />
 
-          <details className="rounded-card border border-line bg-paper p-4">
+          <details className="rounded-[18px] border border-line bg-paper p-4">
             <summary className="min-h-11 cursor-pointer font-display text-[15px] font-semibold text-ink">Other {resolveTerm(terminology, "member", 1)} tools</summary>
             <MemberTools
               member={member}
@@ -264,7 +229,8 @@ export default async function MemberDetailPage({
           </details>
         </div>
       ) : null}
-      {tab === "payments" ? (
+      {tab === "payments" && !hasPermission(ctx, "invoices.read") ? <p role="alert" className="mt-4 text-[13px] text-ink-2">You do not have access to invoices.</p> : null}
+      {tab === "payments" && hasPermission(ctx, "invoices.read") ? (
         <div className="mt-4">
           <SectionHeading
             title="Invoices"
@@ -283,7 +249,8 @@ export default async function MemberDetailPage({
         </div>
       ) : null}
 
-      {tab === "progress" ? (
+      {tab === "progress" && !canReadProgress ? <p role="alert" className="mt-4 text-[13px] text-ink-2">You do not have access to progress.</p> : null}
+      {tab === "progress" && canReadProgress ? (
         <MemberProgressPanel
           progress={progress}
           emptyAction={
@@ -310,70 +277,62 @@ export default async function MemberDetailPage({
 function OverviewSections({
   member,
   memberId,
+  editHref,
+  facilityScope,
   terminology,
   canWrite,
+  canReadPrograms,
   canWaitlist,
   reads,
 }: {
   member: NonNullable<Awaited<ReturnType<typeof getMemberDetailAction>>>;
   memberId: string;
+  editHref: string;
+  facilityScope: string;
   terminology: Awaited<ReturnType<typeof getTerminologyAction>>;
   canWrite: boolean;
+  canReadPrograms: boolean;
   canWaitlist: boolean;
-  reads: Pick<ResolvedOverview, "attendance" | "panels" | "destinations" | "outstanding">;
+  reads: Pick<ResolvedOverview, "attendance" | "panels" | "destinations" | "outstanding" | "opted">;
 }) {
   const attendanceHistory = reads.attendance;
   const panels = reads.panels;
   const destinations = reads.destinations;
+  const activePlans = "failed" in panels.subscription ? null : panels.subscription.subscriptions.filter(plan => plan.status === "active" || plan.status === "paused");
+  const enrolmentBatches = "failed" in panels.enrolment ? [] : panels.enrolment.batches;
 
   return (
     <>
-          <section>
-            <SectionHeading title="Participation & enrolment" />
-            <div className="mt-3 rounded-card border border-line bg-paper p-3.5">
-              <MemberStatusPanel
-                memberId={member.memberId}
-                status={member.status}
-                canWrite={canWrite}
-                summary={{plans: !panels || "failed" in panels.subscription ? null : panels.subscription.subscriptions.filter(plan => plan.status === "active" || plan.status === "paused").map(plan => ({name:plan.planName,status:plan.status})), balance:reads.outstanding}}
-              />
-            </div>
-            <MemberEnrolmentPanel
-              key={member.memberId}
-              memberId={member.memberId}
-              terminology={terminology}
-              canEnrol={canWrite}
-              canWaitlist={canWaitlist}
-              initialData={panels?.enrolment}
-            />
-            <MemberSubscriptionPanel
-              key={member.memberId}
-              memberId={member.memberId}
-              canManage={canWrite}
-              initialData={panels?.subscription}
-            />
+          <OwnerMemberSummary status={member.status} plans={activePlans} balance={reads.outstanding} canManage={canWrite} paymentsHref={reads.outstanding !== undefined ? `/owner/members/${memberId}?tab=payments&facility=${facilityScope}` : undefined} />
+          <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-4">
+          {attendanceHistory ? <section>
+            <MemberAttendanceGrid rows={attendanceHistory.rows} today={attendanceHistory.today} ownerCard />
+          </section> : null}
+          <section aria-labelledby="member-batches-heading" className="rounded-[18px] border border-line bg-paper p-4">
+            <h2 id="member-batches-heading" className="font-display text-[18px] font-semibold text-ink">Batches</h2>
+            {"failed" in panels.enrolment ? (
+              <p className="mt-2 text-[13px] text-ink-3">{titleCase(resolveTerm(terminology, "batch", 1))} information is unavailable.</p>
+            ) : panels.enrolment.enrolments.length === 0 ? (
+              <p className="mt-2 text-[13px] text-ink-3">No batches enrolled.</p>
+            ) : (
+              <ul className="mt-2 divide-y divide-line">
+                {panels.enrolment.enrolments.map((enrolment) => <li key={enrolment.batchId} className="py-2 text-[13px] text-ink">{enrolment.programName} · {enrolment.batchName}{canReadPrograms ? ` · ${enrolmentFacilityLabel(enrolment.batchId, enrolmentBatches)}` : null}</li>)}
+              </ul>
+            )}
+            {(canWrite && canReadPrograms) || "failed" in panels.enrolment ? <MemberManagementLink target="enrolment">{canWrite && canReadPrograms ? "Manage batches" : "View batch read error"}</MemberManagementLink> : null}
           </section>
-
-          <section>
-            <SectionHeading title="Contacts & consent" />
-            {destinations ? (
-              <MemberNotificationDestinations
-                key={memberId}
-                memberId={memberId}
-                {...destinations}
-              />
-            ) : null}
-            <MemberProfileSections
-              member={member}
-              attendanceHistory={attendanceHistory}
-              terminology={terminology}
-              sections={["guardians", "consent"]}
-            />
-
-            <SectionHeading className="mt-5" title="Personal details" />
-            <dl className="mt-2 space-y-2 rounded-card border border-line bg-paper p-3.5 text-[13px]">
-              <div className="flex justify-between gap-3">
-                <dt className="text-ink-3">Phone</dt>
+          </div>
+          <div className="space-y-4">
+          <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+            <h2 className="font-display text-[18px] font-semibold text-ink">Personal details</h2>
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
+              <div className="min-w-0">
+                <dt className="text-[11px] text-ink-3">Name</dt>
+                <dd><InlineEditField value={member.fullName} field="fullName" memberId={member.memberId} type="text" snapshot={member} readOnly={!canWrite} alwaysShowEdit explicitCommit /></dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-[11px] text-ink-3">Phone</dt>
                 <dd>
                   <InlineEditField
                     value={member.phone ?? ""}
@@ -384,24 +343,28 @@ function OverviewSections({
                     placeholder="Add phone"
                     formatAs="phone"
                     readOnly={!canWrite}
+                    alwaysShowEdit
+                    explicitCommit
                   />
                 </dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-ink-3">Date of birth</dt>
+              <div className="min-w-0">
+                <dt className="text-[11px] text-ink-3">Date of birth</dt>
                 <dd>
                   <InlineEditField
                     value={member.dateOfBirth ?? ""}
                     field="dateOfBirth"
                     memberId={member.memberId}
-                    type="text"
+                    type="date"
                     snapshot={member}
                     readOnly={!canWrite}
+                    alwaysShowEdit
+                    explicitCommit
                   />
                 </dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-ink-3">Gender</dt>
+              <div className="min-w-0">
+                <dt className="text-[11px] text-ink-3">Gender</dt>
                 <dd>
                   <InlineEditField
                     value={member.gender ?? ""}
@@ -415,11 +378,13 @@ function OverviewSections({
                       { value: "other", label: "Other" },
                     ]}
                     readOnly={!canWrite}
+                    alwaysShowEdit
+                    explicitCommit
                   />
                 </dd>
               </div>
-              <div>
-                <dt className="text-ink-3">Medical notes</dt>
+              <div className="col-span-2 min-w-0">
+                <dt className="text-[11px] text-ink-3">Medical notes</dt>
                 <dd className="mt-0.5">
                   <InlineEditField
                     value={member.medicalNotes ?? ""}
@@ -429,29 +394,40 @@ function OverviewSections({
                     snapshot={member}
                     placeholder="Add medical notes"
                     readOnly={!canWrite}
+                    alwaysShowEdit
+                    explicitCommit
                   />
                 </dd>
               </div>
             </dl>
-
-            <MemberProfileSections
-              member={member}
-              attendanceHistory={attendanceHistory}
-              terminology={terminology}
-              sections={["status"]}
-            />
           </section>
-
-          <section>
-            <SectionHeading
-              title="Attendance evidence"
-              subtitle="Recent marked sessions."
-            />
-            <MemberAttendanceGrid
-              rows={attendanceHistory.rows}
-              today={attendanceHistory.today}
-            />
+          <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+            <h2 className="font-display text-[18px] font-semibold text-ink">Family and contact</h2>
+            {member.isMinor ? member.guardians.length ? (
+              <ul className="mt-3 divide-y divide-line">
+                {member.guardians.map(g => <li key={g.personId} className="py-2 text-[13px]"><p className="font-medium text-ink">{g.fullName}{g.isPrimary ? " · primary" : ""}</p><p className="mt-1 text-[12px] text-ink-3">{g.relationship}{g.phone ? ` · ${g.phone}` : ""}</p></li>)}
+              </ul>
+            ) : <p className="mt-3 text-[13px] text-ink-3">No {resolveTerm(terminology, "guardian", 1)} on file.</p> : <p className="mt-3 text-[13px] text-ink-3">Contact details are listed above.</p>}
+            <details className="mt-2 border-t border-line">
+              <summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-medium text-ink">Consent records</summary>
+              {member.consents.length ? <ul className="divide-y divide-line">{member.consents.map((c, i) => <li key={i} className="py-2 text-[13px]"><span className="capitalize font-medium">{c.purpose}</span><span className="text-ink-3"> — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"}, granted by {c.granterName || "self"}</span></li>)}</ul> : <p className="pb-2 text-[13px] text-ink-3">No consent on file.</p>}
+            </details>
           </section>
+          <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+            <h2 className="font-display text-[18px] font-semibold text-ink">Updates</h2>
+            {member.statusHistory.length === 0 ? <p className="mt-2 text-[13px] text-ink-3">No status updates on file.</p> : null}
+            {member.statusHistory.length ? <ul className="mt-2 divide-y divide-line">{member.statusHistory.map((h, i) => <li key={i} className="py-2 text-[13px]"><p className="text-ink">{MEMBER_STATUS_LABELS[h.fromStatus as MemberStatus] ?? h.fromStatus} → {MEMBER_STATUS_LABELS[h.toStatus as MemberStatus] ?? h.toStatus}</p><p className="mt-1 text-[12px] text-ink-3">{formatDateIST(h.changedAt)} · {h.reason ?? "no reason given"}</p></li>)}</ul> : null}
+          </section>
+          </div>
+
+          </div>
+          <details id="member-management" className="rounded-[18px] border border-line bg-paper p-4">
+            <summary className="min-h-11 cursor-pointer content-center font-display text-[15px] text-ink">Manage membership</summary>
+            <div id="member-management-participation" tabIndex={-1}><h2 className="sr-only">Participation management</h2><MemberStatusPanel memberId={member.memberId} status={member.status} canWrite={canWrite} /></div>
+            <div id="member-management-enrolment" tabIndex={-1}><MemberEnrolmentPanel key={member.memberId} memberId={member.memberId} terminology={terminology} canEnrol={canWrite && canReadPrograms} canWaitlist={canWaitlist && canReadPrograms} canReadPrograms={canReadPrograms} facility={{ homeId: member.locationId, eligible: [{ id: member.locationId, name: member.locationName }, ...reads.opted.filter(site => site.locationId !== member.locationId).map(site => ({ id: site.locationId, name: site.locationName }))] }} initialData={panels.enrolment} /></div>
+            <div id="member-management-plan" tabIndex={-1}><MemberSubscriptionPanel key={member.memberId} memberId={member.memberId} canManage={canWrite} compact initialData={panels.subscription} /></div>
+            {destinations ? <MemberNotificationDestinations key={memberId} memberId={memberId} editHref={editHref} {...destinations} /> : null}
+          </details>
     </>
   );
 }
@@ -487,13 +463,13 @@ function MemberTools({
               locations={locations}
               canWrite={canWrite}
             />
-            <MakeupCreditsPanel
+            {panels.makeup ? <MakeupCreditsPanel
               key={member.memberId}
               memberId={member.memberId}
               canGrant={canGrant}
               canRedeem={canRedeem}
               initialData={panels?.makeup}
-            />
+            /> : null}
             <ParentLinkPanel
               memberId={member.memberId}
               memberName={member.fullName}

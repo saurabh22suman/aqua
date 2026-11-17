@@ -34,6 +34,7 @@ export function MemberList({
   onOpen,
   isPending,
   canWrite,
+  canViewProfile = true,
 }: {
   members: MemberListRow[];
   /** The tenant's own word for a member: the singular and the plural. */
@@ -54,20 +55,23 @@ export function MemberList({
    * permitted" — UI-UX.txt §6).
    */
   canWrite: boolean;
+  canViewProfile?: boolean;
 }) {
   const memberSingular = titleCase(memberTerm.one);
 
   return (
-    <section className="mt-4 rounded-card border border-line bg-paper">
+    <section className="mt-4 overflow-hidden rounded-card border border-line bg-paper">
       {/* The page title already says what this is; a second visible
           heading repeated it. The LIST keeps its accessible name, and
           the count stays — it is the one useful thing the card's
           header can say. */}
-      <div className="flex justify-end px-3.5 pt-3.5">
+      <div className="flex justify-end px-4 py-2">
         <span role="status" aria-live="polite" className="text-[12px] text-ink-3 tabular-nums">
           {!isPending && emptyKind !== "failed" ? `${members.length} ${members.length === 1 ? "record" : "records"}` : ""}
         </span>
       </div>
+      {!canViewProfile ? <p className="px-4 pb-2 text-[12px] text-ink-3">Directory-only access: member profiles are not available to your role.</p> : null}
+      {members.length > 0 ? <div aria-hidden="true" className="hidden grid-cols-[36px_minmax(0,2fr)_minmax(0,1fr)_auto] items-center gap-3 border-b border-line bg-deck px-5 py-3 text-[11px] text-ink-3 md:grid"><span /><span>Member</span><span>Club</span><span>Status</span></div> : null}
       <ul className="md:px-3.5" data-testid="members-list" aria-busy={isPending} aria-label={`${memberSingular} directory`}>
         {members.length === 0 ? (
           // A FAILED read is not an empty list. The alert above owns
@@ -111,14 +115,8 @@ export function MemberList({
             </li>
           )
         ) : (
-          members.map((m) => (
-            <li key={m.memberId} className="border-b border-line px-3.5 last:border-0 md:px-0">
-              <Link
-                href={`/owner/members/${m.memberId}${scopeQuery}`}
-                data-testid="member-row"
-                onClick={onOpen}
-                className="flex min-h-16 items-center gap-3 py-3"
-              >
+          members.map((m) => {
+            const row = <>
                 {/* The SHARED person avatar owns the initials: the first
                     GRAPHEME of each of the first two words, so an Indian
                     conjunct (क्षा) and a combining mark (E + U+0301) stay
@@ -127,7 +125,7 @@ export function MemberList({
                 <PersonAvatar
                   name={m.fullName}
                   seed={m.personId}
-                  size={40}
+                  size={36}
                   className="shrink-0"
                 />
                 <span className="min-w-0 flex-1">
@@ -141,7 +139,7 @@ export function MemberList({
                         number split across two lines is unreadable
                         (measured at 390px). The groups themselves may
                         wrap onto the next line. */}
-                    <span className="break-words">{m.memberCode} · {m.locationName}</span>
+                    <span className="break-words">{m.memberCode}<span className="md:hidden"> · {m.locationName}</span></span>
                     {m.phone ? (
                       <>
                         {" · "}
@@ -150,13 +148,14 @@ export function MemberList({
                     ) : null}
                   </span>
                 </span>
+                <span className="hidden min-w-0 break-words text-[13px] text-ink-2 md:block">{m.locationName}</span>
                 <span data-testid="member-row-status" className="shrink-0">
                   <StatusBadge tone={MEMBER_STATUS_TONE[m.status] ?? "neutral"}>{statusLabels[m.status]}</StatusBadge>
                 </span>
-                <span aria-hidden="true" className="hidden text-[12px] text-ink-3 md:inline">Open</span>
-              </Link>
-            </li>
-          ))
+            </>;
+            const className = "flex min-h-20 items-center gap-3 py-3 md:grid md:grid-cols-[36px_minmax(0,2fr)_minmax(0,1fr)_auto]";
+            return <li key={m.memberId} className="border-b border-line px-3.5 last:border-0 md:px-0">{canViewProfile ? <Link href={`/owner/members/${m.memberId}${scopeQuery}`} data-testid="member-row" onClick={onOpen} className={className}>{row}</Link> : <div data-testid="member-row" className={className}>{row}</div>}</li>;
+          })
         )}
       </ul>
     </section>

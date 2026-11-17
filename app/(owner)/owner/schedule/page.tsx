@@ -1,6 +1,9 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
-import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
-import { listLocationsAction } from "@/lib/actions/people";
+import { withTenant } from "@/db/tenant";
+import { tenants } from "@/db/schema/tenants";
+import { eq } from "drizzle-orm";
+import { listLocations } from "@/lib/services/people";
 import { getScheduleGridAction } from "@/lib/actions/schedule-grid";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
@@ -8,9 +11,12 @@ import { todayInZone, addDays, weekdayOf } from "@/lib/time/tz";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { OwnerScheduleGrid } from "@/components/owner-schedule-grid";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
 import { cookies } from "next/headers";
-import { FACILITY_COOKIE, parseFacilityValue } from "@/lib/facility";
+import { FACILITY_COOKIE } from "@/lib/facility";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
+import { ownerFacilityHref, resolveOwnerFacility } from "@/lib/owner-scope/facility";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 // U-04 — owner schedule surface.
 //
@@ -34,13 +40,16 @@ function clampAnchor(value: string | undefined, fallback: string): string {
 export default async function OwnerSchedulePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ view?: string; date?: string; location?: string }>;
+  searchParams?: Promise<{ view?: string; date?: string; location?: string; facility?: string }>;
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "attendance.read");
 
   const params = searchParams ? await searchParams : {};
-  const timezone = await getTenantTimezoneAction();
+  // The page has already authorized attendance.read; this narrow tenant
+  // timezone read must not require the unrelated members.read capability.
+  const [tenant] = await withTenant(ctx.tenantId, (tx) => tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1));
+  const timezone = tenant?.timezone ?? "Asia/Kolkata";
   const view =
     params.view === "month"
       ? "month"
@@ -52,16 +61,17 @@ export default async function OwnerSchedulePage({
   const today = todayInZone(timezone);
   const anchor = clampAnchor(params.date, today);
   const cookieStore = await cookies();
-  // An explicit empty location means All; only absent query state adopts
-  // the currently selected facility. The data read still enforces access.
-  const locationId = params.location === undefined
-    ? parseFacilityValue(cookieStore.get(FACILITY_COOKIE)?.value)
-    : params.location || undefined;
+  const scope = resolveOwnerFacility({ facility: params.facility, location: params.location, cookie: cookieStore.get(FACILITY_COOKIE)?.value });
+  if (!scope.ok || (scope.facilityId && !(await canSelectFacility(ctx, scope.facilityId)))) {
+    return <OwnerPage><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href="/owner/schedule?facility=all">View available clubs</Link></OwnerPage>;
+  }
+  const locationId = scope.facilityId;
 
   const { fromDate, toDate, days, prevDate, nextDate } = computeWindow(
     view === "agenda" ? "week" : view,
     anchor,
   );
+  const chooserDays = computeWindow("week", anchor).days;
 
   // The read starts a day EARLIER than the visible range: a session
   // that runs from the previous night into the first visible day is
@@ -76,9 +86,9 @@ export default async function OwnerSchedulePage({
       toDate,
       ...(locationId ? { locationId } : {}),
     }),
-    listLocationsAction(),
-    getTerminologyAction(),
-    listUpcomingSessions(ctx, readFrom, toDate),
+    listLocations(ctx),
+    getTerminologyAction().then(ownerTerminology),
+    listUpcomingSessions(ctx, readFrom, toDate, locationId),
   ]);
 
   const coachIds: Record<string, string> = {};
@@ -99,11 +109,11 @@ export default async function OwnerSchedulePage({
       : null;
 
   const base = (date: string, view: "day" | "week" | "month" | "agenda") =>
-    `/owner/schedule?view=${view}&date=${date}&location=${encodeURIComponent(locationId ?? "")}`;
+    ownerFacilityHref(`/owner/schedule?view=${view}&date=${date}`, locationId);
 
   return (
     <OwnerPage>
-      <PageHeader title="Schedule" />
+      <OwnerDesignHeading title="Schedule" />
 
       <OwnerScheduleGrid
         canManagePrograms={ctx.permissions.has("programs.read")}
@@ -114,6 +124,7 @@ export default async function OwnerSchedulePage({
         locations={locations}
         sessions={sessions}
         days={days}
+        chooserDays={chooserDays}
         monthCells={monthCells}
         prevHref={base(prevDate, view)}
         nextHref={base(nextDate, view)}
@@ -123,7 +134,7 @@ export default async function OwnerSchedulePage({
         monthHref={base(anchor, "month")}
         agendaHref={base(anchor, "agenda")}
         dayHrefs={Object.fromEntries(
-          days.map((day) => [day, base(day, "day")]),
+          chooserDays.map((day) => [day, base(day, view === "week" ? "week" : "day")]),
         )}
         today={today}
         timezone={timezone}

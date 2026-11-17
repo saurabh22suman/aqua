@@ -23,7 +23,7 @@ import {
   type CollectionGroup,
 } from "@/lib/services/reconciliation";
 import { todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // C-34 audit fix, Fix B's other half — split out of
 // lib/services/reconciliation.ts (CLAUDE.md's 300-line guideline)
@@ -54,7 +54,7 @@ export type ReopenCashCountResult =
 const CASH_COUNT_REOPEN_ACTION = "cash_count.reopen";
 
 export async function reopenCashCount(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ReopenCashCountResult> {
   const parsed = reopenInput.safeParse(raw);

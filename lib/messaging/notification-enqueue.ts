@@ -9,6 +9,7 @@ import { memberNotificationContacts } from "@/lib/services/notification-destinat
 import { writeAudit } from "@/lib/audit/write";
 import { normaliseToE164 } from "@/lib/phone";
 import { asMemberId, type TenantId } from "@/lib/ids";
+import { isCoachLikeRoleKey } from "@/lib/services/resource-access";
 
 export type NotificationEvent = {
   tenantId: TenantId;
@@ -68,10 +69,10 @@ export async function staffAudienceCandidates(tx: TenantTx, event: Pick<Notifica
     .from(tenantMemberships).innerJoin(users, eq(users.id, tenantMemberships.userId))
     .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, event.tenantId)))
     .where(and(eq(tenantMemberships.tenantId, event.tenantId), eq(tenantMemberships.status, "active"),
-      isNull(tenantMemberships.deletedAt), isNull(users.deletedAt), isNull(roles.deletedAt), inArray(roles.key, ["owner", "coach", "receptionist", "worker", "manager", "accountant"])));
+      isNull(tenantMemberships.deletedAt), isNull(users.deletedAt), isNull(roles.deletedAt), inArray(roles.key, ["owner", "coach", "curriculum_lead", "receptionist", "worker", "manager", "accountant"])));
   const targets: Array<{ userId: typeof users.$inferSelect.id; role: string; phone: string }> = [];
   for (const staff of staffRows) {
-    if (!scope.allStaff && staff.role === "coach" && staff.userId !== scope.coachUserId) continue;
+    if (!scope.allStaff && isCoachLikeRoleKey(staff.role) && staff.userId !== scope.coachUserId) continue;
     if (scope.batchId && scope.locationId == null && !staff.allLocations) continue;
     if (scope.locationId && !staff.allLocations) {
       const [location] = await tx.select({ id: membershipLocations.locationId }).from(membershipLocations)

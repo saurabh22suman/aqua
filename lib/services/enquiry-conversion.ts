@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { enquiries, type EnquirySource, type EnquiryStage } from "@/db/schema/enquiries";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
 import { createMember, createMemberInTx, enrolMemberInTx, type GuardianInput } from "@/lib/services/register";
 import { transitionMemberStatus } from "@/lib/services/member-status";
@@ -70,7 +70,7 @@ class BookingRefused extends Error {
 }
 
 export async function bookTrial(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
@@ -95,7 +95,7 @@ export async function bookTrial(
 }
 
 async function bookTrialInTx(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
   memberCode: string,
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
@@ -186,7 +186,7 @@ async function bookTrialInTx(
 // trial) -- create the member fresh via createMember, same as C-06's
 // registration flow, status active immediately.
 export async function convertEnquiry(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { enquiryId: string; reason: string; newMember?: NewMemberDetails },
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
   const enquiry = await withTenant(ctx.tenantId, async (tx) => {

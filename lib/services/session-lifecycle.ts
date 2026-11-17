@@ -1,6 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
+import { tenants } from "@/db/schema/tenants";
+import { todayInZone } from "@/lib/time/tz";
+import { lockTenantSchedule } from "@/lib/services/scheduling-lock";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
 import type { MutationActor } from "@/lib/auth/context";
 import { enqueueSessionNotification } from "@/lib/messaging/notification-events";
@@ -163,7 +166,9 @@ export async function rescheduleSession(
   ctx: MutationActor,
   input: RescheduleSessionInput,
 ): Promise<SessionLifecycleResult> {
-  if (input.newEndsAt <= input.newStartsAt) {
+  if (!(input.newStartsAt instanceof Date) || !(input.newEndsAt instanceof Date) ||
+    !Number.isFinite(input.newStartsAt.getTime()) || !Number.isFinite(input.newEndsAt.getTime()) ||
+    input.newEndsAt <= input.newStartsAt) {
     return {
       kind: "error",
       code: "invalid",
@@ -188,6 +193,11 @@ export async function rescheduleSession(
         message: "Scheduling authority is required to reschedule a session.",
       };
     }
+    const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
+    if (!tenant || todayInZone(tenant.timezone, input.newStartsAt.getTime()) !== input.newSessionDate) {
+      return { kind: "error", code: "invalid", message: "Session date must match the local start date." };
+    }
+    await lockTenantSchedule(tx, ctx.tenantId);
     const [s] = await tx
       .select({
         id: sessions.id,
@@ -205,7 +215,7 @@ export async function rescheduleSession(
           eq(sessions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1).for("update");
     if (!s) {
       return {
         kind: "error",

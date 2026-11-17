@@ -6,7 +6,7 @@ import { members } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { auditActorOf, writeAudit } from "@/lib/audit/write";
 import { todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import {
   locationPredicate,
@@ -51,7 +51,7 @@ export async function listOptedFacilities(
 }
 
 export async function addMemberFacility(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { memberId: string; locationId: string; optedOn?: string },
 ): Promise<{ ok: true; row: OptedFacilityRow } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -144,7 +144,7 @@ export async function addMemberFacility(
 }
 
 export async function endMemberFacility(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { optinId: string; endedOn?: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {

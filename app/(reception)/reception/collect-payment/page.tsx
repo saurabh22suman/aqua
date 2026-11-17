@@ -20,7 +20,7 @@ export default async function CollectPaymentPage({ searchParams }: { searchParam
     <StaffPage className="max-w-xl">
       <StaffPageHeader
         title="Collect payment"
-        meta="Show the payer a QR to scan, then record the payment against their invoice."
+        meta="Confirm the payment at the counter, then record it against the invoice."
       />
 
       <div className="mt-6">

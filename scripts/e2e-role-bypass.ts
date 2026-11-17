@@ -579,6 +579,7 @@ async function main(): Promise<void> {
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       NODE_ENV: "production",
+      BETTER_AUTH_URL: BASE,
       DATABASE_URL: iso.appUri,
       MIGRATION_DATABASE_URL: iso.adminUri,
       APP_LOGIN_PASSWORD: "isolated-test-pw",

@@ -2,6 +2,7 @@ import { Suspense, type ReactNode } from "react";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import type { NavItem } from "@/components/bottom-nav";
 import { OwnerMobileNav } from "@/components/owner-ui/owner-mobile-nav";
+import { OwnerNavigationScopeProvider } from "@/components/owner-ui/owner-navigation-scope";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { FacilitySwitcher } from "@/components/facility-switcher";
 import { GlobalSearch } from "@/components/global-search";
@@ -77,6 +78,7 @@ export function OwnerShell({
   clubLogoUrl = null,
   accountName = null,
   tenantId,
+  scopeUserId,
   guideHomeHref,
   accountLabel = "Account",
   children,
@@ -96,6 +98,7 @@ export function OwnerShell({
   // shared PersonAvatar.
   accountName?: string | null;
   tenantId?: string;
+  scopeUserId?: string;
   guideHomeHref?: string;
   // The club's branding initials. Accepted for the callers that already
   // pass them, but NOT drawn in an account control: the academy mark is
@@ -117,7 +120,7 @@ export function OwnerShell({
     : navItems;
 
   return (
-    <div
+    <OwnerNavigationScopeProvider key={`${tenantId ?? ""}:${scopeUserId ?? ""}`}><div
       data-owner-surface
       data-testid="owner-shell"
       // lg:items-start keeps the sticky sidebar at its own height
@@ -143,7 +146,7 @@ export function OwnerShell({
           top: "var(--app-sticky-offset)",
           height: "calc(100dvh - var(--app-sticky-offset))",
         }}
-        className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[190px] lg:flex-none lg:flex-col lg:overflow-hidden lg:border-r lg:border-[var(--owner-nav-border)] lg:bg-[var(--owner-nav-surface)] lg:px-3.5 lg:pb-5 lg:pt-4 lg:text-[var(--owner-nav-ink)] [--focus-ring:var(--owner-nav-focus)] print:hidden"
+          className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-[206px] lg:flex-none lg:flex-col lg:overflow-hidden lg:border-r lg:border-[var(--owner-nav-border)] lg:bg-[var(--owner-nav-surface)] lg:px-3.5 lg:pb-5 lg:pt-6 lg:text-[var(--owner-nav-ink)] [--focus-ring:var(--owner-nav-focus)] print:hidden"
       >
         {/* Brand, club and the account stay OUTSIDE the navigation
             scroller, so a short screen never hides them. The product mark
@@ -157,7 +160,7 @@ export function OwnerShell({
             KhelSuite
           </p>
           <span className="mt-1 block text-[11px] font-normal uppercase leading-[2] tracking-[2px] text-[var(--owner-nav-muted)]">
-            Club workspace
+            Business account
           </span>
           {clubName ? (
             <div className="mt-3 flex items-center gap-2 border-b border-[var(--owner-nav-border)] pb-3">
@@ -187,7 +190,7 @@ export function OwnerShell({
           data-testid="owner-side-nav-scroll"
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1"
         >
-          <OwnerSideNav groups={sidebarGroups} />
+          <Suspense fallback={null}><OwnerSideNav groups={sidebarGroups} /></Suspense>
         </nav>
 
         <div
@@ -226,15 +229,10 @@ export function OwnerShell({
       <div className="min-w-0 flex-1">
         <header
           data-testid="owner-top-bar"
-          // Reference: a compact 62px sticky row with the breadcrumb, the
-          // record search, the appearance control and the account avatar.
-          //
-          // On a phone the row is the approved COMPACT 52px one: the
-          // club identity and the facility in scope sit in ONE row (the
-          // mock's phone header), so the header does not grow to the
-          // height of the two stacked.
+          // The sticky reference header keeps identity, scope and account in
+          // one row: 66px on mobile and 74px at the Owner desktop breakpoint.
           style={{ top: "var(--app-sticky-offset)" }}
-          className="sticky top-0 z-30 flex min-h-[52px] items-center gap-2 border-b border-line bg-paper px-3 lg:min-h-[62px] lg:gap-3 lg:px-6"
+          className="sticky top-0 z-30 flex min-h-[66px] items-center gap-2 border-b border-line bg-paper px-4 py-2.5 lg:min-h-[74px] lg:gap-3 lg:px-7 lg:py-3"
         >
           <div className="hidden lg:block"><OwnerShellCrumb items={crumbItems} /></div>
           {/* The phone header carries the club identity, the facility in
@@ -242,15 +240,15 @@ export function OwnerShell({
               The record search lives in the More panel, so the facility
               label keeps a readable width; the desktop search stays in
               the header and BOTH search instances stay mounted. */}
-          <div role="group" aria-label="Club and facility" className="flex min-w-0 flex-1 items-center gap-2 lg:block lg:max-w-60 lg:flex-initial lg:shrink">
+          <div role="group" aria-label="Business account and club" className="flex min-w-0 flex-1 items-center gap-2 lg:block lg:max-w-60 lg:flex-initial lg:shrink">
             {clubLogoUrl ? <span className="lg:hidden"><ClubMark name={clubName ?? "Club workspace"} logoUrl={clubLogoUrl} size={24} /></span> : null}
-            <span className="min-w-0 flex-1 lg:hidden"><span title={clubName ?? "Club workspace"} className="block truncate text-sm font-medium">{clubName ?? "Club workspace"}</span><span className="block truncate text-xs text-ink-2">{accountLabel}</span></span>
-            <div className="owner-facility min-w-0 max-w-[10.5rem] shrink-0 lg:mt-2 lg:w-full lg:max-w-none">
+            <span className="min-w-0 flex-1 lg:hidden"><span title={clubName ?? "Club workspace"} className="block truncate text-[13px] font-medium">{clubName ?? "Club workspace"}</span><span className="block truncate text-[11px] text-ink-2">{accountLabel}</span></span>
+            <div className="owner-facility min-w-0 max-w-[10.5rem] shrink-0 lg:w-full lg:max-w-none">
               {/* URL state can wait without replacing the workspace. */}
               <Suspense
                 fallback={
                   <span role="status" className="text-xs text-ink-2">
-                    Loading facilities…
+                    Loading clubs…
                   </span>
                 }
               >
@@ -275,7 +273,7 @@ export function OwnerShell({
           {/* Owner OpenPen: the page owns its explicit 16/28px inset via
               OwnerPage. The shell adds no horizontal gutter, so the old
               32+20 double inset cannot return. */}
-          <div className="mx-auto w-full max-w-[1280px]">{children}</div>
+          <div className="mx-auto w-full max-w-[1180px]">{children}</div>
         </div>
 
         {!hasSettingsDestination ? (
@@ -286,12 +284,12 @@ export function OwnerShell({
       </div>
 
       <div data-testid="owner-mobile-nav" className="lg:hidden">
-        <OwnerMobileNav
+        <Suspense fallback={null}><OwnerMobileNav
           navItems={navItems}
           sidebarGroups={sidebarGroups}
           search={<GlobalSearch icon={<OwnerIcon name="search" size={16} className="pointer-events-none absolute left-4 top-[26px] -translate-y-1/2 text-ink-3" />} />}
-        />
+        /></Suspense>
       </div>
-    </div>
+    </div></OwnerNavigationScopeProvider>
   );
 }

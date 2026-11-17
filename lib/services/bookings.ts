@@ -16,7 +16,7 @@ import {
   type QuoteBookingResult,
 } from "@/lib/services/booking-pricing";
 import { asMemberId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // V-02/V-03 — the booking service: create, cancel and the display
 // quote; the read side (day board, bookable facilities) lives in
@@ -90,7 +90,7 @@ function pgErrorCode(error: unknown): string | undefined {
 }
 
 export async function createBooking(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<CreateBookingResult> {
   const parsed = createBookingInput.safeParse(raw);
@@ -240,7 +240,7 @@ export async function createBooking(
 export type CancelBookingResult = { ok: true } | { ok: false; error: string };
 
 export async function cancelBooking(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   bookingId: string,
 ): Promise<CancelBookingResult> {
   const parsed = uuid.safeParse(bookingId);

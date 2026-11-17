@@ -32,19 +32,16 @@ export type Ctx = {
   requestId?: string;
 };
 
-// M3: every lib/services/*.ts file independently redeclared this as
-// `Pick<Ctx, "tenantId"> & { userId?: string }` -- the `userId` half
-// hand-typed as a plain string rather than derived from Ctx, in all
-// eight files, identically. That's exactly why branding UserId didn't
-// close the gap it was meant to: every service function's userId
-// parameter accepted any string, unbranded, no matter how carefully
-// the schema columns were typed. One shared type instead of eight
-// independently-drifting copies.
+/**
+ * Optional identity for scoped read helpers. This shape does not establish
+ * authority: private reads still resolve their live grants and resource scope.
+ * Mutation entry points use MutationActor, including write-on-first-read APIs.
+ */
 export type ActionCtx = Pick<Ctx, "tenantId"> &
   Partial<Pick<Ctx, "userId" | "requestId" | "roleKey" | "allLocations" | "locationIds" | "permissions">> &
   { systemActor?: true };
 
-/** Explicit actor for reviewed mutation boundaries; tenant-only reads use ActionCtx. */
+/** Explicit actor claim for mutation boundaries; runtime guards remain required. */
 export type MutationActor =
   | (Pick<Ctx, "tenantId" | "userId"> & Partial<Pick<Ctx, "requestId" | "roleKey" | "allLocations" | "locationIds" | "permissions">> & { systemActor?: never })
   | (Pick<Ctx, "tenantId"> & Partial<Pick<Ctx, "requestId">> & { systemActor: true; userId?: never; roleKey?: never; allLocations?: never; locationIds?: never; permissions?: never });

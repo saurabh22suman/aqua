@@ -53,15 +53,15 @@ export default async function TenantMessagingPage({
     <section>
       <SectionHeader
         title="Messaging"
-        subtitle="WhatsApp connection state for this tenant. No credentials or message content are shown here."
+        subtitle="Observed outbound messaging attempts for this tenant. No credentials or message content are shown here."
       />
       <OpsCardFlush className="mt-3">
         <DescriptionRow
-          label="Provider"
+          label="Last observed provider"
           value={
             summary.provider
               ? (PROVIDER_LABEL[summary.provider] ?? summary.provider)
-              : "Not connected — no outbound attempt yet"
+              : "No outbound attempts yet"
           }
         />
         <DescriptionRow
@@ -77,7 +77,7 @@ export default async function TenantMessagingPage({
           value={String(summary.failedCount7d)}
         />
       </OpsCardFlush>
-      <OpsPanel tone="warn" className="mt-4" title="“Connected” means “an outbound attempt has been logged”">
+      <OpsPanel tone="warn" className="mt-4" title="Provider connection is not verified here">
         There is no per-tenant WhatsApp account record yet, so this panel does
         not read a stored connection flag. It reports whichever provider
         actually handled the traffic.

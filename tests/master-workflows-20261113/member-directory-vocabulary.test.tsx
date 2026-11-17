@@ -12,16 +12,16 @@ import OwnerNewMemberPage from "@/app/(owner)/owner/members/new/page";
 import ReceptionNewMemberPage from "@/app/(reception)/reception/members/new/page";
 import ReceptionMembersPage from "@/app/(reception)/reception/members/page";
 afterEach(cleanup);
-it("uses the configured member term for the directory heading and create action", async () => {
+it("uses stable multisport owner terms despite a club swimming override", async () => {
   const tree = await MembersPage({});
   const directory = tree.props.children;
   render(await directory.type(directory.props));
-  expect(await screen.findByRole("heading",{name:"Players"})).toBeTruthy();
-  expect(screen.getByRole("link",{name:/add player/i})).toBeTruthy();
+  expect(await screen.findByRole("heading",{name:"Members"})).toBeTruthy();
+  expect(screen.getByRole("link",{name:/add member/i})).toBeTruthy();
 });
-it("uses the configured term in owner and reception create headings", async () => {
+it("uses stable Owner terms while preserving Reception custom terms", async () => {
   const view = render(await OwnerNewMemberPage({}));
-  expect(screen.getByRole("heading",{name:"Add player"})).toBeTruthy();
+  expect(screen.getByRole("heading",{name:"Add member"})).toBeTruthy();
   view.unmount();
   render(await ReceptionNewMemberPage());
   expect(screen.getByRole("heading",{name:"Add player"})).toBeTruthy();

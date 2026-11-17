@@ -2,12 +2,12 @@
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-// U-03/V-11 — member 360 tabs. Overview / Payments / Progress / Notes
-// / Documents. V-11 wires Progress to the generic framework (the tab
+// U-03/V-11 — member 360 navigation: Overview / Fees / Progress / Notes.
+// V-11 wires Progress to the generic framework (the tab
 // was deliberately absent while M-03/V-10 were other workstreams).
 // Notes render an honest empty state and a create form for writers;
-// Documents states uploads are not available yet (C06: no internal
-// task IDs or future promises).
+// Legacy Documents links state uploads are not available (C06: no internal
+// task IDs or future promises), but are not promoted in navigation.
 
 const listMemberNotesAction = vi.fn();
 vi.mock("@/lib/actions/member-notes", () => ({
@@ -40,17 +40,16 @@ afterEach(() => {
 });
 
 describe("U-03 member tabs", () => {
-  it("renders Overview / Payments / Progress / Notes / Documents", () => {
+  it("renders Overview / Fees / Progress / Notes without unavailable Documents", () => {
     render(<MemberDetailTabs memberId="m1" active="notes" />);
     const labels = Array.from(document.querySelectorAll("a")).map(
       (a) => a.textContent,
     );
     expect(labels).toEqual([
       "Overview",
-      "Payments",
+      "Fees",
       "Progress",
       "Notes",
-      "Documents",
     ]);
     const progress = Array.from(document.querySelectorAll("a")).find(
       (a) => a.textContent === "Progress",

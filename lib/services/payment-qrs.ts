@@ -5,7 +5,7 @@ import { withTenant } from "@/db/tenant";
 import { paymentQrs } from "@/db/schema/payment-qrs";
 import { writeAudit as writeAuditRow } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import {
   PAYMENT_QR_IMAGE_MAX_BYTES,
   PAYMENT_QR_IMAGE_MIMES,
@@ -110,7 +110,7 @@ export async function listPaymentQrs(
 }
 
 export async function createPaymentQr(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     nickname: string;
     kind: PaymentQrKind;
@@ -186,7 +186,7 @@ export async function createPaymentQr(
 }
 
 export async function updatePaymentQr(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   id: string,
   input: {
     nickname?: string;
@@ -275,7 +275,7 @@ export async function updatePaymentQr(
 }
 
 export async function deletePaymentQr(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   id: string,
 ): Promise<QrMutationResult> {
   return withTenant(ctx.tenantId, async (tx) => {

@@ -2,6 +2,8 @@
 import type { ReactNode } from "react";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { usePathname } from "next/navigation";
+import { scopedOwnerNavigationHref } from "@/components/owner-ui/owner-facility-navigation";
+import { OwnerNavigationScope } from "@/components/owner-ui/owner-navigation-scope";
 import { findActiveHref, type NavItem } from "@/components/bottom-nav";
 import { TenantSignOut } from "@/components/tenant-sign-out";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
@@ -67,15 +69,15 @@ export function OwnerMobileNav({ navItems, sidebarGroups, search }: { navItems: 
   const active = findActiveHref(pathname, primary);
   const moreActive = findActiveHref(pathname, more);
   return (
-    <nav aria-label="Primary" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-40 grid min-h-16 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] shadow-2">
+    <OwnerNavigationScope pathname={pathname}>{(searchParams) => <nav aria-label="Primary" style={{ gridTemplateColumns: `repeat(${primary.length + 1}, minmax(0, 1fr))` }} className="fixed inset-x-0 bottom-0 z-40 grid min-h-16 border-t border-line bg-paper pb-[env(safe-area-inset-bottom)] shadow-2">
       {primary.map(item => {
         const isActive = active === item.href;
-        return <Link key={item.href} href={item.href} aria-current={isActive ? "page" : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-1 text-[12px] ${isActive ? "font-medium text-[var(--accent-strong)]" : "font-normal text-ink-2"}`}><OwnerIcon name={ownerIconName(item)} size={22} />{ownerNavLabel(item)}</Link>;
+        return <Link key={item.href} href={scopedOwnerNavigationHref(item.href, pathname, searchParams)} aria-current={isActive ? "page" : undefined} className={`flex min-h-16 flex-col items-center justify-center gap-0.5 text-[12px] ${isActive ? "font-medium text-[var(--accent-strong)]" : "font-normal text-ink-2"}`}><span className={`grid h-8 w-12 place-items-center rounded-xl ${isActive ? "bg-[var(--accent-soft)]" : ""}`}><OwnerIcon name={ownerIconName(item)} size={22} /></span>{ownerNavLabel(item)}</Link>;
       })}
       <TransientDisclosure
         className="relative"
         triggerClassName={`flex min-h-16 cursor-pointer list-none flex-col items-center justify-center gap-1 text-[12px] focus-visible:outline-solid focus-visible:outline-2 ${moreActive ? "font-medium text-[var(--accent-strong)] underline underline-offset-4" : "font-normal text-ink-2"}`}
-        trigger={<><OwnerIcon name="more" size={22} /><span>More</span>{moreActive ? <span className="sr-only">Current section</span> : null}</>}
+        trigger={<><span className={`grid h-8 w-12 place-items-center rounded-xl ${moreActive ? "bg-[var(--accent-soft)]" : ""}`}><OwnerIcon name="more" size={22} /></span><span>More</span>{moreActive ? <span className="sr-only">Current section</span> : null}</>}
       >
         <div className="absolute bottom-full right-2 mb-2 max-h-[60dvh] w-64 overflow-y-auto rounded-card border border-line bg-paper p-3 shadow-2">
           {/* The phone's record search lives HERE, not in the header row:
@@ -84,10 +86,10 @@ export function OwnerMobileNav({ navItems, sidebarGroups, search }: { navItems: 
               desktop search stays in the header, so BOTH instances stay
               mounted and no query or result state is lost. */}
           {search ? <div className="mb-2">{search}</div> : null}
-          {more.map(item => <Link key={item.href} href={item.href} aria-current={moreActive === item.href ? "page" : undefined} className={`flex min-h-11 items-center rounded-ctl px-3 text-sm ${moreActive === item.href ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-ink)]" : "text-ink"}`}>{ownerNavLabel(item)}</Link>)}
+          {more.map(item => <Link key={item.href} href={scopedOwnerNavigationHref(item.href, pathname, searchParams)} aria-current={moreActive === item.href ? "page" : undefined} className={`flex min-h-11 items-center rounded-ctl px-3 text-sm ${moreActive === item.href ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-ink)]" : "text-ink"}`}>{ownerNavLabel(item)}</Link>)}
           <TenantSignOut className="mt-2" />
         </div>
       </TransientDisclosure>
-    </nav>
+    </nav>}</OwnerNavigationScope>
   );
 }

@@ -7,6 +7,7 @@ import { listMenuAction } from "@/lib/actions/menu";
 import { listLocationsAction } from "@/lib/actions/people";
 import { listOpenCafeOrdersAction } from "@/lib/actions/orders";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { CafeOpenOrders } from "@/components/cafe-open-orders";
 import { CafeOrderScreen } from "@/components/cafe-order-screen";
 import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
@@ -41,7 +42,7 @@ export default async function ReceptionCafePage() {
 
   const [openOrders, terminology] = await Promise.all([
     listOpenCafeOrdersAction({}),
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
   // The menu is only needed by the new-order screen, so it is not read
   // at all when the café module is off.

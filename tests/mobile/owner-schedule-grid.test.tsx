@@ -3,7 +3,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // U-04 — the schedule grid. The week view renders seven stacked day
-// sections (no `overflow-x-auto` anywhere), each session row shows
+// sections, with horizontal scrolling confined to the day chooser; each session row shows
 // the batch's capacity lane, and the month view adds the 7-column
 // month strip. 44px controls: every nav link carries min-h-[44px].
 
@@ -74,7 +74,7 @@ describe("U-04 schedule grid", () => {
     expect(document.body.textContent).toContain("Riya Nair");
   });
 
-  it("never introduces horizontal scroll at 390px", () => {
+  it("contains horizontal scrolling within the labelled day chooser", () => {
     const { container } = render(
       <OwnerScheduleGrid
         view="week"
@@ -87,13 +87,16 @@ describe("U-04 schedule grid", () => {
         todayHref="#"
       />,
     );
-    expect(container.querySelectorAll(".overflow-x-auto").length).toBe(0);
+    const scrollRegions = container.querySelectorAll(".overflow-x-auto");
+    expect(scrollRegions.length).toBe(1);
+    expect(scrollRegions[0]?.getAttribute("aria-label")).toBe("Choose a day");
+    expect(scrollRegions[0]?.tagName).toBe("NAV");
     expect(container.querySelectorAll(".min-w-\\[520px\\]").length).toBe(0);
   });
 
   it("does not offer batch management without permission", () => {
     render(<OwnerScheduleGrid view="week" locations={[]} sessions={[]} days={WEEK} monthCells={null} prevHref="#" nextHref="#" todayHref="#" />);
-    expect(document.querySelector('a[href="/owner/programs"]')).toBeNull();
+    expect(document.querySelector('a[href^="/owner/programs"]')).toBeNull();
   });
 
   it("shows day-level empty states and the batch editor path when the week is empty", () => {
@@ -114,7 +117,7 @@ describe("U-04 schedule grid", () => {
     const manage = Array.from(document.querySelectorAll("a")).find((a) =>
       a.textContent?.includes("Manage batches"),
     );
-    expect(manage?.getAttribute("href")).toBe("/owner/programs");
+    expect(manage?.getAttribute("href")).toBe("/owner/programs?facility=all");
   });
 
   it("renders the month strip with a count per day and 44px day cells", () => {
@@ -159,7 +162,7 @@ describe("U-04 schedule grid", () => {
         todayHref="#"
       />,
     );
-    expect(document.querySelector('select[name="location"]')).toBeNull();
+    expect(document.querySelector('select[name="facility"]')).toBeNull();
 
     rerender(
       <OwnerScheduleGrid
@@ -176,7 +179,7 @@ describe("U-04 schedule grid", () => {
         todayHref="#"
       />,
     );
-    expect(document.querySelector('select[name="location"]')).toBeTruthy();
+    expect(document.querySelector('select[name="facility"]')).toBeTruthy();
   });
 
 describe("schedule desktop composition (PR3-C5)", () => {

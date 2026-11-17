@@ -5,7 +5,8 @@ import { cleanup, render, screen } from "@testing-library/react";import { afterE
 // "synced never" (and "synced HH:MM" anywhere), which reads as a
 // failure state on a fresh register and never says where the data
 // actually is. The hook now exposes the persisted-time label (or
-// null); the component says "Saved at HH:MM" / "Saved on this phone".
+// null); the component distinguishes an acknowledged save from the
+// initially server-loaded register and pending device writes.
 
 type HookState = {
   savedAtLabel: string | null;
@@ -59,12 +60,13 @@ describe("register sync label (F31)", () => {
     expect(screen.queryByText(/synced/i)).toBeNull();
   });
 
-  it("says 'Saved on this phone' before the first sync, never 'synced never'", () => {
+  it("describes the server-loaded register before the first local save", () => {
     state.savedAtLabel = null;
     render(
       <RegisterBoard sessionId="s1" rows={ROWS} offlineSyncEnabled={true} />,
     );
-    expect(screen.getByText(/Saved on this phone/)).toBeTruthy();
+    expect(screen.getByText(/Loaded from server · no pending marks/)).toBeTruthy();
+    expect(screen.queryByText(/Saved on this phone/)).toBeNull();
     expect(screen.queryByText(/never/i)).toBeNull();
   });
 

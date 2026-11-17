@@ -168,7 +168,7 @@ describe("Tenant detail — Messaging tab", () => {
     expect(screen.getByText("1")).toBeDefined();
   });
 
-  it("shows 'not connected' when no message has ever been sent", async () => {
+  it("reports no outbound attempts without asserting connection state", async () => {
     vi.doMock("next/navigation", () => ({
       redirect: (path: string) => {
         throw new Error(`unexpected redirect: ${path}`);
@@ -196,6 +196,7 @@ describe("Tenant detail — Messaging tab", () => {
       }),
     );
 
-    expect(screen.getByText(/Not connected/)).toBeDefined();
+    expect(screen.getByText(/No outbound attempts yet/)).toBeDefined();
+    expect(screen.queryByText(/Not connected/)).toBeNull();
   });
 });

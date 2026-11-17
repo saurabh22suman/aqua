@@ -23,7 +23,7 @@ import {
   classifyPreparedIntent,
   findOpen,
 } from "@/lib/services/payment-intent-open";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // F01 — the durable, server-backed recovery surface for ONE counter
 // operation. The row is committed before the financial effect and
@@ -45,7 +45,7 @@ const STALE_OBSERVATION =
   "The document changed since it was checked. Refresh and choose again.";
 
 export function preparePaymentIntent(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     invoiceId: string;
     idempotencyKey: string;
@@ -64,7 +64,7 @@ export function preparePaymentIntent(
 }
 
 export function prepareReversalIntent(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     paymentId: string;
     idempotencyKey: string;
@@ -105,7 +105,7 @@ function observationConflict(): PrepareIntentResult {
 }
 
 async function prepareIntent(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   kind: PaymentIntentKind,
   targetId: string,
   rawKey: string,

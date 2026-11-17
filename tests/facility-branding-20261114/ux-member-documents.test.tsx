@@ -8,7 +8,7 @@ afterEach(cleanup);
 it("does not promote unavailable documents in normal navigation", () => {
   render(<MemberDetailTabs memberId="member" active="overview" facilityScope="site" />);
   expect(within(screen.getByRole("navigation", { name: "Member sections" })).queryByRole("link", { name: "Documents" })).toBeNull();
-  expect(screen.getByRole("link", { name: "Documents" })).toBeTruthy();
+  expect(screen.queryByRole("link", { name: "Documents" })).toBeNull();
 });
 it("keeps direct documents links understandable and returnable", () => {
   render(<><MemberDetailTabs memberId="member" active="documents" facilityScope="site" /><MemberDocumentsPanel /></>);

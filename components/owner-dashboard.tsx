@@ -4,6 +4,7 @@ import type { OwnerAttentionRow } from "@/components/owner-home/owner-home-atten
 import { OwnerHomeHeader } from "@/components/owner-home/owner-home-header";
 import { OwnerHomeMoney } from "@/components/owner-home/owner-home-money";
 import { OwnerHomeTimeline } from "@/components/owner-home/owner-home-timeline";
+import { OwnerHomeCollectionsTrend } from "@/components/owner-home/owner-home-collections-trend";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 import {
@@ -19,6 +20,7 @@ import type { BrandingData } from "@/lib/services/branding";
 import type { ArtworkIdentity } from "@/components/owner-artwork/preference";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { addDays, formatDateIST } from "@/lib/time/tz";
+import { formatINRCompact } from "@/lib/money/format";
 
 // Owner Home — the daily oversight workspace (composition contract in
 // DESIGN.md §7, and the accepted Lavender Option B composition).
@@ -154,9 +156,7 @@ export function OwnerDashboard({
     }),
     dues: scopeParams({ tab: "dues" }),
   };
-  const scheduleHref = facility
-    ? `/owner/schedule?date=${data.today}&location=${facility}`
-    : `/owner/schedule?date=${data.today}`;
+  const scheduleHref = `/owner/schedule?${new URLSearchParams({ date: data.today, facility: facility ?? "all" }).toString()}`;
   // The trend report is the REAL drill-down for the collections figure,
   // and it carries the same scope and the same range the card was read
   // under — a narrowed Home never opens an unnarrowed destination.
@@ -169,7 +169,7 @@ export function OwnerDashboard({
   const trendHref = can.viewTrend && can.readFees
     ? `/owner/reports/collections?${new URLSearchParams({
         view: "trends",
-        period: period ?? "last7",
+        period: chartsData?.period.key ?? period,
         facility: facility ?? "all",
       })}`
     : null;
@@ -218,9 +218,11 @@ export function OwnerDashboard({
 
       {/* 2 — the collections card: today's collection, the last seven
           days, and the two actions that belong to collections. */}
+      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(250px,1fr)]">
+      <div className="grid min-w-0 gap-4">
       <div
         data-testid="owner-home-lead"
-        className="mt-4"
+        className="min-w-0"
       >
         <div className="min-w-0">
           {can.readFees && data.money ? <OwnerHomeMoney
@@ -232,14 +234,27 @@ export function OwnerDashboard({
             trendHref={trendHref}
             rangeLabel={rangeLabel}
           /> : null}
-        </div>
+      </div>
 
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {can.readFees && data.money ? <div className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+          <p className="text-[12px] text-ink-2">Outstanding now</p>
+          <p className="mt-2 break-words font-display text-[24px] font-semibold tabular-nums">{formatINRCompact(data.money.outstandingPaise)}</p>
+          <p className="mt-1 text-[12px] text-ink-3">{data.money.dueInvoiceCount} unpaid {data.money.dueInvoiceCount === 1 ? "invoice" : "invoices"}</p>
+        </div> : null}
+        <div className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+          <p className="text-[12px] text-ink-2">Today&apos;s {sessionsOther}</p>
+          <p className="mt-2 font-display text-[24px] font-semibold tabular-nums">{sessionCount}</p>
+          <p className="mt-1 text-[12px] text-ink-3">{sessionCount === 1 ? sessionsOne : sessionsOther}</p>
+        </div>
       </div>
 
       {/* 3 — the day's sessions follow the Collections card directly (the
           approved composition). Each row states the time, the class with a
           readable coach/facility line, and one truthful soft state pill. */}
-      <div data-testid="owner-home-work" className="mt-5">
+      <div data-testid="owner-home-work">
         <OwnerHomeTimeline
           lanes={data.todaysLanes}
           coachLabel={coachOne}
@@ -249,8 +264,9 @@ export function OwnerDashboard({
           nextClass={data.nextClass}
         />
       </div>
-
-      {attention.length > 0 || showOnboarding ? <div className="mt-5">
+      </div>
+      <div className="grid min-w-0 gap-4">
+      {attention.length > 0 || showOnboarding ? <div className="min-w-0">
           <OwnerHomeAttention
             rows={attentionRows(visibleAttention)}
             hiddenRows={attentionRows(hiddenAttention)}
@@ -271,6 +287,9 @@ export function OwnerDashboard({
             }
           />
         </div> : null}
+      {can.readFees ? <OwnerHomeCollectionsTrend data={chartsData} href={trendHref} /> : null}
+      </div>
+      </div>
     </OwnerPage>
   );
 }

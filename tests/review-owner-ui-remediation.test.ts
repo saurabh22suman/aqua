@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { updateMemberSchema } from "@/lib/schemas";
 
 // Owner-UI review remediation (2026-10-13) — data-scope correctness at
@@ -44,7 +44,7 @@ const memberRefA = randomUUID();
 const memberRefB = randomUUID();
 const PERIOD = { from: "2026-11-01", to: "2026-12-01" };
 
-const ownerCtx: ActionCtx = {
+const ownerCtx: MutationActor = {
   tenantId,
   userId: ownerUser,
   roleKey: "owner",
@@ -53,7 +53,7 @@ const ownerCtx: ActionCtx = {
   permissions: new Set(["members.read", "members.write", "reports.operational"]),
 };
 
-const scopedCtx: ActionCtx = {
+const scopedCtx: MutationActor = {
   ...ownerCtx,
   userId: scopedUser,
   roleKey: "admin",

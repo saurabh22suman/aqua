@@ -3,7 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { enrolments } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
 import { tenants } from "@/db/schema/tenants";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { todayInZone } from "@/lib/time/tz";
 import { visibleBatch, visibleMember } from "./resource-access";
@@ -13,7 +13,7 @@ export type TransferBatchResult =
   | { kind: "ok"; fromBatchId: string; toBatchId: string }
   | { kind: "error"; code: "invalid" | "not_enrolled_in_source" | "already_enrolled_in_target" | "target_full" | "batch_not_found"; message: string };
 
-export async function transferMemberToBatch(ctx: ActionCtx, input: {
+export async function transferMemberToBatch(ctx: MutationActor, input: {
   memberId: string; fromBatchId: string; toBatchId: string;
 }): Promise<TransferBatchResult> {
   if (input.fromBatchId === input.toBatchId) return { kind: "error", code: "invalid", message: "Source and destination batches are the same." };

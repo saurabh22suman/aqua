@@ -21,7 +21,7 @@ import {
 } from "@/lib/services/location-access";
 import { asMemberId } from "@/lib/ids";
 import { isUniqueViolation } from "@/lib/pg-errors";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // C-30 — subscriptions. Start/end, pause/resume, cancel. Pause extends
 // the end date by the elapsed paused days on resume. Subscription state
@@ -153,7 +153,7 @@ export async function listMemberSubscriptions(
 }
 
 export async function createSubscription(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SubscriptionMutationResult> {
   const parsed = createSubscriptionInput.safeParse(raw);
@@ -297,7 +297,7 @@ export async function createSubscription(
 }
 
 export async function pauseSubscription(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SubscriptionMutationResult> {
   const parsed = pauseSubscriptionInput.safeParse(raw);
@@ -368,7 +368,7 @@ export async function pauseSubscription(
 }
 
 export async function resumeSubscription(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SubscriptionMutationResult> {
   const parsed = subscriptionIdInput.safeParse(raw);
@@ -437,7 +437,7 @@ export async function resumeSubscription(
 }
 
 export async function cancelSubscription(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SubscriptionMutationResult> {
   const parsed = subscriptionIdInput.safeParse(raw);

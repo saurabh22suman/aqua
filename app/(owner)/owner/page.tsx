@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getOwnerDashboardAction } from "@/lib/actions/dashboard";
@@ -5,7 +6,8 @@ import { getBrandingAction } from "@/lib/actions/branding";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
 import { getOwnerChartsAction } from "@/lib/actions/owner-home-charts";
-import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { FACILITY_COOKIE, resolveFacilityValue, resolveRequestedFacility } from "@/lib/facility";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
@@ -32,12 +34,25 @@ export default async function OwnerHomePage({
   searchParams?: Promise<{ facility?: string; trend?: string; period?: string }>;
 }) {
   const ctx = await requireOwner();
-  // C01 (docs/audits/2026-10-09-role-content-permission-audit.md §9) —
-  // the Accountant is routed to /owner but holds no dashboard.view, so
-  // the dashboard action would refuse them. Their home is the financial
-  // entry instead; Owner/Admin keep the dashboard unchanged.
+  const params = searchParams ? await searchParams : {};
+  // Pick only a destination whose own read grants and entitlements are held.
+  // An explicit URL scope remains an untrusted filter and is checked here.
   if (!hasPermission(ctx, "dashboard.view")) {
-    redirect("/owner/fees");
+    // Fees and Schedule use page-authorized tenant timezone reads after Operations integration.
+    const destination = hasPermission(ctx, "reports.financial") && hasFeature(ctx, "reports") && hasFeature(ctx, "billing")
+      ? "/owner/fees"
+      : hasPermission(ctx, "attendance.read") ? "/owner/schedule"
+        : hasPermission(ctx, "programs.read") ? "/owner/programs"
+          : hasPermission(ctx, "members.read") ? "/owner/members" : null;
+    if (destination) {
+      const scope = resolveRequestedFacility({ facility: params.facility });
+      if (!scope.valid || (scope.facilityId && !(await canSelectFacility(ctx, scope.facilityId)))) {
+        return <OwnerPage><h1 className="font-display text-xl font-semibold">Facility unavailable</h1><p className="mt-2 text-sm text-ink-2">This facility is unavailable for your account.</p><OwnerLink href={`${destination}?facility=all`} className="mt-3 inline-flex min-h-11 items-center text-sm text-[var(--accent-ink)] underline">View available facilities</OwnerLink></OwnerPage>;
+      }
+      const query = params.facility === undefined ? "" : `?${new URLSearchParams({ facility: params.facility })}`;
+      redirect(`${destination}${query}`);
+    }
+    return <OwnerPage><h1 className="font-display text-xl font-semibold">No workspace access</h1><p className="mt-2 text-sm text-ink-2">Ask your club owner to review your access.</p></OwnerPage>;
   }
   if (!hasFeature(ctx, "reports")) {
     return (
@@ -65,7 +80,6 @@ export default async function OwnerHomePage({
       </OwnerPage>
     );
   }
-  const params = searchParams ? await searchParams : {};
   const cookieStore = await cookies();
   const facility = resolveFacilityValue(
     params.facility,
@@ -93,7 +107,7 @@ export default async function OwnerHomePage({
     await Promise.all([
       getOwnerDashboardAction(facility ? { facility } : undefined),
       getBrandingAction(),
-      getTerminologyAction(),
+      getTerminologyAction().then(ownerTerminology),
       getOnboardingChecklistAction().catch(() => null),
       // The chart band degrades to a stated "unavailable" panel rather
       // than taking the page down with it.

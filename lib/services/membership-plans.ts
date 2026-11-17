@@ -11,7 +11,7 @@ import { facilities } from "@/db/schema/preset-engine";
 import { locations } from "@/db/schema/locations";
 import { auditActorOf, writeAudit as writeSharedAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // C-29/C-29c — membership plans. Preset plan_shapes are templates; a
 // template is activated by pricing it at a facility, optionally for a
@@ -182,7 +182,7 @@ export async function listPlanTemplates(
 }
 
 export async function activatePlanFromShape(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<PlanMutationResult> {
   const parsed = activatePlanInput.safeParse(raw);
@@ -281,7 +281,7 @@ export async function activatePlanFromShape(
 }
 
 export async function createPlan(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<PlanMutationResult> {
   const parsed = createPlanInput.safeParse(raw);
@@ -335,7 +335,7 @@ export async function createPlan(
 }
 
 export async function updatePlan(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<PlanMutationResult> {
   const parsed = updatePlanInput.safeParse(raw);
@@ -379,7 +379,7 @@ export async function updatePlan(
 }
 
 export async function archivePlan(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   planId: string,
 ): Promise<PlanMutationResult> {
   return withTenant(ctx.tenantId, async (tx) => {

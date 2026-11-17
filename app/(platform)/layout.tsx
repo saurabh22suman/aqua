@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { OpsMobileMenu } from "@/components/ops/ops-mobile-menu";
 import { OpsNavLinks } from "@/components/ops/ops-nav-links";
 import { OpsContextBar } from "@/components/ops/console/ops-context-bar";
+import { mockMessagingEnabled } from "@/lib/messaging/provider";
 
 // The operator console is not an installable app.
 //
@@ -139,7 +140,7 @@ export default async function PlatformLayout({
           data-testid="ops-side-nav-scroll"
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-3"
         >
-          <OpsNavLinks role={status.role} />
+          <OpsNavLinks role={status.role} mockMessagingAvailable={mockMessagingEnabled()} />
         </nav>
 
         {/* The account row and the exit control, below the navigation
@@ -193,7 +194,7 @@ export default async function PlatformLayout({
           >
             Aqua Control Plane
           </Link>
-          <OpsMobileMenu role={status.role} />
+          <OpsMobileMenu role={status.role} mockMessagingAvailable={mockMessagingEnabled()} />
           <div className="order-2 ml-auto flex items-center gap-2">
             <ThemeToggle />
             <form action={signOutFormAction}>
@@ -213,7 +214,7 @@ export default async function PlatformLayout({
             persistent location cue, and a second sticky row would fight
             the phone header and the demo-banner offset for the same
             position. */}
-        <OpsContextBar role={status.role} />
+        <OpsContextBar role={status.role} mockMessagingAvailable={mockMessagingEnabled()} />
 
         <main className="px-5 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-10 md:py-10">{children}</main>
 

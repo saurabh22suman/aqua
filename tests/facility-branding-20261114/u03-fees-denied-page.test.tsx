@@ -13,7 +13,7 @@ it.each(["url", "cookie"])("denies an unavailable %s facility before financial r
   const id = "83bcb5a8-63dc-4e06-b7b0-ff18becc1b13";
   state.cookie = source === "cookie" ? id : undefined;
   const html = renderToStaticMarkup(await FeesPage({ searchParams: Promise.resolve({ tab: "dues", from: "2026-01-01", to: "2026-01-31", ...(source === "url" ? { facility: id } : {}) }) }));
-  expect(html).toContain("Facility unavailable");
+  expect(html).toContain("Club unavailable");
   expect(html).toContain("facility=all");
   expect(html).toContain("tab=dues");
   expect(html).not.toContain("Nothing outstanding");

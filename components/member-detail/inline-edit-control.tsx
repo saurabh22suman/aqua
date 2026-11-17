@@ -35,6 +35,8 @@ export function InlineEditControl({
   onCommit,
   onBlur,
   onKeyDown,
+  explicitCommit = false,
+  disabled = false,
 }: {
   field: InlineEditFieldName;
   type: InlineEditFieldType;
@@ -46,6 +48,8 @@ export function InlineEditControl({
   onCommit: (value: string) => void;
   onBlur: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+  explicitCommit?: boolean;
+  disabled?: boolean;
 }) {
   const label = FIELD_LABELS[field];
 
@@ -59,11 +63,12 @@ export function InlineEditControl({
     return (
       <Select
         ref={inputRef as Ref<HTMLSelectElement>}
+        disabled={disabled}
         value={draft}
         onChange={(e) => {
           // Select inputs save on change — no blur step needed.
           onDraftChange(e.target.value);
-          onCommit(e.target.value);
+          if (!explicitCommit) onCommit(e.target.value);
         }}
         onBlur={onBlur}
         onKeyDown={onKeyDown as (e: KeyboardEvent<HTMLSelectElement>) => void}
@@ -84,6 +89,7 @@ export function InlineEditControl({
     return (
       <Textarea
         ref={inputRef as Ref<HTMLTextAreaElement>}
+        disabled={disabled}
         value={draft}
         onChange={handleChange}
         onBlur={onBlur}
@@ -100,12 +106,13 @@ export function InlineEditControl({
     return (
       <DateField
         inputRef={inputRef as Ref<HTMLInputElement>}
+        disabled={disabled}
         value={draft}
         onChange={(iso) => {
           onDraftChange(iso);
           // DateField only emits a complete valid date, so a partial
           // keypress never reaches the server.
-          if (iso) onCommit(iso);
+          if (iso && !explicitCommit) onCommit(iso);
         }}
         onBlur={onBlur}
         onKeyDown={onKeyDown as (e: KeyboardEvent<HTMLInputElement>) => void}
@@ -119,6 +126,7 @@ export function InlineEditControl({
   return (
     <Input
       ref={inputRef as Ref<HTMLInputElement>}
+      disabled={disabled}
       type="text"
       value={draft}
       onChange={handleChange}

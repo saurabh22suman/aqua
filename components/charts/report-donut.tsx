@@ -17,7 +17,7 @@
 // the thing that moved the rotation's centre. The totals, the status
 // colours and the legend are untouched.
 
-export type DonutSlice = { label: string; value: number; tone: string };
+export type DonutSlice = { label: string; value: number; tone: string; valueLabel?: string };
 
 export function Donut({
   slices,
@@ -52,7 +52,7 @@ export function Donut({
           className={slice.tone}
           transform={`rotate(-90 ${center} ${center})`}
         >
-          <title>{`${slice.label}: ${slice.value}`}</title>
+          <title>{`${slice.label}: ${slice.valueLabel ?? slice.value}`}</title>
         </circle>
       );
       offset += dash;

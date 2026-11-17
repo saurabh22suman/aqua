@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
@@ -32,7 +33,7 @@ export default async function BookingPricesPage({searchParams}: {searchParams?: 
   const [facilities, rules, terminology] = await Promise.all([
     listActivitiesAction(),
     listBookingPriceRulesAction(),
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
 
 

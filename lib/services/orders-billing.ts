@@ -19,7 +19,7 @@ import {
   type FinalizeOrderResult,
   type VoidOrderResult,
 } from "@/lib/services/orders-core";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { billingAddressSchema, type BillingIssuer } from "@/lib/services/facility-billing-contract";
 import { GSTIN_RE, GST_STATE_NAMES } from "@/lib/gst";
 import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
@@ -68,7 +68,7 @@ export async function cafeModuleEnabled(
 }
 
 export async function finalizeOrder(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   orderId: string,
 ): Promise<FinalizeOrderResult> {
   const parsed = uuid.safeParse(orderId);
@@ -201,7 +201,7 @@ export async function finalizeOrder(
 }
 
 export async function voidOrder(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   orderId: string,
   reason: string,
 ): Promise<VoidOrderResult> {

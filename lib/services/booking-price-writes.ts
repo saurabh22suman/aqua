@@ -19,7 +19,7 @@ import {
   type BookingPriceRuleToggleResult,
   type SaveBookingPriceRuleResult,
 } from "@/lib/services/booking-price-rules";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // Batch 6 — the WRITE half of booking price administration.
 //
@@ -58,7 +58,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 // that rule, absent = a new one. Every write is one transaction with
 // its audit row.
 export async function saveBookingPriceRule(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SaveBookingPriceRuleResult> {
   const parsed = saveBookingPriceRuleInput.safeParse(raw);
@@ -220,7 +220,7 @@ export async function saveBookingPriceRule(
 // Activate or deactivate one rule. Deactivating is how a club retires
 // a price without deleting the audit trail of what it used to be.
 export async function setBookingPriceRuleActive(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<BookingPriceRuleToggleResult> {
   const parsed = setBookingPriceRuleActiveInput.safeParse(raw);

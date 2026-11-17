@@ -3,18 +3,24 @@ import { hasBookingEntitlement } from "@/lib/auth/booking-entitlement";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left.mjs";
 import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { ClubMark } from "@/components/branding/club-mark";
+import { OpenWorkspaceGuideLink } from "@/components/onboarding/guide-help-button";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
 import { TenantSignOut } from "@/components/tenant-sign-out";
 import { StaffClubInstallLink } from "@/components/staff-club-install-link";
 import { listAdminLocationsAction } from "@/lib/actions/locations";
+import { withTenant } from "@/db/tenant";
+import { clubDisplayName } from "@/db/club-selection";
+import { getBranding } from "@/lib/services/branding";
+import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { formatPhoneIN } from "@/lib/phone";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
-import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
-import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
-import { SetupDisclosure } from "@/components/settings/setup-disclosure";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
+import { SectionHeading } from "@/components/ui/PageHeader";
 import {
   categoryIcon,
   settingCategories,
@@ -22,29 +28,8 @@ import {
   SettingsTaskSurface,
 } from "@/components/settings/settings-surfaces";
 
-// Owner OpenPen management lane (29 October 2026).
-//
-// Settings is ONE page of six TASK surfaces — Academy, Programs &
-// facilities, Fees & payments, Team & access, Communications and
-// Appearance & advanced. Every destination is one click away and the
-// row's accessible name says what it opens ("Open Academy profile"),
-// because the visible word alone ("Open") repeats across the page.
-//
-// The index carries no purpose line of its own: the six surfaces and
-// their rows already say what each task is. The `?category=` deep link
-// still opens one surface, and that surface keeps its one-line scope.
-//
-// The account block is its own section below the task groups. Personal
-// appearance stays the shell's control (system-owned); tenant branding
-// remains a separate Settings destination.
-//
-// `?category=` is still rendered as a single-surface view. It is the
-// existing deep-link shape used by older links and tests, and it keeps
-// the same surface/row composition.
-//
-// Two entries are gated at runtime, because the academy decides them:
-// the skill ladder is only offered when the module is on, and a
-// single-site tenant never sees the concept of multiple locations.
+// Club identity, scoped facilities and personal choices are separate tasks.
+// Existing category deep links and each destination's server guard remain intact.
 
 export default async function Page({
   searchParams,
@@ -62,7 +47,11 @@ export default async function Page({
   const identity = await getCurrentStaffIdentity(ctx);
   // U-07 — a single-location tenant never sees the concept of multiple
   // sites: the label stays singular until a second location exists.
-  const locations = await listAdminLocationsAction();
+  const [allLocations, branding] = await Promise.all([listAdminLocationsAction(), getBranding(ctx).catch(() => null)]);
+  const locations = ctx.allLocations !== false ? allLocations : await withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    return allLocations.filter((location) => locationVisible(access, location.id));
+  });
   const multiLocation = locations.length > 1;
   // W1-6 continuation — the checklist is a first-run aid, so it is
   // gone from every owner surface once complete.
@@ -72,6 +61,22 @@ export default async function Page({
     ["add_members", "create_batch", "assign_coach"].every((key) => checklist.items.some((item) => item.key === key));
   const setupComplete = fullChecklist && checklist.items.every((item) => item.complete);
 
+  const destinationPermissions: Readonly<Record<string, readonly string[]>> = {
+    "/owner/programs": ["programs.read"],
+    "/owner/staff": ["staff.read"],
+    "/owner/staff/invitations": ["staff.invite"],
+    "/owner/announcements": ["messaging.send", "members.read", "programs.read"],
+    "/owner/bookings": ["bookings.read", "members.read"],
+    "/owner/settings/academy": ["settings.read"],
+    "/owner/settings/locations": ["settings.read"],
+    "/owner/settings/activities": ["settings.read", "members.read"],
+    "/owner/settings/plans": ["settings.read", "members.read"],
+    "/owner/settings/menu": ["settings.read", "members.read"],
+    "/owner/settings/booking-prices": ["settings.read"],
+    "/owner/settings/payment-qrs": ["settings.read"],
+    "/owner/settings/skills": ["levels.read"],
+    "/owner/settings/reports": ["reports.operational"],
+  };
   const CATEGORIES = settingCategories({
     ladderEnabled,
     multiLocation,
@@ -80,57 +85,59 @@ export default async function Page({
     // caller, so the link is withheld rather than offered and broken.
     canReadBookings:
       ctx.permissions.has("bookings.read") && hasBookingEntitlement(ctx.features),
-  });
+  }).map((category) => ({
+    ...category,
+    items: category.items.filter((item) => {
+      const permissions = destinationPermissions[item.href] ?? [];
+      return permissions.every((permission) => ctx.permissions.has(permission)) &&
+        (item.href !== "/owner/announcements" || ctx.features.has("messaging")) &&
+        (item.href !== "/owner/settings/reports" || ctx.features.has("reports"));
+    }),
+  })).filter((category) => category.items.length > 0);
   const active = CATEGORIES.find((c) => c.key === params.category);
+  const groups = [
+    { label: "Business administration", categories: CATEGORIES.filter((category) => category.key !== "appearance") },
+    { label: "Personal preferences", categories: CATEGORIES.filter((category) => category.key === "appearance") },
+  ];
 
   return (
     <OwnerPage>
       {active ? (
-        <Link
+        <a
           href="/owner/settings"
           className="inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-ink-2"
         >
           <ChevronLeft size={16} className="text-ink-3" aria-hidden="true" />
           Settings
-        </Link>
+        </a>
       ) : null}
 
-      <PageHeader
+      <OwnerDesignHeading
         title={active ? active.label : "Settings"}
-        purpose={active ? active.summary : undefined}
+        purpose={active ? active.summary : "Your business account, clubs and preferences"}
         className="mt-1"
       />
 
-      {!active ? (
-        <SetupDisclosure complete={setupComplete} namespace={`${ctx.tenantId}:${ctx.userId}`}>
-          <p className="mt-1 text-[13px] text-ink-2">
-            A club can have multiple physical facilities. Add resources at each site, then review the club profile and prices.
-            Open each step to review or change its details.
-          </p>
-          <OptionalWorkspaceGuide
-            key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
-            preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
-            title="A little help with club setup"
-            intro="Review these setup areas at your own pace. The guide does not change your settings."
-            regionLabel="Optional club setup guide"
-            itemLabel="Setup area"
-            items={[
-              { key: "facilities", title: "Physical facilities", detail: "Review the physical places where your club operates." },
-              { key: "resources", title: "Sports resources", detail: "Review the resources at each facility." },
-              { key: "profile", title: "Club profile and GST", detail: "Review your club details." },
-              { key: "plans", title: "Membership plan prices", detail: "Review your membership plans and their prices." },
-              { key: "booking", title: "Booking slot prices", detail: "Review your booking slot prices." },
-            ]}
-          />
-          <ol className="mt-2 space-y-1 text-[13px]">
-            <li><Link className="inline-flex min-h-11 items-center text-[var(--accent-ink)] underline underline-offset-2" href="/owner/settings/locations">1. Physical facilities</Link></li>
-            <li><Link className="inline-flex min-h-11 items-center text-[var(--accent-ink)] underline underline-offset-2" href="/owner/settings/activities">2. Sports resources</Link></li>
-            <li><Link className="inline-flex min-h-11 items-center text-[var(--accent-ink)] underline underline-offset-2" href="/owner/settings/academy">3. Club profile &amp; GST</Link></li>
-            <li><Link className="inline-flex min-h-11 items-center text-[var(--accent-ink)] underline underline-offset-2" href="/owner/settings/plans">4. Membership plan prices</Link></li>
-            <li><Link className="inline-flex min-h-11 items-center text-[var(--accent-ink)] underline underline-offset-2" href="/owner/settings/booking-prices">5. Booking slot prices</Link></li>
-          </ol>
-        </SetupDisclosure>
-      ) : null}
+      {!active ? <>
+        <section aria-label="Business account" className="flex min-w-0 flex-wrap items-center gap-3 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+          {branding ? <ClubMark name={clubDisplayName(branding.fallbackDisplayName, branding)} logoUrl={branding.logoUrl} accent={branding.accent} size={44} /> : null}
+          <div className="min-w-0 flex-1"><p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-2">Business account</p>
+            <p className="mt-1 break-words font-display text-[18px] font-semibold">{branding ? clubDisplayName(branding.fallbackDisplayName, branding) : "Business account unavailable"}</p>
+            <p className="mt-1 text-[12px] text-ink-2">{locations.length} {locations.length === 1 ? "club" : "clubs"}</p>
+          </div>
+          {branding ? <Link href="/owner/settings/academy" className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)]">Manage</Link> : <Link href="/owner/settings" className="inline-flex min-h-11 items-center text-[13px] text-[var(--accent-ink)] underline">Retry business account</Link>}
+        </section>
+        <section className="mt-5" aria-labelledby="facility-settings-heading">
+          <h2 id="facility-settings-heading" className="font-display text-[18px] font-semibold">Club settings</h2>
+          {locations.length ? <ul className="mt-3 grid gap-3 lg:grid-cols-2">
+            {locations.map((location) => <li key={location.id}>
+              <Link href={`/owner/settings/locations/${location.id}`} aria-label={`Club: ${location.name}`} className="flex min-h-11 items-center gap-3 rounded-[18px] border border-line bg-paper p-[18px] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] lg:p-5">
+                <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-ink)]"><OwnerIcon name="pin" size={20} /></span><span className="min-w-0 flex-1 break-words text-[14px] font-medium">{location.name}</span><ChevronRight size={18} aria-hidden="true" />
+              </Link>
+            </li>)}
+          </ul> : <p className="mt-2 text-[13px] text-ink-2">No clubs available to you.</p>}
+        </section>
+      </> : null}
 
       {hasChecklist && !setupComplete ? (
         <div className="mt-5">
@@ -165,16 +172,29 @@ export default async function Page({
           </SettingsTaskSurface>
         </div>
       ) : (
-        <div className="mt-5 grid items-start gap-5 lg:grid-cols-2">
-          {CATEGORIES.map((category) => (
-            <SettingsTaskSurface
-              key={category.key}
-              title={category.label}
-              icon={categoryIcon(category.key)}
-            >
-              <SettingsSurfaceItems items={category.items} hideDetail={category.key !== "appearance"} />
-            </SettingsTaskSurface>
+        <div className="mt-5 grid items-start gap-4 lg:grid-cols-2">
+          {groups.map((group) => (
+            <section key={group.label} className="min-w-0"><h2 className="font-display text-[18px] font-semibold">{group.label}</h2><div className="mt-3 overflow-hidden rounded-[18px] border border-line bg-paper px-[18px]">
+          {group.label === "Personal preferences" ? group.categories.flatMap((category) => category.items).map((item) => (
+            <Link key={item.href} href={item.href} aria-label={`Open ${item.label}`} className="flex min-h-11 items-center gap-3 border-b border-line py-3 hover:bg-deck focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
+              <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-ink)]"><OwnerIcon name={item.href === "/owner/settings/appearance" ? "settings" : "reports"} size={20} /></span>
+              <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium text-ink">{item.label}</span><span className="mt-1 block text-[12px] leading-snug text-ink-3">{item.detail}</span></span>
+              <ChevronRight size={18} className="flex-none text-ink-3" aria-hidden="true" />
+            </Link>
+          )) : group.categories.map((category) => (
+            <a key={category.key} href={`/owner/settings?category=${category.key}`}
+              aria-label={`Open ${category.label} settings`}
+              className="flex min-h-11 min-w-0 items-center gap-3 border-b border-line py-3 last:border-0 hover:bg-deck focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
+              {categoryIcon(category.key) ? <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-ink)]"><OwnerIcon name={categoryIcon(category.key)!} size={20} /></span> : null}
+              <span className="min-w-0 flex-1">
+                <span className="block break-words font-display text-[15px] font-semibold">{category.label}</span>
+                <span className="mt-1 block text-[12px] text-ink-2">{category.summary}</span>
+              </span>
+              <ChevronRight size={18} className="flex-none text-ink-3" aria-hidden="true" />
+            </a>
           ))}
+          {group.label === "Personal preferences" && ctx.permissions.has("dashboard.view") ? <OpenWorkspaceGuideLink homeHref="/owner" /> : null}
+          </div></section>))}
         </div>
       )}
 

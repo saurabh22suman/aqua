@@ -8,7 +8,7 @@ import {
   issueOwnerResetLink,
   type IssueLoginLinkResult,
 } from "@/lib/services/invite-link-issue";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import type { TenantId } from "@/lib/ids";
 
 // PR2-C4 — tenant-side owner recovery. Before this, a locked-out
@@ -71,7 +71,7 @@ export async function listOwnerMemberships(
 }
 
 export async function issueTenantOwnerResetLink(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   membershipId: string,
 ): Promise<IssueLoginLinkResult> {
   // A06 — the authenticated issuer ctx is forwarded so the service can

@@ -23,8 +23,9 @@ vi.mock("@/lib/services/credentials",async original=>{
 beforeAll(async()=>{
   f=await fixture();phone=(await f.admin.query("select phone from users where id=$1",[f.userId])).rows[0].phone;
   const baId=await ensureBaUserForPhone(phone);await setCredential(baId,"123456");
+  await f.admin.query("insert into member_account_links(id,tenant_id,user_id,member_id,status,verification_method,verified_by_user_id) values($1,$2,$3,$4,'active','club_record',$3)", [linkId,f.tenantId,f.userId,f.memberId]);
 });
-afterAll(async()=>{release();await f?.cleanup();});
+afterAll(async()=>{release();if(f){await f.admin.query("delete from member_account_links where tenant_id=$1",[f.tenantId]);await f.cleanup();}});
 it("the alternate self-service door cannot bypass the same five-failure account lock",async()=>{
   const origin=new URL(process.env.BETTER_AUTH_URL!).origin;
   const responses=await Promise.all(Array.from({length:12},()=>POST(new Request(`${origin}/api/self/login/pin`,{method:"POST",headers:{"content-type":"application/json",origin,host:new URL(origin).host},body:JSON.stringify({phone,pin:"000000",clubId:f.tenantId,audience:"member"})}))));

@@ -82,8 +82,9 @@ export function NewLeadForm() {
           Qualification
         </h2>
         <p className="mt-1 text-[13px] text-ink-3">
-          These answers select the tenant&apos;s preset and seed its
-          configuration at conversion. Skip anything not discussed.
+          Sport selects a preset and location count creates locations. Fee model,
+          GST registration, collection mode and coach count are recorded for setup,
+          not applied automatically. Skip anything not discussed.
         </p>
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="block">

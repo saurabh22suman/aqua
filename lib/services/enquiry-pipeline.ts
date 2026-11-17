@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { enquiries, enquiryFollowUps, type EnquiryStage } from "@/db/schema/enquiries";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
 import {
   enquiryConditions,
@@ -27,7 +27,7 @@ export type StageResult = { ok: true } | { ok: false; error: string };
 // is no separate enquiry history table, and updated_at/updated_by name
 // only the LAST editor, not the accountable history.
 export async function transitionEnquiryStage(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { enquiryId: string; toStage: EnquiryStage },
 ): Promise<StageResult> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -63,7 +63,7 @@ export async function transitionEnquiryStage(
 }
 
 export async function addFollowUp(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { enquiryId: string; dueAt: Date; note?: string },
 ): Promise<{ id: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -90,7 +90,7 @@ export async function addFollowUp(
 }
 
 export async function completeFollowUp(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   followUpId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {

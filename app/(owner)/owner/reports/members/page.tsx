@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { getMembersReport } from "@/lib/services/owner-people-reports";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
@@ -13,7 +14,7 @@ export default async function MembersReportPage({ searchParams }: { searchParams
   requirePagePermission(ctx, "reports.operational");
   const scope = await reportScope(searchParams);
   const report = await getMembersReport(ctx, { from: scope.from, to: scope.to, locationId: scope.facility });
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const memberPlural = resolveTerm(terminology, "member", "other");
   return <OwnerPage><BackLink href={scope.facilityParam ? `/owner/reports?facility=${scope.facilityParam}` : "/owner/reports"} label="All reports" /><PageHeader title={`${titleCase(memberPlural)} report`} />
     <RangeFilter period={scope.period} facility={scope.facilityParam} />

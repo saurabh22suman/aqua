@@ -5,6 +5,7 @@ import { OwnerShell, ownerRoleLabel } from "@/components/owner-shell";
 import { ownerSidebarGroupsWithBookings } from "@/components/owner-ui/owner-navigation";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { withTenant } from "@/db/tenant";
+import { clubDisplayName } from "@/db/club-selection";
 import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { listLocations } from "@/lib/services/people";
@@ -101,9 +102,10 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
       navItems={ownerNavForPermissions(ctx.permissions, terminology).filter((item) => liveOwner || item.href !== "/owner/settings")}
       sidebarGroups={sidebarGroups}
       locations={pickerLocations}
-      clubName={branding.displayName ?? branding.fallbackDisplayName}
+      clubName={clubDisplayName(branding.fallbackDisplayName, branding)}
       clubLogoUrl={branding.logoUrl}
       tenantId={ctx.tenantId}
+      scopeUserId={ctx.userId}
       accountName={identity?.fullName ?? null}
       accountLabel={ownerRoleLabel(ctx.roleKey)}
       guideHomeHref={ctx.permissions.has("dashboard.view") ? "/owner" : undefined}

@@ -49,11 +49,13 @@ export function PresetDetailForm({
   presetName,
   tenants,
   locationsByTenant,
+  hasSearch = false,
 }: {
   presetKey: string;
   presetName: string;
   tenants: ReadonlyArray<Tenant>;
   locationsByTenant: Record<string, ReadonlyArray<LocationOption>>;
+  hasSearch?: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(applyPresetAction, {
     kind: "error",
@@ -66,11 +68,12 @@ export function PresetDetailForm({
     () => locationsByTenant[tenants[0]?.id ?? ""]?.[0]?.id ?? "",
   );
 
-  const tenantLocations = locationsByTenant[tenantId] ?? [];
+  const effectiveTenantId = tenants.some((tenant) => tenant.id === tenantId) ? tenantId : tenants[0]?.id ?? "";
+  const tenantLocations = locationsByTenant[effectiveTenantId] ?? [];
   const selectedLocation =
     tenantLocations.find((l) => l.id === locationId) ?? tenantLocations[0];
 
-  const selected = tenants.find((t) => t.id === tenantId);
+  const selected = tenants.find((t) => t.id === effectiveTenantId);
   const tenantAlreadyApplied =
     selected?.presetKey !== null && selected?.presetKey !== undefined;
   const locationAlreadyApplied = selectedLocation?.presetKey != null;
@@ -121,7 +124,7 @@ export function PresetDetailForm({
           </span>
           {tenants.length === 0 ? (
             <p className="mt-1 text-[13px] text-ink-3">
-              No tenants yet.{" "}
+              {hasSearch ? "No matching business accounts. " : "No tenants yet. "}
               <Link
                 href="/ops/tenants/new"
                 className="text-[var(--accent-ink)] underline underline-offset-2"
@@ -134,7 +137,7 @@ export function PresetDetailForm({
             <Select
               data-testid="ops-preset-tenant-select"
               name="tenantId"
-              value={tenantId}
+              value={effectiveTenantId}
               onChange={(e) => onTenantChange(e.target.value)}
             >
               {tenants.map((t) => (
@@ -194,8 +197,9 @@ export function PresetDetailForm({
           >
             This location already has preset{" "}
             <span className="font-medium">{selectedLocation?.presetKey}</span>{" "}
-            applied. The engine will refuse this apply and report a lock
-            error — switching presets requires manual clean-up first.
+            applied. {selectedLocation?.presetKey === presetKey
+              ? "This preset is already applied; retrying makes no changes."
+              : "The engine will refuse this apply — switching presets requires manual clean-up first."}
           </p>
         ) : null}
 
@@ -232,7 +236,9 @@ export function PresetDetailForm({
         >
           {isPending
             ? "Applying…"
-            : `Apply ${presetName} to ${selectedLocation?.name ?? "this location"}`}
+            : selectedLocation?.presetKey === presetKey
+              ? `Retry ${presetName} on ${selectedLocation.name}`
+              : `Apply ${presetName} to ${selectedLocation?.name ?? "this location"}`}
         </Button>
         <Link
           href="/ops/presets"

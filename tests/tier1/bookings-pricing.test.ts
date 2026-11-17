@@ -325,6 +325,11 @@ describe("V-03 booking pricing", () => {
   });
 
   it("snapshots the resolved price onto the booking; later rule changes do not rewrite it", async () => {
+    // This price-snapshot case must not inherit the preceding window override.
+    await admin.query(
+      "delete from config_values where tenant_id = $1 and scope_type = 'tenant' and scope_id = $1::text and key = 'bookings.advance_window_days'",
+      [tenant],
+    );
     await admin.query("delete from booking_price_rules where tenant_id = $1", [
       tenant,
     ]);

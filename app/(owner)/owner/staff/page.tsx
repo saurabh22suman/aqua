@@ -25,6 +25,10 @@ export default async function StaffListPage() {
     listStaffAction({}),
     canReadRecovery ? listOwnerMembershipsAction() : Promise.resolve([]),
   ]);
+  // Co-owner recovery is for somebody else who cannot sign in. Showing the
+  // current membership here contradicts that task and exposes needless reset
+  // controls on the staff directory. Server issuance checks remain unchanged.
+  const otherOwners = owners.filter((owner) => owner.membershipId !== ctx.membershipId);
   return (
     <OwnerPage>
       {/* The directory is the main task, so the header carries exactly one
@@ -99,10 +103,10 @@ export default async function StaffListPage() {
       {/* A06 — owner-credential recovery stays owner-only; Admin
           (staff.invite without Owner rank) must not see mint buttons
           for Owner reset links. The service enforces the same gate. */}
-      {owners.length > 0 && canReadRecovery ? (
+      {otherOwners.length > 0 && canReadRecovery ? (
         <details className="mt-5 rounded-card border border-line bg-paper p-4">
           <summary className="cursor-pointer font-medium">Owner access recovery</summary>
-          <OwnerResetLinks owners={owners} />
+          <OwnerResetLinks owners={otherOwners} />
         </details>
       ) : null}
     </OwnerPage>

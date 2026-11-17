@@ -27,7 +27,8 @@ export async function localOfflineScope(): Promise<string | null> {
   if (!("caches" in window)) return null;
   const response = await (await caches.open(META_CACHE)).match(new URL("/__aqua_offline_state", window.location.origin).href);
   const parsed = offlineCacheStateSchema.safeParse(response ? await response.json() : {});
-  return parsed.success ? parsed.data.identity?.scope ?? parsed.data.blockedScope ?? null : null;
+  return parsed.success ? parsed.data.identity?.scope ??
+    (parsed.data.blockedUntil && parsed.data.blockedUntil <= Date.now() ? null : parsed.data.blockedScope ?? null) : null;
 }
 
 export async function clearOfflineData(expectedScope?: string | null): Promise<boolean> {
@@ -56,7 +57,11 @@ export async function clearOfflineData(expectedScope?: string | null): Promise<b
     if (expectedScope !== undefined) unregister = !parsed.success || !parsed.data.identity || parsed.data.identity.scope === expectedScope;
     const scope = previous?.scope ?? expectedScope;
     if (scope && (!parsed.success || !parsed.data.identity || parsed.data.identity.scope === scope)) {
-      await meta.put(key, new Response(JSON.stringify({ blockedScope: scope })));
+      const expiresAt = previous?.expiresAt ?? (parsed.success ? parsed.data.identity?.expiresAt ??
+        (parsed.data.blockedScope === scope ? parsed.data.blockedUntil : undefined) : undefined);
+      const legacyBlocked = parsed.success && parsed.data.blockedScope === scope && !parsed.data.blockedUntil;
+      await meta.put(key, new Response(JSON.stringify(expiresAt && expiresAt > Date.now()
+        ? { blockedScope: scope, blockedUntil: expiresAt } : legacyBlocked ? { blockedScope: scope } : {})));
     }
     await Promise.all((await caches.keys()).filter(key => expectedScope === undefined
       ? key.startsWith("aqua-") && key !== META_CACHE

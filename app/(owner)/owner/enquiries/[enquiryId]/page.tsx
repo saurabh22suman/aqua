@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { notFound } from "next/navigation";
 import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
@@ -26,7 +27,7 @@ export default async function EnquiryDetailPage({
     // L3 audit — EnquiryDetailView → EnquiryNewMemberFields uses
     // closed-key `guardian` for the "Guardian required — this is
     // a minor" copy.
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
   if (!enquiry) notFound();
 

@@ -33,11 +33,13 @@ import {
 
 export function OpsContextBar({
   role = "viewer",
+  mockMessagingAvailable = true,
 }: {
   role?: OpsNavigationRole;
+  mockMessagingAvailable?: boolean;
 }) {
   const pathname = usePathname();
-  const groups = opsNavGroupsForRole(role);
+  const groups = opsNavGroupsForRole(role, mockMessagingAvailable);
 
   // The role's own destinations only: a viewer has no Recovery row in
   // the rail, so a viewer has no Recovery context either.

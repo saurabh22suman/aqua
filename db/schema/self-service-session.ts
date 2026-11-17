@@ -28,13 +28,15 @@
 //
 // THE MIRROR IS EXACT: every column, check, key, index and policy below is
 // the DDL of db/migrations/20261108210137_self_service_sessions.sql and
-// 20261108210138_member_self_link_user_resolution.sql. The two
+// 20261108210138_member_self_link_user_resolution.sql, and the forward
+// credential-epoch migration. The two
 // `user_resolution` SELECT-only policies are DDL-only in the sense that
 // drizzle has no policy API — they are listed in the comment on each table.
 
 import { sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import {
+  bigint,
   check,
   foreignKey,
   index,
@@ -94,6 +96,7 @@ export const selfServiceSessions = pgTable(
     // The guard freezes it too: a credential substitution on a live row is
     // refused.
     tokenHash: text("token_hash").notNull().unique(),
+    credentialEpoch: bigint("credential_epoch", { mode: "bigint" }).notNull().default(0n),
     issuedAt: timestamp("issued_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -106,6 +109,7 @@ export const selfServiceSessions = pgTable(
     revokedByUserId: uuid("revoked_by_user_id").$type<UserId>(),
   },
   (t) => [
+    check("self_service_sessions_credential_epoch_nonnegative", sql`${t.credentialEpoch} >= 0`),
     check(
       "self_service_sessions_audience_check",
       sql`${t.audience} in ('member', 'guardian')`,

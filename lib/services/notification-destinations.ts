@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, persons } from "@/db/schema/people";
 import { guardianships, consents } from "@/db/schema/consent";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asMemberId, asPersonId, type TenantId } from "@/lib/ids";
 import { normaliseToE164 } from "@/lib/phone";
 import { resolveLocationAccess, locationVisible } from "./location-access";
@@ -55,7 +55,7 @@ export async function getNotificationDestinations(ctx: ActionCtx, memberId: stri
   });
 }
 
-export async function saveNotificationDestinations(ctx: ActionCtx, memberId: string, personIds: string[]) {
+export async function saveNotificationDestinations(ctx: MutationActor, memberId: string, personIds: string[]) {
   if (!ctx.userId) return { ok: false as const, error: "Not authenticated." };
   return withTenant(ctx.tenantId, async (tx) => {
     await tx.select({ id: members.id }).from(members)

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { platformAuditLog } from "./schema/platform-users";
 import { whatsappAuthChallenges as challenges } from "./schema/whatsapp";
@@ -22,6 +22,9 @@ export async function verifyPinResetCode(token: string, code: string) {
   return verifyWhatsAppChallenge(token, code, "pin_reset", async () => true);
 }
 
+// Raised only for a refusal after transaction writes: throwing forces rollback.
+class ExpiredReset extends Error {}
+
 export async function saveResetPin(token: string, pin: string) {
   pinSchema.parse(pin);
   const hash = await (await auth.$context).password.hash(pin);
@@ -31,27 +34,37 @@ export async function saveResetPin(token: string, pin: string) {
     return row?.id;
   });
   if (!principal || !await activeTenantLogin(principal)) return false;
-  return withWhatsAppAuthTx(async (tx) => {
-    const [row] = await tx.select().from(challenges)
-      .where(eq(challenges.tokenHash, sha256(token))).for("update");
-    if (!row || row.purpose !== "pin_reset" || !row.verifiedAt || row.consumedAt ||
-      row.principalId !== principal || row.expiresAt.getTime() <= Date.now()) return false;
-    const [user] = await tx.select().from(users).where(eq(users.id, principal as never)).for("update");
-    if (!user?.betterAuthId || user.phone !== row.phone) return false;
-    const [account] = await tx.select({ id: baAccount.id }).from(baAccount)
-      .where(and(eq(baAccount.userId, user.betterAuthId), eq(baAccount.providerId, "credential"),
-        eq(baAccount.issuer, CREDENTIAL_ISSUER), eq(baAccount.accountId, user.betterAuthId))).for("update");
-    if (account) {
-      await tx.update(baAccount).set({ password: hash, updatedAt: new Date() }).where(eq(baAccount.id, account.id));
-    } else {
-      await tx.insert(baAccount).values({ id: uuidv7(), userId: user.betterAuthId,
-        accountId: user.betterAuthId, providerId: "credential", issuer: CREDENTIAL_ISSUER, password: hash });
-    }
-    await tx.delete(baSession).where(eq(baSession.userId, user.betterAuthId));
-    await tx.update(users).set({ failedPinAttempts: 0, pinLockedUntil: null, updatedAt: new Date() })
-      .where(eq(users.id, user.id));
-    await tx.update(challenges).set({ consumedAt: new Date() }).where(eq(challenges.tokenHash, row.tokenHash));
-    await tx.insert(platformAuditLog).values({ action: "credentials.pin_reset", targetType: "user", targetId: user.id });
-    return true;
-  });
+  try {
+    return await withWhatsAppAuthTx(async (tx) => {
+      const [row] = await tx.select().from(challenges)
+        .where(eq(challenges.tokenHash, sha256(token))).for("update");
+      if (!row || row.purpose !== "pin_reset" || !row.verifiedAt || row.consumedAt ||
+        row.principalId !== principal || row.expiresAt.getTime() <= Date.now()) return false;
+      const [user] = await tx.select().from(users)
+        .where(and(eq(users.id, principal as never), isNull(users.deletedAt))).for("update");
+      if (!user?.betterAuthId || user.phone !== row.phone) return false;
+      const [account] = await tx.select({ id: baAccount.id }).from(baAccount)
+        .where(and(eq(baAccount.userId, user.betterAuthId), eq(baAccount.providerId, "credential"),
+          eq(baAccount.issuer, CREDENTIAL_ISSUER), eq(baAccount.accountId, user.betterAuthId))).for("update");
+      if (account) {
+        await tx.update(baAccount).set({ password: hash, updatedAt: new Date() }).where(eq(baAccount.id, account.id));
+      } else {
+        await tx.insert(baAccount).values({ id: uuidv7(), userId: user.betterAuthId,
+          accountId: user.betterAuthId, providerId: "credential", issuer: CREDENTIAL_ISSUER, password: hash });
+      }
+      await tx.delete(baSession).where(eq(baSession.userId, user.betterAuthId));
+      await tx.update(users).set({ failedPinAttempts: 0, pinLockedUntil: null,
+        credentialEpoch: sql`${users.credentialEpoch} + 1`, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+      await tx.update(challenges).set({ consumedAt: new Date() }).where(eq(challenges.tokenHash, row.tokenHash));
+      await tx.insert(platformAuditLog).values({ action: "credentials.pin_reset", targetType: "user", targetId: user.id });
+      // Credential/session/audit writes may have waited past expiry. Never return
+      // false here: that would commit them. Throw and translate after rollback.
+      if (row.expiresAt.getTime() <= Date.now()) throw new ExpiredReset();
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof ExpiredReset) return false;
+    throw error;
+  }
 }

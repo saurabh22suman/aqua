@@ -2,6 +2,7 @@ import { auditLog, type AuditActorType, type AuditSource } from "@/db/schema/aud
 import type { TenantTx } from "@/db/tenant";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { TenantId, UserId } from "@/lib/ids";
+import { z } from "zod";
 
 // E-01 — the one audit writer. Every tenant-side mutation goes
 // through this helper so the actor model (actor_type, nullable
@@ -30,18 +31,19 @@ export type AuditWriteInput = {
 
 // The actor model for a tenant-side mutation.
 //
-// A REQUEST-SCOPED caller (one carrying a resolved role or permission
-// set) is a "user", attributed to its actor id. A legacy/internal
-// caller (no resolved role, no permission set) is a "system" actor with
-// NO actor id — the same rule lib/services/makeup.ts applies: such a
-// caller may carry a synthetic user id that resolves to no users row,
-// and audit_log.actor_id is a foreign key to users.
+// A human remains a human even when optional context claims are absent.
+// A system actor must opt in explicitly and carry no human claims.
 export function auditActor(
-  ctx: Pick<ActionCtx, "userId" | "roleKey" | "permissions">,
+  ctx: Pick<ActionCtx, "userId" | "roleKey" | "permissions" | "systemActor" | "allLocations" | "locationIds">,
 ): { actorId: string | null; actorType: AuditActorType } {
-  const legacy = !ctx.roleKey && !ctx.permissions;
-  if (!ctx.userId || legacy) return { actorId: null, actorType: "system" };
-  return { actorId: ctx.userId, actorType: "user" };
+  if (ctx.systemActor === true && ctx.userId === undefined && ctx.roleKey === undefined &&
+      ctx.permissions === undefined && ctx.allLocations === undefined && ctx.locationIds === undefined) {
+    return { actorId: null, actorType: "system" };
+  }
+  if (ctx.systemActor === undefined && z.string().uuid().safeParse(ctx.userId).success) {
+    return { actorId: ctx.userId!, actorType: "user" };
+  }
+  throw new Error("Invalid audit actor");
 }
 
 // The actor + request attribution for a tenant-side mutation.

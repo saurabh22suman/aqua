@@ -6,7 +6,7 @@ import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import { memberFacilityOptins } from "@/db/schema/facility-optins";
 import { memberStatusTransitions } from "@/db/schema/people";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import {
   locationPredicate,
   locationVisible,
@@ -371,7 +371,7 @@ export type UpdateMemberPatch = {
 // different fields cannot clobber each other with a stale snapshot.
 // An explicit `null` clears an optional person field.
 export async function updateMember(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   memberId: string,
   input: UpdateMemberPatch,
 ): Promise<
@@ -501,7 +501,9 @@ export type LocationOption = { id: string; name: string };
 export async function listLocations(ctx: ActionCtx): Promise<LocationOption[]> {
   return withTenant(ctx.tenantId, async (tx) => {
     const access = await resolveLocationAccess(tx, ctx);
-    const predicate = access.unrestricted || access.includeUnlocated
+    // Access to tenant-wide records with a NULL location never grants access
+    // to every physical facility: location IDs themselves are non-null.
+    const predicate = access.unrestricted
       ? undefined
       : locationPredicate(locations.id, access);
     return tx

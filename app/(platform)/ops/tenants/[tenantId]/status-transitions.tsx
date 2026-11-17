@@ -8,6 +8,7 @@ import {
 } from "@/lib/actions/platform-tenants";
 import { buttonClasses } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Textarea";
+import { Dialog } from "@/components/ui/Dialog";
 import {
   OpsWriteGate,
 } from "@/components/ops/ops-display";
@@ -69,10 +70,12 @@ function buttonClass(action: Action): string {
 
 export function StatusTransitionControls({
   tenantId,
+  tenantName,
   currentStatus,
   canWrite,
 }: {
   tenantId: string;
+  tenantName: string;
   currentStatus: "trial" | "active" | "suspended" | "churned";
   /**
    * Resolved on the server from the session role. A viewer gets the
@@ -181,7 +184,7 @@ export function StatusTransitionControls({
         </div>
       </OpsWriteGate>
 
-      {error ? (
+      {error && !pendingAction ? (
         <p
           role="alert"
           className="mt-3 rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
@@ -190,26 +193,20 @@ export function StatusTransitionControls({
         </p>
       ) : null}
 
-      {pendingAction ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Confirm ${buttonLabel(pendingAction, currentStatus)}`}
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-marine/30 px-4 py-6"
-          onClick={(e) => {
-            if (e.currentTarget === e.target) reset();
-          }}
-        >
-          <div className="w-full max-w-md rounded-card bg-paper border border-line p-5">
-            <p className="font-display text-[16px] font-semibold text-ink">
-              {buttonLabel(pendingAction, currentStatus)} — confirm
-            </p>
-            <p className="mt-1 text-[13px] text-ink-2">
-              {pendingAction === "tenant.suspend"
-                ? "Pausing blocks tenant sign-ins and surfaces a clear message on the login screen."
-                : "Marking churned terminates the tenant. Members cannot sign in after this. The transition cannot be undone."}
-            </p>
-            <label className="mt-4 block">
+      <Dialog
+        open={pendingAction !== null}
+        onOpenChange={(open) => {
+          if (!open && !isPending) reset();
+        }}
+        hideClose={isPending}
+        title={pendingAction ? `${buttonLabel(pendingAction, currentStatus)} — ${tenantName}` : `Confirm status change — ${tenantName}`}
+        description={
+          pendingAction === "tenant.suspend"
+            ? "Pausing blocks tenant sign-ins and surfaces a clear message on the login screen."
+            : "Marking churned terminates the tenant. Members cannot sign in after this. The transition cannot be undone."
+        }
+      >
+        <label className="mt-4 block">
               <span className="block text-[13px] font-medium text-ink-2">
                 Reason
               </span>
@@ -225,8 +222,9 @@ export function StatusTransitionControls({
                 Required. Saved on the platform audit log so the timeline
                 explains the change.
               </span>
-            </label>
-            <div className="mt-5 flex items-center gap-3">
+        </label>
+        {error ? <p role="alert" className="mt-3 text-[13px] text-ink-2">{error}</p> : null}
+        <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 disabled={isPending}
@@ -237,19 +235,18 @@ export function StatusTransitionControls({
                   size: "md",
                 })}
               >
-                {isPending ? "Saving…" : `Confirm ${buttonLabel(pendingAction, currentStatus)}`}
+                {isPending ? "Saving…" : pendingAction ? `Confirm ${buttonLabel(pendingAction, currentStatus)}` : "Confirm"}
               </button>
               <button
                 type="button"
+                disabled={isPending}
                 onClick={reset}
                 className={buttonClasses({ variant: "ghost", size: "sm" })}
               >
                 Cancel
               </button>
-            </div>
-          </div>
         </div>
-      ) : null}
+      </Dialog>
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { cookies } from "next/headers";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
@@ -15,7 +16,7 @@ export default async function BatchesReportPage({ searchParams }: {
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.operational");
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const batchOne = resolveTerm(terminology, "batch", 1);
   const batchMany = resolveTerm(terminology, "batch", "other");
   const facilityOne = resolveTerm(terminology, "facility", 1);

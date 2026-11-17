@@ -2,6 +2,8 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withPlatformAdmin } from "./scope";
 import { platformLeads, type PlatformLead } from "./schema/platform-leads";
+import { tenants } from "./schema/tenants";
+import { actorIsActiveAdmin } from "./platform-tenant-commercial";
 import { recordOpsAudit } from "./ops-action";
 import type { TenantId, UserId } from "@/lib/ids";
 
@@ -126,7 +128,12 @@ export async function getLead(leadId: string): Promise<PlatformLead | null> {
       .from(platformLeads)
       .where(eq(platformLeads.id, leadId))
       .limit(1);
-    return rows[0] ?? null;
+    const lead = rows[0];
+    if (!lead) return null;
+    const linked = lead.convertedTenantId ?? lead.trialTenantId;
+    if (!linked) return lead;
+    const [tenant] = await tx.select({ trialExpiresAt: tenants.trialExpiresAt }).from(tenants).where(eq(tenants.id, linked)).limit(1);
+    return { ...lead, trialExpiresAt: tenant?.trialExpiresAt ?? null };
   });
 }
 
@@ -136,6 +143,10 @@ export async function transitionLead(
   ctx: { actorId: UserId },
 ): Promise<LeadMutationResult> {
   const parsed = transitionLeadInput.parse(input);
+
+  if (parsed.status === "converted") {
+    return { kind: "error", code: "invalid_transition", message: "Complete conversion with a reason instead." };
+  }
 
   if (parsed.status === "lost" && !parsed.lostReason?.trim()) {
     return {
@@ -157,10 +168,20 @@ export async function transitionLead(
       .select()
       .from(platformLeads)
       .where(eq(platformLeads.id, leadId))
-      .limit(1);
+      .limit(1).for("update");
     const existing = existingRows[0];
     if (!existing) {
       return { kind: "error", code: "not_found", message: "Lead not found." };
+    }
+    if (!(await actorIsActiveAdmin(tx, ctx.actorId))) {
+      return { kind: "error", code: "invalid", message: "An active administrator is required." };
+    }
+
+    if (existing.status === "converted") {
+      return { kind: "error", code: "invalid_transition", message: "A converted lead cannot be reopened here." };
+    }
+    if (existing.trialTenantId && parsed.trialTenantId && existing.trialTenantId !== parsed.trialTenantId) {
+      return { kind: "error", code: "invalid_transition", message: "The linked tenant cannot be replaced." };
     }
 
     await tx
@@ -202,16 +223,24 @@ export async function transitionLead(
 export async function markLeadConverted(
   leadId: string,
   convertedTenantId: TenantId,
-  ctx: { actorId: UserId },
+  ctx: { actorId: UserId; reason?: string },
 ): Promise<LeadMutationResult> {
+  const reason = ctx.reason?.trim();
+  if (ctx.reason !== undefined && (!reason || reason.length > 500)) return { kind: "error", code: "invalid", message: "A conversion reason is required (up to 500 characters)." };
   return withPlatformAdmin(async (tx) => {
     const existingRows = await tx
-      .select({ status: platformLeads.status })
+      .select({ status: platformLeads.status, trialTenantId: platformLeads.trialTenantId })
       .from(platformLeads)
       .where(eq(platformLeads.id, leadId))
-      .limit(1);
+      .limit(1).for("update");
     if (!existingRows[0]) {
       return { kind: "error", code: "not_found", message: "Lead not found." };
+    }
+    if (!(await actorIsActiveAdmin(tx, ctx.actorId))) {
+      return { kind: "error", code: "invalid", message: "An active administrator is required." };
+    }
+    if (existingRows[0].status !== "trial" || !existingRows[0].trialTenantId || existingRows[0].trialTenantId !== convertedTenantId) {
+      return { kind: "error", code: "invalid_transition", message: "Only the linked trial tenant can be marked converted." };
     }
 
     await tx
@@ -232,6 +261,7 @@ export async function markLeadConverted(
       targetId: leadId,
       before: { status: existingRows[0].status },
       after: { status: "converted", convertedTenantId },
+      detail: reason ? { reason } : {},
     });
 
     return { kind: "ok", leadId };

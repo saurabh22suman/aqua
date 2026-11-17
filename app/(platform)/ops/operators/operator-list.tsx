@@ -19,12 +19,14 @@ import { operatorTime, shortOperatorId } from "./operator-format";
 
 export function OperatorList({
   actorId,
+  currentSessionId,
   operators,
   sessions,
   sessionCounts,
 }: {
   /** The signed-in administrator's own operator id. */
   actorId: string;
+  currentSessionId?: string | null;
   operators: OperatorAccountRow[];
   sessions: OperatorSessionRow[];
   /** The true session count per operator. */
@@ -86,7 +88,7 @@ export function OperatorList({
               subtitle="A session ends when it expires or when an administrator ends it."
             >
               {own.length === 0 ? (
-                <OpsEmptyState title="No sessions." body="This operator has no session open." />
+                <OpsEmptyState title="No sessions shown." body={trueCount > 0 ? "Sessions exist outside the displayed slice." : "No sessions are recorded for this operator."} />
               ) : (
                 <ul className="space-y-3">
                   {own.map((session) => (
@@ -109,7 +111,7 @@ export function OperatorList({
                         {session.state === "active" ? (
                           <RevokeSessionForm
                             sessionId={session.id}
-                            isOwnSession={isOwn}
+                            isOwnSession={isOwn && session.id === currentSessionId}
                             className="mt-3"
                           />
                         ) : null}

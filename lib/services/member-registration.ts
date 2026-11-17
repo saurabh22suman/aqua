@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, persons, type MemberStatus } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { isMinor, todayInZone } from "@/lib/time/tz";
 import { createGuardianship, recordConsent, type ConsentGrantInput } from "./consent";
 import { locationVisible, resolveLocationAccess } from "./location-access";
@@ -20,13 +20,13 @@ type CreateMemberInput = {
   witnessedByUserId?: UserId; joinedOn?: string; initialStatus?: MemberStatus;
 };
 
-export async function createMember(ctx: ActionCtx, input: CreateMemberInput) {
+export async function createMember(ctx: MutationActor, input: CreateMemberInput) {
   return withTenant(ctx.tenantId, tx => createMemberInTx(tx, ctx, input));
 }
 
 // Shared with CSV import: validation precedes inserts and every failure after
 // the first insert throws, so the member/guardian/consent/audit writes roll back.
-export async function createMemberInTx(tx: TenantTx, ctx: ActionCtx, input: CreateMemberInput): Promise<
+export async function createMemberInTx(tx: TenantTx, ctx: MutationActor, input: CreateMemberInput): Promise<
   { ok: true; memberId: MemberId; personId: PersonId } | { ok: false; error: string }
 > {
   const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));

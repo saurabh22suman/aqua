@@ -69,6 +69,8 @@ export function SessionLifecycleControl({
         ...(times ?? {}),
       });
       router.refresh();
+    } catch {
+      setError("We could not confirm the change. Check the session before retrying.");
     } finally {
       setBusy(false);
     }
@@ -145,7 +147,7 @@ export function SessionLifecycleControl({
             disabled={busy || !date || !startValid || !endValid || end <= start}
             className="inline-flex min-h-11 items-center justify-center flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           >
-            {busy ? "Saving…" : "Save new time"}
+            {busy ? "Saving new time…" : "Save new time"}
           </button>
           <button
             type="button"
@@ -164,7 +166,7 @@ export function SessionLifecycleControl({
 
   if (mode === "confirmCancel") {
     return (
-      <div className="mt-2 flex items-center gap-2 rounded-ctl border border-line bg-deck p-3">
+      <div className="mt-2 flex flex-wrap items-center gap-2 rounded-ctl border border-line bg-deck p-3">
         <p className="min-w-0 flex-1 text-[12px] text-ink-2">
           Cancel this session? The register keeps any marks already
           recorded.
@@ -175,15 +177,17 @@ export function SessionLifecycleControl({
           disabled={busy}
           className="flex-none rounded-ctl border border-line bg-paper px-3 min-h-[44px] text-[12.5px] font-medium text-ink-2 disabled:opacity-50"
         >
-          Confirm
+          {busy ? "Cancelling session…" : "Confirm"}
         </button>
         <button
           type="button"
           onClick={() => setMode("idle")}
+          disabled={busy}
           className="flex-none rounded-ctl px-2 min-h-[44px] text-[12.5px] text-ink-3"
         >
           Keep
         </button>
+        {error ? <p role="alert" className="w-full text-[12px] text-ink-2">{error}</p> : null}
       </div>
     );
   }

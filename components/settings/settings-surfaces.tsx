@@ -34,26 +34,41 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
   return [
     {
       key: "academy",
-      label: "Club",
-      summary: "Your club profile, physical facilities, opening hours and closures.",
+      label: "Business account",
+      summary: "Your business profile, clubs, opening hours and closures.",
       items: [
         {
           href: "/owner/settings/academy",
-          label: "Club profile & GST",
-          detail: "Club name and billing identity for future invoices.",
+          label: "Business profile & default billing",
+          detail: "Business name and default billing identity for future invoices.",
         },
         {
           href: "/owner/settings/locations",
-          label: flags.multiLocation ? "Physical facilities" : "Physical facility",
+          label: flags.multiLocation ? "Clubs" : "Club",
           detail: flags.multiLocation
-            ? "Each physical site, its address and business hours."
-            : "Your physical site’s address and business hours.",
+            ? "Each club, its address and business hours."
+            : "Your club’s address and business hours.",
           testId: "settings-locations",
         },
         {
           href: "/owner/settings/holidays",
           label: "Holidays & closures",
           detail: "Days the academy is closed, so no sessions are scheduled.",
+        },
+        {
+          href: "/owner/settings/branding",
+          label: "Business branding",
+          detail: "Your business name, logo, colour and phone install icon.",
+        },
+        {
+          href: "/owner/settings/terminology",
+          label: "Vocabulary (optional)",
+          detail: "Optional wording for supported surfaces; core Owner navigation uses standard terms.",
+        },
+        {
+          href: "/owner/settings/configuration",
+          label: "Business rules",
+          detail: "Business-wide settings and requests for platform-held values.",
         },
       ],
     },
@@ -65,7 +80,7 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
         {
           href: "/owner/settings/activities",
           label: "Sports resources",
-          detail: "Courts, pools, tables and other resources at each physical facility.",
+          detail: "Courts, pools, tables and other resources at each club.",
         },
         ...(flags.ladderEnabled
           ? [
@@ -161,8 +176,8 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
     },
     {
       key: "appearance",
-      label: "Appearance & advanced",
-      summary: "Your display preferences, club branding and academy rules.",
+      label: "Personal preferences",
+      summary: "Your display and report preferences.",
       items: [
         {
           href: "/owner/settings/appearance",
@@ -175,21 +190,6 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
           href: "/owner/settings/reports",
           label: "Report preferences",
           detail: "Your personal report display preferences.",
-        },
-        {
-          href: "/owner/settings/branding",
-          label: "Club branding",
-          detail: "Your club name, logo, colour and phone install icon.",
-        },
-        {
-          href: "/owner/settings/terminology",
-          label: "Vocabulary",
-          detail: "What you call members, sessions and facilities.",
-        },
-        {
-          href: "/owner/settings/configuration",
-          label: "Academy rules",
-          detail: "Effective values and requests for platform-held settings.",
         },
       ],
     },

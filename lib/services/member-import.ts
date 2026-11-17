@@ -21,7 +21,7 @@ import {
   type MemberImportRowError,
   type ParsedMemberImportRow,
 } from "@/lib/services/member-import-csv";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // PR2-C5 — member import, dry-run half. Parses and validates the CSV
 // against the tenant (location names, minor/guardian rule) and writes
@@ -135,7 +135,7 @@ export type MemberImportCommitResult = {
 };
 
 export async function commitMemberImport(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   csvText: string,
   attestation?: { attested: true; evidenceNote?: string },
 ): Promise<MemberImportCommitResult> {

@@ -21,6 +21,8 @@ import { NavPreview } from "./nav-preview";
 import { PermissionMatrix } from "./permission-matrix";
 import { TenantSelector } from "./tenant-selector";
 import { ResolutionChain } from "./resolution-chain";
+import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
+import { OfflineRuntime } from "./offline-runtime";
 
 // O-06 (docs/ops-platform-design.md §6) — the effective-configuration
 // viewer. Answers "why can't my coach see Reports?" from resolved
@@ -181,6 +183,8 @@ export default async function EffectiveConfigurationPage({
       </section>
 
       <OpsSection className="mt-8" title="Configuration values">
+        <OfflineRuntime deploymentEnabled={OFFLINE_SYNC_ENABLED} tenantEnabled={view.tenant.offlineSyncEnabled} />
+        {canWrite ? <p className="mb-3 text-[13px] text-ink-2">For effective staff club restrictions, <Link href={`/ops/tenants/${view.tenant.id}/diagnostics`} className="text-[var(--accent-ink)] underline">explain a membership in account diagnostics</Link>.</p> : null}
         <ResolvedValues
           configs={view.config}
           selectedConfigKey={selectedConfigKey}

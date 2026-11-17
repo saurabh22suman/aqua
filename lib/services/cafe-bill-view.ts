@@ -163,8 +163,9 @@ export async function readBill(
         `Café bill invariant violated for order ${order.id}: lines ${subtotalPaise}+${taxPaise}=${totalPaise} do not match invoice ${invoice.subtotalPaise}+${invoice.taxPaise}=${invoice.totalPaise}.`,
       );
     }
-    const amountDuePaise =
-      Number(invoice.totalPaise) - Number(invoice.paidPaise);
+    const amountDuePaise = invoice.status === "void"
+      ? 0
+      : Number(invoice.totalPaise) - Number(invoice.paidPaise);
 
     return {
       ok: true,

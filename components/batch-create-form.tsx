@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { createBatchAction } from "@/lib/actions/programs";
 import {
@@ -24,6 +24,10 @@ export function BatchCreateForm({
   locations,
   onCreated,
   terminology,
+  initialProgramId,
+  initialLocationId,
+  onBusyChange,
+  focusOnMount = false,
 }: {
   programs: Program[];
   coaches: CoachOption[];
@@ -38,9 +42,14 @@ export function BatchCreateForm({
   // dance tenant that renames `coach` to trainer / trainer /
   // instructor does not leave the picker label drifted.
   terminology: TerminologyState;
+  initialProgramId?: string;
+  initialLocationId?: string;
+  onBusyChange?: (busy: boolean) => void;
+  focusOnMount?: boolean;
 }) {
-  const [programId, setProgramId] = useState(programs[0]?.id ?? "");
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const programRef = useRef<HTMLSelectElement>(null);
+  const [programId, setProgramId] = useState(programs.find((p) => p.id === initialProgramId)?.id ?? programs[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(locations.find((l) => l.id === initialLocationId)?.id ?? locations[0]?.id ?? "");
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("20");
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -52,6 +61,12 @@ export function BatchCreateForm({
   const [conflicts, setConflicts] = useState<CoachConflict[]>([]);
   const [startValid, setStartValid] = useState(true);
   const [endValid, setEndValid] = useState(true);
+
+  useEffect(() => {
+    if (!focusOnMount) return;
+    programRef.current?.focus();
+    programRef.current?.scrollIntoView?.({ block: "center" });
+  }, [focusOnMount]);
 
   function toggleDay(day: number) {
     setDays((d) => (d.includes(day) ? d.filter((x) => x !== day) : [...d, day].sort()));
@@ -89,6 +104,7 @@ export function BatchCreateForm({
       return;
     }
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     try {
       const res = await createBatchAction({
@@ -110,16 +126,18 @@ export function BatchCreateForm({
       setConflicts([]);
     } catch {
       setError(
-        "The batch could not be created. Your entries are kept — try again.",
+        "We could not confirm whether the batch was created. Your entries are kept; check the batch list before retrying.",
       );
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
   return (
     <div className="mt-3 space-y-2 rounded-card border border-line p-3">
       <Select
+        ref={programRef}
         value={programId}
         onChange={(e) => setProgramId(e.target.value)}
         aria-label="Program"
@@ -240,7 +258,7 @@ export function BatchCreateForm({
           </p>
         </div>
       ) : null}
-      {error ? <p className="text-[12px] text-late">{error}</p> : null}
+      {error ? <p role="alert" className="text-[12px] text-late">{error}</p> : null}
       <Button
           variant="primary"
           size="md"
@@ -248,7 +266,7 @@ export function BatchCreateForm({
         type="button"
         onClick={submit}
         disabled={busy || !name.trim() || days.length === 0 || !startValid || !endValid}>
-        Add batch
+        {busy ? "Adding batch…" : "Add batch"}
       </Button>
     </div>
   );

@@ -14,9 +14,9 @@ export default async function ClubsPage() {
   if (!session?.user) redirect("/login");
   const choices = await listClubChoices(session.user.id,new Date(session.session.createdAt));
   return <main className="mx-auto min-h-dvh w-full max-w-xl px-4 py-8">
-    <PageHeader title="Choose your club" purpose="Your role, facilities and records belong to the club you select." />
+    <PageHeader title="Choose a business account" purpose="A business account can contain more than one club." />
     {choices.length ? <ClubChoice choices={choices} current={activeClubFromHeaders(h)} /> :
-      <p role="status" className="mt-6 text-base text-ink-2">No clubs are available for this session. Sign in again or contact your club owner.</p>}
+      <p role="status" className="mt-6 text-base text-ink-2">No business accounts are available for this session. Sign in again or contact your account owner.</p>}
     <TenantSignOut className="mt-6" showClubSwitch={false} />
   </main>;
 }

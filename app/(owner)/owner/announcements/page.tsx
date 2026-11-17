@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import {
@@ -39,11 +40,13 @@ export default async function AnnouncementsPage() {
   // of the same decision; an owner who may not send needs no batch list.
   const canSend =
     hasPermission(ctx, "messaging.send") && hasFeature(ctx, "messaging");
+  const canReadHistory = hasPermission(ctx, "members.read");
+  const canSelectBatch = canSend && hasPermission(ctx, "programs.read");
   const [announcements, notifications, batches, terminology] = await Promise.all([
-    listAnnouncementsAction(),
+    canReadHistory ? listAnnouncementsAction() : Promise.resolve(null),
     listMyNotificationsAction(),
-    canSend ? listBatchesAction() : Promise.resolve([]),
-    getTerminologyAction(),
+    canSelectBatch ? listBatchesAction() : Promise.resolve([]),
+    getTerminologyAction().then(ownerTerminology),
   ]);
 
   return (
@@ -57,6 +60,7 @@ export default async function AnnouncementsPage() {
         {canSend ? (
           <AnnouncementComposer
             batches={batches}
+            canSelectBatch={canSelectBatch}
             memberLabel={resolveTerm(terminology, "member", "other")}
             batchLabel={resolveTerm(terminology, "batch", 1)}
             guardianLabel={resolveTerm(terminology, "guardian", "other")}
@@ -73,7 +77,7 @@ export default async function AnnouncementsPage() {
           </div>
         )}
 
-        <section
+        {announcements !== null ? <section
           aria-label="Sent history"
           className="min-w-0 rounded-card border border-line bg-paper p-5 [overflow-wrap:anywhere]"
         >
@@ -114,7 +118,7 @@ export default async function AnnouncementsPage() {
               ))}
             </ul>
           )}
-        </section>
+        </section> : null}
       </div>
 
       <div className="mt-5">

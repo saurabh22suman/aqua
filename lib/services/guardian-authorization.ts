@@ -8,7 +8,7 @@ import { tenantMemberships } from "@/db/schema/memberships";
 import { rolePermissions, roles } from "@/db/schema/roles";
 import { users } from "@/db/schema/users";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { readLinkAuthorities } from "@/lib/services/member-link-authority";
 import { isFacilityScopedRoleKey } from "@/lib/services/facility-scope";
 
@@ -30,7 +30,7 @@ function retryable(error: unknown): boolean {
   return false;
 }
 
-export async function withdrawGuardianAuthorization(ctx: ActionCtx, input: { guardianshipId: string; reason: string; confirmed: boolean }): Promise<WithdrawGuardianResult> {
+export async function withdrawGuardianAuthorization(ctx: MutationActor, input: { guardianshipId: string; reason: string; confirmed: boolean }): Promise<WithdrawGuardianResult> {
   const parsed = z.object({ guardianshipId: z.string().uuid(), reason: z.string().trim().min(1).max(500), confirmed: z.literal(true) }).safeParse(input);
   if (!parsed.success || !ctx.userId) return invalid();
   const actor = ctx.userId;

@@ -18,7 +18,7 @@ export function OwnerPage({
   return (
     <main
       data-owner-page
-      className={cn("px-4 pb-8 pt-6 lg:px-7 lg:pb-7 lg:pt-7", className)}
+      className={cn("px-4 pb-8 pt-6 lg:px-7 lg:pb-7 lg:pt-[30px]", className)}
       {...rest}
     />
   );

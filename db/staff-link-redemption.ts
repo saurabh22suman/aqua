@@ -45,9 +45,22 @@ export async function redeemStaffLinkInTx(input: {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       return await withTenant(tenantId, async (tx) => {
-      // Lock membership first; credential arbitration precedes the user-row lock.
-      // A conflict or later refusal throws; returning a refusal after writes
-      // would commit the transaction.
+      // Lock the live tenant, then the account reached through this exact
+      // membership, before locking the membership or canonical credential.
+      // A later refusal throws so no writes can commit on a refused redemption.
+      const [tenant] = await tx.select({ status: tenants.status }).from(tenants)
+        .where(eq(tenants.id, tenantId)).limit(1).for("share");
+      if (!tenant) throw new Refused("membership_not_found");
+      if (tenant.status !== "trial" && tenant.status !== "active") throw new Refused("tenant_suspended");
+      const [lockedAccount] = await tx.select({ id: users.id }).from(tenantMemberships)
+        .innerJoin(users, eq(users.id, tenantMemberships.userId))
+        .where(and(eq(tenantMemberships.id, claims.membershipId),
+          eq(tenantMemberships.tenantId, tenantId), isNull(tenantMemberships.deletedAt),
+          isNull(users.deletedAt)))
+        .limit(1).for("update", { of: users });
+      if (!lockedAccount) throw new Refused("membership_not_found");
+      // Re-read membership and account facts after the account lock: a
+      // concurrent reassignment while waiting must not authorize another user.
       const [m] = await tx.select({
         membershipId: tenantMemberships.id, status: tenantMemberships.status,
         linksValidFrom: tenantMemberships.linksValidFrom, roleId: tenantMemberships.roleId, userId: users.id,
@@ -60,17 +73,13 @@ export async function redeemStaffLinkInTx(input: {
           eq(tenantMemberships.tenantId, tenantId), isNull(tenantMemberships.deletedAt),
           isNull(users.deletedAt), isNull(roles.deletedAt)))
         .limit(1).for("update", { of: tenantMemberships });
-      if (!m) throw new Refused("membership_not_found");
-      // Preserve live role and tenant authority through commit without locking
-      // the global user before the credential (member activation order).
+      if (!m || m.userId !== lockedAccount.id) throw new Refused("membership_not_found");
+      // Hold the re-read role and tenant authority through commit.
       const [role] = await tx.select({ key: roles.key, homePath: roles.homePath })
         .from(roles).where(and(eq(roles.id, m.roleId), eq(roles.tenantId, tenantId),
           isNull(roles.deletedAt))).limit(1).for("share");
-      const [tenant] = await tx.select({ status: tenants.status }).from(tenants)
-        .where(eq(tenants.id, tenantId)).limit(1).for("share");
-      if (!role || !tenant) throw new Refused("membership_not_found");
+      if (!role) throw new Refused("membership_not_found");
       if (m.status === "revoked") throw new Refused("revoked");
-      if (tenant.status !== "trial" && tenant.status !== "active") throw new Refused("tenant_suspended");
       if (claims.exp * 1000 <= Date.now() ||
           (m.linksValidFrom && claims.iat * 1000 + 1000 <= m.linksValidFrom.getTime())) {
         throw new Refused("invalid");
@@ -142,9 +151,8 @@ export async function redeemStaffLinkInTx(input: {
         credentialSet = !!credential?.password;
       }
 
-      // Re-read and lock the membership-joined user only after credential
-      // arbitration. Reject a changed pointer or phone; a concurrent link to
-      // the same BA principal is safe and needs no duplicate link audit.
+      // Re-read the already-locked membership-joined account after credential
+      // arbitration. Preserve the pointer and phone consistency checks.
       const [current] = await tx.select({ id: users.id, phone: users.phone,
         betterAuthId: users.betterAuthId }).from(tenantMemberships)
         .innerJoin(users, eq(users.id, tenantMemberships.userId))
@@ -182,6 +190,18 @@ export async function redeemStaffLinkInTx(input: {
           before: { status: "invited" }, after: { status: "active" }, changedFields: ["status"] });
       }
       if (claims.purpose === "reset") {
+        // A reset link without a PIN is a login/session-revocation operation,
+        // not a credential rotation; retain its existing scoped sessions.
+        if (pinHash !== undefined) {
+          const bumped = await tx.update(users)
+            .set({ credentialEpoch: sql`${users.credentialEpoch} + 1` })
+            .where(and(eq(users.id, current.id), sql`exists (
+              select 1 from ${tenantMemberships} where ${tenantMemberships.id} = ${m.membershipId}
+                and ${tenantMemberships.tenantId} = ${tenantId} and ${tenantMemberships.userId} = ${users.id}
+                and ${tenantMemberships.deletedAt} is null
+            )`)).returning({ id: users.id });
+          if (bumped.length !== 1) throw new Refused("invalid");
+        }
         await tx.delete(baSession).where(eq(baSession.userId, baUserId));
         await tx.insert(platformAuditLog).values({ action: "credentials.pin_reset", tenantId,
           targetType: "user", targetId: m.userId, detail: { purpose: "reset",

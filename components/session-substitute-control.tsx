@@ -77,6 +77,8 @@ export function SessionSubstituteControl({
       } else {
         setError(res.message);
       }
+    } catch {
+      setError("We could not confirm the substitution. Check the session before retrying.");
     } finally {
       setBusy(false);
     }
@@ -136,10 +138,11 @@ export function SessionSubstituteControl({
           className="inline-flex min-h-11 items-center justify-center flex-1 rounded-ctl bg-[var(--accent-strong)] px-3 py-2 text-[13px] font-medium text-white disabled:opacity-50"
           data-testid={`substitute-submit-${sessionId}`}
         >
-          {busy ? "Saving…" : "Confirm substitution"}
+          {busy ? "Saving substitution…" : "Confirm substitution"}
         </button>
         <button
           type="button"
+          disabled={busy}
           onClick={() => {
             setOpen(false);
             setPicked("");

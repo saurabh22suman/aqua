@@ -5,7 +5,7 @@ import { withTenant, type TenantTx } from "@/db/tenant";
 import { locations, type LocationKind } from "@/db/schema/locations";
 import { resolveConfig, setOwnerTenantConfigValue } from "@/db/config";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // U-07 — the owner's location editor and business-hours editor.
 //
@@ -116,7 +116,7 @@ async function selectLocations(
 }
 
 export async function createLocation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LocationMutationResult> {
   const parsed = createLocationInput.safeParse(raw);
@@ -159,7 +159,7 @@ export async function createLocation(
 }
 
 export async function updateLocation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LocationMutationResult> {
   const parsed = updateLocationInput.safeParse(raw);

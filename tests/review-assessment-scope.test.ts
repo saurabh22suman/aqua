@@ -3,7 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;
@@ -29,14 +29,14 @@ const coachUnassignedMember = asMemberId(randomUUID());
 const ownerMember = asMemberId(randomUUID());
 const siteBMember = asMemberId(randomUUID());
 
-const ownerCtx: ActionCtx = {
+const ownerCtx: MutationActor = {
   tenantId,
   userId: ownerUser,
   roleKey: "owner",
   allLocations: true,
   locationIds: [],
 };
-const coachCtx: ActionCtx = {
+const coachCtx: MutationActor = {
   tenantId,
   userId: coachUser,
   roleKey: "coach",

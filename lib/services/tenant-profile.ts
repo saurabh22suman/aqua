@@ -6,7 +6,7 @@ import { writeAudit } from "@/lib/audit/write";
 import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { hasOpenOrders } from "@/lib/services/facility-billing-settings-core";
 import { GSTIN_RE } from "@/lib/gst";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // PR2-C1 — academy profile settings. Name, currency, timezone and
 // GSTIN are the tenant's identity fields; before this service the only
@@ -95,7 +95,7 @@ export async function getTenantProfile(
 }
 
 export async function updateTenantProfile(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<UpdateTenantProfileResult> {
   const parsed = updateSchema.safeParse(raw);

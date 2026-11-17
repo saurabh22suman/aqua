@@ -1,5 +1,6 @@
 import type { NavItem } from "@/components/bottom-nav";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
+import { ownerTerm } from "@/lib/terminology/owner-terms";
 import {
   surfaceForRole,
   type TenantSurface,
@@ -172,7 +173,7 @@ export function ownerSidebarGroupsForPermissions(
 function labelMemberDestinations(items: NavItem[], terminology?: TerminologyState): NavItem[] {
   if (!terminology) return items;
   const memberRoutes = new Set(["/owner/members", "/coach/members", "/reception/members"]);
-  return items.map(item => memberRoutes.has(item.href) ? { ...item, label: titleCase(resolveTerm(terminology, "member", "other")) } : item);
+  return items.map(item => memberRoutes.has(item.href) ? { ...item, label: titleCase(item.href === "/owner/members" ? ownerTerm(terminology, "member", "other") : resolveTerm(terminology, "member", "other")) } : item);
 }
 
 export function navForRole(roleKey: string, terminology?: TerminologyState): NavItem[] {

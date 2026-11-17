@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ roster: vi.fn(), identity: vi.fn() }));
 vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; children: React.ReactNode }) => <a href={href}>{children}</a> }));
 vi.mock("@/lib/auth/surface-guard", () => ({ requireCoach: async () => ({}) }));
-vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => ({ tenantId: "tenant-a", userId: "user-a", roleKey: "coach" }) }));
+vi.mock("@/lib/auth/context", () => ({ NotFoundError: class NotFoundError extends Error {}, requireDefaultCtx: async () => ({ tenantId: "tenant-a", userId: "user-a", roleKey: "coach" }) }));
 vi.mock("@/lib/auth/permission", () => ({ requirePermission: () => {} }));
 vi.mock("@/lib/services/register", () => ({ getRosterForSession: state.roster }));
 vi.mock("@/lib/offline/server-session", () => ({ offlineSessionState: state.identity }));

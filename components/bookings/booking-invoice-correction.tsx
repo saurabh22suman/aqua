@@ -107,8 +107,10 @@ export function BookingInvoiceCorrection({
       move("uncertain");
       return;
     }
-    if (invoice.paidPaise > 0) {
-      say("alert", "This invoice is already paid, so it stays as issued. Paid corrections are deferred for this release; ask an owner to review it.");
+    if (invoice.correctionEligibility !== "eligible") {
+      say("alert", invoice.correctionEligibility === "payment_history"
+        ? "This invoice has payment history. Paid corrections are deferred for this release; ask an owner to review it."
+        : "Invoice correction eligibility could not be confirmed. Ask an owner to review it.");
       move("deferred");
       const current = await readCurrentBill();
       if (current) onBillReplaced?.(current);

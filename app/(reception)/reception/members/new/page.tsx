@@ -1,6 +1,7 @@
 import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { MemberCreateForm } from "@/components/member-create-form";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
@@ -11,7 +12,7 @@ export default async function ReceptionNewMemberPage() {
     listLocationsAction(),
     // L3 audit — the page heading and the form's guardian copy
     // both route through the closed-key resolver.
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
 
   return (

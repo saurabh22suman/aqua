@@ -1,6 +1,7 @@
 import { getTodayAction } from "@/lib/actions/coach";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { listStaffAttendanceDayAction } from "@/lib/actions/staff-attendance";
 import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
@@ -24,7 +25,7 @@ export default async function ReceptionTodayPage() {
   const ctx = await requireReception();
   const [{ sessions }, terminology] = await Promise.all([
     getTodayAction(),
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
   const canMark = hasPermission(ctx, "attendance.mark");
   const canMarkStaff = hasPermission(ctx, "staff.attendance");

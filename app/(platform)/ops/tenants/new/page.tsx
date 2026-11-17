@@ -50,8 +50,8 @@ export default async function NewTenantPage({ searchParams }: { searchParams?: P
     <OpsPage className="max-w-[640px]">
       <OpsPageHeader
         eyebrow="Tenants"
-        title="New tenant"
-        lede="Creates the tenant record, its first location, and an audit trail in a single transaction. Default values are sensible for an India-based sports academy."
+        title="New business account"
+        lede="Creates a business account, its first club and an audit trail in a single transaction. Defaults are for an India-based sports academy."
       />
 
       <OpsWriteGate

@@ -170,12 +170,7 @@ export async function detectSessionConflicts(
     // The overlap predicate is the canonical interval-overlap
     // form: existing.startsAt < candidate.endsAt AND
     //        candidate.startsAt < existing.endsAt.
-    // The sessionDate predicate is intentionally NOT bound to
-    // a single date — sessions whose date spans a long enough
-    // window could in principle overlap; in practice sessionDate
-    // matches the date portion of startsAt so adding the date
-    // filter is harmless redundancy that also lets the planner
-    // skip a row early.
+    // Do not filter on sessionDate: intervals can cross local midnight.
     const rows = await tx
       .select({
         id: sessions.id,
@@ -191,7 +186,6 @@ export async function detectSessionConflicts(
           eq(sessions.tenantId, ctx.tenantId as TenantId),
           eq(sessions.coachId, args.coachId as never),
           coach ? eq(sessions.coachId, coachStaffIdSubquery(ctx.tenantId, ctx.userId)) : undefined,
-          eq(sessions.sessionDate, args.sessionDate),
           sql`${sessions.status} <> 'cancelled'`,
           args.excludeSessionId
             ? ne(sessions.id, args.excludeSessionId as never)

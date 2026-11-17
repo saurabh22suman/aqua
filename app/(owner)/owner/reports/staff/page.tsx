@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { getStaffReport } from "@/lib/services/owner-people-reports";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
@@ -14,7 +15,7 @@ export default async function StaffReportPage({ searchParams }: { searchParams?:
   requirePagePermission(ctx, "staff.attendance");
   const scope = await reportScope(searchParams);
   const report = await getStaffReport(ctx, { from: scope.from, to: scope.to, locationId: scope.facility });
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const checkins = new Map<string, number>();
   for (const row of report.attendance) if (row.checkedIn) checkins.set(row.date, (checkins.get(row.date) ?? 0) + 1);
   const shifts = new Map<string, number>();

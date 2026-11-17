@@ -11,7 +11,7 @@ import {
 } from "@/lib/services/location-access";
 import { formatINR } from "@/lib/money/format";
 import { toSafePaise } from "@/lib/money/safe-paise";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import type { PaymentIntent } from "@/db/schema/payment-intents";
 import {
   paymentIntentFingerprint,
@@ -54,7 +54,7 @@ export type ReversePaymentResult =
   | { ok: false; error: string; conflict?: PaymentIntentConflict };
 
 export async function reversePayment(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ReversePaymentResult> {
   const parsed = reverseInput.safeParse(raw);

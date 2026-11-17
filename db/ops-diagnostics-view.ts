@@ -89,6 +89,7 @@ const MEMBERSHIP_JOIN = and(
 async function readMemberships(
   tenantId: TenantId,
   membershipId: string | null,
+  page: number,
 ): Promise<{
   total: number;
   list: MembershipRow[];
@@ -99,10 +100,12 @@ async function readMemberships(
     const countRows = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(tenantMemberships)
+      .innerJoin(roles, MEMBERSHIP_JOIN)
       .where(
         and(
           eq(tenantMemberships.tenantId, tenantId),
           isNull(tenantMemberships.deletedAt),
+          isNull(roles.deletedAt),
         ),
       );
     const list = await tx
@@ -117,7 +120,8 @@ async function readMemberships(
         ),
       )
       .orderBy(desc(tenantMemberships.createdAt), desc(tenantMemberships.id))
-      .limit(MEMBERSHIP_DIAGNOSTIC_LIMIT);
+      .limit(MEMBERSHIP_DIAGNOSTIC_LIMIT)
+      .offset((page - 1) * MEMBERSHIP_DIAGNOSTIC_LIMIT);
     const selected = membershipId
       ? await tx
           .select(MEMBERSHIP_COLUMNS)
@@ -215,12 +219,13 @@ function describeMembership(
  */
 export async function getTenantDiagnostics(
   tenantId: TenantId,
-  options: { membershipId?: string | null } = {},
+  options: { membershipId?: string | null; page?: number } = {},
 ): Promise<TenantDiagnostics> {
   const membershipId = options.membershipId ?? null;
   const { total, list, selected, assignments } = await readMemberships(
     tenantId,
     membershipId,
+    Math.max(1, Math.min(100000, Math.floor(options.page ?? 1) || 1)),
   );
 
   // The canonical resolution for each role in this club — the same call

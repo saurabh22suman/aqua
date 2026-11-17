@@ -11,7 +11,8 @@ import {
 import { useRouter } from "next/navigation";
 import {
   armMembersReturnIntent,
-  membersReturnHref,
+  clearMembersReturnIntent,
+  hasMembersReturnIntent,
 } from "@/components/members-list-navigation";
 
 // Owner People lane — the in-app return from a member profile.
@@ -35,7 +36,7 @@ import {
 // handler: the return is armed, the child's navigation is prevented, and
 // this wrapper issues the ONE navigation. A modified click (a new tab or
 // window) is left to the browser: that view has no in-memory intent and
-// shows the plain directory.
+// shows a fresh directory in the same explicit facility scope.
 //
 // The state it hands over is an explicit, single-use, in-memory return
 // intent (components/members-list-navigation.ts): no URL parameter, no
@@ -47,14 +48,14 @@ type LinkChildProps = {
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 };
 
-export function MembersReturnLink({ children }: { children: ReactNode }) {
+export function MembersReturnLink({ children, namespace, facility }: { children: ReactNode; namespace: string; facility: string }) {
   const router = useRouter();
   const child = Children.count(children) === 1 ? Children.only(children) : null;
   if (!isValidElement(child)) return null;
 
-  // Where the owner goes back to: the plain directory, or the scope the
-  // directory was read under (the facility cookie may be absent).
-  const destination = membersReturnHref();
+  // The current profile's explicit scope wins over a stale device cookie
+  // or an unrelated directory visited earlier in this browser session.
+  const destination = `/owner/members?facility=${encodeURIComponent(facility)}`;
 
   // The shared BackLink is the control — it does not take an onClick, so
   // the click is caught on a wrapper that generates NO box
@@ -65,7 +66,7 @@ export function MembersReturnLink({ children }: { children: ReactNode }) {
       className="contents"
       onClickCapture={(event: MouseEvent<HTMLSpanElement>) => {
         // A modified click opens another tab or window: the browser
-        // keeps the plain link and that view shows the plain directory.
+        // keeps the plain link and that view shows a fresh directory in the same explicit facility scope.
         if (
           event.metaKey ||
           event.ctrlKey ||
@@ -77,7 +78,8 @@ export function MembersReturnLink({ children }: { children: ReactNode }) {
         }
         // Arm the return BEFORE the navigation is issued, so the
         // directory that comes back finds it.
-        armMembersReturnIntent();
+        if (hasMembersReturnIntent(namespace, facility)) armMembersReturnIntent();
+        else clearMembersReturnIntent();
         // Take the navigation over: the child's own handler must not
         // run, or the app would navigate twice.
         event.preventDefault();

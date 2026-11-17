@@ -23,7 +23,7 @@ import {
 } from "@/lib/services/resource-access";
 import { todayInZone } from "@/lib/time/tz";
 import { asStaffId, type StaffId, type TenantId, type UserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // V-24 — the audited manual correction. Split from the check-in/out
 // service because this is the path that must answer "who corrected
@@ -143,7 +143,7 @@ async function recordedAttendanceLocationInTx(
 }
 
 export async function correctAttendance(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<AttendanceResult> {
   const parsed = correctionInput.safeParse(raw);

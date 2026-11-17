@@ -7,6 +7,7 @@ import { MemberSubscriptionPanel } from "@/components/member-subscription-panel"
 import { MemberInvoicesPanel } from "@/components/member-detail/member-invoices-panel";
 import { MemberIdCard } from "@/components/member-id-card";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { formatDateIST } from "@/lib/time/tz";
@@ -46,7 +47,7 @@ export default async function ReceptionMemberDetailPage({
     // form via resolveTerm (L3 audit). Reception registers the member
     // and prints the card in the same visit; the same terminology
     // fetch that the owner-side page uses pays the cost here too.
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
     getTenantTimezoneAction(),
   ]);
   if (!member) notFound();

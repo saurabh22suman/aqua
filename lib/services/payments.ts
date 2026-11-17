@@ -17,7 +17,7 @@ import {
 import { applyPayments } from "@/lib/money/arithmetic";
 import { formatINR } from "@/lib/money/format";
 import { toSafePaise } from "@/lib/money/safe-paise";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import type { PaymentMethod } from "@/db/schema/payments";
 import { enqueueMemberNotification } from "@/lib/messaging/notification-enqueue";
 import type { PaymentIntent } from "@/db/schema/payment-intents";
@@ -104,7 +104,7 @@ export type PaymentRow = {
 };
 
 export async function recordPayment(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<RecordPaymentResult> {
   const parsed = recordPaymentInput.safeParse(raw);

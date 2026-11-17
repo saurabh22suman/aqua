@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { listLocations } from "@/lib/services/people";
@@ -53,7 +54,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams?:
     withTenant(ctx.tenantId, tx => tenantTimezoneInTx(tx, ctx.tenantId)),
     // Fetched here so the report's facility label follows the tenant's
     // vocabulary (L3 audit rule: no hardcoded vocab in JSX text).
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
     cookies(),
   ]);
   const locations = access.unrestricted ? allLocations : allLocations.filter(location => access.locationIds.includes(location.id));

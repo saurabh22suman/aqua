@@ -1,64 +1,30 @@
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
-import { OwnerLink } from "@/components/owner-ui/owner-link";
+import { TransientDisclosure } from "@/components/ui/TransientDisclosure";
 
-// U-03 — the member 360 tabs. Documents remains available for old links,
-// but is not promoted as a peer while document uploads are unavailable.
-// Progress was deliberately absent while M-03/V-10 were
-// other workstreams; V-11 wires it to the generic framework's
-// assessments.
-//
-// Plain links with `?tab=`, so every tab is a server render.
-//
-// Owner redesign (C2) — the member tabs now use the same shared
-// segmented tab bar as the Fees hub, so one owner surface has one tab
-// shape and one active state.
+export type MemberTab = "overview" | "payments" | "progress" | "notes" | "documents";
 
-export type MemberTab =
-  | "overview"
-  | "payments"
-  | "progress"
-  | "notes"
-  | "documents";
-
-const TABS: Array<{ key: MemberTab; label: string }> = [
-  { key: "overview", label: "Overview" },
-  { key: "payments", label: "Payments" },
-  { key: "progress", label: "Progress" },
-  { key: "notes", label: "Notes" },
-  { key: "documents", label: "Documents" },
-];
-
-export function MemberDetailTabs({
-  memberId,
-  active,
-  facilityScope,
-}: {
+export function MemberDetailTabs({ memberId, active, facilityScope, accessHref, canReadInvoices = true, canReadProgress = true }: {
   memberId: string;
   active: MemberTab;
-  // The scope the member was opened under — the canonical facility or an
-  // explicit "all". It travels with every tab so the drill-down never
-  // lands on a URL without the query, which the facility switcher would
-  // normalise with a hard reload. Optional: a consumer without a scope
-  // keeps its own plain links.
   facilityScope?: string;
+  accessHref?: string;
+  canReadInvoices?: boolean;
+  canReadProgress?: boolean;
 }) {
-  const scope = facilityScope ? `&facility=${facilityScope}` : "";
+  const scope = facilityScope ? `&facility=${encodeURIComponent(facilityScope)}` : "";
+  const href = (tab: MemberTab) => `/owner/members/${memberId}?tab=${tab}${scope}`;
+  const moreActive = active === "notes" || active === "documents";
+  const tabClass = "inline-flex min-h-11 items-center justify-center border-b-2 px-2 text-[13px] font-medium";
   return (
-    <div className="mt-4">
-      <SegmentedTabs
-        ariaLabel="Member sections"
-        active={active}
-        tabs={TABS.filter((tab) => tab.key !== "documents" || active === "documents").map((tab) => ({
-          key: tab.key,
-          label: tab.label,
-          href: `/owner/members/${memberId}?tab=${tab.key}${scope}`,
-        }))}
-      />
-      {active !== "documents" ? (
-        <OwnerLink href={`/owner/members/${memberId}?tab=documents${scope}`} className="mt-2 inline-flex min-h-11 items-center text-[12px] text-ink-3 underline underline-offset-2">
-          Documents
-        </OwnerLink>
-      ) : null}
-    </div>
+    <nav aria-label="Member sections" className="relative mt-4 flex border-b border-line">
+      {([ ["overview", "Overview"], ...(canReadInvoices ? [["payments", "Fees"] as const] : []), ...(canReadProgress ? [["progress", "Progress"] as const] : []) ] as const).map(([key, label]) => (
+        <a key={key} href={href(key)} aria-current={active === key ? "page" : undefined} className={`${tabClass} ${active === key ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>{label}</a>
+      ))}
+      <TransientDisclosure key={`${memberId}:${active}:${facilityScope ?? ""}`} className="group relative" trigger="More" triggerClassName={`${tabClass} cursor-pointer list-none ${moreActive ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>
+        <div className="absolute right-0 z-20 min-w-52 rounded-card border border-line bg-paper p-2 shadow-lg">
+          <a href={href("notes")} aria-current={active === "notes" ? "page" : undefined} className="flex min-h-11 items-center rounded-ctl px-3 text-[13px] text-ink">Notes</a>
+          {accessHref ? <a href={accessHref} data-testid="member-access-entry" className="flex min-h-11 items-center rounded-ctl px-3 text-[13px] text-ink">Member and family access</a> : null}
+        </div>
+      </TransientDisclosure>
+    </nav>
   );
 }

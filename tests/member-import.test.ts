@@ -309,6 +309,7 @@ describe("commitMemberImport", () => {
   it("rejects missing attestation and unauthenticated callers before any write", async () => {
     const before = await memberCount(tenantId);
     await expect(commitMemberImport({ tenantId, userId: actorId }, CSV)).rejects.toThrow(/confirm prior consent/i);
+    // @ts-expect-error Runtime refusal also defends callers without a typed actor.
     await expect(commitMemberImport({ tenantId }, CSV, attest)).rejects.toThrow(/authenticated operator/i);
     expect(await commitMemberImportAction({ csv: CSV })).toMatchObject({ ok: false });
     expect(await memberCount(tenantId)).toBe(before);

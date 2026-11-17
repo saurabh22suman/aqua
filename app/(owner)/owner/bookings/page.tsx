@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { isLiveOwnerForSettings } from "@/lib/auth/owner-settings-page-guard";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { cookies } from "next/headers";
@@ -67,7 +68,7 @@ export default async function OwnerBookingsPage(props: { searchParams?: Promise<
 
   const timezone = await getTenantTimezoneAction();
   const today = todayInZone(timezone);
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
 
   let facilities: BookableFacility[] = [];
   let facilitiesError: string | null = null;

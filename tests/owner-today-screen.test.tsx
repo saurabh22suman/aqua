@@ -171,7 +171,7 @@ describe("owner Home — the summary row", () => {
     // The overdue tile states the count, the oldest age and the
     // outstanding (current) balance.
     // The retired overdue tile is covered by dashboard-financial-scope.test.ts.
-    expect(text).toContain("Unavailable");
+    expect(text).toContain("Collections trend unavailable.");
 
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
       a.getAttribute("href"),
@@ -195,8 +195,8 @@ describe("owner Home — the summary row", () => {
     );
     const text = document.body.textContent ?? "";
     expect(text).toContain("₹0");
-    expect(text).toContain("Last 7 days");
-    expect(text).toContain("Unavailable");
+    expect(text).toContain("Collections trend");
+    expect(text).toContain("Collections trend unavailable.");
   });
 });
 

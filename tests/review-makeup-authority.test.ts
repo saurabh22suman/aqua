@@ -3,7 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { addDays, todayInZone } from "@/lib/time/tz";
 
 let container: StartedPostgreSqlContainer;
@@ -44,21 +44,21 @@ const raceMember = asMemberId(randomUUID());
 const pastTargetMember = asMemberId(randomUUID());
 const raceGrantMember = asMemberId(randomUUID());
 
-const ownerCtx: ActionCtx = {
+const ownerCtx: MutationActor = {
   tenantId,
   userId: ownerUser,
   roleKey: "owner",
   allLocations: true,
   locationIds: [],
 };
-const coachCtx: ActionCtx = {
+const coachCtx: MutationActor = {
   tenantId,
   userId: coachUser,
   roleKey: "coach",
   allLocations: true,
   locationIds: [],
 };
-const restrictedReceptionCtx: ActionCtx = {
+const restrictedReceptionCtx: MutationActor = {
   tenantId,
   userId: receptionUser,
   roleKey: "receptionist",

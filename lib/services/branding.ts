@@ -10,7 +10,7 @@ import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import {
   ACCENT_KEYS,
@@ -161,7 +161,7 @@ export async function getBranding(
 }
 
 export async function updateBranding(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: UpdateBrandingInput,
 ): Promise<UpdateBrandingResult> {
   // Parse here as well as in the Server Action — the service is
@@ -239,7 +239,7 @@ export async function updateBranding(
 
 /** Replace the tenant's current PNG, reference and audit atomically. */
 export async function uploadBrandingAsset(input: {
-  ctx: ActionCtx;
+  ctx: MutationActor;
   kind: "logo" | "install_icon";
   bytes: Uint8Array;
   mime: string;

@@ -6,7 +6,7 @@ import { persons } from "@/db/schema/people";
 import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
 import { generateSessions } from "@/lib/jobs/session-generator";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { auditActorOf, writeAudit } from "@/lib/audit/write";
 import {
   locationPredicate,
@@ -34,7 +34,7 @@ export async function listPrograms(ctx: ActionCtx): Promise<Program[]> {
 }
 
 export async function createProgram(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { name: string; description?: string },
 ): Promise<Program> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -78,7 +78,7 @@ export async function createProgram(
 // program by mistake with active batches under it gets a clear reason,
 // not a silent orphaning of those batches' program_id.
 export async function deleteProgram(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   programId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -172,7 +172,7 @@ export async function listBatches(
 // Wave 2 — a batch created without an explicit facility lands at the
 // tenant's primary live location (else the oldest live location).
 export async function createBatch(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     programId: string;
     name: string;
@@ -295,7 +295,7 @@ export async function createBatch(
 // new ones are created; enrolMember (lib/services/register.ts) refuses
 // new enrolments the same way.
 export async function updateProgram(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { programId: string; name: string; description?: string },
 ): Promise<{ ok: true; program: Program } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -331,7 +331,7 @@ export async function updateProgram(
 // coach conflict (G1) is form-only here too. See createBatch's
 // comment and docs/guard-path-matrix.md.
 export async function updateBatch(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     batchId: string;
     programId: string;
@@ -456,7 +456,7 @@ export async function updateBatch(
 }
 
 export async function deleteBatch(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   batchId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {

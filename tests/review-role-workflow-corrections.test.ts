@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // R01/R02/R04/R05/R06/R09 (docs/audits/2026-10-13-role-workflow-audit.md)
 // — one isolated database proving the responsibility corrections:
@@ -57,7 +57,7 @@ const batchB = randomUUID();
 const sessionA = randomUUID();
 const sessionB = randomUUID();
 
-const ownerCtx: ActionCtx = {
+const ownerCtx: MutationActor = {
   tenantId,
   userId: ownerUser,
   roleKey: "owner",
@@ -75,12 +75,12 @@ const ownerCtx: ActionCtx = {
     "attendance.read",
   ]),
 };
-const adminCtx: ActionCtx = {
+const adminCtx: MutationActor = {
   ...ownerCtx,
   userId: adminUser,
   roleKey: "admin",
 };
-const scopedReception: ActionCtx = {
+const scopedReception: MutationActor = {
   tenantId,
   userId: scopedReceptionUser,
   roleKey: "receptionist",
@@ -88,7 +88,7 @@ const scopedReception: ActionCtx = {
   locationIds: [locA],
   permissions: new Set(["enquiries.read", "enquiries.write", "members.read", "programs.read"]),
 };
-const scopedManager: ActionCtx = {
+const scopedManager: MutationActor = {
   tenantId,
   userId: scopedManagerUser,
   roleKey: "admin",
@@ -251,7 +251,7 @@ describe("R01 owner/admin student attendance is read-only", () => {
   });
 
   it("refuses the service even when the ctx still carries an attendance.mark grant", async () => {
-    const withGrant: ActionCtx = {
+    const withGrant: MutationActor = {
       ...ownerCtx,
       permissions: new Set(["attendance.mark", "attendance.read"]),
     };
@@ -291,7 +291,7 @@ describe("R01 owner/admin student attendance is read-only", () => {
   it("keeps coach marking working on an assigned session (positive control)", async () => {
     // The coach is assigned by staffType coach but not to this batch;
     // assignment refusal (not the R01 role gate) is the expected shape.
-    const coachCtx: ActionCtx = {
+    const coachCtx: MutationActor = {
       ...ownerCtx,
       userId: coachUser,
       roleKey: "coach",

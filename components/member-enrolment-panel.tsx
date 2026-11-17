@@ -16,6 +16,7 @@ import type { BatchWithProgramName } from "@/lib/services/programs";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { enrolmentFacilityLabel } from "@/components/member-detail/enrolment-facility-label";
 
 // B3 — a member created through reception's add-member form, or
 // produced by converting an enquiry with no prior trial booking,
@@ -42,7 +43,9 @@ export function MemberEnrolmentPanel({
   terminology,
   canEnrol,
   canWaitlist,
+  canReadPrograms = true,
   initialData,
+  facility,
 }: {
   memberId: string;
   // Closed-key vocab resolved by the parent server page (L3 audit).
@@ -57,9 +60,11 @@ export function MemberEnrolmentPanel({
   // enquiries.write. Readers keep the enrolment list.
   canEnrol: boolean;
   canWaitlist: boolean;
+  canReadPrograms?: boolean;
   // Owner overview only: the already-authorized server read. Absent for every
   // other consumer, which keeps its own mount read.
   initialData?: MemberEnrolmentSeed;
+  facility?: { homeId: string; eligible: Array<{ id: string; name: string }> };
 }) {
   const router = useRouter();
   const seed = seedForMember(initialData, memberId);
@@ -78,10 +83,12 @@ export function MemberEnrolmentPanel({
   const loadEpoch = useRef(0);
   const appliedSeed = useRef<typeof seed>(seed);
   const [selectedBatchId, setSelectedBatchId] = useState("");
+  const [enrolSite, setEnrolSite] = useState(facility?.homeId ?? "");
+  const [transferSite, setTransferSite] = useState(facility?.homeId ?? "");
   const [actionError, setActionError] = useState<string | null>(null);
   // R.5 — when the refusal is a full batch, offer the waitlist instead
   // of leaving the user at a dead end.
-  const [fullBatch, setFullBatch] = useState(false);
+  const [fullBatch, setFullBatch] = useState<{ memberId: string; batchId: string } | null>(null);
   const [waitlistMessage, setWaitlistMessage] = useState<string | null>(null);
   // R.6 — which enrolment row has its transfer picker open, and where
   // to move that member.
@@ -99,7 +106,7 @@ export function MemberEnrolmentPanel({
     try {
       const [enrolmentRows, batchRows] = await Promise.all([
         listMemberEnrolmentsAction(at),
-        listBatchesAction(),
+        canReadPrograms ? listBatchesAction() : Promise.resolve([]),
       ]);
       if (at !== currentMember.current || run !== loadEpoch.current) return;
       setEnrolments(enrolmentRows);
@@ -138,10 +145,14 @@ export function MemberEnrolmentPanel({
   }, [initialData, memberId]);
 
   const enrolledBatchIds = new Set((enrolments ?? []).map((e) => e.batchId));
-  const availableBatches = (batches ?? []).filter((b) => !enrolledBatchIds.has(b.id));
-  const effectiveBatchId = availableBatches.some((b) => b.id === selectedBatchId)
+  const allowedSites = new Set(facility?.eligible.map((site) => site.id));
+  const availableBatches = (batches ?? []).filter((b) => !enrolledBatchIds.has(b.id) && (!facility || b.locationId === null || allowedSites.has(b.locationId)));
+  const choicesAt = (site: string) => availableBatches.filter((b) => b.locationId === site || b.locationId === null).sort((a, b) => Number(a.locationId === null) - Number(b.locationId === null));
+  const enrolChoices = facility ? choicesAt(enrolSite) : availableBatches;
+  const transferChoices = facility ? choicesAt(transferSite) : availableBatches;
+  const effectiveBatchId = enrolChoices.some((b) => b.id === selectedBatchId)
     ? selectedBatchId
-    : (availableBatches[0]?.id ?? "");
+    : (enrolChoices[0]?.id ?? "");
 
   async function enrol() {
     if (!effectiveBatchId) return;
@@ -151,21 +162,23 @@ export function MemberEnrolmentPanel({
       const result = await enrolMemberAction({ memberId, batchId: effectiveBatchId });
       if (!result.ok) {
         setActionError(result.error);
-        setFullBatch(/full/i.test(result.error));
+        setFullBatch(/full/i.test(result.error) ? { memberId, batchId: effectiveBatchId } : null);
         return;
       }
-      setSelectedBatchId("");
-      setFullBatch(false);
       const rows = await listMemberEnrolmentsAction(memberId);
       setEnrolments(rows);
+      setSelectedBatchId("");
+      setFullBatch(null);
       router.refresh();
+    } catch {
+      setActionError("Could not complete enrolment. Refresh and check the enrolment list before retrying, in case it was saved.");
     } finally {
       setBusy(false);
     }
   }
 
   async function joinWaitlist() {
-    if (!effectiveBatchId) return;
+    if (!effectiveBatchId || fullBatch?.batchId !== effectiveBatchId || fullBatch.memberId !== memberId || !canWaitlist) return;
     setBusy(true);
     setWaitlistMessage(null);
     try {
@@ -178,7 +191,7 @@ export function MemberEnrolmentPanel({
         return;
       }
       setActionError(null);
-      setFullBatch(false);
+      setFullBatch(null);
       setWaitlistMessage(
         `Added to the waitlist at position ${res.position}.`,
       );
@@ -204,11 +217,13 @@ export function MemberEnrolmentPanel({
         setTransferError(res.message);
         return;
       }
-      setTransferFrom(null);
-      setTransferTarget("");
       const rows = await listMemberEnrolmentsAction(memberId);
       setEnrolments(rows);
+      setTransferFrom(null);
+      setTransferTarget("");
       router.refresh();
+    } catch {
+      setTransferError("Could not complete transfer. Refresh and check the enrolment list before retrying, in case it was saved.");
     } finally {
       setBusy(false);
     }
@@ -254,8 +269,8 @@ export function MemberEnrolmentPanel({
               {enrolments!.map((e) => (
                 <li key={e.batchId}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[13.5px]">
-                      {e.batchName} — {e.programName}
+                    <span className="min-w-0 break-words text-[13.5px]">
+                      {e.batchName} — {e.programName}{canReadPrograms ? ` · ${enrolmentFacilityLabel(e.batchId, batches!)}` : null}
                     </span>
                     {canEnrol && availableBatches.length > 0 ? (
                       <button
@@ -264,7 +279,8 @@ export function MemberEnrolmentPanel({
                           setTransferFrom(
                             transferFrom === e.batchId ? null : e.batchId,
                           );
-                          setTransferTarget(availableBatches[0]?.id ?? "");
+                          setTransferSite(facility?.homeId ?? "");
+                          setTransferTarget((facility ? choicesAt(facility.homeId)[0] : availableBatches[0])?.id ?? "");
                           setTransferError(null);
                         }}
                         className="flex-none rounded-ctl border border-line px-3 min-h-[44px] text-[12.5px] text-ink-2"
@@ -275,6 +291,7 @@ export function MemberEnrolmentPanel({
                   </div>
                   {canEnrol && transferFrom === e.batchId ? (
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      {facility ? <div className="w-full"><Select aria-label="Transfer facility" value={transferSite} onChange={(event) => { const id = event.target.value; setTransferSite(id); setTransferTarget(choicesAt(id)[0]?.id ?? ""); }}>{facility.eligible.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</Select></div> : null}
                       {/* P2 (independent review) — the flex sizing lives
                           on a lane-owned wrapper around the shared
                           primitive (the primitive renders its own
@@ -286,9 +303,9 @@ export function MemberEnrolmentPanel({
                           data-testid="transfer-target"
                           aria-label="Transfer to"
                         >
-                          {availableBatches.map((b) => (
+                          {transferChoices.map((b) => (
                             <option key={b.id} value={b.id}>
-                              {b.name} — {b.programName}
+                              {b.name} — {b.programName} · {b.locationId === null ? "Club-wide" : b.locationName ?? "Facility not specified"}
                             </option>
                           ))}
                         </Select>
@@ -325,23 +342,25 @@ export function MemberEnrolmentPanel({
 
           {!canEnrol ? null : availableBatches.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
+              {facility ? <div className="w-full"><Select aria-label="Enrolment facility" value={enrolSite} onChange={(event) => { setEnrolSite(event.target.value); setSelectedBatchId(""); setFullBatch(null); setActionError(null); setWaitlistMessage(null); }}>{facility.eligible.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</Select></div> : null}
               {/* P2 (independent review) — the flex sizing lives on a
                   lane-owned wrapper around the shared primitive. */}
               <div className="w-full min-w-0 flex-1">
                 <Select
                   value={effectiveBatchId}
-                  onChange={(e) => setSelectedBatchId(e.target.value)}
+                  onChange={(e) => { setSelectedBatchId(e.target.value); setFullBatch(null); setActionError(null); setWaitlistMessage(null); }}
                   aria-label={`Select ${resolveTerm(terminology, "batch", 1)} to enrol in`}
                   className="min-w-0"
                   data-testid="enrolment-batch-select"
                 >
-                  {availableBatches.map((b) => (
+                  {enrolChoices.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {b.name} — {b.programName}
+                      {b.name} — {b.programName} · {b.locationId === null ? "Club-wide" : b.locationName ?? "Facility not specified"}
                     </option>
                   ))}
                 </Select>
               </div>
+              {enrolChoices.length === 0 ? <p className="w-full text-[13px] text-ink-3">No available batches at this facility.</p> : null}
               <Button
                 variant="primary"
                 onClick={enrol}
@@ -361,7 +380,7 @@ export function MemberEnrolmentPanel({
             </p>
           )}
           {actionError ? <p className="text-[12px] text-late">{actionError}</p> : null}
-          {fullBatch && canWaitlist ? (
+          {fullBatch?.batchId === effectiveBatchId && fullBatch.memberId === memberId && canWaitlist ? (
             <button
               type="button"
               onClick={joinWaitlist}

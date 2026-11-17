@@ -36,9 +36,9 @@ export function PaymentMethodFields({
         <legend className="text-[12px] font-medium text-ink-2 mb-1">
           Method
         </legend>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
           {COUNTER_METHODS.map((option) => (
-            <label key={option} className="flex items-center gap-2 text-[13px] text-ink">
+            <label key={option} className="flex min-h-11 min-w-11 cursor-pointer items-center gap-2 text-[13px] text-ink">
               <input
                 type="radio"
                 name="payment-method"

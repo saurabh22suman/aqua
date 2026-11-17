@@ -162,6 +162,7 @@ describe("authenticated authorization boundaries", () => {
   });
 
   it("H01 rejects a missing actor while allowing explicitly authorized broader access", async () => {
+    // @ts-expect-error Runtime guards must still reject an untyped caller without identity.
     expect(await enrolMember({ tenantId }, { memberId: memberA, batchId: batchB })).toMatchObject({ ok: false });
     await signIn("owner");
     expect(await enrolMemberAction({ memberId: memberA, batchId: batchB })).toMatchObject({ ok: true });
@@ -176,9 +177,9 @@ describe("authenticated authorization boundaries", () => {
     // service boundary coaches, the front desk and jobs use.
     await signIn("owner");
     await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: outsiderA,
-      status: "present", clientId: `nonroster-${RUN}` })).rejects.toThrow();
+      status: "present", clientId: `nonroster-${RUN}` })).resolves.toMatchObject({ ok: false, code: "reauth" });
     await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
-      status: "present", clientId: `roster-${RUN}` })).rejects.toThrow();
+      status: "present", clientId: `roster-${RUN}` })).resolves.toMatchObject({ ok: false, code: "reauth" });
     expect((await admin.query("select id from attendance where session_id=$1 and member_id=any($2::uuid[])",
       [sessionB, [outsiderA, memberB]])).rowCount).toBe(0);
 
@@ -198,7 +199,9 @@ describe("authenticated authorization boundaries", () => {
 
     await signIn("reception");
     expect(await markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
-      status: "present", clientId: `foreign-site-${RUN}` })).toMatchObject({ ok: false, error: "Session not found." });
+      status: "present", clientId: `foreign-site-${RUN}` })).toMatchObject({ ok: false, code: "terminal", error: "This mark needs review." });
+    expect((await admin.query("select client_id from attendance where session_id=$1 and member_id=$2",
+      [sessionB, memberB])).rows[0]?.client_id).toBe(`roster-svc-${RUN}`);
   });
 
   it("H03 denies receptionist issuance and invalid or out-of-location targets", async () => {

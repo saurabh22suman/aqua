@@ -18,7 +18,7 @@ import {
   type FinalizeOrderResult,
   type VoidOrderResult,
 } from "@/lib/services/orders-core";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // K-02/K-03 — counter order capture and the café → invoice bridge.
@@ -40,7 +40,7 @@ export type {
 };
 
 export async function createOrder(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<CreateOrderResult> {
   const parsed = createOrderInput.safeParse(raw);

@@ -17,7 +17,7 @@ import {
 } from "@/lib/services/payment-intent-core";
 import { latestCommittedTip } from "@/lib/services/payment-intent-order";
 import { loadTarget } from "@/lib/services/payment-intent-target";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // F01 — the authenticated, read-only recovery surface and the explicit
 // discard of ONE prepared attempt. The server is the source of truth:
@@ -124,7 +124,7 @@ export async function listPaymentIntentRecovery(
 }
 
 export async function cancelPaymentIntent(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   kind: PaymentIntentKind,
   rawIntentId: string,
 ): Promise<CancelIntentResult> {

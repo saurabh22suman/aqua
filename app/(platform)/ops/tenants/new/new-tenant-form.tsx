@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import {
   createTenantAction,
@@ -48,14 +48,16 @@ export function NewTenantForm({
   } as CreateTenantResult);
 
   const error = state?.kind === "error" ? state.message : null;
+  const [businessName, setBusinessName] = useState("");
+  const [clubName, setClubName] = useState(defaultLocationName);
 
   return (
     // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
     // suppress the case-only hydration warning React raises for
     // server-action forms (POST vs post).
     <form action={formAction} method="post" suppressHydrationWarning className="mt-8 space-y-6">
-      <Section title="Club details" subtitle="Public-facing name and URL slug.">
-        <Field label="Club name" name="name" required autoComplete="off" />
+      <Section title="Business account" subtitle="The business account contains clubs; each club can have activities.">
+        <Field label="Business account name" name="name" required autoComplete="off" onChange={setBusinessName} />
         <Field
           label="Slug"
           name="slug"
@@ -123,20 +125,23 @@ export function NewTenantForm({
       </Section>
 
       <Section
-        title="First location"
-        subtitle="Every tenant starts with one location. More can be added later."
+        title="First club"
+        subtitle="The business account starts with one club. More clubs can be added later."
       >
         <Field
-          label="Location name"
+          label="First club name"
           name="locationName"
           required
           defaultValue={defaultLocationName}
+          onChange={setClubName}
           autoComplete="off"
         />
         <Checkbox name="locationIsPrimary" defaultChecked>
-          This is the primary location
+          This is the primary club
         </Checkbox>
       </Section>
+
+      <p className="text-[13px] text-ink-2">{businessName.trim() || "Business account"} → {clubName.trim() || "First club"} → activities</p>
 
       {error ? (
         <OpsPanel tone="error" role="alert">
@@ -190,6 +195,7 @@ function Field({
   autoComplete,
   pattern,
   maxLength,
+  onChange,
 }: {
   label: string;
   name: string;
@@ -200,6 +206,7 @@ function Field({
   autoComplete?: string;
   pattern?: string;
   maxLength?: number;
+  onChange?: (value: string) => void;
 }) {
   return (
     <label className="block">
@@ -212,6 +219,7 @@ function Field({
         autoComplete={autoComplete}
         pattern={pattern}
         maxLength={maxLength}
+        onChange={onChange ? (event) => onChange(event.target.value) : undefined}
       />
       {hint ? (
         <span className="mt-1 block text-[12px] text-ink-3">{hint}</span>

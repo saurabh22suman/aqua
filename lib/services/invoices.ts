@@ -18,6 +18,7 @@ import type { InvoiceStatus, InvoiceSource } from "@/db/schema/invoices";
 import type { InvoicePayerKind } from "@/db/schema/invoices";
 import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
 import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { invoiceCorrectionEligibilityInTx, type InvoiceCorrectionEligibility } from "@/lib/services/invoice-correction-eligibility";
 
 // C-32 — invoice reads. Location-scoped (O-08): a scoped receptionist
 // sees only their own facility's documents. The write paths live in
@@ -68,6 +69,7 @@ export type InvoiceLineRow = {
 };
 
 export type InvoiceDetail = InvoiceRow & {
+  correctionEligibility?: InvoiceCorrectionEligibility;
   // WR-1 — a guest invoice has no member.
   memberId: string | null;
   memberName: string | null;
@@ -205,6 +207,7 @@ export async function getInvoice(
     const payerKind = row.invoice.payerKind as InvoicePayerKind;
     return {
       ...base,
+      correctionEligibility: await invoiceCorrectionEligibilityInTx(tx, ctx.tenantId, row.invoice.id),
       memberId: row.invoice.memberId,
       memberName: row.memberName,
       payerKind,

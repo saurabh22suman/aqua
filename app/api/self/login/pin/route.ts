@@ -25,20 +25,24 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTenant, withUser } from "@/db/tenant";
+import { tenants } from "@/db/schema/tenants";
+import { OPERATIONAL_TENANT_STATUSES } from "@/db/platform";
 import { pinSchema } from "@/lib/services/credentials";
-import { verifyPinAttempt } from "@/db/pin-login";
+import { verifyPinCredentialInTx } from "@/db/pin-login";
+import { runPinAttemptInTx } from "@/db/pin-attempt";
 import {
   isPinLocked,
 } from "@/lib/services/pin-lockout";
 import { consumeSelfServiceBudgetInTx } from "@/lib/services/self-service-throttle";
 import { readLinkFacts } from "@/lib/services/self-service-link-facts";
-import { readSelfServiceAccountByPhone } from "@/db/self-service-account";
+import { readSelfServiceAccountByPhone, readSelfServiceAccountInTx } from "@/db/self-service-account";
 import { readAccountLinkClubs } from "@/lib/auth/self-scope";
 import {
   SELF_SERVICE_COOKIE,
   SELF_SERVICE_SESSION_TTL_SECONDS,
-  mintSelfServiceSession,
+  mintSelfServiceSessionInTx,
   validateOmittedGuardianLinks,
   selfServiceCookieOptions,
 } from "@/lib/services/self-service-session";
@@ -161,6 +165,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
     if (!withinBudget) return null;
 
+    const [tenant] = await tx.select({ id: tenants.id }).from(tenants)
+      .where(and(eq(tenants.id, tenantId), inArray(tenants.status, [...OPERATIONAL_TENANT_STATUSES])))
+      .limit(1).for("share");
+    if (!tenant || !await readSelfServiceAccountInTx(tx, { tenantId, userId: account.userId })) return null;
+
     const facts = await readLinkFacts(tx, {
       tenantId,
       userId: account.userId,
@@ -185,37 +194,35 @@ export async function POST(request: Request): Promise<NextResponse> {
     return genericFailure();
   }
 
-  // 4. THE CREDENTIAL. NEVER auth.api.signInEmail.
+  // 4. Credential verification, lockout bookkeeping and mint share one
+  // tenant transaction and one account UPDATE lock. No staff session is made.
   const baUserId = account.betterAuthId;
   if (!baUserId) return genericFailure();
-  const pinOk = await verifyPinAttempt(account.userId, baUserId, parsed.data.pin).catch(() => false);
-  if (!pinOk) {
-    return genericFailure();
-  }
-
-  // A CORRECT PIN IS NOT A FAILED CREDENTIAL. The counters are cleared
-  // even when the account turns out to have no live link -- otherwise a
-  // member who mistyped once would still be one failure away from a
-  // lockout.
-  // The successful verification cleared failures under the account lock.
-
-  // 5. THE SCOPED SESSION. NO ba_session row is created, and the staff
-  //    session (if any) is untouched. The mint's own gate re-reads the
-  //    link rows inside the club and refuses on anything that is not
-  //    live, not confirmed or not current.
-  let minted: { cookieValue: string; expiresAt: Date; sessionId: string };
-  try {
-    minted = await mintSelfServiceSession({
-      tenantId,
-      userId: account.userId,
-      audience,
-      subjectId: prepared.subjectId,
-      linkIds: prepared.linkIds,
-      accountPhone: account.phone,
+  const minted = await withTenant(tenantId, async (tx) => {
+    const [tenant] = await tx.select({ id: tenants.id }).from(tenants)
+      .where(and(eq(tenants.id, tenantId), inArray(tenants.status, [...OPERATIONAL_TENANT_STATUSES])))
+      .limit(1).for("share");
+    if (!tenant) return null;
+    const locked = await readSelfServiceAccountInTx(tx, { tenantId, userId: account.userId, lockMode: "update" });
+    if (!locked || locked.phone !== phone || locked.betterAuthId !== baUserId) return null;
+    const attempt = await runPinAttemptInTx(tx, {
+      id: locked.userId, failedPinAttempts: locked.failedPinAttempts, pinLockedUntil: locked.pinLockedUntil,
+    }, async (verifyTx) => {
+      if (!await verifyPinCredentialInTx(verifyTx, locked.betterAuthId, baUserId, parsed.data.pin)) return { ok: false };
+      // Mint refusal rolls back only its writes, not a valid PIN's counter reset.
+      try {
+        const session = await verifyTx.transaction((mintTx) => mintSelfServiceSessionInTx(mintTx, {
+          tenantId, userId: locked.userId, audience, subjectId: prepared.subjectId,
+          linkIds: prepared.linkIds, accountPhone: locked.phone,
+        }));
+        return { ok: true, value: session };
+      } catch {
+        return { ok: true, value: null };
+      }
     });
-  } catch {
-    return genericFailure();
-  }
+    return attempt.ok ? attempt.value : null;
+  }).catch(() => null);
+  if (!minted) return genericFailure();
 
   const res = NextResponse.json({
     kind: "ok",

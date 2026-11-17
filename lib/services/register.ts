@@ -5,9 +5,9 @@ import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
 import { batches } from "@/db/schema/programs";
 import { attendance, enrolments, sessions } from "@/db/schema/scheduling";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { coachStaffIdSubquery } from "./staff";
-import { locationPredicate, locationVisible, resolveLocationAccess, type LocationAwareCtx } from "./location-access";
+import { locationPredicate, locationVisible, resolveLocationAccess } from "./location-access";
 import { createMember as registerMember } from "./member-registration";
 import { markAttendance as writeAttendance } from "./attendance-mark";
 import { visibleMember, isCoachLikeRoleKey } from "./resource-access";
@@ -19,7 +19,7 @@ import { writeAudit } from "@/lib/audit/write";
 // modules so their eligibility, transaction and audit contracts stay reviewable.
 export { createMemberInTx, type GuardianInput } from "./member-registration";
 
-export async function createMember(ctx: ActionCtx, input: Parameters<typeof registerMember>[1]): ReturnType<typeof registerMember> {
+export async function createMember(ctx: MutationActor, input: Parameters<typeof registerMember>[1]): ReturnType<typeof registerMember> {
   if (!input.memberCode.trim()) return { ok: false, error: "A member code is required." };
   if (!input.consents.some(consent => consent.purpose === "processing")) {
     return { ok: false, error: "Processing consent is required to register a member." };
@@ -27,12 +27,12 @@ export async function createMember(ctx: ActionCtx, input: Parameters<typeof regi
   return registerMember(ctx, input);
 }
 
-export async function markAttendance(ctx: LocationAwareCtx, input: Parameters<typeof writeAttendance>[1]): Promise<void> {
+export async function markAttendance(ctx: MutationActor, input: Parameters<typeof writeAttendance>[1]): Promise<void> {
   if (!input.clientId.trim()) throw new Error("Attendance needs an idempotency key.");
   return writeAttendance(ctx, input);
 }
 
-export async function enrolMember(ctx: LocationAwareCtx, input: { memberId: string; batchId: string; enrolledOn?: string }):
+export async function enrolMember(ctx: MutationActor, input: { memberId: string; batchId: string; enrolledOn?: string }):
 Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async tx => enrolMemberInTx(tx, ctx, input));
 }
@@ -42,7 +42,7 @@ Promise<{ ok: true } | { ok: false; error: string }> {
 // nest (db/scope.ts), so a caller that already owns a transaction needs
 // the body rather than a second transaction. Same rules, refusals and
 // audit row; only the transaction boundary moves.
-export async function enrolMemberInTx(tx: TenantTx, ctx: LocationAwareCtx, input: { memberId: string; batchId: string; enrolledOn?: string }):
+export async function enrolMemberInTx(tx: TenantTx, ctx: MutationActor, input: { memberId: string; batchId: string; enrolledOn?: string }):
 Promise<{ ok: true } | { ok: false; error: string }> {
   const [batch] = await tx.select({ capacity: batches.capacity, locationId: batches.locationId }).from(batches)
     .where(and(eq(batches.id, input.batchId), eq(batches.tenantId, ctx.tenantId), isNull(batches.deletedAt))).for("update");

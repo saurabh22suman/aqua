@@ -12,6 +12,9 @@ import {
   OpsSection,
 } from "@/components/ops/ops-primitives";
 import { OpsReadOnlyNote } from "@/components/ops/ops-display";
+import Link from "next/link";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 // Phase 2.2b — per-preset detail page at /ops/presets/[key].
 // The catalogue page links here for the dominant "Open preview"
@@ -56,8 +59,10 @@ const previewRows = (counts: PreviewCounts) => [
 
 export default async function PresetDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ key: string }>;
+  searchParams?: Promise<{ search?: string; page?: string }>;
 }) {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
@@ -87,13 +92,19 @@ export default async function PresetDetailPage({
   // presetKey, and memberCount for display — the engine's
   // applyPreset will check the lock on submit, so the picker
   // does not pre-validate per-tenant.
+  const query = (await searchParams) ?? {};
+  const search = typeof query.search === "string" ? query.search.trim().slice(0, 120).trimEnd() || undefined : undefined;
+  const page = Math.max(1, Math.min(100000, parseInt(query.page ?? "1", 10) || 1));
   const tenantsResult = await runOpsGlobalRead(
     "tenant.list",
-    () => listTenants({ limit: 200, offset: 0 }),
+    () => listTenants({ limit: 200, offset: (page - 1) * 200, search }),
     "ops_page",
   );
   if (!tenantsResult) redirect("/ops/login");
   const tenants = tenantsResult.rows;
+  const totalPages = Math.max(1, Math.ceil(tenantsResult.total / 200));
+  const href = (target: number) => `?${new URLSearchParams({ ...(search ? { search } : {}), page: String(target) }).toString()}`;
+  if (page > totalPages) redirect(href(totalPages));
 
   // O-03 — the picker chooses a location, not just a tenant. One
   // query for every live location; `eligible` is computed here so
@@ -139,12 +150,24 @@ export default async function PresetDetailPage({
       </OpsSection>
 
       {canWrite ? (
+        <>
+        <form method="get" className="mt-6 flex flex-wrap items-end gap-3">
+          <label>Search business accounts<Input name="search" type="search" maxLength={120} defaultValue={search ?? ""} /></label>
+          <Button type="submit" variant="secondary">Search</Button>
+        </form>
+        <p className="mt-2 text-[12px] text-ink-3">Page {page} of {totalPages} · {tenantsResult.total} matching accounts</p>
+        <div className="flex gap-4 text-[13px]">
+          {page > 1 ? <Link href={href(page - 1)}>Previous</Link> : null}
+          {page < totalPages ? <Link href={href(page + 1)}>Next</Link> : null}
+        </div>
         <PresetDetailForm
           presetKey={result.key}
           presetName={result.name}
           tenants={tenants}
+          hasSearch={Boolean(search)}
           locationsByTenant={locationsByTenant}
         />
+        </>
       ) : (
         <>
           <OpsSection className="mt-8" title="Apply to a location">

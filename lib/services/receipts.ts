@@ -16,7 +16,7 @@ import { methodLabel } from "@/lib/services/payments";
 import type { PaymentMethod } from "@/db/schema/payments";
 import type { AuditSource } from "@/db/schema/audit";
 import { asMemberId, type UserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import type { TenantTx } from "@/db/tenant";
 import type { SelfScope } from "@/lib/auth/self-scope";
 import { billingSubjectInTx } from "@/lib/services/self-billing";
@@ -230,7 +230,7 @@ async function serveOrCreateReceipt(
 }
 
 export async function getOrCreateReceipt(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   paymentId: string,
 ): Promise<ReceiptResult> {
   // Generating + storing a receipt writes a row and an audit entry;

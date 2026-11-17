@@ -65,6 +65,7 @@ vi.mock("@/lib/auth/surface-guard", () => ({
   requirePagePermission: (ctx: unknown) => ctx,
 }));
 vi.mock("@/lib/auth/context", () => ({
+  NotFoundError: class NotFoundError extends Error {},
   requireDefaultCtx: async () => ({
     tenantId: "t1",
     roleKey: "owner",
@@ -164,7 +165,7 @@ describe("facility switcher (W1-6)", () => {
     render(<FacilitySwitcher locations={LOCATIONS} />);
     const select = screen.getByTestId("facility-switcher") as HTMLSelectElement;
     expect(select.value).toBe("all");
-    expect(screen.getByRole("option", { name: "All facilities" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "All clubs" })).toBeTruthy();
     expect(screen.getByRole("option", { name: "Bandra Annex" })).toBeTruthy();
   });
 

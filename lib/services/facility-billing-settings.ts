@@ -1,10 +1,10 @@
 import { sql } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant, type TenantTx } from "@/db/tenant";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { writeAudit } from "@/lib/audit/write";
 import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
-import { authorize, failure, hasOpenOrders, OPEN_ORDERS_MESSAGE, parseAddress, sameAddress } from "@/lib/services/facility-billing-settings-core";
+import { authorize, canManageSite, failure, hasOpenOrders, OPEN_ORDERS_MESSAGE, parseAddress, sameAddress } from "@/lib/services/facility-billing-settings-core";
 import { createBillingRegistrationSchema, resetSiteBillingSettingSchema, saveClubBillingDefaultSchema, saveSiteBillingSettingSchema, type BillingIssuer, type BillingResult, type ClubBillingDefault, type SiteBillingChoice, type SiteBillingSetting, type SaveSiteBillingSettingInput } from "@/lib/services/facility-billing-contract";
 
 type ClubRow = { legal_name: string | null; legal_address: unknown; state_code: string | null; gstin: string | null };
@@ -54,7 +54,7 @@ function sameChoice(a: SiteBillingChoice, b: SiteBillingChoice): boolean {
 function sameIssuer(a: BillingIssuer | null, b: BillingIssuer | null): boolean {
   return !!a && !!b && a.legalName === b.legalName && a.stateCode === b.stateCode && a.gstin === b.gstin && sameAddress(a.legalAddress, b.legalAddress);
 }
-async function audit(tx: TenantTx, ctx: ActionCtx, action: string, entityId: string, before: unknown, after: unknown): Promise<void> {
+async function audit(tx: TenantTx, ctx: MutationActor, action: string, entityId: string, before: unknown, after: unknown): Promise<void> {
   await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, requestId: ctx.requestId ?? null, action, entityType: "facility_billing", entityId, before, after });
 }
 
@@ -65,7 +65,7 @@ export async function getClubBillingDefault(ctx: ActionCtx): Promise<BillingResu
     return current ? ok(current) : notFound();
   });
 }
-export async function saveClubBillingDefault(ctx: ActionCtx, raw: unknown): Promise<BillingResult<ClubBillingDefault>> {
+export async function saveClubBillingDefault(ctx: MutationActor, raw: unknown): Promise<BillingResult<ClubBillingDefault>> {
   const parsed = saveClubBillingDefaultSchema.safeParse(raw);
   if (!parsed.success) return invalid();
   const next = parsed.data;
@@ -89,11 +89,12 @@ export async function getSiteBillingSetting(ctx: ActionCtx, locationId: string):
   if (!resetSiteBillingSettingSchema.safeParse({ locationId }).success) return invalid();
   return withTenant(ctx.tenantId, async (tx) => {
     if (!(await authorize(tx, ctx))) return denied();
+    if (!(await canManageSite(tx, ctx, locationId))) return notFound();
     const value = await site(tx, ctx, locationId);
     return value ? ok(value) : notFound();
   });
 }
-export async function createBillingRegistration(ctx: ActionCtx, raw: unknown): Promise<BillingResult<{ id: string; issuer: BillingIssuer }>> {
+export async function createBillingRegistration(ctx: MutationActor, raw: unknown): Promise<BillingResult<{ id: string; issuer: BillingIssuer }>> {
   const parsed = createBillingRegistrationSchema.safeParse(raw);
   if (!parsed.success) return invalid();
   const issuer = parsed.data;
@@ -107,7 +108,7 @@ export async function createBillingRegistration(ctx: ActionCtx, raw: unknown): P
   });
 }
 
-async function saveSiteInTx(tx: TenantTx, ctx: ActionCtx, next: SaveSiteBillingSettingInput): Promise<BillingResult<SiteBillingSetting>> {
+async function saveSiteInTx(tx: TenantTx, ctx: MutationActor, next: SaveSiteBillingSettingInput): Promise<BillingResult<SiteBillingSetting>> {
     const before = await site(tx, ctx, next.locationId);
     if (!before) return notFound();
     if (before.enabled && !next.enable) return failure("cannot_disable", "An enabled site cannot revert to legacy billing.");
@@ -138,19 +139,21 @@ async function saveSiteInTx(tx: TenantTx, ctx: ActionCtx, next: SaveSiteBillingS
     await audit(tx, ctx, "facility_billing.site.update", next.locationId, before, after);
     return ok(after);
 }
-export async function saveSiteBillingSetting(ctx: ActionCtx, raw: unknown): Promise<BillingResult<SiteBillingSetting>> {
+export async function saveSiteBillingSetting(ctx: MutationActor, raw: unknown): Promise<BillingResult<SiteBillingSetting>> {
   const parsed = saveSiteBillingSettingSchema.safeParse(raw);
   if (!parsed.success) return invalid();
   return withTenant(ctx.tenantId, async (tx) => {
     if (!(await authorize(tx, ctx))) return denied();
+    if (!(await canManageSite(tx, ctx, parsed.data.locationId))) return notFound();
     return saveSiteInTx(tx, ctx, parsed.data);
   });
 }
-export async function resetSiteBillingSetting(ctx: ActionCtx, raw: unknown): Promise<BillingResult<SiteBillingSetting>> {
+export async function resetSiteBillingSetting(ctx: MutationActor, raw: unknown): Promise<BillingResult<SiteBillingSetting>> {
   const parsed = resetSiteBillingSettingSchema.safeParse(raw);
   if (!parsed.success) return invalid();
   return withTenant(ctx.tenantId, async (tx) => {
     if (!(await authorize(tx, ctx))) return denied();
+    if (!(await canManageSite(tx, ctx, parsed.data.locationId))) return notFound();
     const current = await site(tx, ctx, parsed.data.locationId);
     if (!current) return notFound();
     if (current.choice.mode === "inherit") return ok(current);

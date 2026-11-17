@@ -369,6 +369,9 @@ function staffSelfResolver(
           throw new NotFoundError();
         }
 
+        // Match redemption's tenant -> account -> membership ordering.
+        const account = await readSelfServiceAccountInTx(tx, { tenantId, userId });
+        if (!account) throw new NotFoundError();
         const [membership] = await tx.select({ roleKey: roles.key }).from(tenantMemberships)
           .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantId)))
           .innerJoin(users, eq(users.id, tenantMemberships.userId))
@@ -379,11 +382,7 @@ function staffSelfResolver(
         if (!membership || membership.roleKey !== authority.roleKey ||
           isSessionExpiredForRole(membership.roleKey, authority.sessionCreatedAt)) throw new NotFoundError();
 
-        const account = await readSelfServiceAccountInTx(tx, {
-          tenantId,
-          userId,
-        });
-        const accountPhone = account?.phone ?? null;
+        const accountPhone = account.phone;
 
         const linkIds = await readLiveLinkIds(tx, {
           tenantId,

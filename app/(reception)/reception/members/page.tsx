@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listMembersAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { formatPhoneIN } from "@/lib/phone";
@@ -25,7 +26,7 @@ export default async function ReceptionMembersPage({
   const ctx = await requireReception();
   const [params, terminology] = await Promise.all([
     searchParams ?? Promise.resolve({} as { q?: string }),
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
   const query = (params.q ?? "").trim();
   const members = query.length > 0 ? await listMembersAction({ search: query }) : [];

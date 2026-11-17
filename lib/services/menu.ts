@@ -18,7 +18,7 @@ import {
   updateCategoryInput,
   uuid,
 } from "@/lib/services/menu-core";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import type {
   MenuCategoryRow,
   MenuItemRow,
@@ -39,7 +39,7 @@ export * from "./menu-item-list";
 export type { MenuCategoryRow, MenuItemRow, MenuMutationResult };
 
 export async function createMenuCategory(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = categoryInput.safeParse(raw);
@@ -101,7 +101,7 @@ export async function createMenuCategory(
 }
 
 export async function updateMenuCategory(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = updateCategoryInput.safeParse(raw);
@@ -185,7 +185,7 @@ export async function updateMenuCategory(
 }
 
 export async function archiveMenuCategory(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = z.object({ categoryId: uuid }).safeParse(raw);

@@ -55,6 +55,10 @@ export type FeesOverview = {
   /** Past-due balance by age, in whole days late (IST due dates). */
   overdueAgeing: { bucket: "1-7" | "8-30" | "31+"; paise: number; count: number }[];
   today: string;
+  /** Undefined means unavailable, not an empty period. Values are gross captured paise. */
+  methodTotals?: { method: PaymentMethod; paise: number }[];
+  /** Omitted when live invoices.read is absent. */
+  followUps?: { id: string; invoiceNumber: string; payerName: string; dueOn: string; outstandingPaise: number }[];
 };
 
 export type HubInvoiceRow = {
@@ -237,6 +241,9 @@ export async function getFeesOverview(
       .from(payments)
       .where(and(...paymentConditions));
 
+    const methodRows = await tx.select({ method: payments.method, paise: sql<string>`sum(${payments.amountPaise})::text` })
+      .from(payments).where(and(...paymentConditions)).groupBy(payments.method);
+
     const dueConditions = [
       eq(invoices.tenantId, ctx.tenantId),
       inArray(invoices.status, DUES_STATUSES),
@@ -244,6 +251,15 @@ export async function getFeesOverview(
     ];
     if (locationId) dueConditions.push(eq(invoices.locationId, locationId));
     if (invPredicate) dueConditions.push(invPredicate);
+
+    const followUps = await callerHasPermission(tx, ctx, "invoices.read")
+      ? (await tx.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, memberName: persons.fullName, guestName: invoices.guestName, dueOn: invoices.dueOn, total: invoices.totalPaise, paid: invoices.paidPaise })
+        .from(invoices)
+        .leftJoin(members, and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)))
+        .leftJoin(persons, and(eq(persons.id, members.personId), eq(persons.tenantId, ctx.tenantId)))
+        .where(and(...dueConditions)).orderBy(asc(invoices.dueOn), asc(invoices.createdAt), asc(invoices.id)).limit(3))
+        .map((row) => ({ id: row.id, invoiceNumber: row.invoiceNumber, payerName: row.memberName ?? row.guestName ?? "", dueOn: row.dueOn, outstandingPaise: toSafePaise(row.total - row.paid) }))
+      : undefined;
 
     const [outstanding] = await tx
       .select({
@@ -340,6 +356,8 @@ export async function getFeesOverview(
       overdueInvoiceCount: Number(overdue?.count ?? 0),
       overdueAgeing,
       today,
+      methodTotals: methodRows.map((row) => ({ method: row.method as PaymentMethod, paise: toSafePaise(row.paise) })).sort((a, b) => PAYMENT_METHODS.indexOf(a.method) - PAYMENT_METHODS.indexOf(b.method)),
+      followUps,
     };
   });
 }

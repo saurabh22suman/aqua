@@ -77,6 +77,7 @@ export function BookingBillPanel({
   const correctionAllowed =
     canCorrectInvoice &&
     bill.memberId === null &&
+    bill.correctionEligibility === "eligible" &&
     (bill.invoiceStatus === "void" ||
       (bill.invoiceStatus === "issued" && bill.amountDuePaise === bill.totalPaise));
   const collecting = !voided && correctionPhase === "idle";
@@ -150,6 +151,14 @@ export function BookingBillPanel({
           onBillReplaced={onBillReplaced}
           onPhaseChange={setCorrectionPhase}
         />
+      ) : canCorrectInvoice && bill.memberId === null && bill.correctionEligibility !== "eligible" ? (
+        <p className="text-[13px] text-ink-2">
+          {bill.correctionEligibility === "payment_history"
+            ? "This invoice has payment history. Paid corrections are deferred."
+            : bill.correctionEligibility === "cafe"
+              ? "Café bills cannot be corrected here."
+              : "Invoice correction eligibility could not be confirmed. Reload and try again."}
+        </p>
       ) : null}
 
       {voided ? (

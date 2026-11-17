@@ -164,7 +164,7 @@ export function BatchEditForm({
       onSaved(res.batch);
     } catch {
       onError(
-        "The change did not reach the server. Your edits are kept — try again.",
+        "We could not confirm whether the batch was saved. Your edits are kept; check the batch before retrying.",
       );
     } finally {
       setSaving(false);
@@ -284,7 +284,7 @@ export function BatchEditForm({
           </p>
         </div>
       ) : null}
-      {error ? <p className="text-[12px] text-late">{error}</p> : null}
+      {error ? <p role="alert" className="text-[12px] text-late">{error}</p> : null}
       <div className="flex gap-2">
         <Button
           variant="primary"
@@ -294,11 +294,13 @@ export function BatchEditForm({
           onClick={save}
           disabled={saving || !form.name.trim() || form.days.length === 0 || !startValid || !endValid}
           data-testid={`save-batch-${batchId}`}>
-        Save batch
+        {saving ? "Saving batch…" : "Save batch"}
       </Button>
         <button
           type="button"
           onClick={onCancel}
+          disabled={saving}
+          aria-label="Cancel batch edit"
           className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line px-4 py-2 text-[14px] text-ink-3"
         >
           <X size={16} />

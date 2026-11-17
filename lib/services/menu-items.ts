@@ -15,7 +15,7 @@ import {
   updateItemInput,
   uuid,
 } from "@/lib/services/menu-core";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import type { MenuMutationResult } from "@/lib/services/menu-core";
 
 // K-01 — menu item mutations. See lib/services/menu.ts for the
@@ -27,7 +27,7 @@ function nameFilter(name: string) {
 }
 
 export async function createMenuItem(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = itemInput.safeParse(raw);
@@ -125,7 +125,7 @@ export async function createMenuItem(
 }
 
 export async function updateMenuItem(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = updateItemInput.safeParse(raw);
@@ -237,7 +237,7 @@ export async function updateMenuItem(
 }
 
 export async function archiveMenuItem(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = z.object({ itemId: uuid }).safeParse(raw);

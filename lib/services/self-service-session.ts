@@ -68,6 +68,7 @@ import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { withTenant, withUser, type TenantTx } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { OPERATIONAL_TENANT_STATUSES } from "@/db/platform";
+import { readSelfServiceAccountInTx } from "@/db/self-service-account";
 import { writeAudit } from "@/lib/audit/write";
 import {
   selfServiceAudience,
@@ -254,6 +255,7 @@ export type SelfServiceRefusalReason =
   | "relationship_not_live"
   | "identity_not_confirmed"
   | "account_number_unreadable"
+  | "credential_changed"
   | "attestation_authority_lapsed"
   | "subject_mismatch";
 
@@ -326,7 +328,7 @@ async function authorizeBoundLinksInternal(
   args: BoundLinkArgs,
   allowDeletedChildForOmission: boolean,
 ): Promise<
-  | { ok: true; links: AuthorizedLink[] }
+  | { ok: true; links: AuthorizedLink[]; credentialEpoch: bigint }
   | { ok: false; reason: SelfServiceRefusalReason }
 > {
   if (args.linkIds.length === 0) {
@@ -338,6 +340,11 @@ async function authorizeBoundLinksInternal(
       inArray(tenants.status, [...OPERATIONAL_TENANT_STATUSES])))
     .limit(1).for("share");
   if (!tenant) return { ok: false, reason: "tenant_not_live" };
+
+  // Account liveness is separate from the phone-or-attestation pairing gate.
+  // The tenant-scoped read locks the account for the rest of this transaction.
+  const account = await readSelfServiceAccountInTx(tx, args);
+  if (!account) return { ok: false, reason: "account_number_unreadable" };
 
   const facts = await readLinkFacts(tx, {
     tenantId: args.tenantId,
@@ -426,6 +433,7 @@ async function authorizeBoundLinksInternal(
 
   return {
     ok: true,
+    credentialEpoch: account.credentialEpoch,
     links: facts.map((f) => ({
       linkId: f.linkId,
       memberId: f.memberId,
@@ -445,6 +453,12 @@ export async function validateOmittedGuardianLinks(
   args: { tenantId: TenantId; userId: UserId; linkIds: string[]; accountPhone: string | null },
 ): Promise<boolean> {
   if (!args.linkIds.length) return true;
+  // Acquire the same tenant/account locks as the authority gate before facts.
+  const [tenant] = await tx.select({ id: tenants.id }).from(tenants)
+    .where(and(eq(tenants.id, args.tenantId),
+      inArray(tenants.status, [...OPERATIONAL_TENANT_STATUSES])))
+    .limit(1).for("share");
+  if (!tenant || !await readSelfServiceAccountInTx(tx, args)) return false;
   const facts = await readLinkFacts(tx, { ...args, audience: "guardian" });
   if (facts.length !== args.linkIds.length || !facts.every((f) => f.childPersonSoftDeleted)) return false;
   const result = await authorizeBoundLinksInternal(tx, { ...args, audience: "guardian" }, true);
@@ -584,6 +598,7 @@ export async function mintSelfServiceSessionInTx(
     subjectId: input.subjectId,
     bindingDigest: digest,
     tokenHash,
+    credentialEpoch: authorized.credentialEpoch,
     issuedAt,
     expiresAt,
     lastSeenAt: issuedAt,
@@ -774,6 +789,19 @@ export async function resolveSelfServiceSessionInTx(
     return { ok: false, reason: "audience_mismatch" };
   }
 
+  // Lock in the same tenant -> account -> session order as mint. The
+  // account is reached only through a tenant-scoped link, and remains
+  // locked through the caller’s private-data callback.
+  const [tenant] = await tx.select({ id: tenants.id }).from(tenants)
+    .where(and(eq(tenants.id, located.tenantId),
+      inArray(tenants.status, [...OPERATIONAL_TENANT_STATUSES])))
+    .limit(1).for("share");
+  if (!tenant) return { ok: false, reason: "tenant_not_live" };
+  const account = await readSelfServiceAccountInTx(tx, {
+    tenantId: located.tenantId, userId: located.userId,
+  });
+  if (!account) return { ok: false, reason: "account_number_unreadable" };
+
   // Serialize readers before a possible idle-timestamp UPDATE; two SHARE
   // holders upgrading the same row would deadlock during a coarse touch.
   const rows = await tx
@@ -784,6 +812,7 @@ export async function resolveSelfServiceSessionInTx(
       audience: selfServiceSessions.audience,
       subjectId: selfServiceSessions.subjectId,
       personId: selfServiceSessions.personId,
+      credentialEpoch: selfServiceSessions.credentialEpoch,
       bindingDigest: selfServiceSessions.bindingDigest,
       issuedAt: selfServiceSessions.issuedAt,
       expiresAt: selfServiceSessions.expiresAt,
@@ -802,6 +831,9 @@ export async function resolveSelfServiceSessionInTx(
 
   const row = rows[0] ?? null;
   if (!row) return { ok: false, reason: "unknown_session" };
+  if (row.credentialEpoch !== account.credentialEpoch) {
+    return { ok: false, reason: "credential_changed" };
+  }
   if (row.revokedAt !== null) return { ok: false, reason: "revoked" };
   if (row.expiresAt.getTime() <= now.getTime()) {
     return { ok: false, reason: "expired" };

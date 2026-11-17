@@ -21,7 +21,7 @@ export function ScheduleDatePicker({ date, view, locationId }: {
     <form ref={form} action="/owner/schedule" method="get" className="w-full max-w-64">
       <input type="hidden" name="view" value={view} />
       <input ref={dateInput} type="hidden" name="date" defaultValue={date} />
-      <input type="hidden" name="location" value={locationId ?? ""} />
+      <input type="hidden" name="facility" value={locationId ?? "all"} />
       <DateField value={date} onChange={selectDate} aria-label="Schedule date" required />
     </form>
   );

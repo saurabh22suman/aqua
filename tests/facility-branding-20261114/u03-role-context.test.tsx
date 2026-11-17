@@ -10,5 +10,5 @@ afterEach(cleanup);
 it("names the current accountant role in the existing desktop and mobile club context", () => {
   render(<OwnerShell navItems={[]} locations={[]} clubName="Synthetic Club" accountLabel="Accountant"><p>Content</p></OwnerShell>);
   expect(screen.getByText("Accountant workspace")).toBeTruthy();
-  expect(within(screen.getByRole("group", { name: "Club and facility" })).getByText("Accountant")).toBeTruthy();
+  expect(within(screen.getByRole("group", { name: "Business account and club" })).getByText("Accountant")).toBeTruthy();
 });

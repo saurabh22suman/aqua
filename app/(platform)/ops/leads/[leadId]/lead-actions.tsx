@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   convertLeadAction,
   transitionLeadAction,
+  completeLeadAction,
 } from "@/lib/actions/platform-leads";
 import type { ConvertLeadResult } from "@/db/platform-lead-conversion";
 import type { LeadMutationResult } from "@/db/platform-leads";
@@ -25,6 +26,7 @@ export function LeadActions({
   leadId,
   currentStatus,
   hasLinkedTenant = false,
+  linkedTenantId,
   defaultSlug,
   defaultLocationName,
   defaultPreset,
@@ -34,6 +36,7 @@ export function LeadActions({
   leadId: string;
   currentStatus: string;
   hasLinkedTenant?: boolean;
+  linkedTenantId?: string | null;
   defaultSlug: string;
   defaultLocationName: string;
   defaultPreset: string;
@@ -45,6 +48,7 @@ export function LeadActions({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [lostReason, setLostReason] = useState("");
+  const [completionReason, setCompletionReason] = useState("");
   const [convertResult, setConvertResult] = useState<ConvertLeadResult | null>(
     null,
   );
@@ -66,6 +70,16 @@ export function LeadActions({
     startTransition(async () => {
       const result = await convertLeadAction(null, formData);
       setConvertResult(result);
+      router.refresh();
+    });
+  }
+
+  function complete() {
+    if (!linkedTenantId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await completeLeadAction(leadId, linkedTenantId, completionReason);
+      if (result.kind !== "ok") setError(result.message);
       router.refresh();
     });
   }
@@ -124,6 +138,13 @@ export function LeadActions({
                 Mark lost
               </Button>
             </div>
+            {currentStatus === "trial" && linkedTenantId ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-[13px] text-ink-2">Provisioning created a trial tenant. Completing business conversion is a separate audited decision.</p>
+                <label className="block"><span className="mb-1 block text-[12px] font-medium text-ink-2">Conversion reason (required)</span><Input value={completionReason} onChange={(e) => setCompletionReason(e.target.value)} maxLength={500} /></label>
+                <Button type="button" variant="secondary" disabled={pending || !completionReason.trim()} onClick={complete}>Mark business conversion complete</Button>
+              </div>
+            ) : null}
           </OpsWriteGate>
         </OpsCard>
       ) : null}
@@ -138,9 +159,8 @@ export function LeadActions({
               <p className="mt-1 text-[13px] text-ink-3">
                 Creates the tenant, applies the preset chosen from the
                 qualification answers, creates the additional locations and
-                moves this lead to trial. Revenue settings (fee model, GST,
-                collections) land with the money module and stay on the lead
-                until then.
+                moves this lead to trial. Fee model, GST registration, collection
+                mode and coach count are recorded for setup, not applied automatically.
               </p>
               <OpsWriteGate
                 canWrite={canWrite}
@@ -171,6 +191,7 @@ export function LeadActions({
                     />
                   </label>
                 </div>
+                <p className="text-[13px] text-ink-2">The trial deadline is 14 days from provisioning; its exact time is shown in IST after creation.</p>
                 <label className="block">
                   <span className="mb-1 block text-[12px] font-medium text-ink-2">
                     Preset
@@ -194,10 +215,13 @@ export function LeadActions({
             <OpsPanel tone="info" className="mt-4" title="Provisioning result">
               {convertResult.kind === "ok" ? (
                 <>
-                  Tenant provisioned with preset{" "}
-                  <span className="font-medium">{convertResult.preset}</span>{" "}
-                  and {convertResult.locationsCreated} location
+                  Trial tenant created with {convertResult.locationsCreated} location
                   {convertResult.locationsCreated === 1 ? "" : "s"}.{" "}
+                  {convertResult.presetApplied ? (
+                    <>Preset <span className="font-medium">{convertResult.preset}</span> was applied. </>
+                  ) : (
+                    <>The preset was not applied; setup needs attention. </>
+                  )}
                   <a
                     href={`/ops/tenants/${convertResult.tenantId}`}
                     className="text-[var(--accent-ink)] underline underline-offset-2"
@@ -211,7 +235,7 @@ export function LeadActions({
                   ) : null}
                 </>
               ) : (
-                convertResult.message
+                <>{convertResult.message}{convertResult.tenantId ? <> <a href={`/ops/tenants/${convertResult.tenantId}`} className="underline">Open linked tenant</a></> : null}</>
               )}
             </OpsPanel>
           ) : null}

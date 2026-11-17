@@ -13,7 +13,7 @@ import {
   signBookingEntryToken,
   verifyBookingEntryToken,
 } from "@/lib/services/booking-entry-token";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // The paid-booking entry lane.
 //
@@ -170,7 +170,7 @@ function passTtlSeconds(endsAt: Date, nowMs: number): number {
 // applied at the scan. The pass TTL is tied to the booking's end, so it does
 // not expire before the booking starts.
 export async function mintBookingEntryToken(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   bookingId: string,
 ): Promise<MintEntryTokenResult> {
   const parsed = bookingIdInput.safeParse(bookingId);
@@ -262,7 +262,7 @@ export async function mintBookingEntryToken(
 }
 
 export async function checkInBooking(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<CheckInBookingResult> {
   const parsed = checkInInput.safeParse(raw);

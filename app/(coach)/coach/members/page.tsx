@@ -1,6 +1,7 @@
 import { getCoachRosterAction } from "@/lib/actions/coach";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { CoachRosterSearch } from "@/components/coach-roster-search";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import {
@@ -13,7 +14,7 @@ export default async function CoachMembersPage() {
   await requireCoach();
   const [roster, terminology] = await Promise.all([
     getCoachRosterAction(),
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
 
   const memberNoun = resolveTerm(terminology, "member", 1);

@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { isLiveOwnerForSettings } from "@/lib/auth/owner-settings-page-guard";
 import { hasPermission } from "@/lib/auth/permission";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
@@ -25,7 +26,7 @@ export default async function StaffCreatePage() {
   // through the closed-key `coach` resolver so a gym / multi-sport
   // tenant renders "Trainer", a dance / martial-arts tenant
   // renders "Instructor".
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   return (
     <OwnerPage>
       <Link

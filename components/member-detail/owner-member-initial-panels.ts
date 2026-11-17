@@ -24,11 +24,11 @@ import type {
 // Used only by the owner overview. Every other consumer (reception, coach,
 // the payments/notes tabs) keeps the panels' own mount read.
 
-async function readEnrolment(memberId: string): Promise<MemberEnrolmentSeed> {
+async function readEnrolment(memberId: string, canReadPrograms: boolean): Promise<MemberEnrolmentSeed> {
   try {
     const [enrolments, batches] = await Promise.all([
       listMemberEnrolmentsAction(memberId),
-      listBatchesAction(),
+      canReadPrograms ? listBatchesAction() : Promise.resolve([]),
     ]);
     return { memberId, enrolments, batches };
   } catch {
@@ -63,15 +63,15 @@ async function readMakeup(memberId: string): Promise<MemberMakeupSeed> {
   }
 }
 
-export async function readOwnerMemberInitialPanels(memberId: string): Promise<{
+export async function readOwnerMemberInitialPanels(memberId: string, permissions: { canReadPrograms: boolean; canReadAttendance: boolean }): Promise<{
   enrolment: MemberEnrolmentSeed;
   subscription: MemberSubscriptionSeed;
-  makeup: MemberMakeupSeed;
+  makeup: MemberMakeupSeed | null;
 }> {
   const [enrolment, subscription, makeup] = await Promise.all([
-    readEnrolment(memberId),
+    readEnrolment(memberId, permissions.canReadPrograms),
     readSubscription(memberId),
-    readMakeup(memberId),
+    permissions.canReadAttendance ? readMakeup(memberId) : Promise.resolve(null),
   ]);
   return { enrolment, subscription, makeup };
 }

@@ -48,6 +48,6 @@ it("does not populate the picker for a revoked membership", async () => {
   try {
     renderToStaticMarkup(await OwnerLayout({ children: <p>Content</p> }));
     expect(state.locations).toEqual([]);
-    expect(await staffSiteContext({ ...f.context(f.managerId, "manager"), roleKey: "accountant" })).toBe("No assigned facilities");
+    expect(await staffSiteContext({ ...f.context(f.managerId, "manager"), roleKey: "accountant" })).toBe("No assigned clubs");
   } finally { await f.admin.query("update tenant_memberships set status='active' where id=$1", [f.managerMembership]); }
 });

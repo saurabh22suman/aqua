@@ -61,7 +61,9 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
 // sm = 44px (the DESIGN.md §2 floor for a compact table/tertiary
 // control, met exactly); md/lg = 48px, the standard control height.
 const SIZE_CLASS: Record<ButtonSize, string> = {
-  sm: "min-h-11 px-3.5 py-2 text-[16px]",
+  // Compact actions keep a full touch target without the visual weight of
+  // form controls. Inputs and standard submit actions remain 16px / 48px.
+  sm: "min-h-11 min-w-11 px-3 py-2 text-[14px]",
   md: "min-h-12 px-4 py-2.5 text-[16px]",
   lg: "min-h-12 px-4 py-3 text-[16px]",
 };

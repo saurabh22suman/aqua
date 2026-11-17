@@ -6,7 +6,7 @@ import { membershipLocations, tenantMemberships } from "@/db/schema/memberships"
 import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asStaffId } from "@/lib/ids";
 
 // R02 (2026-10-13 role-workflow audit) — delegated curriculum
@@ -162,7 +162,7 @@ export async function getCurriculumLeadState(
 }
 
 export async function setCurriculumLead(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   staffId: string,
   enabled: boolean,
 ): Promise<CurriculumLeadResult> {

@@ -345,7 +345,7 @@ export function InvoiceExpanded({
         />
       ) : null}
 
-      {canVoid && detail.status !== "void" && detail.paidPaise === 0 ? (
+      {canVoid && detail.status !== "void" && detail.correctionEligibility === "eligible" ? (
         <div className="mt-2">
           {showVoid ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -379,9 +379,17 @@ export function InvoiceExpanded({
             </Button>
           )}
         </div>
-      ) : canWrite && detail.status !== "void" && detail.paidPaise === 0 ? (
+      ) : canWrite && detail.status !== "void" && detail.correctionEligibility === "eligible" ? (
         <p className="mt-2 text-[12px] text-ink-3">
           Ask the owner to cancel an invoice.
+        </p>
+      ) : canVoid && detail.status !== "void" ? (
+        <p className="mt-2 text-[12px] text-ink-3">
+          {detail.correctionEligibility === "cafe"
+            ? "Café bills cannot be voided here; a correction path is not available."
+            : detail.correctionEligibility === "payment_history"
+              ? "This invoice has payment history. Paid corrections are deferred."
+              : "Invoice correction eligibility could not be confirmed. Reload and try again."}
         </p>
       ) : null}
 

@@ -1,10 +1,29 @@
-import { asc, desc, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { db } from "./client";
 import { withPlatform } from "./scope";
 import { platformSessions, platformUsers } from "./schema";
+import { sha256 } from "./platform-auth-crypto";
 
 export const OPERATOR_LIST_LIMIT = 50;
 export const OPERATOR_SESSION_LIMIT = 100;
+
+/** Resolve only a fully authenticated, active operator's current session. */
+export async function currentOperatorSessionId(token: string, operatorId: string): Promise<string | null> {
+  if (!token) return null;
+  return withPlatform(async () => {
+    const [row] = await db.select({ id: platformSessions.id })
+      .from(platformSessions)
+      .innerJoin(platformUsers, eq(platformUsers.id, platformSessions.userId))
+      .where(and(
+        eq(platformSessions.tokenHash, sha256(token)),
+        eq(platformSessions.userId, operatorId),
+        eq(platformUsers.status, "active"),
+        eq(platformSessions.secondFactorPassed, true),
+        gt(platformSessions.expiresAt, new Date()),
+      )).limit(1);
+    return row?.id ?? null;
+  });
+}
 
 import type { OperatorRole, OperatorStatus } from "./platform-operators-shared";
 export type { OperatorRole, OperatorStatus } from "./platform-operators-shared";

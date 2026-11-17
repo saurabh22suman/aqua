@@ -202,9 +202,9 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
       />,
     );
     const money = screen.getByTestId("owner-home-money-surface");
-    expect(money.textContent).toContain("Collections");
+    expect(money.textContent).toContain("Collected today");
     expect(money.textContent).toContain("₹21,000");
-    expect(money.textContent).toContain("Unavailable");
+    expect(screen.getByText("Collections trend unavailable.")).toBeTruthy();
   });
 
   it("does not paint an alert on a tile whose money is not late", () => {
@@ -228,7 +228,7 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
     );
     const money = screen.getByTestId("owner-home-money-surface");
     expect(money.textContent).toContain("₹0");
-    expect(money.textContent).toContain("Unavailable");
+    expect(screen.getByText("Collections trend unavailable.")).toBeTruthy();
     expect(money.className).not.toContain("bg-late-soft");
   });
 });

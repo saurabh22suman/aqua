@@ -72,6 +72,7 @@ export default async function PlatformTenantDetailPage({
         <div className="rounded-card border border-line bg-paper px-4 py-3">
           <StatusTransitionControls
             tenantId={detail.id}
+            tenantName={detail.name}
             currentStatus={detail.status}
             canWrite={canWrite}
           />
@@ -227,7 +228,7 @@ export default async function PlatformTenantDetailPage({
             <p className="text-[13px] text-ink-2">
               This tenant still has only preset-seeded sample data.
             </p>
-            <RemoveSampleDataButton tenantId={detail.id} canWrite={canWrite} />
+            <RemoveSampleDataButton tenantId={detail.id} tenantName={detail.name} canWrite={canWrite} />
           </div>
         </section>
       ) : null}

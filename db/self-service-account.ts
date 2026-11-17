@@ -64,6 +64,7 @@ export type SelfServiceAccount = {
   phone: string;
   /** The better-auth identity, when the account has one. */
   betterAuthId: string | null;
+  credentialEpoch: bigint;
   failedPinAttempts: number;
   pinLockedUntil: Date | null;
 };
@@ -72,6 +73,7 @@ const ACCOUNT_COLUMNS = {
   userId: users.id,
   phone: users.phone,
   betterAuthId: users.betterAuthId,
+  credentialEpoch: users.credentialEpoch,
   failedPinAttempts: users.failedPinAttempts,
   pinLockedUntil: users.pinLockedUntil,
 };
@@ -97,6 +99,7 @@ export async function readSelfServiceAccountByPhone(
       userId: row.userId,
       phone: row.phone,
       betterAuthId: row.betterAuthId,
+      credentialEpoch: row.credentialEpoch,
       failedPinAttempts: row.failedPinAttempts,
       pinLockedUntil: row.pinLockedUntil,
     };
@@ -110,8 +113,9 @@ export async function readSelfServiceAccountByPhone(
  * The join is the point: the account is located from a tenant-scoped
  * table, inside the club's own scope, so this is the repository's
  * sanctioned shape and not a global lookup. `users` has no RLS, so the
- * read is mechanically safe; the LOCK is a SHARE lock on ONE row of a
- * table with no RLS, which does not widen what the transaction can see
+ * read is mechanically safe; only the user row is locked, in SHARE mode
+ * by default or UPDATE when the caller will write it. No link row is
+ * locked by this lookup. This does not widen what the transaction can see
  * (the WHERE clause still names one primary key through one link row).
  *
  * `null` means the account has no link row in THIS club — which is a
@@ -120,7 +124,7 @@ export async function readSelfServiceAccountByPhone(
  */
 export async function readSelfServiceAccountInTx(
   tx: TenantTx,
-  args: { tenantId: TenantId; userId: UserId },
+  args: { tenantId: TenantId; userId: UserId; lockMode?: "share" | "update" },
 ): Promise<SelfServiceAccount | null> {
   // TWO LOOKUPS, NOT ONE. The account may be linked in this club through
   // EITHER link table — a member link or a guardian link — and an
@@ -140,13 +144,14 @@ export async function readSelfServiceAccountInTx(
       ),
     )
     .limit(1)
-    .for("share");
+    .for(args.lockMode ?? "share", { of: users });
   const memberRow = memberRows[0];
   if (memberRow) {
     return {
       userId: memberRow.userId,
       phone: memberRow.phone,
       betterAuthId: memberRow.betterAuthId,
+      credentialEpoch: memberRow.credentialEpoch,
       failedPinAttempts: memberRow.failedPinAttempts,
       pinLockedUntil: memberRow.pinLockedUntil,
     };
@@ -164,13 +169,14 @@ export async function readSelfServiceAccountInTx(
       ),
     )
     .limit(1)
-    .for("share");
+    .for(args.lockMode ?? "share", { of: users });
   const guardianRow = guardianRows[0];
   if (!guardianRow) return null;
   return {
     userId: guardianRow.userId,
     phone: guardianRow.phone,
     betterAuthId: guardianRow.betterAuthId,
+    credentialEpoch: guardianRow.credentialEpoch,
     failedPinAttempts: guardianRow.failedPinAttempts,
     pinLockedUntil: guardianRow.pinLockedUntil,
   };

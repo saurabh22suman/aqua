@@ -44,8 +44,7 @@ export default async function TerminologySettingsPage({
 
       <PageHeader
         title={<>Vocabulary</>}
-        purpose={<>Eight terms the academy can rename. Only the visible wording
-        changes.</>}
+        purpose={<>Optional wording for supported surfaces. Owner navigation uses standard core terms; saved choices remain available elsewhere.</>}
       />
 
       <nav

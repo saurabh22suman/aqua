@@ -7,7 +7,7 @@ import { users } from "@/db/schema/users";
 import { writeAudit } from "@/lib/audit/write";
 import { members, persons } from "@/db/schema/people";
 import { rolePermissions, roles } from "@/db/schema/roles";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { asMemberId, asUserId } from "@/lib/ids";
 import { normaliseToE164 } from "@/lib/phone";
 import { isFacilityScopedRoleKey } from "@/lib/services/facility-scope";
@@ -22,7 +22,7 @@ class EnrollmentRefused extends Error {}
 
 /** Enrol exactly one member or one existing guardianship using the named phone. */
 export async function enrollMemberSignIn(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { audience: LinkAudience; memberId: string; guardianshipId?: string; phone: string },
 ): Promise<ProvisionResult> {
   const phone = normaliseToE164(input.phone);

@@ -21,7 +21,7 @@ import {
   type WalletMutationResult,
 } from "@/lib/services/wallet-core";
 import type { AccountEntryDirection, AccountEntrySourceType } from "@/db/schema/account-entries";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // K-05 — the member wallet ledger (fast-follow after Release 1).
 //
@@ -45,7 +45,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 export * from "./wallet-core";
 
 export async function topUp(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WalletMutationResult> {
   const parsed = topUpInput.safeParse(raw);
@@ -148,7 +148,7 @@ export async function topUp(
 }
 
 async function mutate(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
   direction: AccountEntryDirection,
   sourceType: AccountEntrySourceType,
@@ -219,14 +219,14 @@ async function mutate(
 }
 
 export async function charge(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WalletMutationResult> {
   return mutate(ctx, raw, "debit", "charge", "wallet.charge");
 }
 
 export async function refund(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WalletMutationResult> {
   return mutate(ctx, raw, "credit", "refund", "wallet.refund");

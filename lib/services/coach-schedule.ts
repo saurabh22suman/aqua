@@ -14,6 +14,7 @@ import {
 } from "@/lib/services/location-access";
 import { addDays, isMinor } from "@/lib/time/tz";
 import type { ActionCtx } from "@/lib/auth/context";
+import { parseFacilityValue } from "@/lib/facility";
 
 export type CoachScheduleRow = {
   id: string;
@@ -82,6 +83,8 @@ export type UpcomingSessionRow = {
   endsAt: Date;
   batchId: string;
   batchName: string;
+  locationId?: string | null;
+  locationName?: string | null;
   coachId: string | null;
   coachName: string | null;
   status: string;
@@ -99,7 +102,9 @@ export async function listUpcomingSessions(
   ctx: ActionCtx,
   fromDate: string,
   toDate: string,
+  locationId?: string,
 ): Promise<UpcomingSessionRow[]> {
+  if (locationId && !parseFacilityValue(locationId)) return [];
   return withTenant(ctx.tenantId, async (tx) => {
     // R06 (2026-10-13 role-workflow audit) — the management read is
     // still location-scoped: a restricted manager sees only sessions
@@ -115,6 +120,7 @@ export async function listUpcomingSessions(
       sql`${sessions.status} <> 'cancelled'`,
     ];
     if (accessPredicate) conditions.push(accessPredicate);
+    if (locationId) conditions.push(eq(sessions.locationId, locationId));
 
     return tx
       .select({
@@ -124,12 +130,15 @@ export async function listUpcomingSessions(
         endsAt: sessions.endsAt,
         batchId: batches.id,
         batchName: batches.name,
+        locationId: sessions.locationId,
+        locationName: locations.name,
         coachId: sessions.coachId,
         coachName: persons.fullName,
         status: sessions.status,
       })
       .from(sessions)
       .innerJoin(batches, eq(batches.id, sessions.batchId))
+      .leftJoin(locations, and(eq(locations.id, sessions.locationId), eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
       .leftJoin(staff, eq(staff.id, sessions.coachId))
       .leftJoin(persons, eq(persons.id, staff.personId))
       .where(and(...conditions))

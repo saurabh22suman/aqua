@@ -16,6 +16,8 @@ import { OwnerCalendarToolbar } from "@/components/owner-calendar/owner-calendar
 import { sessionToCalendarEvent } from "@/components/owner-calendar/calendar-session-event";
 import type { CalendarEvent } from "@/components/owner-calendar/calendar-model";
 import { SectionHeading } from "@/components/ui/PageHeader";
+import { ownerFacilityHref } from "@/lib/owner-scope/facility";
+import { ScheduleMobileAgenda } from "@/components/owner-approved/operations/schedule-mobile-agenda";
 
 // U-04 — the owner schedule.
 //
@@ -54,6 +56,7 @@ export type OwnerScheduleGridProps = {
   locations: Array<{ id: string; name: string }>;
   sessions: GridSessionRow[];
   days: string[];
+  chooserDays?: string[];
   monthCells: Array<{ date: string; inMonth: boolean; count: number }> | null;
   prevHref: string;
   nextHref: string;
@@ -95,6 +98,7 @@ export function OwnerScheduleGrid({
   locations,
   sessions,
   days,
+  chooserDays,
   monthCells,
   prevHref,
   nextHref,
@@ -141,7 +145,7 @@ export function OwnerScheduleGrid({
 
   const exceptionsLink = canManageExceptions ? (
     <Link
-      href="/owner/sessions"
+      href={ownerFacilityHref("/owner/sessions", locationId)}
       className="inline-flex min-h-11 items-center rounded-ctl border border-line bg-[var(--control-surface-action)] px-3 text-[13px] font-medium text-[var(--accent-ink)]"
     >
       Manage session exceptions
@@ -152,6 +156,7 @@ export function OwnerScheduleGrid({
   // navigation row keep a token gap between them.
   const toolbar = (
     <div className="mt-4 flex flex-col gap-2">
+      <p className="text-[13px] text-ink-2">Club: {locationId ? locations.find((location) => location.id === locationId)?.name ?? "Selected club" : "All available clubs"}</p>
       <ScheduleDatePicker date={anchorDate} view={view} locationId={locationId} />
       <OwnerCalendarToolbar
         navigation={{
@@ -167,29 +172,21 @@ export function OwnerScheduleGrid({
           next: <><OwnerIcon name="chevron" size={18} className="sm:hidden" /><span className="hidden sm:inline">Next {(view === "agenda" ? "Week" : viewTitle).toLowerCase()}</span></>,
         }}
         ariaLabels={{ previous: `Previous ${(view === "agenda" ? "Week" : viewTitle).toLowerCase()}`, today: "Today", next: `Next ${(view === "agenda" ? "Week" : viewTitle).toLowerCase()}` }}
-        toolbarExtra={
-          viewTabs || exceptionsLink ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {viewTabs}
-              {exceptionsLink}
-            </div>
-          ) : undefined
-      }
       />
+      <details className="rounded-ctl border border-line bg-paper px-3">
+        <summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-medium text-ink-2">Filters</summary>
+        <div className="pb-3">
+          {viewTabs}
+          {locations.length > 1 ? <LocationFilter view={view} anchorDate={anchorDate} locationId={locationId} locations={locations} /> : null}
+          {exceptionsLink}
+        </div>
+      </details>
     </div>
   );
 
   if (view === "month") {
     return (
       <div className="mt-4">
-        {locations.length > 1 ? (
-          <LocationFilter
-            view={view}
-            anchorDate={anchorDate}
-            locationId={locationId}
-            locations={locations}
-          />
-        ) : null}
         {toolbar}
         <div className="mt-4 rounded-card border border-line bg-paper p-5">
           <SectionHeading title={`${viewTitle} · scheduled sessions`} />
@@ -197,13 +194,13 @@ export function OwnerScheduleGrid({
             <OwnerCalendarMonth
               cells={monthCells}
               hrefFor={(date) =>
-                `/owner/schedule?view=week&date=${date}&location=${encodeURIComponent(locationId ?? "")}`
+                ownerFacilityHref(`/owner/schedule?view=week&date=${date}`, locationId)
               }
             />
           ) : null}
         </div>
-        {canManagePrograms ? (<Link
-          href="/owner/programs"
+        {canManageExceptions ? (<Link
+          href={ownerFacilityHref("/owner/programs", locationId)}
           className="mt-4 inline-flex min-h-[44px] items-center rounded-pill border border-line bg-paper px-4 text-[13px] font-medium text-ink"
         >
           Add a session (via a batch)
@@ -217,30 +214,22 @@ export function OwnerScheduleGrid({
   // this is where the extra day is dropped again.
   const events: CalendarEvent[] = sessions
     .filter((session) => touchesRange(session, days))
-    .map((session) =>
-      sessionToCalendarEvent(
+    .map((session) => ({
+      ...sessionToCalendarEvent(
         session,
         coachIds[session.id] ?? null,
         capacityFillClass(session),
       ),
-    );
+      href: ownerFacilityHref(`/owner/batches/${session.batchId}`, locationId),
+    }));
 
   return (
     <div className="mt-4">
-      {locations.length > 1 ? (
-        <LocationFilter
-          view={view}
-          anchorDate={anchorDate}
-          locationId={locationId}
-          locations={locations}
-        />
-      ) : null}
-
       {toolbar}
 
-      <div className="mt-4 rounded-card border border-line bg-paper p-5">
-        <SectionHeading title={`${viewTitle} · scheduled sessions`} />
-        <OwnerCalendar
+      <div className="mt-4 md:rounded-[18px] md:border md:border-line md:bg-paper md:p-5">
+        <div className="hidden md:block"><SectionHeading title={`${viewTitle} · scheduled sessions`} /></div>
+        <div className="hidden md:block"><OwnerCalendar
           events={events}
           days={days}
           selectedDate={selectedDate}
@@ -254,13 +243,14 @@ export function OwnerScheduleGrid({
                 ? "No sessions scheduled on this day"
                 : "No sessions scheduled in this week",
             body: "Sessions come from a batch's weekly schedule. Add or edit a batch to change what appears here.",
-            action: canManagePrograms ? { label: "Manage batches", href: "/owner/programs" } : undefined,
+            action: canManagePrograms ? { label: "Manage batches", href: ownerFacilityHref("/owner/programs", locationId) } : undefined,
           }}
-        />
+        /></div>
+        <div className="md:hidden"><ScheduleMobileAgenda events={events} days={days} chooserDays={chooserDays} selectedDate={selectedDate} dayHrefs={dayHrefs} labels={categoryLabels} view={view === "agenda" ? "agenda" : view === "day" ? "day" : "week"} /></div>
       </div>
 
-      {canManagePrograms ? (<Link
-        href="/owner/programs"
+      {canManageExceptions ? (<Link
+        href={ownerFacilityHref("/owner/programs", locationId)}
         className="mt-4 inline-flex min-h-[44px] items-center rounded-pill border border-line bg-paper px-4 text-[13px] font-medium text-ink"
       >
         Add a session (via a batch)
@@ -329,10 +319,10 @@ function LocationFilter({
       <label className="block min-w-0 flex-1 sm:w-64 sm:flex-none">
         <span className="mb-0.5 block text-[11px] text-ink-3">Location</span>
         <Select
-          name="location"
-          defaultValue={locationId ?? ""}
+          name="facility"
+          defaultValue={locationId ?? "all"}
         >
-          <option value="">All locations</option>
+          <option value="all">All clubs</option>
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}

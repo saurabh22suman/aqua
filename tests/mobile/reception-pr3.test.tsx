@@ -107,7 +107,7 @@ describe("reception payment screen composition (PR3-C7)", () => {
   it("carries the recording form and never the booking tile", async () => {
     render(await CollectPaymentPage({}));
     expect(document.body.textContent).toContain("Record a payment");
-    expect(document.body.textContent).toContain("Show the payer a QR");
+    expect(document.body.textContent).toContain("Confirm the payment at the counter");
     expect(document.body.textContent).not.toMatch(/Reserve a lane or court/i);
   });
 });

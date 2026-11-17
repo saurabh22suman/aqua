@@ -109,7 +109,7 @@ export function OwnerHomeTimeline({
   const nextIsFolded = nextIndex >= MAX_VISIBLE_ROWS && nextLane !== null;
 
   return (
-    <section data-testid="owner-home-today" aria-label="Your club today" className="rounded-card border border-line bg-paper">
+    <section data-testid="owner-home-today" aria-label="Your club today" className="rounded-[18px] border border-line bg-paper">
       <div className="px-4 pt-4">
         <SectionHeader
           title="Today’s sessions"

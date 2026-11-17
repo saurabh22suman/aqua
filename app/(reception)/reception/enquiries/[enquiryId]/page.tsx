@@ -3,6 +3,7 @@ import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
 import { listBatchesAction } from "@/lib/actions/programs";
 import { getTerminologyAction } from "@/lib/actions/terminology";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { EnquiryDetailView } from "@/components/enquiry-detail-view";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
@@ -24,7 +25,7 @@ export default async function ReceptionEnquiryDetailPage({
     listLocationsAction(),
     listBatchesAction(),
     // L3 audit — see owner-side page for the rationale.
-    getTerminologyAction(),
+    getTerminologyAction().then(staffTerminology),
   ]);
   if (!enquiry) notFound();
 

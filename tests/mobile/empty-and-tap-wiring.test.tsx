@@ -92,6 +92,7 @@ describe("Tap wiring on icon-only controls", () => {
   it("program edit/delete buttons get a 44px hit area", () => {
     render(
       <ProgramsBatchesBoard
+        canManage
         initialPrograms={[PROGRAM]}
         initialBatches={[]}
         coaches={[]}

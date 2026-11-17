@@ -18,7 +18,7 @@ import {
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { dayRangeUtc } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { toSafePaise, sumPaise } from "@/lib/money/safe-paise";
 
 // C-34 — the daily collection report and the cash count confirmation.
@@ -310,7 +310,7 @@ const CASH_COUNT_OVER_THRESHOLD_ACTION = "cash_count.confirm_over_threshold";
 // resolution (requireDefaultCtx() already carries `permissions`) and
 // this service reads it off an optional field, rather than
 // re-deriving it — the resolution itself happens exactly once.
-export type ConfirmCashCountCtx = ActionCtx & { permissions?: Set<string> };
+export type ConfirmCashCountCtx = MutationActor & { permissions?: Set<string> };
 
 export async function confirmCashCount(
   ctx: ConfirmCashCountCtx,

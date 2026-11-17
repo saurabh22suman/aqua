@@ -10,7 +10,7 @@ import {
 } from "@/db/schema/announcements";
 import { batches } from "@/db/schema/programs";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { resolveAudienceUserIds } from "@/lib/services/announcement-audience";
 import { locationVisible, locationPredicate, resolveLocationAccess, resolveCallerMembership } from "@/lib/services/location-access";
 import { callerHasPermission } from "@/lib/services/resource-access";
@@ -149,7 +149,7 @@ export async function markSelfNotificationReadInTx(tx: TenantTx, scope: SelfScop
 }
 
 export async function sendAnnouncement(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SendAnnouncementResult> {
   const parsed = sendAnnouncementInput.safeParse(raw);
@@ -352,7 +352,7 @@ async function listMyNotificationsInTx(tx: TenantTx, ctx: ActionCtx): Promise<No
 }
 
 export async function markNotificationRead(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   notificationId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = z.string().uuid().safeParse(notificationId);

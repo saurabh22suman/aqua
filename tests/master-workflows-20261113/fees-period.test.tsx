@@ -9,6 +9,7 @@ vi.mock("@/lib/services/selected-facility-access", () => ({canSelectFacility: as
 vi.mock("@/lib/auth/permission", () => ({hasPermission: () => false}));
 vi.mock("next/headers", () => ({cookies: async () => ({get: () => undefined})}));
 vi.mock("@/lib/actions/tenant-timezone", () => ({getTenantTimezoneAction: async () => "Asia/Kolkata"}));
+vi.mock("@/db/tenant", () => ({withTenant: async () => [{timezone:"Asia/Kolkata"}]}));
 vi.mock("@/lib/actions/terminology", () => ({getTerminologyAction: async () => ({overrides:{},locale:"en"})}));
 vi.mock("@/lib/actions/membership-plans", () => ({listPlansAction: async () => []}));
 const ledger = vi.hoisted(() => ({total:0,truncated:false}));
@@ -17,13 +18,15 @@ vi.mock("@/lib/actions/fees-hub", () => ({
   listHubInvoicesAction: async () => [],
   listHubTransactionsAction: async () => ({rows:[],totalCount:ledger.total,truncated:ledger.truncated,limit:200}),
 }));
-const push = vi.hoisted(() => vi.fn());
-vi.mock("next/navigation", () => ({useRouter: () => ({refresh:vi.fn(), push})}));
+vi.mock("next/navigation", () => ({useRouter: () => ({refresh:vi.fn()})}));
 import FeesPage from "@/app/(owner)/owner/fees/page";
 import { FeesPeriodControl } from "@/components/fees/fees-period-control";
-afterEach(() => { cleanup(); vi.useRealTimers(); push.mockClear(); ledger.total=0;ledger.truncated=false; });
+afterEach(() => { cleanup(); vi.useRealTimers(); ledger.total=0;ledger.truncated=false; });
+function openDates() { fireEvent.click(screen.getByRole("button", {name:"Change dates"})); }
+function appliedQuery() { return new URLSearchParams(Array.from(new FormData(screen.getByRole("form", {name:"Collection period"}) as HTMLFormElement), ([key,value])=>[key,String(value)])); }
 it("offers a labelled date range on transactions and keeps the facility on submission", async () => {
   render(await FeesPage({searchParams:Promise.resolve({tab:"transactions",from:"2026-11-01",to:"2026-12-01",facility:"11111111-1111-4111-8111-111111111111"})}));
+  openDates();
   expect(screen.getByLabelText("From date")).toBeTruthy();
   expect(screen.getByLabelText("Through date")).toBeTruthy();
   const form = screen.getByRole("button",{name:/apply period/i}).closest("form")!;
@@ -33,10 +36,11 @@ it("adopts the applied period when Back restores a previous range", () => {
   const props = {tab:"transactions" as const,from:"2026-11-01",to:"2026-12-01",facility:"all",timezone:"Asia/Kolkata",method:"upi",group:"digital"};
   const view = render(<FeesPeriodControl {...props} />);
   view.rerender(<FeesPeriodControl {...props} from="2026-10-01" to="2026-11-01" />);
+  openDates();
   expect((screen.getByLabelText("From date") as HTMLInputElement).value).toBe("01/10/2026");
   expect((screen.getByLabelText("Through date") as HTMLInputElement).value).toBe("31/10/2026");
-  fireEvent.click(screen.getByRole("button", {name:"Apply period"}));
-  const query = new URL(push.mock.calls[0]![0], "http://localhost").searchParams;
+  expect(fireEvent.submit(screen.getByRole("form", {name:"Collection period"}))).toBe(true);
+  const query = appliedQuery();
   expect(query.get("from")).toBe("2026-10-01");
   expect(query.get("to")).toBe("2026-11-01");
   expect(query.get("tab")).toBe("transactions");
@@ -48,8 +52,8 @@ it("uses inclusive calendar days and preserves filters at the year boundary", ()
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2027-01-01T00:15:00+05:30"));
   render(<FeesPeriodControl tab="transactions" from="2026-12-01" to="2027-01-01" facility="all" timezone="Asia/Kolkata" method="upi" group="digital" />);
-  fireEvent.click(screen.getByRole("button",{name:"Last month"}));
-  const query = new URL(push.mock.calls[0]![0], "http://localhost").searchParams;
+  openDates();
+  const query = new URL(screen.getByRole("link",{name:"Last month"}).getAttribute("href")!, "http://localhost").searchParams;
   expect(query.get("from")).toBe("2026-12-01");
   expect(query.get("to")).toBe("2027-01-01");
   expect(query.get("facility")).toBe("all");
@@ -64,6 +68,7 @@ it("discloses when the selected period's ledger is capped", async () => {
 });
 it("announces an invalid date range using neutral error text", () => {
   render(<FeesPeriodControl tab="transactions" from="2026-11-01" to="2026-12-01" timezone="Asia/Kolkata" />);
+  openDates();
   fireEvent.change(screen.getByLabelText("From date"),{target:{value:"10/12/2026"}});
   fireEvent.click(screen.getByRole("button",{name:"Apply period"}));
   const alert = screen.getByRole("alert");
@@ -73,6 +78,11 @@ it("announces an invalid date range using neutral error text", () => {
 });
 it("keeps an explicit all-facilities selection across period navigation", async () => {
   render(await FeesPage({searchParams:Promise.resolve({tab:"transactions",from:"2026-11-01",to:"2026-12-01",facility:"all"})}));
-  fireEvent.click(screen.getByRole("button",{name:/apply period/i}));
-  expect(push).toHaveBeenCalledWith(expect.stringContaining("facility=all"));
+  openDates();
+  expect(fireEvent.submit(screen.getByRole("form", {name:"Collection period"}))).toBe(true);
+  expect(appliedQuery().get("facility")).toBe("all");
+});
+it.each(["overview", "transactions"])("shows one applied range on %s instead of duplicating it above and below the tabs", async (tab) => {
+  render(await FeesPage({searchParams:Promise.resolve({tab,from:"2026-11-01",to:"2026-12-01",facility:"all"})}));
+  expect(screen.getAllByText(/1 Nov 2026 – 30 Nov 2026/)).toHaveLength(1);
 });

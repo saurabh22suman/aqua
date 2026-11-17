@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { Suspense } from "react";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { cookies } from "next/headers";
@@ -6,9 +7,9 @@ import { listMembersAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MembersBoard } from "@/components/members-board";
 import { MembersListLoading } from "@/components/members-list-loading";
-import { OwnerCreateAction } from "@/components/owner-ui/owner-create-action";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { PageHeader } from "@/components/ui/PageHeader";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
 import { buttonClasses } from "@/components/ui/Button";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
@@ -29,6 +30,7 @@ export default async function MembersPage({
   const ctx = await requireOwner();
   requirePagePermission(ctx, "members.read");
   const canWriteMembers = hasPermission(ctx, "members.write");
+  const canViewProfile = canWriteMembers || hasPermission(ctx, "attendance.read") || hasPermission(ctx, "invoices.read");
   const params = searchParams ? await searchParams : {};
   // W1-6 — the owner layout's facility switcher persists the choice in
   // `?facility=` and a cookie. The URL wins; the cookie carries the
@@ -44,6 +46,7 @@ export default async function MembersPage({
     <Suspense fallback={<MembersListLoading />}>
       <MembersDirectory
         canWriteMembers={canWriteMembers}
+        canViewProfile={canViewProfile}
         initialLocationId={initialLocationId}
         navigationNamespace={`${ctx.tenantId}:${ctx.userId}`}
       />
@@ -53,40 +56,40 @@ export default async function MembersPage({
 
 async function MembersDirectory({
   canWriteMembers,
+  canViewProfile,
   initialLocationId,
   navigationNamespace,
 }: {
   canWriteMembers: boolean;
+  canViewProfile: boolean;
   initialLocationId: string | undefined;
   navigationNamespace: string;
 }) {
   const [members, terminology] = await Promise.all([
     listMembersAction({ locationId: initialLocationId }),
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
 
-  // The ONE create affordance for the directory. The shared
-  // OwnerCreateAction is the round floating action above the phone
-  // navigation and the inline labelled primary action on a desktop, so
-  // the same job never appears twice at one viewport. Import stays a
-  // SECONDARY action beside it — it is a different job, not a second
-  // primary.
-  //
+  // Keep the explicit all-facilities scope when navigating to creation.
   const addMemberLabel = `Add ${resolveTerm(terminology, "member", 1)}`;
-  const addMemberHref = initialLocationId
-    ? `/owner/members/new?facility=${initialLocationId}`
-    : "/owner/members/new";
+  const addMemberHref = `/owner/members/new?facility=${initialLocationId ?? "all"}`;
 
   return (
     <OwnerPage>
-      <PageHeader
+      <OwnerDesignHeading
         title={titleCase(resolveTerm(terminology, "member", "other"))}
+        purpose="People, plans and progress"
+        className="flex-col items-stretch sm:flex-row sm:items-center"
         action={
           canWriteMembers ? (
-            <div className="flex flex-none items-center gap-2">
+            <div className="flex max-w-full flex-wrap items-center gap-2">
+              <Link href={addMemberHref} className={buttonClasses({ variant: "primary", size: "sm" })} data-testid="members-create-action">
+                <OwnerIcon name="plus" size={16} />
+                {addMemberLabel}
+              </Link>
               <Link
                 href="/owner/members/import"
-                className={buttonClasses({ variant: "secondary", size: "md" })}
+                className={buttonClasses({ variant: "ghost", size: "sm" })}
                 data-testid="members-import-link"
               >
                 {/* No upload glyph exists in the approved mock; the thin
@@ -94,11 +97,6 @@ async function MembersDirectory({
                 <Upload size={15} strokeWidth={2.2} aria-hidden="true" />
                 Import
               </Link>
-              <OwnerCreateAction
-                href={addMemberHref}
-                label={addMemberLabel}
-                testId="members-create-action"
-              />
             </div>
           ) : null
         }
@@ -110,13 +108,14 @@ async function MembersDirectory({
           two different sentences. The page keeps its heading and its one
           create action; the import action stays in the header beside
           it. */}
-      <div className="mt-4">
+      <div>
         <MembersBoard
           initialMembers={members}
           terminology={terminology}
           initialLocationId={initialLocationId}
           navigationNamespace={navigationNamespace}
           canWrite={canWriteMembers}
+          canViewProfile={canViewProfile}
         />
       </div>
     </OwnerPage>

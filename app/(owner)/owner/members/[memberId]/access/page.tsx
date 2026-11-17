@@ -1,3 +1,4 @@
+import { resolveRequestedFacility } from "@/lib/facility";
 import { notFound } from "next/navigation";
 import { MemberEnrollmentForm } from "@/components/member-detail/member-enrollment-form";
 import { hasPermission } from "@/lib/auth/permission";
@@ -17,13 +18,23 @@ import {
 // rechecks live facility authority; enrollment also requires members.write.
 export default async function MemberAccessPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ memberId: string }>;
+  searchParams?: Promise<{ facility?: string }>;
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "members.link.confirm");
   const { memberId } = await params;
   requireUuidParam(memberId);
+  const scope = resolveRequestedFacility(searchParams ? await searchParams : {});
+  if (!scope.valid) {
+    return <OwnerPage className="max-w-3xl">
+      <BackLink href={`/owner/members/${memberId}?facility=all`} label="Member details" />
+      <PageHeader title="Facility unavailable" purpose="Choose an available facility to continue." />
+    </OwnerPage>;
+  }
+  const memberHref = `/owner/members/${memberId}?facility=${scope.facilityId ?? "all"}`;
 
   let read: MemberAccessRead | null = null;
   let failed = false;
@@ -40,7 +51,7 @@ export default async function MemberAccessPage({
 
   return (
     <OwnerPage className="max-w-3xl">
-      <BackLink href={`/owner/members/${memberId}`} label="Member details" />
+      <BackLink href={memberHref} label="Member details" />
       <PageHeader
         className="mt-2"
         title="Member and family access"

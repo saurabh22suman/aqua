@@ -14,7 +14,7 @@ import { and, between, eq, inArray, or } from "drizzle-orm";
 import type { TenantTx } from "@/db/tenant";
 import { leaveRequests, type LeaveRequest } from "@/db/schema/leave";
 import { shifts } from "@/db/schema/shifts";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import type { StaffId } from "@/lib/ids";
 import { facilityFilter } from "@/lib/services/leave-decision-evidence";
 import { isScopedCaller, type LeaveCaller } from "@/lib/services/leave-decision-scope";
@@ -56,7 +56,7 @@ export type LeaveDecisionResult =
 
 export async function writeDecision(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   request: LeaveRequest,
   input: { note?: string | null },
   decision: "approved" | "rejected",

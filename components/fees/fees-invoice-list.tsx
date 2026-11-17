@@ -214,7 +214,7 @@ export function FeesInvoiceList({
           </a>
           {settled.memberId ? (
             <Link
-              href={`/owner/members/${settled.memberId}?tab=payments`}
+              href={`/owner/members/${settled.memberId}?tab=payments&facility=${encodeURIComponent(facility ?? "all")}`}
               className="inline-flex min-h-11 items-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink"
             >
               Open invoice
@@ -385,7 +385,7 @@ export function FeesInvoiceList({
                 >
                   {invoice.memberId ? (
                     <Link
-                      href={`/owner/members/${invoice.memberId}`}
+                      href={`/owner/members/${invoice.memberId}?facility=${encodeURIComponent(facility ?? "all")}`}
                       className="text-[14px] font-medium text-ink"
                     >
                       {invoice.payerName}

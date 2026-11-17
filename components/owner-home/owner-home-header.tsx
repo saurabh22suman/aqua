@@ -1,6 +1,7 @@
 import { formatFullDateIST } from "@/lib/time/tz";
 import { greetingFor } from "@/components/owner-home/greeting";
 import type { ReactNode } from "react";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
 
 // Owner Home — the context header.
 //
@@ -25,8 +26,7 @@ export function OwnerHomeHeader({
 }) {
   return (
     <header data-testid="owner-home-context">
-      <h1 className="font-display text-2xl font-medium tracking-tight">{greetingFor()}</h1>
-      <p className="mt-1 text-xs text-ink-3">{formatFullDateIST(today)}</p>
+      <OwnerDesignHeading title={greetingFor()} purpose={formatFullDateIST(today)} />
     </header>
   );
 }

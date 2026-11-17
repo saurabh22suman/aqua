@@ -1,4 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { tenants } from "@/db/schema/tenants";
+import { OPERATIONAL_TENANT_STATUSES } from "@/db/platform";
 import { withTenant, withUser, type TenantTx } from "@/db/tenant";
 import { writeAudit } from "@/lib/audit/write";
 import { readSelfServiceAccountInTx } from "@/db/self-service-account";
@@ -51,6 +53,14 @@ export async function activateSelfServiceAccount(input: {
     const staffTenants = await withUser(userId, (tx) => readStaffMembershipTenantIds(tx, userId));
     try {
         return await withTenant(tenantId, async (tx) => {
+            // Take the strongest account lock needed up front: identity
+            // linking can UPDATE it later in this same transaction.
+            const [tenant] = await tx.select({ id: tenants.id }).from(tenants)
+                .where(and(eq(tenants.id, tenantId), inArray(tenants.status, [...OPERATIONAL_TENANT_STATUSES])))
+                .limit(1).for("share");
+            if (!tenant) throw new ActivationRefused("invalid");
+            const account = await readSelfServiceAccountInTx(tx, { tenantId, userId, lockMode: "update" });
+            if (!account) throw new ActivationRefused("invalid");
             const named = await readNamedActivationLink(tx, {
                 tenantId,
                 userId,
@@ -74,12 +84,6 @@ export async function activateSelfServiceAccount(input: {
             if (named.status !== "invited") {
                 throw new ActivationRefused("not_invited");
             }
-            const account = await readSelfServiceAccountInTx(tx, {
-                tenantId,
-                userId,
-            });
-            if (!account)
-                throw new ActivationRefused("invalid");
             const accountHasIdentity = account.betterAuthId !== null;
             let knownBaUserId = account.betterAuthId;
             if (knownBaUserId !== null) {

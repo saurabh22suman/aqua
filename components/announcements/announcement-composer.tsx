@@ -22,6 +22,7 @@ export function AnnouncementComposer({
   memberLabel,
   batchLabel,
   guardianLabel,
+  canSelectBatch = true,
 }: {
   batches: Array<{ id: string; name: string }>;
   // Resolved through resolveTerm on the server (L3 scan: "members"
@@ -30,6 +31,7 @@ export function AnnouncementComposer({
   memberLabel: string;
   batchLabel: string;
   guardianLabel: string;
+  canSelectBatch?: boolean;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -163,7 +165,7 @@ export function AnnouncementComposer({
             >
               <option value="">Choose an audience</option>
               <option value="all">Everyone</option>
-              <option value="batch">One {batchLabel.toLowerCase()}</option>
+              {canSelectBatch ? <option value="batch">One {batchLabel.toLowerCase()}</option> : null}
               <option value="parents">Parents and {guardianLabel.toLowerCase()}</option>
             </Select>
           )}

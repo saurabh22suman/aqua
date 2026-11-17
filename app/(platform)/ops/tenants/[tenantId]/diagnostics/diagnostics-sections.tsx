@@ -69,16 +69,18 @@ export function DiagnosticsMembershipList({
   memberships,
   total,
   tenantId,
+  page = 1,
 }: {
   memberships: MembershipDiagnostic[];
   total: number;
   tenantId: string;
+  page?: number;
 }) {
   if (memberships.length === 0) {
     return (
       <OpsEmptyState
-        title="This club has no staff memberships"
-        body="There is no membership row to describe, so there is no account to diagnose."
+        title={total ? "No memberships shown on this page" : "This club has no staff memberships"}
+        body={total ? "Use the page controls to see other memberships." : "There is no membership row to describe, so there is no account to diagnose."}
       />
     );
   }
@@ -101,7 +103,7 @@ export function DiagnosticsMembershipList({
               {STATUS_LABEL[membership.status] ?? membership.status}
             </StatusBadge>
             <Link
-              href={`/ops/tenants/${tenantId}/diagnostics?membership=${membership.membershipId}`}
+              href={`/ops/tenants/${tenantId}/diagnostics?${new URLSearchParams({ membership: membership.membershipId, ...(page > 1 ? { page: String(page) } : {}) })}`}
               className="text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
             >
               Explain access
@@ -111,7 +113,7 @@ export function DiagnosticsMembershipList({
       ))}
       {total > memberships.length ? (
         <p className="border-t border-line px-4 py-2 text-[12px] text-ink-3">
-          Showing the newest {memberships.length} of {total} memberships.
+          Showing {memberships.length} of {total} memberships on this page.
         </p>
       ) : null}
     </OpsCardFlush>

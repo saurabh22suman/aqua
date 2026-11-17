@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { v7 as uuidv7 } from "uuid";
 import { privilegedFixturePool as admin } from "@/tests/db/privileged-fixture";
+import { deleteAuditRowsForTenant } from "@/tests/helpers/audit-log-cleanup";
 import { asTenantId, asUserId } from "@/lib/ids";
 import { createInvoiceForSubscription } from "@/lib/services/invoice-mutations";
 import { runInvoicesGenerateJob } from "@/lib/jobs/invoices-generate-job";
@@ -11,6 +12,7 @@ beforeAll(async () => {
   await admin.query("insert into tenants(id,slug,name,status) values($1,$2,'Lock test','active')", [tenantId, `lock-${tenantId}`]);
   await admin.query("insert into users(id,phone) values($1,$2)", [userId, `+91${String(BigInt(`0x${userId.replaceAll('-', '').slice(-10)}`) % 10000000000n).padStart(10, '0')}`]);
   await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'invoices.write')", [tenantId, roleId]);
   await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, userId, roleId]);
   await admin.query("insert into locations(id,tenant_id,name,is_primary) values($1,$2,'Main',true)", [locationId, tenantId]);
   await admin.query("insert into persons(id,tenant_id,full_name) values($1,$2,'Test')", [personId, tenantId]);
@@ -19,8 +21,10 @@ beforeAll(async () => {
   await admin.query("insert into subscriptions(id,tenant_id,member_id,plan_id,location_id,starts_on,ends_on,status,auto_renew) values($1,$2,$3,$4,$5,current_date-25,current_date+2,'active',true)", [subscriptionId, tenantId, memberId, planId, locationId]);
 });
 afterAll(async () => {
-  for (const table of ["invoice_line_items", "invoices", "subscriptions", "membership_plans", "members", "persons", "tenant_memberships", "roles", "locations"]) await admin.query(`delete from ${table} where tenant_id=$1`, [tenantId]);
+  await deleteAuditRowsForTenant(admin, tenantId);
+  for (const table of ["invoice_line_items", "invoices", "subscriptions", "membership_plans", "members", "persons", "tenant_memberships", "role_permissions", "roles", "locations"]) await admin.query(`delete from ${table} where tenant_id=$1`, [tenantId]);
   await admin.query("delete from tenants where id=$1", [tenantId]);
+  await admin.query("delete from users where id=$1", [userId]);
   await admin.end();
 });
 

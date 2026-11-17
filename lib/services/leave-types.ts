@@ -37,7 +37,7 @@ import { withTenant, type TenantTx } from "@/db/tenant";
 import { leaveTypes } from "@/db/schema/leave";
 import { writeAudit } from "@/lib/audit/write";
 import type { TenantId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import {
   OWNER_WRITE_REFUSAL,
   callerIsLiveOwnerInTx,
@@ -120,7 +120,7 @@ export async function listLeaveTypes(ctx: ActionCtx): Promise<LeaveTypeRow[]> {
 }
 
 export async function createLeaveType(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LeaveTypeResult> {
   const parsed = leaveTypeInput.safeParse(raw);
@@ -218,7 +218,7 @@ export async function createLeaveType(
 }
 
 export async function updateLeaveType(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LeaveTypeResult> {
   const parsed = leaveTypeUpdateInput.safeParse(raw);

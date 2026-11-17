@@ -13,6 +13,7 @@ import type { InvoiceStatus } from "@/db/schema/invoices";
 import type { InvoicePayerKind } from "@/db/schema/invoices";
 import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
 import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
+import { invoiceCorrectionEligibilityInTx, type InvoiceCorrectionEligibility } from "@/lib/services/invoice-correction-eligibility";
 
 // FINAL DECISION (2026-11-05, completion pass): WR-9 is now DECIDED for this
 // release. An already-paid invoice is kept AS ISSUED and paid buyer/name
@@ -65,6 +66,7 @@ import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot"
 // already reads; no new table, no new join, no new query.
 
 export type BookingBill = {
+  correctionEligibility?: InvoiceCorrectionEligibility;
   issuer?: BillingIssuer | null;
   bookingId: string;
   facilityName: string;
@@ -334,6 +336,7 @@ export async function buildBill(
     ok: true,
     alreadyBilled: true,
     bill: {
+      correctionEligibility: await invoiceCorrectionEligibilityInTx(tx, ctx.tenantId, invoice.id),
       issuer: invoiceIssuerSnapshot(invoice),
       bookingId: booking.id,
       facilityName,

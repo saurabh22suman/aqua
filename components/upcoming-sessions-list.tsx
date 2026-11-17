@@ -5,10 +5,9 @@ import { SessionSubstituteControl } from "@/components/session-substitute-contro
 import { SessionLifecycleControl } from "@/components/session-lifecycle-control";
 import type { UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import type { CoachOption } from "@/lib/services/programs";
-import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
+import { type TerminologyState } from "@/lib/terminology/keys";
 import {
   addDays,
-  formatDateIST,
   formatTimeIST,
   formatWallTime24hIST,
   formatWeekdayDateIST,
@@ -166,8 +165,8 @@ export function UpcomingSessionsList({
         ))}
       </div>
 
-      <section className="mt-4 rounded-card border border-line bg-paper">
-        <div className="px-5 pt-5">
+      <section className="mt-4">
+        <div className="px-1">
           <SectionHeading
             title="Upcoming sessions"
           />
@@ -183,70 +182,19 @@ export function UpcomingSessionsList({
           </div>
         ) : (
           <>
-            <div className="mt-4 hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[620px] border-collapse text-[13px]">
-                <thead>
-                  <tr className="border-y border-line text-left text-[11px] uppercase tracking-[0.08em] text-ink-3">
-                    <th scope="col" className="px-5 py-2.5 font-medium">{titleCase(resolveTerm(terminology, "session", 1))}</th>
-                    <th scope="col" className="px-3 py-2.5 font-medium">{titleCase(resolveTerm(terminology, "coach", 1))}</th>
-                    <th scope="col" className="px-3 py-2.5 font-medium">State</th>
-                    <th scope="col" className="px-5 py-2.5 text-right font-medium">
-                      <span className="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {filtered.map((s) => {
-                    const open = manageId === s.id;
-                    const tone = SESSION_STATUS_TONE[s.status] ?? "neutral";
-                    return (
-                      <tr key={s.id}>
-                        <td className="px-5 py-3">
-                          <p className="font-medium text-ink">
-                            {formatDateIST(s.sessionDate)} ·{" "}
-                            <span className="whitespace-nowrap tabular-nums">
-                              {formatTimeIST(s.startsAt)}–{formatTimeIST(s.endsAt)}
-                            </span>
-                          </p>
-                          <p className="mt-0.5 text-[12px] text-ink-3">{s.batchName}</p>
-                        </td>
-                        <td className="px-3 py-3 text-ink-2">
-                          {s.coachName ?? "Unassigned"}
-                        </td>
-                        <td className="px-3 py-3">
-                          <StatusBadge tone={tone}>{statusLabel(s.status)}</StatusBadge>
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          {canManage ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setManageId(open ? null : s.id)}
-                              aria-expanded={open}
-                            >
-                              {open ? "Close" : "Manage"}
-                            </Button>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="md:hidden">
+            <div className="mt-3 space-y-4">
               {Array.from(grouped.entries()).map(([date, rows]) => (
                 <div key={date}>
-                  <h3 className="border-y border-line bg-deck/60 px-5 py-2 font-display text-[12px] font-medium uppercase tracking-[0.06em] text-ink-3">
+                  <h3 className="px-1 py-2 font-display text-[12px] font-medium uppercase tracking-[0.06em] text-ink-3">
                     {formatHeaderDate(date)}
                   </h3>
-                  <ul className="divide-y divide-line">
+                  <ul className="grid gap-2 md:grid-cols-2">
                     {rows.map((s) => {
                       const open = manageId === s.id;
                       const tone = SESSION_STATUS_TONE[s.status] ?? "neutral";
                       return (
-                        <li key={s.id} className="px-5 py-3" data-testid={`session-${s.id}`}>
+                        <li key={s.id}>
+                        <article aria-label={`${s.batchName} at ${s.locationName ?? "No location"}`} className="rounded-card border border-line bg-paper p-4" data-testid={`session-${s.id}`}>
                           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                             <div className="min-w-0 w-full">
                               <p className="text-[14px] font-medium text-ink">
@@ -257,6 +205,7 @@ export function UpcomingSessionsList({
                                   {s.batchName}
                                 </span>
                               </p>
+                              <p className="mt-0.5 text-[12px] text-ink-3">Location: {s.locationName ?? "No location"}</p>
                               <p className="mt-0.5 text-[12px] text-ink-3">
                                 Coach:{" "}
                                 <span className="text-ink-2">
@@ -267,7 +216,7 @@ export function UpcomingSessionsList({
                             <StatusBadge tone={tone}>{statusLabel(s.status)}</StatusBadge>
                             {canManage ? (
                               <Button
-                                variant="secondary"
+                                variant="ghost"
                                 size="sm"
                                 onClick={() => setManageId(open ? null : s.id)}
                                 aria-expanded={open}
@@ -277,6 +226,7 @@ export function UpcomingSessionsList({
                               </Button>
                             ) : null}
                           </div>
+                        </article>
                         </li>
                       );
                     })}
@@ -301,7 +251,7 @@ export function UpcomingSessionsList({
               <p className="mt-1 text-[12.5px] text-ink-3">
                 {formatWeekdayDateIST(selected.sessionDate)} ·{" "}
                 {formatTimeIST(selected.startsAt)}–{formatTimeIST(selected.endsAt)} ·{" "}
-                {selected.coachName ?? "Unassigned"}
+                {selected.coachName ?? "Unassigned"} · {selected.locationName ?? "No location"}
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setManageId(null)}>

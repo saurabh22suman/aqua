@@ -177,6 +177,7 @@ export default async function LeadDetailPage({
           leadId={lead.id}
           currentStatus={lead.status}
           hasLinkedTenant={Boolean(linkedTenantId)}
+          linkedTenantId={linkedTenantId}
           defaultSlug={slugify(lead.businessName)}
           defaultLocationName={lead.city ?? "Main Location"}
           defaultPreset={defaultPreset}

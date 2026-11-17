@@ -1,6 +1,8 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { TenantTx } from "@/db/tenant";
 import type { ActionCtx } from "@/lib/auth/context";
+import { membershipLocations } from "@/db/schema/memberships";
+import { locationVisible, resolveCallerMembership, resolveLocationAccess, type LocationAwareCtx } from "@/lib/services/location-access";
 import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { billingAddressSchema, type BillingAddress, type BillingResult } from "@/lib/services/facility-billing-contract";
 
@@ -16,6 +18,21 @@ export async function authorize(tx: TenantTx, ctx: ActionCtx): Promise<boolean> 
     where m.tenant_id = ${ctx.tenantId} and m.user_id = ${ctx.userId}
       and m.status = 'active' and m.deleted_at is null and p.permission_key = 'settings.manage' limit 1 for share of p`);
   return grant.rows.length > 0;
+}
+
+/** The live membership is authoritative; an explicit context can only narrow it. */
+export async function canManageSite(tx: TenantTx, ctx: LocationAwareCtx, locationId: string): Promise<boolean> {
+  const membership = await resolveCallerMembership(tx, ctx);
+  if (!membership || membership.status !== "active" || membership.deleted) return false;
+  if (!membership.allLocations) {
+    const rows = await tx.select({ id: membershipLocations.locationId }).from(membershipLocations).where(and(
+      eq(membershipLocations.tenantId, ctx.tenantId), eq(membershipLocations.membershipId, membership.id),
+      eq(membershipLocations.locationId, locationId),
+    )).for("share");
+    if (!rows.length) return false;
+    return ctx.allLocations !== false || (Array.isArray(ctx.locationIds) && ctx.locationIds.includes(locationId));
+  }
+  return locationVisible(await resolveLocationAccess(tx, ctx), locationId);
 }
 export function sameAddress(a: BillingAddress | null, b: BillingAddress | null): boolean {
   return a === b || (!!a && !!b && a.line1 === b.line1 && a.line2 === b.line2 && a.city === b.city && a.postalCode === b.postalCode);

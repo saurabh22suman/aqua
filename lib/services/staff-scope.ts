@@ -40,9 +40,9 @@ export async function staffSiteContext(ctx: StaffScopeCtx): Promise<string> {
     const rows = await tx.select({ id: locations.id, name: locations.name }).from(locations)
       .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt))).orderBy(asc(locations.name));
     const visible = rows.filter((row) => locationVisible(access, row.id));
-    if (!visible.length) return "No assigned facilities";
+    if (!visible.length) return "No assigned clubs";
     if (visible.length === 1) return visible[0]!.name;
-    return access.unrestricted ? "All facilities" : `${visible.length} assigned facilities`;
+    return access.unrestricted ? "All clubs" : `${visible.length} assigned clubs`;
   });
 }
 

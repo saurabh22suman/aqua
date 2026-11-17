@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import type { ReportFamily } from "@/lib/owner-reports/preferences";
@@ -21,7 +22,7 @@ export default async function ReportPreferencesPage({ searchParams }: { searchPa
   const available: ReportFamily[] = ["attendance", "members", "batches"];
   if (hasPermission(ctx, "staff.attendance")) available.push("staff");
   if (hasPermission(ctx, "reports.financial") && hasPermission(ctx, "invoices.read") && hasFeature(ctx, "billing")) available.push("collections");
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   return <OwnerPage>
     <BackLink href={reportsHref} label="Reports" />
     <PageHeader title="Report preferences" />

@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
@@ -16,7 +17,7 @@ export default async function NewMemberPage({ searchParams }: { searchParams?: P
     listLocationsAction(),
     // L3 audit — the page heading and the form's guardian copy
     // both route through the closed-key resolver.
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
   const params = searchParams ? await searchParams : {};
   const cookieStore = await cookies();

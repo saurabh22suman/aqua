@@ -3,6 +3,7 @@ import { RegisterBoard } from "@/components/register-board";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatDateIST, formatTimeIST } from "@/lib/time/tz";
 import { requireUuidParam } from "@/lib/params";
@@ -19,12 +20,9 @@ export default async function RegisterPage({
   requireUuidParam(sessionId);
   const [data, terminology] = await Promise.all([
     getRosterAction(sessionId),
-    // L3 audit — the empty-state copy (`Session not found`) routes
-    // through the closed-key resolver. No current preset overrides
-    // `session`, but the uniform contract is what keeps a future
-    // preset (e.g. a "sparring" tennis preset) from drifting
-    // silently. The fetch is cheap and only paid once per page.
-    getTerminologyAction(),
+    // Use the same presentation vocabulary in the empty state and board,
+    // while retaining any non-core terminology overrides.
+    getTerminologyAction().then(staffTerminology),
   ]);
 
   if (!data) {

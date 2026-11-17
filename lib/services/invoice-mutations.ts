@@ -2,6 +2,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { invoices } from "@/db/schema/invoices";
+import { invoiceCorrectionEligibilityInTx } from "@/lib/services/invoice-correction-eligibility";
 import { subscriptions } from "@/db/schema/subscriptions";
 import { membershipPlans } from "@/db/schema/membership-plans";
 import { tenants } from "@/db/schema/tenants";
@@ -17,7 +18,7 @@ import {
 } from "@/lib/services/resource-access";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import { todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // C-32 — invoice mutations. Issue goes through issueInvoiceInTx
 // (lib/services/invoice-issue.ts) so the counter flow and the nightly
@@ -41,7 +42,7 @@ const createFromSubscriptionInput = z.object({
 // counter flow: one line, the plan being sold, GST resolved from the
 // subscription's facility + activity and snapshotted.
 export async function createInvoiceForSubscription(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<InvoiceMutationResult> {
   const parsed = createFromSubscriptionInput.safeParse(raw);
@@ -51,6 +52,9 @@ export async function createInvoiceForSubscription(
 
   try {
     return await withTenant(ctx.tenantId, async (tx) => {
+      if (ctx.systemActor !== undefined || !ctx.userId || !(await callerHasPermission(tx, ctx, "invoices.write"))) {
+        return { ok: false, error: "Not authorized." };
+      }
       await tx.execute(sql`select id from tenants where id = ${ctx.tenantId} for update`);
       const access = await resolveLocationAccess(tx, ctx);
       const rows = await tx
@@ -154,7 +158,7 @@ export async function createInvoiceForSubscription(
 }
 
 export async function voidInvoice(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   invoiceId: string,
   reason: string,
 ): Promise<InvoiceMutationResult> {
@@ -194,7 +198,13 @@ export async function voidInvoice(
     if (invoice.status === "void") {
       return { ok: false, error: "This invoice is already void." };
     }
-    if (Number(invoice.paidPaise) > 0) {
+    const eligibility = await invoiceCorrectionEligibilityInTx(tx, ctx.tenantId, invoice.id);
+    if (eligibility === "cafe") {
+      return { ok: false, error: "Café bills cannot be voided here; a correction path is not available." };
+    }
+    // Payment capture locks the invoice before inserting the payment. Holding
+    // that same lock makes this historical check atomic with a new capture.
+    if (eligibility !== "eligible") {
       return {
         ok: false,
         error: "Payments are recorded against this invoice; it cannot be voided.",

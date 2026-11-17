@@ -60,7 +60,7 @@ import {
   type LeaveAuditWriter,
   type LeaveDecisionResult,
 } from "@/lib/services/leave-decision-write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import type { StaffId } from "@/lib/ids";
 
 export type { LeaveDecisionResult };
@@ -84,7 +84,7 @@ function refuse(message: string, attendanceWorkDates?: string[]): never {
 
 // THE DECISION.
 export async function decideLeaveRequest(
-  ctx: ActionCtx & { features?: ReadonlySet<string> },
+  ctx: MutationActor & { features?: ReadonlySet<string> },
   input: { requestId: string; note?: string | null },
   decision: "approved" | "rejected",
   writeAuditRow: LeaveAuditWriter,

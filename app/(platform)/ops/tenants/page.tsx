@@ -121,6 +121,7 @@ export default async function PlatformTenantsPage({
     Boolean(trial);
 
   const totalPages = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+  if (page > totalPages) redirect(pageHref(params, totalPages));
   const rangeStart = result.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeEnd = Math.min(page * PAGE_SIZE, result.total);
 

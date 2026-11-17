@@ -15,7 +15,7 @@ import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
 import { zonedWallTimeToInstant } from "@/lib/time/tz";
 import { asStaffId } from "@/lib/ids";
 import { normalizeWall, wallTime } from "@/lib/services/shift-time";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // V-23 — shift mutations (architecture.md §8.9). Templates live in
 // ./shift-templates, the roster reads and publish gate in ./roster;
@@ -48,7 +48,7 @@ function firstIssue(error: z.ZodError): string {
   return error.issues[0]?.message ?? "Invalid roster input.";
 }
 
-export async function createShift(ctx: ActionCtx, raw: unknown): Promise<ShiftResult> {
+export async function createShift(ctx: MutationActor, raw: unknown): Promise<ShiftResult> {
   const parsed = shiftInput.safeParse(raw);
   if (!parsed.success) return { ok: false, error: firstIssue(parsed.error) };
   const input = parsed.data;
@@ -159,7 +159,7 @@ export async function createShift(ctx: ActionCtx, raw: unknown): Promise<ShiftRe
   });
 }
 
-export async function deleteShift(ctx: ActionCtx, shiftId: string): Promise<Ok | Fail> {
+export async function deleteShift(ctx: MutationActor, shiftId: string): Promise<Ok | Fail> {
   const parsed = uuid.safeParse(shiftId);
   if (!parsed.success) return { ok: false, error: "Invalid shift." };
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };

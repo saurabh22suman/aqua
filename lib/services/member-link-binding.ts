@@ -24,11 +24,11 @@
 // that anybody owns a number, and nothing here rewrites the club's
 // recorded number or the account's number.
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { v7 as uuidv7 } from "uuid";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { guardianships } from "@/db/schema/consent";
 import { members, persons } from "@/db/schema/people";
 import {
@@ -98,6 +98,43 @@ type LinkTarget = {
   subjectId: string | null;
   hasQuartet: boolean;
 };
+
+// Lock the link before taking a new snapshot of the facts used for the
+// decision. Never upgrade a SHARE lock on the link: activation and revocation
+// also write it. The nullable guardian child must be locked separately.
+async function lockBindingDecision(
+  tx: TenantTx,
+  args: { tenantId: string; audience: LinkAudience; linkId: string },
+): Promise<boolean> {
+  const tenantId = asTenantId(args.tenantId);
+  if (args.audience === "member") {
+    const [link] = await tx.select({ memberId: memberAccountLinks.memberId })
+      .from(memberAccountLinks).where(and(eq(memberAccountLinks.tenantId, tenantId),
+        eq(memberAccountLinks.id, args.linkId))).for("update");
+    if (!link) return false;
+    await tx.select({ id: members.id }).from(members)
+      .innerJoin(persons, and(eq(persons.id, members.personId), eq(persons.tenantId, members.tenantId)))
+      .where(and(eq(members.tenantId, tenantId), eq(members.id, link.memberId)))
+      .for("share");
+    return true;
+  }
+  const [link] = await tx.select({ memberId: guardianChildLinks.memberId, guardianshipId: guardianChildLinks.guardianshipId })
+    .from(guardianChildLinks).where(and(eq(guardianChildLinks.tenantId, tenantId),
+      eq(guardianChildLinks.id, args.linkId))).for("update");
+  if (!link) return false;
+  const [relationship] = await tx.select({ guardianId: guardianships.guardianId }).from(guardianships)
+    .where(and(eq(guardianships.tenantId, tenantId), eq(guardianships.id, link.guardianshipId)))
+    .for("share");
+  if (link.memberId) {
+    await tx.select({ id: members.id }).from(members)
+      .where(and(eq(members.tenantId, tenantId), eq(members.id, link.memberId))).for("share");
+  }
+  if (relationship) {
+    await tx.select({ id: persons.id }).from(persons)
+      .where(and(eq(persons.tenantId, tenantId), eq(persons.id, relationship.guardianId))).for("share");
+  }
+  return true;
+}
 
 async function readLinkTarget(
   tx: TenantTx,
@@ -268,13 +305,21 @@ function actorCovers(
  * club's recorded number or the account's number.
  */
 export async function confirmLinkBinding(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { audience: LinkAudience; linkId: string },
 ): Promise<BindingActionResult> {
   const actorUserId = ctx.userId;
   if (!actorUserId) return notFound();
 
   return withTenant(ctx.tenantId, async (tx) => {
+    const authority = (
+      await readLinkAuthorities(tx, {
+        tenantId: ctx.tenantId,
+        userIds: [actorUserId],
+      })
+    ).get(actorUserId);
+    if (!authority?.live) return notFound();
+    if (!await lockBindingDecision(tx, { tenantId: ctx.tenantId, audience: input.audience, linkId: input.linkId })) return notFound();
     const target = await readLinkTarget(tx, {
       tenantId: ctx.tenantId,
       audience: input.audience,
@@ -283,12 +328,6 @@ export async function confirmLinkBinding(
     if (!target) return notFound();
     if (target.status === "revoked") return notFound();
 
-    const authority = (
-      await readLinkAuthorities(tx, {
-        tenantId: ctx.tenantId,
-        userIds: [actorUserId],
-      })
-    ).get(actorUserId);
     if (!actorCovers(authority, target)) return notFound();
 
     // THE CLUB'S RECORD MUST BE CURRENT. A link whose snapshot no longer
@@ -322,6 +361,7 @@ export async function confirmLinkBinding(
               and(
                 eq(memberAccountLinks.id, target.linkId),
                 eq(memberAccountLinks.tenantId, ctx.tenantId),
+                ne(memberAccountLinks.status, "revoked"),
               ),
             )
             .returning({ id: memberAccountLinks.id })
@@ -339,6 +379,7 @@ export async function confirmLinkBinding(
               and(
                 eq(guardianChildLinks.id, target.linkId),
                 eq(guardianChildLinks.tenantId, ctx.tenantId),
+                ne(guardianChildLinks.status, "revoked"),
               ),
             )
             .returning({ id: guardianChildLinks.id });
@@ -385,13 +426,21 @@ export async function confirmLinkBinding(
  * "nothing_to_withdraw" and writes nothing.
  */
 export async function withdrawLinkBinding(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { audience: LinkAudience; linkId: string },
 ): Promise<BindingActionResult> {
   const actorUserId = ctx.userId;
   if (!actorUserId) return notFound();
 
   return withTenant(ctx.tenantId, async (tx) => {
+    const authority = (
+      await readLinkAuthorities(tx, {
+        tenantId: ctx.tenantId,
+        userIds: [actorUserId],
+      })
+    ).get(actorUserId);
+    if (!authority?.live) return notFound();
+    if (!await lockBindingDecision(tx, { tenantId: ctx.tenantId, audience: input.audience, linkId: input.linkId })) return notFound();
     const target = await readLinkTarget(tx, {
       tenantId: ctx.tenantId,
       audience: input.audience,
@@ -400,12 +449,6 @@ export async function withdrawLinkBinding(
     if (!target) return notFound();
     if (target.status === "revoked") return notFound();
 
-    const authority = (
-      await readLinkAuthorities(tx, {
-        tenantId: ctx.tenantId,
-        userIds: [actorUserId],
-      })
-    ).get(actorUserId);
     if (!actorCovers(authority, target)) return notFound();
 
     if (!target.hasQuartet) {
@@ -428,6 +471,7 @@ export async function withdrawLinkBinding(
               and(
                 eq(memberAccountLinks.id, target.linkId),
                 eq(memberAccountLinks.tenantId, ctx.tenantId),
+                ne(memberAccountLinks.status, "revoked"),
               ),
             )
             .returning({ id: memberAccountLinks.id })
@@ -445,6 +489,7 @@ export async function withdrawLinkBinding(
               and(
                 eq(guardianChildLinks.id, target.linkId),
                 eq(guardianChildLinks.tenantId, ctx.tenantId),
+                ne(guardianChildLinks.status, "revoked"),
               ),
             )
             .returning({ id: guardianChildLinks.id });
@@ -485,7 +530,7 @@ export async function withdrawLinkBinding(
  * deliver — and it is never sent to anybody by this service.
  */
 export async function issueMemberActivationToken(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { audience: LinkAudience; linkId: string },
 ): Promise<ActivationTokenResult> {
   const actorUserId = ctx.userId;
@@ -545,7 +590,7 @@ export async function issueMemberActivationToken(
  * delivery channel that could prove possession.
  */
 export async function provisionMemberAccountLink(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     audience: LinkAudience;
     accountUserId: string;
@@ -558,7 +603,7 @@ export async function provisionMemberAccountLink(
 
 export async function provisionMemberAccountLinkInTx(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { audience: LinkAudience; accountUserId: string; memberId?: string; guardianshipId?: string },
 ): Promise<ProvisionResult> {
   const actorUserId = ctx.userId;
@@ -734,4 +779,3 @@ export async function provisionMemberAccountLinkInTx(
 
     return { kind: "ok", linkId };
 }
-

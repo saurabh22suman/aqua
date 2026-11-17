@@ -110,7 +110,7 @@ describe("owner Home — the screen opens with the real context", () => {
     const text = document.body.textContent ?? "";
     // The real date, the real club and the real location scope.
     expect(text).toContain("Sun, 25 Oct 2026");
-    expect(text).toContain("Collections");
+    expect(text).toContain("Collected today");
   });
 
   it("puts a small piece of club artwork beside the heading", () => {
@@ -139,11 +139,11 @@ describe("owner Home — the figures", () => {
     );
     const money = screen.getByTestId("owner-home-money-surface");
     expect(money.textContent).toContain("₹18,400");
-    expect(money.textContent).toContain("Today");
-    expect(money.textContent).toContain("Unavailable");
+    expect(money.textContent).toContain("Collected today");
+    expect(money.textContent).toContain("5 payments recorded");
   });
 
-  it("gives a phone the two money figures and a compact real summary", () => {
+  it("gives a phone the actual day's amount and payment count", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -154,7 +154,8 @@ describe("owner Home — the figures", () => {
     );
     const text = screen.getByTestId("owner-home-money-surface").textContent ?? "";
     expect(text).toContain("₹18,400");
-    expect(text).toContain("Unavailable");
+    expect(text).toContain("5 payments recorded");
+    expect(text).not.toContain("Last 7 days");
   });
 });
 

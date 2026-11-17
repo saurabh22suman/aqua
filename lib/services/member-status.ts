@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { members, memberStatusTransitions, type MemberStatus } from "@/db/schema/people";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
 import { asMemberId } from "@/lib/ids";
 import { visibleMember } from "./resource-access";
@@ -13,7 +13,7 @@ export type TransitionResult = { ok: true } | { ok: false; error: string };
 // Reason is required, not optional -- an unexplained status change
 // defeats the point of an audit trail.
 export async function transitionMemberStatus(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { memberId: string; toStatus: MemberStatus; reason: string },
 ): Promise<TransitionResult> {
   if (!input.reason.trim()) {
@@ -63,7 +63,7 @@ export async function transitionMemberStatus(
 }
 
 export function pauseMember(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   memberId: string,
   reason: string,
 ): Promise<TransitionResult> {
@@ -71,7 +71,7 @@ export function pauseMember(
 }
 
 export function resumeMember(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   memberId: string,
   reason: string,
 ): Promise<TransitionResult> {

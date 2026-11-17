@@ -41,13 +41,15 @@ import {
 export function OpsNavLinks({
   variant = "rail",
   role = "viewer",
+  mockMessagingAvailable = true,
 }: {
   variant?: "rail" | "menu";
   role?: OpsNavigationRole;
+  mockMessagingAvailable?: boolean;
 }) {
   const pathname = usePathname();
   const activeHref = findActiveHref(pathname, [...OPS_ROUTE_RESOLUTION]);
-  const groups = opsNavGroupsForRole(role);
+  const groups = opsNavGroupsForRole(role, mockMessagingAvailable);
   const idPrefix = useId();
 
   return (

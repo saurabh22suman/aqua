@@ -16,7 +16,7 @@ import {
 // by facility (Home, Members, Fees, Programs/Sessions, Schedule,
 // Batches, Reports). The choice is written to `?facility=<locationId>`
 // and to a cookie, so it follows the owner from screen to screen;
-// "All facilities" clears both. Pages resolve the URL first and the
+// "All facilities" clears the cookie and writes an explicit URL value. Pages resolve the URL first and the
 // cookie second (lib/facility.ts), so a shared link wins over a stale
 // device preference.
 
@@ -59,9 +59,9 @@ export function FacilitySwitcher({
   // label may be shortened or ellipsised; the scope never is.
   const selectedLabel =
     current === "all"
-      ? "All facilities"
+      ? "All clubs"
       : (locations.find((location) => location.id === current)?.name ??
-        "All facilities");
+        "All clubs");
   useEffect(() => {
     setCurrent(urlFacility);
   }, [urlFacility]);
@@ -88,7 +88,7 @@ export function FacilitySwitcher({
     const next = new URLSearchParams(searchParams.toString());
     if (value === "all") {
       writeFacilityCookie(null);
-      next.delete("facility");
+      next.set("facility", "all");
     } else {
       writeFacilityCookie(value);
       next.set("facility", value);
@@ -99,9 +99,9 @@ export function FacilitySwitcher({
   }
 
   return (
-    <div className="px-5 pt-3 print:hidden">
+    <div className="print:hidden">
       <label htmlFor="facility-switcher" className="sr-only">
-        Facility
+        Club
       </label>
       {/* The shared PICKER: the 10px control radius, 16px control text
           and the very lightly tinted picker surface. It opens the shared
@@ -125,11 +125,11 @@ export function FacilitySwitcher({
           data-testid="facility-switcher"
           value={current}
           onChange={(e) => onChange(e.target.value)}
-          aria-label="Facility"
+          aria-label="Club"
           title={selectedLabel}
-          className="min-h-11 pl-9 pr-8 lg:min-h-12"
+          className="min-h-11 rounded-[10px] bg-paper pl-9 pr-8 text-base lg:text-[13px]"
         >
-          <option value="all">All facilities</option>
+          <option value="all">All clubs</option>
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}

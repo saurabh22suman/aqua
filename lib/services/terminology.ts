@@ -4,7 +4,7 @@ import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import {
   DEFAULT_LOCALE,
@@ -118,7 +118,7 @@ export async function getTerminology(
 }
 
 export async function updateTermOverride(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: UpdateTermOverrideInput,
 ): Promise<UpdateTermOverrideResult> {
   const parsed = setInputSchema.safeParse(rawInput);
@@ -194,7 +194,7 @@ export async function updateTermOverride(
 }
 
 export async function clearTermOverride(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: { key: TermKey; locale: Locale },
 ): Promise<ClearTermOverrideResult> {
   const parsed = z

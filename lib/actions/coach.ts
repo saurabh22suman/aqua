@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { NotFoundError, requireDefaultCtx } from "@/lib/auth/context";
-import { requirePermission } from "@/lib/auth/permission";
+import { ForbiddenError, requirePermission } from "@/lib/auth/permission";
+import { ClubSelectionRequired } from "@/lib/auth/active-club";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema";
 import { addDays, todayInZone } from "@/lib/time/tz";
@@ -22,6 +23,7 @@ import { isCoachLikeRoleKey } from "@/lib/services/resource-access";
 import { offlineSessionState } from "@/lib/offline/server-session";
 import type { OfflineIdentity } from "@/lib/offline/identity";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
+import { AttendanceReviewRequired, liveAttendanceAuthority } from "@/lib/services/attendance-mark";
 
 const memberIdSchema = z.string().uuid();
 import type { CoachRosterRow, CoachScheduleRow } from "@/lib/services/coach-schedule";
@@ -209,18 +211,24 @@ export async function markAttendanceSessionAction(raw: {
   status: "present" | "absent" | "late";
   clientId: string;
   offlineScope?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+}): Promise<{ ok: boolean; error?: string; code?: "reauth" | "terminal" }> {
   const input = markAttendanceSchema.parse(raw);
-  const ctx = await requireDefaultCtx();
-  requirePermission(ctx, "attendance.mark");
+  let ctx: Awaited<ReturnType<typeof requireDefaultCtx>>;
+  try { ctx = await requireDefaultCtx(); requirePermission(ctx, "attendance.mark"); }
+  catch (error) {
+    if (error instanceof NotFoundError || error instanceof ForbiddenError || error instanceof ClubSelectionRequired) {
+      return { ok: false, code: "reauth", error: "Your access changed. Sign in again." };
+    }
+    throw error;
+  }
   // R01 — Owner/Admin are read-only over student attendance even if a
   // stale or tenant-edited grant survives (the service refuses too;
   // this returns the truthful counter message instead of a not-found).
   if (ctx.roleKey === "owner" || ctx.roleKey === "admin") {
-    return { ok: false, error: "Student attendance is recorded by the coach or the front desk." };
+    return { ok: false, code: "reauth", error: "Student attendance is recorded by the coach or the front desk." };
   }
   if (input.offlineScope && (await offlineSessionState()).identity?.scope !== input.offlineScope) {
-    return { ok: false, error: "Your offline session changed. Sign in again before syncing." };
+    return { ok: false, code: "reauth", error: "Your offline session changed. Sign in again before syncing." };
   }
 
   const visible = await sessionVisibleToCaller(
@@ -228,12 +236,14 @@ export async function markAttendanceSessionAction(raw: {
     input.sessionId,
   );
   if (!visible) {
-    return { ok: false, error: "Session not found." };
+    if (!await liveAttendanceAuthority(ctx)) return { ok: false, code: "reauth", error: "Your access changed. Sign in again." };
+    return { ok: false, code: "terminal", error: "This mark needs review." };
   }
 
   try { await markAttendance(ctx, input); }
   catch (error) {
-    if (error instanceof NotFoundError) return { ok: false, error: "Session or eligible member not found." };
+    if (error instanceof AttendanceReviewRequired) return { ok: false, code: "terminal", error: "This mark needs review." };
+    if (error instanceof NotFoundError) return { ok: false, code: "reauth", error: "Session or eligible member not found." };
     throw error;
   }
 

@@ -43,6 +43,8 @@ export const offlineQueueEntrySchema = z.object({
   scope: z.string().regex(/^[a-f0-9]{64}$/),
   /** The offline identity's expiry — the mark dies with the session. */
   expiresAt: z.number().int().positive(),
+  review: z.boolean().optional(),
+  order: z.number().int().nonnegative().safe().optional(),
 });
 
 export type OfflineQueueEntry = z.infer<typeof offlineQueueEntrySchema>;

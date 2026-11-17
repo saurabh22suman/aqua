@@ -104,7 +104,7 @@ beforeAll(async () => {
       "insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",
       [roleId, tenantId],
     );
-    await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'settings.manage')", [tenantId, roleId]);
+    await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'settings.manage'),($1,$2,'invoices.write')", [tenantId, roleId]);
     await admin.query(
       "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",
       [uuidv7(), tenantId, actorId, roleId],

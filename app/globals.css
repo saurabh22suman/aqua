@@ -80,7 +80,7 @@
   /* The approved OpenPen owner surface radius. Owner routes remap
    * --radius-card to this below, so Ops and other roles keep their own
    * 20px card while the owner composition matches the reference. */
-  --radius-owner: 16px;
+  --radius-owner: 18px;
   /* The CONTROL radius — the human-approved 10px (owner redesign,
    * 27 October 2026). Every control the owner presses or types in wears
    * it: action buttons, text fields, selects, date and time pickers.
@@ -210,20 +210,8 @@
     var(--owner-nav-h) + env(safe-area-inset-bottom)
   );
 
-  /* ── Owner typography (Owner light, 2 November 2026) ─────────────────
-   * The human approved ONE type treatment for the owner product:
-   * Instrument Sans 400 for body, rows and controls, 500 for headings.
-   * The application still carries the earlier heavy display face
-   * (Bricolage Grotesque) for every heading, so the owner tree
-   * REDIRECTS the shared display utility to the body face.
-   *
-   * It is scoped to [data-owner-surface] on purpose: Ops, coach,
-   * reception, the public pages and the auth panel keep the face they
-   * have today, and no other role's typography moves.
-   *
-   * --owner-heading-weight is the approved heading weight. Headings
-   * inside the owner tree render at it, so the emphasis between body
-   * text (400) and a heading (500) stays meaningful. */
+  /* Staff retains the 500 heading weight; the Owner surface overrides
+   * this token to 600 for the approved Bricolage display treatment. */
   --owner-heading-weight: 500;
 
   /* ── Chart surface tokens ─────────────────────────────────────────
@@ -461,18 +449,14 @@
  * Only the owner tree wears this attribute. It remaps two shared tokens
  * for owner surfaces WITHOUT changing the generic preset values Ops and
  * other roles consume:
- *   - owner cards use the reference 16px radius;
+ *   - owner cards use the reference 18px radius;
  *   - the selected navigation row aliases the owner nav pill tokens, so
  *     the sidebar is white/plum in Lavender and white/forest in Mint.
  * No palette token is restated here. */
 [data-owner-surface] {
   --radius-card: var(--radius-owner);
-  /* The heavy Owner display treatment is removed HERE and nowhere else:
-   * every owner heading asks for the shared `font-display` utility, and
-   * inside the owner tree that utility now resolves to the body face
-   * (Instrument Sans). Ops, coach, reception, the public pages and the
-   * auth panel keep the face they have today. */
-  --font-display: var(--font-sans);
+  /* Owner display headings inherit the shared Bricolage display face. */
+  --owner-heading-weight: 600;
   --owner-nav-surface: #FFFFFF;
   --owner-nav-ink: var(--color-ink);
   --owner-nav-muted: var(--color-ink-3);
@@ -501,22 +485,13 @@
   outline-color: var(--owner-nav-focus);
 }
 
-/* The owner headings carry the approved weight (500). It is a scoped
- * rule, not a global reset: the body, the rows, the controls and every
- * other role keep their own weights, and the difference between 400
- * body text and a 500 heading stays a meaningful cue. */
+/* Owner headings use the scoped approved 600 weight. */
 [data-owner-surface] :is(h1, h2, h3, h4, h5, h6) {
   font-weight: var(--owner-heading-weight);
 }
 
-/* The owner product has TWO real weights: Instrument Sans 400 for body
- * text and 500 for headings, labels, figures and controls (the
- * approved mock). The application asks for 600 in a number of places —
- * and it loads ONLY the 400 and 500 faces — so a 600 request is drawn
- * as a SYNTHESISED (faux) weight rather than the real face. Inside the
- * owner tree that request is mapped onto the real 500: the figures, the
- * labels and the wordmark carry the approved weight, and no other role's
- * typography moves. */
+/* Owner semibold labels and figures follow the scoped heading weight;
+ * staff continues to use the root 500 weight. */
 [data-owner-surface] :is(.font-semibold, .kpi) {
   font-weight: var(--owner-heading-weight);
 }
@@ -552,11 +527,11 @@
  * token is restated here, so Owner, Ops, the public pages and the auth
  * panel cannot move. */
 [data-staff-surface] {
-  --radius-card: var(--radius-owner);
+  --radius-card: 16px;
   --font-display: var(--font-sans);
 }
 
-/* The staff tree carries the same two real weights as the owner tree:
+/* The staff tree retains its two real weights:
  * 400 for body, rows and controls; 500 for headings, labels, figures
  * and controls. The application asks for 600 in a number of places and
  * loads ONLY the 400 and 500 faces, so a 600 request is drawn as a

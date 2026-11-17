@@ -541,6 +541,7 @@ describe("staff invitation mutations write audit rows (E-02)", () => {
     const phone = `+91987${RUN_NUM}13`;
     const requestId = uuidv7();
     const result = await inviteStaff(
+      // @ts-expect-error This negative test deliberately bypasses the required actor type.
       { tenantId, requestId },
       { phone, fullName: "No Actor", roleKey: "coach", locationIds: [] },
     );

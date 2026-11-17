@@ -2,6 +2,8 @@
 
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { usePathname } from "next/navigation";
+import { scopedOwnerNavigationHref } from "@/components/owner-ui/owner-facility-navigation";
+import { OwnerNavigationScope } from "@/components/owner-ui/owner-navigation-scope";
 import { findActiveHref } from "@/components/bottom-nav";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { ownerIconName } from "@/components/owner-ui/owner-navigation";
@@ -36,7 +38,7 @@ export function OwnerSideNav({
   const activeHref = findActiveHref(pathname, allItems);
 
   return (
-    <div data-testid="owner-side-nav">
+    <OwnerNavigationScope pathname={pathname}>{(searchParams) => <div data-testid="owner-side-nav">
       {groups.map((group, index) => (
         <div key={group.label} className={index === 0 ? undefined : "mt-3"}>
           <p className="px-2.5 text-[11px] font-medium uppercase leading-tight tracking-[1.4px] text-[var(--owner-nav-muted)]">
@@ -48,7 +50,7 @@ export function OwnerSideNav({
               return (
                 <li key={item.href}>
                   <Link
-                    href={item.href}
+                    href={scopedOwnerNavigationHref(item.href, pathname, searchParams)}
                     aria-current={isActive ? "page" : undefined}
                     className={`flex min-h-11 items-center gap-1.5 rounded-ctl px-2 py-2 text-[14px] font-medium transition-colors duration-150 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--owner-nav-focus)] ${
                       isActive
@@ -71,6 +73,6 @@ export function OwnerSideNav({
           </ul>
         </div>
       ))}
-    </div>
+    </div>}</OwnerNavigationScope>
   );
 }

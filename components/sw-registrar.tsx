@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { activateOfflineIdentity, storedOfflineIdentity } from "@/lib/offline/idb";
+import { activateOfflineIdentity, storedOfflineIdentity, kvGet, kvDelete } from "@/lib/offline/idb";
 import { clearOfflineData, localOfflineScope, readOfflineSessionState, runOfflineLifecycle } from "@/lib/offline/client-session";
 import { ConnectionBanner } from "@/components/pwa/connection-banner";
 import { InstallAffordance } from "@/components/pwa/install-affordance";
@@ -11,6 +11,16 @@ import { UpdatePrompt } from "@/components/pwa/update-prompt";
 
 export function ServiceWorkerRegistrar() {
   const pathname = usePathname();
+  const [lost, setLost] = useState(0);
+  useEffect(() => {
+    let active = true;
+    const update = () => { void kvGet<{ count: number }>("attendance-loss-notice").then(notice => {
+      if (active) setLost(Number.isSafeInteger(notice?.count) && (notice?.count ?? 0) > 0 ? notice!.count : 0);
+    }).catch(() => {}); };
+    update();
+    window.addEventListener("aqua-offline-cleared", update);
+    return () => { active = false; window.removeEventListener("aqua-offline-cleared", update); };
+  }, []);
   useEffect(() => {
     // The platform (ops) surface must never run the offline service
     // worker: the worker caches the tenant surface, and the platform
@@ -95,6 +105,10 @@ export function ServiceWorkerRegistrar() {
   // and a signed parent link on its own (see components/pwa/**).
   return (
     <>
+      {lost > 0 && !pathname.startsWith("/ops") ? <div role="alert" className="border-b border-warn bg-warn-soft px-4 py-3 text-sm text-ink">
+        <p>{lost} unsynced attendance {lost === 1 ? "mark was" : "marks were"} removed from this device. Recheck the register.</p>
+        <button type="button" className="min-h-11 underline" onClick={() => { void kvDelete("attendance-loss-notice").then(() => setLost(0)); }}>Dismiss</button>
+      </div> : null}
       <ManifestLink pathname={pathname} />
       <InstallAffordance pathname={pathname} />
       <UpdatePrompt pathname={pathname} />

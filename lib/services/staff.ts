@@ -3,7 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { staff, type StaffType } from "@/db/schema/staff";
 import { persons } from "@/db/schema/people";
 import { users } from "@/db/schema/users";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asPersonId, type StaffId, type PersonId, type TenantId, type UserId } from "@/lib/ids";
 import { auditActorOf, writeAudit } from "@/lib/audit/write";
 import {
@@ -83,7 +83,7 @@ export async function listStaff(
 // semantics means a facility-scoped manager does not see it. That is a product
 // consequence recorded in the packet handoff, not a scope rule invented here.
 export async function createStaff(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input:
     | { existingPersonId: string; staffType: StaffType; userId?: UserId; employedOn?: string }
     | { fullName: string; staffType: StaffType; userId?: UserId; employedOn?: string },

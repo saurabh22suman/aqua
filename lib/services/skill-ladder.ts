@@ -6,7 +6,7 @@ import {
   skillNodes,
 } from "@/db/schema/skill-framework";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 export * from "./skill-ladder-bridge";
 
@@ -106,7 +106,7 @@ export async function listSkillLadders(
 }
 
 export async function updateSkillLevel(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LadderMutationResult> {
   const parsed = updateSkillLevelInput.safeParse(raw);
@@ -160,7 +160,7 @@ export async function updateSkillLevel(
 }
 
 export async function updateSkillNode(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LadderMutationResult> {
   const parsed = updateSkillNodeInput.safeParse(raw);

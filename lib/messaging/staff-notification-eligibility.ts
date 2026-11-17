@@ -9,6 +9,7 @@ import { sessions } from "@/db/schema/scheduling";
 import { whatsappNotificationOutbox } from "@/db/schema/whatsapp";
 import { normaliseToE164 } from "@/lib/phone";
 import type { StaffId } from "@/lib/ids";
+import { isCoachLikeRoleKey } from "@/lib/services/resource-access";
 
 export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsappNotificationOutbox.$inferSelect): Promise<boolean> {
   if (!row.recipientUserId) return false;
@@ -44,7 +45,7 @@ export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsap
         eq(membershipLocations.locationId, locationId))).limit(1);
       if (!site) continue;
     }
-    if (membership.role === "coach" && (row.scopeSessionId || row.scopeBatchId)) {
+    if (isCoachLikeRoleKey(membership.role) && (row.scopeSessionId || row.scopeBatchId)) {
       if (!coachId) continue;
       const [coach] = await tx.select({ id: staff.id }).from(staff).where(and(eq(staff.id, coachId),
         eq(staff.tenantId, row.tenantId), eq(staff.userId, row.recipientUserId), isNull(staff.deletedAt))).limit(1);

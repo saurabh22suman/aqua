@@ -10,8 +10,8 @@ import {
 import { activityTypes } from "@/db/schema/activity-types";
 import { writeAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
-import { visibleMember } from "./resource-access";
-import type { ActionCtx } from "@/lib/auth/context";
+import { callerHasPermission, visibleMember } from "./resource-access";
+import type { MutationActor } from "@/lib/auth/context";
 
 export * from "./skill-framework-list";
 
@@ -80,7 +80,7 @@ export type AssessmentRow = {
 };
 
 export async function createSkillFramework(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SkillMutationResult> {
   const parsed = createFrameworkInput.safeParse(raw);
@@ -88,6 +88,9 @@ export async function createSkillFramework(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid framework." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (ctx.systemActor !== undefined || !ctx.userId || !(await callerHasPermission(tx, ctx, "settings.manage"))) {
+      return { ok: false, error: "Not authorized." };
+    }
     const typeRows = await tx
       .select({ key: activityTypes.key })
       .from(activityTypes)
@@ -133,7 +136,7 @@ export async function createSkillFramework(
 }
 
 export async function createSkillNode(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SkillMutationResult> {
   const parsed = createNodeInput.safeParse(raw);
@@ -141,6 +144,9 @@ export async function createSkillNode(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid node." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (ctx.systemActor !== undefined || !ctx.userId || !(await callerHasPermission(tx, ctx, "settings.manage"))) {
+      return { ok: false, error: "Not authorized." };
+    }
     const frameworkRows = await tx
       .select({ id: skillFrameworks.id })
       .from(skillFrameworks)
@@ -204,7 +210,7 @@ export async function createSkillNode(
 }
 
 export async function recordAssessment(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SkillMutationResult> {
   const parsed = recordAssessmentInput.safeParse(raw);

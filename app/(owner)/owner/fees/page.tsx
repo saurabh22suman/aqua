@@ -1,14 +1,17 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { isLiveOwnerForSettings } from "@/lib/auth/owner-settings-page-guard";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { cookies } from "next/headers";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
-import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
+import { withTenant } from "@/db/tenant";
+import { tenants } from "@/db/schema/tenants";
+import { eq } from "drizzle-orm";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { listPlansAction } from "@/lib/actions/membership-plans";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
-import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { FACILITY_COOKIE, resolveRequestedFacility } from "@/lib/facility";
 import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import {
   getFeesOverviewAction,
@@ -16,7 +19,7 @@ import {
   listHubTransactionsAction,
 } from "@/lib/actions/fees-hub";
 import { formatINR } from "@/lib/money/format";
-import { formatDateIST, formatPeriodRangeIST } from "@/lib/time/tz";
+import { formatDateIST } from "@/lib/time/tz";
 import { methodLabel } from "@/lib/services/payments";
 import {
   groupLabel,
@@ -25,12 +28,14 @@ import {
 } from "@/lib/money/payment-groups";
 import { buttonClasses } from "@/components/ui/Button";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
 import { FeesTransactionList } from "@/components/fees/fees-transaction-list";
 import { FeesPeriodControl } from "@/components/fees/fees-period-control";
-import { StatCard } from "@/components/ui/StatCard";
+import { FeesOverviewCards } from "@/components/fees/fees-overview-cards";
+import type { ReactNode } from "react";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 
@@ -64,24 +69,26 @@ export default async function FeesPage({
   const params = searchParams ? await searchParams : {};
   const tab = resolveTab(params.tab);
   const cookieStore = await cookies();
-  const facility = resolveFacilityValue(
-    params.facility,
-    cookieStore.get(FACILITY_COOKIE)?.value,
-  );
-  if (facility && !(await canSelectFacility(ctx, facility))) {
+  const scope = resolveRequestedFacility({
+    facility: params.facility,
+    cookie: cookieStore.get(FACILITY_COOKIE)?.value,
+  });
+  const facility = scope.facilityId;
+  if (!scope.valid || (facility && !(await canSelectFacility(ctx, facility)))) {
     const recovery = new URLSearchParams({ tab, facility: "all" });
     if (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) recovery.set("from", params.from);
     if (params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to)) recovery.set("to", params.to);
-    return <OwnerPage><PageHeader title="Facility unavailable" purpose="This facility is unavailable for your account." /><Link href={`/owner/fees?${recovery.toString()}`} className={buttonClasses({ variant: "secondary", size: "md" })}>View available facilities</Link></OwnerPage>;
+    return <OwnerPage><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href={`/owner/fees?${recovery.toString()}`} className={buttonClasses({ variant: "secondary", size: "md" })}>View available clubs</Link></OwnerPage>;
   }
   // Plans management is settings.manage; reads stay open.
   const canManageSettings = hasPermission(ctx, "settings.manage") && await isLiveOwnerForSettings(ctx);
-  const timezone = await getTenantTimezoneAction();
+  const [tenant] = await withTenant(ctx.tenantId, (tx) => tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1));
+  const timezone = tenant?.timezone ?? "Asia/Kolkata";
   const period =
     params.from && params.to
       ? { from: params.from, to: params.to }
       : defaultMonthPeriod(timezone);
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const memberLabel = titleCase(resolveTerm(terminology, "member", 1));
   // Home's payment-mix drill-down narrows this list (and only this list).
   const method = isPaymentMethod(params.method) ? params.method : undefined;
@@ -94,12 +101,11 @@ export default async function FeesPage({
   // OpenPen reference — only period-bound tabs name the reporting period.
   // Dues and Invoices describe current documents, so a month label there
   // would falsely narrow the balances to that period.
-  const periodLabel = formatPeriodRangeIST(period.from, period.to);
   const purpose =
     tab === "overview"
       ? "Review fees and payments."
       : tab === "transactions"
-        ? `Recorded payments and their receipts. Period ${periodLabel}.`
+        ? "Recorded payments and their receipts."
         : tab === "dues"
           ? "Current balances, with due dates and invoice state."
           : tab === "invoices"
@@ -134,26 +140,25 @@ export default async function FeesPage({
   ]);
   return (
     <OwnerPage>
-      <PageHeader title="Fees & payments" purpose={purpose} />
-      {tab === "overview" ? <p className="mt-1 text-[13px] text-ink-3">Period {periodLabel}.</p> : null}
+      <OwnerDesignHeading title="Fees & payments" purpose={purpose} action={hasPermission(ctx, "payments.record") ? <Link href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}&facility=${facility ?? "all"}`} className={buttonClasses({ variant: "primary", size: "sm", className: "text-[13px]" })}>Review dues</Link> : null} />
 
+      {tab === "overview" || tab === "transactions" ? (
+        <FeesPeriodControl tab={tab} from={period.from} to={period.to} facility={facility ?? "all"} timezone={timezone} method={method} group={group} />
+      ) : null}
       <div className="mt-4">
         <FeesTabs
           active={tab}
           period={period}
-          facility={facility}
+          facility={facility ?? "all"}
           canManageSettings={canManageSettings}
         />
       </div>
-      {tab === "overview" || tab === "transactions" ? (
-        <FeesPeriodControl tab={tab} from={period.from} to={period.to} facility={facility ?? "all"} timezone={timezone} method={method} group={group} />
-      ) : null}
 
       {tab === "overview" ? (
         <section className="mt-4 space-y-3">
           <div className="grid gap-3 lg:grid-cols-3">
             <div role="group" aria-label="Period collections" className="min-w-0">
-            <StatCard
+            <FeeMetric
               label="Collected in this period"
               value={formatINR(overview.collectedPaise)}
               hint={`${overview.paymentCount} payment${
@@ -164,24 +169,23 @@ export default async function FeesPage({
                   : ""
               }`}
               href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
-                facility ? `&facility=${facility}` : ""
+                `&facility=${facility ?? "all"}`
               }`}
-              tone="money"
+              highlight
             />
             </div>
             <div role="group" aria-label="Current balances" className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-3 lg:col-span-2">
-            <StatCard
+            <FeeMetric
               label="Outstanding now"
               value={formatINR(overview.outstandingPaise)}
               hint={`${overview.dueInvoiceCount} invoice${
                 overview.dueInvoiceCount === 1 ? "" : "s"
               } with a balance`}
               href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}${
-                facility ? `&facility=${facility}` : ""
+                `&facility=${facility ?? "all"}`
               }`}
-              tone="paper"
             />
-            <StatCard
+            <FeeMetric
               label="Overdue now"
               value={
                 <span className={overview.overduePaise > 0 ? "text-late" : undefined}>
@@ -191,10 +195,11 @@ export default async function FeesPage({
               hint={`${overview.overdueInvoiceCount} past the due date · today ${formatDateIST(
                 overview.today,
               )}`}
-              tone="paper"
             />
             </div>
           </div>
+          <p className="text-[12px] text-ink-3">Outstanding and overdue are current balances.</p>
+          <FeesOverviewCards overview={overview} facility={facility ?? "all"} from={period.from} to={period.to} />
 
           {/* OpenPen reference — one action into the invoice journey beside
               the financial evidence that explains the period. */}
@@ -210,7 +215,7 @@ export default async function FeesPage({
                   </div>
                   <Link
                     href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}${
-                      facility ? `&facility=${facility}` : ""
+                      `&facility=${facility ?? "all"}`
                     }`}
                     className={buttonClasses({ variant: "primary", size: "md" })}
                   >
@@ -224,13 +229,13 @@ export default async function FeesPage({
               <ul className="mt-2 divide-y divide-line text-[13px]">
                 <li>
                   <Link
-                    href="/owner/reports/collections"
+                    href={`/owner/reports/collections?${new URLSearchParams({ facility: facility ?? "all" })}`}
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
                     <span>
                       Daily collections
                       <span className="mt-0.5 block text-[12px] text-ink-3">
-                        Cash count and method breakdown
+                        Today’s cash count and method breakdown
                       </span>
                     </span>
                     <span className="text-[12.5px] text-[var(--accent-ink)]">
@@ -241,7 +246,7 @@ export default async function FeesPage({
                 <li>
                   <Link
                     href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
-                      facility ? `&facility=${facility}` : ""
+                      `&facility=${facility ?? "all"}`
                     }`}
                     className="flex items-center justify-between gap-3 py-2.5"
                   >
@@ -298,7 +303,7 @@ export default async function FeesPage({
           {activeFilter ? (
             <Link
               href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
-                facility ? `&facility=${facility}` : ""
+                `&facility=${facility ?? "all"}`
               }`}
               className="mt-1 inline-flex min-h-[44px] items-center text-[12.5px] text-water"
             >
@@ -403,4 +408,10 @@ export default async function FeesPage({
       ) : null}
     </OwnerPage>
   );
+}
+
+function FeeMetric({ label, value, hint, href, highlight = false }: { label: string; value: ReactNode; hint: string; href?: string; highlight?: boolean }) {
+  const content = <><p className="text-[12px] text-ink-3">{label}</p><p className="mt-2 break-words font-display text-[26px] font-semibold leading-tight tabular-nums">{value}</p><p className="mt-2 text-[12px] text-ink-3">{hint}</p></>;
+  const className = `block h-full rounded-[18px] border border-line p-[18px] lg:p-5 ${highlight ? "bg-[var(--selected-surface)]" : "bg-paper"}`;
+  return href ? <Link href={href} className={className}>{content}</Link> : <div className={className}>{content}</div>;
 }

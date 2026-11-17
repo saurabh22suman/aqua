@@ -151,92 +151,7 @@ export async function createTenant(
 
   try {
     const result: ProvisionedTenant = await withPlatformAdmin(async (tx) => {
-      // Sale eligibility is rechecked on the server in this transaction.
-      // Standard remains active for existing clubs, but cannot be forged here.
-      const plan = await findSignupPlan(tx, input.planKey);
-      if (!plan) {
-        return {
-          kind: "error",
-          code: "plan_not_found",
-          message: input.planKey
-            ? `No signup-eligible active plan with key "${input.planKey}".`
-            : "No signup-eligible default plan is configured.",
-        };
-      }
-
-      // Three inserts, one transaction, atomic with the platform
-      // audit row. The new platform_admin_insert policy
-      // (migration 20260902200000) opens the INSERT path on
-      // tenants and locations for app.platform_admin = 'true';
-      // tenant_isolation still denies the inserts by its own
-      // WITH CHECK, but Postgres OR-combines the policies —
-      // one passing is enough.
-      const [tenant] = await tx
-        .insert(tenants)
-        .values({
-          id: asTenantId(uuidv7()),
-          slug: input.slug,
-          name: input.name,
-          status: "trial",
-          planId: plan.id,
-          timezone: input.timezone,
-          currency: input.currency,
-          gstin: input.gstin ?? null,
-          createdBy: ctx.actorId,
-          updatedBy: ctx.actorId,
-        })
-        .returning({ id: tenants.id });
-      if (!tenant) {
-        throw new Error("createTenant: tenants insert returned no row");
-      }
-
-      // C1 — same transaction as the tenant/location/audit rows. A
-      // tenant with no role templates is not a valid tenant: invite-
-      // owner (db/tenant-invite.ts) looks up the owner role by key
-      // and fails outright without it. scripts/seed.ts and
-      // scripts/seed-demo.ts both call this right after creating the
-      // tenant row; this was the one step createTenant was missing.
-      await seedRoleTemplates(tenant.id, tx);
-      // V-26 — leave types are part of a usable tenant for the same
-      // reason roles are: the staff surface's leave request form needs
-      // at least one type to offer. Seeded in the same transaction so
-      // a tenant can never exist without them; the migration backfilled
-      // the same defaults for tenants created before V-26.
-      await seedDefaultLeaveTypes(tenant.id, tx);
-
-      await tx.insert(locations).values({
-        id: uuidv7(),
-        tenantId: tenant.id,
-        name: input.locationName,
-        isPrimary: input.locationIsPrimary,
-        createdBy: ctx.actorId,
-        updatedBy: ctx.actorId,
-      });
-
-      // platform_audit_log is RLS-exempt (db/allowlist.ts). The
-      // recorder goes through the same withPlatformAdmin transaction
-      // so audit and data commit together; inside opsAction the
-      // actor/scope/reason come from the wrapping action.
-      await recordOpsAudit(tx, {
-        action: "tenant.create",
-        actorId: ctx.actorId,
-        tenantId: tenant.id,
-        targetType: "tenant",
-        targetId: tenant.id,
-        detail: {
-          name: input.name,
-          slug: input.slug,
-          timezone: input.timezone,
-          planKey: plan.key,
-          planName: plan.name,
-          currency: input.currency,
-          ...(input.gstin ? { gstin: input.gstin } : {}),
-          locationName: input.locationName,
-          locationIsPrimary: input.locationIsPrimary,
-        },
-      });
-
-      return { kind: "ok", tenantId: tenant.id };
+      return provisionTenantInTransaction(tx, input, ctx);
     });
 
     if (result.kind !== "ok") return result;
@@ -269,6 +184,100 @@ export async function createTenant(
     }
     throw err;
   }
+}
+
+// Call only inside the caller's platform-admin transaction. No post-commit work here.
+export async function provisionTenantInTransaction(
+  tx: Parameters<Parameters<typeof withPlatformAdmin>[0]>[0],
+  input: z.output<typeof createTenantInput>,
+  ctx: { actorId: UserId },
+): Promise<ProvisionedTenant> {
+  // Sale eligibility is rechecked on the server in this transaction.
+  // Standard remains active for existing clubs, but cannot be forged here.
+  const plan = await findSignupPlan(tx, input.planKey);
+  if (!plan) {
+    return {
+      kind: "error",
+      code: "plan_not_found",
+      message: input.planKey
+        ? `No signup-eligible active plan with key "${input.planKey}".`
+        : "No signup-eligible default plan is configured.",
+    };
+  }
+
+  // Three inserts, one transaction, atomic with the platform
+  // audit row. The new platform_admin_insert policy
+  // (migration 20260902200000) opens the INSERT path on
+  // tenants and locations for app.platform_admin = 'true';
+  // tenant_isolation still denies the inserts by its own
+  // WITH CHECK, but Postgres OR-combines the policies —
+  // one passing is enough.
+  const [tenant] = await tx
+    .insert(tenants)
+    .values({
+      id: asTenantId(uuidv7()),
+      slug: input.slug,
+      name: input.name,
+      status: "trial",
+      planId: plan.id,
+      timezone: input.timezone,
+      currency: input.currency,
+      gstin: input.gstin ?? null,
+      createdBy: ctx.actorId,
+      updatedBy: ctx.actorId,
+    })
+    .returning({ id: tenants.id });
+  if (!tenant) {
+    throw new Error("createTenant: tenants insert returned no row");
+  }
+
+  // C1 — same transaction as the tenant/location/audit rows. A
+  // tenant with no role templates is not a valid tenant: invite-
+  // owner (db/tenant-invite.ts) looks up the owner role by key
+  // and fails outright without it. scripts/seed.ts and
+  // scripts/seed-demo.ts both call this right after creating the
+  // tenant row; this was the one step createTenant was missing.
+  await seedRoleTemplates(tenant.id, tx);
+  // V-26 — leave types are part of a usable tenant for the same
+  // reason roles are: the staff surface's leave request form needs
+  // at least one type to offer. Seeded in the same transaction so
+  // a tenant can never exist without them; the migration backfilled
+  // the same defaults for tenants created before V-26.
+  await seedDefaultLeaveTypes(tenant.id, tx);
+
+  await tx.insert(locations).values({
+    id: uuidv7(),
+    tenantId: tenant.id,
+    name: input.locationName,
+    isPrimary: input.locationIsPrimary,
+    createdBy: ctx.actorId,
+    updatedBy: ctx.actorId,
+  });
+
+  // platform_audit_log is RLS-exempt (db/allowlist.ts). The
+  // recorder goes through the same withPlatformAdmin transaction
+  // so audit and data commit together; inside opsAction the
+  // actor/scope/reason come from the wrapping action.
+  await recordOpsAudit(tx, {
+    action: "tenant.create",
+    actorId: ctx.actorId,
+    tenantId: tenant.id,
+    targetType: "tenant",
+    targetId: tenant.id,
+    detail: {
+      name: input.name,
+      slug: input.slug,
+      timezone: input.timezone,
+      planKey: plan.key,
+      planName: plan.name,
+      currency: input.currency,
+      ...(input.gstin ? { gstin: input.gstin } : {}),
+      locationName: input.locationName,
+      locationIsPrimary: input.locationIsPrimary,
+    },
+  });
+
+  return { kind: "ok", tenantId: tenant.id };
 }
 
 // Drizzle prepared-query errors wrap the underlying pg error on

@@ -101,6 +101,9 @@ export function PlanCommercialControls({
                 {planError}
               </p>
             ) : null}
+            <p role="status" className="text-[13px] text-ink-2">
+              {planPending ? "Changing plan…" : planState?.kind === "applied" ? (planState.changed ? "Plan changed." : "No change to the plan.") : ""}
+            </p>
             <Button type="submit" variant="primary" size="sm" disabled={planPending}>
               Change plan
             </Button>
@@ -152,6 +155,9 @@ export function PlanCommercialControls({
                 {trialError}
               </p>
             ) : null}
+            <p role="status" className="text-[13px] text-ink-2">
+              {trialPending ? "Saving deadline…" : trialState?.kind === "applied" ? (trialState.changed ? "Trial deadline saved." : "No change to the trial deadline.") : ""}
+            </p>
             <Button type="submit" variant="primary" size="sm" disabled={trialPending}>
               Save deadline
             </Button>

@@ -12,7 +12,7 @@ import {
   type LeaveBalanceRow,
 } from "@/lib/services/leave-balances";
 import type { LeaveRequestRow } from "@/lib/services/leave-approval";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // V-26 — leave requests and the staff member's own view. Types live in
 // ./leave-types, balance maths in ./leave-balances, the owner queue and
@@ -46,7 +46,7 @@ function firstIssue(error: z.ZodError): string {
 }
 
 export async function requestLeave(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LeaveRequestResult> {
   const parsed = leaveRequestInput.safeParse(raw);
@@ -143,7 +143,7 @@ export async function requestLeave(
 }
 
 export async function cancelLeaveRequest(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   requestId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = uuid.safeParse(requestId);

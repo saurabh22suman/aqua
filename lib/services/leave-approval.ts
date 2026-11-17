@@ -16,7 +16,7 @@ import {
   leaveSessionPredicate,
   resolveLeaveCaller,
 } from "@/lib/services/leave-decision-scope";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // V-27 — leave approval. Approving a request does two things in one
 // transaction: it records the decision (who, when, why) and it moves
@@ -228,7 +228,7 @@ export async function listUncoveredSessions(
 }
 
 async function decide(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
   decision: "approved" | "rejected",
 ): Promise<LeaveDecisionResult> {
@@ -259,14 +259,14 @@ async function decide(
 }
 
 export async function approveLeaveRequest(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LeaveDecisionResult> {
   return decide(ctx, raw, "approved");
 }
 
 export async function rejectLeaveRequest(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LeaveDecisionResult> {
   return decide(ctx, raw, "rejected");

@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { cookies } from "next/headers";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
@@ -85,7 +86,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     />
   );
   if (invalid || !hasFeature(ctx, "reports")) return <OwnerPage>{heading}<p role="alert" className="mt-4 text-sm">{invalid ? "Invalid report range or facility. Choose a valid selection." : "Reports are unavailable."}</p></OwnerPage>;
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const memberLabel = titleCase(resolveTerm(terminology, "member", "other"));
   const batchLabel = titleCase(resolveTerm(terminology, "batch", "other"));
   // A custom range reaches only the destinations whose own filter accepts

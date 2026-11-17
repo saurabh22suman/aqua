@@ -31,6 +31,6 @@ describe("owner dashboard KPI labels (F36)", () => {
     const money = readFileSync(join(ROOT, "components/owner-home/owner-home-money.tsx"), "utf8");
     expect(dashboard).toContain("<OwnerHomeMoney");
     expect(money).toContain('aria-label="Collections"');
-    expect(money).toMatch(/<h2[^>]*>Collections<\/h2>/);
+    expect(money).toMatch(/<h2[^>]*>Collected today<\/h2>/);
   });
 });

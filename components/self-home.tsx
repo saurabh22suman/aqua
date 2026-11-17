@@ -83,9 +83,19 @@ export function SelfHome({
           <div className="flex flex-wrap items-center gap-3"><GuideHelpButton homeHref={family ? "/family" : "/member"} /><SelfSignOut audience={audience} /></div>
         </header>
 
-        <Link href={`/clubs/${tenantId}/install?source=${scopeKind === "staff_session" ? "staff" : audience}`} prefetch={false} className="mt-4 inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">
-          Install this club
-        </Link>
+        <nav aria-label="Club shortcuts" className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <Link href={`/clubs/${tenantId}/install?source=${scopeKind === "staff_session" ? "staff" : audience}`} prefetch={false} className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">
+            Install this club
+          </Link>
+          {scopeKind === "self_session" ? (
+            <Link
+              href={family ? "/family/announcements" : "/member/announcements"}
+              className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2"
+            >
+              Announcements
+            </Link>
+          ) : null}
+        </nav>
 
         <OptionalWorkspaceGuide
           key={guideKey}
@@ -97,15 +107,6 @@ export function SelfHome({
           regionLabel={family ? "Optional family guide" : "Optional member guide"}
           itemLabel="Page feature"
         />
-
-        {scopeKind === "self_session" ? (
-          <Link
-            href={family ? "/family/announcements" : "/member/announcements"}
-            className="mt-4 inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2"
-          >
-            Announcements
-          </Link>
-        ) : null}
 
         <Card className="mt-6 overflow-hidden">
           <CardHeader>

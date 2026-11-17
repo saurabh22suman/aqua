@@ -89,7 +89,7 @@ export function InvitationsBoard({ rows }: { rows: ListInvitationsRow[] }) {
       >
         <span>Person</span>
         <span>Role</span>
-        <span>Location access</span>
+        <span>Club access</span>
         <span>State</span>
         <span className="sr-only">Action</span>
       </div>
@@ -117,10 +117,11 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
   const [confirmingReactivate, setConfirmingReactivate] = useState(false);
   const [confirmingRevoke, setConfirmingRevoke] = useState(false);
 
-  const scopeLabel =
-    row.locationNames.length === 0
-      ? "all locations in this academy"
-      : row.locationNames.join(", ");
+  const scopeLabel = row.allLocations
+    ? "All clubs, including future clubs"
+    : row.locationNames.length > 0
+      ? row.locationNames.join(", ")
+      : "No clubs assigned";
 
   function onReactivate() {
     if (pending || busy) return;
@@ -223,7 +224,7 @@ function InvitationRow({ row }: { row: ListInvitationsRow }) {
       </p>
       <p className="mt-1 text-[12.5px] text-ink-2 lg:mt-0">
         <span className="mr-1 text-[11px] uppercase tracking-[0.08em] text-ink-3 lg:hidden">
-          Location access
+          Club access
         </span>
         {scopeLabel}
       </p>

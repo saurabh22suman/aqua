@@ -1,8 +1,9 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireDefaultCtx } from "@/lib/auth/context";
-import { hasPermission } from "@/lib/auth/permission";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import { listUpcomingSessions, type UpcomingSessionRow } from "@/lib/services/coach-schedule";
 import { getRosterForSession, type RosterData } from "@/lib/services/register";
@@ -21,6 +22,8 @@ import { WaitlistBoard } from "@/components/waitlist-board";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader, SectionHeading } from "@/components/ui/PageHeader";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
+import { ownerFacilityHref, resolveOwnerFacility } from "@/lib/owner-scope/facility";
 
 // Phase 4.2 — per-batch attendance summary, recomposed for the owner
 // OpenPen reference (29 October 2026): compact evidence beside the
@@ -42,13 +45,22 @@ function monthLabel(date: string, timezone: string): string {
 
 export default async function BatchDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ batchId: string }>;
+  searchParams?: Promise<{ facility?: string; location?: string }>;
 }) {
   await requireOwner();
   const { batchId } = await params;
   const ctx = await requireDefaultCtx();
   requirePagePermission(ctx, "programs.read");
+  const query = await searchParams ?? {};
+  const hasExplicitScope = query.facility !== undefined || query.location !== undefined;
+  const scope = resolveOwnerFacility(query);
+  if (!scope.ok || (scope.facilityId && !(await canSelectFacility(ctx, scope.facilityId)))) {
+    return <OwnerPage><PageHeader title="Facility unavailable" purpose="This facility is unavailable for your account." /><Link href="/owner/programs?facility=all">View available facilities</Link></OwnerPage>;
+  }
+  const scopedHref = (path: string) => hasExplicitScope ? ownerFacilityHref(path, scope.facilityId) : path;
 
   const [tenant] = await withTenant(ctx.tenantId, (tx) =>
     tx
@@ -61,10 +73,13 @@ export default async function BatchDetailPage({
   const today = todayInZone(timezone);
   const period = currentMonthPeriod(today);
 
-  const summary = await getBatchAttendanceSummary(ctx, batchId, period);
-  if (!summary) notFound();
-
   const canReadAttendance = hasPermission(ctx, "attendance.read");
+  const canReadReport = hasPermission(ctx, "reports.operational") && hasFeature(ctx, "reports");
+  const batches = await listBatchesAction();
+  const batch = batches.find((candidate) => candidate.id === batchId);
+  if (!batch) notFound();
+  const summary = canReadAttendance ? await getBatchAttendanceSummary(ctx, batchId, period) : null;
+  if (canReadAttendance && !summary) notFound();
   let upcoming: UpcomingSessionRow[] | null = null;
   let roster: RosterData | null = null;
   let rosterFailed = false;
@@ -86,15 +101,11 @@ export default async function BatchDetailPage({
       }
     }
   }
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const memberMany = resolveTerm(terminology, "member", "other");
 
   // R.5 — the queue for this batch (empty state included).
-  const [waitlist, batches] = await Promise.all([
-    listWaitlistAction({ batchId }),
-    listBatchesAction(),
-  ]);
-  const batch = batches.find((candidate) => candidate.id === batchId);
+  const waitlist = hasPermission(ctx, "enquiries.read") ? await listWaitlistAction({ batchId }) : null;
   const subtitle = [batch?.programName, batch?.locationName]
     .filter(Boolean)
     .join(" · ");
@@ -102,7 +113,7 @@ export default async function BatchDetailPage({
   return (
     <OwnerPage>
       <Link
-        href="/owner/programs"
+        href={scopedHref("/owner/programs")}
         className="inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 hover:text-ink"
       >
         <ArrowLeft size={16} aria-hidden="true" />
@@ -110,15 +121,26 @@ export default async function BatchDetailPage({
       </Link>
 
       <PageHeader
-        title={summary.batchName}
+        title={batch.name}
         purpose={subtitle || "Recurring batch"}
         className="mt-1"
       />
+      <section className="mt-4 rounded-card border border-line bg-paper p-4 sm:p-5" aria-label="Batch details">
+        <dl className="grid grid-cols-2 gap-3 text-[13px] sm:grid-cols-3">
+          <div><dt className="text-ink-3">Time</dt><dd>{batch.startTime.slice(0, 5)} – {batch.endTime.slice(0, 5)}</dd></div>
+          <div><dt className="text-ink-3">Coach</dt><dd>{batch.coachName ?? "No coach assigned"}</dd></div>
+          <div><dt className="text-ink-3">Capacity</dt><dd>{batch.capacity} places</dd></div>
+        </dl>
+      </section>
+      {!canReadAttendance && canReadReport ? <Link
+        href={scopedHref(`/owner/reports?from=${period.from}&to=${period.to}`)}
+        className="mt-2 inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
+      >Open attendance report</Link> : null}
 
       {/* items-start: the Upcoming sessions card and the roster beside it
           are unrelated panels, so neither may stretch to the other's
           height (the empty space below "Open schedule"). */}
-      {canReadAttendance ? <div className="mt-4 grid items-start gap-4 lg:grid-cols-2">
+      {canReadAttendance ? <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-2">
         <section className="rounded-card border border-line bg-paper p-4 sm:p-5">
           <SectionHeading title="Upcoming sessions" />
           <p className="mt-1 text-[12px] text-ink-3">Next 30 days, including today.</p>
@@ -127,21 +149,21 @@ export default async function BatchDetailPage({
               <p className="font-medium">{new Intl.DateTimeFormat("en-IN", {timeZone: timezone, day: "numeric", month: "short", weekday: "short"}).format(session.startsAt)}</p>
               <p className="text-ink-3">{new Intl.DateTimeFormat("en-IN", {timeZone: timezone, hour: "numeric", minute: "2-digit", hour12: true}).format(session.startsAt)} – {new Intl.DateTimeFormat("en-IN", {timeZone: timezone, hour: "numeric", minute: "2-digit", hour12: true}).format(session.endsAt)}{session.coachName ? ` · ${session.coachName}` : ""}</p>
             </li>)}</ul>
-            <Link href={`/owner/schedule?view=agenda&date=${upcoming[0].sessionDate}`} className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2">Open schedule</Link>
+            <Link href={scopedHref(`/owner/schedule?view=agenda&date=${upcoming[0].sessionDate}`)} className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2">Open schedule</Link>
           </>}
         </section>
         {upcoming?.[0] ? <section className="rounded-card border border-line bg-paper p-4 sm:p-5">
           <SectionHeading title="Next session roster" />
           {rosterFailed ? <p role="alert" className="mt-3 text-[13px]">The roster could not be loaded. Try again.</p> : roster && roster.rows.length === 0 ? <p className="mt-3 text-[13px] text-ink-3">{`No ${memberMany} on the next session roster.`}</p> : <ul className="mt-2 divide-y divide-line">{roster?.rows.map(member => <li key={member.memberId} className="flex items-center justify-between gap-3 py-2 text-[13px]">
-            {hasPermission(ctx, "members.read") ? <Link href={`/owner/members/${member.memberId}`} className="text-[var(--accent-ink)] underline underline-offset-2">{member.name}</Link> : <span>{member.name}</span>}<span className="text-ink-3">{member.code}</span>
+            {hasPermission(ctx, "members.read") ? <Link href={scopedHref(`/owner/members/${member.memberId}`)} className="text-[var(--accent-ink)] underline underline-offset-2">{member.name}</Link> : <span>{member.name}</span>}<span className="text-ink-3">{member.code}</span>
           </li>)}</ul>}
         </section> : null}
       </div> : null}
 
       {/* items-start here too: the month's attendance evidence and the
           waitlist are separate panels, not an equal-height comparison. */}
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <section
+      <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        {summary ? <section
           className="rounded-card border border-line bg-paper p-4 sm:p-5"
           data-testid="batch-attendance"
         >
@@ -171,19 +193,20 @@ export default async function BatchDetailPage({
               ? "No sessions on the calendar this month."
               : `${summary.sessionCount} ${summary.sessionCount === 1 ? "session" : "sessions"} on the calendar.`}
           </p>
-          <Link
-            href={`/owner/reports?from=${period.from}&to=${period.to}`}
+          {canReadReport ? <Link
+            href={scopedHref(`/owner/reports?from=${period.from}&to=${period.to}`)}
             className="mt-4 inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
           >
             Open attendance report
-          </Link>
-        </section>
+          </Link> : null}
+        </section> : null}
 
-        <WaitlistBoard
+        {waitlist !== null ? <WaitlistBoard
           batchId={batchId}
+          batchName={batch.name}
           initialRows={waitlist}
           canManage={hasPermission(ctx, "enquiries.write")}
-        />
+        /> : null}
       </div>
     </OwnerPage>
   );

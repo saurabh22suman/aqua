@@ -85,7 +85,7 @@ export default async function LeadsPage({
     <OpsPage>
       <OpsPageHeader
         title="Leads"
-        lede="A lead is a club approaching the platform. Its qualification answers become the tenant’s preset and configuration at conversion — nothing is re-entered."
+        lede="A lead is a club approaching the platform. Sport selects a preset and location count creates locations. Fee model, GST registration, collection mode and coach count are recorded for setup, not applied automatically."
         actions={
           <Link
             href="/ops/leads/new"

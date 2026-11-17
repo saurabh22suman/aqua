@@ -63,9 +63,17 @@ async function clearRecords(expectedScope) {
       identity.onsuccess = () => {
         const previous = identity.result;
         if (expectedScope !== undefined && previous?.active && previous.active.scope !== expectedScope) return;
-        tx.objectStore("queue").clear(); kv.clear();
-        const blockedScope = previous?.active?.scope ?? previous?.blockedScope;
-        if (blockedScope) kv.put({ blockedScope }, "identity");
+        const queue = tx.objectStore("queue"), count = queue.count(), notice = kv.get("attendance-loss-notice");
+        notice.onsuccess = () => {
+          const prior = notice.result?.count;
+          const lost = (Number.isSafeInteger(prior) && prior > 0 ? prior : 0) + count.result;
+          queue.clear(); kv.clear();
+          if (lost) kv.put({ count: lost }, "attendance-loss-notice");
+          const active = previous?.active;
+          const blockedScope = valid(active) ? active.scope : previous?.blockedScope && (!previous.blockedUntil || previous.blockedUntil > Date.now()) ? previous.blockedScope : undefined;
+          const blockedUntil = valid(active) ? active.expiresAt : previous?.blockedUntil;
+          if (blockedScope) kv.put({ blockedScope, blockedUntil }, "identity");
+        };
       };
       tx.oncomplete = () => { db.close(); resolve(); };
       tx.onerror = tx.onabort = () => { db.close(); reject(tx.error); };
@@ -77,7 +85,9 @@ async function clear(expectedScope) {
   const previous = await state();
   if (expectedScope !== undefined && previous.identity && previous.identity.scope !== expectedScope) return;
   generation++;
-  await saveState({ blockedScope: previous.identity?.scope ?? previous.blockedScope });
+  const blockedScope = valid(previous.identity) ? previous.identity.scope : previous.blockedScope && (!previous.blockedUntil || previous.blockedUntil > Date.now()) ? previous.blockedScope : undefined;
+  const blockedUntil = valid(previous.identity) ? previous.identity.expiresAt : previous.blockedUntil;
+  await saveState(blockedScope ? { blockedScope, blockedUntil } : {});
   if (expectedScope === undefined) await clearPages();
   else { if (expectedScope) await caches.delete(`aqua-private-v2-${expectedScope}`); await caches.delete(SHELL); }
   await clearRecords(expectedScope);
@@ -86,6 +96,12 @@ async function clear(expectedScope) {
 }
 async function refreshIdentity() {
   const current = ++generation, previous = await state();
+  if (!previous.identity && previous.blockedScope && previous.blockedUntil <= Date.now()) {
+    await mutateCaches(async () => {
+      const latest = await state();
+      if (!latest.identity && latest.blockedScope && latest.blockedUntil <= Date.now()) await saveState({});
+    });
+  }
   if (previous.identity && !valid(previous.identity)) await clear();
   try {
     const response = await fetch("/api/offline/session", { credentials: "same-origin", cache: "no-store" });

@@ -40,6 +40,7 @@ export function MembersBoard({
   navigationNamespace = "default",
   terminology = DEFAULT_TERMINOLOGY,
   canWrite = true,
+  canViewProfile = true,
 }: {
   initialMembers: MemberListRow[];
   // W1-6 — set by the owner layout's facility switcher via the page's
@@ -60,6 +61,7 @@ export function MembersBoard({
    * read is not told to add one.
    */
   canWrite?: boolean;
+  canViewProfile?: boolean;
 }) {
   const [members, setMembers] = useState(initialMembers);
   const [search, setSearch] = useState("");
@@ -187,6 +189,16 @@ export function MembersBoard({
 
   return (
     <div>
+      <section aria-label="Member results" aria-live="polite" className="mb-4">
+        {isPending || error ? <p className="text-[12px] text-ink-3">{isPending ? "Updating results…" : "Results unavailable"}</p> : null}
+        {!isPending && !error ? (
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-ink-2">
+          <span><strong className="font-medium text-ink">{members.length}</strong> matching</span>
+          <span><strong className="font-medium text-ink">{members.filter((member) => member.status === "active").length}</strong> active</span>
+          <span><strong className="font-medium text-ink">{members.filter((member) => member.status === "paused").length}</strong> paused</span>
+        </div>
+        ) : null}
+      </section>
       {error ? <div role="alert" className="mb-3 text-[13px] text-ink-2">
         <p>{error}</p>
         <Button
@@ -258,6 +270,7 @@ export function MembersBoard({
         onOpen={rememberListScroll}
         isPending={isPending}
         canWrite={canWrite}
+        canViewProfile={canViewProfile}
       />
     </div>
   );

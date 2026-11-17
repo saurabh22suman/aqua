@@ -20,7 +20,7 @@ import { persons } from "@/db/schema/people";
 import { staffLocations } from "@/db/schema/staff-locations";
 import { ensurePersonAndStaff } from "@/db/invite-helpers";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
 import { enqueueInvitationNotification } from "@/lib/messaging/invitation-notification";
 import { issueLoginLink } from "@/lib/services/invite-link-issue";
@@ -119,7 +119,7 @@ const inputSchema = z.object({
 });
 
 export async function inviteStaff(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: InviteStaffInput,
 ): Promise<InviteStaffResult> {
   const parsed = inputSchema.safeParse(rawInput);
@@ -461,6 +461,7 @@ export type ListInvitationsRow = {
   roleKey: string;
   status: "invited" | "active" | "revoked";
   locationNames: string[];
+  allLocations: boolean;
   invitedAt: Date | null;
 };
 
@@ -475,6 +476,7 @@ export async function listInvitations(
         roleKey: roles.key,
         status: tenantMemberships.status,
         createdAt: tenantMemberships.createdAt,
+        allLocations: tenantMemberships.allLocations,
       })
       .from(tenantMemberships)
       .innerJoin(roles, eq(roles.id, tenantMemberships.roleId))
@@ -550,6 +552,7 @@ export async function listInvitations(
       roleKey: m.roleKey,
       status: m.status as "invited" | "active" | "revoked",
       locationNames: locsByMember.get(m.membershipId) ?? [],
+      allLocations: m.allLocations,
       invitedAt: m.createdAt,
     }));
   });
@@ -591,7 +594,7 @@ export type RevokeStaffResult =
     };
 
 export async function revokeInvitation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: { membershipId: string },
 ): Promise<RevokeStaffResult> {
   const parsed = z.object({ membershipId: z.string().uuid() }).safeParse(rawInput);
@@ -777,7 +780,7 @@ async function resendTrustGateDenies(
 // and the UI shows "Pending — no live delivery yet" until the
 // messaging chain lands.
 export async function resendInvitation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: { membershipId: string },
 ): Promise<
   | { kind: "ok"; delivered: false }
@@ -896,7 +899,7 @@ export type ReactivateStaffResult =
     };
 
 export async function reactivateInvitation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: { membershipId: string },
 ): Promise<ReactivateStaffResult> {
   const parsed = z.object({ membershipId: z.string().uuid() }).safeParse(rawInput);

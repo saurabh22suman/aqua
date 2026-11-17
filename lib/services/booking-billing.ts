@@ -2,6 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { bookings } from "@/db/schema/bookings";
+import { invoices } from "@/db/schema/invoices";
+import { invoiceCorrectionEligibilityInTx } from "@/lib/services/invoice-correction-eligibility";
 import { tenants } from "@/db/schema/tenants";
 import { resolveConfigInTx } from "@/db/config";
 import { isFeatureEnabledForTenant } from "@/db/features";
@@ -17,7 +19,7 @@ import {
   splitInclusivePrice,
   type BookingBillResult,
 } from "@/lib/services/booking-bill-view";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { resolveBillingIdentityInTx } from "@/lib/services/facility-billing-identity";
 
 // FINAL DECISION (2026-11-05, completion pass): WR-9 is now DECIDED for this
@@ -321,7 +323,7 @@ export function composeBookingLineDescription(
  * invent one. The bill is refused instead.
  */
 export const VOIDED_INVOICE_WITH_MONEY_ERROR =
-  "This booking's bill was voided but still carries money. Paid corrections are deferred for this release and are not defined here. Ask an owner to review it.";
+  "This booking's voided bill has recorded payment history. Paid corrections are deferred for this release. Ask an owner to review it.";
 
 /**
  * The bill request's optional arguments.
@@ -347,7 +349,7 @@ export type BookingBillRequest = {
 };
 
 export async function requestBookingBill(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   bookingId: string,
   request: BookingBillRequest = {},
 ): Promise<BookingBillResult> {
@@ -436,7 +438,13 @@ export async function requestBookingBill(
     //     booking is issued a REPLACEMENT below — a new document, a
     //     new number, the payer taken from the booking. A replacement
     //     is a NEW issuance, so it sits BELOW the module gate.
+    // Serialize correction eligibility with payment capture and invoice void.
+    if (booking.invoiceId) {
+      await tx.select({ id: invoices.id }).from(invoices)
+        .where(and(eq(invoices.tenantId, ctx.tenantId), eq(invoices.id, booking.invoiceId))).for("update");
+    }
     const linked = await loadLinkedInvoice(tx, ctx, booking);
+    const eligibility = linked ? await invoiceCorrectionEligibilityInTx(tx, ctx.tenantId, linked.id) : null;
     if (booking.invoiceId && !linked) {
       // The booking points at a document that cannot be read. The
       // foreign key says it exists, so this is not reachable in the
@@ -464,7 +472,7 @@ export async function requestBookingBill(
         }
         // DECISION (2026-11-05) — a PAID live invoice is kept as issued.
         // Do not send the operator to a void the product will refuse.
-        if (linked.paidPaise > 0) {
+        if (eligibility !== "eligible") {
           return {
             ok: false,
             error: PAID_INVOICE_CORRECTION_DEFERRED_ERROR,
@@ -492,7 +500,7 @@ export async function requestBookingBill(
       // would let the bill carry a buyer the booking does not name.
       return { ok: false, error: REISSUE_NAME_ONLY_AFTER_VOID_ERROR };
     }
-    if (linked && linked.paidPaise > 0) {
+    if (linked && eligibility !== "eligible") {
       return { ok: false, error: VOIDED_INVOICE_WITH_MONEY_ERROR };
     }
     // The voided predecessor, when there is one. It is kept exactly as

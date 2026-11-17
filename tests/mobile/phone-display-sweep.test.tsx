@@ -45,7 +45,7 @@ vi.mock("@/lib/auth/surface-guard", () => ({
   requireCoach: async () => ({}),
   requirePagePermission: (ctx: unknown) => ctx,
 }));
-vi.mock("@/lib/auth/context", () => ({
+vi.mock("@/lib/auth/context", () => ({ NotFoundError: class NotFoundError extends Error {},
   requireDefaultCtx: async () => ({
     features: new Set(),
     permissions: new Set(),

@@ -11,6 +11,8 @@ import {
   OpsSection,
 } from "@/components/ops/ops-primitives";
 import { OperatorList } from "./operator-list";
+import { currentOperatorSessionId } from "@/db/platform-operators-read";
+import { readPlatformSessionToken } from "@/lib/auth/platform-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,7 @@ export default async function OpsOperatorsPage() {
   if (status.kind === "not_found" || status.kind === "expired") redirect("/ops/login");
   if (status.kind === "unauthenticated") redirect("/ops/verify");
   if (status.role !== "admin") return <OperatorRefusal />;
+  const currentSessionId = await currentOperatorSessionId((await readPlatformSessionToken()) ?? "", status.userId);
 
   const accounts = await listOperatorAccountsAction(null, new FormData());
   if (!accounts.ok) redirect("/ops/login");
@@ -82,6 +85,7 @@ export default async function OpsOperatorsPage() {
         ) : (
           <OperatorList
             actorId={status.userId}
+            currentSessionId={currentSessionId}
             operators={accounts.value.rows}
             sessions={sessions.value.rows}
             sessionCounts={sessions.value.countsByOperator}

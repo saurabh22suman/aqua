@@ -94,6 +94,7 @@ export function MemberSubscriptionPanel({
   memberId,
   canManage,
   initialData,
+  compact = false,
 }: {
   memberId: string;
   // Owner overview only: the already-authorized server read. Absent for every
@@ -102,6 +103,7 @@ export function MemberSubscriptionPanel({
   // R10 (2026-10-13 role-workflow audit) — start/pause/resume/cancel
   // ride members.write. A reader without it keeps the plan view.
   canManage: boolean;
+  compact?: boolean;
 }) {
   const router = useRouter();
   const seed = seedForMember(initialData, memberId);
@@ -121,6 +123,7 @@ export function MemberSubscriptionPanel({
   const appliedSeed = useRef<typeof seed>(seed);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
   const seededPlans = seed && !isFailedSeed(seed) ? eligiblePlans(seed.plans) : [];
   const [planId, setPlanId] = useState(seededPlans[0]?.id ?? "");
   const [startsOn, setStartsOn] = useState("");
@@ -371,6 +374,10 @@ export function MemberSubscriptionPanel({
             Start subscription
           </button>
         </div>
+      ) : compact && !starting ? (
+        <button type="button" onClick={() => setStarting(true)} className="mt-3 min-h-11 rounded-pill border border-line px-4 text-[13px] text-ink-2">
+          Start a subscription
+        </button>
       ) : (
         <div className="mt-3 border-t border-line pt-3">
           <p className="text-[12px] font-medium text-ink-2">
@@ -469,6 +476,7 @@ export function MemberSubscriptionPanel({
           >
             {busy ? "Saving…" : "Start subscription"}
           </button>
+          {compact ? <button type="button" disabled={busy} onClick={() => setStarting(false)} className="ml-2 min-h-11 px-3 text-[13px] text-ink-2">Cancel</button> : null}
         </div>
       )}
 

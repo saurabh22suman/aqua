@@ -1,4 +1,3 @@
-import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 
 // U-02 — the Fees hub tab bar. Tabs are plain links with `?tab=`, so
 // the hub works with zero client JavaScript and each tab is its own
@@ -30,19 +29,15 @@ export function FeesTabs({
   canManageSettings?: boolean;
 }) {
   const query = `from=${period.from}&to=${period.to}${
-    facility ? `&facility=${facility}` : ""
+    `&facility=${facility ?? "all"}`
   }`;
   return (
-    <SegmentedTabs
-      ariaLabel="Fees sections"
-      active={active}
-      tabs={FEES_TABS.filter(
-        (tab) => tab.key !== "plans" || canManageSettings,
-      ).map((tab) => ({
-        key: tab.key,
-        label: tab.label,
-        href: `/owner/fees?tab=${tab.key}&${query}`,
-      }))}
-    />
+    <nav aria-label="Fees sections" className="flex overflow-x-auto border-b border-line [scrollbar-width:none]">
+      {FEES_TABS.filter((tab) => tab.key !== "plans" || canManageSettings).map((tab) => (
+        <a key={tab.key} href={`/owner/fees?tab=${tab.key}&${query}`} aria-current={tab.key === active ? "page" : undefined} className={`inline-flex min-h-11 flex-none items-center border-b-2 px-3 text-[13px] font-medium focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--focus-ring)] ${tab.key === active ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>
+          {tab.label}
+        </a>
+      ))}
+    </nav>
   );
 }

@@ -7,7 +7,7 @@ import { locations } from "@/db/schema/locations";
 import { auditActorOf, writeAudit as writeSharedAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import { ACTIVITY_KINDS, type ActivityKind } from "@/lib/activities";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // Activity catalog (decision 2026-09-14) — "activities" are what the
 // schema calls `facilities`: a pool, court, table or café counter under
@@ -123,7 +123,7 @@ export async function listActivities(
 }
 
 export async function createActivity(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = createActivityInput.safeParse(raw);
@@ -198,7 +198,7 @@ export async function createActivity(
 }
 
 export async function updateActivity(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = updateActivityInput.safeParse(raw);
@@ -248,7 +248,7 @@ export async function updateActivity(
 }
 
 export async function deleteActivity(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   activityId: string,
 ): Promise<ActivityMutationResult> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -288,7 +288,7 @@ export async function deleteActivity(
 }
 
 export async function addSubUnit(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = addSubUnitInput.safeParse(raw);
@@ -342,7 +342,7 @@ export async function addSubUnit(
 }
 
 export async function removeSubUnit(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<ActivityMutationResult> {
   const parsed = subUnitIdInput.safeParse(raw);

@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // Regression evidence for docs/audits/2026-10-09-role-content-permission-audit.md
 // R03 (reception has tenant-wide announcement authority). The service
@@ -17,7 +17,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 // keep the current behaviour. Refusals must happen before any write,
 // so no announcement, audit or outbox row is left behind.
 
-type ReviewCtx = ActionCtx & { permissions: Set<string> };
+type ReviewCtx = MutationActor & { permissions: Set<string> };
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;

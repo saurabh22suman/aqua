@@ -136,11 +136,12 @@ export const OPS_ROUTE_RESOLUTION: readonly NavItem[] = OPS_NAV_GROUPS.flatMap(
  */
 export function opsNavGroupsForRole(
   role: OpsNavigationRole,
+  mockMessagingAvailable = true,
 ): readonly OpsNavGroup[] {
   return OPS_NAV_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter(
-      (item) => !item.adminOnly || role === "admin",
+      (item) => (!item.adminOnly || role === "admin") && (item.href !== "/ops/whatsapp" || mockMessagingAvailable),
     ),
   })).filter((group) => group.items.length > 0);
 }

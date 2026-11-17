@@ -6,12 +6,13 @@ import { batches } from "@/db/schema/programs";
 import { tenants } from "@/db/schema/tenants";
 import { resolveConfigInTx, setOwnerTenantConfigValue } from "@/db/config";
 import { addDays, todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { enqueueMemberNotification, enqueueStaffNotification } from "@/lib/messaging/notification-enqueue";
-import { visibleMember } from "@/lib/services/resource-access";
+import { callerHasPermission, visibleMember } from "@/lib/services/resource-access";
 import { writeAudit } from "@/lib/audit/write";
 import { staff } from "@/db/schema/staff";
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 
 // O-04 — the threshold is a configuration-registry value
 // (attendance.absence_alert_threshold_pct, default 50). Reads and
@@ -77,9 +78,14 @@ export function isoWeekKey(dateIso: string): string {
 }
 
 export async function detectAbsenceAlerts(
-  ctx: ActionCtx,
+  ctx: MutationActor,
 ): Promise<DetectAbsenceAlertsResult> {
   return withTenant(ctx.tenantId, async (tx) => {
+    const system = ctx.systemActor === true && ctx.userId === undefined && ctx.roleKey === undefined &&
+      ctx.permissions === undefined && ctx.allLocations === undefined && ctx.locationIds === undefined;
+    const human = ctx.systemActor === undefined && !!ctx.userId &&
+      await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx) && await callerHasPermission(tx, ctx, "settings.manage");
+    if (!system && !human) throw new Error("Not authorized.");
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
       .from(tenants)

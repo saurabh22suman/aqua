@@ -2,7 +2,7 @@ import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-a
 import { and, asc, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { tenantHolidays } from "@/db/schema/tenant-holidays";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { z } from "zod";
 import { auditActorOf, writeAudit } from "@/lib/audit/write";
 
@@ -111,7 +111,7 @@ const addSchema = z.object({
 });
 
 export async function addHoliday(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<HolidayResult> {
   const parsed = addSchema.safeParse(raw);
@@ -184,7 +184,7 @@ const removeSchema = z.object({
 });
 
 export async function removeHoliday(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<HolidayResult> {
   const parsed = removeSchema.safeParse(raw);

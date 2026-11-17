@@ -6,7 +6,9 @@ const SITE = "11111111-1111-4111-8111-111111111111";
 vi.mock("next/headers", () => ({cookies:async () => ({get:() => ({value:SITE})})}));
 vi.mock("@/lib/auth/surface-guard", () => ({requireOwner:async () => ({permissions:new Set()}),requirePagePermission:vi.fn()}));
 vi.mock("@/lib/actions/tenant-timezone", () => ({getTenantTimezoneAction:async () => "Asia/Kolkata"}));
-vi.mock("@/lib/actions/people", () => ({listLocationsAction:async () => []}));
+vi.mock("@/db/tenant", () => ({withTenant:async () => [{timezone:"Asia/Kolkata"}]}));
+vi.mock("@/lib/services/people", () => ({listLocations:async () => [{id:SITE,name:"Selected facility"}]}));
+vi.mock("@/lib/services/selected-facility-access", () => ({canSelectFacility:async () => true}));
 vi.mock("@/lib/actions/schedule-grid", () => ({getScheduleGridAction:(arg:unknown) => grid(arg)}));
 vi.mock("@/lib/actions/terminology", () => ({getTerminologyAction:async () => ({overrides:{},locale:"en"})}));
 vi.mock("@/lib/services/coach-schedule", () => ({listUpcomingSessions:async () => []}));
@@ -21,5 +23,5 @@ it("keeps an explicit all-locations selection while navigating dates", async () 
   grid.mockClear(); renderGrid.mockClear();
   render(await OwnerSchedulePage({searchParams:Promise.resolve({location:"",date:"2026-11-13"})}));
   expect(grid).toHaveBeenCalledWith(expect.not.objectContaining({locationId:SITE}));
-  expect(renderGrid.mock.calls[0]?.[0]).toEqual(expect.objectContaining({nextHref:expect.stringContaining("location=")}));
+  expect(renderGrid.mock.calls[0]?.[0]).toEqual(expect.objectContaining({nextHref:expect.stringContaining("facility=all")}));
 });

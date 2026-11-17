@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTenantTaxRateAction } from "@/lib/actions/platform-tax";
 import {
@@ -26,11 +26,13 @@ function RateRow({
   row,
   pending,
   message,
+  canWrite,
   onRun,
 }: {
   row: TaxScopeRow;
   pending: boolean;
-  message: string | null;
+  message: { text: string; error: boolean } | null;
+  canWrite: boolean;
   onRun: (
     row: TaxScopeRow,
     rateBp: number,
@@ -39,6 +41,8 @@ function RateRow({
   const [value, setValue] = useState(
     formatBasisPointsAsPercent(row.rateBp).replace("%", ""),
   );
+  const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
 
   return (
     <div className="border-b border-line last:border-b-0 px-4 py-3">
@@ -49,12 +53,14 @@ function RateRow({
             {formatBasisPointsAsPercent(row.rateBp)} · {scopeLabel(row)}
           </span>
         </span>
-        <div className="flex items-center gap-2">
+        {canWrite ? <div className="flex items-center gap-2">
           <Input
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); setError(null); }}
             inputMode="decimal"
             aria-label={`GST percent for ${row.label}`}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
             className="w-24"
           />
           <span className="text-[12px] text-ink-3">%</span>
@@ -65,17 +71,21 @@ function RateRow({
             disabled={pending}
             onClick={() => {
               const rateBp = parsePercentToBasisPoints(value);
-              if (rateBp === null) return;
+              if (rateBp === null) {
+                setError("Enter a percentage from 0 to 100 with at most two decimal places.");
+                return;
+              }
               onRun(row, rateBp);
             }}
           >
             {pending ? "Saving…" : "Save"}
           </Button>
-        </div>
+        </div> : null}
       </div>
+      {error ? <p id={errorId} role="alert" className="mt-1 text-[11px] text-ink-2">{error}</p> : null}
       {message ? (
-        <p role="status" className="mt-1 text-[11px] text-ink-2">
-          {message}
+        <p role={message.error ? "alert" : "status"} className="mt-1 text-[11px] text-ink-2">
+          {message.text}
         </p>
       ) : null}
     </div>
@@ -95,12 +105,12 @@ export function TaxRates({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Record<string, string>>({});
+  const [messages, setMessages] = useState<Record<string, { text: string; error: boolean } | null>>({});
 
   function run(row: TaxScopeRow, rateBp: number) {
     const key = `${row.scopeType}:${row.scopeId ?? "tenant"}`;
     setPendingKey(key);
-    setMessages((prev) => ({ ...prev, [key]: "" }));
+    setMessages((prev) => ({ ...prev, [key]: null }));
     startTransition(async () => {
       const result = await setTenantTaxRateAction({
         tenantId,
@@ -110,7 +120,7 @@ export function TaxRates({
       });
       setMessages((prev) => ({
         ...prev,
-        [key]: result.ok ? "Saved." : result.error,
+        [key]: result.ok ? { text: "Saved.", error: false } : { text: result.error, error: true },
       }));
       if (result.ok) router.refresh();
       setPendingKey(null);
@@ -123,20 +133,26 @@ export function TaxRates({
       row,
       pending: pending && pendingKey === key,
       message: messages[key] ?? null,
+      canWrite,
       onRun: run,
     };
   };
 
   return (
-    <OpsWriteGate
-      canWrite={canWrite}
-      note={
-        <>
-          Read-only: this account can browse, not change, platform data. An
-          administrator sets the GST rate.
-        </>
-      }
-    >
+    <>
+      {!canWrite ? (
+        <OpsWriteGate
+          canWrite={canWrite}
+          note={
+            <>
+              Read-only: this account can browse, not change, platform data. An
+              administrator sets the GST rate.
+            </>
+          }
+        >
+          {null}
+        </OpsWriteGate>
+      ) : null}
       <div className="space-y-6">
         <OpsCardFlush>
           <RateRow {...rowProps(config.tenant)} />
@@ -166,6 +182,6 @@ export function TaxRates({
           )}
         </OpsSection>
       </div>
-    </OpsWriteGate>
+    </>
   );
 }

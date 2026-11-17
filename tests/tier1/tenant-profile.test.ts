@@ -174,6 +174,7 @@ describe("updateTenantProfile", () => {
 
   it("refuses without an actor", async () => {
     const result = await updateTenantProfile(
+      // @ts-expect-error This negative test deliberately bypasses the required actor type.
       { tenantId: tenantA, userId: undefined },
       { name: "No Actor" },
     );

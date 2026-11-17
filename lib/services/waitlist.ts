@@ -3,7 +3,7 @@ import { withTenant } from "@/db/tenant";
 import { waitlistEntries } from "@/db/schema/waitlist-entries";
 import { members, persons } from "@/db/schema/people";
 import { batches } from "@/db/schema/programs";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import { z } from "zod";
 import { enqueueWaitlistPromotion } from "@/lib/messaging/notification-events";
@@ -28,6 +28,7 @@ export type WaitlistResult =
         | "not_found"
         | "already_on_waitlist"
         | "not_on_waitlist"
+        | "conflict"
         | "not_waiting";
       message: string;
     };
@@ -38,7 +39,7 @@ const addSchema = z.object({
 });
 
 export async function addToWaitlist(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WaitlistResult> {
   const parsed = addSchema.safeParse(raw);
@@ -165,7 +166,7 @@ const removeSchema = z.object({
 });
 
 export async function cancelWaitlist(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WaitlistResult> {
   const parsed = removeSchema.safeParse(raw);
@@ -314,6 +315,7 @@ export async function getWaitlistHead(
 
 const promoteSchema = z.object({
   batchId: z.string().uuid(),
+  expectedEntryId: z.string().uuid().optional(),
 });
 
 // Known gap (logged as known gap, F2 audit response): promoteHead
@@ -325,7 +327,7 @@ const promoteSchema = z.object({
 // product decision (auto-enrol vs. remain a "head-of-queue"
 // surface) — out of scope for F2. See docs/guard-path-matrix.md.
 export async function promoteHead(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<WaitlistResult> {
   const parsed = promoteSchema.safeParse(raw);
@@ -368,6 +370,9 @@ export async function promoteHead(
       : null;
     if (!head) {
       return { kind: "error", code: "not_on_waitlist", message: "Empty waitlist." };
+    }
+    if (parsed.data.expectedEntryId && head.entryId !== parsed.data.expectedEntryId) {
+      return { kind: "error", code: "conflict", message: "The waitlist has changed. Refresh and review the next member." };
     }
     await tx
       .update(waitlistEntries)

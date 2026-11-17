@@ -51,11 +51,11 @@ export function OwnerHomeAttention({
     <section
       data-testid="owner-home-attention"
       aria-label="Needs your decision"
-      className="overflow-hidden rounded-card border border-line bg-paper"
+      className="overflow-hidden rounded-[18px] border border-line bg-paper"
     >
       <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-5">
         <div className="min-w-0">
-          <h2 className="font-display text-[16px] font-semibold">Needs your decision</h2>
+          <h2 className="font-display text-[18px] font-semibold">Needs your decision</h2>
           <p className="mt-0.5 text-[12.5px] text-ink-3">{summary}</p>
         </div>
         {count > 0 ? <CountChip count={count} tone="warn" /> : null}

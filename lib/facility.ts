@@ -40,6 +40,20 @@ export function parseFacilityValue(value: string | null | undefined): string | u
   return parsed.success ? parsed.data : undefined;
 }
 
+/** Parse a requested filter, not an authorization decision. Invalid explicit values never fall back. */
+export function resolveRequestedFacility(input: {
+  facility?: string | null;
+  location?: string | null;
+  cookie?: string | null;
+}): { valid: boolean; facilityId: string | undefined } {
+  const value = input.facility ?? input.location ?? input.cookie;
+  if (value == null || value === "all" || (input.facility == null && input.location === "")) {
+    return { valid: true, facilityId: undefined };
+  }
+  const facilityId = parseFacilityValue(value);
+  return { valid: facilityId !== undefined, facilityId };
+}
+
 export function resolveFacilityValue(
   searchParam: string | null | undefined,
   cookieValue: string | null | undefined,

@@ -30,7 +30,7 @@ import type { OpsNavigationRole } from "./ops-nav-items";
 // direct flex child of the phone bar and can take a full row of its
 // own when it opens.
 
-export function OpsMobileMenu({ role = "viewer" }: { role?: OpsNavigationRole }) {
+export function OpsMobileMenu({ role = "viewer", mockMessagingAvailable = true }: { role?: OpsNavigationRole; mockMessagingAvailable?: boolean }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const pathname = usePathname();
@@ -74,7 +74,7 @@ export function OpsMobileMenu({ role = "viewer" }: { role?: OpsNavigationRole })
         }}
         className="order-3 w-full overflow-y-auto overscroll-contain rounded-ctl border border-line bg-paper p-2"
       >
-        <OpsNavLinks variant="menu" role={role} />
+        <OpsNavLinks variant="menu" role={role} mockMessagingAvailable={mockMessagingAvailable} />
       </nav>
     </>
   );
