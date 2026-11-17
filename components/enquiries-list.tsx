@@ -17,6 +17,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
 import type { EnquiryRow } from "@/lib/services/enquiries";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list.mjs";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
 
 /**
  * Which surface this list serves.
@@ -67,18 +69,16 @@ export function EnquiryList({
     return (
       <section
         aria-labelledby="current-enquiries-heading"
-        className="rounded-card border border-line bg-paper p-5"
+        className="rounded-card border border-line bg-paper p-[18px] sm:p-5"
       >
-        <h2
-          id="current-enquiries-heading"
-          className="font-display text-[16px] font-semibold text-ink"
-        >
-          Current enquiries
-        </h2>
+        <div className="flex items-center gap-2 rounded-ctl bg-[var(--accent-soft)] px-3 py-2">
+          <ClipboardList size={19} aria-hidden="true" className="shrink-0 text-[var(--accent-ink)]" />
+          <h2 id="current-enquiries-heading" className="font-display text-[18px] font-semibold text-ink">Current enquiries</h2>
+        </div>
         <div data-testid="enquiries-list" className="mt-1">
         <table
           aria-label="Current enquiries"
-          className="hidden w-full border-collapse text-[13px] md:table"
+          className="hidden w-full table-fixed border-collapse text-[13px] md:table"
         >
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.08em] text-ink-3">
@@ -104,7 +104,7 @@ export function EnquiryList({
                     href={`${detailHrefPrefix}/${enquiry.id}`}
                     className="flex min-h-11 flex-col justify-center"
                   >
-                    <span className="text-[14px] font-medium leading-tight text-ink">
+                    <span className="text-[14px] font-medium leading-tight text-ink [overflow-wrap:anywhere]">
                       {enquiry.fullName}
                     </span>
                     <span className="mt-0.5 text-[12px] text-ink-3">
@@ -127,9 +127,9 @@ export function EnquiryList({
                   <Link
                     href={`${detailHrefPrefix}/${enquiry.id}`}
                     aria-label={`Open ${enquiry.fullName}`}
-                    className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 hover:text-ink"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 hover:text-ink"
                   >
-                    Open
+                    Open <ChevronRight size={16} aria-hidden="true" />
                   </Link>
                 </td>
               </tr>
@@ -142,10 +142,11 @@ export function EnquiryList({
             <li key={enquiry.id}>
               <Link
                 href={`${detailHrefPrefix}/${enquiry.id}`}
-                className="flex items-start gap-3 py-3"
+                aria-label={`Open ${enquiry.fullName}`}
+                className="flex min-h-11 items-start gap-3 py-3"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-medium text-ink">
+                  <span className="block text-[14px] font-medium text-ink [overflow-wrap:anywhere]">
                     {enquiry.fullName}
                   </span>
                   <span className="mt-0.5 block text-[12px] text-ink-3">
@@ -161,6 +162,7 @@ export function EnquiryList({
                 >
                   {ENQUIRY_STAGE_LABELS[enquiry.stage]}
                 </StatusBadge>
+                <ChevronRight size={16} aria-hidden="true" className="mt-1 shrink-0 text-[var(--accent-ink)]" />
               </Link>
             </li>
           ))}

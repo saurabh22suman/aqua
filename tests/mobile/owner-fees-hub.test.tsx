@@ -164,7 +164,7 @@ describe("U-02 dues list", () => {
     );
     expect(await findByText("Ananya Sharma")).toBeTruthy();
     expect(document.body.textContent).toContain("2026-0001");
-    expect(document.body.textContent).toContain("outstanding");
+    expect(document.body.textContent).toMatch(/outstanding/i);
     expect(document.body.textContent).toContain("Open");
   });
 

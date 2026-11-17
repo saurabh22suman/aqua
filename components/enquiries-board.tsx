@@ -12,8 +12,7 @@ import {
 import { EnquiryList, type EnquiriesListVariant } from "@/components/enquiries-list";
 import { ENQUIRY_STAGE_LABELS } from "@/lib/enquiry-stage-graph";
 import type { OverdueFollowUp } from "@/lib/services/enquiries";
-import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
-import { formatDateIST } from "@/lib/time/tz";
+import { EnquiriesOverduePreview } from "@/components/enquiries-overdue-preview";
 import { isOptionalContactPhoneValid } from "@/lib/contact-phone";
 
 /**
@@ -91,23 +90,35 @@ export function EnquiriesBoard({
     const matchesStage = stage === "all" || (stage === "active" ? enquiry.stage !== "converted" && enquiry.stage !== "lost" : enquiry.stage === stage);
     return matchesStage && (!term || `${enquiry.fullName} ${enquiry.phone ?? ""}`.toLocaleLowerCase().includes(term));
   }) : enquiries;
-  const filters = variant === "oversight" ? <div className="flex flex-wrap items-end gap-2">
-    <label className="min-w-0 flex-1 text-[13px] text-ink-2">Search enquiries<input value={search} onChange={event => { setSearch(event.target.value); remember(event.target.value,stage); }} type="search" className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-ink" /></label>
-    <label className="text-[13px] text-ink-2">Stage<select value={stage} onChange={event => { setStage(event.target.value); remember(search,event.target.value); }} className="mt-1 block min-h-11 rounded-ctl border border-line bg-paper px-3 text-ink"><option value="active">Active</option><option value="all">All history</option>{Object.entries(ENQUIRY_STAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-  </div> : null;
+  const filters = variant === "oversight" ? (
+    <div className="grid grid-cols-1 items-end gap-2 min-[375px]:grid-cols-[minmax(0,1fr)_150px]">
+      <label className="min-w-0 text-[13px] text-ink-2">
+        Search enquiries
+        <input value={search} onChange={(event) => { setSearch(event.target.value); remember(event.target.value, stage); }} type="search" className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink" />
+      </label>
+      <label className="min-w-0 text-[13px] text-ink-2">
+        Stage
+        <select value={stage} onChange={(event) => { setStage(event.target.value); remember(search, event.target.value); }} className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink">
+          <option value="active">Active</option>
+          <option value="all">All history</option>
+          {Object.entries(ENQUIRY_STAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </select>
+      </label>
+      <p className="text-[13px] text-ink-2 min-[375px]:col-span-2" aria-live="polite">{visibleEnquiries.length} of {enquiries.length} enquiries shown</p>
+    </div>
+  ) : null;
   const list = visibleEnquiries.length === 0 && (term || stage !== "all") && enquiries.length > 0
-    ? <p className="text-[13px] text-ink-2">No enquiries match these filters.</p>
+    ? <div>
+        <p className="text-[13px] text-ink-2">No enquiries match these filters.</p>
+        <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStage("all"); remember("", "all"); }}>Show all enquiries</Button>
+      </div>
     : <EnquiryList enquiries={visibleEnquiries} detailHrefPrefix={detailHrefPrefix} variant={variant} />;
-  const visibleOverdue = overdueFollowUps.filter((followUp) => visibleEnquiries.some((enquiry) => enquiry.id === followUp.enquiryId));
-  const dueList = variant === "oversight" && visibleOverdue.length > 0 ? <section className="rounded-card border border-line bg-paper p-4">
-    <h2 className="font-display text-[16px] font-semibold">Overdue follow-ups</h2>
-    <ul className="divide-y divide-line">{visibleOverdue.map((followUp) => <li key={followUp.id} className="py-2">
-      <Link href={`${detailHrefPrefix}/${followUp.enquiryId}`} aria-label={`Follow up ${followUp.enquiryName}`} className="inline-flex min-h-11 flex-col justify-center text-[13px] text-ink">
-        <span>{followUp.enquiryName} · due {formatDateIST(followUp.dueAt)}</span>
-        {followUp.note ? <span className="text-ink-2">{followUp.note}</span> : null}
-      </Link>
-    </li>)}</ul>
-  </section> : null;
+  const visibleIds = new Set(visibleEnquiries.map((enquiry) => enquiry.id));
+  const visibleOverdue = overdueFollowUps.filter((followUp) => visibleIds.has(followUp.enquiryId));
+  const oversightLists = <div className={`grid items-start gap-4 ${visibleOverdue.length > 0 ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" : ""}`}>
+    {visibleOverdue.length > 0 ? <EnquiriesOverduePreview followUps={visibleOverdue} detailHrefPrefix={detailHrefPrefix} /> : null}
+    <div className="min-w-0">{list}</div>
+  </div>;
 
   // Opening the capture on the owner's page: the card opens BELOW the
   // list, so on a long list it opens off-screen. The owner's own press
@@ -176,8 +187,7 @@ export function EnquiriesBoard({
             : "Your role can view enquiries but not capture them."}
         </p>
         {filters}
-        {dueList}
-        {list}
+        {variant === "oversight" ? oversightLists : list}
       </div>
     );
   }
@@ -207,8 +217,7 @@ export function EnquiriesBoard({
     return (
       <div className="space-y-4" ref={actionAreaRef}>
         {filters}
-        {dueList}
-        {list}
+        {oversightLists}
         {/* The ONE create action for enquiries: the shared floating
             action on a phone and the labelled action on a desktop — the
             SAME control the other owner pages use, not a second shape

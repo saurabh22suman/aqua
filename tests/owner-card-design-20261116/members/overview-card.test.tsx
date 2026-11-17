@@ -26,14 +26,16 @@ describe("owner member overview", () => {
     const html = renderToStaticMarkup(await MemberDetailPage({ params: Promise.resolve({ memberId: member.memberId }) }));
     for (const label of ["Participation", "Membership plan", "Outstanding", "Personal details", "Family and contact", "Attendance", "Edit details"]) expect(html).toContain(label);
     expect(html.indexOf("Attendance")).toBeLessThan(html.indexOf("Manage membership"));
-    expect(html.indexOf("Junior · Evening")).toBeGreaterThan(-1);
-    expect(html).toContain("Junior · Evening · North");
-    expect(html).toContain("Junior · Evening · South");
-    expect(html).toContain("Junior · Other · Facility unavailable");
-    expect(html).toContain("Junior · Open · Club-wide");
-    expect(html.indexOf("Junior · Evening")).toBeLessThan(html.indexOf("Manage membership"));
+    const { container } = render(await MemberDetailPage({ params: Promise.resolve({ memberId: member.memberId }) }));
+    const batches = within(screen.getByRole("region", { name: "Batches" })).getAllByRole("listitem");
+    for (const [index, name, facility] of [[0, "Evening", "North"], [1, "Evening", "South"], [2, "Other", "Facility unavailable"], [3, "Open", "Club-wide"]] as const) {
+      expect(within(batches[index]).getByText(name, { exact: true })).toBeTruthy();
+      expect(within(batches[index]).getByText("Junior", { exact: true })).toBeTruthy();
+      expect(within(batches[index]).getByText(facility, { exact: true })).toBeTruthy();
+    }
+    expect(container.textContent!.indexOf("Evening")).toBeLessThan(container.textContent!.indexOf("Manage membership"));
     expect(html.indexOf("Attendance")).toBeLessThan(html.indexOf("Personal details"));
-    expect(html.indexOf("Junior · Evening")).toBeLessThan(html.indexOf("Personal details"));
+    expect(container.textContent!.indexOf("Evening")).toBeLessThan(container.textContent!.indexOf("Personal details"));
     expect(html.indexOf("Personal details")).toBeLessThan(html.indexOf("Family and contact"));
     expect(html).toContain("No sessions marked yet");
     expect(html).toContain('data-avatar-seed="person-1"');

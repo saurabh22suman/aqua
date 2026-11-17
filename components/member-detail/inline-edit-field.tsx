@@ -6,7 +6,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { Pencil } from "lucide-react";
+import Pencil from "lucide-react/dist/esm/icons/pencil.mjs";
 import { updateMemberAction } from "@/lib/actions/people";
 import { formatPhoneIN } from "@/lib/phone";
 import { formatDateIST } from "@/lib/time/tz";
@@ -65,6 +65,7 @@ export type InlineEditFieldProps = {
   readOnly?: boolean;
   alwaysShowEdit?: boolean;
   explicitCommit?: boolean;
+  ownerRow?: boolean;
 };
 
 type SaveStatus =
@@ -88,6 +89,7 @@ export function InlineEditField({
   readOnly = false,
   alwaysShowEdit = false,
   explicitCommit = false,
+  ownerRow = false,
 }: InlineEditFieldProps) {
   const controlType = field === "dateOfBirth" ? "date" : type;
   const [editing, setEditing] = useState(false);
@@ -321,18 +323,22 @@ export function InlineEditField({
         ? formatDateIST(displayValue)
         : displayValue;
   const isEmpty = !shown;
+  const ownerLabel = field === "phone" ? "phone" : FIELD_LABELS[field];
+  const ownerShown = type === "select" ? options?.find((option) => option.value === shown)?.label ?? shown : shown;
 
   if (readOnly) {
     return (
       <div className={className}>
         <span
           className={
-            shown
+            ownerRow
+              ? "block break-words [overflow-wrap:anywhere] text-[14px] text-ink"
+              : shown
               ? valueClassName ?? "text-[13px]"
               : "text-[13px] text-ink-3"
           }
         >
-          {shown || "—"}
+          {ownerRow ? ownerShown || "Not provided" : shown || "—"}
         </span>
       </div>
     );
@@ -340,7 +346,7 @@ export function InlineEditField({
 
   return (
     <div className={className}>
-      <div className={explicitCommit ? "group inline-flex max-w-full flex-wrap items-center gap-1" : "group inline-flex items-center gap-1"}>
+      <div className={ownerRow ? "group flex min-w-0 w-full flex-wrap items-center justify-between gap-x-2 gap-y-2" : explicitCommit ? "group inline-flex max-w-full flex-wrap items-center gap-1" : "group inline-flex items-center gap-1"}>
         {editing ? (
           <>
           <InlineEditControl
@@ -364,18 +370,18 @@ export function InlineEditField({
           </>
         ) : (
           <>
-            <span className={isEmpty ? "text-[13px] text-[var(--accent-ink)] underline underline-offset-2" : valueClassName ?? "text-[13px]"}>
-              {shown || placeholder || "—"}
+            <span className={ownerRow ? "min-w-0 flex-1 break-words [overflow-wrap:anywhere] text-[14px] text-ink" : isEmpty ? "text-[13px] text-[var(--accent-ink)] underline underline-offset-2" : valueClassName ?? "text-[13px]"}>
+              {ownerRow ? ownerShown || "Not provided" : shown || placeholder || "—"}
             </span>
             <button
               type="button"
               ref={editButtonRef}
               onClick={enterEdit}
-              aria-label={`Edit ${FIELD_LABELS[field] ?? field}`}
+              aria-label={ownerRow ? `${isEmpty ? "Add" : "Edit"} ${ownerLabel}` : `Edit ${FIELD_LABELS[field] ?? field}`}
               className={`flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-ctl px-2 text-[12px] text-ink-3 hover:bg-deck focus-visible:bg-deck ${alwaysShowEdit || isEmpty ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100"}`}
             >
               <Pencil size={14} />
-              {alwaysShowEdit ? "Edit" : null}
+              {ownerRow ? (isEmpty ? "Add" : "Edit") : alwaysShowEdit ? "Edit" : null}
             </button>
           </>
         )}

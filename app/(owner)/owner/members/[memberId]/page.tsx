@@ -25,7 +25,8 @@ import { MemberIdCard } from "@/components/member-id-card";
 import { formatDateIST } from "@/lib/time/tz";
 import { MEMBER_STATUS_LABELS } from "@/lib/member-status-graph";
 import type { MemberStatus } from "@/db/schema/people";
-import { InlineEditField } from "@/components/member-detail/inline-edit-field";
+import { OwnerMemberPersonalDetails } from "@/components/member-detail/owner-member-personal-details";
+import { OwnerMemberBatches } from "@/components/member-detail/owner-member-batches";
 import { PersonAvatar } from "@/components/avatar";
 import { MemberDetailTabs, type MemberTab } from "@/components/member-detail/member-detail-tabs";
 import { MemberAttendanceGrid } from "@/components/member-detail/member-attendance-grid";
@@ -46,8 +47,6 @@ import { MemberNotificationDestinations } from "@/components/member-notification
 import { MemberPayerFinance } from "@/components/member-detail/member-payer-finance";
 import { readOwnerMemberInitialPanels } from "@/components/member-detail/owner-member-initial-panels";
 import { OwnerMemberSummary } from "@/components/member-detail/owner-member-summary";
-import { enrolmentFacilityLabel } from "@/components/member-detail/enrolment-facility-label";
-import { MemberManagementLink } from "@/components/member-detail/member-management-link";
 import { MemberEditEntryLink } from "@/components/member-detail/member-edit-entry";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
 import { formatINR } from "@/lib/money/format";
@@ -299,7 +298,6 @@ function OverviewSections({
   const panels = reads.panels;
   const destinations = reads.destinations;
   const activePlans = "failed" in panels.subscription ? null : panels.subscription.subscriptions.filter(plan => plan.status === "active" || plan.status === "paused");
-  const enrolmentBatches = "failed" in panels.enrolment ? [] : panels.enrolment.batches;
 
   return (
     <>
@@ -309,98 +307,10 @@ function OverviewSections({
           {attendanceHistory ? <section>
             <MemberAttendanceGrid rows={attendanceHistory.rows} today={attendanceHistory.today} ownerCard />
           </section> : null}
-          <section aria-labelledby="member-batches-heading" className="rounded-[18px] border border-line bg-paper p-4">
-            <h2 id="member-batches-heading" className="font-display text-[18px] font-semibold text-ink">Batches</h2>
-            {"failed" in panels.enrolment ? (
-              <p className="mt-2 text-[13px] text-ink-3">{titleCase(resolveTerm(terminology, "batch", 1))} information is unavailable.</p>
-            ) : panels.enrolment.enrolments.length === 0 ? (
-              <p className="mt-2 text-[13px] text-ink-3">No batches enrolled.</p>
-            ) : (
-              <ul className="mt-2 divide-y divide-line">
-                {panels.enrolment.enrolments.map((enrolment) => <li key={enrolment.batchId} className="py-2 text-[13px] text-ink">{enrolment.programName} · {enrolment.batchName}{canReadPrograms ? ` · ${enrolmentFacilityLabel(enrolment.batchId, enrolmentBatches)}` : null}</li>)}
-              </ul>
-            )}
-            {(canWrite && canReadPrograms) || "failed" in panels.enrolment ? <MemberManagementLink target="enrolment">{canWrite && canReadPrograms ? "Manage batches" : "View batch read error"}</MemberManagementLink> : null}
-          </section>
+          <OwnerMemberBatches enrolment={panels.enrolment} canWrite={canWrite} canReadPrograms={canReadPrograms} batchLabel={titleCase(resolveTerm(terminology, "batch", 1))} />
           </div>
           <div className="space-y-4">
-          <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
-            <h2 className="font-display text-[18px] font-semibold text-ink">Personal details</h2>
-            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-[13px]">
-              <div className="min-w-0">
-                <dt className="text-[11px] text-ink-3">Name</dt>
-                <dd><InlineEditField value={member.fullName} field="fullName" memberId={member.memberId} type="text" snapshot={member} readOnly={!canWrite} alwaysShowEdit explicitCommit /></dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-[11px] text-ink-3">Phone</dt>
-                <dd>
-                  <InlineEditField
-                    value={member.phone ?? ""}
-                    field="phone"
-                    memberId={member.memberId}
-                    type="text"
-                    snapshot={member}
-                    placeholder="Add phone"
-                    formatAs="phone"
-                    readOnly={!canWrite}
-                    alwaysShowEdit
-                    explicitCommit
-                  />
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-[11px] text-ink-3">Date of birth</dt>
-                <dd>
-                  <InlineEditField
-                    value={member.dateOfBirth ?? ""}
-                    field="dateOfBirth"
-                    memberId={member.memberId}
-                    type="date"
-                    snapshot={member}
-                    readOnly={!canWrite}
-                    alwaysShowEdit
-                    explicitCommit
-                  />
-                </dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="text-[11px] text-ink-3">Gender</dt>
-                <dd>
-                  <InlineEditField
-                    value={member.gender ?? ""}
-                    field="gender"
-                    memberId={member.memberId}
-                    type="select"
-                    snapshot={member}
-                    options={[
-                      { value: "male", label: "Male" },
-                      { value: "female", label: "Female" },
-                      { value: "other", label: "Other" },
-                    ]}
-                    readOnly={!canWrite}
-                    alwaysShowEdit
-                    explicitCommit
-                  />
-                </dd>
-              </div>
-              <div className="col-span-2 min-w-0">
-                <dt className="text-[11px] text-ink-3">Medical notes</dt>
-                <dd className="mt-0.5">
-                  <InlineEditField
-                    value={member.medicalNotes ?? ""}
-                    field="medicalNotes"
-                    memberId={member.memberId}
-                    type="textarea"
-                    snapshot={member}
-                    placeholder="Add medical notes"
-                    readOnly={!canWrite}
-                    alwaysShowEdit
-                    explicitCommit
-                  />
-                </dd>
-              </div>
-            </dl>
-          </section>
+          <OwnerMemberPersonalDetails member={member} canWrite={canWrite} />
           <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
             <h2 className="font-display text-[18px] font-semibold text-ink">Family and contact</h2>
             {member.isMinor ? member.guardians.length ? (
