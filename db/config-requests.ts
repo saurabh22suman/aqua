@@ -150,11 +150,13 @@ export async function resolveConfigChangeRequest(
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withPlatformAdmin(async (tx) => {
+    // Only the transaction holding this request can apply its value and audit the decision.
     const rows = await tx
       .select()
       .from(configChangeRequests)
       .where(eq(configChangeRequests.id, params.requestId))
-      .limit(1);
+      .limit(1)
+      .for("update");
     const request = rows[0];
     if (!request) {
       return { ok: false, error: "Request not found." };

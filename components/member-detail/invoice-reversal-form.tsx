@@ -38,13 +38,22 @@ export function InvoiceReversalForm({
   const [reverseReason, setReverseReason] = useState("");
   const [reverseError, setReverseError] = useState<string | null>(null);
   const [reversalRetryLast, setReversalRetryLast] = useState(false);
-  const [reversalNewConfirmed, setReversalNewConfirmed] = useState(false);
-  const reversalAttempt = useRef<{ targetId: string; key: string } | null>(null);
+  const [confirmedNewAfter, setConfirmedNewAfter] = useState<string | null>(null);
+  const reversalAttempt = useRef<{
+    targetId: string;
+    observedIntentId: string | null;
+    key: string;
+  } | null>(null);
   const reversalRecovery = usePaymentRecovery(
     payment.id,
     listReversalRecoveryAction,
     cancelReversalRecoveryAction,
   );
+  const last = reversalRecovery.recovery.lastCommitted;
+  const observedIntentId = last?.intentId ?? null;
+  // Confirming a separate reversal only authorizes a new attempt after
+  // the exact reversal shown when the operator confirmed.
+  const reversalNewConfirmed = last !== null && confirmedNewAfter === last.intentId;
 
   return (
     <div className="mt-1.5 rounded-ctl border border-line p-2">
@@ -95,18 +104,17 @@ export function InvoiceReversalForm({
             if (await reversalRecovery.cancel()) {
               reversalAttempt.current = null;
               setReversalRetryLast(false);
-              setReversalNewConfirmed(false);
+              setConfirmedNewAfter(null);
             }
           })();
         }}
         onRetryLast={() => {
           setReversalRetryLast(true);
-          setReversalNewConfirmed(false);
+          setConfirmedNewAfter(null);
         }}
         onRecordNew={() => {
-          setReversalNewConfirmed(true);
+          setConfirmedNewAfter(observedIntentId);
           setReversalRetryLast(false);
-          reversalAttempt.current = null;
         }}
       />
       <button
@@ -144,9 +152,9 @@ export function InvoiceReversalForm({
             setReverseError(AMBIGUOUS_REVERSAL);
             return;
           }
-          const last = reversalRecovery.recovery.lastCommitted;
           const stored =
-            reversalAttempt.current?.targetId === payment.id
+            reversalAttempt.current?.targetId === payment.id &&
+            reversalAttempt.current.observedIntentId === observedIntentId
               ? reversalAttempt.current.key
               : null;
           let key: string | null;
@@ -154,16 +162,14 @@ export function InvoiceReversalForm({
             key = reversalRecovery.recovery.open.idempotencyKey;
           } else if (reversalRetryLast && last) {
             key = last.idempotencyKey;
-          } else if (last) {
-            if (!reversalNewConfirmed) {
-              setReverseError(
-                "Choose “Retry the same reversal” or confirm “Record a separate reversal” above.",
-              );
-              return;
-            }
-            key = mintPaymentKey();
+          } else if (last && !reversalNewConfirmed) {
+            setReverseError(
+              "Choose “Retry the same reversal” or confirm “Record a separate reversal” above.",
+            );
+            return;
           } else {
             key = stored ?? mintPaymentKey();
+            if (key) reversalAttempt.current = { targetId: payment.id, observedIntentId, key };
           }
           if (!key) {
             setReverseError(
@@ -171,8 +177,6 @@ export function InvoiceReversalForm({
             );
             return;
           }
-          const observedIntentId = last?.intentId ?? null;
-          reversalAttempt.current = { targetId: payment.id, key };
           setBusy(true);
           setReverseError(null);
           void (async () => {
@@ -192,7 +196,7 @@ export function InvoiceReversalForm({
                 ) {
                   reversalAttempt.current = null;
                   setReversalRetryLast(false);
-                  setReversalNewConfirmed(false);
+                  setConfirmedNewAfter(null);
                 }
                 setReverseError(result.error);
                 void reversalRecovery.refresh().then((refreshed) => {
@@ -209,7 +213,7 @@ export function InvoiceReversalForm({
               } else {
                 reversalAttempt.current = null;
                 setReversalRetryLast(false);
-                setReversalNewConfirmed(false);
+                setConfirmedNewAfter(null);
                 onClose();
                 setReverseError(null);
                 // The reversal is already committed. Keep the outcome visible

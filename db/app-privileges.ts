@@ -2,7 +2,7 @@ import { Client } from "pg";
 
 // Apply exact append-only grants after new tables exist, including partitions.
 export async function restrictAppPrivileges(client: Client): Promise<void> {
-  for (const table of ["activity_events", "audit_log", "announcements", "account_entries", "platform_audit_log", "absence_alerts", "gate_access_events", "booking_check_ins"]) {
+  for (const table of ["activity_events", "audit_log", "announcements", "account_entries", "platform_audit_log", "absence_alerts", "gate_access_events", "booking_check_ins", "invite_link_uses"]) {
     await client.query(`do $$ declare part regclass; begin
       if to_regclass('public.${table}') is not null then
         revoke update, delete on public.${table} from app_user;

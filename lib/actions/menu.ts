@@ -53,7 +53,7 @@ const itemInput = z.object({
 const updateItemInput = itemInput
   .omit({ categoryId: true })
   .partial()
-  .extend({ itemId: z.string().uuid() });
+  .extend({ itemId: z.string().uuid(), isActive: z.boolean().optional() });
 
 const archiveInput = z.object({
   categoryId: z.string().uuid().optional(),

@@ -279,6 +279,64 @@ describe("O-07 owner configuration", () => {
     expect(rows.rows[0].status).toBe("requested");
   });
 
+  it("allows exactly one concurrent decision and only applies the winning decision", async () => {
+    const key = "access.location_scoped_staff" as const;
+    const requested = await requests.requestConfigChange(
+      { tenantId: tenantA, userId: ownerUserId },
+      { key, requestedValue: "on" },
+    );
+    if (!requested.ok) throw new Error("Could not create the config request fixture.");
+    const { requestId } = requested;
+    const { opsAction } = await import("@/db/ops-action");
+    const decide = (status: "declined" | "resolved") => opsAction(
+      { scope: "config.request.resolve", actorId: platformUserId, targetType: "config_change_request", targetId: requestId },
+      () => requests.resolveConfigChangeRequest({
+        requestId, status, applyValue: status === "resolved", actorId: platformUserId,
+      }),
+    );
+
+    const waitForResolvers = async (count: number) =>
+      expect.poll(async () => {
+        const { rows: [row] } = await admin.query<{ waiting: number }>(`
+          select count(*)::int as waiting from pg_stat_activity
+          where usename = 'app_login' and wait_event_type = 'Lock'
+          and (query ilike 'update "config_change_requests"%'
+            or (query ilike '%from "config_change_requests"%' and query ilike '%for update%'))`);
+        return row.waiting;
+      }, { timeout: 5_000 }).toBe(count);
+
+    const holder = await admin.connect();
+    const decisions: ReturnType<typeof decide>[] = [];
+    try {
+      await holder.query("begin");
+      await holder.query("select id from config_change_requests where id = $1 for update", [requestId]);
+      decisions.push(decide("declined"));
+      await waitForResolvers(1);
+      decisions.push(decide("resolved"));
+      await waitForResolvers(2);
+    } finally {
+      await holder.query("rollback");
+      holder.release();
+      await Promise.allSettled(decisions);
+    }
+    const [declined, resolved] = await Promise.all(decisions);
+    expect(declined).toEqual({ ok: true });
+    expect(resolved).toEqual({ ok: false, error: "This request has already been decided." });
+
+    const { rows: [row] } = await admin.query(
+      "select status from config_change_requests where id = $1", [requestId],
+    );
+    expect(row.status).toBe("declined");
+    const { rows: audit } = await admin.query(
+      "select detail from platform_audit_log where action = 'config.request.resolve' and target_id = $1",
+      [requestId],
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0].detail).toMatchObject({ after: { status: "declined" }, applied: false });
+    const { resolveConfig } = await import("@/db/config");
+    expect((await resolveConfig<boolean>(tenantA, key)).source.scopeType).not.toBe("tenant");
+  }, 20_000);
+
   it("keeps requests tenant-isolated under RLS", async () => {
     const requested = await requests.requestConfigChange(
       { tenantId: tenantA, userId: ownerUserId },

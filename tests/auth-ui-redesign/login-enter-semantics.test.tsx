@@ -50,6 +50,7 @@ vi.mock("@/lib/offline/logout", () => ({
 }));
 vi.mock("@/lib/offline/client-session", () => ({
   clearOfflineData: (...args: unknown[]) => clearOfflineData(...args),
+  localOfflineScope: async () => "draft-scope",
   runOfflineLifecycle: (work: () => Promise<unknown>) => work(),
 }));
 
