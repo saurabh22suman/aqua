@@ -92,7 +92,7 @@ export const SESSION_STATUS_TONE: Record<string, StatusTone> = {
   scheduled: "water",
   in_progress: "warn",
   completed: "good",
-  cancelled: "neutral",
+  cancelled: "late",
 };
 
 export const PAYMENT_STATUS_TONE: Record<string, StatusTone> = {

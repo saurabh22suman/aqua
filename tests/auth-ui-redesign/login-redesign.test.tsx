@@ -49,11 +49,13 @@ vi.mock("next/navigation", () => ({
 
 const syncBeforeLogout = vi.fn();
 const clearOfflineData = vi.fn();
+const localOfflineScope = vi.fn();
 vi.mock("@/lib/offline/logout", () => ({
   syncBeforeLogout: (...args: unknown[]) => syncBeforeLogout(...args),
 }));
 vi.mock("@/lib/offline/client-session", () => ({
   clearOfflineData: (...args: unknown[]) => clearOfflineData(...args),
+  localOfflineScope: () => localOfflineScope(),
   runOfflineLifecycle: (work: () => Promise<unknown>) => work(),
 }));
 
@@ -117,6 +119,7 @@ describe("tenant login redesign", () => {
     homeForSessionAction.mockReset();
     syncBeforeLogout.mockReset();
     clearOfflineData.mockReset();
+    localOfflineScope.mockReset().mockResolvedValue("draft-scope");
     disableOfflineBranch();
   });
 
@@ -424,6 +427,74 @@ describe("tenant login redesign", () => {
     await waitFor(() => expect(clearOfflineData).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(push).toHaveBeenCalledWith("/owner"));
+  });
+
+  it.each([
+    ["PIN rejection", async () => new Response(null, { status: 401 }), /wrong number or PIN/i],
+    ["connection failure", async () => { throw new Error("connection lost"); }, /could not reach the club/i],
+  ] as const)("keeps attendance drafts after %s", async (_label, respond, message) => {
+    enableOfflineBranch();
+    syncBeforeLogout.mockResolvedValue(2);
+    clearOfflineData.mockResolvedValue(true);
+    vi.stubGlobal("fetch", vi.fn(respond));
+
+    render(<LoginForm />);
+    fillCredentials();
+    fireEvent.click(signInButton());
+    fireEvent.click(await screen.findByRole("button", { name: /discard drafts and continue/i }));
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(clearOfflineData).not.toHaveBeenCalled();
+    expect(homeForSessionAction).not.toHaveBeenCalled();
+    expect(screen.getByText(/2 unsynced attendance marks/i)).toBeTruthy();
+  });
+
+  it("waits for draft cleanup after PIN acceptance and retries without submitting the PIN again", async () => {
+    enableOfflineBranch();
+    syncBeforeLogout.mockResolvedValue(2);
+    clearOfflineData.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const login = deferred<Response>();
+    const fetchMock = vi.fn(() => login.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    homeForSessionAction.mockResolvedValue({ kind: "ok", path: "/owner" });
+
+    render(<LoginForm />);
+    fillCredentials();
+    fireEvent.click(signInButton());
+    fireEvent.click(await screen.findByRole("button", { name: /discard drafts and continue/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(clearOfflineData).not.toHaveBeenCalled();
+    login.resolve(okResponse());
+    const retry = await screen.findByRole("button", { name: "Retry discarding drafts" });
+    expect(homeForSessionAction).not.toHaveBeenCalled();
+    expect(pinInput().value).toBe("");
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/owner"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(clearOfflineData.mock.calls).toEqual([["draft-scope"], ["draft-scope"]]);
+  });
+
+  it("leaves the replacement scope alone when another tab changes it during sign-in", async () => {
+    enableOfflineBranch();
+    syncBeforeLogout.mockResolvedValue(2);
+    const login = deferred<Response>();
+    const fetchMock = vi.fn(() => login.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    homeForSessionAction.mockResolvedValue({ kind: "ok", path: "/owner" });
+
+    render(<LoginForm />);
+    fillCredentials();
+    fireEvent.click(signInButton());
+    fireEvent.click(await screen.findByRole("button", { name: /discard drafts and continue/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    localOfflineScope.mockResolvedValue("replacement-scope");
+    login.resolve(okResponse());
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/owner"));
+    expect(clearOfflineData).not.toHaveBeenCalled();
   });
 
   it("offers a cancel that steps back without discarding anything", async () => {

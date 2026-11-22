@@ -7,7 +7,7 @@ import { writeAudit } from "@/lib/audit/write";
 import { ownStaffIdInTx } from "@/lib/services/staff-self";
 import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
 import { todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // V-24 — staff attendance mutations (architecture.md §8.9). The read
 // side (day board, own row) lives in ./staff-attendance-list and is
@@ -48,7 +48,7 @@ function lateMinutesAgainst(startAt: Date | null, now: Date): number {
 }
 
 export async function checkIn(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<CheckInResult> {
   const parsed = checkInInput.safeParse(raw);
@@ -152,7 +152,7 @@ export async function checkIn(
   });
 }
 
-export async function checkOut(ctx: ActionCtx): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function checkOut(ctx: MutationActor): Promise<{ ok: true } | { ok: false; error: string }> {
   return withTenant(ctx.tenantId, async (tx) => {
     const staffId = await ownStaffIdInTx(tx, ctx);
     if (!staffId) {

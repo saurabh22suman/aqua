@@ -3,7 +3,7 @@ import { withTenant } from "./tenant";
 import { configKeys } from "./schema/config";
 import {
   resolveConfigInTx,
-  setTenantConfigValue,
+  setOwnerTenantConfigValue,
   type ResolvedConfig,
   type SetConfigResult,
 } from "./config";
@@ -74,8 +74,8 @@ export async function setOwnerConfigValue(
     return { ok: false, error: "Unknown configuration key." };
   }
   // Visibility (owner_edit only) and value validation both live in
-  // setTenantConfigValue, so there is exactly one gate.
-  return setTenantConfigValue({
+  // setOwnerTenantConfigValue, so there is exactly one gate.
+  return setOwnerTenantConfigValue({
     tenantId: ctx.tenantId,
     key: key as ConfigKeyName,
     value,

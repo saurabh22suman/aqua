@@ -33,7 +33,7 @@ export const CONFIG_KEYS = {
     visibility: "owner_edit",
     risk: "safe",
     description:
-      "The share of a member's recorded marks that can be absences before the monthly low-attendance alert fires. 0-100.",
+      "Monthly attendance percentage below which the low-attendance alert fires (present and late marks divided by all marked sessions). At least four marks are required; 0-100.",
   },
   // 2026-09-14 — the GST rate, in basis points (1800 = 18%). Plan
   // prices are GST-exclusive; invoices apply this rate at issue and
@@ -75,7 +75,7 @@ export const CONFIG_KEYS = {
     visibility: "owner_read",
     risk: "sensitive",
     description:
-      "When on, staff see only the locations they are attached to. An access control inside one academy, not tenant isolation.",
+      "Legacy default for staff location scope. Explicit assignments always restrict access to assigned clubs, regardless of this setting; see account diagnostics for effective membership access.",
   },
   // U-07 — business hours. Stored on the config registry so the
   // location editor, the ops console and (later) public surfaces read
@@ -155,7 +155,7 @@ export const CONFIG_KEYS = {
     visibility: "ops_only",
     risk: "sensitive",
     description:
-      "Kill switch for the offline attendance queue. Ops only — a tenant must not be able to disable its own write path.",
+      "Reserved registry value; it is not used at runtime. Offline attendance instead requires the deployment flag and the tenant offline switch.",
   },
   // V-03 — how far ahead a facility booking may be made. Resolved
   // platform -> tenant -> location; the resolver refuses a start

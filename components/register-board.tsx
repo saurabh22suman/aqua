@@ -54,6 +54,7 @@ export function RegisterBoard({
     mark,
     markedCount,
     pending,
+    retryable = pending,
     online,
     savedAtLabel,
     hasActiveFailure,
@@ -61,6 +62,8 @@ export function RegisterBoard({
     retrySync,
     offlineAvailable,
     sessionEnded,
+    review = [],
+    discardReview,
   } = useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled, offlineIdentity);
 
   // C-D1 (2026-09-13 audit) — bulk marking for the common case where
@@ -128,7 +131,7 @@ export function RegisterBoard({
             className="mb-2 block w-full rounded-card border border-late bg-late-soft px-4 py-3 text-left"
           >
             <p className="text-[13px] font-semibold text-late">
-              Couldn&apos;t sync {pending === 1 ? "1 mark" : `${pending} marks`}.
+              {retryable > 0 ? `Couldn't sync ${retryable === 1 ? "1 mark" : `${retryable} marks`}.` : "Couldn't sync. Check the connection."}
             </p>
             <p className="mt-0.5 text-[12px] text-late">Tap to retry.</p>
           </button>
@@ -155,10 +158,17 @@ export function RegisterBoard({
               {pending === 1 ? "1 mark" : `${pending} marks`} saved locally.
             </p>
             <p className="mt-0.5 text-[12px] text-warn">
-              Will sync when you&apos;re online.
+              {retryable > 0 ? "Eligible marks will sync when you are online." : "Reconnect to check the register."} Unsynced marks are removed when offline access expires or you sign out.
             </p>
           </div>
         ) : null}
+
+        {online && pending > 0 ? <p className="mb-2 text-[12px] text-warn" role="status">
+          Unsynced marks are removed when offline access expires or you sign out. {retryable > 0 ? "Sync them before then." : "Review them before then."}
+        </p> : null}
+        {review.length > 0 ? <div role="alert" className="mb-2 rounded-card border border-warn bg-warn-soft px-4 py-3 text-sm text-ink">
+          {review.length} unsynced {review.length === 1 ? "mark needs" : "marks need"} review. Discard the affected mark and mark it again after checking the register.
+        </div> : null}
 
         <div className="rounded-card bg-water-soft px-4 py-3">
           <div className="flex items-baseline justify-between">
@@ -170,7 +180,10 @@ export function RegisterBoard({
                   {markedCount}
                 </span>{" "}
                 of {rows.length} marked
-                <CountChip count={markedCount} label="marked" />
+                {/* The marked count is stated ONCE, here. A second pill
+                    repeating the same number said it twice on one strip;
+                    the REMAINING state is the second fact worth showing,
+                    so only that one is a pill. */}
                 {unmarked.length > 0 ? (
                   <CountChip count={unmarked.length} label="left" tone="warn" />
                 ) : null}
@@ -188,6 +201,8 @@ export function RegisterBoard({
                 offlineSyncEnabled
                   ? saving > 0
                     ? "saving"
+                    : review.length > 0
+                      ? "review"
                     : !online
                       ? "offline"
                       : pending > 0
@@ -210,14 +225,16 @@ export function RegisterBoard({
                 // docs/architecture.md §12.1.
                 saving > 0 ? (
                   "saving…"
+                ) : review.length > 0 ? (
+                  `${pending} pending · ${review.length} need review${retryable > 0 ? ` · ${retryable} pending sync` : ""}`
                 ) : !online ? (
-                  "offline — saved on device"
+                  pending > 0 ? "offline — saved on device" : "offline — no pending marks"
                 ) : pending > 0 ? (
                   `syncing ${pending}…`
                 ) : savedAtLabel ? (
                   `Saved at ${savedAtLabel}`
                 ) : (
-                  "Saved on this phone"
+                  "Loaded from server · no pending marks"
                 )
               ) : !online ? (
                 "offline — can't save"
@@ -337,6 +354,9 @@ export function RegisterBoard({
                 })}
               </div>
             </div>
+            {review.filter(entry => entry.memberId === r.memberId).map(entry => <div key={entry.clientId} className="text-sm text-ink-2">
+              This mark needs review. <button type="button" className="min-h-11 underline" onClick={() => void discardReview(entry.clientId)}>Discard unsynced mark</button>
+            </div>)}
           </li>
           ))
         )}

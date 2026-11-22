@@ -6,7 +6,7 @@ import { invoices } from "@/db/schema/invoices";
 import { cashCounts } from "@/db/schema/cash-counts";
 import { tenants } from "@/db/schema/tenants";
 import { locations } from "@/db/schema/locations";
-import { auditLog } from "@/db/schema/audit";
+import { writeAudit } from "@/lib/audit/write";
 import {
   userLabel,
   userRoleNameFor,
@@ -18,7 +18,7 @@ import {
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { dayRangeUtc } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { toSafePaise, sumPaise } from "@/lib/money/safe-paise";
 
 // C-34 — the daily collection report and the cash count confirmation.
@@ -310,7 +310,7 @@ const CASH_COUNT_OVER_THRESHOLD_ACTION = "cash_count.confirm_over_threshold";
 // resolution (requireDefaultCtx() already carries `permissions`) and
 // this service reads it off an optional field, rather than
 // re-deriving it — the resolution itself happens exactly once.
-export type ConfirmCashCountCtx = ActionCtx & { permissions?: Set<string> };
+export type ConfirmCashCountCtx = MutationActor & { permissions?: Set<string> };
 
 export async function confirmCashCount(
   ctx: ConfirmCashCountCtx,
@@ -455,7 +455,10 @@ export async function confirmCashCount(
       throw err;
     }
 
-    await tx.insert(auditLog).values({
+    // E-01 — the one audit writer: the cash-count close carries the
+    // request id, so the counter action can be joined to the request
+    // that caused it (architecture §8.11).
+    await writeAudit(tx, {
       tenantId: ctx.tenantId,
       actorId,
       action,
@@ -470,6 +473,7 @@ export async function confirmCashCount(
         needsReview,
         note: note ?? null,
       },
+      requestId: ctx.requestId ?? null,
     });
 
     return { ok: true, variancePaise, systemPaise, needsReview };

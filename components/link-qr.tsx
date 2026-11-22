@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // QR for a minted login/reset link (2026-09-11 auth feature).
 //
@@ -12,23 +12,47 @@ import { useEffect, useState } from "react";
 export function LinkQr({
   url,
   size = 180,
+  onError,
 }: {
   url: string;
   size?: number;
+  onError?: () => void;
 }) {
-  const [svg, setSvg] = useState<string | null>(null);
+  const [rendered, setRendered] = useState<{
+    url: string;
+    size: number;
+    svg: string;
+  } | null>(null);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     let cancelled = false;
+    // A URL change starts from the placeholder. The previous SVG must not
+    // remain scannable beside a new amount/payee while the new one encodes.
+    setRendered(null);
     void (async () => {
       const { toString } = await import("qrcode");
       const out = await toString(url, { type: "svg", margin: 1, width: size });
-      if (!cancelled) setSvg(out);
-    })();
+      if (!cancelled) setRendered({ url, size, svg: out });
+    })().catch(() => {
+      if (!cancelled) {
+        setRendered(null);
+        onErrorRef.current?.();
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, [url, size]);
+
+  const svg =
+    rendered && rendered.url === url && rendered.size === size
+      ? rendered.svg
+      : null;
 
   if (svg === null) {
     return (

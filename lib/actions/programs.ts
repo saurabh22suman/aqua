@@ -13,6 +13,7 @@ import {
 } from "@/lib/schemas";
 import {
   createBatch,
+  BatchLocationNotFoundError,
   createProgram,
   deleteBatch,
   deleteProgram,
@@ -85,8 +86,15 @@ export async function createBatchAction(raw: {
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "programs.write");
 
-  const batch = await createBatch(ctx, input);
-  return { ok: true, batch };
+  try {
+    const batch = await createBatch(ctx, input);
+    return { ok: true, batch };
+  } catch (error) {
+    if (error instanceof BatchLocationNotFoundError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 }
 
 export async function deleteBatchAction(

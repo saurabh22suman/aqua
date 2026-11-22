@@ -27,8 +27,9 @@ import type { MemberId, TenantId } from "@/lib/ids";
 // and 20260918141000_v03_booking_pricing; this is the typed access
 // layer the booking services consume.
 //
-// The overlap guarantee is the database's `bookings_no_overlap_excl`
-// EXCLUDE constraint (btree_gist), deliberately NOT modelled here:
+// The overlap guarantee is the database's `bookings_whole_child_no_overlap_excl`
+// EXCLUDE constraint, deliberately NOT modelled here: its UUID range
+// is unbounded for whole facilities and a singleton for each child.
 // the insert either succeeds or raises SQLSTATE 23P01, and
 // lib/services/bookings.ts maps that to the friendly refusal. A
 // check-then-insert in this layer would be the exact failure the

@@ -1,34 +1,55 @@
-import Link from "next/link";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerCreateAction } from "@/components/owner-ui/owner-create-action";
 import { listInvitationsAction } from "@/lib/actions/staff-invitations";
 import { InvitationsBoard } from "@/components/invitations-board";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
-// Phase 3.6 — staff invitations surface. List + revoke + login-link
-// issue. The "accept" step is the invitee opening the login link the
-// owner shares with them -- that flips status 'invited' to 'active'
-// inside the redeem (no separate UI on this side, no OTP involved
-// until a delivery channel exists).
+// Owner OpenPen management lane (29 October 2026).
+//
+// Staff access is separate from the directory: a person can hold a
+// record without a login, and an invite carries an explicit role and
+// location scope. Creating or sharing a link is not proof it was
+// delivered; revocation has its own confirmation.
 export default async function StaffInvitationsPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "staff.invite");
+  await requireLiveOwnerSettingsPage(ctx);
   const rows = await listInvitationsAction();
   return (
-    <main className="px-5 pt-6 pb-8">
-      <div className="flex items-center justify-between gap-3 pb-4">
-        <h1 className="font-display text-[19px] font-semibold">Invitations</h1>
-        <Link
-          href="/owner/staff/invitations/new"
-          className="rounded-pill px-4 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)]"
-        >
-          Invite staff
-        </Link>
-      </div>
-      <p className="text-[13px] text-ink-3">
-        Pending and active staff. Revoke an active row to remove the person from the academy.
+    <OwnerPage>
+      <PageHeader
+        title="Invitations"
+        purpose="Pending and active logins. Revoking an active row removes that person's access to the academy."
+        action={
+          // The SAME shared create action as Staff and Members: one
+          // accessible "Invite staff" action, floating on a phone and
+          // labelled on a desktop. The page already requires staff.invite.
+          <OwnerCreateAction
+            href="/owner/staff/invitations/new"
+            label="Invite staff"
+            testId="staff-invite-action"
+          />
+        }
+      />
+
+      {/* ONE visible heading: the page title already names this page, so
+          the card carries no second "Invitations" heading. The label
+          keeps the section named for a screen reader. */}
+      <section
+        aria-label="Invitations"
+        className="mt-5 rounded-card border border-line bg-paper p-5"
+      >
+        <div className="mt-2">
+          <InvitationsBoard rows={rows} />
+        </div>
+      </section>
+
+      <p className="mt-4 border-l-[3px] border-[var(--accent)] bg-deck px-4 py-3 text-[12.5px] text-ink-2">
+        Creating or sharing a login link is not proof it was delivered.
+        Revocation uses a separate confirmation.
       </p>
-      <div className="mt-5">
-        <InvitationsBoard rows={rows} />
-      </div>
-    </main>
+    </OwnerPage>
   );
 }

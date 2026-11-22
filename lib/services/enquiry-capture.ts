@@ -2,7 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { enquiries, type EnquirySource } from "@/db/schema/enquiries";
 import { locations } from "@/db/schema/locations";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import {
   locationVisible,
   resolveLocationAccess,
@@ -31,7 +31,7 @@ import { auditEnquiryCreated } from "@/lib/services/enquiry-audit";
 // An omitted site from an internal caller stores NULL, which the
 // visibility predicate treats as management-review-only.
 export async function createEnquiry(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { fullName: string; phone?: string; source: EnquirySource; notes?: string; locationId?: string },
 ): Promise<EnquiryRow> {
   return withTenant(ctx.tenantId, async (tx) => {

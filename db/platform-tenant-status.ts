@@ -2,7 +2,8 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withPlatformAdmin } from "./scope";
 import { tenants } from "./schema/tenants";
-import { recordOpsAudit } from "./ops-action";
+import { currentOpsActorId, currentOpsScope, currentOpsTenantId, recordOpsAudit } from "./ops-action";
+import { actorIsActiveAdmin } from "./platform-tenant-commercial";
 import type { TenantId, UserId } from "@/lib/ids";
 
 // Phase 1.6 — platform-side tenant status transition. Sibling of
@@ -53,7 +54,8 @@ export type TransitionResult =
         | "tenant_not_found"
         | "terminal_state"
         | "no_change"
-        | "reason_required";
+        | "reason_required"
+        | "denied";
       message: string;
     };
 
@@ -98,6 +100,11 @@ export async function transitionTenantStatus(
   }
   const input = parsed.data;
 
+  const scope = currentOpsScope();
+  if (scope !== null && (scope !== actionFor(input.targetStatus) || currentOpsActorId() !== ctx.actorId || currentOpsTenantId() !== tenantId)) {
+    return { kind: "error", code: "denied", message: "This status change is not authorized." };
+  }
+
   if (reasonRequiredForTarget(input.targetStatus) && !input.reason) {
     // Pre-check before the transaction so the caller sees the
     // structured error immediately. The transactional path
@@ -127,6 +134,11 @@ export async function transitionTenantStatus(
         code: "tenant_not_found",
         message: "Tenant not found.",
       };
+    }
+    // Lock the current account after acquiring the tenant lock. A demotion
+    // that committed while this transaction waited must be observed here.
+    if (!await actorIsActiveAdmin(tx, ctx.actorId)) {
+      return { kind: "error", code: "denied", message: "This status change is not authorized." };
     }
     const from = read.status;
     const to = input.targetStatus;

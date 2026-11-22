@@ -1,5 +1,5 @@
 import type { TenantTx } from "@/db/tenant";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { writeAudit } from "@/lib/audit/write";
 
 // The enquiry family's audit contract (docs/architecture.md §8.10:
@@ -44,7 +44,7 @@ function changedFieldsOf(
 
 export async function auditEnquiryCreated(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   enquiry: { id: string; source: string; stage: string; locationId: string | null },
 ): Promise<void> {
   await writeAudit(tx, {
@@ -59,7 +59,7 @@ export async function auditEnquiryCreated(
 
 export async function auditEnquiryStageChanged(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   enquiry: { id: string; fromStage: string; toStage: string },
 ): Promise<void> {
   const before = { stage: enquiry.fromStage };
@@ -78,7 +78,7 @@ export async function auditEnquiryStageChanged(
 
 export async function auditFollowUpCreated(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   followUp: { id: string; enquiryId: string; dueAt: Date },
 ): Promise<void> {
   await writeAudit(tx, {
@@ -93,7 +93,7 @@ export async function auditFollowUpCreated(
 
 export async function auditFollowUpCompleted(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   followUp: { id: string; enquiryId: string; doneAt: Date },
 ): Promise<void> {
   const before = { doneAt: null as string | null };
@@ -139,7 +139,7 @@ export function enquiryAuditState(enquiry: EnquiryAuditState): EnquiryAuditState
 // what happened to the ENQUIRY, and never repeats them.
 export async function auditEnquiryStateChanged(
   tx: TenantTx,
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: {
     action: "enquiry.trial_book" | "enquiry.convert";
     id: string;

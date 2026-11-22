@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
-import { asTenantId } from "@/lib/ids";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asTenantId, asUserId } from "@/lib/ids";
 import { getMoneyAnalytics } from "@/lib/services/owner-analytics";
 
 // U-01 / PR1-C1 — money analytics used to throw Postgres 42803
@@ -28,7 +29,8 @@ const subscriptionId = uuidv7();
 const invoiceId = uuidv7();
 const otherInvoiceId = uuidv7();
 
-const ctx = { tenantId };
+const actorId = asUserId(uuidv7());
+const ctx = { tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] };
 
 beforeAll(async () => {
   await admin.query(
@@ -37,6 +39,9 @@ beforeAll(async () => {
        ($4, $5, 'Analytics Other', $3)`,
     [tenantId, `analytics-${RUN}`, TZ, otherTenantId, `analytics-other-${RUN}`],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await admin.query(
     `insert into locations (id, tenant_id, name, is_primary) values
        ($1, $2, 'Main', true),
@@ -127,9 +132,13 @@ afterAll(async () => {
     await admin.query("delete from persons where tenant_id = $1", [tenant]);
     await admin.query("delete from locations where tenant_id = $1", [tenant]);
   }
+  await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+  await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+  await admin.query("delete from roles where tenant_id=$1", [tenantId]);
   await admin.query("delete from tenants where id = any($1::uuid[])", [
     [tenantId, otherTenantId],
   ]);
+  await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   await admin.end();
 });
 

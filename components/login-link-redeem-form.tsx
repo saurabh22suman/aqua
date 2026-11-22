@@ -42,6 +42,7 @@ export function LoginLinkRedeemForm({
   const [error, setError] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [confirmPin, setConfirmPin] = useState("");
+  const [pinRevealed, setPinRevealed] = useState(false);
 
   const isReset = purpose === "reset";
   const setPinMode = !credentialSet || isReset;
@@ -108,6 +109,8 @@ export function LoginLinkRedeemForm({
           <label className="mt-5 block">
             <span className="block text-[13px] font-medium text-ink-2">PIN</span>
             <input
+              id="staff-invitation-pin"
+              type={pinRevealed ? "text" : "password"}
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
               inputMode="numeric"
@@ -118,9 +121,19 @@ export function LoginLinkRedeemForm({
               className="mt-1 w-full h-14 px-4 rounded-ctl bg-paper border border-line text-[20px] font-display tracking-[0.3em]"
             />
           </label>
+          <button
+            type="button"
+            aria-controls="staff-invitation-pin"
+            aria-pressed={pinRevealed}
+            onClick={() => setPinRevealed((revealed) => !revealed)}
+            className="min-h-11 text-[13px] text-ink underline"
+          >
+            {pinRevealed ? "Hide PIN" : "Show PIN"}
+          </button>
           <label className="mt-4 block">
             <span className="block text-[13px] font-medium text-ink-2">Confirm PIN</span>
             <input
+              type="password"
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ""))}
               inputMode="numeric"

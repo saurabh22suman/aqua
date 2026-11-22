@@ -31,7 +31,12 @@ export async function getOperationalAnalyticsAction(
   const locationId = facilitySchema.parse(facility);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.operational");
-  return getOperationalAnalytics({ tenantId: ctx.tenantId }, period, { locationId });
+  // The FULL authenticated ctx: the service resolves the caller's
+  // location access from it (O-08). A narrowed `{ tenantId }` literal
+  // here would drop the boundary before the service could apply it —
+  // the same A07/A01 failure class the attendance report's adapter
+  // documents.
+  return getOperationalAnalytics(ctx, period, { locationId });
 }
 
 export async function getMoneyAnalyticsAction(
@@ -42,5 +47,5 @@ export async function getMoneyAnalyticsAction(
   const locationId = facilitySchema.parse(facility);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "reports.financial");
-  return getMoneyAnalytics({ tenantId: ctx.tenantId }, period, { locationId });
+  return getMoneyAnalytics(ctx, period, { locationId });
 }

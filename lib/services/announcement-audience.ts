@@ -1,13 +1,20 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, exists, isNull, notExists } from "drizzle-orm";
 import type { TenantTx } from "@/db/tenant";
 import type { AnnouncementAudience } from "@/db/schema/announcements";
 import { members } from "@/db/schema/people";
 import { users } from "@/db/schema/users";
 import { tenantMemberships } from "@/db/schema/memberships";
+import { roles } from "@/db/schema/roles";
 import { guardianships } from "@/db/schema/consent";
 import { enrolments } from "@/db/schema/scheduling";
 import type { ActionCtx } from "@/lib/auth/context";
 import type { UserId } from "@/lib/ids";
+import { guardianChildLinks, memberAccountLinks } from "@/db/schema/member-self";
+import { readSelfServiceAccountInTx } from "@/db/self-service-account";
+import { authorizeBoundLinks } from "@/lib/services/self-service-session";
+import { staffAudienceCandidates } from "@/lib/messaging/notification-enqueue";
+import { batches } from "@/db/schema/programs";
+import { staff as staffTable } from "@/db/schema/staff";
 
 // U-06 — audience resolution for the announcement fan-out, split out
 // of announcements.ts to keep both files inside the line budget.
@@ -36,6 +43,8 @@ export async function resolveAudienceUserIds(
     const staff = await tx
       .selectDistinct({ userId: tenantMemberships.userId })
       .from(tenantMemberships)
+      .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, tenantId), isNull(roles.deletedAt)))
+      .innerJoin(users, and(eq(users.id, tenantMemberships.userId), isNull(users.deletedAt)))
       .where(
         and(
           eq(tenantMemberships.tenantId, tenantId),
@@ -45,8 +54,26 @@ export async function resolveAudienceUserIds(
       );
     for (const row of staff) ids.add(row.userId);
   }
+  if (audience === "batch" && batchId) {
+    const [batch] = await tx.select({ locationId: batches.locationId, coachUserId: staffTable.userId }).from(batches)
+      .leftJoin(staffTable, and(eq(staffTable.id, batches.coachId), eq(staffTable.tenantId, tenantId), isNull(staffTable.deletedAt)))
+      .where(and(eq(batches.id, batchId), eq(batches.tenantId, tenantId), isNull(batches.deletedAt))).limit(1);
+    if (batch) for (const row of await staffAudienceCandidates(tx, { tenantId }, { locationId: batch.locationId, coachUserId: batch.coachUserId, batchId })) ids.add(row.userId);
+  }
 
   if (audience === "all" || audience === "batch") {
+    {
+      const linked = await tx.select({ linkId: memberAccountLinks.id, userId: memberAccountLinks.userId, memberId: members.id })
+        .from(memberAccountLinks).innerJoin(members, and(eq(members.id, memberAccountLinks.memberId), eq(members.tenantId, tenantId)))
+        .where(and(eq(memberAccountLinks.tenantId, tenantId), eq(memberAccountLinks.status, "active"), isNull(memberAccountLinks.revokedAt), eq(members.status, "active"), isNull(members.deletedAt),
+          audience === "batch" ? exists(tx.select({ id: enrolments.id }).from(enrolments).where(and(eq(enrolments.tenantId, tenantId), eq(enrolments.memberId, members.id), eq(enrolments.batchId, batchId!)))) : undefined));
+      for (const row of linked) {
+        const account = await readSelfServiceAccountInTx(tx, { tenantId, userId: row.userId });
+        if (!account) continue;
+        const authorized = await authorizeBoundLinks(tx, { tenantId, userId: row.userId, audience: "member", linkIds: [row.linkId], accountPhone: account.phone, subjectId: row.memberId });
+        if (authorized.ok) ids.add(row.userId);
+      }
+    }
     // The members themselves (active for `all`, enrolled for `batch`)
     // when they have a linked user account.
     const memberRows =
@@ -67,6 +94,9 @@ export async function resolveAudienceUserIds(
                 eq(enrolments.tenantId, tenantId),
                 eq(enrolments.batchId, batchId!),
                 isNull(members.deletedAt),
+                notExists(tx.select({ id: memberAccountLinks.id }).from(memberAccountLinks).where(and(
+                  eq(memberAccountLinks.tenantId, tenantId), eq(memberAccountLinks.userId, users.id), eq(memberAccountLinks.memberId, members.id),
+                ))),
               ),
             )
         : await tx
@@ -78,16 +108,32 @@ export async function resolveAudienceUserIds(
                 eq(members.tenantId, tenantId),
                 eq(members.status, "active"),
                 isNull(members.deletedAt),
+                notExists(tx.select({ id: memberAccountLinks.id }).from(memberAccountLinks).where(and(
+                  eq(memberAccountLinks.tenantId, tenantId), eq(memberAccountLinks.userId, users.id), eq(memberAccountLinks.memberId, members.id),
+                ))),
               ),
             );
     for (const row of memberRows) ids.add(row.userId);
   }
 
   if (audience === "all" || audience === "batch" || audience === "parents") {
+    {
+      const linked = await tx.select({ linkId: guardianChildLinks.id, userId: guardianChildLinks.userId })
+        .from(guardianChildLinks).innerJoin(members, and(eq(members.id, guardianChildLinks.memberId), eq(members.tenantId, tenantId)))
+        .where(and(eq(guardianChildLinks.tenantId, tenantId), eq(guardianChildLinks.status, "active"), isNull(guardianChildLinks.revokedAt), eq(members.status, "active"), isNull(members.deletedAt),
+          audience === "batch" ? exists(tx.select({ id: enrolments.id }).from(enrolments).where(and(eq(enrolments.tenantId, tenantId), eq(enrolments.memberId, members.id), eq(enrolments.batchId, batchId!)))) : undefined));
+      for (const row of linked) {
+        const account = await readSelfServiceAccountInTx(tx, { tenantId, userId: row.userId });
+        if (!account) continue;
+        const authorized = await authorizeBoundLinks(tx, { tenantId, userId: row.userId, audience: "guardian", linkIds: [row.linkId], accountPhone: account.phone });
+        if (authorized.ok) ids.add(row.userId);
+      }
+    }
     for (const row of await guardianUserRows(
       tx,
       tenantId,
       audience === "batch" ? batchId : undefined,
+      true,
     )) {
       ids.add(row.userId);
     }
@@ -102,6 +148,7 @@ async function guardianUserRows(
   tx: TenantTx,
   tenantId: ActionCtx["tenantId"],
   batchId?: string,
+  checkExplicitLinks = false,
 ): Promise<Array<{ userId: UserId }>> {
   const base = tx
     .selectDistinct({ userId: users.id })
@@ -130,6 +177,10 @@ async function guardianUserRows(
           eq(guardianships.tenantId, tenantId),
           isNull(guardianships.deletedAt),
           isNull(members.deletedAt),
+          checkExplicitLinks ? notExists(tx.select({ id: guardianChildLinks.id }).from(guardianChildLinks).where(and(
+            eq(guardianChildLinks.tenantId, tenantId), eq(guardianChildLinks.userId, users.id),
+            eq(guardianChildLinks.guardianshipId, guardianships.id),
+          ))) : undefined,
         ),
       );
   }
@@ -140,6 +191,10 @@ async function guardianUserRows(
       isNull(guardianships.deletedAt),
       eq(members.status, "active"),
       isNull(members.deletedAt),
+      checkExplicitLinks ? notExists(tx.select({ id: guardianChildLinks.id }).from(guardianChildLinks).where(and(
+        eq(guardianChildLinks.tenantId, tenantId), eq(guardianChildLinks.userId, users.id),
+        eq(guardianChildLinks.guardianshipId, guardianships.id),
+      ))) : undefined,
     ),
   );
 }

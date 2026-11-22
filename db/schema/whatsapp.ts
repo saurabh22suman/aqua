@@ -34,6 +34,18 @@ export const whatsappNotificationOutbox = pgTable("whatsapp_notification_outbox"
   status: text("status").notNull().default("pending"),
   attempts: integer("attempts").notNull().default(0),
   error: text("error"),
+  // F08 (composed, rev 3) — the durable claim. "sending" means a
+  // dispatcher claimed the row; "unknown" means the outcome was never
+  // recorded, so the message may or may not have been delivered. See the
+  // migration db/migrations/20261030062319_whatsapp_outbox_claim_state.sql.
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  providerMessageId: text("provider_message_id"),
+  // The per-claim FENCE TOKEN. The attempt counter is not unique per
+  // claim (a resend resets it), so the finalise matches on this token.
+  claimToken: uuid("claim_token"),
+  // The CLASSIFIED reason. It is what the platform read shows, so the
+  // raw provider text never leaves the tenant boundary.
+  failureReason: text("failure_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   sentAt: timestamp("sent_at", { withTimezone: true }),
 });

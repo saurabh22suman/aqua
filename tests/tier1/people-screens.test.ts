@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { locations } from "@/db/schema";
 import { createMember } from "@/lib/services/register";
@@ -27,6 +29,8 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "receptionist", allLocations: true, locationIds: [] as string[] });
 let locationId = "";
 let otherLocationId = "";
 
@@ -39,6 +43,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'People Screens', $3, $4)",
     [tenantId, `people-screens-${RUN}`, plan.rows[0]?.id ?? null, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='receptionist'", [uuidv7(), tenantId, actorId]);
+
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -61,14 +70,18 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
 
 async function newAdultMember(label: string, phone?: string) {
   const created = await createMember(
-    { tenantId, userId: undefined },
+    actor(),
     {
       fullName: `Screen Subject ${label}`,
       phone,
@@ -87,19 +100,19 @@ async function newAdultMember(label: string, phone?: string) {
 describe("listMembers — search and filters", () => {
   it("finds a member by a phone substring", async () => {
     await newAdultMember("phone-search", "9876500001");
-    const rows = await listMembers({ tenantId, userId: undefined }, { search: "765000" });
+    const rows = await listMembers(actor(), { search: "765000" });
     expect(rows.some((r) => r.phone === "9876500001")).toBe(true);
   });
 
   it("finds a member by a name substring, case-insensitively", async () => {
     await newAdultMember("Findable-Name");
-    const rows = await listMembers({ tenantId, userId: undefined }, { search: "findable-name" });
+    const rows = await listMembers(actor(), { search: "findable-name" });
     expect(rows.some((r) => r.fullName.includes("Findable-Name"))).toBe(true);
   });
 
   it("filters by location", async () => {
     const created = await createMember(
-      { tenantId, userId: undefined },
+      actor(),
       {
         fullName: "Annex Member",
         dateOfBirth: "1990-01-01",
@@ -112,14 +125,14 @@ describe("listMembers — search and filters", () => {
     );
     if (!created.ok) throw new Error("fixture failed");
 
-    const rows = await listMembers({ tenantId, userId: undefined }, { locationId: otherLocationId });
+    const rows = await listMembers(actor(), { locationId: otherLocationId });
     expect(rows.every((r) => r.locationId === otherLocationId)).toBe(true);
     expect(rows.some((r) => r.memberId === created.memberId)).toBe(true);
   });
 
   it("filters by status", async () => {
     const active = await newAdultMember("status-filter-active");
-    const rows = await listMembers({ tenantId, userId: undefined }, { status: "active" });
+    const rows = await listMembers(actor(), { status: "active" });
     expect(rows.some((r) => r.memberId === active.memberId)).toBe(true);
     expect(rows.every((r) => r.status === "active")).toBe(true);
   });
@@ -135,11 +148,11 @@ describe("a null date of birth on a legacy row doesn't crash reads", () => {
     const created = await newAdultMember("null-dob");
     await admin.query("update persons set date_of_birth = null where id = $1", [created.personId]);
 
-    const rows = await listMembers({ tenantId, userId: undefined }, {});
+    const rows = await listMembers(actor(), {});
     const row = rows.find((r) => r.memberId === created.memberId);
     expect(row?.isMinor).toBe(false);
 
-    const detail = await getMemberDetail({ tenantId, userId: undefined }, created.memberId);
+    const detail = await getMemberDetail(actor(), created.memberId);
     expect(detail?.isMinor).toBe(false);
     expect(detail?.dateOfBirth).toBeNull();
   });
@@ -147,13 +160,13 @@ describe("a null date of birth on a legacy row doesn't crash reads", () => {
 
 describe("getMemberDetail", () => {
   it("returns null for a member outside the tenant (or nonexistent)", async () => {
-    const detail = await getMemberDetail({ tenantId, userId: undefined }, uuidv7());
+    const detail = await getMemberDetail(actor(), uuidv7());
     expect(detail).toBeNull();
   });
 
   it("assembles person, guardian, consents and status history for a minor", async () => {
     const created = await createMember(
-      { tenantId, userId: undefined },
+      actor(),
       {
         fullName: "Detail Minor",
         dateOfBirth: "2015-01-01",
@@ -167,7 +180,7 @@ describe("getMemberDetail", () => {
     );
     if (!created.ok) throw new Error("fixture failed: " + created.error);
 
-    const detail = await getMemberDetail({ tenantId, userId: undefined }, created.memberId);
+    const detail = await getMemberDetail(actor(), created.memberId);
     expect(detail).not.toBeNull();
     expect(detail!.isMinor).toBe(true);
     expect(detail!.guardians).toHaveLength(1);
@@ -181,7 +194,7 @@ describe("getMemberDetail", () => {
 describe("updateMember", () => {
   it("edits person and location fields", async () => {
     const created = await newAdultMember("editable");
-    const result = await updateMember({ tenantId, userId: undefined }, created.memberId, {
+    const result = await updateMember(actor(), created.memberId, {
       fullName: "Renamed Subject",
       phone: "9876500003",
       dateOfBirth: "1991-02-02",
@@ -189,7 +202,7 @@ describe("updateMember", () => {
     });
     expect(result.ok).toBe(true);
 
-    const detail = await getMemberDetail({ tenantId, userId: undefined }, created.memberId);
+    const detail = await getMemberDetail(actor(), created.memberId);
     expect(detail!.fullName).toBe("Renamed Subject");
     expect(detail!.phone).toBe("9876500003");
     expect(detail!.locationId).toBe(otherLocationId);
@@ -199,7 +212,7 @@ describe("updateMember", () => {
 describe("searchPersons — guardian resolution", () => {
   it("excludes minors from results", async () => {
     const minorCreated = await createMember(
-      { tenantId, userId: undefined },
+      actor(),
       {
         fullName: "Search Excluded Minor Unique",
         dateOfBirth: "2015-01-01",
@@ -213,22 +226,22 @@ describe("searchPersons — guardian resolution", () => {
     );
     if (!minorCreated.ok) throw new Error("fixture failed");
 
-    const results = await searchPersons({ tenantId, userId: undefined }, "Search Excluded Minor Unique");
+    const results = await searchPersons(actor(), "Search Excluded Minor Unique");
     expect(results).toHaveLength(0);
   });
 
   it("finds an existing adult by name for guardian linking", async () => {
     await newAdultMember("Guardian-Findable-Unique");
-    const results = await searchPersons({ tenantId, userId: undefined }, "Guardian-Findable-Unique");
+    const results = await searchPersons(actor(), "Guardian-Findable-Unique");
     expect(results.some((r) => r.fullName.includes("Guardian-Findable-Unique"))).toBe(true);
   });
 });
 
 describe("nextMemberCode", () => {
   it("generates sequential, prefixed codes", async () => {
-    const first = await nextMemberCode({ tenantId, userId: undefined }, "SEQ");
+    const first = await nextMemberCode(actor(), "SEQ");
     await createMember(
-      { tenantId, userId: undefined },
+      actor(),
       {
         fullName: "Seq Subject",
         dateOfBirth: "1990-01-01",
@@ -239,7 +252,7 @@ describe("nextMemberCode", () => {
         ],
       },
     );
-    const second = await nextMemberCode({ tenantId, userId: undefined }, "SEQ");
+    const second = await nextMemberCode(actor(), "SEQ");
     expect(second).not.toBe(first);
   });
 });

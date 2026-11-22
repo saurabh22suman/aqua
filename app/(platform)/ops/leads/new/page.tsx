@@ -1,25 +1,30 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { NewLeadForm } from "./new-lead-form";
+import { OpsPage, OpsPageHeader } from "@/components/ops/ops-primitives";
+import { OpsWriteGate } from "@/components/ops/ops-display";
 
+// Ops redesign (28 October 2026): the breadcrumb is the page frame's
+// eyebrow, and the form is the shared card + shared controls.
 export default async function NewLeadPage() {
   const status = await platformAuthStatusAction();
   if (status.kind !== "authenticated") redirect("/ops/login");
+  const canWrite = status.role === "admin";
 
   return (
-    <div className="max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link href="/ops/leads" className="hover:text-ink underline-offset-2 hover:underline">
-          Leads
-        </Link>
-        {" / "}
-        new
-      </p>
-      <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
-        New lead
-      </h1>
-      <NewLeadForm />
-    </div>
+    <OpsPage className="max-w-[760px]">
+      <OpsPageHeader eyebrow="Leads / new" title="New lead" />
+      <OpsWriteGate
+        canWrite={canWrite}
+        note={
+          <>
+            Read-only: this account can browse, not change, platform data. An
+            administrator captures a lead.
+          </>
+        }
+      >
+        <NewLeadForm />
+      </OpsWriteGate>
+    </OpsPage>
   );
 }

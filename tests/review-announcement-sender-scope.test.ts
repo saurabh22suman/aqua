@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // Regression evidence for docs/audits/2026-10-09-role-content-permission-audit.md
 // R03 (reception has tenant-wide announcement authority). The service
@@ -17,7 +17,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 // keep the current behaviour. Refusals must happen before any write,
 // so no announcement, audit or outbox row is left behind.
 
-type ReviewCtx = ActionCtx & { permissions: Set<string> };
+type ReviewCtx = MutationActor & { permissions: Set<string> };
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;
@@ -110,6 +110,7 @@ beforeAll(async () => {
        ($2,$3,'receptionist','Receptionist','/reception',3)`,
     [ownerRoleId, receptionRoleId, tenantId],
   );
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'messaging.send'),($1,$2,'settings.manage'),($1,$3,'messaging.send')", [tenantId, ownerRoleId, receptionRoleId]);
   const ownerMembership = randomUUID();
   const receptionMembership = randomUUID();
   await admin.query(

@@ -1,8 +1,9 @@
 import { Skeleton } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 export default function Loading() {
   return (
-    <main className="px-5 pt-10 pb-8">
+    <OwnerPage>
       <Skeleton w={18} h={4} />
       <Skeleton w={28} h={6} className="mt-3" />
       <Skeleton w={56} h={3} className="mt-3" />
@@ -11,6 +12,6 @@ export default function Loading() {
         <Skeleton w={60} h={3} className="mt-3" />
         <Skeleton w={52} h={3} className="mt-2" />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

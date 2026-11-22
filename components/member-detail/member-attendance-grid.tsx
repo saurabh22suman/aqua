@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import {
   ATTENDANCE_GRID_DAYS,
   gridDays,
@@ -17,7 +17,7 @@ import {
 import { formatDateIST, formatTimeIST } from "@/lib/time/tz";
 
 // Member attendance (2026-09-15 redesign) — a 15-day, 5×3 scan grid.
-// Green present, yellow late, red absent, neutral no session; today
+// Green present, yellow late, red absent, neutral no record; today
 // carries the accent outline. Tapping a day opens its session detail
 // below. The grid is deliberately read-only: coaches and staff mark
 // from the register (attendance.mark), and the owner/member/parent
@@ -43,7 +43,7 @@ const STATUS_LABEL: Record<AttendanceDay["status"], string> = {
   present: "Present",
   late: "Late",
   absent: "Absent",
-  none: "No session",
+  none: "No record",
 };
 
 function weekdayShort(dateIso: string): string {
@@ -61,6 +61,7 @@ export function MemberAttendanceGrid({
   today,
   scopeNote,
   registerBasePath,
+  ownerCard = false,
 }: {
   rows: AttendanceGridRow[];
   // Tenant-local today (the server resolves it with todayInZone).
@@ -69,6 +70,7 @@ export function MemberAttendanceGrid({
   // Coaches get a jump into the session register to mark/edit; staff
   // hold attendance.mark too. Owner and parent surfaces omit it.
   registerBasePath?: string;
+  ownerCard?: boolean;
 }) {
   const days = gridDays(rows, today, ATTENDANCE_GRID_DAYS);
   const summary = summarise(days.flatMap((day) => day.rows));
@@ -76,20 +78,30 @@ export function MemberAttendanceGrid({
   const selectedDay = days.find((day) => day.date === selected) ?? null;
 
   return (
-    <div className="mt-2 rounded-card border border-line bg-paper p-3.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="font-display text-[24px] font-semibold">
-          {summary.pct === null ? "—" : `${summary.pct}%`}
-        </p>
-        <p className="text-right text-[12px] text-ink-3">
+    <div className={`border border-line bg-paper ${ownerCard ? "rounded-[18px] p-[18px] lg:p-5" : "mt-2 rounded-card p-3.5"}`}>
+      {ownerCard ? <h2 className="mb-4 font-display text-[18px] font-semibold text-ink">Attendance</h2> : null}
+      {ownerCard ? <div className="flex items-center gap-4">
+        <div className="relative grid h-[85px] w-[85px] shrink-0 place-items-center">
+          <svg viewBox="0 0 90 90" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+            <circle cx="45" cy="45" r="38" fill="none" stroke="var(--line)" strokeWidth="5" />
+            {summary.pct !== null ? <circle cx="45" cy="45" r="38" fill="none" className="stroke-good" strokeWidth="5" strokeLinecap="round" strokeDasharray={`${summary.pct * 2.3876} 238.76`} /> : null}
+          </svg>
+          <p className="font-display text-[21px] font-semibold">{summary.pct === null ? "—" : `${summary.pct}%`}</p>
+        </div>
+        <div><p className="text-[13px] text-ink">
           {summary.totalCount === 0
             ? "No sessions marked yet"
-            : `${summary.presentCount} of ${summary.totalCount} sessions attended`}
+            : `${summary.presentCount} of ${summary.totalCount} marked sessions attended`}
         </p>
-      </div>
-      <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        Last {ATTENDANCE_GRID_DAYS} days
-      </p>
+        <p className="mt-1 text-[12px] text-ink-3">Last {ATTENDANCE_GRID_DAYS} days</p>
+        <p className="text-[12px] text-ink-3">Unmarked sessions excluded</p></div>
+      </div> : <>
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="font-display text-[24px] font-semibold">{summary.pct === null ? "—" : `${summary.pct}%`}</p>
+          <p className="text-right text-[12px] text-ink-3">{summary.totalCount === 0 ? "No sessions marked yet" : `${summary.presentCount} of ${summary.totalCount} marked sessions attended`}</p>
+        </div>
+        <p className="mt-0.5 text-[11px] uppercase tracking-[0.14em] text-ink-3">Last {ATTENDANCE_GRID_DAYS} days</p>
+      </>}
 
       <div className="mt-2.5 grid grid-cols-5 gap-1.5">
         {days.map((day) => {
@@ -104,7 +116,7 @@ export function MemberAttendanceGrid({
               key={day.date}
               type="button"
               aria-label={`${formatDateIST(day.date)}, ${
-                day.status === "none" ? "no session" : day.status
+                day.status === "none" ? "no record" : day.status
               }${day.isToday ? ", today" : ""}`}
               aria-current={day.isToday ? "date" : undefined}
               onClick={() => setSelected(isSelected ? null : day.date)}
@@ -141,7 +153,7 @@ export function MemberAttendanceGrid({
           </p>
           {selectedDay.rows.length === 0 ? (
             <p className="mt-1 text-[12px] text-ink-3">
-              No session marked this day.
+              No attendance record for this day. A session may be unmarked.
             </p>
           ) : (
             <ul className="mt-1.5 space-y-1.5">

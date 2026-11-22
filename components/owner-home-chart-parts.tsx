@@ -8,31 +8,25 @@
 
 export function ChartComparison({
   label,
-  meaning,
   text,
-  previousLabel,
-  capNote,
 }: {
   label: string;
-  meaning: string;
   text: string;
-  previousLabel: string;
-  capNote: string | null;
 }) {
-  const expansion =
-    label === "DoD" ? "day over day" : label === "WoW" ? "week over week" : "month over month";
+  // A CONCISE change: which comparison, and what changed. The
+  // comparison's expansion ("the seven days before") and its exact
+  // instants have ONE owner — the range disclosure above the band — so
+  // they are not repeated beside every panel.
   return (
     <div
       className="max-w-[46ch] rounded-ctl bg-deck px-3 py-2"
-      title={meaning}
       data-testid="chart-comparison"
     >
       <p className="text-[12px] text-ink-2">
         <span className="font-medium">{label}</span>
-        <span className="text-ink-3"> · {expansion}</span> — {text}
+        {" — "}
+        {text}
       </p>
-      <p className="mt-0.5 text-[11.5px] text-ink-3">vs {previousLabel}</p>
-      {capNote ? <p className="mt-0.5 text-[11.5px] text-ink-3">{capNote}</p> : null}
     </div>
   );
 }

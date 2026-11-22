@@ -2,6 +2,7 @@ import { and, between, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { leaveRequests, leaveTypes } from "@/db/schema/leave";
+import { staff } from "@/db/schema/staff";
 import { writeAudit } from "@/lib/audit/write";
 import { ownStaffIdInTx } from "@/lib/services/staff-self";
 import {
@@ -11,7 +12,7 @@ import {
   type LeaveBalanceRow,
 } from "@/lib/services/leave-balances";
 import type { LeaveRequestRow } from "@/lib/services/leave-approval";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // V-26 — leave requests and the staff member's own view. Types live in
 // ./leave-types, balance maths in ./leave-balances, the owner queue and
@@ -45,7 +46,7 @@ function firstIssue(error: z.ZodError): string {
 }
 
 export async function requestLeave(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LeaveRequestResult> {
   const parsed = leaveRequestInput.safeParse(raw);
@@ -76,6 +77,22 @@ export async function requestLeave(
     if (!type) return { ok: false, error: "Leave type not found." };
 
     if (type.annualQuota !== null) {
+      // The quota check and the insert must not interleave: two
+      // concurrent requests would read the same balance, both pass and
+      // both insert. The lock is on the STAFF row — a stable parent
+      // that always exists for the caller; the leave rows themselves
+      // cannot be locked when the member has none yet.
+      await tx
+        .select({ id: staff.id })
+        .from(staff)
+        .where(
+          and(
+            eq(staff.id, staffId),
+            eq(staff.tenantId, ctx.tenantId),
+          ),
+        )
+        .for("update");
+
       const balances = await balancesInTx(tx, ctx.tenantId, staffId, year);
       const balance = balances.find((b) => b.leaveTypeId === type.id);
       const available = balance?.availableDays ?? type.annualQuota;
@@ -126,7 +143,7 @@ export async function requestLeave(
 }
 
 export async function cancelLeaveRequest(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   requestId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const parsed = uuid.safeParse(requestId);

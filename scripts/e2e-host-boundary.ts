@@ -55,6 +55,7 @@
 // exactly what the test asserts on.
 
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { e2eWebEnv } from "./lib/e2e-child-env";
 import { createServer } from "node:net";
 
 const PORT = 3222;
@@ -293,7 +294,7 @@ async function main(): Promise<void> {
   const server = spawn("pnpm", ["next", "dev", "-p", String(PORT), "-H", "::"], {
     stdio: "ignore",
     detached: true,
-    env: { ...process.env, OPS_HOST: PLATFORM_HOST },
+    env: e2eWebEnv({ ...process.env, OPS_HOST: PLATFORM_HOST }),
   });
   await waitForServer(server);
 

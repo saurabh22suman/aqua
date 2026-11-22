@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { hasPermission, requirePermission } from "@/lib/auth/permission";
 import { z } from "zod";
@@ -125,6 +127,10 @@ export async function createMemberAction(
         { ...input, memberCode, witnessedByUserId: ctx.userId },
       );
       if (!result.ok) return result;
+      for (const path of ["/owner/members", "/reception/members", "/owner", "/reception"]) {
+        try { revalidatePath(path); }
+        catch { console.error("Member creation succeeded; cache refresh failed."); }
+      }
       return { ok: true, memberId: result.memberId };
     } catch (err) {
       const message = duplicateCodeMessage(err) ?? "";

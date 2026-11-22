@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq, sql } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { persons, locations, programs, members, batches } from "@/db/schema";
 import { sessions } from "@/db/schema/scheduling";
@@ -21,7 +22,7 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const actorId: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 let programId = "";
@@ -32,6 +33,9 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Holiday Test', $3)",
     [tenantId, "holiday-" + RUN, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
   await withTenant(tenantId, async (tx) => {
     await tx.insert(locations).values({ tenantId, name: "Main", isPrimary: true });
     const [prog] = await tx
@@ -53,7 +57,11 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -68,7 +76,7 @@ beforeEach(async () => {
 describe("addHoliday / removeHoliday (Phase R.3)", () => {
   it("adds a one-off holiday", async () => {
     const result = await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Independence Day", holidayDate: "2027-08-15" },
     );
     expect(result.kind).toBe("ok");
@@ -76,12 +84,12 @@ describe("addHoliday / removeHoliday (Phase R.3)", () => {
 
   it("rejects a duplicate one-off holiday", async () => {
     const first = await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Diwali A", holidayDate: "2027-11-08" },
     );
     expect(first.kind).toBe("ok");
     const second = await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Diwali B", holidayDate: "2027-11-08" },
     );
     expect(second.kind).toBe("error");
@@ -92,11 +100,11 @@ describe("addHoliday / removeHoliday (Phase R.3)", () => {
 
   it("allows a recurring holiday to be added once per tenant per month-day", async () => {
     const a = await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Republic A", holidayDate: "2027-01-26", recurringYearly: true },
     );
     const b = await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Republic B", holidayDate: "2028-01-26", recurringYearly: true },
     );
     expect(a.kind).toBe("ok");
@@ -106,13 +114,13 @@ describe("addHoliday / removeHoliday (Phase R.3)", () => {
 
   it("removes a holiday", async () => {
     const add = await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Throwaway", holidayDate: "2027-09-09" },
     );
     expect(add.kind).toBe("ok");
     if (add.kind !== "ok") return;
     const remove = await removeHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { holidayId: add.holidayId },
     );
     expect(remove.kind).toBe("ok");
@@ -120,7 +128,7 @@ describe("addHoliday / removeHoliday (Phase R.3)", () => {
 
   it("rejects removing a non-existent holiday", async () => {
     const result = await removeHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { holidayId: uuidv7() },
     );
     expect(result.kind).toBe("error");
@@ -157,15 +165,15 @@ describe("isHoliday (Phase R.3)", () => {
 describe("listHolidaysInRange (Phase R.3)", () => {
   it("returns the active set for the tenant", async () => {
     await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "One-off", holidayDate: "2027-06-01" },
     );
     await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "Recurring", holidayDate: "2027-12-25", recurringYearly: true },
     );
     const result = await listHolidaysInRange(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       "2027-06-01",
       "2027-12-31",
     );
@@ -210,7 +218,7 @@ describe("session generator + holidays (Phase R.3)", () => {
     void weekday;
 
     await addHoliday(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: actorId },
       { name: "On that day", holidayDate: dateStr },
     );
 

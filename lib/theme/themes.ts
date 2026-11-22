@@ -3,7 +3,7 @@ import { z } from "zod";
 // UI foundation — the approved theme presets.
 //
 // The human decision (docs/design-system/README.md, "Approved direction")
-// is exactly TWO LIGHT presets: Mint Garden (default) and Lavender Club.
+// includes Mint Garden (default), Lavender Club and Slate & Amber dark.
 // One layout, typography, spacing and component behaviour across both.
 //
 // A preset is a personal display preference. It is NOT tenant branding
@@ -14,7 +14,7 @@ import { z } from "zod";
 // The stored value is always validated against this enum: a stale or
 // tampered value falls back to the default instead of reaching the DOM.
 
-export const THEME_IDS = ["mint", "lavender"] as const;
+export const THEME_IDS = ["mint", "lavender", "dark"] as const;
 
 export const themeIdSchema = z.enum(THEME_IDS);
 
@@ -40,6 +40,11 @@ export const THEMES: Record<ThemeId, ThemeDefinition> = {
     id: "lavender",
     label: "Lavender Club",
     description: "White and pale lilac with violet actions and aubergine text.",
+  },
+  dark: {
+    id: "dark",
+    label: "Slate & Amber",
+    description: "Dark slate surfaces with warm amber actions and soft ivory text.",
   },
 };
 

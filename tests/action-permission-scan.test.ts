@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import * as ts from "typescript";
+import { scanCheckedPlatformAdminGuards } from "@/scripts/lib/ops-action-scan";
+import { checkedAlternatePrincipal } from "./master-family-platform-20261113/alternate-principal-proposal-helper";
 
 // D2 — action-permission scan.
 //
@@ -56,6 +59,11 @@ const EXEMPTIONS: Exemption[] = [
     file: "lib/actions/platform-auth.ts",
     exportedName: "logoutPlatformAction",
     reason: "Session is already authenticated; logout is the inverse auth step. The session cookie is the credential.",
+  },
+  {
+    file: "lib/actions/club-selection.ts",
+    exportedName: "selectClubAction",
+    reason: "Pre-tenant selection: authenticates the session and revalidates the chosen live membership. No tenant permission context exists until selection; foreign, revoked and absent identities are regression-tested.",
   },
   {
     file: "lib/actions/auth-ui.ts",
@@ -164,7 +172,8 @@ function listFiles(dir: string): string[] {
 type FuncHit = {
   file: string;
   exportedName: string;
-  text: string;
+  body: ts.Node;
+  source: ts.SourceFile;
 };
 
 // Lightweight extractor: exported async functions whose first
@@ -173,32 +182,45 @@ type FuncHit = {
 // any auth gate).
 function findExportedAsyncFunctions(file: string): FuncHit[] {
   const text = readFileSync(file, "utf8");
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const out: FuncHit[] = [];
-  // Matches `export async function Name(...)` and `export async function Name<T>(...)`.
-  const re = /^export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*[<(]/gm;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    const name = m[1]!;
-    // Find the body: scan forward to the matching closing brace.
-    // Cheap approximation: grab from after the function signature
-    // through the next "}" at column 0 (next top-level statement).
-    const start = m.index + m[0].length;
-    const body = text.slice(start, start + 4000);
-    out.push({ file, exportedName: name, text: body });
+  for (const node of source.statements) {
+    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+    if (!modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+    if (ts.isFunctionDeclaration(node) && node.name && node.body && modifiers.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) {
+      out.push({ file, exportedName: node.name.text, body: node.body, source });
+    }
+    if (ts.isVariableStatement(node)) for (const decl of node.declarationList.declarations) {
+      const init = decl.initializer;
+      if (ts.isIdentifier(decl.name) && init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) && init.modifiers?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) {
+        out.push({ file, exportedName: decl.name.text, body: init.body, source });
+      }
+    }
   }
   return out;
 }
 
-function hasRequirePermission(text: string): boolean {
-  return /requirePermission\s*\(/.test(text);
+function hasRequirePermission(fn: FuncHit): boolean {
+  const imported = fn.source.statements.some((s) => ts.isImportDeclaration(s) && ts.isStringLiteral(s.moduleSpecifier) && s.moduleSpecifier.text === "@/lib/auth/permission" && !s.importClause?.isTypeOnly && s.importClause?.namedBindings && ts.isNamedImports(s.importClause.namedBindings) && s.importClause.namedBindings.elements.some((e) => !e.isTypeOnly && e.name.text === "requirePermission" && (!e.propertyName || e.propertyName.text === "requirePermission")));
+  if (!imported) return false;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionLike(node)) return;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "requirePermission") found = true;
+    ts.forEachChild(node, visit);
+  };
+  visit(fn.body);
+  return found;
 }
 
 type Issue = { file: string; exportedName: string; reason: string };
 const issues: Issue[] = [];
 
 for (const file of listFiles(SCAN_DIR)) {
+  const content = readFileSync(file, "utf8");
+  const badPlatform = file.startsWith("lib/actions/platform-") ? new Set(scanCheckedPlatformAdminGuards(content, file).map((v) => v.functionName)) : null;
   for (const fn of findExportedAsyncFunctions(file)) {
-    if (hasRequirePermission(fn.text)) continue;
+    if (hasRequirePermission(fn) || (badPlatform && !badPlatform.has(fn.exportedName)) || checkedAlternatePrincipal(file, fn.exportedName, content)) continue;
     const rel = file.replace(process.cwd() + "/", "");
     const exempt = EXEMPTIONS.find(
       (e) => e.file === rel && (e.exportedName === fn.exportedName || e.exportedName === "*"),

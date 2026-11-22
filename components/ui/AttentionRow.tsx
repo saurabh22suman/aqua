@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 

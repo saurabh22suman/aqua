@@ -1,13 +1,17 @@
 "use client";
 
+import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import {
   requestConfigChangeAction,
   setOwnerConfigValueAction,
 } from "@/lib/actions/owner-config";
 import {
+  KEY_HELP,
   KEY_TITLES,
   fromInputValue,
   isStructured,
@@ -31,8 +35,6 @@ import {
 // instead of pretending a tenant-level text field can edit it.
 // Display helpers live in components/settings/owner-config-values.ts.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
   const router = useRouter();
@@ -131,13 +133,13 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="divide-y divide-line">
       {items.map((item) => {
         const structured = isStructured(item);
         return (
           <section
             key={item.key}
-            className="rounded-card bg-paper border border-line p-4"
+            className="py-4 first:pt-2 last:pb-2"
             data-testid={`config-${item.key}`}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -149,17 +151,54 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
               </span>
             </div>
             {KEY_TITLES[item.key] ? (
-              <p className="mt-0.5 text-[12px] text-ink-3">{item.description}</p>
+              <p className="mt-0.5 text-[12px] text-ink-3">
+                {KEY_HELP[item.key] ?? item.description}
+              </p>
             ) : null}
 
-            {item.editable && !structured ? (
+            {(item.key === "operations.business_hours" &&
+              item.visibility === "owner_edit") ||
+            item.key === "attendance.absence_alert_threshold_pct" ? (
+              <div className="mt-3">
+                <p className="text-[13px] text-ink-3">
+                  Current value:{" "}
+                  <span className="font-medium text-ink-2">
+                    {readOnlyValue(item)}
+                  </span>
+                </p>
+                {item.key === "operations.business_hours" ? (
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    Opening hours are set for each location.{" "}
+                    <Link
+                      href="/owner/settings/locations"
+                      className="text-[var(--accent-ink)] underline underline-offset-2"
+                    >
+                      Edit hours in Locations
+                    </Link>
+                    .
+                  </p>
+                ) : (
+                  <p className="mt-2 text-[12.5px] text-ink-3">
+                    The percentage and the minimum/consecutive-absence controls
+                    are edited together on the absence-alert screen.{" "}
+                    <Link
+                      href="/owner/settings/alerts"
+                      className="text-[var(--accent-ink)] underline underline-offset-2"
+                    >
+                      Edit threshold in Alerts
+                    </Link>
+                    .
+                  </p>
+                )}
+              </div>
+            ) : item.editable && !structured ? (
               <div className="mt-3 flex flex-wrap items-end gap-2">
                 <label className="block grow min-w-[12rem]">
                   <span className="block text-[12px] font-medium text-ink-2 mb-1">
                     Current value
                   </span>
                   {valueType(item) === "boolean" ? (
-                    <select
+                    <Select
                       value={drafts[item.key] ?? "false"}
                       onChange={(e) =>
                         setDrafts((prev) => ({
@@ -167,13 +206,13 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                           [item.key]: e.target.value,
                         }))
                       }
-                      className={inputClass}
+
                     >
                       <option value="true">On</option>
                       <option value="false">Off</option>
-                    </select>
+                    </Select>
                   ) : (
-                    <input
+                    <Input
                       type={
                         valueType(item) === "integer" ||
                         valueType(item) === "number"
@@ -190,18 +229,20 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                           [item.key]: e.target.value,
                         }))
                       }
-                      className={inputClass}
+
                     />
                   )}
                 </label>
-                <button
-                  type="button"
+                <Button
+            variant="primary"
+            size="md"
+            className="inline-flex items-center justify-center"
+            type="button"
                   disabled={pending && pendingKey === item.key}
                   onClick={() => save(item)}
-                  className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-                >
+          >
                   {pending && pendingKey === item.key ? "Saving…" : "Save"}
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="mt-3">
@@ -209,8 +250,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                   Current value:{" "}
                   <span className="font-medium text-ink-2">
                     {readOnlyValue(item)}
-                  </span>{" "}
-                  · {scopeLabel(item)}
+                  </span>
                 </p>
                 {item.key === "operations.business_hours" ? (
                   <p className="mt-2 text-[12.5px] text-ink-3">
@@ -239,7 +279,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                       <span className="block text-[12px] font-medium text-ink-2 mb-1">
                         What should it be?
                       </span>
-                      <input
+                      <Input
                         value={requestValues[item.key] ?? ""}
                         onChange={(e) =>
                           setRequestValues((prev) => ({
@@ -247,14 +287,14 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                             [item.key]: e.target.value,
                           }))
                         }
-                        className={inputClass}
+
                       />
                     </label>
                     <label className="block">
                       <span className="block text-[12px] font-medium text-ink-2 mb-1">
                         Why? (optional)
                       </span>
-                      <input
+                      <Input
                         value={requestNotes[item.key] ?? ""}
                         onChange={(e) =>
                           setRequestNotes((prev) => ({
@@ -262,7 +302,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                             [item.key]: e.target.value,
                           }))
                         }
-                        className={inputClass}
+
                       />
                     </label>
                     <button

@@ -27,11 +27,15 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const OWNER_USER: UserId = asUserId(uuidv7());
+const roleId = uuidv7();
+const membershipId = uuidv7();
+const grants = ["members.read", "members.write", "programs.read", "programs.write", "staff.read", "settings.manage"];
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
 let programId = "";
+const ownerCtx = () => ({ tenantId, userId: OWNER_USER, roleKey: "owner" as const, membershipId, roleId, slug: `onboarding-${RUN}`, allLocations: true, locationIds: [locationId], permissions: new Set(grants), features: new Set(["members", "programs", "staff", "settings"]) });
 
 beforeAll(async () => {
   tenantId = asTenantId(uuidv7());
@@ -42,6 +46,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Onboarding Test', $3, $4)",
     [tenantId, `onboarding-${RUN}`, plan?.id ?? null, TZ],
   );
+
+  await admin.query("insert into users (id, phone) values ($1, $2)", [OWNER_USER, `+919${String(BigInt("0x" + OWNER_USER.replaceAll("-", "").slice(-12)) % 1_000_000_000n).padStart(9, "0")}`]);
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [roleId, tenantId]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [membershipId, tenantId, OWNER_USER, roleId]);
+  for (const key of grants) await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, $3)", [tenantId, roleId, key]);
 
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
@@ -69,15 +78,20 @@ afterAll(async () => {
     await admin.query("delete from consents where tenant_id = $1", [tenantId]);
     await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
+    await admin.query("delete from membership_locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id = $1 and not exists (select 1 from audit_log where actor_id = $1)", [OWNER_USER]);
   }
   await admin.end();
 });
 
 describe("getOnboardingChecklist (Phase 2.8)", () => {
   it("lists the three minimal items by default — add members, create a batch, assign a coach", async () => {
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     expect(data.items.map((i) => i.key)).toEqual([
       "add_members",
       "create_batch",
@@ -91,7 +105,7 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
 
   it("marks 'add_members' complete the moment a single non-deleted member exists", async () => {
     await createMember(
-      { tenantId, userId: SYSTEM_USER },
+      ownerCtx(),
       {
         fullName: "First Member",
         dateOfBirth: "1990-01-01",
@@ -103,7 +117,7 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
       },
     );
 
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     const item = data.items.find((i) => i.key === "add_members");
     expect(item?.complete).toBe(true);
     expect(data.completedCount).toBe(1);
@@ -111,9 +125,10 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
 
   it("marks 'create_batch' complete when at least one batch exists for the tenant", async () => {
     await createBatch(
-      { tenantId, userId: SYSTEM_USER },
+      ownerCtx(),
       {
         programId,
+        locationId,
         name: "Beginners 06:00",
         capacity: 12,
         daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
@@ -122,14 +137,14 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
       },
     );
 
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     const item = data.items.find((i) => i.key === "create_batch");
     expect(item?.complete).toBe(true);
     expect(data.completedCount).toBe(2);
   });
 
   it("'assign_coach' is incomplete while every batch has a null coach_id", async () => {
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     const item = data.items.find((i) => i.key === "assign_coach");
     expect(item?.complete).toBe(false);
   });
@@ -158,11 +173,11 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
         .limit(1);
       await tx
         .update(batches)
-        .set({ coachId: asStaffId(coachStaffId), updatedBy: SYSTEM_USER })
+        .set({ coachId: asStaffId(coachStaffId), updatedBy: OWNER_USER })
         .where(eq(batches.id, batchRow!.id));
     });
 
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     const item = data.items.find((i) => i.key === "assign_coach");
     expect(item?.complete).toBe(true);
     expect(data.completedCount).toBe(3);
@@ -171,17 +186,18 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
   });
 
   it("every item carries a non-empty title, detail, and CTA — no item is blank for the UI", async () => {
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     for (const item of data.items) {
       expect(item.title.length).toBeGreaterThan(0);
       expect(item.detail.length).toBeGreaterThan(0);
+      if (!item.cta) throw new Error(`Missing CTA for ${item.key}`);
       expect(item.cta.label.length).toBeGreaterThan(0);
       expect(item.cta.href.startsWith("/")).toBe(true);
     }
   });
 
   it("offers the CSV import as a secondary CTA on the add-members step (PR2-C7)", async () => {
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     const item = data.items.find((i) => i.key === "add_members");
     expect(item?.secondaryCta).toEqual({
       label: "Import a CSV",
@@ -198,7 +214,7 @@ describe("getOnboardingChecklist (Phase 2.8)", () => {
       "update members set deleted_at = now() where tenant_id = $1 and member_code = $2",
       [tenantId, `OB1-${RUN}`],
     );
-    const data = await getOnboardingChecklist({ tenantId });
+    const data = await getOnboardingChecklist(ownerCtx());
     const item = data.items.find((i) => i.key === "add_members");
     expect(item?.complete).toBe(false);
   });

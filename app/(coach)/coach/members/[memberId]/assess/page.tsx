@@ -5,6 +5,7 @@ import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { AssessmentBoard } from "@/components/assessment-board";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
 import { isUuid, requireUuidParam } from "@/lib/params";
 
 // V-10 — coach assessment entry. Reached from the register row (with
@@ -32,18 +33,26 @@ export default async function AssessMemberPage({
 
   if (!hasFeature(ctx, "swim.levels")) {
     return (
-      <main className="px-5 pt-6 pb-8">
-        <EmptyState
-          title="Skill assessments aren't enabled"
-          body="This academy's plan doesn't include the skill ladder. The owner can turn it on from settings."
-          action={{ label: "Back to today", href: "/coach" }}
-        />
-      </main>
+      <StaffPage>
+        <StaffPageHeader title="Assessment" />
+        <div className="mt-5">
+          <EmptyState
+            title="Skill assessments aren't enabled"
+            body="This academy's plan doesn't include the skill ladder. The owner can turn it on from settings."
+            action={{ label: "Back to today", href: "/coach" }}
+          />
+        </div>
+      </StaffPage>
     );
   }
 
   const progress = await getMemberProgressAction(memberId);
   if (!progress) notFound();
+
+  // AssessmentBoard's empty-ladder state renders no heading of its own;
+  // give the page the h1 in that state, and let the board own its h1
+  // when a ladder exists (one heading, never two).
+  const hasLadder = progress.frameworks.some((f) => f.nodes.length > 0);
 
   const canAssess = hasPermission(ctx, "levels.assess");
   const back = sessionId
@@ -51,7 +60,13 @@ export default async function AssessMemberPage({
     : { href: `/coach/members/${memberId}`, label: "Member" };
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <StaffPage>
+      {hasLadder ? null : (
+        <StaffPageHeader
+          title={`Assess ${progress.memberName}`}
+          meta={progress.memberCode}
+        />
+      )}
       <AssessmentBoard
         memberId={memberId}
         progress={progress}
@@ -66,6 +81,6 @@ export default async function AssessMemberPage({
           View this member&apos;s progress history
         </Link>
       </p>
-    </main>
+    </StaffPage>
   );
 }

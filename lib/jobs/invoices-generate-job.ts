@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, ne } from "drizzle-orm";
+import { and, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { subscriptions } from "@/db/schema/subscriptions";
@@ -23,6 +23,7 @@ export async function runInvoicesGenerateJob(
   tenantId: TenantId,
 ): Promise<void> {
   const result = await withTenant(tenantId, async (tx) => {
+    await tx.execute(sql`select id from tenants where id = ${tenantId} for update`);
     const [row] = await tx
       .select({ status: tenants.status, timezone: tenants.timezone })
       .from(tenants)

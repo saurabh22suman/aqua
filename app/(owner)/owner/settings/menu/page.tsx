@@ -1,8 +1,11 @@
-import Link from "next/link";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listMenuAction } from "@/lib/actions/menu";
 import { listLocationsAction } from "@/lib/actions/people";
 import { MenuManager } from "@/components/menu-manager";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // K-07 — owner menu management. Reads ride settings.read; every
 // write goes through the K-01 actions gated on settings.manage
@@ -12,13 +15,14 @@ import { MenuManager } from "@/components/menu-manager";
 export default async function OwnerMenuPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
   const [menu, locations] = await Promise.all([
     listMenuAction({}),
     listLocationsAction(),
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage className="max-w-2xl">
       <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
         <Link
           href="/owner/settings"
@@ -29,14 +33,12 @@ export default async function OwnerMenuPage() {
         {" / "}
         café menu
       </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Café menu
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Categories and items the counter sells, with price, GST rate
-        and SAC code. Reception sees this menu at the café counter and
-        cannot change it.
-      </p>
+      <PageHeader
+        title={<>Café menu</>}
+        purpose={<>Every item carries a price, a GST rate and a SAC code.
+        Reception sees this menu at the café counter and cannot change
+        it.</>}
+      />
       <div className="mt-5">
         <MenuManager
           categories={menu.categories}
@@ -44,6 +46,6 @@ export default async function OwnerMenuPage() {
           locations={locations}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

@@ -1,9 +1,10 @@
+import { StaffInboxLink } from "@/components/announcements/staff-inbox-link";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { TenantSignOut } from "@/components/tenant-sign-out";
+import { StaffClubInstallLink } from "@/components/staff-club-install-link";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
-import { formatPhoneIN } from "@/lib/phone";
 import { listMyShiftsAction } from "@/lib/actions/shifts";
 import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
 import {
@@ -15,20 +16,19 @@ import { MyAttendanceCard } from "@/components/my-attendance-card";
 import { MyLeaveCard } from "@/components/my-leave-card";
 import { addDays, todayInZone } from "@/lib/time/tz";
 import Link from "next/link";
-import { BookOpen, ChevronRight } from "lucide-react";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import {
+  STAFF_CARD,
+  StaffIdentity,
+  StaffPage,
+  StaffPageHeader,
+} from "@/components/staff-ui/staff-page";
+import { StaffAppearance } from "@/components/staff-ui/staff-appearance";
+import { OpenWorkspaceGuideLink } from "@/components/onboarding/guide-help-button";
 
-// K2 — coach's account surface. Minimum the K2 brief asks for: the
-// user's name and phone, plus a sign-out button. The bottom nav's
-// "Me" tab (app/(coach)/layout.tsx) lands here. A full profile editor
-// is explicitly out of scope for the demo; when one lands, it can
-// replace the two-line identity block in place without touching the
-// nav or the sign-out form.
-//
-// F4 (mobile UX plan v2): this page previously required the
-// members.read permission, which the coach role does not hold — every
-// tap on "Me" threw ForbiddenError. requireCoach() is the
-// authorization boundary; the identity read only needs the caller's
-// own user row.
+// K2 — coach's account surface. The bottom nav's "Me" tab lands here.
+// The identity block is the caller's own name/phone; the three
+// self-service cards read only the caller's own rows (staff.self).
 export default async function CoachMePage() {
   await requireCoach();
   const ctx = await requireDefaultCtx();
@@ -46,17 +46,14 @@ export default async function CoachMePage() {
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">Me</h1>
+    <StaffPage>
+      <StaffPageHeader title="Me" />
 
-      <section className="mt-5 rounded-card border border-line bg-paper p-4">
-        <p className="font-display text-[15px] font-semibold">
-          {identity?.fullName ?? "Signed in"}
-        </p>
-        <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
-        </p>
-      </section>
+      <StaffIdentity name={identity?.fullName} phone={identity?.phone} />
+
+      <StaffInboxLink href="/coach/announcements" />
+
+      <StaffAppearance />
 
       <MyShiftsCard shifts={shifts} />
       <MyAttendanceCard attendance={attendance} />
@@ -72,23 +69,27 @@ export default async function CoachMePage() {
       {hasPermission(ctx, "levels.write") ? (
         <Link
           href="/coach/curriculum"
-          className="mt-4 flex min-h-[56px] items-center gap-3 rounded-card border border-line bg-paper px-4 py-3"
+          className={`mt-4 flex min-h-14 items-center gap-3 px-4 py-3 ${STAFF_CARD}`}
           data-testid="coach-curriculum-link"
         >
-          <BookOpen size={17} className="flex-none text-ink-2" aria-hidden="true" />
+          <span className="grid h-10 w-10 flex-none place-items-center rounded-ctl bg-deck text-ink-2">
+            <OwnerIcon name="programs" size={20} />
+          </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[14px] font-medium leading-tight">
+            <span className="block text-[14px] font-medium leading-tight text-ink">
               Curriculum framework
             </span>
             <span className="mt-0.5 block text-[12px] leading-tight text-ink-3">
               Levels, skills and the four-band rubric you assess against.
             </span>
           </span>
-          <ChevronRight size={17} className="flex-none text-ink-3" aria-hidden="true" />
+          <OwnerIcon name="chevron" size={18} className="flex-none text-ink-3" />
         </Link>
       ) : null}
 
+      <StaffClubInstallLink tenantId={ctx.tenantId} />
+      {ctx.roleKey === "coach" ? <OpenWorkspaceGuideLink homeHref="/coach" /> : null}
       <TenantSignOut />
-    </main>
+    </StaffPage>
   );
 }

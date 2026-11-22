@@ -1,4 +1,5 @@
-import { Clock } from "lucide-react";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { STAFF_CARD } from "@/components/staff-ui/staff-page";
 import { formatTimeIST } from "@/lib/time/tz";
 import { StaffCheckInControls } from "@/components/staff-check-in-controls";
 import type { MyAttendanceRow } from "@/lib/services/staff-attendance";
@@ -33,9 +34,9 @@ export function MyAttendanceCard({
   }
 
   return (
-    <section className="mt-5 rounded-card border border-line bg-paper p-4">
-      <h2 className="flex items-center gap-1.5 font-display text-[15px] font-semibold">
-        <Clock size={15} className="text-ink-3" />
+    <section className={`mt-4 p-4 ${STAFF_CARD}`}>
+      <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
+        <OwnerIcon name="check" size={16} className="text-ink-3" />
         Today&apos;s attendance
       </h2>
       <p className="mt-2 text-[13px] text-ink-2">{summary}</p>

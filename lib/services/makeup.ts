@@ -7,7 +7,7 @@ import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
 import { isUniqueViolation } from "@/lib/pg-errors";
 import { todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asMemberId } from "@/lib/ids";
 import {
   callerHasPermission,
@@ -204,7 +204,7 @@ export type MakeupCreditResult =
 // the thrown 23505 can be caught after withTenant() rolls the aborted
 // transaction back (the same shape as invoice-mutations' create path).
 export async function grantMakeupCredit(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { memberId: string; sourceSessionId: string; expiresAt?: Date },
 ): Promise<MakeupCreditResult> {
   try {
@@ -226,7 +226,7 @@ export async function grantMakeupCredit(
 }
 
 async function grantMakeupCreditInTx(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { memberId: string; sourceSessionId: string; expiresAt?: Date },
 ): Promise<MakeupCreditResult> {
   if (!input.memberId || !input.sourceSessionId) {
@@ -377,7 +377,7 @@ async function grantMakeupCreditInTx(
 // caller's allowed locations. Redemption writes its audit row in the
 // same transaction; a refusal writes nothing.
 export async function redeemMakeupCredit(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { memberId: string; sourceSessionId: string; targetSessionId: string },
 ): Promise<MakeupCreditResult> {
   if (!input.memberId || !input.sourceSessionId || !input.targetSessionId) {

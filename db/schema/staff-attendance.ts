@@ -16,14 +16,15 @@ import { auditColumns } from "./_shared";
 import { tenants } from "./tenants";
 import { staff } from "./staff";
 import { shifts } from "./shifts";
-import type { StaffId, TenantId } from "@/lib/ids";
+import { tenantMemberships } from "./memberships";
+import type { StaffId, TenantId, UserId } from "@/lib/ids";
 
 // V-24 — staff attendance (architecture.md §8.9). Created in migration
 // 20260919223554_v24_staff_attendance; this is the typed access layer
 // lib/services/staff-attendance.ts consumes.
 //
-// One row per staff member per work_date. `markedBy` is set if and
-// only if `method` is manual (database CHECK); the service also
+// One row per staff member per work_date. Manual corrections name exactly
+// one staff marker or a same-tenant owner user marker; the service also
 // requires a note on manual corrections, so "who corrected this and
 // why" is never lost.
 
@@ -43,6 +44,7 @@ export const staffAttendance = pgTable(
     // self_app | self_qr | manual
     method: text("method").notNull(),
     markedBy: uuid("marked_by").$type<StaffId>(),
+    markedByUserId: uuid("marked_by_user_id").$type<UserId>(),
     lateMinutes: integer("late_minutes").notNull().default(0),
     // present | absent | half_day | leave | holiday
     status: text("status").notNull(),
@@ -72,7 +74,7 @@ export const staffAttendance = pgTable(
     ),
     check(
       "staff_attendance_marked_by_check",
-      sql`(${t.method} = 'manual') = (${t.markedBy} is not null)`,
+      sql`(${t.method} = 'manual' and ((${t.markedBy} is not null) <> (${t.markedByUserId} is not null))) or (${t.method} <> 'manual' and ${t.markedBy} is null and ${t.markedByUserId} is null)`,
     ),
     foreignKey({
       name: "staff_attendance_staff_tenant_fkey",
@@ -83,6 +85,11 @@ export const staffAttendance = pgTable(
       name: "staff_attendance_marked_by_tenant_fkey",
       columns: [t.markedBy, t.tenantId],
       foreignColumns: [staff.id, staff.tenantId],
+    }),
+    foreignKey({
+      name: "staff_attendance_marker_membership_fkey",
+      columns: [t.tenantId, t.markedByUserId],
+      foreignColumns: [tenantMemberships.tenantId, tenantMemberships.userId],
     }),
     foreignKey({
       name: "staff_attendance_shift_tenant_fkey",

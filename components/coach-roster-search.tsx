@@ -2,8 +2,10 @@
 
 import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
 import { PersonAvatar } from "@/components/avatar";
+import { Input } from "@/components/ui/Input";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { STAFF_CARD } from "@/components/staff-ui/staff-page";
 import type { CoachRosterRow } from "@/lib/services/coach-schedule";
 
 // Inline client-side filter on top of the coach's roster. Search is
@@ -11,7 +13,14 @@ import type { CoachRosterRow } from "@/lib/services/coach-schedule";
 // with the bottom nav — a coach looking someone up poolside types
 // their name and scrolls. A URL pattern would force a round-trip per
 // keystroke on mobile, which is the wrong shape for the use case.
-export function CoachRosterSearch({ roster }: { roster: CoachRosterRow[] }) {
+export function CoachRosterSearch({
+  roster,
+  memberNouns,
+}: {
+  roster: CoachRosterRow[];
+  /** The tenant-resolved plural noun, so no copy is hardcoded. */
+  memberNouns?: string;
+}) {
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
   const filtered = useMemo(() => {
@@ -29,52 +38,55 @@ export function CoachRosterSearch({ roster }: { roster: CoachRosterRow[] }) {
 
   return (
     <>
-      <div className="mt-4 relative">
-        <Search
-          size={14}
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-3"
-          aria-hidden="true"
+      <div className="relative mt-4">
+        <OwnerIcon
+          name="search"
+          size={18}
+          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-3"
         />
-        <input
+        <Input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or code"
-          aria-label="Search members"
-          className="w-full min-h-[44px] pl-9 pr-3 rounded-ctl bg-paper border border-line text-[16px]"
+          placeholder="Name, code or batch"
+          aria-label={memberNouns ? `Search ${memberNouns}` : "Search roster"}
+          className="pl-11"
         />
       </div>
       {filtered.length === 0 ? (
-        <p className="mt-4 text-center text-[13px] text-ink-3 py-8">
-          No members match &ldquo;{deferred}&rdquo;.
+        <p className="mt-4 py-8 text-center text-[13px] text-ink-3">
+          {memberNouns
+            ? `No ${memberNouns} match “${deferred}”.`
+            : `No matches for “${deferred}”.`}
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-line rounded-card border border-line bg-paper">
+        <ul className={`mt-3 divide-y divide-line ${STAFF_CARD}`}>
           {filtered.map((m) => (
             <li key={m.memberId}>
               <Link
                 href={`/coach/members/${m.memberId}`}
-                className="flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 active:bg-deck"
+                className="flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 hover:bg-deck/50 active:bg-deck"
                 data-testid="coach-roster-row"
               >
-                {/* U-09 — deterministic avatar seeded by the stable
-                    member id (never the display name). */}
-                <PersonAvatar seed={m.memberId} size={36} className="flex-none" />
+                {/* The avatar draws the member's displayed name (the
+                    name beside it), and keeps the stable id as identity
+                    metadata only. */}
+                <PersonAvatar name={m.name} seed={m.memberId} size={36} className="flex-none" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium truncate">
+                  <p className="truncate text-[14px] font-medium text-ink">
                     {m.name}
                     {m.isMinor ? (
                       <span className="text-[11px] text-ink-3">{" (minor)"}</span>
                     ) : null}
                   </p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 truncate">
+                  <p className="mt-0.5 truncate text-[12px] text-ink-3">
                     {m.code}
                     {m.batches.length > 0 ? (
                       <span className="text-ink-3"> · {m.batches.join(", ")}</span>
                     ) : null}
                   </p>
                 </div>
-                <span className="text-ink-3 text-[12px] flex-none">›</span>
+                <OwnerIcon name="chevron" size={16} className="flex-none text-ink-3" />
               </Link>
             </li>
           ))}

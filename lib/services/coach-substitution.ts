@@ -4,11 +4,12 @@ import { sessions } from "@/db/schema/scheduling";
 import { staff } from "@/db/schema/staff";
 import { writeAudit } from "@/lib/audit/write";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
+import { lockTenantSchedule } from "@/lib/services/scheduling-lock";
 import {
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { asStaffId, asTenantId } from "@/lib/ids";
 
 // Phase R.1 — coach substitution. C-20: the recorded coach on
@@ -56,7 +57,7 @@ export type SubstituteCoachResult =
     };
 
 export async function substituteCoach(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { sessionId: string; newCoachId: string },
 ): Promise<SubstituteCoachResult> {
   if (!input.newCoachId) {
@@ -68,6 +69,7 @@ export async function substituteCoach(
   }
 
   return withTenant(ctx.tenantId, async (tx) => {
+    await lockTenantSchedule(tx, ctx.tenantId);
     const [s] = await tx
       .select({
         id: sessions.id,
@@ -84,7 +86,7 @@ export async function substituteCoach(
           eq(sessions.tenantId, asTenantId(ctx.tenantId)),
         ),
       )
-      .limit(1);
+      .limit(1).for("update");
     if (!s) {
       return {
         kind: "error",
@@ -154,7 +156,7 @@ export async function substituteCoach(
       excludeSessionId: s.id,
       tx,
     });
-    if (conflicts.conflicts.length > 0) {
+    if (conflicts.hasConflicts) {
       return {
         kind: "error",
         code: "coach_conflict",

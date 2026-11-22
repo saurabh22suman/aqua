@@ -145,6 +145,7 @@ describe("H-03 — partitioned audit_log", () => {
         order by indexname`,
     );
     expect(rows.map((r) => r.indexname)).toEqual([
+      "audit_log_attendance_operation_idx",
       "audit_log_pkey",
       "audit_log_tenant_action_created_idx",
       "audit_log_tenant_id_created_at_idx",

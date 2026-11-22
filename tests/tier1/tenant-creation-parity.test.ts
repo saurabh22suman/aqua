@@ -11,7 +11,6 @@ import { applyPreset } from "@/db/preset-engine";
 import { generateSessions } from "@/lib/jobs/session-generator";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { asTenantId, asUserId, type UserId, type TenantId } from "@/lib/ids";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // D3 — "the seed doing something the production path does not" has
 // shown up four times now (enrolMember, seedRoleTemplates, membership
@@ -36,6 +35,12 @@ let actorId: UserId;
 const tenantIdsToClean: TenantId[] = [];
 const userIdsToClean: string[] = [];
 
+async function signupOffer(): Promise<string> {
+  const result = await admin.query<{key:string}>("select key from plans where key='starter' and status='active' and available_for_new_tenants=true");
+  if (result.rows.length !== 1) throw new Error("Expected seeded active Starter signup offer");
+  return result.rows[0]!.key;
+}
+
 async function actor(): Promise<UserId> {
   if (actorId) return actorId;
   const id = uuidv7();
@@ -58,10 +63,6 @@ afterAll(async () => {
     await admin.query("delete from roles where tenant_id = $1", [id]);
     await admin.query("delete from persons where tenant_id = $1", [id]);
     await admin.query("delete from locations where tenant_id = $1", [id]);
-    await admin.query("delete from platform_audit_log where tenant_id = $1", [id]);
-    // E-02 — membership activation audits the invited user; drop the
-    // tenant's trail before userIdsToClean deletes that user.
-    await deleteAuditRowsForTenant(admin, id);
     await admin.query(
       "delete from pgboss.schedule where name = 'sessions.generate' and key = $1",
       [id],
@@ -69,10 +70,10 @@ afterAll(async () => {
     await admin.query("delete from tenants where id = $1", [id]);
   }
   for (const id of userIdsToClean) {
-    await admin.query("delete from users where id = $1::uuid", [id]);
+    await admin.query("delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id=users.id)", [id]);
   }
   if (actorId) {
-    await admin.query("delete from platform_users where id = $1::uuid", [actorId]);
+    await admin.query("delete from platform_users where id = $1::uuid and not exists (select 1 from platform_audit_log where actor_id=platform_users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -109,7 +110,7 @@ describe("tenant creation: production path vs seed path", () => {
       name: "Parity Prod Academy",
       slug: `parity-prod-${RUN}`,
       timezone: TZ,
-      planKey: "standard",
+      planKey: await signupOffer(),
       currency: "INR",
       locationName: "Main",
       locationIsPrimary: true,
@@ -217,7 +218,7 @@ describe("tenant creation: production path vs seed path", () => {
       name: "Parity Preset Academy",
       slug: `parity-preset-${RUN}`,
       timezone: TZ,
-      planKey: "standard",
+      planKey: await signupOffer(),
       currency: "INR",
       locationName: "Main",
       locationIsPrimary: true,

@@ -25,10 +25,14 @@ export function createShutdownHandler({
     clearHeartbeat();
     try {
       await stop();
-    } catch (err) {
-      log(
-        `[worker] drain failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+    } catch {
+      // The drain failure is reported by a FIXED code, never by the error
+      // object: a pg-boss or pool error can carry a connection string, a
+      // query or a payload, and an ordinary log line must not receive
+      // arbitrary error text. The drain contract is unchanged — the
+      // heartbeat was cleared above, the drain is attempted once, and the
+      // process still exits 0.
+      log("[worker] worker_event code=drain_failed");
     }
     exit(0);
   };

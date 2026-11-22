@@ -9,7 +9,7 @@ import { tenantMemberships } from "@/db/schema/memberships";
 import { writeAudit } from "@/lib/audit/write";
 import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
 import { asMemberId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // U-03 — member notes. Staff-authored, tenant-scoped, audited.
 // Reads and writes go through the member's location check (O-08):
@@ -91,7 +91,7 @@ export async function listMemberNotes(
 }
 
 export async function createMemberNote(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<NoteMutationResult> {
   const parsed = createInput.safeParse(raw);
@@ -128,7 +128,7 @@ export async function createMemberNote(
 }
 
 export async function updateMemberNote(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<NoteMutationResult> {
   const parsed = updateNoteInput.safeParse(raw);
@@ -164,7 +164,7 @@ export async function updateMemberNote(
 }
 
 export async function deleteMemberNote(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   noteId: string,
 ): Promise<NoteMutationResult> {
   const parsed = z.string().uuid().safeParse(noteId);

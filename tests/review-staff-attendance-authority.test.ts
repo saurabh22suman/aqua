@@ -7,7 +7,7 @@ import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asTenantId, asUserId } from "@/lib/ids";
 import { todayInZone } from "@/lib/time/tz";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // Regression evidence for docs/audits/2026-10-09-role-content-permission-audit.md
 // A04 (target location ignored) and R04 (unrestricted historical correction).
@@ -19,7 +19,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 // selects the target by tenant/id/deleted state only, and no date window is
 // checked anywhere in the service.
 
-type ReviewCtx = ActionCtx & { permissions: Set<string> };
+type ReviewCtx = MutationActor & { permissions: Set<string> };
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;

@@ -3,6 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { persons, locations, programs, staff, members, batches } from "@/db/schema";
 import { sessions, enrolments } from "@/db/schema/scheduling";
@@ -10,14 +11,13 @@ import {
   listCoachSchedule,
   listCoachRoster,
 } from "@/lib/services/coach-schedule";
-import { asTenantId, asStaffId, asUserId, asPersonId, type TenantId, type UserId } from "@/lib/ids";
+import { asTenantId, asStaffId, asUserId, asPersonId, type TenantId } from "@/lib/ids";
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
 
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
@@ -54,6 +54,9 @@ beforeAll(async () => {
     "insert into users (id, phone) values ($1, $2), ($3, $4)",
     [coachUserId, "+1-" + RUN + "-coach-a", otherUserId, "+1-" + RUN + "-coach-b"],
   );
+
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select gen_random_uuid(),$1,u.id,r.id,'active',true from unnest($2::uuid[]) u(id) cross join roles r where r.tenant_id=$1 and r.key='coach'", [tenantId, [coachUserId, otherUserId]]);
 
   await withTenant(tenantId, async (tx) => {
     const [personA] = await tx
@@ -98,8 +101,11 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1", [tenantId]);
+    await admin.query("delete from roles where tenant_id=$1", [tenantId]);
     await admin.query(
-      "delete from users where id in ($1::uuid, $2::uuid)",
+      "delete from users where id in ($1::uuid, $2::uuid) and not exists (select 1 from audit_log where actor_id=users.id)",
       [coachUserId, otherUserId],
     );
     await admin.query("delete from tenants where id = $1", [tenantId]);
@@ -226,8 +232,8 @@ describe("listCoachSchedule / listCoachRoster (Phase R.34 — test sweep)", () =
           locationId,
           memberCode: "RB-" + RUN + "-" + p!.id.slice(0, 4).replace(/-/g, ""),
           status: "active",
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: asUserId(coachUserId),
+          updatedBy: asUserId(coachUserId),
         })
         .returning({ id: members.id });
       memberAId = m!.id;
@@ -264,16 +270,16 @@ describe("listCoachSchedule / listCoachRoster (Phase R.34 — test sweep)", () =
           memberId: m!.id,
           batchId: b1!.id,
           enrolledOn: new Date().toISOString().slice(0, 10),
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: asUserId(coachUserId),
+          updatedBy: asUserId(coachUserId),
         },
         {
           tenantId,
           memberId: m!.id,
           batchId: b2!.id,
           enrolledOn: new Date().toISOString().slice(0, 10),
-          createdBy: SYSTEM_USER,
-          updatedBy: SYSTEM_USER,
+          createdBy: asUserId(coachUserId),
+          updatedBy: asUserId(coachUserId),
         },
       ]);
     });

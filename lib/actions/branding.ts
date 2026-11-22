@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permission";
 import {
   getBranding,
   updateBranding,
+  uploadBrandingAsset,
   type BrandingData,
   type UpdateBrandingResult,
 } from "@/lib/services/branding";
@@ -39,7 +40,7 @@ const updateFormSchema = z.object({
     .max(40, "Short name is too long.")
     .optional(),
   accent: z.enum(ACCENT_KEYS).optional(),
-});
+}).strict();
 
 export type UpdateBrandingActionInput = z.input<typeof updateFormSchema>;
 
@@ -62,4 +63,19 @@ export async function updateBrandingAction(
     { tenantId: ctx.tenantId, userId: ctx.userId, requestId: ctx.requestId },
     parsed.data,
   );
+}
+
+const uploadFormSchema = z.object({
+  kind: z.enum(["logo", "install_icon"]),
+  file: z.custom<File>((value) => value instanceof File && value.size > 0 && value.size <= 750 * 1024 && ["image/png", "image/jpeg", "image/webp"].includes(value.type)),
+  kindCount: z.literal(1),
+  fileCount: z.literal(1),
+});
+
+export async function uploadBrandingAssetAction(form: FormData): Promise<{ ok: boolean }> {
+  const parsed = uploadFormSchema.safeParse({ kind: form.get("kind"), file: form.get("file"), kindCount: form.getAll("kind").length, fileCount: form.getAll("file").length });
+  if (!parsed.success) return { ok: false };
+  const ctx = await requireDefaultCtx();
+  requirePermission(ctx, "settings.manage");
+  return uploadBrandingAsset({ ctx, kind: parsed.data.kind, bytes: new Uint8Array(await parsed.data.file.arrayBuffer()), mime: parsed.data.file.type });
 }

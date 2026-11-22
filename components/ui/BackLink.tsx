@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { ChevronLeft } from "lucide-react";
 
 // Phase 4 (mobile UX plan v2) — F13. The five detail pages that had no

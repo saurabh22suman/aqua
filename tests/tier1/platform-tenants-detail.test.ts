@@ -3,7 +3,7 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
-import { asTenantId } from "@/lib/ids";
+import { asTenantId, asUserId } from "@/lib/ids";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { withTenant } from "@/db/tenant";
 import {
@@ -25,14 +25,18 @@ const RUN = Date.now().toString(36);
 const TENANT_ID = asTenantId(uuidv7());
 
 let defaultPlanId: string;
+let defaultPlanName: string;
+const actor=asUserId(uuidv7()),roleId=uuidv7(),membershipId=uuidv7();
 let aliceLocationId = "";
 let primaryBatchId = "";
 
 beforeAll(async () => {
-  const plan = await admin.query<{ id: string }>(
-    "select id from plans where is_default = true",
+  const plan = await admin.query<{ id: string; name: string }>(
+    "select id, name from plans where is_default = true",
   );
   defaultPlanId = plan.rows[0]?.id ?? "";
+  defaultPlanName = plan.rows[0]?.name ?? "";
+  if (!defaultPlanId || !defaultPlanName) throw new Error("Missing default plan fixture");
 
   await admin.query(
     `insert into tenants (id, slug, name, plan_id, timezone, currency, status, offline_sync_enabled)
@@ -40,6 +44,10 @@ beforeAll(async () => {
     [TENANT_ID, `detail-${RUN}`, "Detail Test Academy", defaultPlanId],
   );
 
+  await admin.query("insert into users(id,phone) values($1,$2)",[actor, `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'receptionist','Reception','/reception',3)",[roleId,TENANT_ID]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'members.read'),($1,$2,'members.write')",[TENANT_ID,roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,TENANT_ID,actor,roleId]);
   await withTenant(TENANT_ID, async (tx) => {
     const [primary] = await tx
       .insert(locations)
@@ -100,8 +108,8 @@ beforeAll(async () => {
   });
 
   for (let i = 0; i < 2; i++) {
-    await createMember(
-      { tenantId: TENANT_ID, userId: undefined },
+    const created = await createMember(
+      { tenantId: TENANT_ID, userId: actor },
       {
         fullName: `Detail Test ${RUN} ${i}`,
         dateOfBirth: "1990-01-01",
@@ -116,6 +124,7 @@ beforeAll(async () => {
         ],
       },
     );
+    if (!created.ok) throw new Error(`Member fixture failed: ${created.error}`);
   }
 });
 
@@ -129,8 +138,12 @@ afterAll(async () => {
     await admin.query("delete from programs where tenant_id = $1", [TENANT_ID]);
     await admin.query("delete from members where tenant_id = $1", [TENANT_ID]);
     await admin.query("delete from persons where tenant_id = $1", [TENANT_ID]);
+    await admin.query("delete from tenant_memberships where tenant_id=$1",[TENANT_ID]);
+    await admin.query("delete from role_permissions where tenant_id=$1",[TENANT_ID]);
+    await admin.query("delete from roles where tenant_id=$1",[TENANT_ID]);
     await admin.query("delete from locations where tenant_id = $1", [TENANT_ID]);
     await admin.query("delete from tenants where id = $1", [TENANT_ID]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[actor]);
   }
   await admin.end();
 });
@@ -202,7 +215,7 @@ describe("getTenantDetail", () => {
     // bug that swallowed the JOIN and returned `null` or an empty
     // string would slip past `not.toBeNull()`. Match the actual
     // value so the test fails on the real regression.
-    expect(detail.planName).toBe("Standard");
+    expect(detail.planName).toBe(defaultPlanName);
   });
 
   it("returns an empty activity array when there are no audit rows", async () => {

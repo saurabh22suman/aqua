@@ -28,9 +28,8 @@ import { addDays, todayInZone, zonedWallTimeToInstant } from "@/lib/time/tz";
 //   * a booking cannot be cancelled by another tenant or by a caller
 //     who cannot reach its location.
 //
-// It also CHARACTERISES one known gap in the exclusion constraint's
-// granularity (whole-facility vs sub-unit) so the coordinator has
-// executable evidence of it rather than a description.
+// The applied whole-facility exclusion contract is checked in both
+// insertion orders alongside non-overlapping lane bookings.
 
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
@@ -53,6 +52,7 @@ const scopedFacilityB = uuidv7();
 
 const actor = asUserId(uuidv7());
 const otherActor = asUserId(uuidv7());
+const scopedActor = asUserId(uuidv7());
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 
@@ -64,7 +64,7 @@ const otherCtx = {
 };
 const scopedCtx = {
   tenantId: scopedTenant,
-  userId: actor,
+  userId: scopedActor,
   requestId: uuidv7(),
   allLocations: false,
   locationIds: [scopedLocA],
@@ -128,6 +128,8 @@ beforeAll(async () => {
       `b6-rel-c-${RUN}`,
     ],
   );
+  // This suite exercises billing when booking is enabled, not the module-off path.
+  await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'pool.booking',true)", [tenant]);
   await admin.query(
     `insert into locations (id, tenant_id, name, is_primary) values
        ($1, $3, 'Rel Site', true),
@@ -168,6 +170,17 @@ beforeAll(async () => {
       `+9196${String(Date.now()).slice(-8)}`,
     ],
   );
+  await admin.query("insert into users(id,phone) values($1,$2)", [scopedActor, `+9195${String(Date.now()).slice(-8)}`]);
+  for (const [tenantId, userId] of [[tenant, actor], [otherTenant, otherActor], [scopedTenant, actor]] as const) {
+    const roleId = uuidv7();
+    await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)", [roleId, tenantId]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [uuidv7(), tenantId, userId, roleId]);
+    if (tenantId === scopedTenant) {
+      const membershipId = uuidv7();
+      await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',false)", [membershipId, tenantId, scopedActor, roleId]);
+      await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [uuidv7(), tenantId, membershipId, scopedLocA]);
+    }
+  }
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Rel Member')",
     [personId, tenant],
@@ -211,6 +224,10 @@ afterAll(async () => {
     await admin.query("delete from invoices where tenant_id = $1", [id]);
     await admin.query("delete from booking_price_rules where tenant_id = $1", [id]);
     await admin.query("delete from config_values where tenant_id = $1", [id]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [id]);
+    await admin.query("delete from membership_locations where tenant_id = $1", [id]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [id]);
+    await admin.query("delete from roles where tenant_id = $1", [id]);
     await admin.query("delete from facility_sub_units where tenant_id = $1", [id]);
     await admin.query("delete from facilities where tenant_id = $1", [id]);
     await admin.query("delete from members where tenant_id = $1", [id]);
@@ -296,14 +313,10 @@ describe("B6 booking reliability — exclusive slots", () => {
     expect(second.ok).toBe(true);
   });
 
-  it("CHARACTERISES a known gap: a whole-facility booking and a lane booking do not collide", async () => {
-    // The exclusion constraint keys on
-    // `coalesce(sub_unit_id, nil-uuid)`, so "the whole facility" and
-    // "lane A" are DIFFERENT keys and both rows are accepted. This is
-    // the constraint's granularity — a schema decision, not an
-    // application bug — and it is recorded for the coordinator rather
-    // than fixed here (no schema expansion in this batch, and the
-    // insert exclusion stays the sole authority on concurrency).
+  it("refuses whole-facility and lane overlaps in either insertion order", async () => {
+    // The applied whole/child exclusion contract must prevent overlapping
+    // bookings regardless of which kind was inserted first.
+    const before = await bookingRows(tenant);
     const whole = await bookings.createBooking(ctx, {
       facilityId,
       subUnitId: null,
@@ -320,7 +333,18 @@ describe("B6 booking reliability — exclusive slots", () => {
       startsAt: wall(DAY_4, "15:00"),
       endsAt: wall(DAY_4, "16:00"),
     });
-    expect(lane.ok).toBe(true);
+    expect(lane.ok).toBe(false);
+    const laneFirst = await bookings.createBooking(ctx, {
+      facilityId, subUnitId: laneA, memberId,
+      startsAt: wall(DAY_4, "17:00"), endsAt: wall(DAY_4, "18:00"),
+    });
+    expect(laneFirst.ok).toBe(true);
+    const wholeSecond = await bookings.createBooking(ctx, {
+      facilityId, subUnitId: null, walkInName: "Second Whole Guest",
+      startsAt: wall(DAY_4, "17:00"), endsAt: wall(DAY_4, "18:00"),
+    });
+    expect(wholeSecond.ok).toBe(false);
+    expect(await bookingRows(tenant)).toBe(before + 2);
   });
 });
 
@@ -363,7 +387,7 @@ describe("B6 booking reliability — duplicate and retry", () => {
     if (!created.ok) return;
 
     const first = await billing.requestBookingBill(ctx, created.bookingId);
-    expect(first.ok).toBe(true);
+    expect(first.ok, JSON.stringify(first)).toBe(true);
     if (!first.ok) return;
     expect(first.alreadyBilled).toBe(false);
 

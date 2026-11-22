@@ -178,7 +178,7 @@ describe("mock access — the gate scan", () => {
       await fx.admin.query(
         `insert into bookings
            (id, tenant_id, location_id, facility_id, member_id, starts_at, ends_at, status, price_paise)
-         values ($1, $2, $3, $4, $5, '2026-10-26T09:00:00.000Z', '2026-10-26T11:00:00.000Z', 'confirmed', 0)`,
+         values ($1, $2, $3, $4, $5, '2026-10-27T09:00:00.000Z', '2026-10-27T11:00:00.000Z', 'confirmed', 0)`,
         [
           uuidv7(),
           fx.ids.tenantId,
@@ -191,6 +191,7 @@ describe("mock access — the gate scan", () => {
       const outcome = await scan({
         deviceKey: "court1",
         secret: "TAG-FACILITY-BOOKED",
+        now: new Date("2026-10-27T10:00:00.000Z"),
       });
       expect(outcome.decision).toBe("granted");
       expect(outcome.reasonCode).toBe("granted_booking");

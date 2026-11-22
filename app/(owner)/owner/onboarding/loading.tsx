@@ -1,15 +1,19 @@
-import { SkeletonCard } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { Skeleton } from "@/components/skeleton";
 
-// Skeleton rather than spinner — DESIGN.md §3 (users are on flaky
-// poolside 4G where a spinner reads as broken). Matches the
-// hero-plus-list composition of the live view.
+// Onboarding cold-load: heading plus the check-count surface.
 export default function Loading() {
   return (
-    <main className="px-5 pt-6 pb-8">
-      <div className="pb-4">
-        <SkeletonCard className="!rounded-card" />
+    <OwnerPage>
+      <Skeleton w={64} h={6} />
+      <Skeleton w={80} h={3} className="mt-3" />
+      <div className="mt-5 max-w-2xl rounded-card border border-line bg-paper p-5">
+        <Skeleton w={40} h={4} />
+        <Skeleton w={56} h={3} className="mt-2" />
+        <Skeleton w={96} h={12} className="mt-4" />
+        <Skeleton w={96} h={12} className="mt-3" />
+        <Skeleton w={96} h={12} className="mt-3" />
       </div>
-      <SkeletonCard />
-    </main>
+    </OwnerPage>
   );
 }

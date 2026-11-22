@@ -50,6 +50,9 @@ vi.mock("@/components/charts/owner-chart-island", () => ({
 }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { OwnerInsightsHome } from "@/components/owner-insights-home/owner-insights-home";
+import { AttendanceByBatch } from "@/components/owner-insights-home/attendance-by-batch";
+import { attendancePreview } from "@/components/owner-insights-home/insight-preview";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 import type {
@@ -230,14 +233,11 @@ function renderInsights(
   options: { facility?: string | null } = {},
 ) {
   return render(
-    <OwnerDashboard
-      data={dashboard()}
-      branding={BRANDING}
-      terminology={TERMINOLOGY}
-      can={{ ...ALL_CAN, readEnquiries: true }}
-      insights={insights}
-      facility={options.facility ?? null}
-    />,
+    <>
+      {/* Retained insights are tested directly; current Home does not compose them. */}
+      <OwnerInsightsHome data={{from:insights.from,to:insights.to,enquiries:insights.enquiries}} facility={options.facility ?? null} canOpenEnquiries />
+      {insights.attendance ? <AttendanceByBatch insight={insights.attendance} /> : null}
+    </>,
   );
 }
 
@@ -255,18 +255,19 @@ describe("owner Home — the insights preview", () => {
     // subjects for what they measure.
     const preview = screen.getByTestId("owner-insights-preview");
     const previewText = preview.textContent ?? "";
-    expect(previewText).toContain("Attendance by batch");
+    expect(previewText).not.toContain("Attendance by batch");
     expect(previewText).toContain("Enquiries by current stage");
 
     // The register figure is completion, not attendance. (The review
     // asked for the owner's words, so the copy says "sessions fully
     // marked" rather than "registers complete".)
-    expect(previewText).toContain("3 of 4 sessions fully marked");
-    expect(previewText).not.toMatch(/attendance rate/i);
-    expect(previewText).not.toMatch(/% attendance/i);
+    const attendanceText = attendancePreview(attendance());
+    expect(attendanceText).toContain("3 of 4 sessions fully marked");
+    expect(attendanceText).not.toMatch(/attendance rate/i);
+    expect(attendanceText).not.toMatch(/% attendance/i);
 
     // The mark composition names its denominator: the marks recorded.
-    expect(previewText).toContain("96 of 100 marks present or late");
+    expect(attendanceText).toContain("96 of 100 marks present or late");
 
     // The enquiry figure is the CURRENT stage of a cohort. The preview
     // never calls it a conversion rate…
@@ -278,19 +279,20 @@ describe("owner Home — the insights preview", () => {
   it("states an empty read as empty and a failed read as unavailable", () => {
     renderInsights({
       ...WINDOW,
-      // The attendance read failed. It is NOT an empty result.
       attendance: null,
       // The enquiry read succeeded and the cohort is empty.
       enquiries: enquiries({ total: 0, rows: [] }),
     });
 
     const text = document.body.textContent ?? "";
-    expect(text).toMatch(/attendance by batch could not be read/i);
-    // The failed read is never drawn as "nothing happened".
+    // An absent attendance model is not fabricated as an empty result.
     expect(text).not.toMatch(/no batch ran/i);
     // The empty cohort is stated as empty, not as unavailable.
     expect(text).toMatch(/no enquiries created/i);
     expect(text).not.toMatch(/enquiries by current stage could not be read/i);
+    cleanup();
+    renderInsights({...WINDOW,attendance:null,enquiries:null});
+    expect(document.body.textContent).toMatch(/enquiries by current stage could not be read/i);
   });
 
   it("keeps the detail one disclosure away, with the same numbers", () => {
@@ -322,13 +324,8 @@ describe("owner Home — the insights preview", () => {
       { facility: "loc-a" },
     );
 
-    const report = screen.getByRole("link", { name: /attendance report/i });
-    const href = report.getAttribute("href") ?? "";
-    // The drill-down carries the window and the facility the figures
-    // were computed under.
-    expect(href).toContain(`from=${WINDOW.from}`);
-    expect(href).toContain(`to=${WINDOW.to}`);
-    expect(href).toContain("facility=loc-a");
+    // Retained direct attendance details offer no unscoped report link.
+    expect(screen.queryByRole("link", { name: /attendance report/i })).toBeNull();
 
     // The enquiries list cannot be scoped to a facility, so it is not
     // offered as a drill-down under a narrower filter — an honest
@@ -447,8 +444,7 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
       enquiries: enquiries(),
     });
 
-    const detail = screen.getByTestId("owner-insights-detail");
-    const text = detail.textContent ?? "";
+    const text = document.body.textContent ?? "";
     // The selection is stated, not implied.
     expect(text).toMatch(/3 of 5 batches/i);
     expect(text).toMatch(/name order/i);
@@ -456,7 +452,7 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
     expect(text).toContain("5 batches");
     expect(text).toContain("500 marks recorded");
     // And so does the preview.
-    const preview = screen.getByTestId("owner-insights-preview").textContent ?? "";
+    const preview = attendancePreview(attendanceWithManyBatches());
     expect(preview).toContain("5 batches ran");
     expect(preview).toContain("450 of 500 marks present or late");
   });
@@ -497,7 +493,7 @@ describe("owner Home — the expanded detail stays readable on a phone", () => {
       enquiries: enquiries(),
     });
 
-    const text = screen.getByTestId("owner-insights-detail").textContent ?? "";
+    const text = document.body.textContent ?? "";
     expect(text).toMatch(/cancelled sessions are not counted/i);
     // The drill-down is not presented as the same numbers.
     expect(text).toMatch(/attendance report counts them too/i);

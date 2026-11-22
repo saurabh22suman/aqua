@@ -1,8 +1,10 @@
+import { ACTIVE_CLUB_COOKIE } from "@/lib/auth/active-club";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { pinLogin, pinSchema } from "@/lib/services/credentials";
 import { FACILITY_COOKIE } from "@/lib/facility";
 import { THEME_COOKIE } from "@/lib/theme/storage";
+import { tenantSignInOrigin } from "@/lib/tenant-sign-in-origin";
 
 // POST /api/login/pin — the phone + PIN login door (2026-09-11 auth
 // feature).
@@ -23,6 +25,15 @@ const loginSchema = z.object({
 });
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const expectedOrigin = tenantSignInOrigin(process.env.BETTER_AUTH_URL);
+  const host = request.headers.get("host") ?? new URL(request.url).host;
+  if (!expectedOrigin || request.headers.get("origin") !== expectedOrigin ||
+    host.toLowerCase() !== new URL(expectedOrigin).host.toLowerCase()) {
+    return NextResponse.json({ kind: "error", code: "invalid_request" }, { status: 403 });
+  }
+  if (request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
+    return NextResponse.json({ kind: "error", code: "invalid_request" }, { status: 415 });
+  }
   let body: unknown;
   try {
     body = await request.json();
@@ -40,7 +51,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const result = await pinLogin(parsed.data.phone, parsed.data.pin);
+  const result = await pinLogin(parsed.data.phone, parsed.data.pin, request.headers);
   if (result.status < 200 || result.status >= 300) {
     return NextResponse.json(
       { kind: "error", code: "invalid_credentials" },
@@ -67,6 +78,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   // would be dropped from the response and nobody could sign in.
   res.cookies.delete(THEME_COOKIE);
   res.cookies.delete(FACILITY_COOKIE);
+  res.cookies.delete(ACTIVE_CLUB_COOKIE);
   for (const cookie of result.headers.getSetCookie()) {
     res.headers.append("set-cookie", cookie);
   }

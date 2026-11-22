@@ -19,6 +19,8 @@ const RUN = Date.now().toString(36);
 const tenant = asTenantId(uuidv7());
 const loc = uuidv7();
 const actor = asUserId(uuidv7());
+const ownerRole = uuidv7(), ownerMembership = uuidv7();
+const phone = () => `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`;
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 
@@ -68,14 +70,18 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, status, timezone, gstin) values ($1, $2, 'Cafe Pay', 'active', 'Asia/Kolkata', '27ABCDE1234F1Z5')",
     [tenant, `k04-${RUN}`],
   );
+  for (const id of [tenant]) await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'cafe.pos',true)", [id]);
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Counter', true)",
     [loc, tenant],
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9192${String(Date.now()).slice(-8)}`,
+    phone(),
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[ownerRole,tenant]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) select $1,$2,p.key from (values ('members.read'),('invoices.read'),('invoices.write'),('payments.record'),('reports.financial'),('settings.manage')) p(key)",[tenant,ownerRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[ownerMembership,tenant,actor,ownerRole]);
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Payer')",
     [personId, tenant],
@@ -100,6 +106,15 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  // Privileged cleanup is restricted to these synthetic tenant IDs; audit rows remain.
+  for (const id of [tenant]) {
+    for (const table of ["receipts","payment_reversals","account_entries","payments","order_lines","orders","invoice_line_items","invoices","menu_items","menu_categories","members","persons","tenant_memberships","role_permissions","roles","locations"]) {
+      await admin.query(`delete from "${table}" where tenant_id=$1`,[id]);
+    }
+    await admin.query("delete from tenant_features where tenant_id=$1", [id]);
+    await admin.query("delete from tenants where id=$1",[id]);
+  }
+  await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)",[[actor]]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});

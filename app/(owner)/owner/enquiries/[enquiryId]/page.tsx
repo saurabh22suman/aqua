@@ -1,3 +1,4 @@
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { notFound } from "next/navigation";
 import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
@@ -8,6 +9,7 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 export default async function EnquiryDetailPage({
   params,
@@ -25,12 +27,12 @@ export default async function EnquiryDetailPage({
     // L3 audit — EnquiryDetailView → EnquiryNewMemberFields uses
     // closed-key `guardian` for the "Guardian required — this is
     // a minor" copy.
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
   if (!enquiry) notFound();
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
       <BackLink href="/owner/enquiries" label="Enquiries" />
       <h1 className="font-display text-[19px] font-semibold">{enquiry.fullName}</h1>
       <p className="mt-0.5 text-[12.5px] text-ink-3">
@@ -45,6 +47,6 @@ export default async function EnquiryDetailPage({
           terminology={terminology}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

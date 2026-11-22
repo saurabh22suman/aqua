@@ -29,7 +29,14 @@ export async function GET(
       "content-type": "application/pdf",
       "content-length": String(result.pdf.byteLength),
       "content-disposition": `attachment; filename="${result.fileName}"`,
-      "cache-control": "private, max-age=300",
+      // The receipt is the SAME signed credential as the parent page
+      // (app/p/[token]/route.ts) and carries the same personal data —
+      // a specific child's payment. The page already answers no-store
+      // for that reason; the receipt used to answer
+      // "private, max-age=300", which PERMITTED the browser to cache
+      // the PDF for up to five minutes. One credential, one caching
+      // policy.
+      "cache-control": "private, no-store",
     },
   });
 }

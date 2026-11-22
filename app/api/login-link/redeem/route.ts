@@ -1,3 +1,4 @@
+import { ACTIVE_CLUB_COOKIE } from "@/lib/auth/active-club";
 import { createHmac } from "node:crypto";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -86,6 +87,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const res = NextResponse.json(
     { kind: "ok", homePath: result.homePath } satisfies RedeemRouteResult,
   );
+  res.cookies.delete(ACTIVE_CLUB_COOKIE);
   res.cookies.set(baCtx.authCookies.sessionToken.name, `${result.sessionToken}.${signature}`, {
     httpOnly: attrs.httpOnly,
     secure: attrs.secure,

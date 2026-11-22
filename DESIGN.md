@@ -2,6 +2,86 @@
 
 **The visual system for Aqua. Loaded on every UI task. Non-negotiable.**
 
+## Owner card direction — 16 November 2026
+
+The human approved the seven Owner page concepts (Home, Members, member
+details, Fees, Programs & batches, Schedule and Settings) and requested
+parallel local implementation. This amendment governs those page compositions;
+the existing semantic tokens, three presets, authority boundaries and real-data
+contracts remain in force. The mock is a design reference, not a source of
+sample records, new permissions, charts or product capabilities.
+
+- Use compact identity headers, labelled contextual actions and task-focused
+  cards. Keep a 44px minimum hit area even when a control looks smaller.
+- Member details begin with identity, navigation and truthful participation,
+  balance and plan summaries. Attendance, batches, personal details and family
+  context are scannable sections. Management forms open on request, and edits
+  have explicit Save/Cancel and reliable focus restoration.
+- Fees keeps the applied reporting period visible in a compact card. Date
+  inputs open on request; Apply must update the URL, heading and corresponding
+  collections together. Current balances retain their separate meaning.
+- Programs group each program's real batches and its authorized actions.
+  Schedule uses the existing event data and mobile agenda while retaining
+  desktop calendar views. Facility and event identity survive navigation.
+- Settings distinguishes the business account, its clubs, administration
+  and personal display preferences. A club and a facility are the same
+  location in the human's model, not two nested entities. Optional guidance remains available through
+  Help after dismissal. Each link must match its destination's access checks.
+- One layout serves Mint Garden, Lavender Club and Slate & Amber. No mock-only
+  metric or functionality may be added to make a card appear populated.
+
+Human design approval does not replace verification of the integrated build.
+Check 320/390px mobile, the Owner desktop and short-screen shell, all three
+themes, restricted access, empty/error states and actual changed controls.
+
+### Mock fidelity correction — 16 November 2026
+
+The human rejected the first card implementation as too far from the approved
+mock. "Uses cards" is not acceptance. Match the approved `homePage`,
+`membersPage`, `profilePage`, `feesPage`, `programsPage`, `schedulePage` and
+`settingsPage` compositions in the Owner mock artifact, with the same theme and
+viewport on each side of the comparison. The approved artifact is recorded as
+SHA-256 `2ae9433f8a58bc1614e8f3f001442339e262cb1f76657fa19b6950bfdf7c4c0c`.
+
+- Owner page headings use the shared 27px mobile / 31px desktop treatment;
+  section headings are 18px, body copy 14px and metadata 12px. The member
+  identity heading is 24px mobile / 27px desktop.
+- Match 18px card corners, 18px mobile / 20px desktop card insets and 16px
+  section gaps. Cards contain related tasks; do not nest the page's navigation
+  inside a large identity card.
+- Member identity is a compact avatar/name/code/club row and a joined-date /
+  Edit details row. The underlined Overview / Fees / Progress / More navigation
+  sits below it. Existing Notes, Documents and authorized family access stay
+  reachable through More, including their existing deep links.
+- Programs places its create action beside the page heading, then club context
+  and scheduling links, then program cards. Each card has an icon/name/count
+  header and a paired Edit program / Add batch action row before its batches.
+- Fees places its compact period control before underlined navigation and
+  the financial cards. Schedule uses a date strip and time-column mobile
+  agenda; Settings uses grouped icon rows and real club cards.
+- The Owner shell uses a 66px mobile / 74px desktop header, a 206px desktop
+  sidebar and an 1180px content cap. Keep the existing 1024px shell breakpoint,
+  scroll ownership, safe areas, permission-filtered links and 44px hit targets.
+  Native mobile inputs remain 16px to avoid automatic input zoom.
+
+Real record length, permissions, empty/error states and supported financial
+meaning can require an explained difference. Illustrative charts, fake counts
+or unsupported notification controls cannot be copied. Show these differences
+explicitly in the comparison; do not call screenshots that merely avoid overflow
+a visual match. The current seven-page amendment supersedes older Owner sizing
+and composition below; it does not redesign other roles or alter core authority.
+
+## Current theme amendment — 14 November 2026
+
+The human approved three selectable presets: **Mint Garden**, **Lavender Club**,
+and **Slate & Amber**. This supersedes the older two-light-preset-only statements
+below. All three use one component tree, typography, spacing, control order and
+responsive layout. Theme changes may change colours, never item positions.
+`lib/theme/themes.ts` and `app/globals.css` are the current token implementation; use
+existing semantic tokens and verify actual contrast, including the dark preset.
+Action accents remain distinct from money/attendance status meanings. Theme is
+a personal display preference, never an authorization or tenant selector.
+
 ## Design program — 2026-10-26
 
 The current program is defined in `docs/design-system/` (README,

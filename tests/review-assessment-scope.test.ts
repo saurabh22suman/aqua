@@ -3,7 +3,7 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 let container: StartedPostgreSqlContainer;
 let admin: Pool;
@@ -29,14 +29,14 @@ const coachUnassignedMember = asMemberId(randomUUID());
 const ownerMember = asMemberId(randomUUID());
 const siteBMember = asMemberId(randomUUID());
 
-const ownerCtx: ActionCtx = {
+const ownerCtx: MutationActor = {
   tenantId,
   userId: ownerUser,
   roleKey: "owner",
   allLocations: true,
   locationIds: [],
 };
-const coachCtx: ActionCtx = {
+const coachCtx: MutationActor = {
   tenantId,
   userId: coachUser,
   roleKey: "coach",
@@ -144,6 +144,14 @@ beforeAll(async () => {
     "insert into users(id,phone) values($1,$4),($2,$5),($3,$6)",
     [ownerUser, coachUser, otherCoachUser, phone("9501"), phone("9502"), phone("9503")],
   );
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  for (const [user, role] of [[ownerUser, "owner"], [coachUser, "coach"], [otherCoachUser, "coach"]] as const) {
+    await admin.query(
+      "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key=$4",
+      [randomUUID(), tenantId, user, role],
+    );
+  }
 
   await seedStaff(coachStaff, coachUser, "Review Assess Coach");
   await seedStaff(otherCoachStaff, otherCoachUser, "Review Assess Other Coach");

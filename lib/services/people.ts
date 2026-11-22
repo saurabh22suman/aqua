@@ -6,12 +6,13 @@ import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
 import { memberFacilityOptins } from "@/db/schema/facility-optins";
 import { memberStatusTransitions } from "@/db/schema/people";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import {
   locationPredicate,
   locationVisible,
   resolveLocationAccess,
 } from "@/lib/services/location-access";
+import { personLocationPredicate } from "@/lib/services/person-location-scope";
 import { isMinor } from "@/lib/time/tz";
 import { asMemberId } from "@/lib/ids";
 import { writeAudit } from "@/lib/audit/write";
@@ -48,7 +49,7 @@ export type MemberListRow = {
 };
 
 // C-06 done-when covers "list with search and filters" -- search is a
-// substring match on name or phone; filters are status and location.
+// substring match on name, phone or member code; filters are status and location.
 // deletedAt is null on both sides (a member row and its person row can
 // only be soft-deleted together, but there's no cross-table guarantee
 // of that yet, so both are checked).
@@ -92,7 +93,7 @@ export async function listMembers(
     }
     if (filters.search?.trim()) {
       const term = `%${filters.search.trim()}%`;
-      conditions.push(or(ilike(persons.fullName, term), ilike(persons.phone, term))!);
+      conditions.push(or(ilike(persons.fullName, term), ilike(persons.phone, term), ilike(members.memberCode, term))!);
     }
 
     // O-08 — when location scoping is on, the list is constrained to
@@ -370,7 +371,7 @@ export type UpdateMemberPatch = {
 // different fields cannot clobber each other with a stale snapshot.
 // An explicit `null` clears an optional person field.
 export async function updateMember(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   memberId: string,
   input: UpdateMemberPatch,
 ): Promise<
@@ -457,6 +458,8 @@ export async function searchPersons(
 ): Promise<PersonSearchRow[]> {
   if (!query.trim()) return [];
   return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    const personScope = personLocationPredicate(tx, ctx.tenantId, access);
     const [tenant] = await tx
       .select({ timezone: tenants.timezone })
       .from(tenants)
@@ -475,6 +478,7 @@ export async function searchPersons(
         and(
           eq(persons.tenantId, ctx.tenantId),
           isNull(persons.deletedAt),
+          personScope,
           or(ilike(persons.fullName, term), ilike(persons.phone, term))!,
         ),
       )
@@ -495,13 +499,19 @@ export async function searchPersons(
 export type LocationOption = { id: string; name: string };
 
 export async function listLocations(ctx: ActionCtx): Promise<LocationOption[]> {
-  return withTenant(ctx.tenantId, (tx) =>
-    tx
+  return withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    // Access to tenant-wide records with a NULL location never grants access
+    // to every physical facility: location IDs themselves are non-null.
+    const predicate = access.unrestricted
+      ? undefined
+      : locationPredicate(locations.id, access);
+    return tx
       .select({ id: locations.id, name: locations.name })
       .from(locations)
-      .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt)))
-      .orderBy(locations.name),
-  );
+      .where(and(eq(locations.tenantId, ctx.tenantId), isNull(locations.deletedAt), predicate))
+      .orderBy(locations.name);
+  });
 }
 
 // Per-tenant member code generator (C-03 done-when: "codes are unique

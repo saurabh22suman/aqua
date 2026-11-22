@@ -6,7 +6,7 @@ import Link from "next/link";
 import { homeForSessionAction } from "@/lib/actions/auth-ui";
 import { formatPhoneIN, normaliseToE164 } from "@/lib/phone";
 import { syncBeforeLogout } from "@/lib/offline/logout";
-import { clearOfflineData, runOfflineLifecycle } from "@/lib/offline/client-session";
+import { clearOfflineData, localOfflineScope, runOfflineLifecycle } from "@/lib/offline/client-session";
 import { PhoneField } from "@/components/auth/phone-field";
 import { PinField } from "@/components/auth/pin-field";
 import { Button } from "@/components/ui/Button";
@@ -38,7 +38,12 @@ export function LoginForm() {
   const [pinBlurred, setPinBlurred] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [drafts, setDrafts] = useState(0);
+  const [drafts, setDrafts] = useState<{
+    count: number;
+    scope: string | null;
+    pinAccepted: boolean;
+  } | null>(null);
+  const [workspacePending, setWorkspacePending] = useState(false);
 
   // The same shared helper the service uses, so what the client sends
   // is exactly what the server looks up (F-1, Indian-user UX audit). A
@@ -49,9 +54,11 @@ export function LoginForm() {
   }
 
   function showCanonical() {
-    setPhone((current) =>
-      current.trim().length > 0 ? formatPhoneIN(normalise(current)) : current,
-    );
+    setPhone((current) => {
+      const canonical = normalise(current);
+      return /^\+?[\d\s()-]+$/.test(current) && /^\+[1-9]\d{7,14}$/.test(canonical)
+        ? formatPhoneIN(canonical) : current;
+    });
   }
 
   const pinValid = PIN_RULE.test(pin);
@@ -65,45 +72,86 @@ export function LoginForm() {
 
   // Unsynced drafts hold the sign-in, so the primary action stays
   // closed until the person has dealt with them.
-  const canSubmit = phone.length > 0 && pinValid && !busy && drafts === 0;
+  const canUseCredentials = phone.length > 0 && pinValid;
+  const canSubmit = !busy && !drafts && (workspacePending || canUseCredentials);
+
+  function editCredentials(update: (value: string) => void, value: string) {
+    if (busy || drafts?.pinAccepted) return;
+    if (workspacePending) setWorkspacePending(false);
+    if (error) setError(null);
+    update(value);
+  }
+
+  async function openWorkspace() {
+    try {
+      const home = await homeForSessionAction();
+      setWorkspacePending(false);
+      if (home.kind === "ok") {
+        router.push(home.path);
+      } else if (home.kind === "suspended") {
+        const list = home.tenantSlugs.join(", ");
+        setError(`Your club (${list}) is paused. Reach out to your operator to reactivate it.`);
+      } else {
+        setError("No club found for this number.");
+      }
+    } catch {
+      setWorkspacePending(true);
+      setPin("");
+      setPinRevealed(false);
+      setError("Your PIN was accepted. Check your connection, then open your workspace.");
+    }
+  }
 
   async function submit(discard = false) {
     if (busy) return;
     setError(null);
     setBusy(true);
     try {
-      if (typeof indexedDB !== "undefined" && "serviceWorker" in navigator) {
-        if (discard) await runOfflineLifecycle(() => clearOfflineData());
-        else {
-          const remaining = await syncBeforeLogout();
-          if (remaining) { setDrafts(remaining); return; }
+      if (workspacePending) {
+        await openWorkspace();
+        return;
+      }
+      if (!drafts?.pinAccepted) {
+        if (!discard && typeof indexedDB !== "undefined" && "serviceWorker" in navigator) {
+          const pending = await runOfflineLifecycle(async () => {
+            const scope = await localOfflineScope();
+            const count = await syncBeforeLogout();
+            return count > 0 ? { count, scope, pinAccepted: false } : null;
+          });
+          setDrafts(pending);
+          if (pending) return;
+        }
+        const res = await fetch("/api/login/pin", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ phone: normalise(phone), pin }),
+        });
+        if (!res.ok) {
+          setError("Wrong number or PIN. Try again, or ask your club for a login link.");
+          return;
         }
       }
-      const res = await fetch("/api/login/pin", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone: normalise(phone), pin }),
-      });
-      if (!res.ok) {
-        setError("Wrong number or PIN. Try again, or ask your club for a login link.");
-        return;
+      if (discard && drafts) {
+        setDrafts({ ...drafts, pinAccepted: true });
+        setPin("");
+        setPinRevealed(false);
+        try {
+          const cleared = await runOfflineLifecycle(async () => {
+            // Replacing the offline identity drops the old queue. Leave
+            // the replacement alone if another tab has switched scopes.
+            if (await localOfflineScope() !== drafts.scope) return true;
+            return clearOfflineData(drafts.scope);
+          });
+          if (!cleared) throw new Error("Could not discard attendance drafts.");
+        } catch {
+          setError("Your PIN was accepted. Try discarding the drafts again to open your workspace.");
+          return;
+        }
+        setDrafts(null);
       }
-      const home = await homeForSessionAction();
-      if (home.kind === "ok") {
-        router.push(home.path);
-        return;
-      }
-      if (home.kind === "suspended") {
-        // Phase 1.6 — the operator paused or churned this tenant.
-        const list = home.tenantSlugs.join(", ");
-        setError(
-          `Your club (${list}) is paused. Reach out to your operator to reactivate it.`,
-        );
-        return;
-      }
-      setError("No club found for this number.");
+      await openWorkspace();
     } catch {
-      setError("Could not sign in. Retry when connected; pending offline drafts must be synced or explicitly discarded before switching accounts.");
+      setError("Could not reach the club. Check your connection, then try again.");
     } finally {
       setBusy(false);
     }
@@ -139,14 +187,14 @@ export function LoginForm() {
         Sign in
       </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
-        Welcome back. Your club is ready when you are.
+        Use your mobile number and PIN to open your staff workspace.
       </p>
 
-      <form onSubmit={onSubmit} aria-busy={busy} className="mt-7 space-y-5">
+      <form onSubmit={onSubmit} aria-busy={busy} className="mt-5 space-y-4">
         <PhoneField
           id="login-phone"
           value={phone}
-          onChange={setPhone}
+          onChange={(value) => editCredentials(setPhone, value)}
           onBlur={showCanonical}
           onKeyDown={onEnter}
         />
@@ -154,7 +202,7 @@ export function LoginForm() {
         <PinField
           id="login-pin"
           value={pin}
-          onChange={setPin}
+          onChange={(value) => editCredentials(setPin, value)}
           onBlur={() => setPinBlurred(true)}
           onKeyDown={onEnter}
           revealed={pinRevealed}
@@ -164,7 +212,7 @@ export function LoginForm() {
         />
 
         {error ? (
-          <p role="alert" className="text-[13px] leading-relaxed text-ink-2">
+          <p role="alert" data-auth-feedback className="rounded-ctl border border-line bg-paper px-3 py-2.5 text-[13px] leading-relaxed text-ink-2">
             {error}
           </p>
         ) : null}
@@ -173,37 +221,60 @@ export function LoginForm() {
           type="submit"
           variant="primary"
           size="lg"
-          pill
           disabled={!canSubmit}
-          className="w-full disabled:opacity-40"
+          className="w-full disabled:opacity-60"
         >
-          {busy ? "One moment…" : "Sign in"}
+          {busy ? (workspacePending ? "Opening workspace…" : "Signing in…") : workspacePending ? "Open workspace" : "Sign in"}
         </Button>
       </form>
 
-      {drafts > 0 ? (
+      {drafts ? (
         <div className="mt-5 space-y-3 rounded-ctl border border-line bg-paper p-4">
           <p role="alert" className="text-[14px] leading-relaxed text-ink">
-            {drafts} unsynced attendance marks remain on this device. Connect
-            to sync them, or discard them before signing in.
+            {drafts.pinAccepted
+              ? "Discard the old attendance drafts to finish signing in."
+              : `${drafts.count} unsynced attendance marks remain on this device. Connect to sync them, or discard them after your PIN is accepted.`}
           </p>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={busy}
-            onClick={() => void submit(true)}
-            className="w-full"
-          >
-            Discard drafts and continue sign-in
-          </Button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => { setDrafts(0); setPin(""); }}
-            className="min-h-11 w-full text-[14px] text-ink-2 underline"
-          >
-            Cancel sign-in
-          </button>
+          {drafts.pinAccepted ? (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={busy}
+              onClick={() => void submit(true)}
+              className="w-full"
+            >
+              {busy ? "Discarding drafts…" : "Retry discarding drafts"}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="primary"
+                size="sm"
+                disabled={busy || !canUseCredentials}
+                onClick={() => void submit()}
+                className="w-full"
+              >
+                Sync drafts and continue
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={busy || !canUseCredentials}
+                onClick={() => void submit(true)}
+                className="w-full"
+              >
+                Discard drafts and continue sign-in
+              </Button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => { setDrafts(null); setPin(""); }}
+                className="min-h-11 w-full text-[14px] text-ink-2 underline"
+              >
+                Cancel sign-in
+              </button>
+            </>
+          )}
         </div>
       ) : null}
 

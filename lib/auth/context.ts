@@ -1,3 +1,4 @@
+import { activeClubFromHeaders, ClubSelectionRequired } from "@/lib/auth/active-club";
 import { headers } from "next/headers";
 import { cache } from "react";
 import { auth } from "./server";
@@ -31,16 +32,19 @@ export type Ctx = {
   requestId?: string;
 };
 
-// M3: every lib/services/*.ts file independently redeclared this as
-// `Pick<Ctx, "tenantId"> & { userId?: string }` -- the `userId` half
-// hand-typed as a plain string rather than derived from Ctx, in all
-// eight files, identically. That's exactly why branding UserId didn't
-// close the gap it was meant to: every service function's userId
-// parameter accepted any string, unbranded, no matter how carefully
-// the schema columns were typed. One shared type instead of eight
-// independently-drifting copies.
+/**
+ * Optional identity for scoped read helpers. This shape does not establish
+ * authority: private reads still resolve their live grants and resource scope.
+ * Mutation entry points use MutationActor, including write-on-first-read APIs.
+ */
 export type ActionCtx = Pick<Ctx, "tenantId"> &
-  Partial<Pick<Ctx, "userId" | "requestId" | "roleKey" | "allLocations" | "locationIds" | "permissions">>;
+  Partial<Pick<Ctx, "userId" | "requestId" | "roleKey" | "allLocations" | "locationIds" | "permissions">> &
+  { systemActor?: true };
+
+/** Explicit actor claim for mutation boundaries; runtime guards remain required. */
+export type MutationActor =
+  | (Pick<Ctx, "tenantId" | "userId"> & Partial<Pick<Ctx, "requestId" | "roleKey" | "allLocations" | "locationIds" | "permissions">> & { systemActor?: never })
+  | (Pick<Ctx, "tenantId"> & Partial<Pick<Ctx, "requestId">> & { systemActor: true; userId?: never; roleKey?: never; allLocations?: never; locationIds?: never; permissions?: never });
 
 export class NotFoundError extends Error {
   constructor() {
@@ -86,7 +90,9 @@ export async function requireDefaultCtx(): Promise<Ctx> {
   const session = await withPlatformSafe(() => auth.api.getSession({ headers: h }));
   if (!session?.user) throw new NotFoundError();
 
-  const membership = await resolveDefaultMembership(session.user.id);
+  const selected = activeClubFromHeaders(h);
+  const membership = await resolveDefaultMembership(session.user.id, selected);
+  if (membership?.requiresSelection || selected && !membership) throw new ClubSelectionRequired();
   if (!membership) throw new NotFoundError();
 
   if (
@@ -149,7 +155,9 @@ export async function sessionExists(): Promise<boolean> {
   // and the user is trapped on an error page with no path back to
   // login. Membership resolution costs one indexed read per layout
   // render; correctness of the redirect is worth it.
-  const membership = await resolveDefaultMembership(session.user.id);
+  const selected = activeClubFromHeaders(h);
+  const membership = await resolveDefaultMembership(session.user.id, selected);
+  if (membership?.requiresSelection || selected && !membership) throw new ClubSelectionRequired();
   if (!membership) return false;
   if (
     isSessionExpiredForRole(

@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { withTenant } from "./tenant";
 import { withPlatformAdmin } from "./scope";
@@ -31,6 +32,9 @@ export async function requestConfigChange(
   input: { key: string; requestedValue: string; note?: string },
 ): Promise<ConfigChangeRequestResult> {
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const keyRows = await tx
       .select({ visibility: configKeys.visibility })
       .from(configKeys)
@@ -146,11 +150,13 @@ export async function resolveConfigChangeRequest(
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   return withPlatformAdmin(async (tx) => {
+    // Only the transaction holding this request can apply its value and audit the decision.
     const rows = await tx
       .select()
       .from(configChangeRequests)
       .where(eq(configChangeRequests.id, params.requestId))
-      .limit(1);
+      .limit(1)
+      .for("update");
     const request = rows[0];
     if (!request) {
       return { ok: false, error: "Request not found." };

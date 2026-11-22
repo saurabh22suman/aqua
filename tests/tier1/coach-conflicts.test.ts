@@ -19,7 +19,7 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const SYSTEM_USER: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 
@@ -33,6 +33,10 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Coach Conflict Test', $3)",
     [tenantId, `coach-conflict-${RUN}`, TZ],
   );
+  const roleId = uuidv7();
+  await admin.query("insert into users(id,phone) values($1,$2)",[SYSTEM_USER,`+9188${String(Date.now()).slice(-8)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[roleId,tenantId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[uuidv7(),tenantId,SYSTEM_USER,roleId]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -79,6 +83,9 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
+    await admin.query("delete from tenant_memberships where tenant_id=$1",[tenantId]);
+    await admin.query("delete from roles where tenant_id=$1",[tenantId]);
+    await admin.query("delete from users where id=$1",[SYSTEM_USER]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.end();

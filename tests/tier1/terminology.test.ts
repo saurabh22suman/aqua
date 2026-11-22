@@ -30,7 +30,9 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const OWNER_USER: UserId = asUserId(uuidv7());
+const ownerRoleId = uuidv7();
+const ownerMembershipId = uuidv7();
 
 let tenantId: TenantId = asTenantId("");
 
@@ -43,12 +45,15 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Term Test', $3, $4)",
     [tenantId, `term-${RUN}`, plan?.id ?? null, TZ],
   );
-  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
-  // sentinel needs a real row before an audited mutation runs.
+  // The settings mutation uses a real synthetic Owner, not a system sentinel.
   await admin.query(
     "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [SYSTEM_USER, `system-term-${RUN}`],
+    [OWNER_USER, `+9198${String(BigInt("0x" + OWNER_USER.replaceAll("-", "").slice(-12)) % 100_000_000n).padStart(8, "0")}`],
   );
+  // Real, active Owner authority for this synthetic settings fixture.
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRoleId, tenantId]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [ownerMembershipId, tenantId, OWNER_USER, ownerRoleId]);
+  await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, 'settings.manage')", [tenantId, ownerRoleId]);
 });
 
 // Tests share a tenant fixture — each case wipes terminology to
@@ -68,11 +73,14 @@ beforeEach(async () => {
 afterAll(async () => {
   if (tenantId) {
     await deleteAuditRowsForTenant(admin, tenantId);
+    await admin.query("delete from tenant_memberships where tenant_id = $1 and user_id = $2 and role_id = $3", [tenantId, OWNER_USER, ownerRoleId]);
+    await admin.query("delete from role_permissions where tenant_id = $1 and role_id = $2", [tenantId, ownerRoleId]);
+    await admin.query("delete from roles where tenant_id = $1 and id = $2", [tenantId, ownerRoleId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.query(
     "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
-    [SYSTEM_USER],
+    [OWNER_USER],
   );
   await admin.end();
 });
@@ -117,7 +125,7 @@ describe("updateTermOverride (Phase 2.10)", () => {
     });
 
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "member", locale: "en", one: "swimmer", other: "swimmers" } satisfies UpdateTermOverrideInput,
     );
 
@@ -133,7 +141,7 @@ describe("updateTermOverride (Phase 2.10)", () => {
     // takes a closed key set, so substring matches are impossible
     // by construction. This test is the canary that proves it.
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "member", locale: "en", one: "swimmer", other: "swimmers" },
     );
     expect(resolveTerm(await getTerminology({ tenantId }), "member", 1)).toBe("swimmer");
@@ -144,7 +152,7 @@ describe("updateTermOverride (Phase 2.10)", () => {
 
   it("rejects an unknown term key — the set is closed, not a free-text override", async () => {
     const result = await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       // Bypass the type-level enum to test the runtime guard.
       { key: "membership_number" as never, locale: "en", one: "x", other: "y" },
     );
@@ -156,7 +164,7 @@ describe("updateTermOverride (Phase 2.10)", () => {
 
   it("rejects an empty singular form — 'active members' reads wrong if 'member' is empty", async () => {
     const result = await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "member", locale: "en", one: "", other: "swimmers" },
     );
     expect(result.kind).toBe("error");
@@ -164,7 +172,7 @@ describe("updateTermOverride (Phase 2.10)", () => {
 
   it("persists updatedBy on the tenants row — every override is attributable", async () => {
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "coach", locale: "en", one: "mentor", other: "mentors" },
     );
     const row = (
@@ -173,7 +181,7 @@ describe("updateTermOverride (Phase 2.10)", () => {
         [tenantId],
       )
     ).rows[0];
-    expect(row?.updated_by).toBe(SYSTEM_USER);
+    expect(row?.updated_by).toBe(OWNER_USER);
   });
 });
 
@@ -181,10 +189,10 @@ describe("clearTermOverride (Phase 2.10)", () => {
   it("removes a key's override entirely — falls back to the locale default on next read", async () => {
     // Set, then clear.
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "session", locale: "en", one: "class", other: "classes" },
     );
-    await clearTermOverride({ tenantId, userId: SYSTEM_USER }, { key: "session", locale: "en" });
+    await clearTermOverride({ tenantId, userId: OWNER_USER }, { key: "session", locale: "en" });
 
     const data = await getTerminology({ tenantId });
     expect(data.overrides.session).toBeUndefined();
@@ -196,14 +204,14 @@ describe("clearTermOverride (Phase 2.10)", () => {
     // then clear one — proves clearing doesn't bleed into the
     // sibling.
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "member", locale: "en", one: "swimmer", other: "swimmers" },
     );
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "batch", locale: "en", one: "slot", other: "slots" },
     );
-    await clearTermOverride({ tenantId, userId: SYSTEM_USER }, { key: "batch", locale: "en" });
+    await clearTermOverride({ tenantId, userId: OWNER_USER }, { key: "batch", locale: "en" });
 
     const data = await getTerminology({ tenantId });
     expect(data.overrides.batch).toBeUndefined();
@@ -223,7 +231,7 @@ describe("terminology mutations write audit rows (E-02)", () => {
     const requestId = uuidv7();
 
     const result = await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: OWNER_USER, requestId },
       { key: "member", locale: "en", one: "athlete", other: "athletes" },
     );
     expect(result.kind).toBe("ok");
@@ -251,7 +259,7 @@ describe("terminology mutations write audit rows (E-02)", () => {
     expect(row.entity_type).toBe("tenant");
     expect(row.entity_id).toBe(tenantId);
     expect(row.actor_type).toBe("staff");
-    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.actor_id).toBe(OWNER_USER);
     expect(row.request_id).toBe(requestId);
     expect(row.before).toEqual({
       key: "member",
@@ -267,7 +275,7 @@ describe("terminology mutations write audit rows (E-02)", () => {
   it("writes zero rows when the override is rejected by the closed-key schema", async () => {
     const requestId = uuidv7();
     const result = await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: OWNER_USER, requestId },
       { key: "membership_number" as never, locale: "en", one: "x", other: "y" },
     );
     expect(result.kind).toBe("error");
@@ -290,7 +298,7 @@ describe("terminology mutations write audit rows (E-02)", () => {
     const requestId = uuidv7();
 
     const result = await clearTermOverride(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: OWNER_USER, requestId },
       { key: "session", locale: "en" },
     );
     expect(result.kind).toBe("ok");
@@ -312,7 +320,7 @@ describe("terminology mutations write audit rows (E-02)", () => {
     const row = rows.rows[0]!;
     expect(row.action).toBe("terminology.clear");
     expect(row.actor_type).toBe("staff");
-    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.actor_id).toBe(OWNER_USER);
     expect(row.before).toEqual({
       key: "session",
       en: { one: "class", other: "classes" },
@@ -324,7 +332,7 @@ describe("terminology mutations write audit rows (E-02)", () => {
   it("writes zero rows when the clear input is invalid", async () => {
     const requestId = uuidv7();
     const result = await clearTermOverride(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: OWNER_USER, requestId },
       { key: "session", locale: "hi" as never },
     );
     expect(result.kind).toBe("error");
@@ -346,7 +354,7 @@ describe("resolveTerm invariants (Phase 2.10)", () => {
     // "s" but irregular ones (e.g. 'child' → 'children' if we
     // ever add that key) won't be.
     await updateTermOverride(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: OWNER_USER },
       { key: "session", locale: "en", one: "class", other: "classes" },
     );
     const data = await getTerminology({ tenantId });

@@ -11,8 +11,9 @@ import {
   assertLocalDatabase,
   planSplashHistory,
 } from "@/db/seed-splash-history";
-import { asTenantId, type TenantId } from "@/lib/ids";
+import { asTenantId, asUserId, type TenantId } from "@/lib/ids";
 import { privilegedFixturePool as admin } from "./db/privileged-fixture";
+import { deleteAuditRowsForTenant } from "./helpers/audit-log-cleanup";
 
 // Synthetic history: boundaries, determinism, idempotency and the
 // accounting links. The planner is pure; the apply path runs against the
@@ -139,6 +140,7 @@ describe("splash history guards", () => {
 const RUN = Date.now().toString(36);
 let tenantId: TenantId = asTenantId("");
 let locationId = "";
+const ownerId = asUserId(uuidv7());
 
 beforeAll(async () => {
   tenantId = asTenantId(uuidv7());
@@ -146,6 +148,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Splash History Test', 'Asia/Kolkata')",
     [tenantId, `splash-history-${RUN}`],
   );
+  const ownerRole = uuidv7();
+  await admin.query("insert into users (id, phone) values ($1, $2)", [ownerId, `history-${RUN}`]);
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [ownerRole, tenantId]);
+  await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, 'members.write')", [tenantId, ownerRole]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [uuidv7(), tenantId, ownerId, ownerRole]);
   await withTenant(tenantId, async (tx) => {
     const [location] = await tx
       .insert(locations)
@@ -166,7 +173,7 @@ beforeAll(async () => {
   });
   for (let index = 0; index < 8; index++) {
     const created = await createMember(
-      { tenantId },
+      { tenantId, userId: ownerId },
       {
         fullName: `History Member ${index + 1}`,
         dateOfBirth: "1995-01-01",
@@ -183,6 +190,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (tenantId) {
+    await deleteAuditRowsForTenant(admin, tenantId);
     for (const table of [
       "attendance",
       "sessions",
@@ -198,9 +206,12 @@ afterAll(async () => {
     await admin.query("delete from staff where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
+  await admin.query("delete from users where id = $1", [ownerId]);
   await admin.end();
 });
 

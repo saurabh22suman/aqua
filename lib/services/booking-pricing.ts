@@ -121,8 +121,8 @@ export function compareRules(a: BookingPriceRule, b: BookingPriceRule): number {
   const windowA = windowMinutes(a);
   const windowB = windowMinutes(b);
   if (windowA !== windowB) return windowA - windowB;
-  const daysA = a.daysOfWeek.length === 0 ? 1 : 0;
-  const daysB = b.daysOfWeek.length === 0 ? 1 : 0;
+  const daysA = a.daysOfWeek.length === 0 ? 7 : new Set(a.daysOfWeek).size;
+  const daysB = b.daysOfWeek.length === 0 ? 7 : new Set(b.daysOfWeek).size;
   if (daysA !== daysB) return daysA - daysB;
   return a.id.localeCompare(b.id);
 }

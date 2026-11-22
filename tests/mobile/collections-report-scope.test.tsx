@@ -47,7 +47,7 @@ function deferred<T>() {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 describe("CollectionsReport scope binding (P1)", () => {
@@ -102,8 +102,8 @@ describe("CollectionsReport scope binding (P1)", () => {
       />,
     );
     // Change the date while the first load is still pending.
-    fireEvent.change(screen.getByDisplayValue("2026-10-09"), {
-      target: { value: "2026-10-10" },
+    fireEvent.change(screen.getByDisplayValue("09/10/2026"), {
+      target: { value: "10/10/2026" },
     });
     await waitFor(() => expect(getDailyCollectionAction).toHaveBeenCalledTimes(2));
 

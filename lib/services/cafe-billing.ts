@@ -12,7 +12,7 @@ import {
 } from "@/lib/services/location-access";
 import { finalizeOrder } from "@/lib/services/orders-billing";
 import { readBill } from "@/lib/services/cafe-bill-view";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import type {
   CafeBillResult,
   OpenCafeOrderRow,
@@ -148,7 +148,7 @@ export async function listOpenCafeOrders(
 // then read the itemized bill back. A second request returns the same
 // invoice with alreadyBilled = true.
 export async function requestCafeBill(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   orderId: string,
 ): Promise<CafeBillResult> {
   const parsed = z.string().uuid().safeParse(orderId);
