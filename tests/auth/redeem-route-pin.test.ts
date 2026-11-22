@@ -15,7 +15,6 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { locations } from "@/db/schema/locations";
-import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import { persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
 import { seedRoleTemplates } from "@/lib/services/roles";
@@ -75,8 +74,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (tenantId) {
+    await admin.query("delete from invite_link_uses where tenant_id = $1", [tenantId]);
     await withTenant(tenantId, async (tx) => {
-      await tx.delete(inviteLinkUses).where(eq(inviteLinkUses.tenantId, tenantId));
       await tx.delete(staff).where(eq(staff.tenantId, tenantId));
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
