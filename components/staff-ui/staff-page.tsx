@@ -15,8 +15,7 @@ import { formatPhoneIN } from "@/lib/phone";
 //
 // The card radius is 16px (`rounded-2xl`), matching the approved owner
 // card, while controls keep the shared 10px control radius. Headings use
-// Instrument Sans 500 (the shared 400 face is the body): the staff tree
-// never asks for the heavy display face.
+// use the shared DM Sans face for a clear hierarchy on narrow screens.
 
 export function StaffPage({
   className,
@@ -47,7 +46,7 @@ export type StaffPageHeaderProps = {
 
 export function StaffPageHeader({ title, meta, action }: StaffPageHeaderProps) {
   return (
-    <header className="flex items-start justify-between gap-3">
+    <header data-workspace-heading className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <h1 className="text-[22px] font-medium leading-tight tracking-[-0.01em] text-ink">
           {title}

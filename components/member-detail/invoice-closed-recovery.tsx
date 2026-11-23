@@ -65,7 +65,7 @@ export function InvoiceClosedRecovery({
           ) : null}
           <p role="status" className="text-[12px] text-ink">
             When checked on {formatDateTimeIST(recovery.open.createdAt)}, an
-            earlier prepared attempt on this closed invoice had recorded no
+            earlier prepared attempt on this invoice had recorded no
             money. If it has since committed, discarding will be refused and the
             payment will appear below; if your location access changed, it cannot
             be discarded here.

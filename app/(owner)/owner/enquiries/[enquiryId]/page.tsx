@@ -1,4 +1,5 @@
 import { ownerTerminology } from "@/lib/terminology/owner-terms";
+import { hasPermission } from "@/lib/auth/permission";
 import { notFound } from "next/navigation";
 import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
@@ -8,6 +9,8 @@ import { EnquiryDetailView } from "@/components/enquiry-detail-view";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 import { requireUuidParam } from "@/lib/params";
+import { OwnerSectionLinks } from "@/components/owner-ui/owner-section-links";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { formatPhoneIN } from "@/lib/phone";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
@@ -32,18 +35,22 @@ export default async function EnquiryDetailPage({
   if (!enquiry) notFound();
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="record">
       <BackLink href="/owner/enquiries" label="Enquiries" />
-      <h1 className="font-display text-[19px] font-semibold">{enquiry.fullName}</h1>
-      <p className="mt-0.5 text-[12.5px] text-ink-3">
-        {enquiry.source}
-        {enquiry.phone ? ` · ${formatPhoneIN(enquiry.phone)}` : ""}
-      </p>
+      <PageHeader title={enquiry.fullName}
+        purpose={<>{enquiry.source}{enquiry.phone ? <> · <a className="underline underline-offset-2" href={`tel:${enquiry.phone}`}>{formatPhoneIN(enquiry.phone)}</a></> : null}</>} />
+      <OwnerSectionLinks label="Enquiry sections" className="mt-3" sections={[
+        { id: "next-action-heading", label: "Next action" },
+        { id: "follow-up-timeline-heading", label: "Follow-ups" },
+        ...(enquiry.notes ? [{ id: "enquiry-notes-heading", label: "Notes" }] : []),
+      ]} />
       <div className="mt-4">
         <EnquiryDetailView
           enquiry={enquiry}
           locations={locations}
           batches={batches}
+          canWrite={hasPermission(ctx, "enquiries.write")}
+          canOpenMember={hasPermission(ctx, "members.read")}
           terminology={terminology}
         />
       </div>

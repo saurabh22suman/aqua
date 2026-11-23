@@ -5,6 +5,8 @@ import type { ReportFamily } from "@/lib/owner-reports/preferences";
 import { ReportPreferencesEditor } from "@/components/reports/owner-approved/report-preferences";
 import { BackLink } from "@/components/ui/BackLink";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { isLiveOwnerForSettings } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
@@ -18,14 +20,18 @@ export default async function ReportPreferencesPage({ searchParams }: { searchPa
   const cookieStore = await cookies();
   const facility = resolveFacilityValue(params.facility, cookieStore.get(FACILITY_COOKIE)?.value);
   const reportsHref = `/owner/reports?${new URLSearchParams({ facility: facility ?? "all" })}`;
-  if (!hasFeature(ctx, "reports")) return <OwnerPage><BackLink href={reportsHref} label="Reports" /><PageHeader title="Report preferences" purpose="Reports are unavailable." /></OwnerPage>;
+  if (!hasFeature(ctx, "reports")) return <OwnerPage workflow="settings"><BackLink href={reportsHref} label="Reports" /><PageHeader title="Report preferences" purpose="Reports are unavailable." /></OwnerPage>;
   const available: ReportFamily[] = ["attendance", "members", "batches"];
   if (hasPermission(ctx, "staff.attendance")) available.push("staff");
   if (hasPermission(ctx, "reports.financial") && hasPermission(ctx, "invoices.read") && hasFeature(ctx, "billing")) available.push("collections");
-  const terminology = await getTerminologyAction().then(ownerTerminology);
-  return <OwnerPage>
+  const [terminology, canUseSettings] = await Promise.all([
+    getTerminologyAction().then(ownerTerminology),
+    hasPermission(ctx, "settings.manage") ? isLiveOwnerForSettings(ctx) : false,
+  ]);
+  return <OwnerPage workflow="settings">
     <BackLink href={reportsHref} label="Reports" />
-    <PageHeader title="Report preferences" />
+    <PageHeader title="Report preferences" action={canUseSettings ? <Link href="/owner/settings"
+      className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--accent-ink)]">All settings</Link> : null} />
     <ReportPreferencesEditor identity={{ tenantId: ctx.tenantId, userId: ctx.userId }} available={available} labels={{ members: titleCase(resolveTerm(terminology, "member", "other")), batches: titleCase(resolveTerm(terminology, "batch", "other")) }} />
   </OwnerPage>;
 }

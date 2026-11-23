@@ -1,4 +1,5 @@
 import type { NavItem } from "@/components/bottom-nav";
+import { scheduleDestination } from "@/lib/owner-scope/schedule";
 import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
 import { ownerTerm } from "@/lib/terminology/owner-terms";
 import {
@@ -38,35 +39,25 @@ export const OWNER_SIDEBAR_GROUPS: OwnerSidebarGroup[] = [
     items: [
       { href: "/owner/fees", label: "Fees & payments", iconName: "receipt" },
       { href: "/owner/enquiries", label: "Enquiries", iconName: "clipboard-list" },
-      // C04 (2026-10-09 role/content/permission audit §9) — announcements
-      // are recurring communication work, so the desktop sidebar carries the
-      // entry point; the Settings → Announcements link stays on the
-      // same route (no second implementation). Desktop only: the mobile
-      // bottom nav stays at the four-item design contract.
-      { href: "/owner/announcements", label: "Announcements", iconName: "megaphone" },
-      { href: "/owner/inbox", label: "Announcements inbox", iconName: "megaphone" },
+      {
+        href: "/owner/announcements",
+        label: "Announcements",
+        iconName: "megaphone",
+        activePrefixes: ["/owner/inbox"],
+      },
       { href: "/owner/staff", label: "Staff", iconName: "briefcase" },
     ],
   },
   {
-    // Owner UX audit (2026-10-24): "Programs & sessions", "Sessions"
-    // and "Schedule" were three destinations in one flat group, and
-    // they competed — the owner could not tell which one answered
-    // "when is it on?". They are the same job (when, what and who
-    // covers it), so they now sit under one group. The routes and
-    // the pages are untouched; only the grouping and one redundant
-    // label changed.
     label: "Scheduling",
     items: [
       { href: "/owner/programs", label: "Programs & batches", iconName: "calendar-days", activePrefixes: ["/owner/batches"] },
-      // R10 (2026-10-13 role-workflow audit) — scheduling management and
-      // the read-only grid were reachable only by drilling through
-      // Programs. They stay owner/admin-only (Programs gate is
-      // programs.read; Sessions needs programs.write, Schedule needs
-      // attendance.read), matching the management authority the pages
-      // already enforce.
-      { href: "/owner/sessions", label: "Sessions", iconName: "user-cog" },
-      { href: "/owner/schedule", label: "Schedule", iconName: "calendar-range" },
+      {
+        href: "/owner/schedule",
+        label: "Schedule",
+        iconName: "calendar-range",
+        activePrefixes: ["/owner/sessions"],
+      },
     ],
   },
   {
@@ -91,24 +82,25 @@ export const TENANT_SURFACE_NAV: Record<TenantSurface, NavItem[]> = {
     // is the declared way to say "this child route belongs to this
     // destination"; without it the register lit no tab at all.
     { href: "/coach", label: "Today", iconName: "list-checks", exact: true, activePrefixes: ["/coach/register"] },
-    { href: "/coach/schedule", label: "Schedule", iconName: "calendar-days" },
+    { href: "/coach/schedule", label: "Schedule", iconName: "calendar-days", activePrefixes: ["/coach/workday"] },
     { href: "/coach/members", label: "Members", iconName: "users" },
-    { href: "/coach/me", label: "Me", iconName: "user-round" },
+    { href: "/coach/me", label: "Me", iconName: "user-round", activePrefixes: ["/coach/announcements", "/coach/curriculum"] },
   ],
   reception: [
-    { href: "/reception", label: "Today", iconName: "calendar-days", exact: true },
+    { href: "/reception", label: "Today", iconName: "calendar-days", exact: true, activePrefixes: ["/reception/bookings", "/reception/collect-payment", "/reception/dues", "/reception/close", "/reception/cafe", "/reception/workday"] },
     // The member DIRECTORY, not a second create destination. The
     // contextual "+" on the directory (and the labelled desktop create)
     // is the one create path; a tab pointing at the same create URL
     // would offer the same task twice on one screen.
     { href: "/reception/members", label: "Members", iconName: "users" },
     { href: "/reception/enquiries", label: "Enquiries", iconName: "clipboard-list" },
-    { href: "/reception/me", label: "Me", iconName: "user-round" },
+    { href: "/reception/me", label: "Me", iconName: "user-round", activePrefixes: ["/reception/announcements"] },
   ],
-  // R08 — the worker surface renders its own self-service cards and a
-  // sign-out; it deliberately has no bottom nav (there is no second
-  // destination in the worker charter).
-  worker: [],
+  worker: [
+    { href: "/worker", label: "Today", iconName: "layout-dashboard", exact: true, activePrefixes: ["/worker/announcements"] },
+    { href: "/worker/shifts", label: "Schedule", iconName: "calendar-days", activePrefixes: ["/worker/leave"] },
+    { href: "/worker/me", label: "Me", iconName: "user-round" },
+  ],
   // A parent has no tenant session/nav; /p/[token] is the surface.
   parent: [],
 };
@@ -145,9 +137,6 @@ export function filterOwnerNavItems(
   permissions: ReadonlySet<string>,
 ): NavItem[] {
   return items.filter((item) => {
-    // Senders with roster-read access have an inbox on the compose page. Readers
-    // reach only addressed notifications; this entry grants no send access.
-    if (item.href === "/owner/inbox") return !(permissions.has("messaging.send") && permissions.has("members.read"));
     const gate = OWNER_NAV_PERMISSION_GATES[item.href];
     return !gate || permissions.has(gate);
   });
@@ -163,11 +152,25 @@ export function ownerNavForPermissions(
 export function ownerSidebarGroupsForPermissions(
   permissions: ReadonlySet<string>,
   terminology?: TerminologyState,
+  features?: ReadonlySet<string>,
 ): OwnerSidebarGroup[] {
-  return OWNER_SIDEBAR_GROUPS.map((group) => ({
-    label: group.label,
-    items: labelMemberDestinations(filterOwnerNavItems(group.items, permissions), terminology),
-  })).filter((group) => group.items.length > 0);
+  const canPublish = permissions.has("messaging.send") && (features?.has("messaging") ?? true);
+  const schedule = scheduleDestination(permissions);
+  return OWNER_SIDEBAR_GROUPS.map((group) => {
+    const destinations = group.items.map((item) => {
+      if (item.href === "/owner/announcements" && !canPublish) {
+        return { ...item, href: "/owner/inbox", activePrefixes: ["/owner/announcements"] };
+      }
+      if (item.href === "/owner/schedule" && schedule && schedule !== item.href) {
+        return { ...item, href: schedule, activePrefixes: undefined };
+      }
+      return item;
+    });
+    return {
+      label: group.label,
+      items: labelMemberDestinations(filterOwnerNavItems(destinations, permissions), terminology),
+    };
+  }).filter((group) => group.items.length > 0);
 }
 
 function labelMemberDestinations(items: NavItem[], terminology?: TerminologyState): NavItem[] {
@@ -177,6 +180,15 @@ function labelMemberDestinations(items: NavItem[], terminology?: TerminologyStat
 }
 
 export function navForRole(roleKey: string, terminology?: TerminologyState): NavItem[] {
+  if (roleKey === "manager" || roleKey === "admin") {
+    const main = TENANT_SURFACE_NAV.owner;
+    const schedule = OWNER_SIDEBAR_GROUPS.flatMap(group => group.items).find(item => item.href === "/owner/schedule");
+    return labelMemberDestinations([
+      { ...main[0], label: "Today" },
+      ...(schedule ? [schedule] : []),
+      main[1],
+    ], terminology);
+  }
   const surface = surfaceForRole(roleKey);
   return surface ? labelMemberDestinations(TENANT_SURFACE_NAV[surface], terminology) : [];
 }

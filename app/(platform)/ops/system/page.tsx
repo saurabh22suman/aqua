@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listDeadLetterJobsAction } from "@/lib/actions/platform-jobs";
@@ -5,6 +6,8 @@ import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { getSystemEvidence } from "@/db/ops-system-evidence";
 import { OpsPage, OpsPageHeader, OpsPanel, OpsSection } from "@/components/ops/ops-primitives";
 import { SystemEvidencePanel, SystemQueueSummary, SystemRefusal } from "./system-evidence-sections";
+
+export const metadata: Metadata = { title: "System evidence" };
 
 export const dynamic = "force-dynamic";
 

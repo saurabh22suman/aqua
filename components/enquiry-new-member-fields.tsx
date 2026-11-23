@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { searchPersonsAction } from "@/lib/actions/people";
 import { CURRENT_POLICY_VERSION } from "@/lib/consent-policy";
@@ -33,18 +33,24 @@ export function EnquiryNewMemberFields({
   onChange,
   onValidityChange,
   terminology,
+  initialLocationId,
+  onGuardianSummaryChange,
 }: {
   locations: LocationOption[];
   onChange: (details: NewMemberDetails | null) => void;
-  onValidityChange: (valid: boolean) => void;
+  onValidityChange?: (valid: boolean) => void;
   // Closed-key vocab resolved by the parent server page (L3 audit).
   terminology: TerminologyState;
+  initialLocationId?: string | null;
+  onGuardianSummaryChange?: (value: string) => void;
 }) {
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [gender, setGender] = useState("");
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(locations.find((site) => site.id === initialLocationId)?.id ?? "");
   const [guardianQuery, setGuardianQuery] = useState("");
   const [guardianResults, setGuardianResults] = useState<PersonSearchRow[]>([]);
+  const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const searchRequest = useRef(0);
   const [guardian, setGuardian] = useState<GuardianChoice>({ mode: "none" });
   const [guardianName, setGuardianName] = useState("");
   const [guardianPhone, setGuardianPhone] = useState("");
@@ -53,21 +59,36 @@ export function EnquiryNewMemberFields({
 
   const minor = useMemo(() => looksLikeMinor(dateOfBirth), [dateOfBirth]);
 
+  function resetGuardianSearch() {
+    searchRequest.current++;
+    setGuardianQuery("");
+    setGuardianResults([]);
+    setSearchState("idle");
+  }
+
   async function runGuardianSearch(query: string) {
+    const request = ++searchRequest.current;
+    const term = query.trim();
     setGuardianQuery(query);
-    if (query.trim().length < 2) {
-      setGuardianResults([]);
+    setGuardianResults([]);
+    if (term.length < 2) {
+      setSearchState("idle");
       return;
     }
-    setGuardianResults(await searchPersonsAction(query));
+    setSearchState("loading");
+    try {
+      const matches = await searchPersonsAction(term);
+      if (request !== searchRequest.current) return;
+      setGuardianResults(matches);
+      setSearchState("ready");
+    } catch {
+      if (request === searchRequest.current) setSearchState("failed");
+    }
   }
 
   function guardianMissing(): boolean {
-    return (
-      minor === true &&
-      guardian.mode === "none" &&
-      !(guardianName.trim() && relationship.trim())
-    );
+    return minor === true && (!relationship.trim() ||
+      (guardian.mode !== "existing" && !guardianName.trim()));
   }
 
   // Recomputes and reports upward whenever any input changes, rather
@@ -75,7 +96,9 @@ export function EnquiryNewMemberFields({
   // handler (which would read state from before React commits it).
   useEffect(() => {
     const valid = !!(dateOfBirth && locationId && consentGiven && !guardianMissing());
-    onValidityChange(valid);
+    onValidityChange?.(valid);
+    const label = guardian.mode === "existing" ? guardian.label : guardianName.trim();
+    onGuardianSummaryChange?.(minor === true && valid ? label : "");
     if (!valid) {
       onChange(null);
       return;
@@ -107,7 +130,11 @@ export function EnquiryNewMemberFields({
           <DateField
             {...field}
             value={dateOfBirth}
-            onChange={setDateOfBirth}
+            onChange={(value) => {
+              setDateOfBirth(value);
+              setConsentGiven(false);
+              resetGuardianSearch();
+            }}
             data-testid="enquiry-member-dob"
           />
         )}
@@ -137,6 +164,7 @@ export function EnquiryNewMemberFields({
               setLocationId(e.target.value);
             }}
           >
+            <option value="">Select facility</option>
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -158,6 +186,11 @@ export function EnquiryNewMemberFields({
                 type="button"
                 onClick={() => {
                   setGuardian({ mode: "none" });
+                  setRelationship("");
+                  setConsentGiven(false);
+                  setGuardianName("");
+                  setGuardianPhone("");
+                  resetGuardianSearch();
                 }}
                 className="inline-flex min-h-11 items-center text-[11px] text-ink-3 underline"
               >
@@ -177,6 +210,14 @@ export function EnquiryNewMemberFields({
                   />
                 )}
               </Field>
+              {searchState === "loading" ? <p role="status" className="text-sm text-ink-2">Searching guardians…</p> : null}
+              {searchState === "ready" && guardianResults.length === 0 ? <p role="status" className="text-sm text-ink-2">No matching guardian.</p> : null}
+              {searchState === "failed" ? (
+                <div className="rounded-ctl bg-warn-soft p-3">
+                  <p role="alert" className="text-sm text-ink">Could not search guardians.</p>
+                  <button type="button" className="min-h-11 underline" onClick={() => void runGuardianSearch(guardianQuery)}>Retry guardian search</button>
+                </div>
+              ) : null}
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
                   {guardianResults.map((r) => (
@@ -185,7 +226,9 @@ export function EnquiryNewMemberFields({
                         type="button"
                         onClick={() => {
                           setGuardian({ mode: "existing", personId: r.personId, label: r.fullName });
-                          setGuardianResults([]);
+                          setRelationship("");
+                          setConsentGiven(false);
+                          resetGuardianSearch();
                         }}
                         className="w-full min-h-11 text-left px-3 py-2 text-[12.5px] hover:bg-deck"
                       >
@@ -196,32 +239,39 @@ export function EnquiryNewMemberFields({
                   ))}
                 </ul>
               ) : null}
-              <Field id="enquiry-guardian-name" label="Or: guardian full name">
-                {(field) => (
-                  <Input
-                    {...field}
-                    type="text"
-                    value={guardianName}
-                    onChange={(e) => {
-                      setGuardianName(e.target.value);
-                    }}
-                    placeholder="Or: guardian full name"
-                  />
-                )}
-              </Field>
-              <Field id="enquiry-guardian-phone" label="Guardian phone (optional)">
-                {(field) => (
-                  <Input
-                    {...field}
-                    type="tel"
-                    value={guardianPhone}
-                    onChange={(e) => {
-                      setGuardianPhone(e.target.value);
-                    }}
-                    placeholder="Guardian phone (optional)"
-                  />
-                )}
-              </Field>
+              <details className="rounded-ctl border border-line px-3">
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-2">Add a new guardian</summary>
+                <div className="space-y-2 pb-3">
+                  <Field id="enquiry-guardian-name" label="Guardian full name">
+                    {(field) => (
+                      <Input
+                        {...field}
+                        type="text"
+                        value={guardianName}
+                        onChange={(e) => {
+                          setGuardianName(e.target.value);
+                          setConsentGiven(false);
+                        }}
+
+                      />
+                    )}
+                  </Field>
+                  <Field id="enquiry-guardian-phone" label="Guardian phone (optional)">
+                    {(field) => (
+                      <Input
+                        {...field}
+                        type="tel"
+                        value={guardianPhone}
+                        onChange={(e) => {
+                          setGuardianPhone(e.target.value);
+                          setConsentGiven(false);
+                        }}
+                        placeholder="Guardian phone (optional)"
+                      />
+                    )}
+                  </Field>
+                </div>
+              </details>
             </>
           )}
           <Field id="enquiry-guardian-relationship" label="Relationship (e.g. mother)">
@@ -232,6 +282,7 @@ export function EnquiryNewMemberFields({
                 value={relationship}
                 onChange={(e) => {
                   setRelationship(e.target.value);
+                  setConsentGiven(false);
                 }}
                 placeholder="Relationship (e.g. mother)"
               />
@@ -248,7 +299,7 @@ export function EnquiryNewMemberFields({
         </div>
       ) : null}
 
-      <div className="flex items-start gap-2">
+      <div className="flex min-h-11 items-start gap-2">
         <input
           id="enquiry-consent"
           type="checkbox"
@@ -256,7 +307,8 @@ export function EnquiryNewMemberFields({
           onChange={(e) => {
             setConsentGiven(e.target.checked);
           }}
-          className="mt-0.5"
+          className="mt-0.5 h-5 w-5 shrink-0"
+          disabled={guardianMissing()}
           data-testid="enquiry-consent-checkbox"
         />
         <label htmlFor="enquiry-consent" className="text-[11.5px] text-ink-2">

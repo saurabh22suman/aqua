@@ -18,6 +18,7 @@ import { parseRupeesToPaise } from "@/lib/payment-qr";
 import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
 import { Dialog } from "@/components/ui/Dialog";
 import { navigateFacility } from "@/components/facility-navigation";
+import { CollectionsScopePicker } from "@/components/reports/owner-approved/collections-scope-picker";
 import type { MouseEvent } from "react";
 
 // C-34 — the daily collection report: totals by method and by the
@@ -56,6 +57,7 @@ export function CollectionsReport({
   canReopen,
   initialLocationId,
   showNavigation = false,
+  compactOwner = false,
 }: {
   defaultDate: string;
   locations: Array<{ id: string; name: string }>;
@@ -68,6 +70,7 @@ export function CollectionsReport({
   canReopen: boolean;
   initialLocationId?: string;
   showNavigation?: boolean;
+  compactOwner?: boolean;
 }) {
   const [onDate, setOnDate] = useState(defaultDate);
   const [locationId, setLocationId] = useState(() => initialLocationId !== undefined ? (locations.some(location => location.id === initialLocationId) ? initialLocationId : "") : locations[0]?.id ?? "");
@@ -284,7 +287,14 @@ export function CollectionsReport({
         <Dialog open={pendingHref !== null} onOpenChange={open => { if (!open) setPendingHref(null); }} title="Leave daily close?" description="Your unsaved cash count or reopen draft will be lost." footer={<><Button variant="secondary" onClick={() => setPendingHref(null)}>Stay</Button><Button onClick={() => { if (pendingHref && !busy) navigateFacility(pendingHref); }}>Leave</Button></>} />
         {message && (!locationId || busy) ? <p role="status" className="text-sm text-ink-2">{message}</p> : null}
       </> : null}
-      <div className="flex flex-wrap items-end gap-2">
+      {compactOwner ? (
+        <CollectionsScopePicker
+          scope={{ onDate, locationId }} today={defaultDate} locations={locations}
+          facilityLabel={facilityLabel} disabled={busy}
+          hasCashDraft={Boolean(counted.trim() || note.trim() || reopenOpen || reopenReason.trim())}
+          onApply={scope => { setOnDate(scope.onDate); setLocationId(scope.locationId); }}
+        />
+      ) : <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[13rem]">
           <Field id="collections-date" label="Date" required>
             {(field) => (
@@ -314,7 +324,7 @@ export function CollectionsReport({
             ))}
           </Select>
         </label>
-      </div>
+      </div>}
 
       {!locationId ? (
         <p role="alert" className="text-[13px] text-ink-3">Choose an available {facilityLabel} to see collections.</p>
@@ -322,7 +332,7 @@ export function CollectionsReport({
         <p className="text-[13px] text-ink-3">Pick a date to see collections.</p>
       ) : loadError ? (
         <div className="rounded-card border border-line bg-paper p-3.5">
-          <p className="text-[13px] text-ink-3">
+          <p role="alert" className="text-[13px] text-ink-3">
             Could not load collections for {scopeLabel}.
           </p>
           <button
@@ -334,7 +344,7 @@ export function CollectionsReport({
           </button>
         </div>
       ) : report === null ? (
-        <p className="text-[13px] text-ink-3">
+        <p role="status" className="text-[13px] text-ink-3">
           Loading collections for {scopeLabel}…
         </p>
       ) : (
@@ -351,7 +361,7 @@ export function CollectionsReport({
               Payment evidence
             </h2>
             <p className="mt-1 text-[12px] text-ink-3">
-              Collected on {report.onDate} · {report.paymentCount} payment
+              Collected on {compactOwner ? formatDateIST(report.onDate) : report.onDate} · {report.paymentCount} payment
               {report.paymentCount === 1 ? "" : "s"}
             </p>
             <p className="mt-1 font-display text-[22px] font-semibold text-ink">

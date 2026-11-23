@@ -11,6 +11,17 @@ vi.mock("@/components/owner-calendar/owner-calendar-toolbar", () => ({OwnerCalen
 import { BookingScreen } from "@/components/booking-screen";
 import type { BookableFacility } from "@/lib/services/bookings";
 afterEach(cleanup);
+it("keeps the selected date and day navigation in the Owner board without create access", () => {
+  const facilities: BookableFacility[] = [{id:"a",name:"Court A",kind:"court",capacity:4,locationId:"site-a",locationName:"Site A",subUnits:[]}];
+  render(<BookingScreen facilities={facilities} timezone="Asia/Kolkata" today="2026-11-13" terminology={{overrides:{},locale:"en"}} compactOwner />);
+  fireEvent.click(screen.getByRole("tab", { name: "Board" }));
+  const date = screen.getByRole("button", { name: "Booking board date" });
+  expect(date.textContent).toContain("13 Nov 2026");
+  fireEvent.click(screen.getByRole("button", { name: "Next day" }));
+  expect(date.textContent).toContain("14 Nov 2026");
+  fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
+  expect(screen.getByRole("button", { name: "Booking calendar date" }).textContent).toContain("14 Nov 2026");
+});
 it("lets the operator change the board resource without losing the booking form context", () => {
   const facilities: BookableFacility[] = [{id:"a",name:"Court A",kind:"court",capacity:4,locationId:"site-a",locationName:"Site A",subUnits:[]},{id:"b",name:"Court B",kind:"court",capacity:4,locationId:"site-a",locationName:"Site A",subUnits:[]}];
   render(<BookingScreen facilities={facilities} timezone="Asia/Kolkata" today="2026-11-13" terminology={{overrides:{},locale:"en"}} canCreate />);

@@ -109,6 +109,7 @@ export function PlanManager({
   const [pending, startTransition] = useTransition();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [activeOnly, setActiveOnly] = useState(false);
 
   function run(key: string, fn: () => Promise<PlanMutationResult>) {
     setPendingKey(key);
@@ -134,9 +135,16 @@ export function PlanManager({
       <h2 className="font-display text-[16px] font-semibold text-ink">
         Plans catalogue
       </h2>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" checked={activeOnly} onChange={event => setActiveOnly(event.target.checked)} />
+          Active plans only
+        </label>
+        <p role="status" className="text-[13px] text-ink-2">{plans.filter(plan => plan.isActive).length} active · {plans.filter(plan => !plan.isActive).length} archived</p>
+      </div>
       {plans.length === 0 ? <div className="mt-2 text-[13px] text-ink-3"><p>No plans yet.</p>{locations.length > 0 ? <p className="mt-1">Facilities: {locations.map(location => location.name).join(", ")}</p> : null}</div> : <div className="mt-2 divide-y divide-line">
       {locations.map((location) => {
-        const rows = byLocation.get(location.id) ?? [];
+        const rows = [...(byLocation.get(location.id) ?? [])].sort((left, right) => Number(right.isActive) - Number(left.isActive));
         return (
           <section key={location.id} className="py-3 first:pt-2 last:pb-0">
             <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
@@ -148,9 +156,10 @@ export function PlanManager({
               </p>
             ) : (
               <div className="mt-2 overflow-hidden">
+                {activeOnly && !rows.some(plan => plan.isActive) ? <p className="text-sm text-ink-2">No active plans at this facility.</p> : null}
                 {rows.map((plan) => (
+                  <div key={plan.id} hidden={activeOnly && !plan.isActive}>
                   <PlanRowEditor
-                    key={plan.id}
                     plan={plan}
                     pending={pending && pendingKey === plan.id}
                     message={messages[plan.id] ?? null}
@@ -159,6 +168,7 @@ export function PlanManager({
                     }
                     onArchive={() => run(plan.id, () => archivePlanAction({ id: plan.id }))}
                   />
+                  </div>
                 ))}
               </div>
             )}

@@ -15,6 +15,8 @@ import {
   type PaymentIntentObservation,
   type PrepareIntentResult,
 } from "@/lib/services/payment-intent-core";
+import { COLLECTION_HOLD_COPY } from "@/lib/collection-hold";
+import { lockAndReadInvoiceCollectionHold } from "@/lib/services/collection-eligibility";
 import { observationStatus } from "@/lib/services/payment-intent-order";
 
 import { loadTarget } from "@/lib/services/payment-intent-target";
@@ -170,6 +172,11 @@ async function prepareIntent(
       .limit(1);
     if (existing[0]) {
       return classifyPreparedIntent(existing[0], actorId, kind, targetId, fingerprint);
+    }
+
+    if (kind === "payment") {
+      const hold = await lockAndReadInvoiceCollectionHold(tx, ctx.tenantId, targetId);
+      if (hold) return { ok: false, error: COLLECTION_HOLD_COPY[hold].refusal };
     }
 
     const open = await findOpen(tx, ctx.tenantId, actorId, kind, targetId);

@@ -139,7 +139,7 @@ describe("Overview dashboard (PR3)", () => {
     expect(screen.getByText("Zero members")).toBeDefined();
     expect(screen.getByText("2 items")).toBeDefined();
 
-    const viewLinks = screen.getAllByText("View");
+    const viewLinks = screen.getAllByRole("link", { name: /^Review tenant/ });
     expect(viewLinks[0]?.closest("a")?.getAttribute("href")).toBe("/ops/tenants/t1");
 
     // Primary element gets the wider column.
@@ -173,20 +173,15 @@ describe("Overview dashboard (PR3)", () => {
     expect(viewAll?.getAttribute("href")).toBe("/ops/activity");
   });
 
-  it("keeps the quick-actions launcher cards", async () => {
+  it("gives operators a direct tenant lookup beside the overview heading", async () => {
     summaryMock.mockResolvedValue(FULL_SUMMARY);
     queueMock.mockResolvedValue([]);
     activityMock.mockResolvedValue({ rows: [], total: 0 });
 
     render(await PlatformHome());
 
-    const quickActions = screen.getByText("Quick actions").closest("section");
-    if (!quickActions) throw new Error("quick actions section not found");
-    expect(within(quickActions).getByText("Tenants").closest("a")?.getAttribute("href")).toBe(
-      "/ops/tenants",
-    );
-    expect(within(quickActions).getByText("Feature catalogue")).toBeDefined();
-    expect(within(quickActions).getByText("Presets")).toBeDefined();
-    expect(within(quickActions).getByText("Leads")).toBeDefined();
+    const action = screen.getByRole("link", { name: "Find a tenant" });
+    expect(action.getAttribute("href")).toBe("/ops/tenants");
+    expect(screen.queryByText("Workspace shortcuts")).toBeNull();
   });
 });

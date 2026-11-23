@@ -5,6 +5,8 @@ import { z } from "zod";
 import { isOpsHost } from "@/lib/ops-host";
 import { readAuthorizedBrandingTarget } from "@/lib/services/branding-target";
 import { readTargetManifestData } from "@/lib/services/branding-target-asset";
+import { buttonClasses } from "@/components/ui/Button";
+import { ClubEntryCard } from "../entry-card";
 
 export const dynamic = "force-dynamic";
 
@@ -19,22 +21,35 @@ export default async function TenantLaunchPage({ params }: { params: Promise<{ t
     readAuthorizedBrandingTarget(tenantId, "guardian", (tx) => readTargetManifestData(tx, tenantId)),
   ]);
   const club = staff ?? member ?? guardian;
-  return <main className="mx-auto min-h-dvh max-w-xl px-4 py-8">
-    <h1 className="break-words font-display text-2xl font-semibold text-ink">{club ? `Open ${club.name}` : "Open your club"}</h1>
-    {staff || member || guardian ? <>
-      <p className="mt-4 text-base text-ink-2">Choose how you want to continue.</p>
-      <ul className="mt-4 space-y-3">
-        {staff ? <li><Link href="/clubs" className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Choose a staff club</Link></li> : null}
-        {member ? <li><Link href="/member" className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Open member view</Link></li> : null}
-        {guardian ? <li><Link href="/family" className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Open family view</Link></li> : null}
-      </ul>
-    </> : <>
-      <p className="mt-4 text-base text-ink-2">Your access could not be confirmed. Sign in again or contact your club.</p>
-      <ul className="mt-4 space-y-3">
-        <li><Link href="/login" className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Staff sign in</Link></li>
-        <li><Link href={`/member/sign-in?clubId=${tenantId}`} className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Member sign in</Link></li>
-        <li><Link href={`/family/sign-in?clubId=${tenantId}`} className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Family sign in</Link></li>
-      </ul>
-    </>}
-  </main>;
+  const destinations = club
+    ? [
+        ...(staff ? [{ href: "/clubs", label: "Choose a staff club" }] : []),
+        ...(member ? [{ href: "/member", label: "Open member view" }] : []),
+        ...(guardian ? [{ href: "/family", label: "Open family view" }] : []),
+      ]
+    : [
+        { href: "/login", label: "Staff sign in" },
+        { href: `/member/sign-in?clubId=${tenantId}`, label: "Member sign in" },
+        { href: `/family/sign-in?clubId=${tenantId}`, label: "Family sign in" },
+      ];
+  return (
+    <ClubEntryCard title={club ? `Open ${club.name}` : "Open your club"}>
+      <p className="text-sm leading-relaxed text-ink-2">
+        {club
+          ? destinations.length === 1 ? "Continue to your view." : "Choose the view you want to open."
+          : "Your access could not be confirmed. Sign in to the correct view or ask your club for help."}
+      </p>
+      <nav aria-label="Club entry" className="mt-4">
+        <ul className="grid gap-2">
+          {destinations.map(({href, label}) => (
+            <li key={href}>
+              <Link href={href} className={buttonClasses({ variant: destinations.length === 1 ? "primary" : "secondary", className: "w-full justify-start" })}>
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </ClubEntryCard>
+  );
 }

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Owner-UI review P1 (2026-10-13) — reconciliation evidence and action
@@ -51,6 +51,52 @@ afterEach(() => {
 });
 
 describe("CollectionsReport scope binding (P1)", () => {
+  it("applies the Owner's date and facility together and keeps a cash draft on cancel", async () => {
+    getDailyCollectionAction.mockResolvedValue(report());
+    render(<CollectionsReport
+      defaultDate="2026-10-09"
+      locations={[LOC_A, LOC_B]}
+      facilityLabel="Facility"
+      canConfirm
+      canReopen={false}
+      compactOwner
+    />);
+
+    const counted = () => screen.getByPlaceholderText<HTMLInputElement>("0.00");
+    await screen.findByRole("button", { name: /confirm count/i });
+    fireEvent.change(counted(), { target: { value: "1200" } });
+    const trigger = screen.getByRole("button", { name: /^Collection date and facility/ });
+    const open = () => {
+      fireEvent.click(trigger);
+      return within(screen.getByRole("dialog", { name: "Collection date and facility" }));
+    };
+    const chooseScope = (sheet: ReturnType<typeof within>) => {
+      const recentDays = within(sheet.getByRole("group", { name: "Last 7 days" }));
+      expect(recentDays.getAllByRole("button")).toHaveLength(7);
+      fireEvent.click(recentDays.getByRole("button", { name: /8 Oct 2026/ }));
+      fireEvent.change(sheet.getByRole("combobox", { name: "Facility" }), { target: { value: LOC_B.id } });
+    };
+
+    const cancelled = open();
+    chooseScope(cancelled);
+    expect(getDailyCollectionAction).toHaveBeenCalledTimes(1);
+    fireEvent.click(cancelled.getByRole("button", { name: "Cancel" }));
+    expect(counted().value).toBe("1200");
+
+    const applied = open();
+    expect(applied.getByRole("combobox", { name: "Facility" })).toHaveProperty("value", LOC_A.id);
+    chooseScope(applied);
+    getDailyCollectionAction.mockResolvedValue(report({ onDate: "2026-10-08", cashPaise: 5000 }));
+    fireEvent.click(applied.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(getDailyCollectionAction).toHaveBeenLastCalledWith({
+      onDate: "2026-10-08",
+      locationId: LOC_B.id,
+    }));
+    expect(getDailyCollectionAction).toHaveBeenCalledTimes(2);
+    await screen.findByRole("button", { name: /confirm count for .*Andheri/i });
+    expect(counted().value).toBe("");
+  });
+
   it("clears the count draft and re-fetches when the facility changes", async () => {
     getDailyCollectionAction
       .mockResolvedValueOnce(report())

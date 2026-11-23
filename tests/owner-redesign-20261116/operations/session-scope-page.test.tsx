@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from "vitest";
 const A = "11111111-1111-4111-8111-111111111111";
 const B = "22222222-2222-4222-8222-222222222222";
 const state = vi.hoisted(() => ({ cookie: undefined as string | undefined, allowed: true, list: vi.fn<(...args: unknown[]) => Promise<never[]>>().mockResolvedValue([]), check: vi.fn<(...args: unknown[]) => Promise<boolean>>().mockResolvedValue(true) }));
-vi.mock("@/lib/auth/surface-guard", () => ({ requireOwner: async () => ({ tenantId: "tenant", permissions: new Set(["programs.write", "attendance.read"]) }), requirePagePermission: () => {} }));
-vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => ({ tenantId: "tenant", permissions: new Set(["programs.write", "attendance.read"]) }) }));
+vi.mock("@/lib/auth/surface-guard", () => ({ requireOwner: async () => ({ tenantId: "tenant", permissions: new Set(["programs.write", "programs.read", "attendance.read"]) }), requirePagePermission: () => {} }));
+vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => ({ tenantId: "tenant", permissions: new Set(["programs.write", "programs.read", "attendance.read"]) }) }));
 vi.mock("@/lib/auth/permission", () => ({ hasPermission: (ctx: { permissions: Set<string> }, key: string) => ctx.permissions.has(key) }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => state.cookie === undefined ? undefined : { value: state.cookie } }) }));
 vi.mock("@/lib/services/selected-facility-access", () => ({ canSelectFacility: async (...args: unknown[]) => { await state.check(...args); return state.allowed; } }));
@@ -21,7 +21,7 @@ it("lets explicit all override the cookie and retains all in schedule and progra
   state.cookie = A;
   render(await Page({ searchParams: Promise.resolve({ facility: "all" }) }));
   expect(state.list).toHaveBeenCalledWith(expect.anything(), expect.any(String), expect.any(String), undefined);
-  expect(screen.getByRole("link", { name: /schedule grid/i }).getAttribute("href")).toContain("facility=all");
+  expect(screen.getByRole("link", { name: "Calendar" }).getAttribute("href")).toContain("facility=all");
   expect(screen.getByRole("link", { name: /programs/i }).getAttribute("href")).toContain("facility=all");
 });
 it("uses explicit facility before legacy location and cookie", async () => {
@@ -43,4 +43,15 @@ it.each(["bad-id", A])("refuses malformed or denied selection %s before querying
   render(await Page({ searchParams: Promise.resolve({ facility }) }));
   expect(screen.getByRole("heading", { name: "Facility unavailable" })).toBeTruthy();
   expect(state.list).not.toHaveBeenCalled();
+});
+
+it("keeps a selected calendar view and date on the scoped return link", async () => {
+  render(await Page({ searchParams: Promise.resolve({ facility: B, date: "2026-11-23", view: "day" }) }));
+  const calendar = screen.getByRole("link", { name: "Calendar" });
+  const href = new URL(calendar.getAttribute("href")!, "http://localhost");
+  expect(href.pathname).toBe("/owner/schedule");
+  expect(href.searchParams.get("facility")).toBe(B);
+  expect(href.searchParams.get("date")).toBe("2026-11-23");
+  expect(href.searchParams.get("view")).toBe("day");
+  expect(screen.getByRole("link", { name: "List" }).getAttribute("aria-current")).toBe("page");
 });

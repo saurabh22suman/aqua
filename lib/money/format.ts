@@ -37,6 +37,34 @@ export function formatINRCompact(paise: number | bigint): string {
   return exact.endsWith(".00") ? exact.slice(0, -3) : exact;
 }
 
+const WHOLE_RUPEE_FORMATTER = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Whole-rupee money for Owner Home summaries and its collection readouts.
+ *
+ * The underlying value stays integer paise. The display rounds HALF-UP to
+ * the nearest rupee, so 50 paise is ₹1 and 149 paise is ₹1. A positive
+ * amount below 50 paise is stated as "Under ₹1" instead of being rounded
+ * down to a false zero. Zero is a real ₹0. Indian digit grouping comes from
+ * the same en-IN formatter family as formatINR.
+ *
+ * This is display only: invoices, receipts, ledgers and reports keep using
+ * formatINR / formatINRCompact so their exact paise never move.
+ */
+export function formatINRWhole(paise: number | bigint): string {
+  if ((typeof paise === "number" && !Number.isSafeInteger(paise)) || paise < 0) {
+    throw new Error(`formatINRWhole expects a non-negative integer paise value, got ${paise}`);
+  }
+  const exact = BigInt(paise);
+  if (exact > 0n && exact < 50n) return "Under ₹1";
+  return WHOLE_RUPEE_FORMATTER.format((exact + 50n) / 100n);
+}
+
 export function parsePaise(formatted: string): number {
   // Strip the currency symbol/label and any whitespace Intl may have
   // inserted (some ICU data emits a non-breaking space after ₹).

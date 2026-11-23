@@ -7,7 +7,7 @@ vi.mock("next/link", () => ({ default: ({ href, children }: { href: string; chil
 vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("NOT_FOUND"); } }));
 vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => ({ roleKey: state.roleKey, tenantId: "tenant-a", userId: "user-a", permissions: new Set(["staff.self"]) }) }));
 vi.mock("@/lib/auth/surface-guard", () => ({ requireCoach: async () => ({}), requireReception: async () => ({}), requireOwner: state.ownerGuard }));
-vi.mock("@/lib/auth/permission", () => ({ requirePermission: () => {}, hasPermission: (_ctx: unknown, permission: string) => permission === "staff.self" }));
+vi.mock("@/lib/auth/permission", () => ({ requirePermission: () => {}, hasPermission: (_ctx: unknown, permission: string) => permission === "staff.self", hasFeature: () => false }));
 vi.mock("@/lib/services/staff", () => ({ getCurrentStaffIdentity: async () => null }));
 vi.mock("@/lib/actions/shifts", () => ({ listMyShiftsAction: async () => [] }));
 vi.mock("@/lib/actions/staff-attendance", () => ({ getMyAttendanceAction: async () => null }));

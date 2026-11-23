@@ -89,6 +89,10 @@ describe("settings onboarding row (W1-6 continuation)", () => {
     expect(screen.queryByTestId("settings-onboarding")).toBeNull();
     expect(document.body.textContent).not.toContain("Onboarding checklist");
     expect(document.body.textContent).not.toContain("Setup guide");
+    const help = screen.getByText("Help").closest("details");
+    expect(help?.open).toBe(false);
+    if (help) help.open = true;
+    expect(screen.getByRole("link", { name: "Review completed setup" }).getAttribute("href")).toBe("/owner/onboarding");
   });
 
   it("keeps the Setup row while any step is incomplete", async () => {

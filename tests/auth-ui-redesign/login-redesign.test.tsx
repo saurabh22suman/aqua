@@ -400,7 +400,8 @@ describe("tenant login redesign", () => {
     render(<LoginPage />);
     const link = screen.getByRole("link", { name: /forgot pin/i });
     expect(link.getAttribute("href")).toBe("/login/reset");
-    expect(link.textContent).toMatch(/reset with whatsapp/i);
+    expect(link.textContent?.trim()).toBe("Forgot PIN?");
+    expect(link.getAttribute("aria-label")).toMatch(/reset with whatsapp/i);
   });
 
   it("keeps the unsynced-draft discard as an explicit, separate choice", async () => {

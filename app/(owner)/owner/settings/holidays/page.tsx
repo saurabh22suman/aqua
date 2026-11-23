@@ -5,6 +5,7 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { BackLink } from "@/components/ui/BackLink";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SettingsReadError } from "@/components/settings/settings-states";
 import { reviewClosureAction } from "@/lib/actions/closure-review";
 import { hasPermission } from "@/lib/auth/permission";
 
@@ -20,12 +21,26 @@ export default async function HolidaysPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
   await requireLiveOwnerSettingsPage(ctx);
-  const holidays = await listHolidaysAction();
+  const holidays = await listHolidaysAction().catch(() => null);
+  if (holidays === null) {
+    // An unavailable calendar is not an empty one: sessions may still be
+    // skipped on a closure the owner cannot see, so refuse to imply none.
+    return (
+      <OwnerPage workflow="settings">
+        <BackLink href="/owner/settings" label="Settings" />
+        <PageHeader title={<>Holidays &amp; closures</>} />
+        <SettingsReadError
+          message="Could not load holidays and closures. Nothing was changed."
+          retryHref="/owner/settings/holidays"
+        />
+      </OwnerPage>
+    );
+  }
   const reviewed = await Promise.all(holidays.slice(0,50).map((holiday) => reviewClosureAction(holiday.id).catch(() => null)));
   const reviews = Object.fromEntries(reviewed.filter((review) => review !== null).map((review) => [review.holidayId,review]));
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="settings">
       <BackLink href="/owner/settings" label="Settings" />
       <PageHeader
         title={<>Holidays &amp; closures</>}
@@ -33,7 +48,7 @@ export default async function HolidaysPage() {
         repeat every year on the same date.</>}
       />
       <div className="mt-4">
-        <HolidaysBoard initialHolidays={holidays} reviews={reviews} canManageSessions={hasPermission(ctx,"programs.write")} />
+        <HolidaysBoard initialHolidays={holidays} reviews={reviews} canManageSessions={hasPermission(ctx,"programs.write")} taskSheet={ctx.roleKey === "owner"} />
       </div>
     </OwnerPage>
   );

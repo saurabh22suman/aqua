@@ -52,14 +52,14 @@ export function OpsPageHeader({
   meta?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
+    <div data-workspace-heading className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0">
         {eyebrow ? (
           <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="mt-2 font-display text-[28px] font-semibold leading-tight text-marine">
+        <h1 className="mt-2 font-display text-[28px] font-semibold leading-tight text-ink">
           {title}
         </h1>
         {lede ? (

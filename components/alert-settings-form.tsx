@@ -18,7 +18,7 @@ export function AlertSettingsForm({
 }) {
   const router = useRouter();
   const [value, setValue] = useState(String(initialThreshold));
-  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "saved" | "error" | "unconfirmed">("idle");
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -41,6 +41,8 @@ export function AlertSettingsForm({
       }
       setStatus("saved");
       router.refresh();
+    } catch {
+      setStatus("unconfirmed");
     } finally {
       setBusy(false);
     }
@@ -63,6 +65,10 @@ export function AlertSettingsForm({
       </div>
 
       <div className="pt-4">
+        <section aria-label="Effective alert threshold" className="owner-work-panel mb-3">
+          <h2 className="text-sm font-semibold">Saved monthly threshold</h2>
+          <p className="mt-1 text-lg font-semibold tabular-nums">{initialThreshold}%</p>
+        </section>
         <label className="block" htmlFor="alert-threshold">
           <span className="mb-1 block text-[13px] font-medium text-ink-2">
             Monthly attendance below (%)
@@ -109,6 +115,7 @@ export function AlertSettingsForm({
             </p>
           ) : null}
         </div>
+        {status === "unconfirmed" ? <p role="alert" className="mt-2 text-sm text-ink-2">Could not confirm the save. Reload to check the effective threshold. Your draft is still here.</p> : null}
       </div>
     </div>
   );

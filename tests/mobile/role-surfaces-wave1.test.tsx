@@ -97,10 +97,6 @@ describe("W1-2 no dead /platform links", () => {
 
 describe("W1-3 parent explainer (not a bare stub)", () => {
   it("explains how parents get their link", () => {
-    // P-D3 (2026-09-13 UI/UX audit): the role check moved from the
-    // (parent) layout into the page so its 404 can render this same
-    // explainer. The content test renders the shared component; the
-    // page's gate is exercised by the role-gating suites.
     render(<ParentLinkExplainer />);
     expect(document.body.textContent).toMatch(/club|academy/i);
     expect(document.body.textContent).toMatch(/link/i);

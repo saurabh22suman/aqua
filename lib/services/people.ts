@@ -1,5 +1,5 @@
 import { and, desc, eq, exists, ilike, isNull, or, sql } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, persons, type MemberStatus } from "@/db/schema/people";
 import { guardianships, consents } from "@/db/schema/consent";
 import { locations } from "@/db/schema/locations";
@@ -14,7 +14,7 @@ import {
 } from "@/lib/services/location-access";
 import { personLocationPredicate } from "@/lib/services/person-location-scope";
 import { isMinor } from "@/lib/time/tz";
-import { asMemberId } from "@/lib/ids";
+import { asMemberId, type TenantId } from "@/lib/ids";
 import { writeAudit } from "@/lib/audit/write";
 
 // isMinor() deliberately throws on a null date of birth -- correct at
@@ -519,18 +519,32 @@ export async function listLocations(ctx: ActionCtx): Promise<LocationOption[]> {
 // after a delete; this reads the current max suffix and adds one. Two
 // concurrent registrations CAN compute the same next code -- this read
 // and createMember's insert are two different transactions, not one,
-// so there is no lock spanning both. members_tenant_member_code_key
-// is the real guarantee; createMemberAction (lib/actions/people.ts)
-// catches that specific conflict and retries with a freshly generated
-// code rather than trusting this function to be collision-free alone.
+// so there is no lock spanning both. The inline unique constraint in
+// migration 0006 is the real guarantee (PostgreSQL names it
+// members_tenant_id_member_code_key); callers that insert catch that
+// specific conflict and retry with a freshly generated code rather
+// than trusting this function to be collision-free alone.
 export async function nextMemberCode(ctx: ActionCtx, prefix = "MEM"): Promise<string> {
-  return withTenant(ctx.tenantId, async (tx) => {
-    const [{ n }] = await tx
-      .select({
-        n: sql<number>`coalesce(max(substring(${members.memberCode} from '[0-9]+$')::int), 0)`,
-      })
-      .from(members)
-      .where(and(eq(members.tenantId, ctx.tenantId), ilike(members.memberCode, `${prefix}-%`)));
-    return `${prefix}-${String(n + 1).padStart(4, "0")}`;
-  });
+  return withTenant(ctx.tenantId, async (tx) =>
+    nextMemberCodeInTx(tx, ctx.tenantId, prefix),
+  );
+}
+
+// The transaction-aware variant for callers that already own a
+// transaction (enquiry conversion): withTenant() cannot nest, but the
+// generator query is the same one. It is still just a read -- the
+// unique key is the real guarantee, so a collision rolls that
+// transaction back and the caller retries from a clean state.
+export async function nextMemberCodeInTx(
+  tx: TenantTx,
+  tenantId: TenantId,
+  prefix = "MEM",
+): Promise<string> {
+  const [{ n }] = await tx
+    .select({
+      n: sql<number>`coalesce(max(substring(${members.memberCode} from '[0-9]+$')::int), 0)`,
+    })
+    .from(members)
+    .where(and(eq(members.tenantId, tenantId), ilike(members.memberCode, `${prefix}-%`)));
+  return `${prefix}-${String(n + 1).padStart(4, "0")}`;
 }

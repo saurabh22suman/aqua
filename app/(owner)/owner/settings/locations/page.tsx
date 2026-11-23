@@ -27,7 +27,7 @@ export default async function LocationsSettingsPage() {
   const multiLocation = locations.length > 1;
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="directory">
       <BackLink href="/owner/settings" label="Settings" />
       <PageHeader
         title={<>{multiLocation ? "Physical facilities" : "Physical facility"}</>}

@@ -5,7 +5,7 @@ import { MemberDetailTabs } from "@/components/member-detail/member-detail-tabs"
 vi.mock("next/navigation", () => ({ usePathname: () => "/owner/members/m" }));
 afterEach(cleanup);
 
-it("keeps available member notes and authorized family access in More", () => {
+it("keeps notes in More and exposes authorized family access alongside the tabs", () => {
   render(<MemberDetailTabs memberId="member-1" active="overview" facilityScope="site" accessHref="/owner/members/member-1/access?facility=site" />);
   const nav = screen.getByRole("navigation", { name: "Member sections" });
   expect(within(nav).getByRole("link", { name: "Fees" }).getAttribute("href")).toBe("/owner/members/member-1?tab=payments&facility=site");

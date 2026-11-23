@@ -1,8 +1,12 @@
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerHomeAttention } from "@/components/owner-home/owner-home-attention";
 import type { OwnerAttentionRow } from "@/components/owner-home/owner-home-attention";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { OwnerHomeHeader } from "@/components/owner-home/owner-home-header";
-import { OwnerHomeMoney } from "@/components/owner-home/owner-home-money";
+import { OwnerHomePriority } from "@/components/owner-home/owner-home-priority";
+import { OwnerScoreCell } from "@/components/owner-home/owner-scoreline";
+import { OwnerHomeNextSession } from "@/components/owner-home/owner-home-next-session";
+import { OwnerHomeFinancialSnapshot } from "@/components/owner-home/owner-home-financial-snapshot";
 import { OwnerHomeTimeline } from "@/components/owner-home/owner-home-timeline";
 import { OwnerHomeCollectionsTrend } from "@/components/owner-home/owner-home-collections-trend";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
@@ -17,42 +21,10 @@ import type {
   OwnerDashboardData,
 } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
-import type { ArtworkIdentity } from "@/components/owner-artwork/preference";
 import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
-import { addDays, formatDateIST } from "@/lib/time/tz";
-import { formatINRCompact } from "@/lib/money/format";
+import { addDays, formatWeekdayDateIST } from "@/lib/time/tz";
 
-// Owner Home — the daily oversight workspace (composition contract in
-// DESIGN.md §7, and the accepted Lavender Option B composition).
-//
-// The owner is a reviewer, not an operator: the screen answers "what
-// is happening, what is owed, what needs me" and never becomes a
-// capture form or an attendance-marking console.
-//
-// The accepted composition (owner mock, 2 November 2026) is ONE
-// collections card, ONE invoice shortcut and the day's sessions:
-//
-//   1. the day and the scope the figures cover
-//   2. the collections card — today's collection, the last seven days,
-//      the contextual "Record payment" action and the secondary
-//      "View trend" link, over the club artwork
-//   3. the invoice shortcut — the outstanding/overdue review, which
-//      keeps its own route
-//   4. today's classes — each row owns its own places taken and
-//      capacity, so there is no second capacity panel printing the
-//      same facts
-//   5. the decision queue — what needs the owner, in the service's own
-//      priority order
-//
-// The Quick actions box and the duplicate "Find a member" tile are
-// gone: an owner reaches Members, Enquiries and Bookings from their own
-// navigation, and a home screen that repeats those shortcuts next to
-// the one action that matters only adds noise. Every figure is a real
-// read from lib/services/dashboard; zeroes say so in words ("No
-// payments recorded today yet"), an unavailable percentage is "—", and
-// completion (marks recorded) is never labelled attendance. Nothing
-// here invents growth, targets, profit or weather.
-
+// Today is composed from the existing scoped dashboard and chart reads.
 const MAX_ATTENTION_ROWS = 3;
 
 type Can = {
@@ -91,7 +63,6 @@ function isMoneyLate(item: NeedsAttentionItem): boolean {
 
 export function OwnerDashboard({
   data,
-  branding,
   terminology,
   chartsData,
   showOnboarding = false,
@@ -103,11 +74,12 @@ export function OwnerDashboard({
     viewSchedule: false,
   },
   facility = null,
-  artworkIdentity,
   period = "last7",
   guideKey,
+  floodlitSport = "court",
 }: {
   guideKey?: string;
+  floodlitSport?: "court" | "pool";
   data: OwnerDashboardData;
   branding: BrandingData;
   terminology: TerminologyState;
@@ -126,21 +98,19 @@ export function OwnerDashboard({
   // The resolved facility scope, carried into every drill-down link so
   // a narrowed Home never opens an unnarrowed destination.
   facility?: string | null;
-  // A stable seed for the club artwork. The caller passes the tenant
-  // id so the picture is chosen once for the visit.
-  illustrationSeed?: string | null;
-  artworkIdentity?: ArtworkIdentity;
 }) {
-  const displayName = branding.displayName ?? data.tenantName;
   const sessionsOther = resolveTerm(terminology, "session", "other");
   const sessionsOne = resolveTerm(terminology, "session", 1);
   const coachOne = resolveTerm(terminology, "coach", 1);
 
-  const scopeLabel =
-    data.scopeLocationName ??
-    (data.facilityBreakdown.length > 1 ? "All locations" : null);
-  const attention = data.needsAttention.filter((item) => !isMoneyLate(item) && (can.readFees || item.title !== "Cash count needs review"));
+  const attention = data.needsAttention.filter((item) => can.readFees || (!isMoneyLate(item) && item.title !== "Cash count needs review"));
   const sessionCount = data.todaysLanes.length;
+  const nextClass = data.nextClass;
+  // The agenda and calendar already cover a next session listed today.
+  const separateNextClass = nextClass && (
+    nextClass.sessionDate !== data.today ||
+    !data.todaysLanes.some(lane => lane.batchId === nextClass.batchId)
+  ) ? nextClass : null;
 
   const scopeParams = (params: Record<string, string>) => {
     const query = new URLSearchParams(params);
@@ -156,16 +126,21 @@ export function OwnerDashboard({
     }),
     dues: scopeParams({ tab: "dues" }),
   };
+  const membersHref = `/owner/members?${new URLSearchParams({ facility: facility ?? "all" }).toString()}`;
   const scheduleHref = `/owner/schedule?${new URLSearchParams({ date: data.today, facility: facility ?? "all" }).toString()}`;
+  // The scoreboard's own calendar link: the NEXT session's real date, not
+  // today's. It stays field-for-field scoped with the facility the figure
+  // was read under, and is only built when the caller may open Schedule.
+  const nextSessionHref = data.nextClass
+    ? `/owner/schedule?${new URLSearchParams({ date: data.nextClass.sessionDate, facility: facility ?? "all" }).toString()}`
+    : null;
   // The trend report is the REAL drill-down for the collections figure,
   // and it carries the same scope and the same range the card was read
   // under — a narrowed Home never opens an unnarrowed destination.
-  // The selected range, compact: the charts read's own from/to dates, the
-  // same window the seven-day figure was read under. No charts read → no
-  // pill (never an invented window).
-  const rangeLabel = chartsData?.period
-    ? `${formatDateIST(chartsData.period.currentFromDate).replace(/ \d{4}$/, "")} – ${formatDateIST(chartsData.period.currentToDate).replace(/ \d{4}$/, "")}`
-    : null;
+  // Overdue is the same dues read the finance card's figures came from,
+  // narrowed by the fees hub's own overdue flag; the destination applies
+  // the tenant-local due-date cut, so Home never invents one.
+  const overdueHref = scopeParams({ tab: "dues", overdue: "1" });
   const trendHref = can.viewTrend && can.readFees
     ? `/owner/reports/collections?${new URLSearchParams({
         view: "trends",
@@ -185,21 +160,129 @@ export function OwnerDashboard({
       hiddenAttention.push(item);
     }
   }
+  // The priority card is the first item of the service's own priority
+  // order (cash discrepancy, then the billing decision, then the
+  // follow-ups, then the register) — never a separately chosen item.
+  const priorityItem = attention[0] ?? null;
+  const priorityIsOverdue = priorityItem ? isMoneyLate(priorityItem) : false;
+  const overdueCount = data.money?.overdueInvoiceCount ?? 0;
+  const oldest = data.money?.oldestOverdueDays;
+  const priorityDetail = priorityIsOverdue && overdueCount > 0
+    ? `${overdueCount} ${overdueCount === 1 ? "invoice" : "invoices"} past due${oldest ? ` · oldest ${oldest} ${oldest === 1 ? "day" : "days"} late` : ""}`
+    : priorityItem?.detail;
+  const attentionDestination = (item: NeedsAttentionItem) => isMoneyLate(item)
+    ? overdueHref
+    : item.href === "/owner/reports/collections"
+      ? `/owner/reports/collections?${new URLSearchParams({ facility: facility ?? "all" })}`
+      : item.href;
+  const priorityHref = priorityItem ? attentionDestination(priorityItem) : undefined;
+  const priorityAction = priorityItem?.title === "Cash count needs review" ? "Open cash count"
+    : priorityIsOverdue ? "Open overdue invoices"
+    : priorityItem?.title === "Follow-up overdue" ? "Open enquiry"
+    : priorityItem?.title === "Register not started" ? "View register"
+    : "Review";
   const attentionRows = (items: NeedsAttentionItem[]): OwnerAttentionRow[] =>
     items.map((item) => ({
       title: item.title,
       detail: item.detail,
-      href: item.href,
+      href: attentionDestination(item),
     }));
 
+  const showAttention = attention.length > 0 || can.readFees || showOnboarding;
+
+  // Keep the authorized quick action below the agenda and collections.
+  const enquiryAction =
+    can.captureEnquiry && can.readEnquiries ? (
+      <Link
+        href="/owner/enquiries?capture=1"
+        className="inline-flex min-h-11 items-center gap-1.5 text-[12.5px] font-medium text-[var(--accent-ink)]"
+      >
+        <OwnerIcon name="plus" size={16} />
+        New enquiry
+      </Link>
+    ) : null;
+
   return (
-    <OwnerPage data-testid="owner-home">
-      {/* 1 — the day and the scope the figures cover. */}
-      <OwnerHomeHeader
-        displayName={displayName}
-        scopeLabel={scopeLabel}
-        today={data.today}
+    <OwnerPage
+      data-testid="owner-home"
+      data-floodlit-owner=""
+      data-floodlit-sport={floodlitSport}
+      className="floodlit-workspace courtside-home"
+    >
+      <section
+        className="floodlit-hero"
+        data-testid="owner-floodlit-hero"
+        aria-labelledby="owner-home-title"
+      >
+        <OwnerHomeHeader today={data.today} />
+        {can.readFees ? (
+          <OwnerHomeFinancialSnapshot
+            money={data.money}
+            paymentsHref={fees.collected}
+            invoicesHref={fees.dues}
+            overdueHref={priorityIsOverdue ? null : overdueHref}
+          />
+        ) : null}
+      </section>
+
+      <OwnerHomePriority
+        className="floodlit-priority priority courtside-workspace-priority"
+        item={priorityItem}
+        detail={priorityDetail}
+        action={priorityAction}
+        actionHref={priorityHref}
       />
+
+      <div className={`floodlit-support${can.readFees ? "" : " floodlit-support-single"}`}>
+        <OwnerHomeTimeline
+          id="owner-agenda"
+          lanes={data.todaysLanes}
+          dateLabel={formatWeekdayDateIST(data.today)}
+          coachLabel={coachOne}
+          sessionLabel={sessionsOne}
+          sessionsLabel={sessionCount === 1 ? sessionsOne : sessionsOther}
+          scheduleHref={can.viewSchedule ? scheduleHref : null}
+          nextClass={data.nextClass}
+          lead={separateNextClass ? (
+            <OwnerHomeNextSession
+              nextClass={separateNextClass}
+              siteLabel={data.scopeLocationName}
+              scheduleHref={can.viewSchedule ? nextSessionHref ?? scheduleHref : null}
+            />
+          ) : null}
+        />
+        {can.readFees ? <OwnerHomeCollectionsTrend data={chartsData} href={trendHref} /> : null}
+      </div>
+      {enquiryAction ? <div className="flex justify-end">{enquiryAction}</div> : null}
+
+      <ul className="courtside-scoreline" aria-label="Overview totals">
+        <OwnerScoreCell count={sessionCount} label="Sessions today" icon="calendar" href="#owner-agenda" />
+        <OwnerScoreCell count={attention.length} label="Need attention" icon="alert" href={showAttention ? "#owner-attention" : undefined} />
+        <OwnerScoreCell count={data.activeMemberCount} label="Active members" icon="members" href={can.readMembers ? membersHref : undefined} />
+      </ul>
+
+      {showAttention ? (
+        <div id="owner-attention" tabIndex={-1}>
+          <OwnerHomeAttention
+            rows={attentionRows(visibleAttention)}
+            hiddenRows={attentionRows(hiddenAttention)}
+            count={attention.length}
+            summary={attention.length === 0 ? "No items to review today" : ""}
+            onEmpty={showOnboarding ? <p className="text-[13px] text-ink-2">Finish setting up your club.</p> : undefined}
+            footer={can.readFees && data.money ? (
+              <Link className="courtside-attention-action" href={fees.dues}>
+                <OwnerIcon name="invoice" size={18} />
+                <span><strong>{can.recordPayment ? "Record payment" : "Review open invoices"}</strong><small>Fees and payments</small></span>
+                <OwnerIcon name="chevron" size={16} />
+              </Link>
+            ) : null}
+          />
+        </div>
+      ) : null}
+
+      {showOnboarding ? (
+        <Link href="/owner/onboarding" className="mt-4 inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-4 text-sm font-medium text-ink hover:bg-deck">Set up your club</Link>
+      ) : null}
       <OptionalWorkspaceGuide
         key={guideKey}
         startCollapsed
@@ -209,87 +292,11 @@ export function OwnerDashboard({
         regionLabel="Optional daily overview guide"
         itemLabel="Overview area"
         items={[
-          { key: "sessions", title: "Today's sessions", detail: "The timeline shows the day's sessions or the next class when available." },
-          ...(attention.length > 0 || showOnboarding ? [{ key: "attention", title: "Needs attention", detail: "This section brings together the items shown on your overview." }] : []),
+          { key: "sessions", title: "Today's sessions", detail: "See the day's schedule and the next booked session." },
+          ...(showAttention ? [{ key: "attention", title: "Needs attention", detail: "Review outstanding tasks and follow-ups." }] : []),
           ...(showOnboarding ? [{ key: "setup", title: "Register checks", detail: "The setup link opens the available register checks." }] : []),
         ]}
       />
-      {showOnboarding ? <Link href="/owner/onboarding" className="mt-4 inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-4 text-sm font-medium text-ink hover:bg-deck focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]">Set up your club</Link> : null}
-
-      {/* 2 — the collections card: today's collection, the last seven
-          days, and the two actions that belong to collections. */}
-      <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(250px,1fr)]">
-      <div className="grid min-w-0 gap-4">
-      <div
-        data-testid="owner-home-lead"
-        className="min-w-0"
-      >
-        <div className="min-w-0">
-          {can.readFees && data.money ? <OwnerHomeMoney
-            money={data.money}
-            artworkIdentity={artworkIdentity}
-            last7Paise={can.readFees && chartsData?.period.key === "last7" ? chartsData.collections.totalPaise : null}
-            collectedHref={can.readFees ? fees.collected : null}
-            collectHref={can.recordPayment && can.readFees ? fees.dues : null}
-            trendHref={trendHref}
-            rangeLabel={rangeLabel}
-          /> : null}
-      </div>
-
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        {can.readFees && data.money ? <div className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
-          <p className="text-[12px] text-ink-2">Outstanding now</p>
-          <p className="mt-2 break-words font-display text-[24px] font-semibold tabular-nums">{formatINRCompact(data.money.outstandingPaise)}</p>
-          <p className="mt-1 text-[12px] text-ink-3">{data.money.dueInvoiceCount} unpaid {data.money.dueInvoiceCount === 1 ? "invoice" : "invoices"}</p>
-        </div> : null}
-        <div className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
-          <p className="text-[12px] text-ink-2">Today&apos;s {sessionsOther}</p>
-          <p className="mt-2 font-display text-[24px] font-semibold tabular-nums">{sessionCount}</p>
-          <p className="mt-1 text-[12px] text-ink-3">{sessionCount === 1 ? sessionsOne : sessionsOther}</p>
-        </div>
-      </div>
-
-      {/* 3 — the day's sessions follow the Collections card directly (the
-          approved composition). Each row states the time, the class with a
-          readable coach/facility line, and one truthful soft state pill. */}
-      <div data-testid="owner-home-work">
-        <OwnerHomeTimeline
-          lanes={data.todaysLanes}
-          coachLabel={coachOne}
-          sessionLabel={sessionsOne}
-          sessionsLabel={sessionCount === 1 ? sessionsOne : sessionsOther}
-          scheduleHref={can.viewSchedule ? scheduleHref : null}
-          nextClass={data.nextClass}
-        />
-      </div>
-      </div>
-      <div className="grid min-w-0 gap-4">
-      {attention.length > 0 || showOnboarding ? <div className="min-w-0">
-          <OwnerHomeAttention
-            rows={attentionRows(visibleAttention)}
-            hiddenRows={attentionRows(hiddenAttention)}
-            count={attention.length}
-            summary={
-              attention.length === 0
-                ? "Nothing needs your attention today"
-                : `${attention.length} thing${
-                    attention.length === 1 ? "" : "s"
-                  } to keep your club on track`
-            }
-            onEmpty={
-              showOnboarding ? (
-                <p className="mt-1 text-[12.5px] text-ink-3">
-                  Setting the academy up is the next thing worth doing.
-                </p>
-              ) : undefined
-            }
-          />
-        </div> : null}
-      {can.readFees ? <OwnerHomeCollectionsTrend data={chartsData} href={trendHref} /> : null}
-      </div>
-      </div>
     </OwnerPage>
   );
 }

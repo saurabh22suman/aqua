@@ -24,6 +24,7 @@ export type PinFieldProps = {
   onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
   revealed: boolean;
   onToggleRevealed: () => void;
+  autoComplete?: "current-password" | "new-password";
   invalid?: boolean;
   error?: string;
 };
@@ -36,6 +37,7 @@ export function PinField({
   onKeyDown,
   revealed,
   onToggleRevealed,
+  autoComplete = "current-password",
   invalid = false,
   error,
 }: PinFieldProps) {
@@ -60,7 +62,7 @@ export function PinField({
           onKeyDown={onKeyDown}
           type={revealed ? "text" : "password"}
           inputMode="numeric"
-          autoComplete="current-password"
+          autoComplete={autoComplete}
           maxLength={12}
           aria-describedby={describedBy}
           aria-required="true"

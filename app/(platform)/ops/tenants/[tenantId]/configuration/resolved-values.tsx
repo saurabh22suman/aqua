@@ -46,7 +46,7 @@ function sourceDetail(config: ResolvedConfig): string | null {
 
 export function SourcePill({ config }: { config: ResolvedConfig }) {
   return (
-    <OpsStatusPill tone={config.source.scopeType === "default" ? "neutral" : "water"}>
+    <OpsStatusPill tone="neutral">
       {scopeLabel(config)}
     </OpsStatusPill>
   );

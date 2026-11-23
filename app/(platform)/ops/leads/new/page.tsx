@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { NewLeadForm } from "./new-lead-form";
 import { OpsPage, OpsPageHeader } from "@/components/ops/ops-primitives";
 import { OpsWriteGate } from "@/components/ops/ops-display";
+
+export const metadata: Metadata = { title: "New lead" };
 
 // Ops redesign (28 October 2026): the breadcrumb is the page frame's
 // eyebrow, and the form is the shared card + shared controls.

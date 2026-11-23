@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -15,6 +16,8 @@ import {
   OpsPageHeader,
 } from "@/components/ops/ops-primitives";
 import { OpsStatusPill } from "@/components/ops/ops-display";
+
+export const metadata: Metadata = { title: "Lead details" };
 
 // O-10 (docs/ops-platform-design.md §7) — one lead: the qualification
 // record, the lifecycle controls and the conversion action.
@@ -175,6 +178,7 @@ export default async function LeadDetailPage({
       <div className="mt-8">
         <LeadActions
           leadId={lead.id}
+          businessName={lead.businessName}
           currentStatus={lead.status}
           hasLinkedTenant={Boolean(linkedTenantId)}
           linkedTenantId={linkedTenantId}

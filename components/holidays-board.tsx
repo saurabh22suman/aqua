@@ -46,10 +46,12 @@ export function HolidaysBoard({
   initialHolidays,
   reviews = {},
   canManageSessions = false,
+  taskSheet = false,
 }: {
   initialHolidays: HolidayRow[];
   reviews?: Record<string, ClosureReview>;
   canManageSessions?: boolean;
+  taskSheet?: boolean;
 }) {
   const router = useRouter();
   const [holidays, setHolidays] = useState(initialHolidays);
@@ -58,6 +60,8 @@ export function HolidaysBoard({
   const [recurringYearly, setRecurringYearly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<HolidayRow | null>(null);
   // MD-01 follow-up — the removal refusal must be visible in the active
   // confirmation, not inside the separate (possibly closed) add editor.
@@ -75,6 +79,7 @@ export function HolidaysBoard({
     if (!name.trim() || !holidayDate) return;
     setBusy(true);
     setError(null);
+    setAdded(null);
     try {
       const res = await addHolidayAction({
         name: name.trim(),
@@ -85,9 +90,11 @@ export function HolidaysBoard({
         setError(res.message);
         return;
       }
+      setAdded(`${name.trim()} added.`);
       setName("");
       setHolidayDate("");
       setRecurringYearly(false);
+      setAddOpen(false);
       router.refresh();
     } catch {
       setError(
@@ -136,63 +143,8 @@ export function HolidaysBoard({
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <h2 className="font-display text-[16px] font-semibold text-ink">
-        Holiday list
-      </h2>
-      <p className="max-w-[65ch] text-[12.5px] text-ink-3">
-        These closures are club-wide. Session generation skips these dates. This does not cancel sessions
-        already generated.
-      </p>
-      {holidays.length === 0 ? (
-        <div className="rounded-ctl border border-line bg-paper">
-          <EmptyState
-            title="No holidays yet"
-            body="Declare a holiday and the session generator skips that date."
-          />
-        </div>
-      ) : (
-        <ul className="divide-y divide-line rounded-card border border-line bg-paper">
-          {holidays.map((h) => (
-            <li key={h.id} className="flex items-center gap-3 px-3.5 py-3">
-              <div className="h-9 w-9 rounded-[11px] bg-deck text-ink-3 grid place-items-center flex-none">
-                <CalendarOff size={16} aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="break-words text-[13.5px] font-medium">{h.name}</p>
-                <p className="text-[11.5px] text-ink-3">
-                  {formatDateIST(h.holidayDate)}
-                  {h.recurringYearly ? " · Repeats yearly" : ""}
-                </p>
-                {reviews[h.id] ? <AffectedSessions review={reviews[h.id]!} canManageSessions={canManageSessions} /> : <p className="mt-1 text-[12px] text-ink-2">Affected-session review unavailable. Refresh to try again.</p>}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setRemoveError(null);
-                  setPendingRemove(h);
-                }}
-                disabled={busy}
-                aria-label={`Remove ${h.name}`}
-                className="flex h-11 w-11 flex-none items-center justify-center rounded-ctl text-ink-3 disabled:opacity-50"
-              >
-                <Trash2 size={15} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <details className="group rounded-card border border-line bg-paper p-5">
-        <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-display text-[16px] font-semibold text-ink">
-          Add holiday
-          <span className="flex flex-none items-center gap-2">
-            <OwnerIcon name="plus" size={18} className="group-open:hidden" />
-            <ChevronDown size={18} aria-hidden="true" className="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
-          </span>
-        </summary>
-        <div className="mt-3 space-y-2.5">
+  const closureFields = (
+    <div className="space-y-2.5">
         <label className="block">
           <span className="block text-[12px] text-ink-3 mb-1">
             Holiday name
@@ -240,8 +192,80 @@ export function HolidaysBoard({
             {error}
           </p>
         ) : null}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {taskSheet ? <>
+        <Button type="button" onClick={() => setAddOpen(true)} variant="primary" aria-haspopup="dialog">
+          <OwnerIcon name="plus" size={16} /> Add a closure
+        </Button>
+        {added ? <p role="status" className="text-sm text-ink-2">{added}</p> : null}
+        <Dialog open={addOpen} onOpenChange={open => { if (!busy) setAddOpen(open); }} title="Add a closure">
+          {closureFields}
+        </Dialog>
+      </> : <details className="group owner-work-panel"
+        onToggle={event => {
+          if (event.currentTarget.open) event.currentTarget.querySelector<HTMLInputElement>('[data-testid="holiday-name"]')?.focus();
+        }}>
+        <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-display text-[16px] font-semibold text-ink">
+          Add a closure
+          <span className="flex flex-none items-center gap-2">
+            <OwnerIcon name="plus" size={18} className="group-open:hidden" />
+            <ChevronDown size={18} aria-hidden="true" className="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+          </span>
+        </summary>
+        <div className="mt-3">{closureFields}</div>
+      </details>}
+
+      <h2 className="font-display text-[16px] font-semibold text-ink">
+        Holiday list
+      </h2>
+      <p className="max-w-[65ch] text-[12.5px] text-ink-3">
+        These closures are club-wide. Session generation skips these dates. This does not cancel sessions
+        already generated.
+      </p>
+      {holidays.length === 0 ? (
+        <div className="rounded-ctl border border-line bg-paper">
+          <EmptyState
+            title="No holidays yet"
+            body="Declare a holiday and the session generator skips that date."
+          />
         </div>
-      </details>
+      ) : (
+        <ul className="divide-y divide-line rounded-card border border-line bg-paper">
+          {holidays.map((h) => (
+            <li key={h.id} className="flex items-center gap-3 px-3.5 py-3">
+              <div className="h-9 w-9 rounded-[11px] bg-deck text-ink-3 grid place-items-center flex-none">
+                <CalendarOff size={16} aria-hidden="true" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-[13.5px] font-medium">{h.name}</p>
+                <p className="text-[11.5px] text-ink-3">
+                  {formatDateIST(h.holidayDate)}
+                  {h.recurringYearly ? " · Repeats yearly" : ""}
+                </p>
+                {reviews[h.id] ? <AffectedSessions review={reviews[h.id]!} canManageSessions={canManageSessions} /> : <p className="mt-1 text-[12px] text-ink-2">Affected-session review unavailable. Refresh to try again.</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRemoveError(null);
+                  setPendingRemove(h);
+                }}
+                disabled={busy}
+                aria-label={`Remove ${h.name}`}
+                className="flex h-11 w-11 flex-none items-center justify-center rounded-ctl text-ink-3 disabled:opacity-50"
+              >
+                <Trash2 size={15} aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+
 
       <Dialog
         open={pendingRemove !== null}

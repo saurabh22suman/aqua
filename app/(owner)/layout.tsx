@@ -1,3 +1,9 @@
+import "./courtside.css";
+import "./courtside-workspace.css";
+import "./floodlit-owner.css";
+import "./owner-brief.css";
+import "./owner-pastel.css";
+import "./owner-mobile-workspace.css";
 import { ClubSelectionRequired } from "@/lib/auth/active-club";
 import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
@@ -81,26 +87,23 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
   // Members, Fees & payments and Reports; Owner/Admin hold every gate
   // and see the full contract unchanged.
   //
-  // Owner redesign (27 October 2026) — the booking desk joins the
-  // desktop Scheduling group, but only for a caller who may read
-  // bookings AND whose tenant is entitled to the booking feature. That
-  // is the same pair of gates the BOOKINGS ROUTE enforces
-  // (app/(owner)/owner/bookings/page.tsx), so the sidebar never offers
-  // a destination that would answer 404. The mobile bottom nav keeps
-  // its four items (DESIGN.md §2); the phone reaches the booking desk
-  // through Settings, and the Operations lane owns those links.
+  // Bookings uses the same permission and entitlement as its page.
+  // The Owner phone preset orders the authorized links from these groups.
   const sidebarGroups = ownerSidebarGroupsWithBookings(
-    ownerSidebarGroupsForPermissions(ctx.permissions, terminology),
+    ownerSidebarGroupsForPermissions(ctx.permissions, terminology, ctx.features),
     ctx.permissions,
     ctx.features,
   ).map((group) => ({ ...group, items: group.items.filter((item) => liveOwner || item.href !== "/owner/settings") }))
     .filter((group) => group.items.length > 0);
   // Keep URL-dependent picker suspension local to the control.
   // Authorized navigation and content must not wait behind its fallback.
+  const operations = ctx.roleKey === "manager" || ctx.roleKey === "admin";
   return (
     <OwnerShell
       navItems={ownerNavForPermissions(ctx.permissions, terminology).filter((item) => liveOwner || item.href !== "/owner/settings")}
       sidebarGroups={sidebarGroups}
+      mobileNavPreset={ctx.roleKey === "owner" ? "courtside" : operations ? "operations" : "legacy"}
+      brief={ctx.roleKey === "owner"}
       locations={pickerLocations}
       clubName={clubDisplayName(branding.fallbackDisplayName, branding)}
       clubLogoUrl={branding.logoUrl}
@@ -108,7 +111,9 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
       scopeUserId={ctx.userId}
       accountName={identity?.fullName ?? null}
       accountLabel={ownerRoleLabel(ctx.roleKey)}
+      accountHref={operations ? "/owner/account" : undefined}
       guideHomeHref={ctx.permissions.has("dashboard.view") ? "/owner" : undefined}
+      canChooseDefaultFacility={ctx.permissions.has("dashboard.view") && ctx.features.has("reports")}
     >
       {children}
     </OwnerShell>

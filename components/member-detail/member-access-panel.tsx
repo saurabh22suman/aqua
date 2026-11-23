@@ -54,9 +54,11 @@ type Issued = { linkId: string; url: string; expiresAt: string };
 export function MemberAccessPanel({
   read,
   failed,
+  showIdentity = true,
 }: {
   read: MemberAccessRead | null;
   failed: boolean;
+  showIdentity?: boolean;
 }) {
   const router = useRouter();
   const [busyLinkId, setBusyLinkId] = useState<string | null>(null);
@@ -145,14 +147,8 @@ export function MemberAccessPanel({
     <section className="rounded-card border border-line bg-paper p-4" data-testid="member-access-panel">
       <SectionHeading
         title="Sign-in links"
-        subtitle={`${read.memberName} · ${read.memberCode} · ${read.facilityName}`}
+        subtitle={showIdentity ? `${read.memberName} · ${read.memberCode} · ${read.facilityName}` : undefined}
       />
-      {read.guardianChoices?.length ? (
-        <section aria-label="Family authorizations" className="mt-4">
-          <h3 className="text-sm font-medium text-ink">Family authorizations</h3>
-          {read.guardianChoices.map((guardian) => <GuardianAuthorizationControl key={guardian.guardianshipId} {...guardian} />)}
-        </section>
-      ) : null}
       {read.links.length === 0 ? (
         <div className="mt-3">
           <p className="text-[15px] font-medium text-ink">No sign-in link yet</p>
@@ -294,6 +290,14 @@ export function MemberAccessPanel({
           })}
         </ul>
       )}
+      {read.guardianChoices?.length ? (
+        <details id="member-family-authorizations" className="mt-4 border-t border-line">
+          <summary className="min-h-11 cursor-pointer content-center text-sm font-medium text-ink">
+            Family authorizations
+          </summary>
+          {read.guardianChoices.map((guardian) => <GuardianAuthorizationControl key={guardian.guardianshipId} {...guardian} />)}
+        </details>
+      ) : null}
     </section>
   );
 }

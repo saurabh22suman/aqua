@@ -6,6 +6,7 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { ActivityManager } from "@/components/activity-manager";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 
 // Activity catalog (owner surface): what the club runs at each site —
 // pool, court, table, café counter. Plans attach to activities next.
@@ -20,17 +21,8 @@ export default async function ActivitiesPage() {
   ]);
 
   return (
-    <OwnerPage className="max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner/settings"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Settings
-        </Link>
-        {" / "}
-        activities
-      </p>
+    <OwnerPage workflow="settings" className="max-w-2xl">
+      <BackLink href="/owner/settings" label="Settings" />
       <PageHeader
         title={<>Sports resources</>}
         purpose={<>Each entry is one resource, such as a pool, court or table,
@@ -45,9 +37,17 @@ export default async function ActivitiesPage() {
           activities={activities}
         />
       </div>
-      <Link href="/owner/settings/academy" className="mt-4 inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2">
-        Next: Club profile &amp; GST
-      </Link>
+      {/* Resources are the prerequisite for both priced catalogues. The
+          page names the two real next tasks instead of sending the owner
+          back to their profile. */}
+      <nav aria-label="Next steps" className="mt-5 flex flex-wrap gap-x-5 gap-y-1 border-t border-line pt-4">
+        <Link href="/owner/settings/plans" className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2">
+          Next: Membership plans
+        </Link>
+        <Link href="/owner/settings/booking-prices" className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2">
+          Next: Booking slot prices
+        </Link>
+      </nav>
     </OwnerPage>
   );
 }

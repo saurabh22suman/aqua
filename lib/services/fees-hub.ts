@@ -24,6 +24,8 @@ import {
   methodsForGroup,
 } from "@/lib/money/payment-groups";
 import type { PaymentMethod } from "@/db/schema/payments";
+import { asCollectionHold, type CollectionHold } from "@/lib/collection-hold";
+import { invoiceCollectionHoldSql } from "@/lib/services/collection-eligibility";
 
 // U-02 — the Fees & Payments hub reads. This is one place over the
 // existing C-29…C-39 spine: an overview (collected / outstanding), a
@@ -78,6 +80,11 @@ export type HubInvoiceRow = {
   issuedOn: string;
   dueOn: string;
   locationName: string;
+  // Local audit batch (2026-11-21) — a linked booking was cancelled. The
+  // row and its balance stay visible, but collection is held for owner
+  // review. Optional so existing fixtures and ordinary invoices are
+  // unchanged.
+  collectionHold?: CollectionHold;
 };
 
 export type HubTransactionRow = {
@@ -105,6 +112,10 @@ export const feesInvoiceFilterInput = z.object({
   locationId: z.string().uuid().optional(),
   search: z.string().trim().max(120).optional(),
   invoiceStatus: z.enum(["issued", "partial"]).optional(),
+  // A subset of Dues: only invoices already past their due date in the
+  // tenant's own calendar. Optional so every existing caller and the
+  // normal Dues list keep their current behaviour.
+  overdueOnly: z.boolean().optional(),
 });
 
 export const feesTransactionsInput = z.object({
@@ -139,6 +150,10 @@ export type DeskDueRow = {
   dueOn: string;
   outstandingPaise: number;
   overdue: boolean;
+  // Local audit batch (2026-11-21) — the desk must not offer collection
+  // (or a collections call shortcut) when a linked booking was cancelled.
+  // The balance remains visible for owner review.
+  collectionHold?: CollectionHold;
 };
 
 export const DESK_DUES_LIMIT = 50;
@@ -176,6 +191,7 @@ export async function listDeskDues(
         dueOn: invoices.dueOn,
         totalPaise: invoices.totalPaise,
         paidPaise: invoices.paidPaise,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
       // WR-1 — a guest invoice has no member, so the member join is a
@@ -190,17 +206,21 @@ export async function listDeskDues(
       .orderBy(asc(invoices.dueOn), asc(invoices.createdAt))
       .limit(limit);
 
-    return rows.map((row) => ({
-      id: row.id,
-      invoiceNumber: row.invoiceNumber,
-      memberName: row.memberName,
-      memberCode: row.memberCode,
-      phone: row.phone,
-      payerName: row.memberName ?? row.guestName ?? "",
-      dueOn: row.dueOn,
-      outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
-      overdue: row.dueOn < today,
-    }));
+    return rows.map((row) => {
+      const collectionHold = asCollectionHold(row.collectionHold);
+      return {
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        memberName: row.memberName,
+        memberCode: row.memberCode,
+        phone: row.phone,
+        payerName: row.memberName ?? row.guestName ?? "",
+        dueOn: row.dueOn,
+        outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
+        overdue: row.dueOn < today,
+        ...(collectionHold ? { collectionHold } : {}),
+      };
+    });
   });
 }
 
@@ -372,9 +392,22 @@ export async function listHubInvoices(
   return withTenant(ctx.tenantId, async (tx) => {
     const access = await resolveLocationAccess(tx, ctx);
     const conditions = [eq(invoices.tenantId, ctx.tenantId)];
-    if (parsed.data.status === "dues") {
+    // overdueOnly is always a Dues subset, even if a caller pairs it with
+    // the wider status: it must never return a settled or void document.
+    if (parsed.data.status === "dues" || parsed.data.overdueOnly) {
       conditions.push(inArray(invoices.status, DUES_STATUSES));
       conditions.push(sql`${invoices.totalPaise} > ${invoices.paidPaise}`);
+    }
+    if (parsed.data.overdueOnly) {
+      // Same clock choice as getFeesOverview: the tenant's timezone,
+      // falling back to UTC, so "overdue" means the same calendar day
+      // everywhere the owner sees a late balance.
+      const [tenant] = await tx
+        .select({ timezone: tenants.timezone })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId));
+      const today = todayInZone(tenant?.timezone ?? "UTC");
+      conditions.push(lt(invoices.dueOn, today));
     }
     if (parsed.data.locationId) {
       conditions.push(eq(invoices.locationId, parsed.data.locationId));
@@ -402,6 +435,7 @@ export async function listHubInvoices(
         issuedOn: invoices.issuedOn,
         dueOn: invoices.dueOn,
         locationName: locations.name,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
       // WR-1 — a guest invoice has no member, so the member join is a
@@ -415,26 +449,32 @@ export async function listHubInvoices(
       .innerJoin(locations, eq(locations.id, invoices.locationId))
       .where(and(...conditions))
       .orderBy(
-        parsed.data.status === "dues" ? asc(invoices.dueOn) : desc(invoices.issuedOn),
+        parsed.data.status === "dues" || parsed.data.overdueOnly
+          ? asc(invoices.dueOn)
+          : desc(invoices.issuedOn),
         desc(invoices.createdAt),
       );
 
-    return rows.map((r) => ({
-      id: r.id,
-      invoiceNumber: r.invoiceNumber,
-      memberId: r.memberId,
-      memberName: r.memberName,
-      payerKind: r.payerKind as InvoicePayerKind,
-      payerName: r.memberName ?? r.guestName ?? "",
-      totalPaise: toSafePaise(r.totalPaise),
-      paidPaise: toSafePaise(r.paidPaise),
-      outstandingPaise: toSafePaise(r.totalPaise - r.paidPaise),
-      status: r.status as InvoiceStatus,
-      source: r.source as InvoiceSource,
-      issuedOn: r.issuedOn,
-      dueOn: r.dueOn,
-      locationName: r.locationName,
-    }));
+    return rows.map((r) => {
+      const collectionHold = asCollectionHold(r.collectionHold);
+      return {
+        id: r.id,
+        invoiceNumber: r.invoiceNumber,
+        memberId: r.memberId,
+        memberName: r.memberName,
+        payerKind: r.payerKind as InvoicePayerKind,
+        payerName: r.memberName ?? r.guestName ?? "",
+        totalPaise: toSafePaise(r.totalPaise),
+        paidPaise: toSafePaise(r.paidPaise),
+        outstandingPaise: toSafePaise(r.totalPaise - r.paidPaise),
+        status: r.status as InvoiceStatus,
+        source: r.source as InvoiceSource,
+        issuedOn: r.issuedOn,
+        dueOn: r.dueOn,
+        locationName: r.locationName,
+        ...(collectionHold ? { collectionHold } : {}),
+      };
+    });
   });
 }
 

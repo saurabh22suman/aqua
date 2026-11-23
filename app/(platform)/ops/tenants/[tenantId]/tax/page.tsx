@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantTaxConfigAction } from "@/lib/actions/platform-tax";
 import { TaxRates } from "./tax-rates";
 import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Tenant GST rates" };
 
 // GST rates in the ops console: the tenant default, per facility and
 // per activity. Plan prices are GST-exclusive; invoices apply and

@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { createEnquiryAction } from "@/lib/actions/enquiries";
+import { createEnquiryAction, listEnquiriesAction } from "@/lib/actions/enquiries";
 import type { EnquiryRow } from "@/lib/services/enquiries";
 import { OwnerCreateAction } from "@/components/owner-ui/owner-create-action";
-import { Button } from "@/components/ui/Button";
+import { OwnerControlSheet } from "@/components/owner-ui/owner-control-sheet";
+import { Dialog } from "@/components/ui/Dialog";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import {
   EnquiryCaptureCard,
   type CaptureSource,
@@ -26,7 +29,8 @@ import { isOptionalContactPhoneValid } from "@/lib/contact-phone";
  * secondary, available when the owner is covering reception.
  */
 export type EnquiriesBoardVariant = EnquiriesListVariant;
-type EnquiryReturn = {token:string; namespace:string; search:string; stage:string};
+type DeskMode = "capture" | "find";
+type EnquiryReturn = { token: string; namespace: string; search: string; stage: string; mode: DeskMode };
 let enquiryReturn: EnquiryReturn | null = null;
 
 export function EnquiriesBoard({
@@ -34,6 +38,8 @@ export function EnquiriesBoard({
   detailHrefPrefix = "/owner/enquiries",
   locations,
   canWrite,
+  openCapture = false,
+  compactFilters = false,
   variant = "front-desk",
   overdueFollowUps = [],
   navigationNamespace,
@@ -44,25 +50,33 @@ export function EnquiriesBoard({
   // the caller's allowed locations come from the server page.
   locations: Array<{ id: string; name: string }>;
   canWrite: boolean;
+  openCapture?: boolean;
+  compactFilters?: boolean;
   variant?: EnquiriesBoardVariant;
   overdueFollowUps?: OverdueFollowUp[];
   navigationNamespace?: string;
 }) {
   const [enquiries, setEnquiries] = useState(initialEnquiries);
   const [search, setSearch] = useState("");
-  const [stage, setStage] = useState("active");
+  const [stage, setStage] = useState(variant === "oversight" ? "active" : "all");
+  const [deskMode, setDeskMode] = useState<DeskMode>(canWrite && locations.length ? "capture" : "find");
+  const [saved, setSaved] = useState<EnquiryRow | null>(null);
+  const [checking, setChecking] = useState(false);
+  const submitting = useRef(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [source, setSource] = useState<CaptureSource>("walk-in");
-  const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
+  const [locationId, setLocationId] = useState(locations.length === 1 ? locations[0].id : "");
   const [error, setError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [captureOpen, setCaptureOpen] = useState(variant === "front-desk");
+  const captureRequested = openCapture && canWrite && locations.length > 0;
+  const [captureOpen, setCaptureOpen] = useState(variant === "front-desk" || captureRequested);
   // The EXPLICIT intents. Both counters start at 0, so nothing is
   // focused on arrival and reception's always-visible capture is never
   // focused at all: only a press by the owner moves the focus.
-  const [openIntent, setOpenIntent] = useState(0);
+  const [openIntent, setOpenIntent] = useState(captureRequested && variant === "oversight" ? 1 : 0);
   const [closeIntent, setCloseIntent] = useState(0);
   // The real name field of the capture card, and the area that holds
   // the owner's create action. Both are typed DOM references — no
@@ -74,36 +88,51 @@ export function EnquiriesBoard({
     if (phoneError) phoneFieldRef.current?.focus();
   }, [phoneError]);
   useEffect(() => {
-    if (variant !== "oversight" || !navigationNamespace || !enquiryReturn) return;
+    if (!navigationNamespace || !enquiryReturn) return;
     if (window.history.state?.aquaEnquiryToken !== enquiryReturn.token || enquiryReturn.namespace !== navigationNamespace) return;
     setSearch(enquiryReturn.search);
     setStage(enquiryReturn.stage);
+    setDeskMode(enquiryReturn.mode);
   }, [navigationNamespace,variant]);
-  function remember(nextSearch:string,nextStage:string) {
-    if (!navigationNamespace || variant !== "oversight") return;
+  function remember(nextSearch: string, nextStage: string, mode = deskMode) {
+    if (!navigationNamespace) return;
     const token = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-    enquiryReturn = {token,namespace:navigationNamespace,search:nextSearch,stage:nextStage};
+    enquiryReturn = {token,namespace:navigationNamespace,search:nextSearch,stage:nextStage,mode};
     window.history.replaceState({...window.history.state,aquaEnquiryToken:token},"");
   }
   const term = search.trim().toLocaleLowerCase();
-  const visibleEnquiries = variant === "oversight" ? enquiries.filter((enquiry) => {
-    const matchesStage = stage === "all" || (stage === "active" ? enquiry.stage !== "converted" && enquiry.stage !== "lost" : enquiry.stage === stage);
-    return matchesStage && (!term || `${enquiry.fullName} ${enquiry.phone ?? ""}`.toLocaleLowerCase().includes(term));
+  const digits = term.replace(/[^0-9]/g, "");
+  const overdueIds = new Set(overdueFollowUps.map((entry) => entry.enquiryId));
+  const showFilters = variant === "oversight" || deskMode === "find";
+  const visibleEnquiries = showFilters ? enquiries.filter((enquiry) => {
+    const matchesStage = stage === "all"
+      || (stage === "active" && enquiry.stage !== "converted" && enquiry.stage !== "lost")
+      || (stage === "follow-ups" && overdueIds.has(enquiry.id))
+      || enquiry.stage === stage;
+    return matchesStage && (
+      !term || enquiry.fullName.toLocaleLowerCase().includes(term)
+      || (digits.length > 0 && /^[+\d\s()-]+$/.test(term) && enquiry.phone?.replace(/[^0-9]/g, "").includes(digits))
+    );
   }) : enquiries;
-  const filters = variant === "oversight" ? (
+  const stageName = stage === "active" ? "Active enquiries" : stage === "all" ? "All stages" : stage === "follow-ups" ? "Needs follow-up" : ENQUIRY_STAGE_LABELS[stage as keyof typeof ENQUIRY_STAGE_LABELS];
+  const stageControl = (
+    <label className="min-w-0 text-[13px] text-ink-2">
+      Stage
+      <select id="enquiry-stage-filter" value={stage} onChange={(event) => { setStage(event.target.value); remember(search, event.target.value); }} className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink">
+        <option value="active">Active</option>
+        <option value="all">All history</option>
+        {variant === "oversight" ? <option value="follow-ups">Needs follow-up</option> : null}
+        {Object.entries(ENQUIRY_STAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select>
+    </label>
+  );
+  const filters = showFilters ? (
     <div className="grid grid-cols-1 items-end gap-2 min-[375px]:grid-cols-[minmax(0,1fr)_150px]">
       <label className="min-w-0 text-[13px] text-ink-2">
         Search enquiries
-        <input value={search} onChange={(event) => { setSearch(event.target.value); remember(event.target.value, stage); }} type="search" className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink" />
+        <input ref={searchRef} value={search} onChange={(event) => { setSearch(event.target.value); remember(event.target.value, stage); }} type="search" className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink" />
       </label>
-      <label className="min-w-0 text-[13px] text-ink-2">
-        Stage
-        <select value={stage} onChange={(event) => { setStage(event.target.value); remember(search, event.target.value); }} className="mt-1 block min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink">
-          <option value="active">Active</option>
-          <option value="all">All history</option>
-          {Object.entries(ENQUIRY_STAGE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-        </select>
-      </label>
+      {compactFilters ? <OwnerControlSheet label="Enquiry stage" value={stageName} immediate>{stageControl}</OwnerControlSheet> : stageControl}
       <p className="text-[13px] text-ink-2 min-[375px]:col-span-2" aria-live="polite">{visibleEnquiries.length} of {enquiries.length} enquiries shown</p>
     </div>
   ) : null;
@@ -116,14 +145,12 @@ export function EnquiriesBoard({
   const visibleIds = new Set(visibleEnquiries.map((enquiry) => enquiry.id));
   const visibleOverdue = overdueFollowUps.filter((followUp) => visibleIds.has(followUp.enquiryId));
   const oversightLists = <div className={`grid items-start gap-4 ${visibleOverdue.length > 0 ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]" : ""}`}>
-    {visibleOverdue.length > 0 ? <EnquiriesOverduePreview followUps={visibleOverdue} detailHrefPrefix={detailHrefPrefix} /> : null}
-    <div className="min-w-0">{list}</div>
+    {visibleOverdue.length > 0 ? <EnquiriesOverduePreview followUps={visibleOverdue} detailHrefPrefix={detailHrefPrefix}
+      onShowQueue={stage === "follow-ups" ? undefined : () => { setStage("follow-ups"); remember(search, "follow-ups"); }} /> : null}
+    <div className="min-w-0 space-y-3"><div className="owner-work-panel">{filters}</div>{list}</div>
   </div>;
 
-  // Opening the capture on the owner's page: the card opens BELOW the
-  // list, so on a long list it opens off-screen. The owner's own press
-  // is the intent — the field is focused and brought into the viewport
-  // so the capture is where the owner can see it.
+  // Focus the opened capture so the form is ready for the next keystroke.
   //
   // The scroll uses the BROWSER'S OWN default: asking for
   // `behavior: "smooth"` forces an animated scroll on every reader,
@@ -135,7 +162,7 @@ export function EnquiriesBoard({
     const field = nameFieldRef.current;
     if (!field) return;
     field.focus();
-    field.scrollIntoView({ block: "center" });
+    field.scrollIntoView?.({ block: "center" });
   }, [openIntent]);
 
   // Closing the capture returns the focus to the SAME create action
@@ -151,13 +178,15 @@ export function EnquiriesBoard({
   }, [closeIntent]);
 
   async function submit() {
-    if (!fullName.trim() || !locationId) return;
+    if (submitting.current || !fullName.trim() || !locationId) return;
+    setSaved(null);
     setError(null);
     if (!isOptionalContactPhoneValid(phone)) {
       setPhoneError("Enter a valid phone number.");
       return;
     }
     setPhoneError(null);
+    submitting.current = true;
     setBusy(true);
     try {
       const enquiry = await createEnquiryAction({
@@ -166,15 +195,35 @@ export function EnquiriesBoard({
         source,
         locationId,
       });
-      setEnquiries((e) => [enquiry, ...e]);
+      setEnquiries((rows) => [enquiry, ...rows.filter((row) => row.id !== enquiry.id)]);
+      setSaved(enquiry);
       setFullName("");
       setPhone("");
     } catch {
       // R07 — a refused capture shows an inline error; the typed
       // details stay in the controlled fields.
-      setError("Could not save the enquiry. Check the site and try again.");
+      setError("Could not confirm the save. Check saved enquiries before trying again.");
     } finally {
+      submitting.current = false;
       setBusy(false);
+    }
+  }
+
+  async function checkSavedEnquiries() {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const rows = await listEnquiriesAction({});
+      setEnquiries(rows);
+      if (variant === "front-desk") setDeskMode("find");
+      else setCaptureOpen(false);
+      setSearch(fullName.trim());
+      setStage("all");
+      remember(fullName.trim(), "all", "find");
+    } catch {
+      setError("Could not check saved enquiries. Your draft is still here. Try the check again when connected.");
+    } finally {
+      setChecking(false);
     }
   }
 
@@ -186,13 +235,13 @@ export function EnquiriesBoard({
             ? "No site is configured yet — ask the owner to add one before capturing enquiries."
             : "Your role can view enquiries but not capture them."}
         </p>
-        {filters}
-        {variant === "oversight" ? oversightLists : list}
+        {variant === "oversight" ? oversightLists : <>{filters}{list}</>}
       </div>
     );
   }
 
   const capture = (
+    <div className="space-y-3">
     <EnquiryCaptureCard
       fullName={fullName}
       phone={phone}
@@ -210,14 +259,33 @@ export function EnquiriesBoard({
       onLocationId={setLocationId}
       onSubmit={() => void submit()}
     />
+    {error ? <Button size="sm" disabled={checking} onClick={() => void checkSavedEnquiries()}>{checking ? "Checking saved enquiries…" : "Check saved enquiries"}</Button> : null}
+    {saved ? (
+      <div className="space-y-1 rounded-ctl border border-line bg-good-soft p-3">
+        <p role="status" className="text-sm text-ink">Enquiry saved for {saved.fullName}.</p>
+        <Link href={`${detailHrefPrefix}/${saved.id}`} className={buttonClasses({ size: "sm" })}>Open saved enquiry</Link>
+      </div>
+    ) : null}
+    </div>
   );
+
+  if (variant === "oversight" && compactFilters) {
+    return (
+      <div className="space-y-4" ref={actionAreaRef}>
+        <OwnerCreateAction kind="button" label="Add enquiry" testId="enquiries-create-action"
+          onClick={() => { setCaptureOpen(true); setOpenIntent(intent => intent + 1); }} />
+        {oversightLists}
+        <Dialog open={captureOpen} onOpenChange={setCaptureOpen} title="Add enquiry">
+          {captureOpen ? capture : null}
+        </Dialog>
+      </div>
+    );
+  }
 
   if (variant === "oversight") {
     // Owner oversight leads; the routine capture stays secondary.
     return (
       <div className="space-y-4" ref={actionAreaRef}>
-        {filters}
-        {oversightLists}
         {/* The ONE create action for enquiries: the shared floating
             action on a phone and the labelled action on a desktop — the
             SAME control the other owner pages use, not a second shape
@@ -255,14 +323,29 @@ export function EnquiriesBoard({
             testId="enquiries-create-action"
           />
         )}
+        {oversightLists}
       </div>
     );
   }
 
+  function changeMode(mode: DeskMode) {
+    setDeskMode(mode);
+    remember(search, stage, mode);
+    if (mode === "capture") setOpenIntent((intent) => intent + 1);
+    else requestAnimationFrame(() => searchRef.current?.focus());
+  }
+
   return (
     <div className="space-y-4">
-      {capture}
-      <EnquiryList enquiries={enquiries} detailHrefPrefix={detailHrefPrefix} />
+      <div role="group" aria-label="Enquiry tasks" className="flex flex-wrap gap-2">
+        <Button size="sm" data-testid="enquiry-mode-capture" aria-pressed={deskMode === "capture"}
+          variant={deskMode === "capture" ? "primary" : "secondary"} disabled={busy || checking}
+          onClick={() => changeMode("capture")}>Capture enquiry</Button>
+        <Button size="sm" disabled={busy || checking} aria-pressed={deskMode === "find"} variant={deskMode === "find" ? "primary" : "secondary"}
+          onClick={() => changeMode("find")}>Find enquiry</Button>
+      </div>
+      {deskMode === "capture" ? capture : filters}
+      {list}
     </div>
   );
 }

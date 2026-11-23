@@ -17,7 +17,7 @@ const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 // areas. The domain stores `late` already; the register never offered
 // it. `warn`, not `late` — a late arrival is not the absent state.
 const TOGGLE_BASE =
-  "h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150";
+  "h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60";
 const TOGGLE_TONES: Record<Mark, { on: string; label: string }> = {
   present: { on: "bg-good-soft border-good text-good", label: "Present" },
   late: { on: "bg-warn-soft border-warn text-warn", label: "Late" },
@@ -35,12 +35,14 @@ export function RegisterBoard({
   rows,
   offlineSyncEnabled,
   offlineIdentity,
+  sessionContext,
   terminology = DEFAULT_TERMINOLOGY,
 }: {
   sessionId: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
   offlineIdentity?: OfflineIdentity | null;
+  sessionContext?: string;
   // Closed-key vocab resolved by the parent server page (L3 audit).
   // Optional so existing callers/tests render the generic terms; the
   // page passes the tenant-resolved state.
@@ -82,7 +84,7 @@ export function RegisterBoard({
   </div>;
 
   async function markAllPresent() {
-    if (bulk) return;
+    if (bulk || !canMark) return;
     const targets = [...unmarked];
     setBulk({ done: 0, total: targets.length });
     for (let i = 0; i < targets.length; i++) {
@@ -115,7 +117,8 @@ export function RegisterBoard({
           this is the same signature element the coach today-list and (once
           built) the owner/parent screens reuse. See DESIGN.md §"the lane
           strip". */}
-      <div className="sticky top-0 z-10 -mx-5 px-5 pt-3 pb-3 bg-deck/95 backdrop-blur-sm">
+      <section aria-label={sessionContext ?? "Register controls"} className="sticky top-0 z-10 pt-3 pb-3 bg-deck/95 backdrop-blur-sm">
+        {sessionContext ? <p className="mb-2 break-words text-xs font-semibold text-ink-2" data-register-context>{sessionContext}</p> : null}
         {/* Sync-failure banner (online + hasActiveFailure): the mark
             that didn't land is the single most urgent operational
             signal on this screen. Distinct colour, distinct copy,
@@ -253,11 +256,11 @@ export function RegisterBoard({
               />
             </div>
           ) : null}
-          {(unmarked.length > 0 || bulk !== null) && canMark ? (
+          {unmarked.length > 0 || bulk !== null ? (
             <Button
               variant="secondary"
               className="mt-2.5 w-full"
-              disabled={bulk !== null}
+              disabled={!canMark || bulk !== null}
               onClick={() => void markAllPresent()}
               data-testid="mark-all-present"
             >
@@ -279,7 +282,7 @@ export function RegisterBoard({
               : "That mark did not save. Try again once you're online."}
           </p>
         ) : null}
-      </div>
+      </section>
 
       <ul className="mt-2 pb-8">
         {rows.length === 0 ? (
@@ -330,7 +333,7 @@ export function RegisterBoard({
                   button is h-11 w-11 (44px) — the hit box meets
                   DESIGN.md §2; don't "tidy" these into labelled
                   buttons. */}
-              <div className="flex gap-1.5 flex-none">
+              <div role="group" aria-label={`Attendance for ${r.name}`} className="flex gap-1.5 flex-none">
                 {TOGGLE_ORDER.map((next) => {
                   const Icon = TOGGLE_ICONS[next];
                   const active = marks[r.memberId] === next;
@@ -339,6 +342,7 @@ export function RegisterBoard({
                       key={next}
                       type="button"
                       onClick={() => mark(r.memberId, next)}
+                      disabled={!canMark}
                       aria-label={TOGGLE_TONES[next].label}
                       aria-pressed={active}
                       className={`${TOGGLE_BASE} ${

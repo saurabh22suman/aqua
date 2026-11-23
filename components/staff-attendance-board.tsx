@@ -62,6 +62,7 @@ export function StaffAttendanceBoard({
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [unmarkedOnly, setUnmarkedOnly] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [status, setStatus] = useState<"present" | "absent" | "half_day" | "leave" | "holiday">("present");
   const [note, setNote] = useState("");
@@ -97,6 +98,9 @@ export function StaffAttendanceBoard({
     });
   }
 
+  const rowsNeedingMarks = rows.filter(row => row.status === null && row.attendanceVisibility !== "limited");
+  const visibleRows = unmarkedOnly ? rowsNeedingMarks : rows;
+
   return (
     <section className="mt-8" data-testid="staff-attendance">
       <h2 className="font-display text-[15px] font-semibold">Staff attendance</h2>
@@ -110,13 +114,21 @@ export function StaffAttendanceBoard({
         </p>
       ) : null}
 
+      {rows.length ? (
+        <label className="owner-work-panel mt-3 flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" checked={unmarkedOnly} onChange={event => setUnmarkedOnly(event.target.checked)} />
+          Only staff needing a mark <span className="tabular-nums text-ink-3">({rowsNeedingMarks.length})</span>
+        </label>
+      ) : null}
       {rows.length === 0 ? (
         <p className="mt-3 rounded-card border border-line bg-paper px-4 py-6 text-center text-[13px] text-ink-3">
           No staff records yet. Add staff from the owner surface.
         </p>
+      ) : visibleRows.length === 0 ? (
+        <p role="status" className="mt-3 text-sm text-ink-2">No visible records still need a mark.</p>
       ) : (
         <ul className="mt-3 divide-y divide-line rounded-card border border-line bg-paper">
-          {rows.map((row) => {
+          {visibleRows.map((row) => {
             const late = row.lateMinutes > 0;
             const limited = row.attendanceVisibility === "limited";
             // A visible status proves the record is at a facility this

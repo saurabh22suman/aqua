@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatINR } from "@/lib/money/format";
@@ -65,6 +66,8 @@ export function BookingDayList({
   onBill,
   slots,
   onChooseSlot,
+  canCancel = false,
+  canBill = false,
 }: {
   rows: BookingDayRow[];
   busyId: string | null;
@@ -77,6 +80,8 @@ export function BookingDayList({
    */
   slots?: ReadonlyArray<string>;
   onChooseSlot?: (slot: string) => void;
+  canCancel?: boolean;
+  canBill?: boolean;
 }) {
   if (rows.length === 0 && !slots?.length) {
     return (
@@ -141,7 +146,7 @@ export function BookingDayList({
         }
         const row = entry.row;
         const cancelled = row.status === "cancelled";
-        const paid = row.invoiceId !== null && row.amountDuePaise === 0;
+        const paid = row.invoiceStatus === "paid" && row.amountDuePaise === 0;
         return (
           <li key={row.bookingId} className="py-3" data-testid="booking-row">
             <div className="flex items-start justify-between gap-3">
@@ -182,6 +187,8 @@ export function BookingDayList({
                 busyId={busyId}
                 onCancel={onCancel}
                 onBill={onBill}
+                canCancel={canCancel}
+                canBill={canBill}
               />
             ) : null}
           </li>
@@ -203,35 +210,46 @@ export function BookingRowActions({
   busyId,
   onCancel,
   onBill,
+  canCancel = false,
+  canBill = false,
 }: {
   row: BookingDayRow;
   busyId: string | null;
   onCancel: (row: BookingDayRow) => void;
   onBill: (row: BookingDayRow) => void;
+  canCancel?: boolean;
+  canBill?: boolean;
 }) {
-  const paid = row.invoiceId !== null && row.amountDuePaise === 0;
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const active = row.status === "held" || row.status === "confirmed";
+  const billingAllowed = canBill && row.billable && row.status !== "cancelled";
+  const paid = row.invoiceStatus === "paid" && row.amountDuePaise === 0;
+  const billLabel = row.invoiceStatus === "void" ? "Request replacement bill"
+    : paid ? "View bill" : row.invoiceId ? "Collect" : "Request bill";
+  if (!billingAllowed && !(canCancel && active)) return null;
   return (
-    <div className="mt-2 flex gap-2">
-      {row.billable ? (
-        <Button
-          variant={paid ? "ghost" : "secondary"}
-          size="sm"
-          disabled={busyId === row.bookingId}
-          onClick={() => onBill(row)}
-          data-testid="booking-bill-button"
-        >
-          {paid ? "View bill" : row.invoiceId ? "Collect" : "Request bill"}
-        </Button>
-      ) : null}
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={busyId === row.bookingId}
-        onClick={() => onCancel(row)}
-        data-testid="booking-cancel-button"
-      >
-        Cancel
-      </Button>
+    <div className="mt-2">
+      {canCancel && active && confirmation === row.bookingId ? (
+        <div role="group" aria-label="Confirm booking cancellation" className="space-y-2 rounded-ctl border border-line bg-deck p-3">
+          <p className="text-sm font-semibold">{row.memberName ?? row.walkInName ?? "Booking"} · {row.facilityName} · {boardClock(row.startsAt)}–{boardClock(row.endsAt)}</p>
+          <p className="text-sm text-ink-2">Cancel this slot? Any linked balance will be held for owner review. Recorded payments stay on the account.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="destructive" size="sm" disabled={busyId !== null} onClick={() => { setConfirmation(null); onCancel(row); }}>Confirm cancellation</Button>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmation(null)}>Keep booking</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {billingAllowed ? (
+            <Button variant={paid ? "ghost" : "secondary"} size="sm" disabled={busyId !== null}
+              onClick={() => onBill(row)} data-testid="booking-bill-button">{billLabel}</Button>
+          ) : null}
+          {canCancel && active ? (
+            <Button variant="ghost" size="sm" disabled={busyId !== null}
+              onClick={() => setConfirmation(row.bookingId)} data-testid="booking-cancel-button">Cancel booking</Button>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

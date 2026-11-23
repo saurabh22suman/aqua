@@ -20,15 +20,17 @@ export function MemberStatusFilter({
   options,
   value,
   onChange,
+  className = "",
 }: {
   options: MemberStatusOption[];
   /** The current status value ("" for every status). */
   value: string;
   /** Reports the chosen status. The caller owns what happens next. */
   onChange: (value: string) => void;
+  className?: string;
 }) {
   return (
-    <div className="w-full min-w-0">
+    <div className={`min-w-0 ${className || "w-full"}`}>
       {/* The status filter is a VISIBLE, labelled row of chips — the
           approved mock's shape. A native dropdown hides its options
           behind a closed control on a phone, and the options ARE the

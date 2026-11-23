@@ -780,7 +780,7 @@ The visual direction is defined in the accompanying UI direction file. Scope com
 |---|---|
 | Design tokens | Single source of truth in Tailwind config, no ad-hoc hex values |
 | Palette | Deck / marine / water / mango. Mango is actions only, water is data, green and red are payment and attendance state |
-| Type | Bricolage Grotesque display, Instrument Sans body, self-hosted Latin subsets; 60 KB budget, measured 55.2 KB |
+| Type | Bricolage Grotesque and Instrument Sans for shared surfaces. Barlow Condensed and DM Sans for Floodlit Owner Home. 150 KiB combined Latin WOFF2 budget |
 | Components | shadcn/ui copy-paste. **No component library dependency** |
 | Icons | Lucide, individually imported. Never a barrel import, never emoji |
 | Shadows | Exactly two levels, defined once |

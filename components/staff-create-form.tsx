@@ -27,10 +27,7 @@ const unavailableCandidateSearch: StaffCandidateSearch = async () => {
   throw new Error("staff candidate search not wired");
 };
 
-// Same labels/control shape as the sibling "Invite staff" form so the
-// same decision is asked the same way on both screens (2026-09-13
-// audit R-D6). The coach label still routes through the closed-key
-// resolver; Title Case here matches the other three role names.
+// Roster types classify staff records. Account permissions are assigned through invitations.
 const ROLE_KEYS = ["coach", "receptionist", "worker", "accountant"] as const;
 type StaffType = (typeof ROLE_KEYS)[number];
 
@@ -89,6 +86,13 @@ export function StaffCreateForm({
     }
   }
 
+  const blockedReason =
+    mode === "existing" && selectedPerson === null
+      ? "Choose an existing person to continue."
+      : mode === "new" && fullName.trim().length === 0
+        ? "Enter the person's full name to continue."
+        : null;
+
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 mb-4" data-testid="staff-mode">
@@ -142,7 +146,7 @@ export function StaffCreateForm({
       )}
 
       <div className="mb-4">
-        <span className="block text-[12.5px] font-medium mb-1.5">Role</span>
+        <span className="block text-[12.5px] font-medium mb-1.5">Staff type</span>
         <div className="grid grid-cols-2 gap-2" data-testid="staff-type">
           {ROLE_KEYS.map((key) => (
             <button
@@ -188,6 +192,19 @@ export function StaffCreateForm({
         </p>
       ) : null}
 
+      {blockedReason ? (
+        <p className="mb-3 text-[12.5px] text-ink-3" role="status">
+          {blockedReason}
+        </p>
+      ) : null}
+
+      {(mode === "new" ? fullName.trim() : selectedPerson?.fullName) ? (
+        <section aria-label="Review staff record" className="owner-work-panel mb-3">
+          <h2 className="text-sm font-semibold">{mode === "new" ? "Create a new person" : "Use an existing person"}</h2>
+          <p className="mt-1 break-words">{mode === "new" ? fullName.trim() : selectedPerson?.fullName}</p>
+          <p className="text-sm text-ink-2">{roleLabel(staffType)}</p>
+        </section>
+      ) : null}
       <div className="flex gap-2">
         <Button
           type="button"

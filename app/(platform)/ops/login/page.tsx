@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { env } from "@/lib/env";
 import { PlatformLoginForm } from "./login-form";
 import { OpsCard, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Operator sign-in" };
 
 // Ops redesign (28 October 2026): the sign-in screen is a focused card
 // on the console canvas — no navigation, no rail, nothing to click
@@ -14,7 +17,7 @@ export default async function PlatformLoginPage() {
   return (
     <div className="w-full max-w-[440px]">
       <OpsPageHeader
-        eyebrow="Aqua operator"
+        eyebrow={env.OPS_STAGING_PASSWORD_ONLY ? "Aqua operator" : "Operator sign-in · Step 1 of 2"}
         title="Sign in"
         lede={env.OPS_STAGING_PASSWORD_ONLY
           ? "Staging sign-in uses your operator password only."

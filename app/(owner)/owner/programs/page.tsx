@@ -13,6 +13,7 @@ import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { FACILITY_COOKIE, parseFacilityValue, resolveFacilityValue } from "@/lib/facility";
 import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import { ownerFacilityHref } from "@/lib/owner-scope/facility";
+import { scheduleDestination } from "@/lib/owner-scope/schedule";
 
 export default async function ProgramsPage({
   searchParams,
@@ -30,12 +31,17 @@ export default async function ProgramsPage({
   );
   if ((requestedFacility !== undefined && requestedFacility !== "all" && !parseFacilityValue(requestedFacility)) ||
       (facility && !(await canSelectFacility(ctx, facility)))) {
-    return <OwnerPage><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href="/owner/programs?facility=all" className={buttonClasses({variant:"secondary",size:"md"})}>View available clubs</Link></OwnerPage>;
+    return <OwnerPage workflow="directory"><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href="/owner/programs?facility=all" className={buttonClasses({variant:"secondary",size:"md"})}>View available clubs</Link></OwnerPage>;
   }
   // These options come from existing staff/member reads. Do not invoke an
   // editor-only action a read-only catalogue viewer is not allowed to call.
   const canManage = ctx.permissions.has("programs.write");
   const canManageBatches = canManage && ctx.permissions.has("staff.read") && ctx.permissions.has("members.read");
+  // Audit simplification (21 November 2026) — Schedule is ONE job with a
+  // Calendar / List surface. Point at the surface this profile may
+  // actually open instead of offering two competing buttons; program
+  // setup stays on this page.
+  const scheduleHref = scheduleDestination(ctx.permissions);
   const [programs, batches, coaches, locations, terminology] = await Promise.all([
     listProgramsAction(),
     listBatchesAction(facility ? { locationId: facility } : undefined),
@@ -48,26 +54,19 @@ export default async function ProgramsPage({
   ]);
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="directory">
       <ProgramsBatchesBoard
+          key={facility ?? "all"}
           scopeLabel={facility ? batches.find((batch) => batch.locationId === facility)?.locationName ?? locations.find((location) => location.id === facility)?.name ?? "selected club" : "all available clubs"}
           toolbar={
           <div className="flex flex-wrap items-center gap-2">
-            {ctx.permissions.has("attendance.read") ? <Link
-              href={ownerFacilityHref("/owner/schedule", facility)}
+            {scheduleHref ? <Link
+              href={ownerFacilityHref(scheduleHref, facility)}
               className={buttonClasses({ variant: "secondary", size: "sm" })}
               data-testid="link-schedule"
             >
               <OwnerIcon name="calendar" size={15} className="text-ink-3" />
               Schedule
-            </Link> : null}
-            {ctx.permissions.has("programs.write") ? <Link
-              href={ownerFacilityHref("/owner/sessions", facility)}
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-              data-testid="link-sessions"
-            >
-              <OwnerIcon name="calendar" size={15} className="text-ink-3" />
-              Sessions
             </Link> : null}
           </div>
           }

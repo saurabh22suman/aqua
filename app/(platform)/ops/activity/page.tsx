@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -12,6 +13,8 @@ import { OpsActivityFilter } from "@/components/ops/ops-activity-filter";
 import { normalizeActivityDate } from "@/components/ops/ops-activity-date";
 import { OpsActivityList } from "@/components/ops/ops-activity-list";
 import { OpsPage, OpsPageHeader, OpsPanel, OpsTextLink } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Platform activity" };
 
 /**
  * The audited read of the trail.

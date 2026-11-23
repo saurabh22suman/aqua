@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listNotificationsNeedingAttentionAction } from "@/lib/actions/platform-notifications";
@@ -8,6 +9,8 @@ import {
   RecoveryRefusal,
   type RecoveryConsoleData,
 } from "@/components/ops/recovery/recovery-console";
+
+export const metadata: Metadata = { title: "Recovery queues" };
 
 // The operator's read-only investigation console for delivery outcomes
 // and queued work.

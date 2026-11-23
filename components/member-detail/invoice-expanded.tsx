@@ -9,6 +9,8 @@ import type { InvoiceDetail } from "@/lib/services/invoices";
 import type { PaymentRow } from "@/lib/services/payments";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { COLLECTION_HOLD_COPY } from "@/lib/collection-hold";
 import { InvoiceSummary } from "@/components/member-detail/invoice-summary";
 import { InvoicePaymentList } from "@/components/member-detail/invoice-payment-list";
 import {
@@ -73,6 +75,7 @@ export function InvoiceExpanded({
   canReadPayments,
   onChanged,
   onSettled,
+  presentation = "inline",
 }: {
   invoiceId: string;
   canWrite: boolean;
@@ -81,6 +84,11 @@ export function InvoiceExpanded({
   canRefund: boolean;
   canReadPayments: boolean;
   onChanged: () => void;
+  /**
+   * The standalone owner invoice route opts into a balance-first document
+   * presentation. Every existing inline consumer keeps the default.
+   */
+  presentation?: "inline" | "standalone";
   /**
    * MF-01 — called after a successful recording leaves the invoice paid.
    * The Dues parent uses it only to retain the completion strip; other
@@ -255,10 +263,12 @@ export function InvoiceExpanded({
       } catch {
         if (activeInvoice.current !== runInvoice) return;
         await onResult?.({ ok: false, error: "request_failed", conflict: "unknown" });
-        await load();
+        const reload = await load();
         if (activeInvoice.current !== runInvoice) return;
         setMessage(
-          "The request did not complete. The invoice was refreshed — check it before retrying, in case the change already went through.",
+          reload === "ok"
+            ? "The request did not complete. The invoice was refreshed — check it before retrying, in case the change already went through."
+            : "The request did not complete. The invoice could not be refreshed — check it before retrying, in case the change already went through.",
         );
       } finally {
         if (activeInvoice.current === runInvoice) setBusy(false);
@@ -277,23 +287,32 @@ export function InvoiceExpanded({
             {message}
           </p>
         ) : null}
-        <p className="text-[12px] text-ink-3">Could not load this invoice.</p>
+        <p role={presentation === "standalone" ? "alert" : undefined} className="text-[13px] text-ink-2">
+          Could not load this invoice.
+        </p>
         <button
           type="button"
           onClick={() => void load()}
           className="mt-1.5 inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill border border-line px-3 text-[12px] text-ink-2 hover:text-ink"
         >
-          Retry
+          {presentation === "standalone" ? "Retry invoice" : "Retry"}
         </button>
       </div>
     );
   }
   if (!detail) {
-    return <p className="mt-2 text-[12px] text-ink-3">Loading invoice…</p>;
+    return <p role="status" className="mt-2 text-[12px] text-ink-3">Loading invoice…</p>;
   }
 
+  const holdCopy = detail.collectionHold && detail.outstandingPaise > 0 && detail.status !== "void"
+    ? COLLECTION_HOLD_COPY[detail.collectionHold]
+    : null;
+  // The confirmed policy: a balance linked to a cancelled booking stays
+  // open and keeps its history, but a NEW payment is held for owner
+  // review. The payment form is hidden; the payment/reversal history and
+  // the correction/void eligibility above remain exactly as they were.
   const paymentAllowed =
-    canRecord && (detail.status === "issued" || detail.status === "partial");
+    canRecord && !holdCopy && (detail.status === "issued" || detail.status === "partial");
   // A closed target is the only place the discard-only recovery block
   // belongs. An open invoice uses the normal Continue/New notice; a viewer
   // without payments.record cannot discard anything, so the block is
@@ -306,13 +325,40 @@ export function InvoiceExpanded({
     .filter((payment) => payment.status === "captured")
     .reduce((sum, payment) => sum + payment.amountPaise, 0);
 
+  const paymentForm = paymentAllowed ? (
+    <InvoicePaymentForm
+      invoiceId={invoiceId}
+      invoiceNumber={detail.invoiceNumber}
+      outstandingPaise={detail.outstandingPaise}
+      busy={busy}
+      setMessage={setMessage}
+      run={run}
+    />
+  ) : null;
+
   return (
-    <div className="mt-2 border-t border-line pt-2">
+    <div
+      className={
+        presentation === "standalone"
+          ? ""
+          : "mt-2 border-t border-line pt-2"
+      }
+    >
       <InvoiceSummary
         detail={detail}
         capturedTotalPaise={capturedTotalPaise}
         canReadPayments={canReadPayments}
+        standalone={presentation === "standalone"}
       />
+
+      {holdCopy ? (
+        <div className="mt-3 rounded-ctl border border-line bg-deck px-3 py-2">
+          <StatusBadge tone="warn">{holdCopy.label}</StatusBadge>
+          <p className="mt-1 text-[12px] text-ink-2">{holdCopy.description}</p>
+        </div>
+      ) : null}
+
+      {presentation === "standalone" ? paymentForm : null}
 
       <InvoicePaymentList
         payments={payments}
@@ -325,7 +371,7 @@ export function InvoiceExpanded({
         onMessage={setMessage}
       />
 
-      {closedTarget ? (
+      {closedTarget || holdCopy ? (
         <InvoiceClosedRecovery
           invoiceId={invoiceId}
           canRecord={canRecord}
@@ -334,16 +380,7 @@ export function InvoiceExpanded({
         />
       ) : null}
 
-      {paymentAllowed ? (
-        <InvoicePaymentForm
-          invoiceId={invoiceId}
-          invoiceNumber={detail.invoiceNumber}
-          outstandingPaise={detail.outstandingPaise}
-          busy={busy}
-          setMessage={setMessage}
-          run={run}
-        />
-      ) : null}
+      {presentation !== "standalone" ? paymentForm : null}
 
       {canVoid && detail.status !== "void" && detail.correctionEligibility === "eligible" ? (
         <div className="mt-2">

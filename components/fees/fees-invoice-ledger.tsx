@@ -4,6 +4,7 @@ import { Fragment, type RefObject } from "react";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import type { HubInvoiceRow } from "@/lib/services/fees-hub";
 import { formatINR } from "@/lib/money/format";
+import { COLLECTION_HOLD_COPY } from "@/lib/collection-hold";
 import { formatDateIST, todayInZone } from "@/lib/time/tz";
 import { InvoiceExpanded, type InvoiceSettledSummary } from "@/components/member-detail/invoice-expanded";
 import { METHOD_LABEL } from "@/lib/money/payment-groups";
@@ -233,6 +234,11 @@ export function FeesInvoiceLedger({ rows, facility, filter, caption, expandedId,
                       {INVOICE_STATUS_LABEL[invoice.status] ?? invoice.status}
                     </StatusBadge>
                   </span>
+                  {invoice.collectionHold && invoice.outstandingPaise > 0 && invoice.status !== "void" ? (
+                    <p className="mt-1 text-[12px] font-medium leading-snug text-ink-2">
+                      {COLLECTION_HOLD_COPY[invoice.collectionHold].label}
+                    </p>
+                  ) : null}
                 </td>
                 <td
                   role="cell"

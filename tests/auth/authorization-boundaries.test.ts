@@ -5,6 +5,8 @@ import { env } from "@/lib/env";
 import { asTenantId, asUserId } from "@/lib/ids";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { deleteAuditRowsForTenant } from "@/tests/helpers/audit-log-cleanup";
+import { inviteStaffAction } from "@/lib/actions/staff-invitations";
+import { inviteStaff, type InviteStaffInput } from "@/lib/services/staff-invitations";
 import { enrolMemberAction } from "@/lib/actions/enrolment";
 import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
@@ -154,6 +156,16 @@ afterAll(async () => {
 });
 
 describe("authenticated authorization boundaries", () => {
+  it("rejects new Accountant invitations before creating a user or membership", async () => {
+    await signIn("owner");
+    const phone = `+919${String(Date.now()).slice(-9)}`;
+    const input = { phone, fullName: "Retired role", roleKey: "accountant", locationIds: [] };
+    expect(await inviteStaffAction(input)).toMatchObject({ kind: "error", code: "invalid" });
+    expect(await inviteStaff({ tenantId, userId: userOwner }, input as unknown as InviteStaffInput))
+      .toMatchObject({ kind: "error", code: "invalid" });
+    expect((await admin.query("select id from users where phone=$1", [phone])).rowCount).toBe(0);
+  });
+
   it("H01 rejects a scoped enrolment into another location", async () => {
     await signIn("reception");
     expect(await enrolMemberAction({ memberId: memberA, batchId: batchB })).toMatchObject({ ok: false });

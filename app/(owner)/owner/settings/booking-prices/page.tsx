@@ -8,6 +8,8 @@ import { getTerminologyAction } from "@/lib/actions/terminology";
 import { BookingPriceManager } from "@/components/bookings/booking-price-manager";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { SettingsPrerequisite } from "@/components/settings/settings-states";
 
 // Batch 6 — owner/admin configuration of the booking price catalogue.
 //
@@ -38,22 +40,23 @@ export default async function BookingPricesPage({searchParams}: {searchParams?: 
 
 
   return (
-    <OwnerPage className="max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner/settings"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Settings
-        </Link>
-        {" / "}
-        booking prices
-      </p>
+    <OwnerPage workflow="settings" className="max-w-2xl">
+      <BackLink href="/owner/settings" label="Settings" />
       <PageHeader
         title={<>Booking slot prices</>}
         purpose={<>Set resource slot prices by day and time.</>}
       />
       {returnParams.has("resource") ? <Link href={`/owner/bookings?${returnParams}`} className="inline-flex min-h-11 items-center underline">Return to selected booking slot</Link> : null}
+      {/* Prices are attached to resources. Without one the catalogue looks
+          empty for a reason the owner can fix, so name that reason here. */}
+      {facilities.length === 0 ? (
+        <SettingsPrerequisite
+          title="No sports resources yet"
+          body="A booking price belongs to a resource. Add a pool, court or table first, then return here to price its slots."
+          actionLabel="Add sports resources"
+          actionHref="/owner/settings/activities"
+        />
+      ) : null}
       <div className="mt-5">
         <BookingPriceManager
           facilities={facilities.map((facility) => ({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { PinField } from "@/components/auth/pin-field";
 import { Button } from "@/components/ui/Button";
@@ -76,6 +76,8 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
   const [pinBlurred, setPinBlurred] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const heading = audience === "member" ? "Member invitation" : "Family invitation";
 
   useEffect(() => {
     setToken(readTokenFromFragment(window.location.hash));
@@ -91,7 +93,8 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
   const canSubmit = token !== null && pinValid && confirm === pin && !busy;
 
   async function submit(): Promise<void> {
-    if (busy || token === null) return;
+    if (submitting.current || token === null) return;
+    submitting.current = true;
     setError(null);
     setBusy(true);
     // Set once the door has opened: the page is on its way out, so the
@@ -150,7 +153,10 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
         "We could not reach the club's server. Your invitation is still here — try again.",
       );
     } finally {
-      if (!leaving) setBusy(false);
+      if (!leaving) {
+        submitting.current = false;
+        setBusy(false);
+      }
     }
   }
 
@@ -162,7 +168,7 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
 
   if (!tokenReady) {
     return (
-      <p className="text-[14px] leading-relaxed text-ink-2">
+      <p role="status" className="text-[14px] leading-relaxed text-ink-2">
         Checking your invitation link…
       </p>
     );
@@ -174,16 +180,16 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
   if (token === null && !busy) {
     return (
       <div>
-        <h1 className="font-display font-semibold text-ink">Open your account</h1>
+        <h1 className="font-display font-semibold text-ink">{heading}</h1>
         <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
-          This link is missing its invitation code. Open the link your club
-          sent you, or ask them for a new one.
+          Open your club’s full invitation link or ask the club for a new one.
         </p>
         <Link
           href={audience === "member" ? "/member/sign-in" : "/family/sign-in"}
+          aria-label="Sign in with your PIN instead"
           className="mt-4 flex min-h-[44px] items-center justify-center text-[14px] text-ink-2 underline underline-offset-2"
         >
-          Sign in with your PIN instead
+          Sign in
         </Link>
       </div>
     );
@@ -192,14 +198,14 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
   return (
     <div>
       <h1 className="font-display font-semibold text-ink">
-        {audience === "member" ? "Member sign-in" : "Guardian sign-in"}
+        {heading}
       </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
         Your club&apos;s private invitation opens your{" "}
         {audience === "member" ? "membership" : "family view"}. Use the PIN for
         your existing account, or choose a first PIN now.
       </p>
-      <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
+      <p className="my-4 rounded-ctl border border-line bg-deck p-3 text-[13px] leading-relaxed text-ink-2">
         Keep this single-use invitation private.
       </p>
 
@@ -252,6 +258,7 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
           <p
             role="alert"
             data-testid="self-form-error"
+            data-auth-feedback
             className="text-[13px] leading-relaxed text-ink-2"
           >
             {error}
@@ -261,9 +268,8 @@ export function SelfInvitationForm({ audience }: { audience: SelfAudience }) {
           type="submit"
           variant="primary"
           size="lg"
-          pill
           disabled={!canSubmit}
-          className="w-full disabled:opacity-40"
+          className="w-full disabled:opacity-60"
         >
           {busy ? "One moment…" : "Open my account"}
         </Button>

@@ -94,6 +94,8 @@ export function ProgramsBatchesBoard({
 }) {
   const [programs, setPrograms] = useState(initialPrograms);
   const [batches, setBatches] = useState(initialBatches);
+  const [batchQuery, setBatchQuery] = useState("");
+  const batchSearchRef = useRef<HTMLInputElement>(null);
   const [programName, setProgramName] = useState("");
   const [programError, setProgramError] = useState<string | null>(null);
   const [busyProgram, setBusyProgram] = useState(false);
@@ -339,6 +341,18 @@ export function ProgramsBatchesBoard({
     return !selectedFacilityId || batch.locationId === selectedFacilityId;
   }
 
+  const search = batchQuery.trim().toLowerCase();
+  const editing = showProgramEditor || showBatchForm || editingBatch !== null ||
+    editingProgram !== null || confirmDeleteBatch !== null || confirmDeleteProgram !== null;
+  const displayedBatches = search ? batches.filter((batch) =>
+    [batch.name, batch.programName, batch.coachName, batch.locationName]
+      .some((value) => value?.toLowerCase().includes(search)),
+  ) : batches;
+  const displayedProgramIds = new Set(displayedBatches.map((batch) => batch.programId));
+  const displayedPrograms = search
+    ? programs.filter((program) => displayedProgramIds.has(program.id) || program.name.toLowerCase().includes(search))
+    : programs;
+
   return (
     <div ref={boardRef} className="space-y-5">
       <OwnerDesignHeading title="Programs & batches" purpose={`${programs.length === 1 ? "1 program" : `${programs.length} programs`} · ${batches.length === 1 ? "1 batch" : `${batches.length} batches`}`} action={showCreateAction ? (
@@ -534,14 +548,33 @@ export function ProgramsBatchesBoard({
           </div>
         ) : null}
       </section>
-      <section>
+      {batches.length > 0 ? (
+        <section aria-label="Batch search" className="owner-work-panel">
+          <label htmlFor="find-batch" className="text-[13px] font-medium text-ink">Find a batch</label>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Input ref={batchSearchRef} id="find-batch" type="search" value={batchQuery} readOnly={editing}
+              onChange={(event) => setBatchQuery(event.target.value)} placeholder="Batch, program, coach or club"
+              className="min-w-0 flex-1 basis-48" />
+            {batchQuery ? (
+              <Button type="button" variant="secondary" size="sm" disabled={editing}
+                aria-label="Clear batch search" onClick={() => { setBatchQuery(""); batchSearchRef.current?.focus(); }}>
+                Clear
+              </Button>
+            ) : null}
+          </div>
+          {search ? <p role="status" className="mt-2 text-[13px] text-ink-2">{displayedBatches.length} of {batches.length} batches match</p> : null}
+        </section>
+      ) : null}
+      <section aria-label="Programs and batches">
         {programs.length === 0 ? (
           <p className="px-5 py-4 text-[13px] text-ink-3" data-testid="programs-list">
             No programs yet. Add the first one to create a batch.
           </p>
+        ) : displayedPrograms.length === 0 ? (
+          <p className="rounded-card border border-line bg-paper p-4 text-[13px] text-ink-2">No batches match this search.</p>
         ) : (
           <div data-testid="batches-list-mobile"><ul className="mt-3 grid items-start gap-3 lg:grid-cols-2" data-testid="programs-list">
-            {programs.map((p) => (
+            {displayedPrograms.map((p) => (
               <li key={p.id} role="group" aria-label={p.name} className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
                 <div className="flex min-h-12 flex-wrap items-center gap-2">
                 {editingProgram === p.id ? (
@@ -597,7 +630,7 @@ export function ProgramsBatchesBoard({
                         data-program-edit={p.id}
                         className="inline-flex items-center justify-center gap-1.5 rounded-ctl border border-line bg-paper px-3 text-[13px] text-ink-2 hover:text-ink"
                       >
-                        <Pencil size={15} aria-hidden="true" />Edit program
+                        <Pencil size={15} aria-hidden="true" />Edit
                       </button>
                     </Tap>) : null}
                     {canManageBatches ? <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-ctl bg-[var(--accent-soft)] px-3 text-[13px] font-medium text-[var(--accent-ink)] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]" disabled={showBatchForm || editingBatch !== null || editingProgram !== null || showProgramEditor || confirmDeleteProgram !== null || confirmDeleteBatch !== null} aria-label={`Add ${resolveTerm(terminology, "batch", 1)} to ${p.name}`} onClick={(event) => openBatchEditor(event.currentTarget, p.id)}>
@@ -634,7 +667,7 @@ export function ProgramsBatchesBoard({
                           aria-label={`Delete ${p.name}`}
                           className="inline-flex items-center gap-2 rounded-ctl px-2 text-[12px] text-ink-3 hover:text-ink-2"
                         >
-                          <Trash2 size={15} />Delete program
+                          <Trash2 size={15} aria-hidden="true" />Delete
                         </button>
                       </Tap>
                     )}
@@ -644,7 +677,7 @@ export function ProgramsBatchesBoard({
                 </div>
                 {batches.every((batch) => batch.programId !== p.id) ? <p className="mt-2 text-[13px] text-ink-3">No {resolveTerm(terminology, "batch", "other")} at this club.</p> : null}
                 <ul className="divide-y divide-line">
-                  {batches.filter(b => b.programId === p.id).map(b => <li key={b.id} className="py-2">
+                  {displayedBatches.filter(b => b.programId === p.id).map(b => <li key={b.id} className="py-2">
                     {editingBatch === b.id && editBatchForm ? <BatchEditForm batchId={b.id} initial={editBatchForm} onDraftChange={updateEditBatchForm} programs={programs} coaches={coaches} locations={locations} error={batchError} onCancel={cancelEditBatch} onSaved={onBatchSaved} onError={setBatchError} terminology={terminology} /> :
                     <div className="flex flex-col items-stretch gap-2 lg:flex-row lg:flex-wrap lg:items-center">
                       <div role="group" aria-label={`${b.name} details`} className="min-w-0 flex-1 lg:basis-44">
@@ -653,7 +686,7 @@ export function ProgramsBatchesBoard({
                         <p className="mt-1 flex items-center gap-2 text-[12px] text-ink-3"><OwnerIcon name="members" size={14} />{b.coachName ? coachLabel(b.coachName, terminology) : "Unassigned"}</p>
                         <p className="mt-1 flex items-center gap-2 text-[12px] text-ink-3"><OwnerIcon name="pin" size={14} />{b.locationName ?? "No club assigned"} · {b.capacity} places</p>
                       </div>
-                      <div role="group" aria-label={`${b.name} actions`} className="flex flex-wrap items-center"><Link href={batchHref(b.id, selectedFacilityId)} aria-label={`View batch ${b.name}`} className="inline-flex min-h-11 items-center px-2 text-[13px] font-medium text-[var(--accent-ink)]">View batch</Link>{canManageBatches ? <BatchRowControls batch={b} pending={busyBatchDelete} disabled={showBatchForm || showProgramEditor || editingProgram !== null || editingBatch !== null || confirmDeleteProgram !== null || (confirmDeleteBatch !== null && confirmDeleteBatch !== b.id)} confirmDeleteBatch={confirmDeleteBatch} onEdit={startEditBatch} onAskDelete={setConfirmDeleteBatch} onDelete={removeBatch} /> : null}</div>
+                      <div role="group" aria-label={`${b.name} actions`} className="flex flex-wrap items-center gap-x-1"><Link href={batchHref(b.id, selectedFacilityId)} aria-label={`View batch ${b.name}`} className="inline-flex min-h-11 items-center px-2 text-[13px] font-medium text-[var(--accent-ink)]">View</Link>{canManageBatches ? <BatchRowControls batch={b} pending={busyBatchDelete} disabled={showBatchForm || showProgramEditor || editingProgram !== null || editingBatch !== null || confirmDeleteProgram !== null || (confirmDeleteBatch !== null && confirmDeleteBatch !== b.id)} confirmDeleteBatch={confirmDeleteBatch} onEdit={startEditBatch} onAskDelete={setConfirmDeleteBatch} onDelete={removeBatch} /> : null}</div>
                     </div>}
                   </li>)}
                 </ul>
@@ -718,7 +751,7 @@ function BatchRowControls({
           aria-label={`Edit ${batch.name}`}
           className="inline-flex items-center justify-center gap-1 rounded-ctl px-2 text-[13px] text-ink-2 hover:text-ink"
         >
-          <Pencil size={15} aria-hidden="true" />Edit batch
+          <Pencil size={15} aria-hidden="true" />Edit
         </button>
       </Tap>
       <Tap>

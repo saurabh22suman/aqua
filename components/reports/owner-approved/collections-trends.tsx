@@ -1,10 +1,13 @@
+import { OwnerControlSheet } from "@/components/owner-ui/owner-control-sheet";
+import { OWNER_PERIOD_TAB_LABEL } from "@/lib/time/owner-period-model";
 import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
-import { formatINR, formatINRCompact } from "@/lib/money/format";
+import { formatINR, formatINRCompact, formatINRWhole } from "@/lib/money/format";
 import { formatDateIST } from "@/lib/time/tz";
 import { ColumnChart } from "@/components/charts/report-column-chart";
 import { Donut } from "@/components/charts/report-donut";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import type { PaymentMethodKey } from "@/lib/money/payment-groups";
 
 const METHOD_TONES: Record<PaymentMethodKey, { stroke: string; swatch: string }> = {
@@ -23,17 +26,44 @@ const METHOD_TONES: Record<PaymentMethodKey, { stroke: string; swatch: string }>
 // gross/reversal semantics. Exact figures live inside the disclosure; the
 // ring stays at its approved 132px and sits beside its legend without
 // wrapping on a phone.
-export function CollectionsTrends({ data, facility, facilityScope = facility }: { data: OwnerChartsData; facility?: string; facilityScope?: string }) {
+export function CollectionsTrends({ data, facility, facilityScope = facility, compact = false }: { data: OwnerChartsData; facility?: string; facilityScope?: string; compact?: boolean }) {
   const { collections, period } = data;
   const buckets = period.key === "day" ? [{ key: period.currentFromDate, label: period.currentFromDate, fullLabel: formatDateIST(period.currentFromDate), totalPaise: collections.totalPaise }] : collections.buckets;
   const methods = collections.methods.filter(method => method.paise > 0);
-  return <>
-    <form action="/owner/reports/collections" className="mt-4 flex flex-wrap items-end gap-3">
-      <input type="hidden" name="view" value="trends" />{facilityScope ? <input type="hidden" name="facility" value={facilityScope} /> : null}
-      <label className="grid gap-1 text-sm text-ink-2">Range<Select name="period" defaultValue={period.key}><option value="last7">Last 7 days</option><option value="day">Today</option><option value="week">This week</option><option value="month">This month</option></Select></label>
+  const rangeForm = (
+    <form action="/owner/reports/collections" className="flex flex-wrap items-end gap-2">
+      <input type="hidden" name="view" value="trends" />
+      {facilityScope ? <input type="hidden" name="facility" value={facilityScope} /> : null}
+      <div className="grid gap-1 text-sm text-ink-2">
+        <label htmlFor="collections-report-range">Range</label>
+        <Select id="collections-report-range" name="period" defaultValue={period.key}>
+          <option value="last7">Last 7 days</option>
+          <option value="day">Today</option>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+        </Select>
+      </div>
       <Button type="submit" variant="secondary">Apply</Button>
     </form>
-    <p className="mt-3 text-sm text-ink-2">{formatDateIST(period.currentFromDate)}{period.currentToDate !== period.currentFromDate ? ` – ${formatDateIST(period.currentToDate)}` : ""}{facility ? " · Selected facility" : " · All permitted facilities"}</p>
+  );
+  return <>
+    <section className="owner-money-kpi owner-range-kpi mt-3" aria-label="Collections for this range">
+      <div className="min-w-0">
+        <h2>Payments recorded</h2>
+        <p className="owner-money-value">{formatINRWhole(collections.totalPaise)}</p>
+        <p>{formatDateIST(period.currentFromDate)}{period.currentToDate !== period.currentFromDate ? ` – ${formatDateIST(period.currentToDate)}` : ""} · {facility ? "Selected facility" : "All permitted facilities"}</p>
+        {collections.reversalCount > 0 ? (
+          <p className="mt-1">{formatINRWhole(collections.reversedPaise)} reversed separately · {collections.reversalCount} {collections.reversalCount === 1 ? "reversal" : "reversals"}</p>
+        ) : null}
+        <Link
+          href={`/owner/fees?${new URLSearchParams({ tab: "transactions", from: period.currentFromDate, to: period.currentToDate, facility: facility ?? "all" })}`}
+          className="inline-flex min-h-11 items-center font-semibold text-[var(--accent-ink)]"
+        >
+          View transactions
+        </Link>
+      </div>
+      {compact ? <OwnerControlSheet label="Reporting range" value={OWNER_PERIOD_TAB_LABEL[period.key]}>{rangeForm}</OwnerControlSheet> : rangeForm}
+    </section>
     <div data-testid="report-plots" className="mt-4 grid items-start gap-3 lg:grid-cols-2">
       <section data-testid="report-plot" aria-labelledby="collections-chart-title" className={`min-w-0 rounded-card border border-line bg-paper p-4${methods.length ? "" : " lg:col-span-2"}`}>
         <h2 id="collections-chart-title" className="font-display text-lg font-semibold">Daily collections</h2>

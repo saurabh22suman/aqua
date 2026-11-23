@@ -3,8 +3,9 @@
 import { Button } from "@/components/ui/Button";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { Input } from "@/components/ui/Input";
+import { Dialog } from "@/components/ui/Dialog";
 import { useActionState } from "react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createPaymentQrAction,
@@ -263,10 +264,32 @@ function QrRow({ qr }: { qr: PaymentQrRow }) {
   );
 }
 
-export function PaymentQrManager({ qrs }: { qrs: PaymentQrRow[] }) {
+export function PaymentQrManager({ qrs, taskSheet = false }: { qrs: PaymentQrRow[]; taskSheet?: boolean }) {
   const [addOpen, setAddOpen] = useState(false);
+  const [method, setMethod] = useState<"upi" | "image">("upi");
+  const setupHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { if (addOpen && !taskSheet) setupHeading.current?.focus(); }, [addOpen, taskSheet]);
   return (
     <div className="space-y-4">
+      {taskSheet ? <>
+        <Button type="button" variant="primary" onClick={() => setAddOpen(true)} aria-haspopup="dialog">
+          <OwnerIcon name="plus" size={16} /> Add a payment QR
+        </Button>
+        <Dialog open={addOpen} onOpenChange={setAddOpen} title="Add a payment QR">
+          <div className="mb-4 flex flex-wrap gap-2" role="group" aria-label="QR source">
+            <Button type="button" variant={method === "upi" ? "primary" : "secondary"} aria-pressed={method === "upi"} onClick={() => setMethod("upi")}>Use a UPI ID</Button>
+            <Button type="button" variant={method === "image" ? "primary" : "secondary"} aria-pressed={method === "image"} onClick={() => setMethod("image")}>Upload an image</Button>
+          </div>
+          <div hidden={method !== "upi"}>
+            <p className="mb-3 text-sm text-ink-2">Reception can fill in the payment amount with a generated UPI QR.</p>
+            <AddUpiForm />
+          </div>
+          <div hidden={method !== "image"}>
+            <p className="mb-3 text-sm text-ink-2">Use an existing bank or merchant QR. Payers enter the amount themselves.</p>
+            <AddImageForm />
+          </div>
+        </Dialog>
+      </> : null}
       <section className="rounded-card bg-paper border border-line p-4 sm:p-5">
         <h2 className="font-display text-[16px] font-semibold text-ink">
           Collection destinations
@@ -288,7 +311,7 @@ export function PaymentQrManager({ qrs }: { qrs: PaymentQrRow[] }) {
         )}
       </section>
 
-      <section className="rounded-card bg-paper border border-line p-4 sm:p-5">
+      {taskSheet ? null : <section className="rounded-card bg-paper border border-line p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="font-display text-[16px] font-semibold text-ink">
@@ -316,9 +339,9 @@ export function PaymentQrManager({ qrs }: { qrs: PaymentQrRow[] }) {
         </div>
 
         {addOpen ? (
-          <div id="payment-qr-add" className="mt-4 space-y-5">
+          <div id="payment-qr-add" className="owner-work-panel mt-4 space-y-5">
             <div>
-              <h3 className="text-[14px] font-medium text-ink">
+              <h3 tabIndex={-1} ref={setupHeading} className="text-[14px] font-medium text-ink">
                 Generated UPI QR
               </h3>
               <p className="mb-3 mt-0.5 text-[12px] text-ink-3">
@@ -337,7 +360,7 @@ export function PaymentQrManager({ qrs }: { qrs: PaymentQrRow[] }) {
             </div>
           </div>
         ) : null}
-      </section>
+      </section>}
     </div>
   );
 }

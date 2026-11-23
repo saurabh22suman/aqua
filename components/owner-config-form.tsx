@@ -179,15 +179,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                   </p>
                 ) : (
                   <p className="mt-2 text-[12.5px] text-ink-3">
-                    The percentage and the minimum/consecutive-absence controls
-                    are edited together on the absence-alert screen.{" "}
-                    <Link
-                      href="/owner/settings/alerts"
-                      className="text-[var(--accent-ink)] underline underline-offset-2"
-                    >
-                      Edit threshold in Alerts
-                    </Link>
-                    .
+                    Edit the threshold and the minimum and consecutive absence rules under Notifications.
                   </p>
                 )}
               </div>
@@ -271,7 +263,7 @@ export function OwnerConfigForm({ items }: { items: OwnerConfigItem[] }) {
                   </p>
                 ) : null}
                 <details className="mt-2">
-                  <summary className="cursor-pointer text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
+                  <summary className="min-h-11 cursor-pointer py-3 text-[12px] text-[var(--accent-ink)] underline underline-offset-2">
                     Request change
                   </summary>
                   <div className="mt-2 space-y-2">

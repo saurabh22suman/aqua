@@ -2,6 +2,256 @@
 
 **The visual system for Aqua. Loaded on every UI task. Non-negotiable.**
 
+## Owner workspace — approved pastel direction, 22 November 2026
+
+Use the approved Collections mock for Owner Home and the Week Planner for
+schedule and roster. This direction takes precedence over the earlier Floodlit
+and illustrated masthead references for those screens. Use one shell and shared
+components for every sport and tenant. Show the real terminology and active
+facility scope. Keep the existing Owner navigation and role permissions.
+
+- Use the local DM Sans variable face for Owner text and headings. Start with
+  a pale periwinkle canvas, dark ink, white records, and indigo for primary
+  actions. Reserve pastel blue and peach for selected financial states and keep
+  the words Outstanding and Overdue visible. Keep personal appearance presets
+  available. Use no decorative artwork or new font assets.
+- Home opens in the authorized facility scope, with All facilities as the
+  default when there is no preference. The date control opens seven dates
+  ending today in the club’s timezone. Selecting a date updates payments and
+  agenda together. Outstanding and overdue still describe current balances.
+  Keep unresolved cash review visible and route each action to its scoped view.
+- Use whole rupees for at-a-glance totals and exact amounts on invoices,
+  transactions, receipts and report evidence. Keep captured payments and
+  reversals identifiable. Place date controls with period-based figures and
+  keep current dues available independently of the reporting period.
+- Give every page a clear first action and a legible outcome or recovery.
+  Support keyboard operation, visible focus, touch targets and reduced motion.
+  Keep mobile and desktop navigation usable at narrow widths and under zoom.
+
+For the remaining Owner screens, choose the first panel from the work at hand.
+Schedule leads with its date and site, Sessions with the selected window and
+coverage, and Bookings with the resource and date. List follow-ups before the
+enquiry directory. Keep identity, facility, review and consent visible during
+intake. Put report filters beside the scoped figures, and show the current
+saved value separately from drafts in setup. Give long editors a direct way
+to reach the sections they can actually open. Keep staff access and records
+separate from attendance decisions and show unknown attendance as unknown.
+
+### Owner mobile pages and sheets
+
+Use the current Owner Home for typography, palette, and navigation. Keep its
+composition intact. On the other Owner paths, use the layout that fits the job.
+Put balances and the next eligible action first in ledgers. Lead directories
+with search and applied filters. Give record pages a compact identity header.
+Keep editors and setup pages focused on the fields and outcome of the task.
+
+Schedule shows the selected date range, facility, previous and next controls,
+and seven days before the first session. The range opens a date sheet. Filters
+for calendar view and facility have their own sheet. Bookings, staff
+attendance, and roster use the same compact navigation pattern. Use the
+shared DD/MM/YYYY picker inside the sheet so it scrolls with the form and
+receives focus and input inside the active dialog.
+
+The session list shows the applied dates beside Needs cover. Its range sheet
+shows the dates for Today, Next 7 days, and Full window. Choosing one updates
+the list immediately and keeps any coverage filter applied.
+
+Daily collections shows the applied date and facility in one control. Its
+sheet opens on the last seven days and offers the calendar for other dates.
+Apply both choices together so the payment evidence and cash count use the
+same scope. Capture the report after its payment evidence has loaded.
+
+Bookings shows the selected date above both Calendar and Board. Roster places
+the week and facility in one control and opens publication scope from Publish
+week. Invitations keeps search visible and puts status and sort in one sheet.
+Each invitation row shows the person's name and phone number. Its details
+button opens role, status, club access and sign-in actions in a sheet.
+Invite staff sits in the page header and stays clear of row actions.
+Attendance shows its applied dates on the mobile filter control.
+
+Use a named sheet for short tasks such as filtering records, adding an
+enquiry, declaring a closure, and adding a payment QR. Show the applied
+choice in the trigger. Group secondary destinations by task in More. Keep
+mobile drawers scrollable, with a visible close button, Escape, focus return
+and a safe-area inset. Offer swipe dismissal for read-only sheets and
+filters. Keep forms available for error recovery and respect reduced motion.
+[Apple Sheets](https://developer.apple.com/design/human-interface-guidelines/sheets?changes=_1)
+· [Apple Pickers](https://developer.apple.com/design/human-interface-guidelines/pickers?changes=_7)
+· [W3C Modal Dialog Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
+
+## Approved workspace direction — 20 November 2026
+
+### Shared role design
+
+Use the mobile brief's typography, semantic colors, spacing, and visible action
+states across the workspace. Staff and family screens are mobile-first. Platform
+operations keep a desktop-first workspace and usable mobile navigation. Each
+role Home leads with its current work, including the coach's next session,
+Reception's lookup and collection actions, the worker's shift, and the family
+or member's linked memberships, fees, and notices. Signed legacy Parent pages use a self-contained
+HTML treatment with existing exact receipt amounts and no script tags. Reuse the
+same layouts for every sport under a tenant.
+
+### Sign-in and onboarding
+
+Use the compact Aqua brand panel and shared entry layout for staff, member,
+family, invitation, PIN recovery, and business-account selection. The form
+heading identifies the current sign-in. Put the other two destinations in
+an Other sign-in options disclosure below the form. Keep the fields and primary
+action on the first mobile screen. Retain entered values after a refused sign-in
+and show network recovery next to the form. Preserve the selected club in
+member/family sign-in links when opened from a club's own landing page. Keep
+operator verification on the platform host. Respect reduced motion and keep
+PIN reveal available by keyboard with a 44px target.
+
+In signed-in account settings, show Switch role when the account has an
+additional assigned role. Identify the current role and where each choice
+leads. Reuse a live session for the same person and business when available.
+If the destination needs its own sign-in, tell the person before they choose.
+Staff can use the business account picker to reach roles at another business.
+
+Keep paired actions on one row when both fit with 44px targets. Member
+and Family use Fees and Achievements, with the child's name in each Family
+action's accessible label. Use one sign-in link when both tools need the
+same sign-in. Put instructions beside the decision they support and omit
+copy that repeats the heading or nearby actions. Keep a visible, short label
+such as Receipt or Queue. Give repeated controls an accessible name with the
+record it acts on when the surrounding screen needs that distinction.
+Place Search beside its input when both controls fit.
+
+Worker has three tabs. Today shows the current or next shift and check-in.
+Schedule lists published shifts and opens Leave for balances and requests.
+Me holds profile and settings. Announcements opens from Today.
+
+### Owner Home mobile brief — 21 November 2026
+
+The approved Owner Home composition is the 21 November mobile brief:
+[Owner Home mobile HTML](docs/design/owner-brief-2026-11-21/Owner-Home-Mobile.html).
+Use the readable copy (same markup/CSS/JS without embedded bytes) for
+implementation and the exact Floodlit WOFF2s and artwork in
+`docs/design/floodlit-owner-2026-11-20/`. This supersedes the earlier Owner
+Home compositions on the OWNER route only.
+
+- **Owner Home.** The financial brief composition and its scope actions are
+  gated server-side by `ctx.roleKey === "owner"`. The shared app palette and
+  text face apply across roles. Each role has its existing authorized navigation.
+- **One reusable layout, two sports.** Aquatics and Racquet use the same
+  structure; only the real tenant-sport artwork and the existing personal
+  Mint / Lavender / Dark palette overrides change.
+- **Home order.** Brand and sticky facility scope; a 107px venue masthead with
+  the real tenant short name and tenant date; one Money block; the optional
+  by-facility comparison; then a short Club today list. Remove the detached
+  New enquiry shortcut and the three score tiles from the owner Home. Enquiry
+  capture stays in Enquiries; full calendar access stays real.
+- **Money.** Lead with payments recorded today across all methods. Place
+  overdue review next, with the invoice count and oldest age. An unresolved
+  cash count takes precedence as the main action, with overdue review as a
+  quiet link. Show the dated seven-day total and current outstanding balance
+  below today's decision. Quiet and unavailable reads are distinct. This
+  order supersedes the weekly emphasis in the mobile HTML reference.
+- **Whole rupees.** Owner Home summary, chart readout, overdue and
+  cash/By-facility values use half-up whole-rupee formatting with Indian
+  grouping, and state a positive amount that would round to zero as "Under ₹1". Integer paise
+  stay the storage and arithmetic unit; invoices, receipts, ledgers and
+  reports keep their exact formatters.
+- **Facility scope.** The Home control opens a native dialog of only the
+  caller's live authorized facilities. While a switch is loading the control
+  and figures stay on the committed scope and a live message says so; a failed
+  request keeps those figures and offers Retry. The label moves only with the
+  matching read. Successful choices write the existing URL and cookie scope.
+- **By facility.** Expandable only for a multi-facility, all-facilities Home.
+  The deferred read uses the existing Fees overview definitions under existing
+  permissions; no simulated totals.
+- **Motion.** Sheet and scope-change transitions are short transform/opacity
+  (~175/160 ms). `prefers-reduced-motion` disables them. No number animation.
+
+### Floodlit Owner Today reference
+
+Use the approved Floodlit HTML for the next Owner Today implementation. The
+photographic stage, fonts, spacing and action layout in that artifact supersede
+the earlier phone revision's visual choices. The following sections retain
+the previous design history and applicable scope, permission and workflow
+rules. The reference directory provides the approved assets and build checks.
+[Floodlit reference and acceptance](docs/design/floodlit-owner-2026-11-20/README.md)
+· [Interactive mock](docs/design/floodlit-owner-2026-11-20/KhelSuite-Floodlit.html)
+
+### Earlier workspace reference
+
+The previous workspace mock illustrates the role workflows. The other Owner
+screens use their respective specifications. The handoff identifies the real
+routes, permissions and data for the selected work. [Owner desktop reference](docs/design/workspace-2026-11-20/Owner-overview.png)
+· [Interactive reference](docs/design/workspace-2026-11-20/KhelSuite-Workspace.html)
+· [Implementation handoff](docs/handoffs/workspace-redesign-2026-11-20.md)
+
+### Owner Today revision after mobile feedback
+
+The approved concept established finance first, one real next action and an
+agenda users can find quickly. The phone review showed excessive emphasis and
+repetition. The revision below records the preceding neutral-card build.
+Floodlit sets the visual direction for the next Owner Today implementation.
+
+- **Type.** Use the full Latin Instrument Sans face already loaded by the app
+  for Owner Today headings, figures and body text. Set the page title around
+  36px on a phone and up to 54px on desktop, with 27–31px phone figures.
+  Use tabular numbers and sentence-case labels. The original prototype used
+  Barlow Condensed and DM Sans. This revision uses one family as a deliberate
+  candidate after the shipped subset caused mixed letterforms. Verify the
+  actual rendered family and glyphs before presenting it for visual approval.
+- **Context once.** The header facility switcher shows the scope and the page
+  header gives the date. Keep the **New enquiry** shortcut as a quiet link.
+  Show two financial figures on a neutral card. Overdue is a subset of the
+  outstanding balance and is stated once near that balance.
+- **Actions.** The priority card has the one solid action on the first screen.
+  When overdue is the priority, its action replaces the ledger's secondary
+  overdue link. Keep all existing financial destinations and the complete
+  attention queue available. A real zero stays zero. An unavailable read
+  has a separate state.
+- **Agenda.** Put the agenda below the priority on a phone, or alongside the
+  collections chart on desktop. A small thumbnail and a text link are
+  enough for the next session. Keep the full Schedule action and existing
+  disclosures. Preserve the approved Owner shell and mobile tab order
+  **Today · Enquiries · Schedule · Members · More**.
+- **Scope.** **All facilities** means all sites the caller is authorized
+  to see in the active business. A genuine first-time choice between
+  different businesses is labeled as a business selection. On return, the
+  app may reopen that person's last explicitly chosen business on this
+  device after revalidating membership. A new Owner sign-in opens all
+  allowed facilities. **Default facility** under personal preferences can
+  choose one allowed site on this device. Explicit scope in links and
+  manual switching continue to take precedence after sign-in.
+
+Keep the first phone view easy to scan at 390×844 and check long names at
+320px. Verify actual keyboard targets, open and unavailable states, and
+contrast in Court Blue, Clay Season and Floodlights.
+
+### Across roles and sports
+
+Use one shell system and component vocabulary. Source terms, enabled modules
+and branding from existing configuration. The Manager leads with assigned
+sites and coverage. The Accountant lands in permitted Fees or Collections.
+Reception keeps the selected member visible during lookup and retry. The
+Coach keeps session and save/sync state visible. Families keep the selected
+child visible through updates, billing and receipts. Each role maintains a
+stable navigation order and retains the production workflow beyond the demo.
+Motion should help users follow a change. Give gestures visible button
+equivalents and respect reduced motion.
+
+Keep the phone navigation focused on recurring jobs. Owner keeps the approved
+Today, Enquiries, Schedule, Members and More. Manager and Administrator use
+Today, Schedule, Members and More. Use the assigned facility scope for every
+operational destination. Put personal settings in the account menu and keep
+club configuration in the owner's Settings.
+
+Coach and Reception open My workday from their existing navigation. Personal
+attendance, shifts and leave live there. Keep Me for identity, preferences and
+role switching. Members and families use Home, Announcements and Account.
+Keep fees, receipts and achievements attached to the relevant membership.
+Ops uses its grouped menu and a direct tenant search on the overview.
+
+Manager appointments are made through Invitations with explicit facility
+scope. Accountant is retired for new invitations. Existing Accountant access
+and staff records keep their current role and history.
+
 ## Owner card direction — 16 November 2026
 
 The human approved the seven Owner page concepts (Home, Members, member
@@ -320,17 +570,13 @@ renders. Shipped weights, latin subset only:
 Self-hosted, subset to Latin only (`latin-ext`/`vietnamese` dropped —
 nothing in this product needs them today), `font-display: swap`.
 
-**Combined budget 60 KB, latin only — actual 55.2 KB, inside budget.**
-The three static latin files (`instrument-sans-latin-400`,
-`instrument-sans-latin-500`, `bricolage-grotesque-latin-600`, woff2) are
-16.5 + 16.8 + 21.9 KB. The original 45 KB figure was set before any
-static-weight measurement existed — a guess, and wrong once real numbers
-came in. Raised to 60 KB rather than compromise the type: the three
-weights are load-bearing for the design, and against a 102 KB shared JS
-baseline and a 150 KB total budget there's headroom to pay for it.
-Enforced in CI as its own gate (`scripts/check-font-budget.ts`), same
-shape as the JS bundle gate — adding a fourth weight or a new subset
-fails the build, not a later "someone noticed."
+**Combined budget of 150 KiB for emitted Latin WOFF2 assets.** The three
+shared static faces total 55.2 KiB. Floodlit Owner Home uses the approved
+Barlow Condensed Bold and DM Sans Latin files, totaling 59,376 bytes. Scope
+the Floodlit faces to Owner Home and preserve the shared typography for
+other surfaces. Keep the approved source files and licenses with the
+[Floodlit reference](docs/design/floodlit-owner-2026-11-20/README.md).
+The CI gate in `scripts/check-font-budget.ts` sums all emitted WOFF2 files.
 
 **Phase 4 (Hindi, Bengali) will need revisiting this budget, not just
 extending it.** Neither Bricolage Grotesque nor Instrument Sans ships a
@@ -339,9 +585,7 @@ Devanagari or Bengali subset at all (checked both packages' `metadata.json`
 respectively) — Phase 4 is a new typeface decision, not a bigger latin
 budget. Measured for real against Noto Sans Devanagari/Bengali (400+500+600,
 each script's own subset, woff2) as a size anchor, not a guess: Devanagari
-~154 KB, Bengali ~136 KB. Either alone is roughly 2.5–3x this entire latin
-budget; loading both unconditionally for every user is not viable at any
-budget. Phase 4 needs a decision on per-locale conditional loading (ship a
+~154 KB, Bengali ~136 KB. Together they add roughly 290 KiB. Load the required script by locale. Phase 4 needs a decision on per-locale conditional loading (ship a
 user's script, not everyone's), before it needs a bigger number.
 
 | Role | Size | Family | Weight |
@@ -354,7 +598,8 @@ user's script, not everyone's), before it needs a bigger number.
 | Label / meta | 12–13px | sans | 400 |
 | Micro | 11px | sans | 500 |
 
-**Weights 400, 500, 600 only.** Nothing bolder. Never below 11px.
+**Foundation weights are 400, 500 and 600.** Use the Owner Today scale
+in the 20 November revision for that screen. Keep UI text at 11px or larger.
 
 ```css
 html { font-variant-numeric: tabular-nums; }
@@ -742,7 +987,7 @@ before retrying") rather than inviting a double submit.
 | Metric | Limit |
 |---|---|
 | First-load JS, gzipped | **150 KB** — build fails above |
-| Fonts | 60 KB (latin subset, woff2; see §1.3) |
+| Fonts | 150 KiB combined (Latin WOFF2, see §1.3) |
 | LCP, 4G mid-tier Android | 2.5s |
 | Lighthouse mobile | > 90 |
 
@@ -774,7 +1019,7 @@ authority on the per-route cost.
 | Two vertical scroll owners on one surface | Double scrollbars; the reader loses the page |
 | A theme preset used for anything but colour | A display preference is not an authorization input |
 | A third shadow level | Two is the system |
-| Font weight 700+ | Not in the scale |
+| Font weights outside the applicable type scale | Use the foundation scale or the approved scoped screen scale |
 | Title Case | |
 | A "More" nav tab | Where features go to die |
 | Colour as the only carrier of meaning | Accessibility, and sunlight |
@@ -794,7 +1039,11 @@ authority on the per-route cost.
 
 ---
 
-## 7. Owner Home — composition contract (shipped 2026-10-25)
+## 7. Owner Home — historical composition contract (25 October 2026)
+
+The [20 November workspace direction](#approved-workspace-direction--20-november-2026)
+sets the current Owner Home order. Use this historical section for compatible
+details such as truthful data, chart periods, facility drill-downs and evidence.
 
 `/owner` is the owner's daily oversight workspace. The owner reviews; they do
 not mark registers or run the front desk from this screen. The screen answers,

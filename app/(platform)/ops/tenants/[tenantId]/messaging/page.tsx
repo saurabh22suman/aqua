@@ -1,11 +1,14 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantHeader } from "@/db/platform-tenants";
 import { getTenantMessagingSummary } from "@/db/platform-tenant-messaging";
 import { asTenantId } from "@/lib/ids";
 import { runOpsRead } from "@/lib/auth/ops-operation";
-import { SectionHeader, DescriptionRow, DATETIME_FMT } from "../tenant-detail-shared";
-import { OpsCardFlush, OpsPanel } from "@/components/ops/ops-primitives";
+import { DescriptionRow, DATETIME_FMT } from "../tenant-detail-shared";
+import { OpsPageHeader, OpsCardFlush, OpsPanel, OpsTextLink } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Tenant messaging" };
 
 const PROVIDER_LABEL: Record<string, string> = {
   mock: "Non-production mock",
@@ -51,10 +54,7 @@ export default async function TenantMessagingPage({
 
   return (
     <section>
-      <SectionHeader
-        title="Messaging"
-        subtitle="Observed outbound messaging attempts for this tenant. No credentials or message content are shown here."
-      />
+      <OpsPageHeader title="Messaging" lede="Outbound attempts for this tenant." />
       <OpsCardFlush className="mt-3">
         <DescriptionRow
           label="Last observed provider"
@@ -77,6 +77,11 @@ export default async function TenantMessagingPage({
           value={String(summary.failedCount7d)}
         />
       </OpsCardFlush>
+      {auth.role === "admin" && summary.failedCount7d > 0 ? (
+        <div className="mt-3">
+          <OpsTextLink href="/ops/recovery#failed-sends">Review platform failed sends</OpsTextLink>
+        </div>
+      ) : null}
       <OpsPanel tone="warn" className="mt-4" title="Provider connection is not verified here">
         There is no per-tenant WhatsApp account record yet, so this panel does
         not read a stored connection flag. It reports whichever provider

@@ -13,6 +13,7 @@ import { Button, buttonClasses } from "@/components/ui/Button";
 import { PersonAvatar } from "@/components/avatar";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { STAFF_CARD, StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
+import { ReceptionMemberResultLink } from "@/components/reception/member-search-navigation";
 import { StaffCreateAction } from "@/components/staff-ui/staff-create-action";
 
 // PR3-C7 — reception member search. The counter's fastest path to a
@@ -28,8 +29,9 @@ export default async function ReceptionMembersPage({
     searchParams ?? Promise.resolve({} as { q?: string }),
     getTerminologyAction().then(staffTerminology),
   ]);
-  const query = (params.q ?? "").trim();
-  const members = query.length > 0 ? await listMembersAction({ search: query }) : [];
+  const query = typeof params.q === "string" ? params.q.trim().slice(0, 200) : "";
+  const members = query ? await listMembersAction({ search: query }).catch(() => null) : [];
+  const navigationNamespace = `${ctx.tenantId}:${ctx.userId}`;
   const memberNoun = resolveTerm(terminology, "member", 1);
   const memberNouns = resolveTerm(terminology, "member", "other");
   const canCreate = hasPermission(ctx, "members.write");
@@ -56,9 +58,9 @@ export default async function ReceptionMembersPage({
         }
       />
 
-      <form method="get" className="mt-5">
+      <form id="reception-member-search" method="get" className={`mt-4 space-y-3 p-4 ${STAFF_CARD}`}>
         <label className="block" htmlFor="member-search">
-          <span className="sr-only">Search {memberNouns}</span>
+          <span className="mb-1 block text-sm font-semibold">Search {memberNouns}</span>
           <div className="relative">
             <OwnerIcon
               name="search"
@@ -68,6 +70,7 @@ export default async function ReceptionMembersPage({
             <Input
               id="member-search"
               name="q"
+              maxLength={200}
               type="search"
               defaultValue={query}
               placeholder="Name, phone or code"
@@ -75,7 +78,7 @@ export default async function ReceptionMembersPage({
             />
           </div>
         </label>
-        <Button type="submit" variant="primary" className="mt-2 w-full">
+        <Button type="submit" variant="primary" className="w-full">
           Search
         </Button>
       </form>
@@ -84,6 +87,11 @@ export default async function ReceptionMembersPage({
         <p className="mt-5 text-[13px] text-ink-3">
           Start typing to find someone.
         </p>
+      ) : members === null ? (
+        <section className={`mt-4 space-y-2 p-4 ${STAFF_CARD}`}>
+          <p role="alert" className="text-sm">Could not search. Check your connection and retry with the same details.</p>
+          <Button type="submit" form="reception-member-search" size="sm">Retry search</Button>
+        </section>
       ) : members.length === 0 ? (
         <div className="mt-4">
           <EmptyState
@@ -105,14 +113,14 @@ export default async function ReceptionMembersPage({
           />
         </div>
       ) : (
-        <ul className={`mt-5 divide-y divide-line ${STAFF_CARD}`}>
+        <section className="mt-4" aria-label="Search results">
+        <p role="status" className="mb-2 text-sm text-ink-2">{members.length} {members.length === 1 ? "match" : "matches"}</p>
+        <ul className={`divide-y divide-line ${STAFF_CARD}`}>
           {members.map((member) => (
             <li key={member.memberId}>
-              <Link
-                href={`/reception/members/${member.memberId}`}
-                className="flex items-center gap-3 px-3.5 py-3 transition-colors duration-150 hover:bg-deck/50 active:bg-deck"
-                data-testid={`member-result-${member.memberId}`}
-              >
+              <ReceptionMemberResultLink memberId={member.memberId} namespace={navigationNamespace}
+                className="flex min-h-16 items-start gap-3 px-3.5 py-3 transition-colors duration-150 hover:bg-deck/50 active:bg-deck">
+
                 <PersonAvatar
                   name={member.fullName}
                   seed={member.memberId}
@@ -120,10 +128,10 @@ export default async function ReceptionMembersPage({
                   className="flex-none"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium text-ink">
+                  <p className="break-words text-[14px] font-semibold text-ink">
                     {member.fullName}
                   </p>
-                  <p className="mt-0.5 truncate text-[12px] text-ink-3">
+                  <p className="mt-0.5 break-words text-[12px] text-ink-3">
                     {member.memberCode} · {member.locationName}
                     {member.phone ? ` · ${formatPhoneIN(member.phone)}` : ""}
                   </p>
@@ -131,10 +139,11 @@ export default async function ReceptionMembersPage({
                 <StatusBadge tone={MEMBER_STATUS_TONE[member.status] ?? "neutral"}>
                   {member.status}
                 </StatusBadge>
-              </Link>
+              </ReceptionMemberResultLink>
             </li>
           ))}
         </ul>
+        </section>
       )}
 
       {canCreate ? (

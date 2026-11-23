@@ -59,16 +59,16 @@ export default async function TenantDetailLayout({
       </Link>
 
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-[28px] font-semibold leading-tight text-marine">
+        <p className="font-display text-[22px] font-semibold leading-tight text-marine">
           {header.name}
-        </h1>
+        </p>
         <StatusBadge tone={TENANT_STATUS_TONE[header.status] ?? "neutral"}>
           {STATUS_LABEL[header.status] ?? header.status}
         </StatusBadge>
       </div>
       <p className="mt-1 font-mono text-[13px] text-ink-3">{header.slug}</p>
 
-      <TenantTabNav tenantId={header.id} />
+      <TenantTabNav tenantId={header.id} canViewDiagnostics={auth.role === "admin"} />
 
       <div className="mt-6">{children}</div>
     </div>

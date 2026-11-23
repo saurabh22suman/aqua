@@ -18,7 +18,7 @@ export function ScheduleDatePicker({ date, view, locationId }: {
   }
 
   return (
-    <form ref={form} action="/owner/schedule" method="get" className="w-full max-w-64">
+    <form ref={form} action="/owner/schedule" method="get" className="w-full max-w-sm">
       <input type="hidden" name="view" value={view} />
       <input ref={dateInput} type="hidden" name="date" defaultValue={date} />
       <input type="hidden" name="facility" value={locationId ?? "all"} />

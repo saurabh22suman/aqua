@@ -7,6 +7,7 @@ import { withPlatform } from "@/db/scope";
 import { listClubChoices } from "@/db/club-selection";
 import { ACTIVE_CLUB_COOKIE } from "@/lib/auth/active-club";
 import { FACILITY_COOKIE } from "@/lib/facility";
+import { lastBusinessKey, ownerStartPath, workspacePreferenceCookie } from "@/lib/services/workspace-opening";
 
 export async function selectClubAction(raw: unknown): Promise<{ kind: "ok"; path: string } | { error: string }> {
   const input = z.object({ tenantId: z.string().uuid() }).safeParse(raw);
@@ -21,5 +22,6 @@ export async function selectClubAction(raw: unknown): Promise<{ kind: "ok"; path
   store.set(ACTIVE_CLUB_COOKIE,selected.tenantId,{ httpOnly: true,secure: process.env.NODE_ENV === "production",
     sameSite: "lax",path: "/",maxAge: 30*24*60*60 });
   store.delete(FACILITY_COOKIE);
-  return { kind: "ok", path: selected.homePath };
+  store.set(lastBusinessKey(session.user.id), selected.tenantId, workspacePreferenceCookie);
+  return { kind: "ok", path: await ownerStartPath(selected.homePath, session.user.id, selected.tenantId, store) };
 }

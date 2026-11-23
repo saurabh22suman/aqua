@@ -1,4 +1,5 @@
 import { Select } from "@/components/ui/Select";
+import { OwnerPlannerControls } from "@/components/owner-approved/operations/owner-planner-controls";
 import { ScheduleDatePicker } from "@/components/owner-approved/operations/schedule-date-picker";
 import { Button } from "@/components/ui/Button";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
@@ -80,13 +81,14 @@ export type OwnerScheduleGridProps = {
   /** The coach id behind each session, when the read exposes one. */
   coachIds?: Record<string, string>;
   canManagePrograms?: boolean;
+  compactPlanner?: boolean;
   /**
-   * Owner OpenPen (29 October 2026) — the exception-management
-   * destination is a write surface (/owner/sessions requires
-   * programs.write). Defaults to the batch-management gate so a caller
-   * that already passed the write-ish flag keeps the link.
+   * Audit simplification (21 November 2026) — the Calendar / List
+   * switch is the only path to the exception list, so this flag now
+   * gates only the program-setup link ("Add a session (via a batch)").
+   * Editing a batch is a programs.write surface.
    */
-  canManageExceptions?: boolean;
+  canEditPrograms?: boolean;
 };
 
 const DEFAULT_CATEGORY_LABELS = { batch: "Batch", booking: "Booking" };
@@ -113,7 +115,8 @@ export function OwnerScheduleGrid({
   categoryLabels = DEFAULT_CATEGORY_LABELS,
   coachIds = {},
   canManagePrograms = false,
-  canManageExceptions = canManagePrograms,
+  compactPlanner = false,
+  canEditPrograms = canManagePrograms,
 }: OwnerScheduleGridProps) {
   const anchorDate = anchor ?? days[0] ?? "";
   const selectedDate = days.includes(anchorDate)
@@ -130,6 +133,7 @@ export function OwnerScheduleGrid({
     dayHref || weekHref || monthHref ? (
       <SegmentedTabs
         ariaLabel="Schedule view"
+        documentNavigation
         active={view}
         tabs={[
           { key: "day", label: "Day", href: dayHref ?? "#" },
@@ -143,20 +147,23 @@ export function OwnerScheduleGrid({
   const viewTitle =
     view === "day" ? "Day" : view === "week" ? "Week" : view === "month" ? "Month" : "Agenda";
 
-  const exceptionsLink = canManageExceptions ? (
-    <Link
-      href={ownerFacilityHref("/owner/sessions", locationId)}
-      className="inline-flex min-h-11 items-center rounded-ctl border border-line bg-[var(--control-surface-action)] px-3 text-[13px] font-medium text-[var(--accent-ink)]"
-    >
-      Manage session exceptions
-    </Link>
-  ) : null;
-
-  // Two control groups: the location filter row and the shared
-  // navigation row keep a token gap between them.
-  const toolbar = (
-    <div className="mt-4 flex flex-col gap-2">
-      <p className="text-[13px] text-ink-2">Club: {locationId ? locations.find((location) => location.id === locationId)?.name ?? "Selected club" : "All available clubs"}</p>
+  // The filters disclosure holds the day/week/month/agenda and club
+  // controls; the Calendar / List switch for the destination itself
+  // lives in the page heading, not here.
+  const scopeLabel = locationId
+    ? locations.find(location => location.id === locationId)?.name ?? "Selected facility"
+    : "All facilities";
+  const toolbar = compactPlanner ? (
+    <OwnerPlannerControls date={anchorDate} view={view} locationId={locationId} scopeLabel={scopeLabel}
+      rangeLabel={rangeLabel} shortRange={compactScheduleRange(view, days[0] ?? anchorDate, days.at(-1) ?? anchorDate)}
+      prevHref={prevHref} nextHref={nextHref} todayHref={todayHref}
+      filters={<div>
+        {viewTabs}
+        {locations.length > 1 ? <LocationFilter view={view} anchorDate={anchorDate} locationId={locationId} locations={locations} facilityLabel="Facility" /> : null}
+      </div>} />
+  ) : (
+    <div className="owner-work-panel mt-4 flex flex-col gap-2">
+      <p className="text-[13px] text-ink-2">{locationId ? locations.find((location) => location.id === locationId)?.name ?? "Selected facility" : "All facilities"}</p>
       <ScheduleDatePicker date={anchorDate} view={view} locationId={locationId} />
       <OwnerCalendarToolbar
         navigation={{
@@ -173,14 +180,15 @@ export function OwnerScheduleGrid({
         }}
         ariaLabels={{ previous: `Previous ${(view === "agenda" ? "Week" : viewTitle).toLowerCase()}`, today: "Today", next: `Next ${(view === "agenda" ? "Week" : viewTitle).toLowerCase()}` }}
       />
-      <details className="rounded-ctl border border-line bg-paper px-3">
-        <summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-medium text-ink-2">Filters</summary>
-        <div className="pb-3">
-          {viewTabs}
-          {locations.length > 1 ? <LocationFilter view={view} anchorDate={anchorDate} locationId={locationId} locations={locations} /> : null}
-          {exceptionsLink}
-        </div>
-      </details>
+      <div className="flex flex-wrap items-start gap-2">
+        <details className="min-w-0 flex-1 basis-20 rounded-ctl open:basis-full border border-line bg-paper px-3">
+          <summary className="flex min-h-11 cursor-pointer items-center text-[13px] font-medium text-ink-2">Filters</summary>
+          <div className="pb-3">
+            {viewTabs}
+            {locations.length > 1 ? <LocationFilter view={view} anchorDate={anchorDate} locationId={locationId} locations={locations} /> : null}
+          </div>
+        </details>
+      </div>
     </div>
   );
 
@@ -199,7 +207,7 @@ export function OwnerScheduleGrid({
             />
           ) : null}
         </div>
-        {canManageExceptions ? (<Link
+        {canEditPrograms ? (<Link
           href={ownerFacilityHref("/owner/programs", locationId)}
           className="mt-4 inline-flex min-h-[44px] items-center rounded-pill border border-line bg-paper px-4 text-[13px] font-medium text-ink"
         >
@@ -249,7 +257,7 @@ export function OwnerScheduleGrid({
         <div className="md:hidden"><ScheduleMobileAgenda events={events} days={days} chooserDays={chooserDays} selectedDate={selectedDate} dayHrefs={dayHrefs} labels={categoryLabels} view={view === "agenda" ? "agenda" : view === "day" ? "day" : "week"} /></div>
       </div>
 
-      {canManageExceptions ? (<Link
+      {canEditPrograms ? (<Link
         href={ownerFacilityHref("/owner/programs", locationId)}
         className="mt-4 inline-flex min-h-[44px] items-center rounded-pill border border-line bg-paper px-4 text-[13px] font-medium text-ink"
       >
@@ -301,28 +309,46 @@ function touchesRange(session: GridSessionRow, days: string[]): boolean {
   return start < rangeEnd && end > rangeStart;
 }
 
+const compactMonth = new Intl.DateTimeFormat("en-IN", { month: "short", timeZone: "UTC" });
+const compactDay = new Intl.DateTimeFormat("en-IN", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+const monthHeading = new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+
+function compactScheduleRange(view: OwnerScheduleGridProps["view"], from: string, to: string): string {
+  const first = new Date(`${from}T00:00:00Z`);
+  const last = new Date(`${to}T00:00:00Z`);
+  if (view === "month") return monthHeading.format(first);
+  if (from === to) return compactDay.format(first);
+  if (from.slice(0, 7) === to.slice(0, 7)) {
+    return `${first.getUTCDate()}–${last.getUTCDate()} ${compactMonth.format(last)}`;
+  }
+  return `${first.getUTCDate()} ${compactMonth.format(first)} – ${last.getUTCDate()} ${compactMonth.format(last)}`;
+}
+
 function LocationFilter({
   view,
   anchorDate,
   locationId,
   locations,
+  facilityLabel = "Location",
 }: {
   view: "day" | "week" | "month" | "agenda";
   anchorDate: string;
   locationId?: string;
   locations: Array<{ id: string; name: string }>;
+  facilityLabel?: "Location" | "Facility";
 }) {
   return (
     <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
       <input type="hidden" name="view" value={view} />
       <input type="hidden" name="date" value={anchorDate} />
       <label className="block min-w-0 flex-1 sm:w-64 sm:flex-none">
-        <span className="mb-0.5 block text-[11px] text-ink-3">Location</span>
+        <span className="mb-0.5 block text-[12px] text-ink-2">{facilityLabel}</span>
         <Select
           name="facility"
+          aria-label={facilityLabel}
           defaultValue={locationId ?? "all"}
         >
-          <option value="all">All clubs</option>
+          <option value="all">{facilityLabel === "Facility" ? "All facilities" : "All clubs"}</option>
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}

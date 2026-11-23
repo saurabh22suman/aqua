@@ -49,15 +49,23 @@ export function MemberEditForm({
   const [locationId, setLocationId] = useState(member.locationId);
   const [medicalNotes, setMedicalNotes] = useState(member.medicalNotes ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [saveUnconfirmed, setSaveUnconfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const dirty = fullName !== member.fullName || phone !== (member.phone ?? "") ||
-    dateOfBirth !== (member.dateOfBirth ?? "") || joinedOn !== member.joinedOn ||
-    gender !== (member.gender ?? "") || locationId !== member.locationId ||
-    medicalNotes !== (member.medicalNotes ?? "");
+  const changes = ([
+    ["Full name", fullName !== member.fullName],
+    ["Phone", phone !== (member.phone ?? "")],
+    ["Date of birth", dateOfBirth !== (member.dateOfBirth ?? "")],
+    ["Joined on", joinedOn !== member.joinedOn],
+    ["Gender", gender !== (member.gender ?? "")],
+    ["Location", locationId !== member.locationId],
+    ["Medical notes", medicalNotes !== (member.medicalNotes ?? "")],
+  ] as const).filter(([, changed]) => changed).map(([label]) => label);
+  const dirty = changes.length > 0;
 
   async function submit() {
     setError(null);
+    setSaveUnconfirmed(false);
     if (!fullName.trim() || !dateOfBirth || !locationId) {
       setError("Full name, date of birth and location are required.");
       return;
@@ -80,7 +88,8 @@ export function MemberEditForm({
       }
       router.push(profileHref);
     } catch {
-      setError("The change could not be saved. Check the fields and try again.");
+      setSaveUnconfirmed(true);
+      setError("Could not confirm the save. Your draft is still here.");
     } finally {
       setBusy(false);
     }
@@ -88,8 +97,12 @@ export function MemberEditForm({
 
   return (
     <div className="space-y-2.5">
-      {/* OpenPen owner reference — a bounded correction form: persistent
-          labels, paired fields at ≥sm, and Cancel beside Save. */}
+      <section aria-label="Changes to save" className="rounded-ctl border border-line bg-deck px-3 py-2.5">
+        <p role="status" className="text-[13px] font-medium text-ink">
+          {dirty ? `${changes.length} ${changes.length === 1 ? "field" : "fields"} changed` : "No unsaved changes"}
+        </p>
+        {dirty ? <p className="mt-0.5 text-[12px] text-ink-2">{changes.join(" · ")}</p> : null}
+      </section>
       <h2 className="font-display text-[16px] font-semibold">
         Personal details
       </h2>
@@ -166,32 +179,33 @@ export function MemberEditForm({
           </Select>
         )}
       </Field>
-      <Field id="edit-medical-notes-field" label="Medical notes (optional)">
-        {(field) => (
-          <Textarea
-            {...field}
-            value={medicalNotes}
-            onChange={(e) => setMedicalNotes(e.target.value)}
-            placeholder="Medical notes (optional)"
-            rows={2}
-          />
-        )}
-      </Field>
+      <section aria-label={originIntent ? "Care notes" : undefined} className={originIntent ? "owner-work-panel" : undefined}>
+        {originIntent ? <h2 className="mb-2 font-semibold">Care notes</h2> : null}
+        <Field id="edit-medical-notes-field" label="Medical notes (optional)">
+          {(field) => (
+            <Textarea
+              {...field}
+              value={medicalNotes}
+              onChange={(e) => setMedicalNotes(e.target.value)}
+              placeholder="Medical notes (optional)"
+              rows={2}
+            />
+          )}
+        </Field>
+      </section>
 
       {error ? (
-        <p role="alert" className="text-[13px] text-ink-2">
-          {error}
-        </p>
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2.5">
+          <p role="alert" className="text-[13px] text-ink-2">{error}</p>
+          {saveUnconfirmed ? <a href={profileHref} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[13px] font-medium text-water underline">
+            Check saved profile in a new tab
+          </a> : null}
+        </div>
       ) : null}
 
       <div className="flex gap-2 pt-1">
         {originIntent ? (
-          // Owner-aware Cancel: a REAL anchor. When the origin is proven (or a
-          // scoped directory return must be preserved) the handler takes the
-          // click; otherwise the browser performs a normal document navigation
-          // to the canonical profile href — there is no scoped state to lose,
-          // and it avoids the stalled forward-RSC path. The control is chosen
-          // from a server prop, so server and client render the same element.
+          // Keep document navigation when there is no scoped origin to restore.
           <a
             href={profileHref}
             className={`${buttonClasses({ variant: "secondary", size: "md" })} flex-1`}

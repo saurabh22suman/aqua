@@ -1,7 +1,8 @@
 "use client";
 
 import { useTheme } from "@/components/theme/theme-provider";
-import { THEMES, THEME_IDS } from "@/lib/theme/themes";
+import { themeDefinition } from "@/lib/theme/courtside";
+import { THEME_IDS } from "@/lib/theme/themes";
 
 // Owner appearance — the display preset as an explicit, named choice.
 //
@@ -27,11 +28,17 @@ import { THEMES, THEME_IDS } from "@/lib/theme/themes";
 // Native radio inputs inside a fieldset keep the platform's own keyboard
 // behaviour (arrow keys move inside the group), form participation and
 // screen-reader semantics, and the whole option row is the 44px target.
+//
+// 20 November 2026: the optional `courtside` flag names the same three
+// presets by their Owner redesign names (Court Blue / Clay Season /
+// Floodlights). It changes text only — the ids, the cookie and the
+// provider are untouched.
 
-export function OwnerThemeChoice() {
+export function OwnerThemeChoice({ courtside = false }: { courtside?: boolean }) {
   const { theme, setTheme } = useTheme();
 
   return (
+    <>
     <fieldset
       className="rounded-card border border-line bg-paper p-4 sm:p-5"
       data-testid="owner-theme-choice"
@@ -44,7 +51,7 @@ export function OwnerThemeChoice() {
       </p>
       <div className="grid gap-2 sm:grid-cols-2">
         {THEME_IDS.map((id) => {
-          const preset = THEMES[id];
+          const preset = themeDefinition(id, courtside);
           const selected = theme === id;
           return (
             <div
@@ -79,5 +86,17 @@ export function OwnerThemeChoice() {
         })}
       </div>
     </fieldset>
+    {courtside ? (
+      <section aria-label="Theme preview" className="owner-work-panel mt-3">
+        <h2 className="text-[16px] font-semibold">Theme preview</h2>
+        <p className="mt-1 text-sm text-ink-2">{themeDefinition(theme, true).label}</p>
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Preview colors">
+          <span className="rounded-ctl border border-line bg-deck px-3 py-2 text-sm text-ink">Workspace</span>
+          <span className="rounded-ctl border border-line bg-paper px-3 py-2 text-sm text-ink">Cards</span>
+          <span className="rounded-ctl bg-[var(--action-surface)] px-3 py-2 text-sm text-[var(--action-foreground)]">Primary actions</span>
+        </div>
+      </section>
+    ) : null}
+    </>
   );
 }

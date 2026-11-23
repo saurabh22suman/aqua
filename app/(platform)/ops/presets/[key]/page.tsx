@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getActivePreset } from "@/db/platform-presets";
@@ -15,6 +16,8 @@ import { OpsReadOnlyNote } from "@/components/ops/ops-display";
 import Link from "next/link";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+
+export const metadata: Metadata = { title: "Sport preset details" };
 
 // Phase 2.2b — per-preset detail page at /ops/presets/[key].
 // The catalogue page links here for the dominant "Open preview"

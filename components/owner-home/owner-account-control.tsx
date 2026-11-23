@@ -36,14 +36,18 @@ export function AccountAvatar({ name }: { name: string | null | undefined }) {
 export function OwnerAccountControl({
   className = "",
   accountName = null,
+  accountHref,
   tenantId,
   guideHomeHref,
+  canChooseDefaultFacility = false,
 }: {
   className?: string;
   /** The signed-in person's display name. */
   accountName?: string | null;
+  accountHref?: string;
   tenantId?: string;
   guideHomeHref?: string;
+  canChooseDefaultFacility?: boolean;
 }) {
   return (
     <TransientDisclosure
@@ -57,6 +61,8 @@ export function OwnerAccountControl({
       }
     >
       <div className="absolute right-0 z-40 mt-1 w-52 rounded-ctl border border-line bg-paper p-2 shadow-2">
+        {accountHref ? <Link href={accountHref} className="flex min-h-11 items-center rounded-ctl px-3 text-sm text-ink hover:bg-deck">Account settings</Link> : null}
+        {canChooseDefaultFacility ? <Link href="/owner/settings/workspace" className="flex min-h-11 items-center rounded-ctl px-3 text-sm text-ink hover:bg-deck">Default facility</Link> : null}
         <Link href="/owner/settings/appearance" className="flex min-h-11 items-center rounded-ctl px-3 text-sm text-ink hover:bg-deck">Appearance</Link>
         {guideHomeHref ? <div className="px-3"><OpenWorkspaceGuideLink homeHref={guideHomeHref} /></div> : null}
         {tenantId ? <div className="px-3"><StaffClubInstallLink tenantId={tenantId} /></div> : null}

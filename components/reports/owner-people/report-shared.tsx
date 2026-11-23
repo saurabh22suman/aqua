@@ -1,11 +1,13 @@
+import { OwnerControlSheet } from "@/components/owner-ui/owner-control-sheet";
+import { OWNER_PERIOD_TAB_LABEL } from "@/lib/time/owner-period-model";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { ColumnChart } from "@/components/charts/report-column-chart";
 import { addDays, formatDateIST } from "@/lib/time/tz";
 import type { OwnerPeriodKey } from "@/lib/time/owner-periods";
 
-export function RangeFilter({ period, facility }: { period: OwnerPeriodKey; facility?: string }) {
-  return <form method="get" className="mt-4 flex flex-wrap items-end gap-2">
+export function RangeFilter({ period, facility, compact = false }: { period: OwnerPeriodKey; facility?: string; compact?: boolean }) {
+  const form = <form method="get" className="mt-4 flex flex-wrap items-end gap-2">
     <label className="min-w-40 flex-1 text-sm font-medium">Range
       <Select name="period" defaultValue={period}>
         <option value="last7">Last 7 days</option><option value="day">Today</option><option value="week">This week</option><option value="month">This month</option>
@@ -14,6 +16,9 @@ export function RangeFilter({ period, facility }: { period: OwnerPeriodKey; faci
     {facility ? <input type="hidden" name="facility" value={facility} /> : null}
     <Button type="submit" variant="secondary" size="md">Apply</Button>
   </form>;
+  return compact ? <div className="owner-filter-summary">
+    <OwnerControlSheet label="Reporting range" value={OWNER_PERIOD_TAB_LABEL[period]}>{form}</OwnerControlSheet>
+  </div> : form;
 }
 
 export function daysBetween(from: string, to: string): string[] {

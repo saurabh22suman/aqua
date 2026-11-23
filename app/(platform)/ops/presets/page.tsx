@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -6,6 +7,8 @@ import { previewPreset } from "@/db/preset-engine";
 import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { PresetCatalogue } from "./preset-catalogue";
 import { OpsPage, OpsPageHeader, OpsPanel, OpsSection } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Sport presets" };
 
 // Phase 2.2b — operator-facing preset catalogue at /ops/presets.
 //

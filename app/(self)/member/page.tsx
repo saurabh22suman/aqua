@@ -39,7 +39,8 @@ export default async function MemberHomePage() {
       try { canViewOwnBilling = await resolver.read(async (tx, scope) => (await billingSubjectInTx(tx, scope)) !== null); }
       catch (error) { if (!isBillingDeadlock(error)) throw error; }
     }
-    return <SelfHome view={view} audience="member" scopeKind={scopeKind} tenantId={tenantId} canViewOwnBilling={canViewOwnBilling} guideKey={guideKey} />;
+    return <SelfHome view={view} audience="member" scopeKind={scopeKind} tenantId={tenantId}
+      canViewOwnBilling={canViewOwnBilling} guideKey={guideKey} />;
   } catch (error) {
     if (error instanceof NotFoundError) redirect("/member/sign-in");
     throw error;

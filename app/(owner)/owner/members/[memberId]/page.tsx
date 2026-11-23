@@ -36,6 +36,7 @@ import { MemberProgressPanel } from "@/components/member-detail/member-progress-
 import { getMemberProgressAction } from "@/lib/actions/assessments";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
+import { OwnerSectionLinks } from "@/components/owner-ui/owner-section-links";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { MembersReturnLink } from "@/components/members-return-link";
 import { BackLink } from "@/components/ui/BackLink";
@@ -49,7 +50,7 @@ import { readOwnerMemberInitialPanels } from "@/components/member-detail/owner-m
 import { OwnerMemberSummary } from "@/components/member-detail/owner-member-summary";
 import { MemberEditEntryLink } from "@/components/member-detail/member-edit-entry";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
-import { formatINR } from "@/lib/money/format";
+import { formatINR, formatINRWhole } from "@/lib/money/format";
 
 const TAB_KEYS = new Set<MemberTab>([
   "overview",
@@ -171,7 +172,11 @@ export default async function MemberDetailPage({
         readOwnerMemberInitialPanels(memberId, { canReadPrograms, canReadAttendance }),
         canWrite ? getNotificationDestinationsAction(memberId) : Promise.resolve(null),
         hasPermission(ctx, "invoices.read")
-          ? listMemberInvoicesAction(memberId).then(rows => formatINR(rows.filter(row => row.status === "issued" || row.status === "partial").reduce((sum, row) => sum + BigInt(row.outstandingPaise), 0n))).catch(() => null)
+          ? listMemberInvoicesAction(memberId).then(rows => {
+            const balance = rows.filter(row => row.status === "issued" || row.status === "partial")
+              .reduce((sum, row) => sum + BigInt(row.outstandingPaise), 0n);
+            return ctx.roleKey === "owner" ? formatINRWhole(balance) : formatINR(balance);
+          }).catch(() => null)
           : Promise.resolve(undefined),
       ]);
     overview = { attendance, card, opted, locations, panels, destinations, outstanding };
@@ -179,14 +184,14 @@ export default async function MemberDetailPage({
 
   return (
 
-    <OwnerPage>
+    <OwnerPage workflow="record">
       <MembersReturnLink namespace={editNamespace} facility={facilityScope}>
         <BackLink
           href="/owner/members"
           label={titleCase(resolveTerm(terminology, "member", "other"))}
         />
       </MembersReturnLink>
-      <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5" aria-label="Member identity">
+      <section className="owner-work-panel" aria-label="Member identity">
         <div className="flex items-center gap-3">
           <PersonAvatar name={member.fullName} seed={member.personId} size={58} className="shrink-0 !rounded-[20px]" />
           <div className="min-w-0">
@@ -203,6 +208,10 @@ export default async function MemberDetailPage({
 
       {tab === "overview" && overview ? (
         <div className="mt-4 space-y-4">
+          <OwnerSectionLinks label="Member overview sections" sections={[
+            { id: "member-family-contact", label: "Family and contact" },
+            { id: "member-status-updates", label: "Status history" },
+          ]} />
           <OverviewSections
             member={member}
             memberId={memberId}
@@ -311,7 +320,7 @@ function OverviewSections({
           <div className="space-y-4">
           <OwnerMemberPersonalDetails member={member} canWrite={canWrite} />
           <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
-            <h2 className="font-display text-[18px] font-semibold text-ink">Family and contact</h2>
+            <h2 id="member-family-contact" tabIndex={-1} className="font-display text-[18px] font-semibold text-ink">Family and contact</h2>
             {member.isMinor ? member.guardians.length ? (
               <ul className="mt-3 divide-y divide-line">
                 {member.guardians.map(g => <li key={g.personId} className="py-2 text-[13px]"><p className="font-medium text-ink">{g.fullName}{g.isPrimary ? " · primary" : ""}</p><p className="mt-1 text-[12px] text-ink-3">{g.relationship}{g.phone ? ` · ${g.phone}` : ""}</p></li>)}
@@ -323,7 +332,7 @@ function OverviewSections({
             </details>
           </section>
           <section className="rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
-            <h2 className="font-display text-[18px] font-semibold text-ink">Updates</h2>
+            <h2 id="member-status-updates" tabIndex={-1} className="font-display text-[18px] font-semibold text-ink">Updates</h2>
             {member.statusHistory.length === 0 ? <p className="mt-2 text-[13px] text-ink-3">No status updates on file.</p> : null}
             {member.statusHistory.length ? <ul className="mt-2 divide-y divide-line">{member.statusHistory.map((h, i) => <li key={i} className="py-2 text-[13px]"><p className="text-ink">{MEMBER_STATUS_LABELS[h.fromStatus as MemberStatus] ?? h.fromStatus} → {MEMBER_STATUS_LABELS[h.toStatus as MemberStatus] ?? h.toStatus}</p><p className="mt-1 text-[12px] text-ink-3">{formatDateIST(h.changedAt)} · {h.reason ?? "no reason given"}</p></li>)}</ul> : null}
           </section>

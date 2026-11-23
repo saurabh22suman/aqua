@@ -60,12 +60,13 @@ export function LeaveRequestForm({ types }: { types: LeaveTypeRow[] }) {
               {...field}
               value={fromDate}
               onChange={setFromDate}
+              calendarLabel="Choose start date"
             />
           )}
         </Field>
         <Field id="leave-to-date" label="To" required>
           {(field) => (
-            <DateField {...field} value={toDate} onChange={setToDate} />
+            <DateField {...field} value={toDate} onChange={setToDate} calendarLabel="Choose end date" />
           )}
         </Field>
       </div>
@@ -105,7 +106,7 @@ export function LeaveRequestForm({ types }: { types: LeaveTypeRow[] }) {
           })
         }
       >
-        Request leave
+        {pending ? "Sending…" : "Send request"}
       </Button>
       {message ? (
         <p className="text-[13px] text-ink-2">{message}</p>

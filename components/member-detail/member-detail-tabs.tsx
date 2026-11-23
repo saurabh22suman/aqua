@@ -19,10 +19,17 @@ export function MemberDetailTabs({ memberId, active, facilityScope, accessHref, 
       {([ ["overview", "Overview"], ...(canReadInvoices ? [["payments", "Fees"] as const] : []), ...(canReadProgress ? [["progress", "Progress"] as const] : []) ] as const).map(([key, label]) => (
         <a key={key} href={href(key)} aria-current={active === key ? "page" : undefined} className={`${tabClass} ${active === key ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>{label}</a>
       ))}
+      {accessHref ? <a
+        href={accessHref}
+        aria-label="Member and family access"
+        data-testid="member-access-entry"
+        className={`${tabClass} border-transparent text-ink-3`}
+      >
+        Access
+      </a> : null}
       <TransientDisclosure key={`${memberId}:${active}:${facilityScope ?? ""}`} className="group relative" trigger="More" triggerClassName={`${tabClass} cursor-pointer list-none ${moreActive ? "border-[var(--accent-strong)] text-ink" : "border-transparent text-ink-3"}`}>
         <div className="absolute right-0 z-20 min-w-52 rounded-card border border-line bg-paper p-2 shadow-lg">
           <a href={href("notes")} aria-current={active === "notes" ? "page" : undefined} className="flex min-h-11 items-center rounded-ctl px-3 text-[13px] text-ink">Notes</a>
-          {accessHref ? <a href={accessHref} data-testid="member-access-entry" className="flex min-h-11 items-center rounded-ctl px-3 text-[13px] text-ink">Member and family access</a> : null}
         </div>
       </TransientDisclosure>
     </nav>

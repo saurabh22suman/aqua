@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Owner-UI review P1 (2026-10-13) — roster publication scope is its
@@ -39,9 +39,29 @@ const STAFF = [
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  publishRosterAction.mockReset();
 });
 
 describe("StaffRosterBoard publication scope (P1)", () => {
+  it("opens the Owner publication scope on demand and keeps refusal in the sheet", async () => {
+    publishRosterAction.mockResolvedValueOnce({ ok: false, error: "Publication refused." })
+      .mockResolvedValueOnce({ ok: true, count: 2 });
+    render(<StaffRosterBoard weekStart="2026-10-12" shifts={[]} templates={[]} staff={STAFF}
+      locations={[LOC_A, LOC_B]} weekLocationId={LOC_A.id} compactPublication />);
+    expect(screen.queryByTestId("roster-publish-scope")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Publish week" }));
+    const sheet = within(screen.getByRole("dialog", { name: "Publish roster" }));
+    expect(sheet.getByTestId("roster-publish-scope")).toHaveProperty("value", LOC_A.id);
+    fireEvent.change(sheet.getByTestId("roster-publish-scope"), { target: { value: LOC_B.id } });
+    fireEvent.click(sheet.getByTestId("roster-publish"));
+    await sheet.findByText("Publication refused.");
+    expect(sheet.getByTestId("roster-publish-scope")).toHaveProperty("value", LOC_B.id);
+    await waitFor(() => expect(sheet.getByTestId("roster-publish")).toHaveProperty("disabled", false));
+    fireEvent.click(sheet.getByTestId("roster-publish"));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Publish roster" })).toBeNull());
+    expect(screen.getByRole("alert").textContent).toMatch(/Published 2 shifts.*Andheri/);
+  });
+
   it("publishes the displayed week/location, not the add-shift form's location", async () => {
     publishRosterAction.mockResolvedValue({ ok: true, count: 3 });
     render(

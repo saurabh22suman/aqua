@@ -4,6 +4,8 @@ import { listSkillLaddersAction } from "@/lib/actions/skill-ladder";
 import { SkillLadderManager } from "@/components/skill-ladder-manager";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
+import { buttonClasses } from "@/components/ui/Button";
+import type { SkillLadderRow } from "@/lib/services/skill-ladder";
 import {
   STAFF_CARD,
   StaffPage,
@@ -20,10 +22,18 @@ import {
 //
 // Scope statement: the framework is academy-wide; this page does not
 // imply per-activity isolation.
+//
+// finish/staff — a failed framework read is its own state. It used to
+// throw to the global error boundary; the page now says the curriculum
+// is unavailable and retries in place, without pretending the academy
+// has no ladder.
 export default async function CoachCurriculumPage() {
   const ctx = await requireCoach();
   const enabled = hasFeature(ctx, "swim.levels") && hasPermission(ctx, "levels.read");
-  const ladders = enabled ? await listSkillLaddersAction() : [];
+  let ladders: SkillLadderRow[] | null = [];
+  if (enabled) {
+    ladders = await listSkillLaddersAction().catch(() => null);
+  }
   const canEdit = hasPermission(ctx, "levels.write");
 
   return (
@@ -38,15 +48,41 @@ export default async function CoachCurriculumPage() {
         }
       />
 
-      {enabled ? (
-        <SkillLadderManager ladders={ladders} canEdit={canEdit} />
-      ) : (
+      {!enabled ? (
         <div className={`mt-4 ${STAFF_CARD}`}>
           <EmptyState
             title="Skill ladders aren't enabled"
             body="This academy's plan doesn't include the skill-level module, so there is no ladder to view."
           />
         </div>
+      ) : ladders === null ? (
+        <section
+          aria-labelledby="curriculum-unavailable"
+          className={`mt-4 p-4 ${STAFF_CARD}`}
+          data-testid="curriculum-unavailable"
+        >
+          <h2
+            id="curriculum-unavailable"
+            className="text-[15px] font-medium text-ink"
+          >
+            Curriculum unavailable
+          </h2>
+          <p role="alert" className="mt-1 text-[13px] leading-snug text-ink-2">
+            Could not load the curriculum. No changes were made.
+          </p>
+          <a
+            href="/coach/curriculum"
+            className={buttonClasses({
+              variant: "secondary",
+              size: "sm",
+              className: "mt-3",
+            })}
+          >
+            Retry curriculum
+          </a>
+        </section>
+      ) : (
+        <SkillLadderManager ladders={ladders} canEdit={canEdit} />
       )}
     </StaffPage>
   );

@@ -37,6 +37,7 @@ export function FeesInvoiceList({
   initial,
   filter,
   facility,
+  overdueOnly = false,
   canWrite,
   canVoid = false,
   canRecord,
@@ -51,6 +52,8 @@ export function FeesInvoiceList({
   // The validated facility scope the server rendered with. null/absent
   // means "every facility the caller may see".
   facility?: string | null;
+  // Dues-only subset: invoices already past their due date.
+  overdueOnly?: boolean;
   canWrite: boolean;
   canVoid?: boolean;
   canRecord: boolean;
@@ -62,7 +65,9 @@ export function FeesInvoiceList({
   navigationNamespace?: string;
 }) {
   const router = useRouter();
-  const scope = `${filter}|${facility ?? ""}`;
+  // The overdue subset is part of the rendered/request scope: a scope
+  // change refetches and an older response cannot replace it.
+  const scope = `${filter}|${facility ?? ""}|${overdueOnly ? "overdue" : "all"}`;
   const [data, setData] = useState<RowsState | null>(() => ({
     scope,
     rows: initial,
@@ -88,12 +93,13 @@ export function FeesInvoiceList({
   const restoredToken = useRef<string | null>(null);
 
   const load = useCallback(async (nextSearch = appliedSearch, nextStatus = invoiceStatus) => {
-    const requestScope = `${filter}|${facility ?? ""}`;
+    const requestScope = `${filter}|${facility ?? ""}|${overdueOnly ? "overdue" : "all"}`;
     const seq = ++requestSeq.current;
     setLoadError(false);
     try {
       const next = await listHubInvoicesAction({
         status: filter,
+        ...(overdueOnly ? { overdueOnly: true } : {}),
         ...(facility ? { locationId: facility } : {}),
         ...(nextSearch ? { search: nextSearch } : {}),
         ...(nextStatus ? { invoiceStatus: nextStatus } : {}),
@@ -107,7 +113,7 @@ export function FeesInvoiceList({
     } catch {
       if (seq === requestSeq.current) setLoadError(true);
     }
-  }, [filter, facility, appliedSearch, invoiceStatus]);
+  }, [filter, facility, overdueOnly, appliedSearch, invoiceStatus]);
 
   useEffect(() => {
     if (filter !== "dues" || !navigationNamespace || !rememberedDues) return;
@@ -215,7 +221,9 @@ export function FeesInvoiceList({
         {lookup}
         <p className="mt-4 text-[13px] text-ink-3">
           {appliedSearch || invoiceStatus ? "No invoices match these filters." : filter === "dues"
-            ? "Nothing outstanding — every issued invoice is settled."
+            ? overdueOnly
+              ? "No overdue invoices — every outstanding balance is still within its due date."
+              : "Nothing outstanding — every issued invoice is settled."
             : "No invoices yet. Raise one from a member's page or the member's active plan."}
         </p>
       </>

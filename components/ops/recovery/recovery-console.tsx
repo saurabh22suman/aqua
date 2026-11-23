@@ -124,17 +124,20 @@ export function RecoveryConsole({ data }: { data: RecoveryConsoleData }) {
       <OpsPageHeader
         eyebrow="Investigation"
         title="Recovery"
-        lede="Investigate unknown message outcomes, failed sends and dead-letter jobs, and recover the notifications that can still be recovered."
+        lede="Check delivery and recover failed notifications."
         meta="Live read · never cached"
       />
 
-      <OpsPanel tone="pending" className="mt-6" title="What you can change here">
-        Contact details are masked. Message bodies, provider errors and job
-        payloads are excluded from this view. Each list shows a recent slice
-        of records; older records may fall outside these results. Recovering
-        a notification needs a reason and is recorded on the platform audit
-        log; the dead-letter queue stays read-only.
+      <OpsPanel tone="pending" className="mt-6" title="Recovery limits">
+        Recent records only. Contact details are masked.
+        Recovery requires a reason and is logged. Dead-letter jobs are read-only.
       </OpsPanel>
+
+      <nav aria-label="Recovery queues" className="mt-3 flex flex-wrap gap-x-3">
+        <a href="#unknown-outcomes" aria-label="Verify delivery" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--accent-ink)] underline underline-offset-4">Delivery</a>
+        <a href="#failed-sends" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--accent-ink)] underline underline-offset-4">Failed sends</a>
+        <a href="#dead-letter-jobs" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--accent-ink)] underline underline-offset-4">Dead-letter jobs</a>
+      </nav>
 
       {notice ? (
         <p role="status" className="mt-4 text-[13px] text-ink-2">
@@ -142,7 +145,7 @@ export function RecoveryConsole({ data }: { data: RecoveryConsoleData }) {
         </p>
       ) : null}
 
-      <section className="mt-8">
+      <section id="unknown-outcomes" className="mt-8 scroll-mt-4">
         <OpsSection
           title="Unknown outcomes"
           subtitle="Notifications whose delivery outcome was never recorded — the message may or may not have reached the recipient. The projection returns at most fifty rows in total, shared with Failed sends."
@@ -163,7 +166,7 @@ export function RecoveryConsole({ data }: { data: RecoveryConsoleData }) {
         )}
       </section>
 
-      <section className="mt-8">
+      <section id="failed-sends" className="mt-8 scroll-mt-4">
         <OpsSection
           title="Failed sends"
           subtitle="Definite failures: the provider refused the send, or a notification's attempts ran out. The ledger list shows the newest fifty failed attempts."
@@ -216,7 +219,7 @@ export function RecoveryConsole({ data }: { data: RecoveryConsoleData }) {
         ) : null}
       </section>
 
-      <section className="mt-8">
+      <section id="dead-letter-jobs" className="mt-8 scroll-mt-4">
         <OpsSection
           title="Dead-letter jobs"
           subtitle="Queued work the scheduler moved aside after repeated failure. Only safe metadata is shown; payloads, output and error text are excluded from this view."

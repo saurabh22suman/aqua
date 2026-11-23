@@ -27,7 +27,7 @@ export default async function FamilySignInPage({
   const raw = typeof params.clubId === "string" ? params.clubId : "";
   const clubId = UUID_RE.test(raw) ? raw : undefined;
   return (
-    <LoginWelcome>
+    <LoginWelcome activeRole="family" clubId={clubId}>
       <SelfSignInForm audience="guardian" clubId={clubId} />
     </LoginWelcome>
   );

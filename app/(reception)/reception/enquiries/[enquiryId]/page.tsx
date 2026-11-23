@@ -1,3 +1,4 @@
+import { hasPermission } from "@/lib/auth/permission";
 import { notFound } from "next/navigation";
 import { getEnquiryDetailAction } from "@/lib/actions/enquiries";
 import { listLocationsAction } from "@/lib/actions/people";
@@ -17,7 +18,7 @@ export default async function ReceptionEnquiryDetailPage({
 }: {
   params: Promise<{ enquiryId: string }>;
 }) {
-  await requireReception();
+  const ctx = await requireReception();
   const { enquiryId } = await params;
   requireUuidParam(enquiryId);
   const [enquiry, locations, batches, terminology] = await Promise.all([
@@ -35,7 +36,7 @@ export default async function ReceptionEnquiryDetailPage({
       <div className="flex items-start gap-3">
         <PersonAvatar name={enquiry.fullName} size={44} className="flex-none" />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
+          <h1 className="text-[22px] font-medium leading-tight tracking-[-0.01em] text-ink">
             {enquiry.fullName}
           </h1>
           <p className="mt-0.5 text-[12.5px] text-ink-3">
@@ -49,6 +50,8 @@ export default async function ReceptionEnquiryDetailPage({
           enquiry={enquiry}
           locations={locations}
           batches={batches}
+          canWrite={hasPermission(ctx, "enquiries.write")}
+          canOpenMember={hasPermission(ctx, "members.read")}
           memberDetailBasePath="/reception/members"
           terminology={terminology}
         />

@@ -13,12 +13,15 @@ it("gives each child's actions distinct accessible names and correct destination
   ];
   render(<SelfHome view={{ clubName: "Example Club", audience: "guardian", entries }} audience="guardian" scopeKind="self_session" tenantId="synthetic-club" />);
   for (const child of entries) {
-    const row = screen.getByText(child.fullName).closest("li");
+    const memberships = within(screen.getByRole("region", { name: "Linked memberships" }));
+    const row = memberships.getByText(child.fullName).closest("li");
     expect(row).not.toBeNull();
     const fees = within(row!).getByRole("link", { name: `Fees and payments for ${child.fullName}` });
     const achievements = within(row!).getByRole("link", { name: `Achievements page for ${child.fullName}` });
     expect(fees.getAttribute("href")).toBe(`/family/billing/${child.memberId}`);
     expect(achievements.getAttribute("href")).toBe(`/family/showcase/${child.memberId}`);
+    expect(fees.textContent?.trim()).toBe("Fees");
+    expect(achievements.textContent?.trim()).toBe("Achievements");
   }
 });
 

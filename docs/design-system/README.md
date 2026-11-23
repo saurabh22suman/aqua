@@ -7,12 +7,16 @@ Read [engineering standard](../engineering-standard.md), [visual/component
 contract](visual-contract.md), [motion](motion.md), [PWA](pwa.md), then the
 [delivery lanes](delivery.md). Root DESIGN.md remains the incumbent contract;
 the foundation owner must reconcile it with these explicit human decisions.
+For the Owner-first workspace redesign and its current screen compositions,
+start with the 20 November handoff.
+[Workspace redesign handoff](../handoffs/workspace-redesign-2026-11-20.md)
 
-## Approved direction
+## Foundation direction
 
-- Two LIGHT presets only: **Mint Garden** and **Lavender Club**. Mint is the
-  initial default; theme selection is a personal preference, not tenant branding.
-  One layout, typography, spacing and component behavior across both themes.
+- Theme selection is a personal preference. Share layout, typography, spacing
+  and component behavior across the presets specified in DESIGN.md. The later
+  three-preset approval includes **Mint Garden**, **Lavender Club** and
+  **Slate & Amber**, with Courtside names on Owner routes.
 - Owner, coach, reception and any authorized customer/member surfaces are
   mobile-first and responsive. Ops is desktop-first and responsive.
 - Use selected shadcn/ui copied-source primitives compatible with Tailwind v4;

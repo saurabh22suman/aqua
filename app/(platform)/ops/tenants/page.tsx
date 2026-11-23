@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -15,6 +16,8 @@ import {
 } from "@/components/ops/ops-primitives";
 import { OpsToolbar } from "@/components/ops/ops-table";
 import { TenantCards, TenantTable } from "./tenant-table";
+
+export const metadata: Metadata = { title: "Tenants" };
 
 // PR2 (ops tenant health) — db/tenant-health.ts computes the status;
 // this is only the display mapping. `null` (churned tenants — not

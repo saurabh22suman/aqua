@@ -42,7 +42,7 @@ afterEach(cleanup);
 
 describe("coach schedule header (F29)", () => {
   it("renders the weekday once and the IST time on the row", async () => {
-    render(await CoachSchedulePage());
+    render(await CoachSchedulePage({}));
 
     const text = document.body.textContent ?? "";
     expect(text).toContain("Sat, 12 Sept");

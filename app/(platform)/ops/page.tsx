@@ -1,7 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Activity from "lucide-react/dist/esm/icons/activity.mjs";
-import { mockMessagingEnabled } from "@/lib/messaging/provider";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import {
   getPlatformMetricsSummary,
@@ -18,7 +18,7 @@ import {
   OpsPanel,
   OpsSection,
 } from "@/components/ops/ops-primitives";
-import { OpsTaskList } from "@/components/ops/console/ops-task-list";
+import { cn } from "@/components/ui/cn";
 import {
   classifySnapshot,
   snapshotMetaText,
@@ -27,35 +27,7 @@ import { SnapshotFreshnessNotice } from "@/components/ops/reliability/snapshot-f
 import { OpsOverviewMetrics } from "./ops-overview-metrics";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 
-// PR3 (ops console improvements) — Overview becomes a dashboard.
-//
-// Layout decision: the needs-attention queue is the primary element,
-// not the KPI strip. The KPIs are glanceable context ("is the
-// platform generally okay"); the queue is what an operator actually
-// acts on, the same "what needs me right now" pattern already proven
-// on the owner dashboard. It gets the dominant width; quick actions
-// and recent activity share a narrower secondary column.
-//
-// Ops redesign (28 October 2026): the frame is now the shared Ops
-// primitives (components/ops/ops-primitives.tsx), so the console's
-// pages share one card, one empty state, one figure tile and one
-// heading rhythm.
-//
-// HONESTY ABOUT THE TWO NUMBERS (human decision, 28 October 2026):
-// the KPI strip is a DAILY SNAPSHOT, computed by the nightly job at a
-// known time, so it says when it was computed and compares with the
-// snapshot a MONTH earlier (the backend's own comparison rule — the
-// delta is measured against the latest snapshot that is at least
-// thirty days old). The needs-attention queue is LIVE and is one row
-// per issue, capped at the eleven most pressing ones — so it never
-// claims to be a total. The two are different measures of different
-// things, and the page says so instead of implying one trend line.
-//
-// Ops reliability (9 November 2026): the page now also says whether
-// that snapshot moment is still recent. The threshold (30 hours) is a
-// local DISPLAY assumption, not an SLO, and the freshness region lives
-// in components/ops/reliability/. A stale snapshot is FLAGGED, never
-// hidden, and the live queue is never painted with the snapshot's age.
+export const metadata: Metadata = { title: "Platform operations" };
 
 const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
@@ -68,8 +40,8 @@ const SEVERITY_TONE: Record<"attention" | "at_risk", StatusTone> = {
   at_risk: "late",
 };
 const SEVERITY_LABEL: Record<"attention" | "at_risk", string> = {
-  attention: "Medium",
-  at_risk: "High",
+  attention: "Needs review",
+  at_risk: "High priority",
 };
 
 export default async function PlatformHome() {
@@ -109,50 +81,16 @@ export default async function PlatformHome() {
   return (
     <OpsPage>
       <OpsPageHeader
-        title="Aqua control plane"
-        lede={
-          <>
-            Signed in as <span className="font-medium">{status.role}</span>.
-          </>
-        }
+        title="Platform operations"
+        actions={<Link href="/ops/tenants" className="inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-3 text-sm font-semibold text-ink">Find a tenant</Link>}
         meta={snapshotMetaText(snapshot)}
       />
-
-      <OptionalWorkspaceGuide
-        startCollapsed
-        title="A look around Ops"
-        intro="Explore the overview at your own pace. This guide makes no changes."
-        regionLabel="Optional Ops overview guide"
-        itemLabel="Overview area"
-        items={[
-          { key: "snapshot", title: "Snapshot", detail: "The snapshot panel says when metrics are available and how recent they are." },
-          { key: "attention", title: "Needs attention", detail: "This live list shows the most pressing items currently returned by the queue." },
-          { key: "tasks", title: "Quick actions", detail: "The task list shows the destinations available in this console." },
-          { key: "activity", title: "Recent activity", detail: "The activity panel shows recent platform activity." },
-        ]}
-      />
-      <SnapshotFreshnessNotice snapshot={snapshot} />
-
-      {!metrics.asOf ? (
-        <OpsPanel tone="pending" className="mt-6" title="No metrics snapshot yet">
-          The platform.metrics-snapshot job runs nightly. The figures below
-          are unavailable until it runs once; the needs-attention queue is
-          live and does not depend on it.
-        </OpsPanel>
-      ) : (
-        <OpsOverviewMetrics
-          activeTenants={metrics.activeTenants}
-          trialTenants={metrics.trialTenants}
-          atRiskTenants={metrics.atRiskTenants}
-          openOpsTasks={metrics.openOpsTasks}
-        />
-      )}
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2">
           <OpsSection
             title="Needs attention"
-            subtitle="Live: one row per open issue, showing the eleven most pressing ones."
+            subtitle="Live issues across tenants, ordered by priority"
             actions={
               <span className="text-[12px] text-ink-3">
                 {queue.length} {queue.length === 1 ? "item" : "items"}
@@ -162,53 +100,43 @@ export default async function PlatformHome() {
           {queue.length === 0 ? (
             <OpsEmptyState
               title="Nothing needs attention"
-              body="No tenant currently matches these checks — zero members, overdue invoices, an expiring trial, no recent activity, failed messages or a pending change request. An empty queue is not a statement that every tenant is healthy, and it does not cover anything these checks do not look at."
+              body="There are no open issues in the current checks for invoices, trials, activity, messages or change requests."
             />
           ) : (
             <OpsCardFlush>
+              <ul>
               {queue.map((item, i) => (
-                <div
+                <li
                   key={`${item.tenantId}-${item.text}-${i}`}
-                  className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-b-0"
+                  className={cn(
+                    "flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 last:border-b-0",
+                    i === 0 && "border-s-4 border-s-[var(--accent-strong)] bg-deck/40",
+                  )}
                 >
                   <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-ink">
-                      {item.tenantName}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-ink-2">{item.text}</p>
+                    <p className="text-[15px] font-semibold text-ink">{item.text}</p>
+                    <p className="mt-0.5 text-[13px] text-ink-2">{item.tenantName}</p>
                   </div>
                   <div className="flex flex-none items-center gap-3">
-                    <span className="text-[12px] text-ink-3 tabular-nums">
-                      {item.ageDays != null ? `${item.ageDays}d` : "—"}
-                    </span>
                     <StatusBadge tone={SEVERITY_TONE[item.severity]}>
                       {SEVERITY_LABEL[item.severity]}
                     </StatusBadge>
                     <Link
                       href={`/ops/tenants/${item.tenantId}`}
-                      className="text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2"
+                      aria-label={`Review tenant ${item.tenantName}: ${item.text}`}
+                      className="inline-flex min-h-11 items-center text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2"
                     >
-                      View
+                      Review tenant
                     </Link>
                   </div>
-                </div>
+                </li>
               ))}
+              </ul>
             </OpsCardFlush>
           )}
         </section>
 
         <div className="space-y-6">
-          <section>
-            <OpsSection
-              title="Quick actions"
-              subtitle="Where to go next, grouped by task."
-            />
-            <OpsTaskList
-              role={status.role}
-              includeWhatsApp={mockMessagingEnabled()}
-            />
-          </section>
-
           <section>
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
@@ -243,6 +171,35 @@ export default async function PlatformHome() {
           </section>
         </div>
       </div>
+      <SnapshotFreshnessNotice snapshot={snapshot} />
+
+      {!metrics.asOf ? (
+        <OpsPanel tone="pending" className="mt-6" title="No metrics snapshot yet">
+          The platform.metrics-snapshot job runs nightly. The figures below
+          are unavailable until it runs once; the needs-attention queue is
+          live and does not depend on it.
+        </OpsPanel>
+      ) : (
+        <OpsOverviewMetrics
+          activeTenants={metrics.activeTenants}
+          trialTenants={metrics.trialTenants}
+          atRiskTenants={metrics.atRiskTenants}
+          openOpsTasks={metrics.openOpsTasks}
+        />
+      )}
+
+      <OptionalWorkspaceGuide
+        startCollapsed
+        title="A look around Ops"
+        intro="Explore the overview at your own pace. This guide makes no changes."
+        regionLabel="Optional Ops overview guide"
+        itemLabel="Overview area"
+        items={[
+          { key: "snapshot", title: "Snapshot", detail: "The snapshot panel says when metrics are available and how recent they are." },
+          { key: "attention", title: "Needs attention", detail: "This live list shows the most pressing items currently returned by the queue." },
+          { key: "activity", title: "Recent activity", detail: "The activity panel shows recent platform activity." },
+        ]}
+      />
     </OpsPage>
   );
 }

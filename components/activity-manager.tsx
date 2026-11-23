@@ -2,6 +2,7 @@
 
 import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
 
+import { OwnerSectionLinks } from "@/components/owner-ui/owner-section-links";
 import { Button } from "@/components/ui/Button";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
@@ -70,6 +71,7 @@ export function ActivityManager({
 
   return (
     <div className="space-y-4">
+      <OwnerSectionLinks label="Resource facilities" sections={locations.map(location => ({ id: `resources-${location.id}`, label: location.name }))} />
       <section className="rounded-card border border-line bg-paper p-4 sm:p-5">
       <h2 className="font-display text-[16px] font-semibold text-ink">
         Existing resources
@@ -79,10 +81,10 @@ export function ActivityManager({
         const rows = byLocation.get(location.id) ?? [];
         return (
           <section key={location.id} className="py-3 first:pt-2 last:pb-0">
-            <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+            <h3 id={`resources-${location.id}`} tabIndex={-1} className="text-sm font-semibold text-ink">
               {location.name}
               {location.isPrimary ? " · primary" : ""}
-            </h2>
+            </h3>
             {rows.length === 0 ? (
               <p className="mt-2 text-[13px] text-ink-3">
                 No resources at this physical facility yet.

@@ -20,9 +20,9 @@ export function PermissionMatrix({ roles }: { roles: readonly PermissionRole[] }
       {roles.map((role) => (
         <details
           key={role.key}
-          className="border-b border-line px-4 py-3 last:border-b-0"
+          className="border-b border-line px-4 last:border-b-0"
         >
-          <summary className="cursor-pointer text-[13px] text-ink">
+          <summary className="min-h-11 cursor-pointer break-words py-3 text-[13px] text-ink">
             <span className="font-medium">{role.name}</span>{" "}
             <span className="text-ink-3">
               ({role.key}) · home {role.homePath} · {role.permissions.length}{" "}
@@ -30,9 +30,9 @@ export function PermissionMatrix({ roles }: { roles: readonly PermissionRole[] }
             </span>
           </summary>
           {role.permissions.length === 0 ? (
-            <p className="mt-2 text-[12px] text-ink-3">No permissions granted.</p>
+            <p className="pb-3 text-[12px] text-ink-3">No permissions granted.</p>
           ) : (
-            <ul className="mt-2 flex flex-wrap gap-1.5">
+            <ul className="flex flex-wrap gap-1.5 pb-3">
               {role.permissions.map((permission) => (
                 <li
                   key={permission}

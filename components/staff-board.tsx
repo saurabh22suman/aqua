@@ -1,7 +1,12 @@
+"use client";
+
+import { OwnerControlSheet } from "@/components/owner-ui/owner-control-sheet";
+import { useRef, useState } from "react";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import Briefcase from "lucide-react/dist/esm/icons/briefcase.mjs";
 import { PersonAvatar } from "@/components/avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Input } from "@/components/ui/Input";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { StaffRow } from "@/lib/services/staff";
 import { titleCase } from "@/lib/terminology/keys";
@@ -40,7 +45,10 @@ function LoginState({ linked }: { linked: boolean }) {
   );
 }
 
-export function StaffBoard({ rows }: { rows: StaffRow[] }) {
+export function StaffBoard({ rows, compactFilters = false }: { rows: StaffRow[]; compactFilters?: boolean }) {
+  const [query, setQuery] = useState("");
+  const [staffType, setStaffType] = useState("");
+  const searchInput = useRef<HTMLInputElement>(null);
   if (rows.length === 0) {
     return (
       <div className="rounded-ctl border border-line bg-paper">
@@ -57,108 +65,184 @@ export function StaffBoard({ rows }: { rows: StaffRow[] }) {
     );
   }
 
+  const needle = query.trim().toLocaleLowerCase("en-IN");
+  const types = new Map(rows.map(row => [row.staffType, typeLabel(row)]));
+  const byType = staffType ? rows.filter(row => row.staffType === staffType) : rows;
+  const filtered = needle
+    ? byType.filter((row) =>
+        [
+          row.fullName,
+          typeLabel(row),
+          row.userId ? "linked" : "not linked",
+        ]
+          .join(" ")
+          .toLocaleLowerCase("en-IN")
+          .includes(needle),
+      )
+    : byType;
+  const withoutLogin = rows.filter((row) => !row.userId).length;
+
+  const typeControl = (
+    <label htmlFor="staff-type-filter" className="grid gap-1 text-sm font-medium">
+      Staff type
+      <select id="staff-type-filter" value={staffType} onChange={event => setStaffType(event.target.value)}
+        className="min-h-11 rounded-ctl border border-line bg-paper px-3 text-[16px]">
+        <option value="">All staff types</option>
+        {[...types].sort(([, left], [, right]) => left.localeCompare(right)).map(([key, label]) =>
+          <option key={key} value={key}>{label}</option>)}
+      </select>
+    </label>
+  );
+
   return (
     <div data-testid="staff-list">
-      <table
-        aria-label="Team directory"
-        className="hidden w-full border-collapse text-[13px] md:table"
-      >
-        <thead>
-          <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.08em] text-ink-3">
-            <th scope="col" className="py-2.5 pr-3 font-medium">
-              Staff member
-            </th>
-            <th scope="col" className="py-2.5 pr-3 font-medium">
-              Staff type
-            </th>
-            <th scope="col" className="py-2.5 pr-3 font-medium">
-              Login
-            </th>
-            <th scope="col" className="py-2.5 pr-3 font-medium">
-              Employed on
-            </th>
-            <th scope="col" className="py-2.5 text-right font-medium">
-              Actions
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b border-line last:border-0">
-              <td className="py-3 pr-3">
+      {/* Long directories need a way to find one person. The search covers the
+          three facts the table shows, so "not linked" and a role are findable
+          without opening every row. */}
+      <div className="owner-work-panel mb-2 flex flex-wrap items-end gap-2">
+        <Input
+          ref={searchInput}
+          type="search"
+          role="searchbox"
+          aria-label="Find a staff member"
+          placeholder="Search name, role or login state"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="sm:max-w-xs"
+          autoComplete="off"
+        />
+        {compactFilters ? <OwnerControlSheet label="Staff type" value={[...types].find(([key]) => key === staffType)?.[1] ?? "All staff types"} immediate>
+          {typeControl}
+        </OwnerControlSheet> : typeControl}
+        {query || staffType ? (
+          <button
+            type="button"
+            onClick={() => { setQuery(""); setStaffType(""); searchInput.current?.focus(); }}
+            className="inline-flex min-h-11 items-center rounded-ctl px-3 text-[13px] font-medium text-ink-2 underline underline-offset-2 hover:text-ink"
+          >
+            Clear staff search
+          </button>
+        ) : null}
+      </div>
+      <p className="pb-3 text-[12.5px] text-ink-3" role="status">
+        {needle || staffType
+          ? `${filtered.length} of ${rows.length} staff`
+          : `${rows.length} staff${withoutLogin > 0 ? ` · ${withoutLogin} without login access` : ""}`}
+      </p>
+
+      {filtered.length === 0 ? (
+        <div className="rounded-ctl border border-line bg-paper px-4 py-6 text-center">
+          <p className="text-[14px] font-medium">
+            {needle ? `No staff match “${query.trim()}”` : "No matching staff"}
+          </p>
+          <p className="mt-1 text-[12.5px] text-ink-3">
+            Clear the search to see everyone again.
+          </p>
+        </div>
+      ) : (
+        <>
+          <table
+            aria-label="Team directory"
+            className="hidden w-full border-collapse text-[13px] md:table"
+          >
+            <thead>
+              <tr className="border-b border-line text-left text-[11px] uppercase tracking-[0.08em] text-ink-3">
+                <th scope="col" className="py-2.5 pr-3 font-medium">
+                  Staff member
+                </th>
+                <th scope="col" className="py-2.5 pr-3 font-medium">
+                  Staff type
+                </th>
+                <th scope="col" className="py-2.5 pr-3 font-medium">
+                  Login
+                </th>
+                <th scope="col" className="py-2.5 pr-3 font-medium">
+                  Employed on
+                </th>
+                <th scope="col" className="py-2.5 text-right font-medium">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((row) => (
+                <tr key={row.id} className="border-b border-line last:border-0">
+                  <td className="py-3 pr-3">
+                    <Link
+                      href={`/owner/staff/${row.id}`}
+                      className="flex min-h-11 items-center gap-2.5"
+                    >
+                      <PersonAvatar
+                        name={row.fullName}
+                        seed={row.personId}
+                        size={32}
+                        className="flex-none"
+                      />
+                      <span className="text-[14px] font-medium leading-tight text-ink">
+                        {row.fullName}
+                      </span>
+                    </Link>
+                  </td>
+                  <td className="py-3 pr-3 text-ink-2">{typeLabel(row)}</td>
+                  <td className="py-3 pr-3">
+                    <LoginState linked={Boolean(row.userId)} />
+                  </td>
+                  <td className="py-3 pr-3 tabular-nums text-ink-2">
+                    {row.employedOn ? formatDateIST(row.employedOn) : "—"}
+                  </td>
+                  <td className="py-3 text-right">
+                    <Link
+                      href={`/owner/staff/${row.id}`}
+                      aria-label={`Open ${row.fullName}`}
+                      className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 hover:text-ink"
+                    >
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <ul className="divide-y divide-line md:hidden">
+            {filtered.map((row) => (
+              <li key={row.id}>
                 <Link
                   href={`/owner/staff/${row.id}`}
-                  className="flex min-h-11 items-center gap-2.5"
+                  className="flex items-start gap-3 py-3"
                 >
                   <PersonAvatar
                     name={row.fullName}
                     seed={row.personId}
-                    size={32}
+                    size={36}
                     className="flex-none"
                   />
-                  <span className="text-[14px] font-medium leading-tight text-ink">
-                    {row.fullName}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-medium leading-tight text-ink">
+                      {row.fullName}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-ink-3">
+                      {typeLabel(row)}
+                      {row.employedOn
+                        ? ` · Employed ${formatDateIST(row.employedOn)}`
+                        : ""}
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <LoginState linked={Boolean(row.userId)} />
+                    </span>
+                  </span>
+                  <span
+                    aria-hidden="true"
+                    className="mt-1 flex-none text-[13px] text-ink-3"
+                  >
+                    →
                   </span>
                 </Link>
-              </td>
-              <td className="py-3 pr-3 text-ink-2">{typeLabel(row)}</td>
-              <td className="py-3 pr-3">
-                <LoginState linked={Boolean(row.userId)} />
-              </td>
-              <td className="py-3 pr-3 tabular-nums text-ink-2">
-                {row.employedOn ? formatDateIST(row.employedOn) : "—"}
-              </td>
-              <td className="py-3 text-right">
-                <Link
-                  href={`/owner/staff/${row.id}`}
-                  aria-label={`Open ${row.fullName}`}
-                  className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2 hover:text-ink"
-                >
-                  Open
-                </Link>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <ul className="divide-y divide-line md:hidden">
-        {rows.map((row) => (
-          <li key={row.id}>
-            <Link
-              href={`/owner/staff/${row.id}`}
-              className="flex items-start gap-3 py-3"
-            >
-              <PersonAvatar
-                name={row.fullName}
-                seed={row.personId}
-                size={36}
-                className="flex-none"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-medium leading-tight text-ink">
-                  {row.fullName}
-                </span>
-                <span className="mt-0.5 block truncate text-[12px] text-ink-3">
-                  {typeLabel(row)}
-                  {row.employedOn
-                    ? ` · Employed ${formatDateIST(row.employedOn)}`
-                    : ""}
-                </span>
-                <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                  <LoginState linked={Boolean(row.userId)} />
-                </span>
-              </span>
-              <span
-                aria-hidden="true"
-                className="mt-1 flex-none text-[13px] text-ink-3"
-              >
-                →
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

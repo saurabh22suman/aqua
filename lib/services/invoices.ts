@@ -19,6 +19,8 @@ import type { InvoicePayerKind } from "@/db/schema/invoices";
 import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
 import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
 import { invoiceCorrectionEligibilityInTx, type InvoiceCorrectionEligibility } from "@/lib/services/invoice-correction-eligibility";
+import { asCollectionHold, type CollectionHold } from "@/lib/collection-hold";
+import { invoiceCollectionHoldSql } from "@/lib/services/collection-eligibility";
 
 // C-32 — invoice reads. Location-scoped (O-08): a scoped receptionist
 // sees only their own facility's documents. The write paths live in
@@ -53,6 +55,11 @@ export type InvoiceRow = {
   subscriptionId: string | null;
   activityName: string | null;
   createdAt: string;
+  // Local audit batch (2026-11-21) — the confirmed "hold collection for
+  // owner review" policy. Present only when a linked booking was
+  // cancelled; the amounts, payments and receipts all remain visible.
+  // Optional so existing fixtures and ordinary invoices are unchanged.
+  collectionHold?: CollectionHold;
 };
 
 export type InvoiceLineRow = {
@@ -83,12 +90,14 @@ type InvoiceJoinRow = {
   invoice: typeof invoices.$inferSelect;
   locationName: string;
   activityName: string | null;
+  collectionHold: string | null;
 };
 
 function toRow(row: InvoiceJoinRow): InvoiceRow {
   const inv = row.invoice;
   const total = toSafePaise(inv.totalPaise);
   const paid = toSafePaise(inv.paidPaise);
+  const collectionHold = asCollectionHold(row.collectionHold);
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
@@ -110,6 +119,7 @@ function toRow(row: InvoiceJoinRow): InvoiceRow {
     subscriptionId: inv.subscriptionId,
     activityName: row.activityName,
     createdAt: inv.createdAt.toISOString(),
+    ...(collectionHold ? { collectionHold } : {}),
   };
 }
 
@@ -131,6 +141,7 @@ export async function listMemberInvoices(
         invoice: invoices,
         locationName: locations.name,
         activityName: facilities.name,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
       .innerJoin(locations, eq(locations.id, invoices.locationId))
@@ -167,6 +178,7 @@ export async function getInvoice(
         locationName: locations.name,
         memberName: persons.fullName,
         guestName: invoices.guestName,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
       .innerJoin(locations, eq(locations.id, invoices.locationId))
@@ -203,6 +215,7 @@ export async function getInvoice(
       invoice: row.invoice,
       locationName: row.locationName,
       activityName: null,
+      collectionHold: row.collectionHold,
     });
     const payerKind = row.invoice.payerKind as InvoicePayerKind;
     return {

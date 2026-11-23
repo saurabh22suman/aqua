@@ -9,6 +9,7 @@ import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { OpsMobileMenu } from "@/components/ops/ops-mobile-menu";
 import { OpsNavLinks } from "@/components/ops/ops-nav-links";
 import { OpsContextBar } from "@/components/ops/console/ops-context-bar";
+import { LoginWelcome } from "@/components/auth/login-welcome";
 import { mockMessagingEnabled } from "@/lib/messaging/provider";
 
 // The operator console is not an installable app.
@@ -34,6 +35,7 @@ import { mockMessagingEnabled } from "@/lib/messaging/provider";
 // can withdraw it. Verified on Next 15.5.24.
 export const metadata: Metadata = {
   manifest: null,
+  title: { default: "Platform operations", template: "%s · Aqua Ops" },
 };
 
 // Ops redesign (28 October 2026) — the approved console shell.
@@ -86,13 +88,7 @@ export default async function PlatformLayout({
   // screen reader and an invitation to guess at destinations that are
   // not there.
   if (status.kind !== "authenticated") {
-    return (
-      <div className="min-h-dvh bg-deck text-ink">
-        <main className="mx-auto w-full max-w-5xl px-5 py-10 md:px-10 md:py-16">
-          {children}
-        </main>
-      </div>
-    );
+    return <LoginWelcome operations>{children}</LoginWelcome>;
   }
 
   return (
@@ -101,8 +97,12 @@ export default async function PlatformLayout({
       // md:items-start keeps the sticky rail at its own height instead
       // of stretching it to the full column, which is what makes it
       // stay put while the page scrolls.
+      data-platform-brief
       className="min-h-[calc(100dvh-var(--app-sticky-offset))] pb-[calc(4rem+env(safe-area-inset-bottom))] md:flex md:items-start md:pb-0"
     >
+      <a href="#ops-main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-ctl focus:bg-paper focus:px-4 focus:py-3 focus:text-ink focus:shadow-lg">
+        Skip to main content
+      </a>
       <aside
         data-testid="ops-sidebar"
         // The sticky offset and height follow the app chrome that sits
@@ -216,7 +216,7 @@ export default async function PlatformLayout({
             position. */}
         <OpsContextBar role={status.role} mockMessagingAvailable={mockMessagingEnabled()} />
 
-        <main className="px-5 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-10 md:py-10">{children}</main>
+        <main id="ops-main" tabIndex={-1} className="px-5 py-6 pb-[calc(5rem+env(safe-area-inset-bottom))] md:px-10 md:py-10">{children}</main>
 
         {/* X-D1 (2026-09-13 audit §7.5): at md+ the desktop rail
             takes over; the bottom bar must not render alongside it.

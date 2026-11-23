@@ -1,18 +1,21 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ upload: vi.fn(), refresh: vi.fn() }));
+const mocks = vi.hoisted(() => ({ upload: vi.fn(), refresh: vi.fn(), scope: vi.fn() }));
+vi.mock("@/lib/auth/self-scope", () => ({ resolveSelfScope: mocks.scope }));
+vi.mock("@/lib/auth/workspace-roles", () => ({ readSelfWorkspaceRoles: async () => null }));
 vi.mock("@/lib/actions/branding", () => ({ uploadBrandingAssetAction: mocks.upload }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/components/onboarding/optional-workspace-guide", () => ({ OptionalWorkspaceGuide: () => null }));
 vi.mock("@/components/self-sign-out", () => ({ SelfSignOut: () => null }));
 import { BrandAssetUpload } from "@/components/branding/brand-asset-upload";
-import { SelfHome } from "@/components/self-home";
+import { SelfAccountPage } from "@/components/self-account-page";
 import { isInstallInvitationSurface } from "@/lib/offline/install-prompt";
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 const tenantId = "0190c000-0000-7000-8000-000000000001";
-it.each([["member", "self_session", "member"], ["guardian", "self_session", "guardian"], ["guardian", "staff_session", "staff"]] as const)("links %s %s to the correct private install source", (audience, scopeKind, source) => {
-  render(<SelfHome view={{ clubName: "Example Club", audience, entries: [] }} audience={audience} scopeKind={scopeKind} tenantId={tenantId} />);
+it.each([["member", "self_session", "member"], ["guardian", "self_session", "guardian"], ["guardian", "staff_session", "staff"]] as const)("links %s %s to the correct private install source", async (audience, scopeKind, source) => {
+  mocks.scope.mockResolvedValue({ read: (read: (tx: unknown, scope: unknown) => unknown) => read(null, { tenantId, kind: scopeKind }) });
+  render(await SelfAccountPage({ audience }));
   expect(screen.getByRole("link", { name: "Install this club" }).getAttribute("href")).toBe(`/clubs/${tenantId}/install?source=${source}`);
 });
 it("suppresses the generic install ribbon only on the club install page", () => {

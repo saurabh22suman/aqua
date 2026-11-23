@@ -35,6 +35,7 @@ export function MemberList({
   isPending,
   canWrite,
   canViewProfile = true,
+  resultsCurrent = true,
 }: {
   members: MemberListRow[];
   /** The tenant's own word for a member: the singular and the plural. */
@@ -56,6 +57,7 @@ export function MemberList({
    */
   canWrite: boolean;
   canViewProfile?: boolean;
+  resultsCurrent?: boolean;
 }) {
   const memberSingular = titleCase(memberTerm.one);
 
@@ -77,13 +79,13 @@ export function MemberList({
           // A FAILED read is not an empty list. The alert above owns
           // the failure and offers the retry, so the list must not
           // also claim that the filter answered the question.
-          emptyKind === "failed" ? null : (
+          emptyKind === "failed" || isPending ? null : (
             <li className="list-none py-2">
               {emptyKind === "no-match" ? (
                 <>
                   <EmptyState
                     title={`No ${memberTerm.other} match.`}
-                    body="Try a different name, phone number or status."
+                    body="Try a different name, phone number, member code or status."
                   />
                   {/* The way out of a filter that matched nothing: a
                       SECONDARY action, so it never competes with the
@@ -154,7 +156,7 @@ export function MemberList({
                 </span>
             </>;
             const className = "flex min-h-20 items-center gap-3 py-3 md:grid md:grid-cols-[36px_minmax(0,2fr)_minmax(0,1fr)_auto]";
-            return <li key={m.memberId} className="border-b border-line px-3.5 last:border-0 md:px-0">{canViewProfile ? <Link href={`/owner/members/${m.memberId}${scopeQuery}`} data-testid="member-row" onClick={onOpen} className={className}>{row}</Link> : <div data-testid="member-row" className={className}>{row}</div>}</li>;
+            return <li key={m.memberId} className="border-b border-line px-3.5 last:border-0 md:px-0">{canViewProfile && resultsCurrent ? <Link href={`/owner/members/${m.memberId}${scopeQuery}`} data-testid="member-row" onClick={onOpen} className={className}>{row}</Link> : <div data-testid="member-row" className={className}>{row}</div>}</li>;
           })
         )}
       </ul>

@@ -18,7 +18,7 @@ export default async function StaffInvitePage() {
   await requireLiveOwnerSettingsPage(ctx);
   const locations = await listLocationsAction();
   return (
-    <OwnerPage>
+    <OwnerPage workflow="edit">
       <Link
         href="/owner/staff/invitations"
         className="mb-4 inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 hover:text-ink"
@@ -32,19 +32,32 @@ export default async function StaffInvitePage() {
         link and share it directly with the person.</>}
       />
 
-      {/* Scope guidance mirrors the explicit manager mode in the form below. */}
+      {/* Scope guidance mirrors the explicit scope control in the form below.
+          Every role chooses a reach; a blank scope is never "all locations". */}
       <p className="mt-4 max-w-[700px] border-l-[3px] border-[var(--accent)] bg-deck px-4 py-3 text-[13px] text-ink-2">
-        Managers must explicitly choose selected facilities or the whole academy,
-        including future facilities. For other roles, leave locations unselected for
-        all locations, or select specific ones to restrict access. Review the role
-        and scope before creating access.
+        Every invitation states its reach: selected facilities or the whole
+        academy, including future facilities. Managers must choose explicitly,
+        and the same explicit choice applies to every other role here. Review
+        the role and scope before creating access.
       </p>
 
       <div className="mt-5 max-w-[700px]">
         <StaffInviteForm locations={locations} />
       </div>
 
-      <p className="mt-4 text-[12.5px] text-ink-3">
+      <p className="mt-4 max-w-[700px] text-[12.5px] leading-relaxed text-ink-3">
+        Creating this invitation does not send anything. Next, generate a
+        single-use login link from{" "}
+        <Link
+          href="/owner/staff/invitations"
+          className="font-medium text-[var(--accent-ink)] underline underline-offset-2"
+        >
+          Invitations
+        </Link>{" "}
+        and share it directly with the person.
+      </p>
+
+      <p className="mt-2 text-[12.5px] text-ink-3">
         Just adding someone with no login?{" "}
         <Link
           href="/owner/staff/new"

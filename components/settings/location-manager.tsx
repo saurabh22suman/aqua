@@ -45,6 +45,18 @@ export function LocationManager({
 }) {
   const [locations, setLocations] = useState(initial);
   const [message, setMessage] = useState<string | null>(null);
+  // The add form must name the real number of sites: an academy with none
+  // is adding its FIRST location, not a second one.
+  const addTitle =
+    locations.length === 0
+      ? "Add your first location"
+      : locations.length === 1
+        ? "Add a second location"
+        : "Add another location";
+  const addCopy =
+    locations.length === 0
+      ? "Add the physical site where your sessions and staff are based. You can add more sites later."
+      : "A second site lets you switch between them, with per-site rosters and per-site reports.";
 
   async function reload() {
     setLocations(await listAdminLocationsAction());
@@ -52,6 +64,12 @@ export function LocationManager({
 
   return (
     <div className="mt-4 space-y-4">
+      {locations.length > 0 && canWrite ? (
+        <div className="owner-work-panel flex flex-wrap items-center justify-between gap-x-3">
+          <span className="text-sm font-semibold">{locations.length} {locations.length === 1 ? "facility" : "facilities"}</span>
+          <a href="#add-physical-facility" className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--accent-ink)]">Add a facility</a>
+        </div>
+      ) : null}
       {locations.map((location) => (
         <LocationCard
           key={location.id}
@@ -66,13 +84,10 @@ export function LocationManager({
 
       {canWrite ? (
         <section className="rounded-card border border-line bg-paper p-4 sm:p-5">
-          <h2 className="font-display text-[16px] font-semibold">
-            {locations.length > 1 ? "Add another location" : "Add a second location"}
+          <h2 id="add-physical-facility" tabIndex={-1} className="font-display text-[16px] font-semibold">
+            {addTitle}
           </h2>
-          <p className="mt-1 text-[12.5px] text-ink-3">
-            A second site lets you switch between them, with per-site rosters
-            and per-site reports.
-          </p>
+          <p className="mt-1 text-[12.5px] text-ink-3">{addCopy}</p>
           <CreateLocationForm
             onCreated={async (text) => {
               setMessage(text);

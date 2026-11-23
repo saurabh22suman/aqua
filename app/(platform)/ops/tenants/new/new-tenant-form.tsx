@@ -10,6 +10,7 @@ import { Button, buttonClasses } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { ProvisioningReview } from "@/components/ops/console/provisioning-review";
 import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
 
 // Phase 1.5 — create-tenant form. H1 — uses <form action={createTenantAction}>
@@ -50,6 +51,9 @@ export function NewTenantForm({
   const error = state?.kind === "error" ? state.message : null;
   const [businessName, setBusinessName] = useState("");
   const [clubName, setClubName] = useState(defaultLocationName);
+  const [slug, setSlug] = useState("");
+  const [planKey, setPlanKey] = useState(defaultPlanKey);
+  const [presetKey, setPresetKey] = useState(defaultPresetKey);
 
   return (
     // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
@@ -57,10 +61,12 @@ export function NewTenantForm({
     // server-action forms (POST vs post).
     <form action={formAction} method="post" suppressHydrationWarning className="mt-8 space-y-6">
       <Section title="Business account" subtitle="The business account contains clubs; each club can have activities.">
-        <Field label="Business account name" name="name" required autoComplete="off" onChange={setBusinessName} />
+        <Field label="Business account name" name="name" required autoComplete="off" value={businessName} onChange={setBusinessName} />
         <Field
           label="Slug"
           name="slug"
+          value={slug}
+          onChange={setSlug}
           required
           autoComplete="off"
           pattern="[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?"
@@ -94,7 +100,8 @@ export function NewTenantForm({
         <SelectField
           label="Plan"
           name="planKey"
-          defaultValue={defaultPlanKey}
+          value={planKey}
+          onChange={setPlanKey}
           options={plans.map((p) => ({
             value: p.key,
             label: p.isDefault ? `${p.name} (default)` : p.name,
@@ -116,7 +123,8 @@ export function NewTenantForm({
         <SelectField
           label="Preset"
           name="presetKey"
-          defaultValue={defaultPresetKey}
+          value={presetKey}
+          onChange={setPresetKey}
           options={presets.map((p) => ({
             value: p.key,
             label: `${p.name} (${p.key})`,
@@ -132,7 +140,7 @@ export function NewTenantForm({
           label="First club name"
           name="locationName"
           required
-          defaultValue={defaultLocationName}
+          value={clubName}
           onChange={setClubName}
           autoComplete="off"
         />
@@ -141,7 +149,18 @@ export function NewTenantForm({
         </Checkbox>
       </Section>
 
-      <p className="text-[13px] text-ink-2">{businessName.trim() || "Business account"} → {clubName.trim() || "First club"} → activities</p>
+      <ProvisioningReview
+        title="Review business setup"
+        fields={[
+          { label: "Business account", value: businessName.trim() || "Enter a business name" },
+          { label: "Tenant URL slug", value: slug.trim() || "Enter a slug" },
+          { label: "First club", value: clubName.trim() || "Enter a club name" },
+          { label: "Plan", value: plans.find((plan) => plan.key === planKey)?.name ?? "Default plan" },
+          { label: "Preset", value: presets.find((preset) => preset.key === presetKey)?.name ?? "Default preset" },
+        ]}
+      >
+        Creates a trial tenant. Set its trial deadline and invite the owner from the tenant workspace.
+      </ProvisioningReview>
 
       {error ? (
         <OpsPanel tone="error" role="alert">
@@ -191,7 +210,7 @@ function Field({
   hint,
   type = "text",
   required,
-  defaultValue,
+  value,
   autoComplete,
   pattern,
   maxLength,
@@ -202,7 +221,7 @@ function Field({
   hint?: string;
   type?: string;
   required?: boolean;
-  defaultValue?: string;
+  value?: string;
   autoComplete?: string;
   pattern?: string;
   maxLength?: number;
@@ -215,7 +234,7 @@ function Field({
         type={type}
         name={name}
         required={required}
-        defaultValue={defaultValue}
+        value={value}
         autoComplete={autoComplete}
         pattern={pattern}
         maxLength={maxLength}
@@ -231,18 +250,20 @@ function Field({
 function SelectField({
   label,
   name,
-  defaultValue,
+  value,
+  onChange,
   options,
 }: {
   label: string;
   name: string;
-  defaultValue: string;
+  value: string;
+  onChange: (value: string) => void;
   options: ReadonlyArray<{ value: string; label: string }>;
 }) {
   return (
     <label className="block">
       <span className="mb-1 block text-[13px] font-medium text-ink-2">{label}</span>
-      <Select name={name} defaultValue={defaultValue}>
+      <Select name={name} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}

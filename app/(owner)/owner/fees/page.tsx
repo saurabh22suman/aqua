@@ -18,7 +18,7 @@ import {
   listHubInvoicesAction,
   listHubTransactionsAction,
 } from "@/lib/actions/fees-hub";
-import { formatINR } from "@/lib/money/format";
+import { formatINR, formatINRWhole } from "@/lib/money/format";
 import { methodLabel } from "@/lib/services/payments";
 import {
   groupLabel,
@@ -58,12 +58,15 @@ export default async function FeesPage({
     method?: string;
     group?: string;
     invoice?: string;
+    overdue?: string;
   }>;
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.financial");
   const params = searchParams ? await searchParams : {};
   const tab = resolveTab(params.tab);
+  // This subset is independent of the reporting window.
+  const overdueOnly = tab === "dues" && params.overdue === "1";
   const cookieStore = await cookies();
   const scope = resolveRequestedFacility({
     facility: params.facility,
@@ -72,9 +75,10 @@ export default async function FeesPage({
   const facility = scope.facilityId;
   if (!scope.valid || (facility && !(await canSelectFacility(ctx, facility)))) {
     const recovery = new URLSearchParams({ tab, facility: "all" });
+    if (overdueOnly) recovery.set("overdue", "1");
     if (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) recovery.set("from", params.from);
     if (params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to)) recovery.set("to", params.to);
-    return <OwnerPage><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href={`/owner/fees?${recovery.toString()}`} className={buttonClasses({ variant: "secondary", size: "md" })}>View available clubs</Link></OwnerPage>;
+    return <OwnerPage workflow="ledger"><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href={`/owner/fees?${recovery.toString()}`} className={buttonClasses({ variant: "secondary", size: "md" })}>View available clubs</Link></OwnerPage>;
   }
   // Plans management is settings.manage; reads stay open.
   const canManageSettings = hasPermission(ctx, "settings.manage") && await isLiveOwnerForSettings(ctx);
@@ -103,7 +107,9 @@ export default async function FeesPage({
       : tab === "transactions"
         ? "Recorded payments and their receipts."
         : tab === "dues"
-          ? "Current balances, with due dates and invoice state."
+          ? overdueOnly
+            ? "Overdue balances only, with due dates and invoice state."
+            : "Current balances, with due dates and invoice state."
           : tab === "invoices"
             ? "Invoice documents, including paid and partial records."
             : "Read the plans catalogue; manage pricing in Settings.";
@@ -113,6 +119,7 @@ export default async function FeesPage({
     tab === "dues" || tab === "invoices"
       ? listHubInvoicesAction({
           status: tab === "dues" ? "dues" : "all",
+          ...(overdueOnly ? { overdueOnly: true } : {}),
           ...(facility ? { locationId: facility } : {}),
         })
       : Promise.resolve([]),
@@ -135,12 +142,9 @@ export default async function FeesPage({
     tab === "plans" ? listPlansAction() : Promise.resolve([]),
   ]);
   return (
-    <OwnerPage>
-      <OwnerDesignHeading title="Fees & payments" purpose={purpose} action={hasPermission(ctx, "payments.record") ? <Link href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}&facility=${facility ?? "all"}`} className={buttonClasses({ variant: "primary", size: "sm", className: "text-[13px]" })}>Review dues</Link> : null} />
+    <OwnerPage workflow="ledger" data-owner-money-page="fees">
+      <OwnerDesignHeading title="Fees & payments" purpose={purpose} />
 
-      {tab === "overview" || tab === "transactions" ? (
-        <FeesPeriodControl tab={tab} from={period.from} to={period.to} facility={facility ?? "all"} timezone={timezone} method={method} group={group} />
-      ) : null}
       <div className="mt-4">
         <FeesTabs
           active={tab}
@@ -149,6 +153,10 @@ export default async function FeesPage({
           canManageSettings={canManageSettings}
         />
       </div>
+
+      {tab === "overview" || tab === "transactions" ? (
+        <FeesPeriodControl compact={ctx.roleKey === "owner"} tab={tab} from={period.from} to={period.to} facility={facility ?? "all"} timezone={timezone} method={method} group={group} />
+      ) : null}
 
       {tab === "overview" ? (
         <FeesSummaryMetrics overview={overview} facility={facility} period={period} />
@@ -183,20 +191,39 @@ export default async function FeesPage({
 
       {tab === "dues" ? (
         <section className="mt-4">
-          <SectionHeading
-            title="Outstanding invoices"
-            subtitle="Oldest due first. Open an invoice to record what the counter collected — the balance updates and the receipt becomes available."
-          />
+          <nav aria-label="Dues view" className="owner-pastel-switch">
+            <Link
+              href={`/owner/fees?${new URLSearchParams({ tab: "dues", facility: facility ?? "all", ...period })}`}
+              aria-current={!overdueOnly ? "page" : undefined}
+              aria-label="View all dues"
+            >
+              All dues
+            </Link>
+            <Link
+              href={`/owner/fees?${new URLSearchParams({ tab: "dues", overdue: "1", facility: facility ?? "all", ...period })}`}
+              aria-current={overdueOnly ? "page" : undefined}
+            >
+              Overdue
+            </Link>
+          </nav>
+          <div className={`owner-money-kpi mt-3${overdueOnly ? " is-overdue" : ""}`}>
+            <h2>{overdueOnly ? "Overdue invoices" : "Outstanding invoices"}</h2>
+            <p className="owner-money-value">
+              {formatINRWhole(overdueOnly ? overview.overduePaise : overview.outstandingPaise)}
+            </p>
+            <p>{overdueOnly ? overview.overdueInvoiceCount : overview.dueInvoiceCount} with a balance · Oldest due first</p>
+          </div>
           <FeesInvoiceList
             initial={invoices}
             filter="dues"
             facility={facility}
+            overdueOnly={overdueOnly}
             canWrite={hasPermission(ctx, "invoices.write")}
             canVoid={hasPermission(ctx, "settings.manage")}
             canRecord={hasPermission(ctx, "payments.record")}
             canRefund={hasPermission(ctx, "payments.refund")}
             canReadPayments={hasPermission(ctx, "payments.read")}
-            caption="Outstanding invoices"
+            caption={overdueOnly ? "Overdue invoices" : "Outstanding invoices"}
             navigationNamespace={`${ctx.tenantId}:${ctx.userId}`}
           />
         </section>

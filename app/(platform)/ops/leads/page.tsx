@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -13,6 +14,8 @@ import {
 } from "@/components/ops/ops-primitives";
 import { OpsStatusPill } from "@/components/ops/ops-display";
 import { OpsList, OpsListRow, OpsToolbar } from "@/components/ops/ops-table";
+
+export const metadata: Metadata = { title: "Business leads" };
 
 // O-10 (docs/ops-platform-design.md §7) — the sales pipeline list.
 //

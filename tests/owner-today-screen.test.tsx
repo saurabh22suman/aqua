@@ -164,13 +164,12 @@ describe("owner Home — the summary row", () => {
     );
     const text = document.body.textContent ?? "";
     expect(text).toContain("Collections");
-    expect(text).toContain("Today");
+    expect(text).toContain("Payments recorded today");
+    expect(text).toContain("Outstanding now");
     // Indian grouping without immaterial ".00" (DESIGN.md §4).
     expect(text).toContain("₹3,000");
     expect(text).not.toContain("₹3,000.00");
-    // The overdue tile states the count, the oldest age and the
-    // outstanding (current) balance.
-    // The retired overdue tile is covered by dashboard-financial-scope.test.ts.
+    expect(text).toContain("Of which ₹57,000 overdue");
     expect(text).toContain("Collections trend unavailable.");
 
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) =>
@@ -182,6 +181,7 @@ describe("owner Home — the summary row", () => {
       "/owner/fees?tab=transactions&from=2026-10-25&to=2026-10-26&facility=loc-1",
     );
     expect(hrefs).toContain("/owner/fees?tab=dues&facility=loc-1");
+    expect(hrefs).toContain("/owner/fees?tab=dues&overdue=1&facility=loc-1");
   });
 
   it("says so plainly when nothing was collected or is late", () => {
@@ -254,7 +254,7 @@ describe("owner Home — a quiet day", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("No sessions today");
     expect(text).toContain("Evening Squad");
-    expect(text).toContain("6:00 pm");
+    expect(screen.getByRole("region", { name: "Next session" }).querySelector("time")?.getAttribute("aria-label")).toBe("6:00 pm");
     expect(text).toContain("Imran Sheikh");
     expect(text).not.toContain("Nothing scheduled today, and no class booked ahead");
   });

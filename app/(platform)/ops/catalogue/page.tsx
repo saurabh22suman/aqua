@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -6,6 +7,8 @@ import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 import { PlanCatalogue } from "@/components/ops/commercial/plan-catalogue";
 import { buttonClasses } from "@/components/ui/Button";
+
+export const metadata: Metadata = { title: "SaaS plans" };
 
 export default async function OpsCataloguePage() {
   const status = await platformAuthStatusAction();

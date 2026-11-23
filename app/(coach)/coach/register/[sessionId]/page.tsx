@@ -8,15 +8,21 @@ import { requireCoach } from "@/lib/auth/surface-guard";
 import { formatDateIST, formatTimeIST } from "@/lib/time/tz";
 import { requireUuidParam } from "@/lib/params";
 import { BackLink } from "@/components/ui/BackLink";
-import { StaffPage } from "@/components/staff-ui/staff-page";
+import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
 
 export default async function RegisterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams?: Promise<{ day?: string }>;
 }) {
   await requireCoach();
   const { sessionId } = await params;
+  const { day } = (await searchParams) ?? {};
+  const fromSchedule = typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day);
+  const backHref = fromSchedule ? `/coach/schedule?day=${day}` : "/coach";
+  const backLabel = fromSchedule ? "Back to schedule" : "Today";
   requireUuidParam(sessionId);
   const [data, terminology] = await Promise.all([
     getRosterAction(sessionId),
@@ -28,7 +34,7 @@ export default async function RegisterPage({
   if (!data) {
     return (
       <StaffPage>
-        <BackLink href="/coach" label="Today" />
+        <BackLink href={backHref} label={backLabel} />
         <p className="text-[15px] font-medium text-ink">
           {titleCase(resolveTerm(terminology, "session", 1))} not found
         </p>
@@ -43,16 +49,17 @@ export default async function RegisterPage({
 
   return (
     <StaffPage className="px-5">
-      <BackLink href="/coach" label="Today" />
-      <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
-        {time} · {data.batchName}
-      </h1>
-      <p className="mt-1 text-[13px] text-ink-3">{formatDateIST(data.startsAt)}</p>
+      <BackLink href={backHref} label={backLabel} />
+      <StaffPageHeader
+        title={`${time} · ${data.batchName}`}
+        meta={formatDateIST(data.startsAt)}
+      />
       <p className="mt-1 break-words text-[13px] text-ink-2">{data.locationName ? `Venue: ${data.locationName}` : "Venue not recorded"}</p>
 
       <div className="mt-4">
         <RegisterBoard
           sessionId={sessionId}
+          sessionContext={[data.batchName, time, data.locationName].filter(Boolean).join(" · ")}
           rows={data.rows}
           offlineSyncEnabled={data.offlineSyncEnabled && OFFLINE_SYNC_ENABLED}
           offlineIdentity={data.offlineIdentity}

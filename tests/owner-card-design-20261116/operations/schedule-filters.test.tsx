@@ -6,7 +6,7 @@ afterEach(cleanup);
 it("starts secondary schedule filters collapsed while keeping the selected view and location available", () => {
   render(<OwnerScheduleGrid view="week" anchor="2026-11-17" locationId="north" locations={[{ id: "north", name: "North" }, { id: "south", name: "South" }]} sessions={[]} days={["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"]} monthCells={null} prevHref="#prev" nextHref="#next" todayHref="#today" dayHref="#day" weekHref="#week" monthHref="#month" agendaHref="#agenda" />);
   const summary = screen.getByText("Filters");
-  expect(screen.getByText("Club: North")).toBeTruthy();
+  expect(screen.getByText("North", { selector: "p" })).toBeTruthy();
   const details = summary.closest("details");
   expect(details?.open).toBe(false);
   fireEvent.click(summary);

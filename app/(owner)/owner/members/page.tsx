@@ -45,6 +45,7 @@ export default async function MembersPage({
   return (
     <Suspense fallback={<MembersListLoading />}>
       <MembersDirectory
+        compactFilters={ctx.roleKey === "owner"}
         canWriteMembers={canWriteMembers}
         canViewProfile={canViewProfile}
         initialLocationId={initialLocationId}
@@ -55,18 +56,20 @@ export default async function MembersPage({
 }
 
 async function MembersDirectory({
+  compactFilters,
   canWriteMembers,
   canViewProfile,
   initialLocationId,
   navigationNamespace,
 }: {
+  compactFilters: boolean;
   canWriteMembers: boolean;
   canViewProfile: boolean;
   initialLocationId: string | undefined;
   navigationNamespace: string;
 }) {
   const [members, terminology] = await Promise.all([
-    listMembersAction({ locationId: initialLocationId }),
+    listMembersAction({ locationId: initialLocationId }).catch(() => null),
     getTerminologyAction().then(ownerTerminology),
   ]);
 
@@ -75,10 +78,10 @@ async function MembersDirectory({
   const addMemberHref = `/owner/members/new?facility=${initialLocationId ?? "all"}`;
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="directory">
       <OwnerDesignHeading
         title={titleCase(resolveTerm(terminology, "member", "other"))}
-        purpose="People, plans and progress"
+        purpose={canViewProfile ? "Find a member and open their profile to review their plan, fees or progress." : "Search the directory by name, phone or member code."}
         className="flex-col items-stretch sm:flex-row sm:items-center"
         action={
           canWriteMembers ? (
@@ -110,7 +113,9 @@ async function MembersDirectory({
           it. */}
       <div>
         <MembersBoard
-          initialMembers={members}
+          compactFilters={compactFilters}
+          initialMembers={members ?? []}
+          initialReadFailed={members === null}
           terminology={terminology}
           initialLocationId={initialLocationId}
           navigationNamespace={navigationNamespace}

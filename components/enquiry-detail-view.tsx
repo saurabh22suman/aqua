@@ -1,40 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
-import {
-  addFollowUpAction,
-  bookTrialAction,
-  completeFollowUpAction,
-  convertEnquiryAction,
-  transitionEnquiryStageAction,
-} from "@/lib/actions/enquiries";
+import { bookTrialAction, convertEnquiryAction, transitionEnquiryStageAction } from "@/lib/actions/enquiries";
 import { ENQUIRY_STAGE_LABELS, ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
-// Trial/conversion fields are requested only after opening that workflow.
-const EnquiryNewMemberFields = dynamic(
-  () => import("@/components/enquiry-new-member-fields").then((module) => module.EnquiryNewMemberFields),
-  { loading: () => <p role="status" className="text-[13px] text-ink-3">Loading member form…</p> },
-);
-import type { EnquiryDetail } from "@/lib/services/enquiries";
+import type { EnquiryStage } from "@/db/schema/enquiries";
+import type { EnquiryDetail, NewMemberDetails } from "@/lib/services/enquiries";
 import type { LocationOption } from "@/lib/services/people";
 import type { BatchWithProgramName } from "@/lib/services/programs";
-import type { EnquiryStage } from "@/db/schema/enquiries";
-import type { NewMemberDetails } from "@/lib/services/enquiries";
 import type { TerminologyState } from "@/lib/terminology/keys";
-import { formatDateTimeIST, zonedWallTimeToInstant } from "@/lib/time/tz";
-import { OwnerIcon } from "@/components/owner-ui/owner-icon";
-import { Button } from "@/components/ui/Button";
-import {
-  StatusBadge,
-  ENQUIRY_STAGE_TONE,
-} from "@/components/ui/StatusBadge";
+import { EnquiryFollowUps } from "@/components/enquiry-follow-ups";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { StatusBadge, ENQUIRY_STAGE_TONE } from "@/components/ui/StatusBadge";
 import { Field } from "@/components/ui/Field";
-import { DateField } from "@/components/ui/DateField";
-import { TimeField } from "@/components/ui/TimeField";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
+
+const EnquiryNewMemberFields = dynamic(
+  () => import("@/components/enquiry-new-member-fields").then((module) => module.EnquiryNewMemberFields),
+  { loading: () => <p role="status" className="text-sm text-ink-2">Loading member details…</p> },
+);
+
+const STAGE_ACTIONS: Partial<Record<EnquiryStage, string>> = {
+  new: "Reopen enquiry",
+  contacted: "Mark contacted",
+  trial_completed: "Mark trial complete",
+  lost: "Mark as lost",
+};
+
+type Workflow = "trial" | "convert";
 
 export function EnquiryDetailView({
   enquiry,
@@ -42,412 +38,227 @@ export function EnquiryDetailView({
   batches,
   memberDetailBasePath = "/owner/members",
   terminology,
+  canWrite = true,
+  canOpenMember = true,
 }: {
   enquiry: EnquiryDetail;
   locations: LocationOption[];
   batches: BatchWithProgramName[];
-  // Where to send staff after converting — the member's own detail
-  // page, where the Enrolment section (B3) picks up: a direct
-  // conversion (no prior trial) has no batchId field on this form, so
-  // enrolling is always this page's job, not this one's.
   memberDetailBasePath?: string;
-  // Closed-key vocab resolved by the parent server page (L3 audit).
   terminology: TerminologyState;
+  canWrite?: boolean;
+  canOpenMember?: boolean;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [workflow, setWorkflow] = useState<Workflow | null>(null);
+  const [details, setDetails] = useState<NewMemberDetails | null>(null);
+  const [guardianLabel, setGuardianLabel] = useState("");
+  const [batchId, setBatchId] = useState("");
+  const [reason, setReason] = useState("");
+  const [review, setReview] = useState(false);
+  const [convertedId, setConvertedId] = useState<string | null>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
 
-  const [followUpDate, setFollowUpDate] = useState("");
-  const [followUpTime, setFollowUpTime] = useState("");
-  const [followUpNote, setFollowUpNote] = useState("");
-  // Both parts report their validity, so an unfinished or impossible
-  // entry can never be submitted behind the operator's back.
-  const [followUpDateValid, setFollowUpDateValid] = useState(true);
-  const [followUpTimeValid, setFollowUpTimeValid] = useState(true);
+  const transitions = ENQUIRY_STAGE_TRANSITIONS[enquiry.stage];
+  const canBook = canWrite && transitions.includes("trial_scheduled") && !enquiry.memberId;
+  const canConvert = canWrite && transitions.includes("converted");
+  const stageOptions = canWrite ? transitions.filter((stage) => stage in STAGE_ACTIONS) : [];
+  const recommendedStage = stageOptions.find((stage) => stage !== "lost");
+  const memberId = convertedId ?? enquiry.memberId;
+  const converted = Boolean(convertedId) || enquiry.stage === "converted";
+  const selectedFacility = locations.find((location) => location.id === (details?.locationId ?? enquiry.locationId));
+  const trialBatch = batches.find((batch) => batch.id === enquiry.trialBatchId);
 
-  // Owner redesign (C2) — one workflow at a time. The trial form and
-  // the conversion form are alternative next actions, so opening one
-  // closes the other: "Trial and conversion forms should not be
-  // expanded together."
-  const [openWorkflow, setOpenWorkflow] = useState<"trial" | "convert" | null>(null);
-  const [batchId, setBatchId] = useState(batches[0]?.id ?? "");
-  const [trialDetails, setTrialDetails] = useState<NewMemberDetails | null>(null);
-  const [trialValid, setTrialValid] = useState(false);
-
-  const [convertDetails, setConvertDetails] = useState<NewMemberDetails | null>(null);
-  const [convertValid, setConvertValid] = useState(false);
-  const [convertReason, setConvertReason] = useState("");
-
-  const stageOptions = ENQUIRY_STAGE_TRANSITIONS[enquiry.stage].filter(
-    (s) => s !== "trial_scheduled" && s !== "converted",
-  );
-
-  async function moveStage(toStage: EnquiryStage) {
-    setError(null);
+  async function run(action: () => Promise<void>) {
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
+    setError(null);
+    setMessage(null);
     try {
-      const result = await transitionEnquiryStageAction({ enquiryId: enquiry.id, toStage });
+      await action();
+    } catch {
+      setError("Could not confirm the update. Check the current stage before trying again.");
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+
+  function open(next: Workflow) {
+    setWorkflow(next);
+    setReview(false);
+    setDetails(null);
+    setGuardianLabel("");
+    setError(null);
+    setMessage(null);
+  }
+
+  async function moveStage(stage: EnquiryStage) {
+    await run(async () => {
+      const result = await transitionEnquiryStageAction({ enquiryId: enquiry.id, toStage: stage });
       if (!result.ok) {
         setError(result.error);
         return;
       }
+      setWorkflow(null);
+      setMessage(`Enquiry updated to ${ENQUIRY_STAGE_LABELS[stage].toLowerCase()}.`);
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
-  async function submitFollowUp() {
-    if (!followUpDate || !followUpTime) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await addFollowUpAction({
-        enquiryId: enquiry.id,
-        // The SAME wall-clock instant as before: the shared date and
-        // time controls carry an ISO date and a 24-hour time, and
-        // Asia/Kolkata turns them into the instant.
-        dueAt: zonedWallTimeToInstant(
-          followUpDate, followUpTime, "Asia/Kolkata",
-        ).toISOString(),
-        note: followUpNote.trim() || undefined,
-      });
-      setFollowUpDate("");
-      setFollowUpTime("");
-      setFollowUpNote("");
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function markFollowUpDone(id: string) {
-    await completeFollowUpAction(id);
-    router.refresh();
-  }
-
-  async function submitBookTrial() {
-    if (!trialDetails || !batchId) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const result = await bookTrialAction({ enquiryId: enquiry.id, batchId, details: trialDetails });
+  async function bookTrial() {
+    if (!details || !batchId) return;
+    await run(async () => {
+      const result = await bookTrialAction({ enquiryId: enquiry.id, batchId, details });
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      setOpenWorkflow(null);
+      setWorkflow(null);
+      setMessage("Trial booked. You can track it from this enquiry.");
       router.refresh();
-    } finally {
-      setBusy(false);
-    }
+    });
   }
 
-  async function submitConvert() {
-    setBusy(true);
-    setError(null);
-    try {
+  async function convert() {
+    if (!enquiry.memberId && !details) return;
+    await run(async () => {
       const result = await convertEnquiryAction({
         enquiryId: enquiry.id,
-        reason: convertReason.trim() || "converted",
-        newMember: enquiry.memberId ? undefined : convertDetails ?? undefined,
+        reason: reason.trim() || "converted",
+        newMember: enquiry.memberId ? undefined : details ?? undefined,
       });
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      setOpenWorkflow(null);
-      router.push(`${memberDetailBasePath}/${result.memberId}`);
-    } finally {
-      setBusy(false);
-    }
+      setConvertedId(result.memberId);
+      setWorkflow(null);
+      setMessage(`${enquiry.fullName} is now a member.`);
+      router.refresh();
+    });
   }
 
+  const memberLink = memberId && canOpenMember ? (
+    <Link href={`${memberDetailBasePath}/${memberId}`} className={buttonClasses({ variant: "primary" })}>
+      Open member profile
+    </Link>
+  ) : null;
+
   return (
-    <div className="space-y-5">
-      <section className="rounded-card border border-line bg-paper p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="font-display text-[16px] font-semibold text-ink">
-              Current stage
-            </h2>
-            <p className="mt-1.5">
-              <StatusBadge tone={ENQUIRY_STAGE_TONE[enquiry.stage] ?? "neutral"}>
-                {ENQUIRY_STAGE_LABELS[enquiry.stage]}
-              </StatusBadge>
-            </p>
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <section className="min-w-0 rounded-card border border-line bg-paper p-4 sm:p-5" aria-labelledby="next-action-heading">
+        <header className="flex flex-wrap items-center justify-between gap-2">
+          <h2 tabIndex={-1} id="next-action-heading" className="text-lg font-bold">{converted ? "Membership created" : "Next action"}</h2>
+          <StatusBadge tone={ENQUIRY_STAGE_TONE[converted ? "converted" : enquiry.stage]}>
+            {ENQUIRY_STAGE_LABELS[converted ? "converted" : enquiry.stage]}
+          </StatusBadge>
+        </header>
+        {trialBatch ? <p className="mt-2 text-sm text-ink-2">Trial batch · {trialBatch.name}</p> : null}
+        {selectedFacility ? <p className="mt-1 text-sm text-ink-2">{selectedFacility.name}</p> : null}
+
+        {converted ? (
+          <div className="mt-4 space-y-3">
+            {message ? <p role="status" className="text-sm text-good">{message}</p> : null}
+            {memberLink}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {stageOptions.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => moveStage(s)}
-                disabled={busy}
-                className="inline-flex min-h-11 items-center justify-center rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] text-ink-2 hover:text-ink disabled:opacity-50"
-              >
-                Move to {ENQUIRY_STAGE_LABELS[s]}
-              </button>
-            ))}
+        ) : workflow === null ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {recommendedStage ? (
+              <Button variant="primary" disabled={busy} onClick={() => void moveStage(recommendedStage)}>
+                {STAGE_ACTIONS[recommendedStage]}
+              </Button>
+            ) : null}
+            {canBook ? (
+              <Button variant={!recommendedStage && batches.length ? "primary" : "secondary"} disabled={busy || !batches.length}
+                onClick={() => open("trial")} data-testid="show-book-trial">Book a trial</Button>
+            ) : null}
+            {canConvert ? (
+              <Button variant={!recommendedStage && (!canBook || !batches.length) ? "primary" : "secondary"} disabled={busy}
+                onClick={() => open("convert")} data-testid="show-convert">Convert to member</Button>
+            ) : null}
+            {canBook && !batches.length ? <p className="w-full text-sm text-ink-2">No trial batches are available.</p> : null}
+            {stageOptions.includes("lost") ? (
+              <details className="w-full">
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm text-ink-2 underline">Other actions</summary>
+                <Button variant="secondary" disabled={busy} onClick={() => void moveStage("lost")}>Mark as lost</Button>
+              </details>
+            ) : null}
+            {!canWrite ? <p className="text-sm text-ink-2">You have read access to this enquiry.</p> : null}
           </div>
-        </div>
-        {error ? (
-          <p role="alert" className="mt-3 text-[12.5px] text-late">
-            {error}
-          </p>
-        ) : null}
+        ) : (
+          <div className="mt-4 border-t border-line pt-4">
+            <div hidden={review} className="space-y-3">
+              <h3 className="font-semibold">{workflow === "trial" ? "Book a trial" : "Prepare conversion"}</h3>
+              {workflow === "trial" ? (
+                <Field id="enquiry-trial-batch" label="Trial batch" required>
+                  {(field) => (
+                    <Select {...field} value={batchId} onChange={(event) => setBatchId(event.target.value)}>
+                      <option value="">Select trial batch</option>
+                      {batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name} · {batch.programName}</option>)}
+                    </Select>
+                  )}
+                </Field>
+              ) : (
+                <Field id="enquiry-convert-reason" label="Reason (optional)">
+                  {(field) => <Input {...field} value={reason} onChange={(event) => setReason(event.target.value)} />}
+                </Field>
+              )}
+              {!enquiry.memberId ? (
+                <EnquiryNewMemberFields key={workflow} locations={locations} initialLocationId={enquiry.locationId}
+                  onChange={setDetails} onGuardianSummaryChange={setGuardianLabel} terminology={terminology} />
+              ) : null}
+              <div className="flex flex-wrap gap-2">
+                {workflow === "trial" ? (
+                  <Button variant="primary" disabled={busy || !details || !batchId} onClick={() => void bookTrial()} data-testid="submit-book-trial">
+                    {busy ? "Booking…" : "Confirm trial booking"}
+                  </Button>
+                ) : (
+                  <Button variant="primary" disabled={busy || (!enquiry.memberId && !details)} onClick={() => {
+                    setReview(true);
+                    requestAnimationFrame(() => reviewHeading.current?.focus());
+                  }}>Review conversion</Button>
+                )}
+                <Button variant="ghost" disabled={busy} onClick={() => { setWorkflow(null); setError(null); }}>Back to actions</Button>
+              </div>
+            </div>
+            {review ? (
+              <div className="space-y-3">
+                <h3 tabIndex={-1} ref={reviewHeading} className="font-semibold">Review conversion</h3>
+                <dl className="space-y-1 rounded-ctl bg-deck p-3 text-sm">
+                  <div><dt className="inline text-ink-2">Member · </dt><dd className="inline font-semibold">{enquiry.fullName}</dd></div>
+                  {selectedFacility ? <div><dt className="inline text-ink-2">Facility · </dt><dd className="inline">{selectedFacility.name}</dd></div> : null}
+                  {guardianLabel ? <div><dt className="inline text-ink-2">Guardian · </dt><dd className="inline">{guardianLabel}</dd></div> : null}
+                  {enquiry.memberId ? <div><dt className="inline text-ink-2">Membership · </dt><dd className="inline">Activate the existing trial membership</dd></div> : null}
+                </dl>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="primary" disabled={busy} onClick={() => void convert()} data-testid="submit-convert">
+                    {busy ? "Converting…" : "Confirm conversion"}
+                  </Button>
+                  <Button variant="secondary" disabled={busy} onClick={() => { setReview(false); setError(null); }}>Edit details</Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+        {!converted && message ? <p role="status" className="mt-4 text-sm text-good">{message}</p> : null}
+        {error ? <p role="alert" className="mt-4 rounded-ctl bg-late-soft p-3 text-sm text-late">{error}</p> : null}
       </section>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <section
-          aria-labelledby="follow-up-timeline-heading"
-          className="rounded-card border border-line bg-paper p-5"
-        >
-          <h2
-            id="follow-up-timeline-heading"
-            className="font-display text-[16px] font-semibold text-ink"
-          >
-            Follow-up timeline
-          </h2>
-          <ul className="mt-1 divide-y divide-line">
-            {enquiry.followUps.length === 0 ? (
-              <li className="py-3 text-[13px] text-ink-3">No follow-ups yet.</li>
-            ) : (
-              enquiry.followUps.map((f) => (
-                <li key={f.id} className="flex items-center gap-3 py-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[14px] font-medium text-ink">
-                      {f.note ?? "Follow up"}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-ink-3">
-                      {f.doneAt ? "Done" : "Due"} ·{" "}
-                      {formatDateTimeIST(f.dueAt)}
-                    </p>
-                  </div>
-                  {f.doneAt ? (
-                    <span className="flex-none text-[11.5px] text-good">Done</span>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => markFollowUpDone(f.id)}
-                      className="flex-none"
-                    >
-                      Mark done
-                    </Button>
-                  )}
-                </li>
-              ))
-            )}
-          </ul>
-
-          <details className="group mt-3 border-t border-line pt-3">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-medium text-ink-2 marker:content-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
-              {/* The approved contextual plus on the opener; the native
-                  disclosure keeps its own chevron for the open state. */}
-              <OwnerIcon name="plus" size={14} />
-              Add follow-up
-              <ChevronDown size={14} aria-hidden="true" className="text-ink-3 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
-            </summary>
-            <div className="mt-2 space-y-3">
-              {/* One date + time group, built from the product's shared
-                  controls: the masked day-first DATE field and the
-                  hour/minutes/AM-PM TIME field. The native
-                  `datetime-local` input it replaces rendered US
-                  mm/dd/yyyy segments on this locale and asked the
-                  browser for a value the product could not read back
-                  in its own format. */}
-              <fieldset className="min-w-0">
-                <legend className="block text-[13px] font-medium text-ink-2">
-                  Due date and time (IST)
-                </legend>
-                <div className="mt-1.5 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <div className="min-w-0">
-                    <label
-                      htmlFor="enquiry-follow-up-due-date"
-                      className="sr-only"
-                    >
-                      Due date
-                    </label>
-                    <DateField
-                      id="enquiry-follow-up-due-date"
-                      value={followUpDate}
-                      onChange={setFollowUpDate}
-                      onValidityChange={setFollowUpDateValid}
-                      aria-label="Due date"
-                      formatHint="sr-only"
-                    />
-                  </div>
-                  <TimeField
-                    id="enquiry-follow-up-due-time"
-                    label="Due time"
-                    value={followUpTime}
-                    onChange={setFollowUpTime}
-                    onValidityChange={setFollowUpTimeValid}
-                    hourLabel="Due hour"
-                    minuteLabel="Due minutes"
-                    periodLabel="Due AM/PM"
-                  />
-                </div>
-              </fieldset>
-              <Field id="enquiry-follow-up-note" label="Note (optional)">
-                {(field) => (
-                  <Input
-                    {...field}
-                    type="text"
-                    value={followUpNote}
-                    onChange={(e) => setFollowUpNote(e.target.value)}
-                    placeholder="Note (optional)"
-                  />
-                )}
-              </Field>
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={submitFollowUp}
-                disabled={
-                  busy ||
-                  !followUpDate ||
-                  !followUpTime ||
-                  !followUpDateValid ||
-                  !followUpTimeValid
-                }
-              >
-                Add follow-up
-              </Button>
-            </div>
-          </details>
-        </section>
-
-        <section
-          aria-labelledby="next-action-heading"
-          className="rounded-card border border-line bg-paper p-5"
-        >
-          <h2
-            id="next-action-heading"
-            className="font-display text-[16px] font-semibold text-ink"
-          >
-            Next action
-          </h2>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            {ENQUIRY_STAGE_TRANSITIONS[enquiry.stage].includes("trial_scheduled") &&
-            !enquiry.memberId ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() =>
-                  setOpenWorkflow((open) => (open === "trial" ? null : "trial"))
-                }
-                data-testid="show-book-trial"
-              >
-                Book a trial
-              </Button>
-            ) : null}
-            {ENQUIRY_STAGE_TRANSITIONS[enquiry.stage].includes("converted") ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="md"
-                onClick={() =>
-                  setOpenWorkflow((open) => (open === "convert" ? null : "convert"))
-                }
-                data-testid="show-convert"
-              >
-                Convert to member
-              </Button>
-            ) : null}
-          </div>
-
-          {openWorkflow === "trial" ? (
-            <div className="mt-4 space-y-2.5">
-              <h3 className="text-[14px] font-medium text-ink">Book a trial</h3>
-              <Field id="enquiry-trial-batch" label="Trial batch">
-                {(field) => (
-                  <Select
-                    {...field}
-                    value={batchId}
-                    onChange={(e) => setBatchId(e.target.value)}
-                  >
-                    {batches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} — {b.programName}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <EnquiryNewMemberFields
-                locations={locations}
-                onChange={setTrialDetails}
-                onValidityChange={setTrialValid}
-                terminology={terminology}
-              />
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={submitBookTrial}
-                disabled={busy || !trialValid || !batchId}
-                className="w-full"
-                data-testid="submit-book-trial"
-              >
-                {busy ? "Booking…" : "Confirm trial booking"}
-              </Button>
-            </div>
-          ) : null}
-
-          {openWorkflow === "convert" ? (
-            <div className="mt-4 space-y-2.5">
-              <h3 className="text-[14px] font-medium text-ink">
-                {enquiry.memberId
-                  ? "Convert to active member"
-                  : "Convert without a trial"}
-              </h3>
-              <Field id="enquiry-convert-reason" label="Reason (e.g. paid and enrolled)">
-                {(field) => (
-                  <Input
-                    {...field}
-                    type="text"
-                    value={convertReason}
-                    onChange={(e) => setConvertReason(e.target.value)}
-                    placeholder="Reason (e.g. paid and enrolled)"
-                  />
-                )}
-              </Field>
-              {!enquiry.memberId ? (
-                <EnquiryNewMemberFields
-                  locations={locations}
-                  onChange={setConvertDetails}
-                  onValidityChange={setConvertValid}
-                  terminology={terminology}
-                />
-              ) : null}
-              <Button
-                type="button"
-                variant="primary"
-                size="md"
-                onClick={submitConvert}
-                disabled={busy || (!enquiry.memberId && !convertValid)}
-                className="w-full"
-                data-testid="submit-convert"
-              >
-                {busy ? "Converting…" : "Confirm conversion"}
-              </Button>
-            </div>
-          ) : null}
-
-          {openWorkflow === null ? (
-            <p className="mt-3 text-[12.5px] text-ink-3">
-              Open a trial or conversion when it is the right next step. Only
-              one workflow is open at a time.
-            </p>
-          ) : null}
-        </section>
+      <div className="min-w-0 space-y-4">
+        {enquiry.notes ? (
+          <section className="rounded-card border border-line bg-paper p-4" aria-labelledby="enquiry-notes-heading">
+            <h2 tabIndex={-1} id="enquiry-notes-heading" className="font-semibold">Enquiry notes</h2>
+            <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-ink-2">{enquiry.notes}</p>
+          </section>
+        ) : null}
+        <EnquiryFollowUps enquiry={enquiry} canWrite={canWrite} />
       </div>
     </div>
   );

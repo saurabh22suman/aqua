@@ -10,6 +10,7 @@ import { resolveTerm } from "@/lib/terminology/keys";
 import { todayInZone } from "@/lib/time/tz";
 import { CollectionsReport } from "@/components/reports/collections-report";
 import { BackLink } from "@/components/ui/BackLink";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cookies } from "next/headers";
@@ -35,17 +36,18 @@ export default async function CollectionsPage({ searchParams }: { searchParams?:
     const period = isOwnerPeriodKey(params.period) ? params.period : "last7";
     const validPeriod = params.period === undefined || isOwnerPeriodKey(params.period);
     const permitted = hasPermission(ctx, "invoices.read") && hasFeature(ctx, "reports") && hasFeature(ctx, "billing");
+    const retryHref = `/owner/reports/collections?${new URLSearchParams({ view: "trends", period, ...(facilityScope ? { facility: facilityScope } : {}) })}`;
     let data = null;
     let failed = false;
     if (permitted && validPeriod) {
       try { data = await getOwnerCharts(ctx, { period, ...(facility ? { locationId: facility } : {}) }); }
       catch { failed = true; }
     }
-    return <OwnerPage>
+    return <OwnerPage workflow="ledger" data-owner-money-page="collections">
       <BackLink href={`/owner/reports?${new URLSearchParams({ facility: facility ?? "all" })}`} label="All reports" />
       <PageHeader title="Collections report" />
       <CollectionsViews view="trends" facility={facility} period={period} />
-      {!validPeriod ? <p role="alert" className="mt-4 text-sm text-ink-2">Invalid range. Choose a valid range.</p> : !permitted ? <p className="mt-4 text-sm text-ink-2">Trends unavailable for your access.</p> : failed ? <p role="alert" className="mt-4 text-sm text-ink-2">Collections could not load. Please try again.</p> : data ? <CollectionsTrends data={data} facility={facility} facilityScope={facilityScope} /> : null}
+      {!validPeriod ? <p role="alert" className="mt-4 text-sm text-ink-2">Invalid range. Choose a valid range.</p> : !permitted ? <p className="mt-4 text-sm text-ink-2">Trends unavailable for your access.</p> : failed ? <p role="alert" className="mt-4 text-sm text-ink-2">Collections could not load. <Link href={retryHref} className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Try again</Link></p> : data ? <CollectionsTrends compact={ctx.roleKey === "owner"} data={data} facility={facility} facilityScope={facilityScope} /> : null}
     </OwnerPage>;
   }
   const [allLocations, access, timezone, terminology, cookieStore] = await Promise.all([
@@ -62,7 +64,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams?:
   const requestedFacility = params.facility === "all" ? undefined : params.facility ?? cookieStore.get(FACILITY_COOKIE)?.value;
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="ledger" data-owner-money-page="collections">
       <PageHeader
         title="Daily collections"
         purpose="Review payments and count cash at close."
@@ -75,6 +77,7 @@ export default async function CollectionsPage({ searchParams }: { searchParams?:
         canConfirm={hasPermission(ctx, "payments.record")}
         canReopen={hasPermission(ctx, "settings.manage")}
         initialLocationId={requestedFacility}
+        compactOwner={ctx.roleKey === "owner"}
         showNavigation
       />
     </OwnerPage>

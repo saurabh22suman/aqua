@@ -12,8 +12,11 @@ import type { MyAttendanceRow } from "@/lib/services/staff-attendance";
 
 export function MyAttendanceCard({
   attendance,
+  id,
 }: {
   attendance: MyAttendanceRow | null;
+  /** Page-local anchor so a summary can point at the one action. */
+  id?: string;
 }) {
   const checkedIn = Boolean(attendance?.checkedInAt);
   const checkedOut = Boolean(attendance?.checkedOutAt);
@@ -34,7 +37,7 @@ export function MyAttendanceCard({
   }
 
   return (
-    <section className={`mt-4 p-4 ${STAFF_CARD}`}>
+    <section id={id} className={`mt-4 scroll-mt-4 p-4 ${STAFF_CARD}`}>
       <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
         <OwnerIcon name="check" size={16} className="text-ink-3" />
         Today&apos;s attendance

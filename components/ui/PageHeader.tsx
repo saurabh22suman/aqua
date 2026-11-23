@@ -25,6 +25,7 @@ export function PageHeader({
 } & Omit<HTMLAttributes<HTMLDivElement>, "title">) {
   return (
     <div
+      data-workspace-heading
       className={cn(
         "flex flex-wrap items-start justify-between gap-x-4 gap-y-3",
         className,

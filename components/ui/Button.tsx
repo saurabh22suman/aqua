@@ -51,7 +51,7 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--accent-strong)] text-white hover:bg-[var(--action-surface-hover)]",
+    "bg-[var(--accent-strong)] text-[var(--action-foreground)] hover:bg-[var(--action-surface-hover)]",
   secondary:
     "border border-[var(--control-border)] bg-[var(--control-surface-action)] text-[var(--accent-ink)] hover:bg-[var(--control-surface-action-hover)] hover:border-[var(--control-border-hover)]",
   ghost: "bg-transparent text-ink-2 hover:bg-deck",
@@ -84,7 +84,7 @@ export function buttonClasses({
     pill ? "rounded-pill" : "rounded-ctl",
     VARIANT_CLASS[variant],
     SIZE_CLASS[size],
-    "transition-colors duration-150 disabled:opacity-50",
+    "transition-colors duration-150 motion-reduce:transition-none disabled:opacity-50",
     className,
   ]
     .filter(Boolean)

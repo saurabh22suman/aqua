@@ -17,7 +17,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 import { Dialog } from "@/components/ui/Dialog";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -150,14 +149,14 @@ export function OwnerCalendar({
             }`;
             if (href) {
               return (
-                <Link
+                <a
                   key={day}
                   href={href}
                   aria-current={active ? "date" : undefined}
                   className={className}
                 >
                   {chip}
-                </Link>
+                </a>
               );
             }
             if (onSelectDay) {

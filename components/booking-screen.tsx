@@ -17,6 +17,10 @@ import type { BookableFacility, BookingDayRow } from "@/lib/services/bookings";
 import type { BookingBill } from "@/lib/services/booking-billing";
 import type { TerminologyState } from "@/lib/terminology/keys";
 import { OwnerCalendar } from "@/components/owner-calendar/owner-calendar";
+import { Button } from "@/components/ui/Button";
+import { DateField } from "@/components/ui/DateField";
+import { Field } from "@/components/ui/Field";
+import { OwnerPeriodStrip } from "@/components/owner-ui/owner-period-strip";
 import { OwnerCalendarToolbar } from "@/components/owner-calendar/owner-calendar-toolbar";
 import { calendarRange } from "@/components/owner-calendar/calendar-layout";
 import { Tabs } from "@/components/ui/Tabs";
@@ -102,11 +106,13 @@ const BookingReceipt = dynamic(
 // facility in the heading.
 
 export function BookingScreen({
+  compactOwner = false,
   facilities,
   timezone,
   today,
   terminology,
   canCreate = false,
+  canBill = false,
   canScanPass = false,
   canCorrectInvoice = false,
   canManagePrices = false,
@@ -115,6 +121,7 @@ export function BookingScreen({
   initialSlot,
   facilityScope,
 }: {
+  compactOwner?: boolean;
   facilities: BookableFacility[];
   timezone: string;
   today: string;
@@ -129,6 +136,7 @@ export function BookingScreen({
    * a create affordance by accident.
    */
   canCreate?: boolean;
+  canBill?: boolean;
   /**
    * Whether the desk offers the entry scanner.
    *
@@ -191,6 +199,7 @@ export function BookingScreen({
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cancellationMessage, setCancellationMessage] = useState<string | null>(null);
   const [view, setView] = useState<"calendar" | "board">("calendar");
   const [scope, setScope] = useState<"day" | "week" | "agenda">("day");
   // Owner OpenPen (29 October 2026) — the board and the selected slot
@@ -231,12 +240,17 @@ export function BookingScreen({
   );
 
   async function cancel(row: BookingDayRow) {
+    if (!canCreate || busyId || (row.status !== "held" && row.status !== "confirmed")) return;
+    setCancellationMessage(null);
     setBusyId(row.bookingId);
     setError(null);
     try {
       const result = await cancelBookingAction({ bookingId: row.bookingId });
       if (!result.ok) setError(result.error);
-      else setRefreshKey((key) => key + 1);
+      else {
+        setRefreshKey((key) => key + 1);
+        setCancellationMessage(`Booking cancelled for ${row.memberName ?? row.walkInName ?? row.facilityName}.`);
+      }
     } catch {
       setRefreshKey((key) => key + 1);
       setError("Could not confirm the cancellation. Check the booking before trying again.");
@@ -246,6 +260,8 @@ export function BookingScreen({
   }
 
   async function requestBill(row: BookingDayRow) {
+    if (!canBill || busyId || !row.billable || row.status === "cancelled") return;
+    setCancellationMessage(null);
     setBusyId(row.bookingId);
     setError(null);
     try {
@@ -299,6 +315,7 @@ export function BookingScreen({
     return (
       <div className="space-y-4">
         {error ? <ErrorNote message={error} /> : null}
+        {cancellationMessage ? <p role="status" className="rounded-ctl bg-good-soft px-3 py-2 text-sm text-ink">{cancellationMessage}</p> : null}
         <BookingBillPanel
           key={bill.invoiceId}
           bill={bill}
@@ -329,6 +346,15 @@ export function BookingScreen({
   const calendarEvents = calendarRows.map(bookingToCalendarEvent);
   const rowById = new Map(calendarRows.map((row) => [row.bookingId, row]));
   const step = showWeek ? 7 : 1;
+  const rangeLabel = showWeek
+    ? `${formatDateIST(week[0]!)} – ${formatDateIST(week[6]!)}`
+    : formatDateIST(date);
+  const calendarTabs = (
+    <Tabs label="Calendar range" value={scope}
+      onValueChange={value => setScope(value === "week" ? "week" : value === "agenda" ? "agenda" : "day")}
+      tabs={[{ value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "agenda", label: "Agenda" }]} />
+  );
+
 
   return (
     <div className="grid gap-5 lg:grid-cols-5">
@@ -397,7 +423,22 @@ export function BookingScreen({
           </div>
         ) : null}
         {error ? <ErrorNote message={error} /> : null}
+        {cancellationMessage ? <p role="status" className="rounded-ctl bg-good-soft px-3 py-2 text-sm text-ink">{cancellationMessage}</p> : null}
 
+        {hasDate && compactOwner ? (
+          <OwnerPeriodStrip label={view === "calendar" ? "Booking calendar date" : "Booking board date"}
+            value={rangeLabel} period={showWeek ? "week" : "day"}
+            previous={{ onSelect: () => setDate(addDays(date, -step)) }}
+            next={{ onSelect: () => setDate(addDays(date, step)) }} immediate>
+            <div className="space-y-3">
+              {view === "calendar" ? calendarTabs : null}
+              <Field id="booking-board-date" label="Date" required>
+                {field => <DateField {...field} value={date} onChange={value => { if (value) setDate(value); }} />}
+              </Field>
+              <Button type="button" variant="secondary" onClick={() => setDate(today)}>Today</Button>
+            </div>
+          </OwnerPeriodStrip>
+        ) : null}
         {!hasDate ? (
           <p
             role="alert"
@@ -407,40 +448,16 @@ export function BookingScreen({
           </p>
         ) : view === "calendar" ? (
           <>
-            {/* Two control groups: the range tabs and the shared
-                navigation row keep a token gap between them. */}
+            {!compactOwner ? (
             <div className="mt-2 flex flex-col gap-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Tabs
-                  label="Calendar range"
-                  value={scope}
-                  onValueChange={(value) =>
-                    setScope(
-                      value === "week"
-                        ? "week"
-                        : value === "agenda"
-                          ? "agenda"
-                          : "day",
-                    )
-                  }
-                  tabs={[
-                    { value: "day", label: "Day" },
-                    { value: "week", label: "Week" },
-                    { value: "agenda", label: "Agenda" },
-                  ]}
-                />
-              </div>
+              {calendarTabs}
               <OwnerCalendarToolbar
                 navigation={{
                   previous: { onSelect: () => setDate(addDays(date, -step)) },
                   today: { onSelect: () => setDate(today) },
                   next: { onSelect: () => setDate(addDays(date, step)) },
                 }}
-                rangeLabel={
-                  showWeek
-                    ? `${formatDateIST(week[0]!)} – ${formatDateIST(week[6]!)}`
-                    : formatDateIST(date)
-                }
+                rangeLabel={rangeLabel}
                 timezone={timezone}
                 labels={{
                   previous: (
@@ -468,6 +485,7 @@ export function BookingScreen({
                 }}
               />
             </div>
+            ) : null}
             {calendarRead.failed ? (
               <BookingReadError
                 message={calendarRead.error}
@@ -504,6 +522,8 @@ export function BookingScreen({
                       busyId={busyId}
                       onCancel={cancel}
                       onBill={requestBill}
+                      canCancel={canCreate}
+                      canBill={canBill}
                     />
                   );
                 }}
@@ -530,6 +550,8 @@ export function BookingScreen({
                 busyId={busyId}
                 onCancel={cancel}
                 onBill={requestBill}
+                canCancel={canCreate}
+                canBill={canBill}
                 // The free hours are offered only when there is a form
                 // to choose them for.
                 slots={canCreate ? SLOT_STARTS : undefined}

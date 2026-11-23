@@ -224,6 +224,14 @@ export function TerminologyForm({
           defaults and any stored overrides.
         </p>
       ) : null}
+      <div className="owner-work-panel mb-3">
+        <label htmlFor={`vocabulary-picker-${locale}`} className="block text-sm font-medium">Go to vocabulary term</label>
+        <select id={`vocabulary-picker-${locale}`} value="" className="mt-1 min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px]"
+          onChange={event => document.getElementById(`vocabulary-${locale}-${event.target.value}`)?.focus()}>
+          <option value="" disabled>Choose a term</option>
+          {ROW_KEYS.map(row => <option key={row.key} value={row.key}>{titleCase(row.label)}</option>)}
+        </select>
+      </div>
       <ul className="space-y-3" data-testid={`terminology-form-${locale}`}>
         {ROW_KEYS.map((row) => {
           const defaults = DEFAULT_TERMS[locale][row.key];
@@ -241,7 +249,7 @@ export function TerminologyForm({
           return (
             <li key={row.key} className="bg-paper border border-line rounded-ctl p-4">
               <div className="flex items-baseline justify-between gap-2">
-                <h3 className="font-display text-[14px] font-semibold">{titleCase(row.label)}</h3>
+                <h3 id={`vocabulary-${locale}-${row.key}`} tabIndex={-1} className="font-display text-[14px] font-semibold">{titleCase(row.label)}</h3>
                 <span className="text-[11px] uppercase tracking-wide text-ink-3">
                   {isCustom ? "Custom" : "Default"}
                 </span>

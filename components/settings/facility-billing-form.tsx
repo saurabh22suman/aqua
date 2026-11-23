@@ -126,10 +126,12 @@ export function FacilityBillingForm({ initial, club }: { initial: SiteBillingSet
   const showAddress = mode === "unregistered_override" || (mode === "registered_override" && !registrationId);
   return <section className="mt-5 max-w-3xl rounded-card border border-line bg-paper p-4 sm:p-5">
     <FacilityDraftGuard dirty={!reloading && (dirty || locked)} busy={locked} />
-    <h2 className="font-display text-[16px] font-semibold">Financial identity</h2>
-    <p className="mt-1 text-[13px] text-ink-2">{saved.enabled ? "Facility billing is enabled for this site." : "This facility uses the club default for billing until you choose to use its own settings for new bills."}</p>
-    <p className="mt-2 text-[13px] text-ink-2">Saved source: {saved.choice.mode === "inherit" ? "Club default" : saved.choice.mode === "registered_override" ? "Facility registration" : "Facility unregistered"}.</p>
-    <p className="mt-1 break-words text-[13px] text-ink-2">{saved.enabled ? "Effective issuer" : "Facility-specific issuer"}: {saved.effectiveIssuer ? `${saved.effectiveIssuer.legalName} · ${saved.effectiveIssuer.gstin ?? "Unregistered"} · ${GST_STATE_NAMES[saved.effectiveIssuer.stateCode] ?? saved.effectiveIssuer.stateCode}` : saved.enabled ? "Not configured" : "Not enabled; existing billing uses the club default"}</p>
+    <section aria-label="Saved billing identity" className="owner-work-panel" aria-live="polite">
+      <h2 className="font-display text-[16px] font-semibold">Financial identity</h2>
+      <p className="mt-1 text-[13px] text-ink-2">{saved.enabled ? "Facility billing is enabled for this site." : "This facility uses the club default for billing until you choose to use its own settings for new bills."}</p>
+      <p className="mt-2 text-[13px] text-ink-2">Saved source: {saved.choice.mode === "inherit" ? "Club default" : saved.choice.mode === "registered_override" ? "Facility registration" : "Facility unregistered"}.</p>
+      <p className="mt-1 break-words text-[13px] text-ink-2">{saved.enabled ? "Effective issuer" : "Facility-specific issuer"}: {saved.effectiveIssuer ? `${saved.effectiveIssuer.legalName} · ${saved.effectiveIssuer.gstin ?? "Unregistered"} · ${GST_STATE_NAMES[saved.effectiveIssuer.stateCode] ?? saved.effectiveIssuer.stateCode}` : saved.enabled ? "Not configured" : "Not enabled; existing billing uses the club default"}</p>
+    </section>
     <label className="mt-4 block text-[13px] font-medium">Facility billing state
       <Select {...fieldProps("stateCode")} value={stateCode} onChange={(event) => setStateCode(event.target.value)} disabled={locked || uncertain}>
         <option value="">Select state</option>{GST_STATE_OPTIONS.map(([code, name]) => <option key={code} value={code}>{name}</option>)}

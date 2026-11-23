@@ -13,6 +13,7 @@ vi.mock("@/lib/actions/platform-leads", () => ({
 import { LeadActions } from "@/app/(platform)/ops/leads/[leadId]/lead-actions";
 
 const props = {
+  businessName: "Example club",
   leadId: "lead-123",
   hasLinkedTenant: true,
   linkedTenantId: "tenant-123",

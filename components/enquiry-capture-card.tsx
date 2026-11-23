@@ -65,7 +65,7 @@ export function EnquiryCaptureCard({
   onSubmit: () => void;
 }) {
   return (
-    <div className="rounded-card border border-line bg-paper p-3.5 space-y-3">
+    <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }} aria-busy={busy} className="space-y-3 rounded-card border border-line bg-paper p-4">
       <p className="text-[13px] font-medium">Quick capture</p>
 
       {/* Owner redesign (C2) — shared labelled controls. The capture
@@ -122,6 +122,7 @@ export function EnquiryCaptureCard({
               onChange={(e) => onLocationId(e.target.value)}
               data-testid="enquiry-capture-location"
             >
+              <option value="">Choose a facility</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}
@@ -130,12 +131,12 @@ export function EnquiryCaptureCard({
             </Select>
           )}
         </Field>
-      ) : null}
+      ) : locations[0] ? <p className="text-sm text-ink-2">Facility · {locations[0].name}</p> : null}
 
       <Button
         variant="primary"
         size="md"
-        onClick={onSubmit}
+        type="submit"
         disabled={busy || !fullName.trim() || !locationId}
         className="w-full"
         data-testid="enquiry-capture-submit"
@@ -148,6 +149,6 @@ export function EnquiryCaptureCard({
           {error}
         </p>
       ) : null}
-    </div>
+    </form>
   );
 }

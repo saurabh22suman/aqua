@@ -12,7 +12,10 @@ import { todayInZone, addDays } from "@/lib/time/tz";
 import { listOverdueFollowUps } from "@/lib/services/enquiries";
 import { getDailyCollection } from "@/lib/services/reconciliation";
 import { getFeesOverview } from "@/lib/services/fees-hub";
-import { listCashCountsNeedingReview } from "@/lib/services/reconciliation-closed-state";
+import {
+  listCashCountsNeedingReview,
+  type NeedsReviewCashCount,
+} from "@/lib/services/reconciliation-closed-state";
 import {
   locationPredicate,
   locationVisible,
@@ -134,6 +137,11 @@ export type OwnerDashboardData = {
   // C02 — collected today / outstanding / overdue, the figures the
   // owner home now leads with (periods stated in the labels there).
   money: OwnerMoneySummary | null;
+  // The newest cash count above the review threshold inside the caller's
+  // current facility scope. Structured rather than parsed out of the
+  // attention sentence so Owner Home can state the amount, direction,
+  // site and date truthfully. Optional for older fixtures.
+  cashReview?: NeedsReviewCashCount | null;
   // W1-6 (docs/role-surfaces-plan.md) — consolidated per-facility view.
   // Wave 1 splits member-scoped data only: batches/sessions have no
   // location column yet, so attendance here is grouped by each
@@ -680,6 +688,7 @@ export async function getOwnerDashboard(
       todaysLanes,
       nextClass,
       money: moneySummary,
+      cashReview: reviewCashCounts[0] ?? null,
       facilityBreakdown,
     };
   });

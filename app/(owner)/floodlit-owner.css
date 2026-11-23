@@ -1,0 +1,757 @@
+/* Exact self-hosted faces from the approved Floodlit reference. */
+@font-face {
+  font-family: "Floodlit Display";
+  src: url("../../docs/design/floodlit-owner-2026-11-20/barlow-condensed-bold-latin.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Floodlit Text";
+  src: url("../../docs/design/floodlit-owner-2026-11-20/dm-sans-latin.woff2") format("woff2");
+  font-weight: 100 1000;
+  font-display: swap;
+}
+
+[data-owner-surface]:has([data-floodlit-owner]) {
+  background: #f4f2f6;
+  font-family: "Floodlit Text", system-ui, sans-serif;
+}
+[data-owner-surface]:has([data-floodlit-owner][data-floodlit-sport="pool"]) {
+  background: #eff4f2;
+}
+[data-owner-surface]:has([data-floodlit-owner]) .courtside-toolbar {
+  background: var(--paper);
+}
+@media (max-width: 620px) {
+  [data-owner-surface]:has([data-floodlit-owner]) .courtside-toolbar {
+    min-height: 59px;
+    padding-block: 6px;
+  }
+}
+@media (min-width: 1024px) {
+  [data-owner-surface]:has([data-floodlit-owner]) [data-testid="owner-sidebar"] {
+    width: 220px;
+  }
+}
+
+[data-floodlit-owner] {
+  --floodlit-display: "Floodlit Display";
+  --floodlit-body: "Floodlit Text";
+  /* Reference palette, Court (racquet) preset. */
+  --floodlit-canvas: #f4f2f6;
+  --floodlit-paper: #fff;
+  --floodlit-ink: #231d38;
+  --floodlit-soft: #5d546c;
+  --floodlit-line: #e7e1ed;
+  --floodlit-purple: #4e3691;
+  --floodlit-accent: #583e9c;
+  --floodlit-selected: #eee8fa;
+  --floodlit-hero: #12132d;
+  --floodlit-hero-ink: #fff9ff;
+  --floodlit-hero-muted: #ede3fb;
+  --floodlit-ice: #d7c6fc;
+  --floodlit-gold: #f8d69c;
+  --floodlit-wash: #fff4e5;
+  --floodlit-warm: #784a21;
+
+  /* The app's semantic focus ring on light surfaces; the reference's gold on
+     the dark stage, where the theme ring does not carry 3:1. */
+  --floodlit-focus: var(--focus-ring);
+  --floodlit-focus-stage: var(--floodlit-gold);
+
+  background: var(--floodlit-canvas);
+  color: var(--floodlit-ink);
+  font: 14px/1.45 var(--floodlit-body, "DM Sans", system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Aquatics preset: same layout, verified pool artwork and warm/teal palette. */
+[data-floodlit-owner][data-floodlit-sport="pool"],
+[data-floodlit-owner] [data-floodlit-sport="pool"] {
+  --floodlit-canvas: #eff4f2;
+  --floodlit-ink: #182f2c;
+  --floodlit-soft: #4c625e;
+  --floodlit-line: #dce8e4;
+  --floodlit-purple: #155d50;
+  --floodlit-accent: #176653;
+  --floodlit-selected: #dff1e9;
+  --floodlit-hero: #061c23;
+  --floodlit-hero-muted: #e5f6f0;
+  --floodlit-ice: #aee5d6;
+  --floodlit-wash: #fbf1df;
+  --floodlit-warm: #70461c;
+}
+
+[data-floodlit-owner].floodlit-workspace,
+[data-floodlit-owner] .floodlit-workspace {
+  width: min(100%, 1510px);
+  min-width: 0;
+  margin-inline: auto;
+  padding: 23px clamp(21px, 3.3vw, 48px) 35px;
+  outline: none;
+}
+
+/* ── Photographic stage ─────────────────────────────────────────────── */
+[data-floodlit-owner] .floodlit-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 362px;
+  padding: 20px 26px 23px;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--floodlit-hero);
+  color: var(--floodlit-hero-ink);
+}
+[data-floodlit-owner] .floodlit-hero::before,
+[data-floodlit-owner] .floodlit-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+[data-floodlit-owner] .floodlit-hero::before {
+  background-image: url("../../docs/design/floodlit-owner-2026-11-20/court.webp");
+  background-size: cover;
+  background-position: right 57%;
+}
+[data-floodlit-owner][data-floodlit-sport="pool"] .floodlit-hero::before,
+[data-floodlit-owner] [data-floodlit-sport="pool"] .floodlit-hero::before,
+[data-floodlit-owner] .floodlit-hero[data-floodlit-sport="pool"]::before {
+  background-image: url("../../docs/design/floodlit-owner-2026-11-20/pool.webp");
+}
+[data-floodlit-owner] .floodlit-hero::after {
+  background:
+    linear-gradient(90deg, var(--floodlit-hero) 0%, color-mix(in srgb, var(--floodlit-hero) 94%, transparent) 22%, color-mix(in srgb, var(--floodlit-hero) 73%, transparent) 52%, transparent 81%),
+    linear-gradient(0deg, color-mix(in srgb, var(--floodlit-hero) 97%, transparent), transparent 48%);
+}
+[data-floodlit-owner][data-contrast="high"] .floodlit-hero::after,
+[data-contrast="high"] [data-floodlit-owner] .floodlit-hero::after {
+  background:
+    linear-gradient(90deg, var(--floodlit-hero), color-mix(in srgb, var(--floodlit-hero) 84%, transparent) 63%, color-mix(in srgb, var(--floodlit-hero) 33%, transparent)),
+    linear-gradient(0deg, var(--floodlit-hero), transparent 52%);
+}
+
+[data-floodlit-owner] .floodlit-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+[data-floodlit-owner] .floodlit-hero-top > * { min-width: 0; }
+[data-floodlit-owner] .floodlit-date {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--floodlit-hero-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+[data-floodlit-owner] .floodlit-date svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The authorized facility picker uses a dark surface inside the stage. */
+[data-floodlit-owner] .floodlit-hero-top :is(select, [data-testid="facility-switcher"]) {
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #ffffff65;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--floodlit-hero) 86%, transparent);
+  color: var(--floodlit-hero-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+[data-floodlit-owner] .floodlit-hero-top .floodlit-scope {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--floodlit-hero-ink);
+}
+[data-floodlit-owner] .floodlit-hero-top select {
+  max-width: 180px;
+  padding: 0 30px 0 12px;
+}
+[data-floodlit-owner] .floodlit-hero-top select[data-testid="facility-switcher"] {
+  padding-left: 34px;
+}
+[data-floodlit-owner] .floodlit-hero-top option {
+  background: var(--floodlit-paper);
+  color: var(--floodlit-ink);
+}
+[data-floodlit-owner] .floodlit-hero-top [data-testid="facility-switcher"] ~ svg,
+[data-floodlit-owner] .floodlit-hero-top .floodlit-scope svg {
+  color: var(--floodlit-ice);
+}
+
+[data-floodlit-owner] .floodlit-hero h1.floodlit-title {
+  margin: 0;
+  font: 700 clamp(57px, 5.6vw, 85px)/.95 var(--floodlit-display, "Barlow Condensed", "Arial Narrow", system-ui, sans-serif);
+  letter-spacing: -.027em;
+  overflow-wrap: anywhere;
+}
+
+/* ── Finance inside the stage ───────────────────────────────────────── */
+[data-floodlit-owner] .floodlit-financial {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+  gap: 0;
+  width: min(100%, 550px);
+  margin-top: 27px;
+}
+[data-floodlit-owner] .floodlit-financial :is(dl, dt, dd) { margin: 0; }
+[data-floodlit-owner] .floodlit-metric {
+  min-width: 0;
+  padding: 0 14px 0 0;
+}
+[data-floodlit-owner] .floodlit-metric + .floodlit-metric {
+  padding: 0 0 0 21px;
+  border-left: 1px solid #f6edff50;
+}
+[data-floodlit-owner] :is(.floodlit-metric-title, .floodlit-metric [data-testid="owner-floodlit-metric-label"]) {
+  color: var(--floodlit-hero-muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.23;
+}
+[data-floodlit-owner] .floodlit-metric-value {
+  margin: 5px 0 2px;
+  font: 700 clamp(43px, 4.7vw, 67px)/1.02 var(--floodlit-display, "Barlow Condensed", "Arial Narrow", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.021em;
+  overflow-wrap: anywhere;
+}
+@media (min-width: 621px) {
+  [data-floodlit-owner] .floodlit-metric-value[data-wide-amount] {
+    font-size: clamp(34px, 3.9vw, 56px);
+    line-height: 1.22;
+  }
+}
+[data-floodlit-owner] :is(.floodlit-rupee, .floodlit-metric-value .rupee) {
+  margin-right: .1em;
+  font-family: var(--floodlit-body, "DM Sans", system-ui, sans-serif);
+  font-size: .57em;
+  font-weight: 700;
+  vertical-align: .12em;
+}
+
+/* Quiet text actions (payments / open invoices) stay 44px on phones. */
+[data-floodlit-owner] :is(.floodlit-metric-btn, .floodlit-metric-link, .floodlit-text-btn) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--floodlit-ice);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: left;
+}
+[data-floodlit-owner] :is(.floodlit-metric-btn, .floodlit-metric-link, .floodlit-text-btn):hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+[data-floodlit-owner] :is(.floodlit-metric-btn, .floodlit-metric-link, .floodlit-text-btn) svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-floodlit-owner] .floodlit-overdue {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin-top: 3px;
+  color: var(--floodlit-hero-muted);
+  font-size: 13px;
+}
+[data-floodlit-owner] .floodlit-overdue-line svg {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+[data-floodlit-owner] .floodlit-overdue svg {
+  width: 14px;
+  height: 14px;
+  color: var(--floodlit-gold);
+}
+[data-floodlit-owner] .floodlit-overdue strong {
+  color: var(--floodlit-gold);
+  font-variant-numeric: tabular-nums;
+}
+[data-floodlit-owner] .floodlit-overdue a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--floodlit-gold);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+[data-floodlit-owner] .floodlit-change-in {
+  animation: floodlit-fade-in .3s ease-out both;
+}
+@keyframes floodlit-fade-in {
+  from { opacity: .46; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Warm priority strip ────────────────────────────────────────────── */
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 14px 17px;
+  border: 1px solid color-mix(in srgb, var(--floodlit-warm) 18%, var(--floodlit-wash));
+  border-radius: 15px;
+  background: var(--floodlit-wash);
+  color: var(--floodlit-ink);
+}
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]).quiet {
+  border-color: var(--floodlit-line);
+  background: var(--floodlit-paper);
+}
+[data-floodlit-owner] .floodlit-priority-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--floodlit-warm) 11%, var(--floodlit-wash));
+  color: var(--floodlit-warm);
+}
+[data-floodlit-owner] .floodlit-priority-icon svg { width: 18px; height: 18px; }
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]).quiet .floodlit-priority-icon {
+  background: var(--floodlit-selected);
+  color: var(--floodlit-accent);
+}
+[data-floodlit-owner] :is(.floodlit-priority-context, .floodlit-priority .courtside-priority-label) {
+  color: var(--floodlit-warm);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .085em;
+  text-transform: uppercase;
+}
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) h2 {
+  margin-top: 2px;
+  color: var(--floodlit-ink);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+[data-floodlit-owner] :is(.floodlit-priority-detail, .floodlit-priority .courtside-priority-reason) {
+  margin-top: 3px;
+  color: var(--floodlit-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ── Shared actions in this composition ─────────────────────────────── */
+[data-floodlit-owner] :is(.floodlit-priority, .floodlit-workspace) .floodlit-button,
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) :is(.button, .courtside-primary) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 8px 13px;
+  border: 1px solid var(--floodlit-line);
+  border-radius: 9px;
+  background: var(--floodlit-paper);
+  color: var(--floodlit-ink);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-decoration: none;
+}
+[data-floodlit-owner] :is(.floodlit-priority, .floodlit-workspace) .floodlit-button:hover,
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) :is(.button, .courtside-primary):hover {
+  background: var(--floodlit-selected);
+}
+[data-floodlit-owner] :is(.floodlit-priority, .floodlit-workspace) :is(.floodlit-button.primary, .button.primary),
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) .courtside-primary {
+  border-color: var(--floodlit-ink);
+  background: var(--floodlit-ink);
+  color: var(--floodlit-paper);
+}
+[data-floodlit-owner] :is(.floodlit-priority, .floodlit-workspace) :is(.floodlit-button.primary, .button.primary):hover,
+[data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) .courtside-primary:hover {
+  background: var(--floodlit-ink);
+  filter: brightness(1.25);
+}
+[data-floodlit-owner] :is(.floodlit-priority, .floodlit-workspace) .button .icon,
+[data-floodlit-owner] :is(.floodlit-priority, .floodlit-workspace) .floodlit-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Agenda + collections ───────────────────────────────────────────── */
+[data-floodlit-owner] .floodlit-support {
+  display: grid;
+  grid-template-columns: minmax(0, 1.32fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+  margin-top: 13px;
+}
+[data-floodlit-owner] .floodlit-support-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-floodlit-owner] .floodlit-support > * { min-width: 0; }
+
+[data-floodlit-owner] .floodlit-support :is(.floodlit-panel, [data-testid="owner-home-today"], [data-testid="owner-home-attention"], .courtside-workspace-trend),
+[data-floodlit-owner] .floodlit-support > section {
+  min-width: 0;
+  border: 1px solid var(--floodlit-line);
+  border-radius: 16px;
+  background: var(--floodlit-paper);
+  color: var(--floodlit-ink);
+}
+
+[data-floodlit-owner] .floodlit-panel { padding: 0; }
+[data-floodlit-owner] .floodlit-panel-body { padding: 9px 14px 12px; }
+[data-floodlit-owner] .floodlit-panel-head,
+[data-floodlit-owner] .floodlit-support > section > :first-child:not(ul):not(ol):not(details) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--floodlit-line);
+}
+[data-floodlit-owner] .floodlit-support > section > :first-child:not(ul):not(ol):not(details) > :first-child {
+  min-width: 0;
+  flex: 1;
+}
+[data-floodlit-owner] .floodlit-support h2 {
+  margin: 0;
+  color: var(--floodlit-ink);
+  font-family: var(--floodlit-body, "DM Sans", system-ui, sans-serif);
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -.033em;
+  line-height: 1.18;
+}
+[data-floodlit-owner] .floodlit-panel-head p {
+  margin-top: 2px;
+  color: var(--floodlit-soft);
+  font-size: 12px;
+}
+[data-floodlit-owner] :is(.floodlit-panel-head, .floodlit-support > section > :first-child) :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--floodlit-accent);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+[data-floodlit-owner] :is(.floodlit-panel-head, .floodlit-support > section > :first-child) :is(a, button):hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+[data-floodlit-owner] :is(.floodlit-day-nav, .floodlit-panel-head) .floodlit-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--floodlit-line);
+  border-radius: 9px;
+  background: var(--floodlit-paper);
+  color: var(--floodlit-ink);
+}
+
+[data-floodlit-owner] :is(.floodlit-agenda-list, .floodlit-agenda ul, [data-testid="owner-home-today"] ul) {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-floodlit-owner] :is(.floodlit-agenda-row, [data-testid="owner-home-today"] li) {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+  min-height: 61px;
+  padding: 9px 15px;
+  border-top: 1px solid var(--floodlit-line);
+}
+[data-floodlit-owner] :is(.floodlit-agenda-row, [data-testid="owner-home-today"] li):first-child { border-top: 0; }
+[data-floodlit-owner] :is(.floodlit-agenda-row, [data-testid="owner-home-today"] li) time {
+  min-width: 43px;
+  padding: 0;
+  color: var(--floodlit-ink);
+  font: 700 22px/1 var(--floodlit-display, "Barlow Condensed", "Arial Narrow", system-ui, sans-serif);
+  font-variant-numeric: tabular-nums;
+}
+[data-floodlit-owner] .floodlit-next-session {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 11px;
+  border-top: 1px solid var(--floodlit-line);
+  padding: 10px 14px;
+}
+[data-floodlit-owner] .floodlit-next-session time {
+  font: 700 22px/1 var(--floodlit-display), system-ui, sans-serif;
+}
+[data-floodlit-owner] .floodlit-next-session h3 {
+  font: 700 13px/1.3 var(--floodlit-body), system-ui, sans-serif;
+}
+[data-floodlit-owner] :is(.floodlit-next-label, .floodlit-next-meta) {
+  color: var(--floodlit-soft);
+  font-size: 12px;
+}
+[data-floodlit-owner] .floodlit-next-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--floodlit-accent);
+  font-size: 12px;
+  font-weight: 750;
+}
+[data-floodlit-owner] .floodlit-next-link:hover { text-decoration: underline; }
+
+[data-floodlit-owner] .floodlit-row-text {
+  flex: 1;
+  min-width: 0;
+}
+[data-floodlit-owner] :is(.floodlit-row-text, [data-testid="owner-home-today"] li) p,
+[data-floodlit-owner] :is(.floodlit-row-text, [data-testid="owner-home-today"] li) strong {
+  display: block;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+[data-floodlit-owner] :is(.floodlit-row-text, [data-testid="owner-home-today"] li) :is(small, [data-testid="session-meta"]) {
+  display: block;
+  margin-top: 2px;
+  color: var(--floodlit-soft);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+[data-floodlit-owner] :is(.floodlit-state, [data-testid="session-state-pill"] > span) {
+  flex: none;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+[data-floodlit-owner] :is(.floodlit-trend-readout, .courtside-trend-readout) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  margin-top: 9px;
+  color: var(--floodlit-soft);
+  font-size: 12px;
+}
+[data-floodlit-owner] :is(.floodlit-trend-readout, .courtside-trend-readout) :is(output, strong) {
+  color: var(--floodlit-ink);
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-floodlit-owner] :is(.floodlit-chart, .courtside-trend-chart) {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+  gap: 8px;
+  height: 108px;
+  margin-top: 7px;
+  padding: 0;
+  overflow: visible;
+  background: none;
+}
+[data-floodlit-owner] :is(.floodlit-chart, .courtside-trend-chart)::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 20px;
+  background: repeating-linear-gradient(to top, var(--floodlit-line) 0 1px, transparent 1px 27px);
+  pointer-events: none;
+}
+[data-floodlit-owner] :is(.floodlit-chart, .courtside-trend-chart) :is(.floodlit-bar, button) {
+  z-index: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 20px;
+  align-items: end;
+  justify-items: stretch;
+  gap: 0;
+  min-width: 0;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--floodlit-soft);
+  font-size: 11px;
+  font-weight: 650;
+}
+[data-floodlit-owner] :is(.floodlit-chart, .courtside-trend-chart) :is(.floodlit-bar i, .floodlit-bar-fill, .courtside-trend-bar-track span) {
+  display: block;
+  height: max(4px, var(--height, 4px));
+  border: 0;
+  border-radius: 6px 6px 2px 2px;
+  background: color-mix(in srgb, var(--floodlit-accent) 56%, var(--floodlit-selected));
+  transition: background .16s ease;
+}
+[data-floodlit-owner] :is(.floodlit-chart, .courtside-trend-chart) :is(.floodlit-bar[aria-pressed="true"] i, .floodlit-bar:hover i, button[aria-pressed="true"] .courtside-trend-bar-track span, button:hover .courtside-trend-bar-track span) {
+  background: var(--floodlit-accent);
+}
+
+[data-floodlit-owner] :is(.floodlit-empty, .floodlit-support .empty) {
+  padding: 16px;
+  color: var(--floodlit-soft);
+}
+
+/* ── Focus and motion ───────────────────────────────────────────────── */
+[data-floodlit-owner] :where(a, button, select, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--floodlit-focus);
+  outline-offset: 3px;
+}
+[data-floodlit-owner] .floodlit-hero :where(a, button, select):focus-visible {
+  outline-color: var(--floodlit-focus-stage);
+}
+
+/* ── Responsive reference geometry ──────────────────────────────────── */
+@media (max-width: 620px) {
+  [data-floodlit-owner].floodlit-workspace,
+  [data-floodlit-owner] .floodlit-workspace {
+    padding: 10px 11px 35px;
+  }
+  [data-floodlit-owner] .floodlit-hero {
+    min-height: 325px;
+    padding: 10px 13px 14px;
+    border-radius: 17px;
+  }
+  [data-floodlit-owner] .floodlit-hero-top {
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  [data-floodlit-owner] .floodlit-date { gap: 4px; font-size: 11px; }
+  [data-floodlit-owner] .floodlit-date svg { width: 13px; height: 13px; }
+  [data-floodlit-owner] .floodlit-hero-top select { max-width: 155px; font-size: 11px; }
+  [data-floodlit-owner] .floodlit-hero::before { background-position: 79% center; }
+  [data-floodlit-owner] .floodlit-hero::after {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--floodlit-hero) 91%, transparent) 0%, color-mix(in srgb, var(--floodlit-hero) 66%, transparent) 24%, transparent 45%, color-mix(in srgb, var(--floodlit-hero) 92%, transparent) 62%, var(--floodlit-hero) 100%),
+      linear-gradient(90deg, color-mix(in srgb, var(--floodlit-hero) 55%, transparent), transparent);
+  }
+  [data-floodlit-owner][data-contrast="high"] .floodlit-hero::after,
+  [data-contrast="high"] [data-floodlit-owner] .floodlit-hero::after {
+    background: linear-gradient(180deg, var(--floodlit-hero) 0%, color-mix(in srgb, var(--floodlit-hero) 74%, transparent) 40%, var(--floodlit-hero) 73%);
+  }
+  [data-floodlit-owner] .floodlit-hero h1.floodlit-title { font-size: 53px; }
+  [data-floodlit-owner] .floodlit-financial {
+    grid-template-columns: minmax(0, 1.03fr) minmax(0, 1fr);
+    margin-top: 80px;
+  }
+  [data-floodlit-owner] .floodlit-metric { padding-right: 8px; }
+  [data-floodlit-owner] .floodlit-metric + .floodlit-metric { padding-left: 10px; }
+  [data-floodlit-owner] :is(.floodlit-metric-title, .floodlit-metric [data-testid="owner-floodlit-metric-label"]) { font-size: 12px; }
+  [data-floodlit-owner] .floodlit-metric-value { font-size: clamp(30px, 9.5vw, 49px); }
+  [data-floodlit-owner] .floodlit-metric-btn { min-height: 44px; font-size: 11.5px; }
+  [data-floodlit-owner] .floodlit-overdue { margin-top: 1px; font-size: 12px; }
+
+  [data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 7px 9px;
+    margin-top: 9px;
+    padding: 10px 11px;
+    border-radius: 13px;
+  }
+  [data-floodlit-owner] .floodlit-priority-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    align-self: start;
+  }
+  [data-floodlit-owner] .floodlit-priority-icon svg { width: 15px; height: 15px; }
+  [data-floodlit-owner] :is(.floodlit-priority-context, .floodlit-priority .courtside-priority-label) { font-size: 10px; }
+  [data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) h2 { font-size: 17px; }
+  [data-floodlit-owner] :is(.floodlit-priority-detail, .floodlit-priority .courtside-priority-reason) {
+    margin-top: 2px;
+    font-size: 12px;
+  }
+  [data-floodlit-owner] :is(.floodlit-priority, [data-testid="owner-home-priority"]) :is(.floodlit-button, .button, .courtside-primary) {
+    grid-column: 2;
+    justify-self: start;
+    min-height: 44px;
+    padding-inline: 10px;
+    font-size: 12px;
+  }
+
+  [data-floodlit-owner] .floodlit-support {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    margin-top: 9px;
+  }
+  [data-floodlit-owner] .floodlit-support :is(.floodlit-panel, [data-testid="owner-home-today"], [data-testid="owner-home-attention"], .courtside-workspace-trend),
+  [data-floodlit-owner] .floodlit-support > section { border-radius: 13px; }
+  [data-floodlit-owner] .floodlit-panel-head,
+  [data-floodlit-owner] .floodlit-support > section > :first-child:not(ul):not(ol):not(details) {
+    padding: 8px 11px;
+  }
+  [data-floodlit-owner] .floodlit-support h2 { font-size: 19px; }
+  [data-floodlit-owner] :is(.floodlit-agenda-row, [data-testid="owner-home-today"] li) { padding-inline: 11px; }
+}
+
+@media (max-width: 350px) {
+  [data-floodlit-owner] .floodlit-hero h1.floodlit-title { font-size: 46px; }
+  [data-floodlit-owner] :is(.floodlit-metric-title, .floodlit-metric [data-testid="owner-floodlit-metric-label"]) { min-height: 2.45em; }
+  [data-floodlit-owner] .floodlit-financial { margin-top: 64px; }
+  [data-floodlit-owner] .floodlit-hero::after {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--floodlit-hero) 93%, transparent), color-mix(in srgb, var(--floodlit-hero) 77%, transparent) 32%, transparent 43%, color-mix(in srgb, var(--floodlit-hero) 92%, transparent) 55%, var(--floodlit-hero) 100%),
+      linear-gradient(90deg, color-mix(in srgb, var(--floodlit-hero) 60%, transparent), transparent);
+  }
+  [data-floodlit-owner] :is(.floodlit-agenda-row, [data-testid="owner-home-today"] li) {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  [data-floodlit-owner] :is(.floodlit-agenda-row, [data-testid="owner-home-today"] li) time {
+    min-width: 36px;
+    font-size: 20px;
+  }
+  [data-floodlit-owner] :is(.floodlit-state, [data-testid="session-state-pill"] > span) {
+    padding-inline: 5px;
+    font-size: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-floodlit-owner],
+  [data-floodlit-owner] *,
+  [data-floodlit-owner] *::before,
+  [data-floodlit-owner] *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

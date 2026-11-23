@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { Loader2, Save, X } from "lucide-react";
 import { inviteStaffAction } from "@/lib/actions/staff-invitations";
@@ -14,7 +14,6 @@ const ROLE_OPTIONS = [
   { key: "coach", label: "Coach" },
   { key: "receptionist", label: "Receptionist" },
   { key: "worker", label: "Worker" },
-  { key: "accountant", label: "Accountant" },
   { key: "manager", label: "Manager" },
 ] as const;
 
@@ -28,6 +27,12 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
   const [scope, setScope] = useState<"selected" | "all" | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{
+    phone?: string;
+    fullName?: string;
+  }>({});
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   // Tenant-wide is an explicit choice, never inferred from a blank list.
   const isManager = roleKey === "manager";
@@ -41,6 +46,23 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
 
   async function submit() {
     if (scopeMissing) return;
+    // A disabled action with no explanation is a dead end. Validate here,
+    // put the message beside the field and take the focus there, so a
+    // keyboard or screen-reader user is never left guessing.
+    const nextErrors: { phone?: string; fullName?: string } = {};
+    if (phone.trim().length === 0) {
+      nextErrors.phone = "Enter the staff member's phone number.";
+    }
+    if (fullName.trim().length === 0) {
+      nextErrors.fullName = "Enter the staff member's full name.";
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      if (nextErrors.phone) phoneRef.current?.focus();
+      else nameRef.current?.focus();
+      return;
+    }
+    setFieldErrors({});
     setError(null);
     setPending(true);
     try {
@@ -72,13 +94,21 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
           id="invite-phone-field"
           label="Phone number (with country code)"
           description="Country code first. After inviting, generate a login link and share it directly with the person."
+          error={fieldErrors.phone}
+          required
         >
           {(field) => (
             <Input
               {...field}
+              ref={phoneRef}
               type="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (fieldErrors.phone) {
+                  setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+                }
+              }}
               placeholder="+919876543210"
               className="font-mono"
               data-testid="invite-phone"
@@ -87,13 +117,24 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
         </Field>
       </div>
       <div className="mb-4">
-        <Field id="invite-name-field" label="Full name">
+        <Field
+          id="invite-name-field"
+          label="Full name"
+          error={fieldErrors.fullName}
+          required
+        >
           {(field) => (
             <Input
               {...field}
+              ref={nameRef}
               type="text"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (fieldErrors.fullName) {
+                  setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+                }
+              }}
               placeholder="Rehan Mehta"
               maxLength={200}
               data-testid="invite-name"
@@ -161,21 +202,24 @@ export function StaffInviteForm({ locations }: { locations: LocationOption[] }) 
 
       {scopeMissing ? (
         <p
-          className="mb-4 text-[13px] text-ink-2"
-          role="alert"
+          className="mb-4 text-[13px] text-ink-3"
           data-testid="invite-manager-facilities-required"
         >
-          Choose at least one facility, or explicitly choose the whole academy.
+          Choose selected facilities or the whole academy to continue.
         </p>
       ) : null}
 
-      {!scopeMissing ? (
-        <p className="mb-4 text-[13px] text-ink-2" data-testid="invite-scope-summary">
-          {ROLE_OPTIONS.find((role) => role.key === roleKey)?.label} — {scope === "all"
-            ? "whole academy, including future facilities"
-            : locations.filter((location) => locationIds.includes(location.id)).map((location) => location.name).join(", ")}
-        </p>
-      ) : null}
+      <section aria-label="Invitation review" className="owner-work-panel mb-4">
+        <h2 className="text-sm font-semibold">Review invitation</h2>
+        {fullName.trim() || phone.trim() ? <p className="mt-1 break-words text-sm">{[fullName.trim(), phone.trim()].filter(Boolean).join(" · ")}</p> : null}
+        {scopeMissing ? <p className="mt-1 text-sm text-ink-2">{ROLE_OPTIONS.find(role => role.key === roleKey)?.label}</p> : (
+          <p className="mt-1 text-sm text-ink-2" data-testid="invite-scope-summary">
+            {ROLE_OPTIONS.find(role => role.key === roleKey)?.label} — {scope === "all"
+              ? "whole academy, including future facilities"
+              : locations.filter(location => locationIds.includes(location.id)).map(location => location.name).join(", ")}
+          </p>
+        )}
+      </section>
       {scope === "selected" && !isManager ? (
         <p className="mb-4 text-[13px] text-ink-2">Club-wide records without an assigned site may also be visible.</p>
       ) : null}

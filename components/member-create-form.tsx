@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { AlertTriangle } from "lucide-react";
@@ -28,7 +28,7 @@ import {
 
 type GuardianChoice =
   | { mode: "none" }
-  | { mode: "existing"; personId: string; label: string }
+  | { mode: "existing"; personId: string; label: string; phone: string | null }
   | { mode: "new" };
 
 type ValidationIssue = { key: string; id: string; testId: string; label: string; message: string };
@@ -38,6 +38,7 @@ export function MemberCreateForm({
   initialLocationId,
   cancelHref,
   memberDetailBasePath = "/owner/members",
+  layout = "owner",
   terminology,
 }: {
   locations: LocationOption[];
@@ -48,6 +49,7 @@ export function MemberCreateForm({
   // staff land somewhere they can immediately enrol the member in a
   // batch (B3), not a generic "done" screen.
   memberDetailBasePath?: string;
+  layout?: "owner" | "reception";
   // Closed-key vocab resolved by the parent server page (L3 audit).
   // Two surface strings ("Guardian required", "the guardian's
   // details") route through here so a swim / gym / football tenant
@@ -68,6 +70,8 @@ export function MemberCreateForm({
 
   const [guardianQuery, setGuardianQuery] = useState("");
   const [guardianResults, setGuardianResults] = useState<PersonSearchRow[]>([]);
+  const [guardianSearchState, setGuardianSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const guardianSearchVersion = useRef(0);
   const [guardian, setGuardian] = useState<GuardianChoice>({ mode: "none" });
   const [guardianName, setGuardianName] = useState("");
   const [guardianPhone, setGuardianPhone] = useState("");
@@ -123,13 +127,22 @@ export function MemberCreateForm({
     ? isMinor(dateOfBirth, "Asia/Kolkata") : null;
 
   async function runGuardianSearch(query: string) {
+    const version = ++guardianSearchVersion.current;
     setGuardianQuery(query);
+    setGuardianResults([]);
     if (query.trim().length < 2) {
-      setGuardianResults([]);
+      setGuardianSearchState("idle");
       return;
     }
-    const results = await searchPersonsAction(query);
-    setGuardianResults(results);
+    setGuardianSearchState("loading");
+    try {
+      const results = await searchPersonsAction(query.trim());
+      if (version !== guardianSearchVersion.current) return;
+      setGuardianResults(results);
+      setGuardianSearchState("ready");
+    } catch {
+      if (version === guardianSearchVersion.current) setGuardianSearchState("failed");
+    }
   }
 
   // Guardian-not-present is a real, expected state for a minor with no
@@ -224,6 +237,26 @@ export function MemberCreateForm({
     }
   }
 
+  const locationField = (
+    <Field id="member-location-field" label="Location" error={issues.find((issue) => issue.key === "location")?.message}>
+      {(field) => (
+        <Select
+          {...field}
+          value={locationId}
+          onChange={(e) => { setLocationId(e.target.value); setIssues((current) => current.filter((issue) => issue.key !== "location")); }}
+          data-testid="member-location"
+        >
+          {initialLocation === "" ? <option value="" disabled>Choose a location</option> : null}
+          {locations.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </Select>
+      )}
+    </Field>
+  );
+
   return (
     // Owner UX audit (high) — the save bar is sticky, so while the
     // form is longer than the viewport it FLOATS over whatever is at
@@ -236,15 +269,33 @@ export function MemberCreateForm({
     // it pins above, so the last section can always scroll clear of
     // both. Everything stays visible and reachable.
     <div className="space-y-5">
+      {layout === "owner" ? (
+        <nav aria-label="Registration sections" className="owner-section-links">
+          {[
+            { id: "registration-identity", label: "Personal details" },
+            { id: "intake-club", label: "Facility" },
+            { id: "member-consent-heading", label: "Consent" },
+          ].map(section => (
+            <button key={section.id} type="button" aria-controls={section.id}
+              onClick={() => document.getElementById(section.id)?.focus()}>{section.label}</button>
+          ))}
+        </nav>
+      ) : null}
       {issues.length ? <section data-member-error-summary aria-labelledby="member-errors-heading" className="rounded-ctl border border-line bg-paper p-4">
         <h2 id="member-errors-heading" className="font-semibold">Check the following details</h2>
         <ul className="mt-2 list-inside list-disc text-[13px] text-ink-2">{issues.map((issue) => <li key={issue.key}><a href={`#${issue.id}`} className="inline-flex min-h-11 items-center underline underline-offset-2" onClick={(event) => { event.preventDefault(); focusField(issue.testId); }}>{issue.label}</a></li>)}</ul>
       </section> : null}
-      <section className="space-y-2.5">
+      {layout === "reception" ? (
+        <section aria-labelledby="intake-club" className="space-y-2 rounded-card border border-line bg-paper p-4">
+          <h2 id="intake-club" className="text-[15px] font-semibold">Registration club</h2>
+          {locationField}
+        </section>
+      ) : null}
+      <section className={layout === "reception" ? "space-y-2.5 rounded-card border border-line bg-paper p-4" : "space-y-2.5"}>
         {/* OpenPen owner reference — full name first, then paired fields at
             ≥sm so the editor reads as a bounded form rather than a long
             queue of controls. On 390px every field is one column. */}
-        <h2 className="font-display text-[16px] font-semibold">
+        <h2 id="registration-identity" tabIndex={-1} className="font-display text-[16px] font-semibold">
           Personal details
         </h2>
         <Field id="member-full-name-field" label="Full name" error={issues.find((issue) => issue.key === "name")?.message}>
@@ -293,26 +344,11 @@ export function MemberCreateForm({
               />
             )}
           </Field>
-          <Field id="member-location-field" label="Location" error={issues.find((issue) => issue.key === "location")?.message}>
-            {(field) => (
-              <Select
-                {...field}
-                value={locationId}
-                onChange={(e) => { setLocationId(e.target.value); setIssues((current) => current.filter((issue) => issue.key !== "location")); }}
-                data-testid="member-location"
-              >
-                {initialLocation === "" ? <option value="" disabled>Choose a location</option> : null}
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
+          {layout === "reception" ? (<>
           {initialLocationId === "" && !locationId ? (
             <p className="text-sm text-ink-3">The selected {resolveTerm(terminology, "facility", 1)} is unavailable. Choose an available {resolveTerm(terminology, "facility", 1)} to continue.</p>
           ) : null}
+          </>) : null}
         </div>
         <Field id="member-gender-field" label="Gender (optional)">
           {(field) => (
@@ -353,10 +389,14 @@ export function MemberCreateForm({
 
           {guardian.mode === "existing" ? (
             <div className="flex items-center justify-between rounded-ctl bg-water-soft px-3 py-2">
-              <span className="text-[13px] text-water">{guardian.label}</span>
+              <div className="min-w-0">
+                <p className="text-[12px] font-medium text-ink-2">Selected guardian</p>
+                <p className="break-words text-[14px] font-medium text-ink">{guardian.label}</p>
+                {guardian.phone ? <p className="text-[13px] text-ink-2">{formatPhoneIN(guardian.phone)}</p> : null}
+              </div>
               <button
                 type="button"
-                onClick={() => setGuardian({ mode: "none" })}
+                onClick={() => { setGuardian({ mode: "none" }); void runGuardianSearch(""); }}
                 className="inline-flex items-center min-h-[44px] px-2 text-[12px] text-ink-3 underline"
               >
                 Change
@@ -380,6 +420,14 @@ export function MemberCreateForm({
                   />
                 )}
               </Field>
+              {guardianSearchState === "loading" ? <p role="status" className="text-[13px] text-ink-2">Searching guardians…</p> : null}
+              {guardianSearchState === "ready" && guardianResults.length === 0 ? <p role="status" className="text-[13px] text-ink-2">No matching guardian.</p> : null}
+              {guardianSearchState === "failed" ? (
+                <div className="rounded-ctl border border-line bg-paper px-3 py-2">
+                  <p role="alert" className="text-[13px] text-ink">Could not search guardians.</p>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => void runGuardianSearch(guardianQuery)}>Retry guardian search</Button>
+                </div>
+              ) : null}
               {guardianResults.length > 0 ? (
                 <ul className="rounded-ctl border border-line divide-y divide-line overflow-hidden">
                   {guardianResults.map((r) => (
@@ -387,8 +435,8 @@ export function MemberCreateForm({
                       <button
                         type="button"
                         onClick={() => {
-                          setGuardian({ mode: "existing", personId: r.personId, label: r.fullName });
-                          setGuardianResults([]);
+                          setGuardian({ mode: "existing", personId: r.personId, label: r.fullName, phone: r.phone });
+                          void runGuardianSearch("");
                           setIssues((current) => current.filter((issue) => issue.key !== "guardian" && issue.key !== "guardianPhone"));
                         }}
                         className="w-full text-left px-3 py-3 min-h-[44px] text-[14px] hover:bg-deck"
@@ -460,8 +508,18 @@ export function MemberCreateForm({
         </section>
       ) : null}
 
+      {layout === "owner" ? (
+        <section aria-labelledby="intake-club" className="owner-work-panel space-y-2">
+          <h2 id="intake-club" tabIndex={-1} className="text-[16px] font-semibold">Registration facility</h2>
+          {locationField}
+          {initialLocationId === "" && !locationId ? (
+            <p className="text-sm text-ink-3">The selected {resolveTerm(terminology, "facility", 1)} is unavailable. Choose an available {resolveTerm(terminology, "facility", 1)} to continue.</p>
+          ) : null}
+        </section>
+      ) : null}
+
       <section className="space-y-2" aria-labelledby="member-consent-heading">
-        <h2 id="member-consent-heading" className="font-display text-[16px] font-semibold">Consent</h2>
+        <h2 tabIndex={-1} id="member-consent-heading" className="font-display text-[16px] font-semibold">Consent</h2>
         <MemberConsentChoices minor={minor} memberLabel={memberLabel}
           processing={consentGiven} communications={communicationsGiven}
           processingError={issues.find((issue) => issue.key === "consent")?.message}
@@ -472,6 +530,16 @@ export function MemberCreateForm({
         <p className="text-[13px] text-late" role="alert">
           {error}
         </p>
+      ) : null}
+
+      {layout === "owner" && fullName.trim() ? (
+        <section aria-labelledby="review-registration" className="owner-work-panel">
+          <h2 id="review-registration" className="font-semibold">Review registration</h2>
+          <dl className="mt-2 grid grid-cols-2 gap-3 text-[13px]">
+            <div><dt className="text-ink-3">Name</dt><dd className="break-words">{fullName.trim()}</dd></div>
+            <div><dt className="text-ink-3">Facility</dt><dd>{locations.find(location => location.id === locationId)?.name ?? "Choose a facility"}</dd></div>
+          </dl>
+        </section>
       ) : null}
 
       {/* OpenPen owner reference — the bounded editor ends with an in-flow

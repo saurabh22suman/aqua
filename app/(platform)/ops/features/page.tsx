@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listFeatures } from "@/db/platform-features";
@@ -6,6 +7,8 @@ import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { FeatureCatalogue } from "./feature-catalogue";
 import { OpsPage, OpsPageHeader } from "@/components/ops/ops-primitives";
 import { OpsReadOnlyNote } from "@/components/ops/ops-display";
+
+export const metadata: Metadata = { title: "Feature catalogue" };
 
 // Phase 1.7 — feature catalogue screen. The platform sidebar has
 // linked `/ops/features` since 1.2; this is the page that

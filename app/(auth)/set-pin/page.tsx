@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/server";
 import { withPlatform } from "@/db/scope";
 import { hasCredentialByBaUserId } from "@/lib/services/credentials";
 import { homeForSessionAction } from "@/lib/actions/auth-ui";
+import { LoginWelcome } from "@/components/auth/login-welcome";
 import { SetPinForm } from "@/components/set-pin-form";
 
 // Set-PIN safety net (2026-09-11 auth feature).
@@ -24,13 +25,12 @@ export default async function SetPinPage() {
   }
 
   return (
-    <main className="px-5 pt-10 max-w-md mx-auto">
+    <LoginWelcome>
       <h1 className="font-display text-[19px] font-semibold">Choose your PIN</h1>
       <p className="mt-2 text-[14px] text-ink-2">
-        One last step: pick a 6–12 digit PIN. You will use your mobile number and this PIN
-        to sign in from now on.
+        Save a PIN for this account. You’ll use it with your mobile number the next time you sign in.
       </p>
       <SetPinForm />
-    </main>
+    </LoginWelcome>
   );
 }

@@ -19,7 +19,7 @@ it("shows a committed tenant and warning without claiming the preset was applied
     kind: "ok", tenantId: "tenant-123", preset: "swimming", presetApplied: false,
     presetWarning: "Preset failed. Apply it from the catalogue.", locationsCreated: 1,
   });
-  render(<LeadActions leadId="lead-123" currentStatus="qualified" defaultSlug="test-club"
+  render(<LeadActions businessName="Example club" leadId="lead-123" currentStatus="qualified" defaultSlug="test-club"
     defaultLocationName="Main" defaultPreset="swimming"
     presetOptions={[{ key: "swimming", name: "Swimming" }]} canWrite />);
   fireEvent.submit(screen.getByRole("button", { name: "Provision trial tenant" }).closest("form")!);
@@ -34,7 +34,7 @@ it("states that the preset was applied when provisioning reports success", async
     kind: "ok", tenantId: "tenant-456", preset: "swimming", presetApplied: true,
     presetWarning: null, locationsCreated: 2,
   });
-  render(<LeadActions leadId="lead-456" currentStatus="qualified" defaultSlug="other-club"
+  render(<LeadActions businessName="Example club" leadId="lead-456" currentStatus="qualified" defaultSlug="other-club"
     defaultLocationName="Main" defaultPreset="swimming"
     presetOptions={[{ key: "swimming", name: "Swimming" }]} canWrite />);
   fireEvent.submit(screen.getByRole("button", { name: "Provision trial tenant" }).closest("form")!);

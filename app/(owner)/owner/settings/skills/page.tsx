@@ -1,5 +1,4 @@
 import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
-import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { listSkillLaddersAction } from "@/lib/actions/skill-ladder";
@@ -7,6 +6,7 @@ import { SkillLadderManager } from "@/components/skill-ladder-manager";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 
 // V-09 — owner skill-ladder settings. The list is the generic
 // framework the bridge populated from the preset ladder; editing a
@@ -32,17 +32,8 @@ export default async function OwnerSkillsPage() {
   const canEdit = hasPermission(ctx, "levels.write");
 
   return (
-    <OwnerPage className="max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner/settings"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Settings
-        </Link>
-        {" / "}
-        skills
-      </p>
+    <OwnerPage workflow="settings" className="max-w-2xl">
+      <BackLink href="/owner/settings" label="Settings" />
       <PageHeader
         title={<>Skill ladder</>}
         purpose={<>The levels and skills coaches assess against, with the four-band

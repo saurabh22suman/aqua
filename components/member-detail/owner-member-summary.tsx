@@ -10,7 +10,7 @@ export function OwnerMemberSummary({ status, plans, balance, canManage, payments
   canManage: boolean;
   paymentsHref?: string;
 }) {
-  return <div className={`grid grid-cols-2 gap-3 ${balance !== undefined ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+  return <div role="group" aria-label="Membership summary" className={`grid grid-cols-2 gap-3 ${balance !== undefined ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
     <section className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
       <h2 className="text-[13px] text-ink-3">Participation</h2>
       <p className="mt-2"><StatusBadge tone={MEMBER_STATUS_TONE[status] ?? "neutral"}>{MEMBER_STATUS_LABELS[status]}</StatusBadge></p>
@@ -18,7 +18,7 @@ export function OwnerMemberSummary({ status, plans, balance, canManage, payments
     </section>
     {balance !== undefined ? <section className="min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
       <h2 className="text-[13px] text-ink-3">Outstanding</h2>
-      <p className="mt-1 font-display text-[27px] font-semibold leading-tight text-ink">{balance ?? "Unavailable"}</p>
+      <p className="mt-1 font-display text-[27px] font-semibold leading-tight tabular-nums text-ink [overflow-wrap:anywhere]">{balance ?? "Unavailable"}</p>
       {paymentsHref ? <a href={paymentsHref} className="mt-1 inline-flex min-h-11 items-center text-[13px] text-ink-2 underline underline-offset-2">View invoices</a> : null}
     </section> : null}
     <section className={`min-w-0 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5 ${balance !== undefined ? "col-span-2 sm:col-span-1" : ""}`}>

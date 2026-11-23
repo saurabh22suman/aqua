@@ -29,6 +29,8 @@ export type DialogProps = {
   /** Hide the close button when the dialog must be answered. */
   hideClose?: boolean;
   className?: string;
+  /** Use only for sheets that can close without losing an unsaved operation. */
+  swipeToClose?: boolean;
 };
 
 export function Dialog({
@@ -40,10 +42,12 @@ export function Dialog({
   footer,
   hideClose,
   className,
+  swipeToClose = false,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement | null>(null);
   const restoreFocusTo = useRef<HTMLElement | null>(null);
   const titleId = useId();
+  const dragStart = useRef<number | null>(null);
   const descriptionId = useId();
 
   useEffect(() => {
@@ -80,6 +84,7 @@ export function Dialog({
       ref={ref}
       onCancel={handleCancel}
       onClose={handleClose}
+      data-ui-dialog
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       className={cn(
@@ -88,7 +93,20 @@ export function Dialog({
         className,
       )}
     >
-      <div className="flex items-start gap-3 border-b border-line px-5 py-4">
+      {swipeToClose ? <div data-ui-dialog-grip aria-hidden="true"
+        onPointerDown={event => {
+          if (event.pointerType !== "touch" || !event.isPrimary) return;
+          dragStart.current = event.clientY;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerUp={event => {
+          const delta = dragStart.current === null ? 0 : event.clientY - dragStart.current;
+          dragStart.current = null;
+          if (delta > 56) onOpenChange(false);
+        }}
+        onPointerCancel={() => { dragStart.current = null; }}
+      /> : null}
+      <div data-ui-dialog-header className="flex items-start gap-3 border-b border-line px-5 py-4">
         <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
           <h2 id={titleId} className="font-display text-[16px] font-semibold">
             {title}
@@ -110,9 +128,9 @@ export function Dialog({
           </button>
         )}
       </div>
-      {children ? <div className="px-5 py-4">{children}</div> : null}
+      {children ? <div data-ui-dialog-body className="px-5 py-4">{children}</div> : null}
       {footer ? (
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
+        <div data-ui-dialog-footer className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
           {footer}
         </div>
       ) : null}

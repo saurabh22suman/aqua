@@ -12,13 +12,13 @@ import type { MyShiftRow } from "@/lib/services/shifts";
 // so this card can never surface a colleague's draft. A pure
 // component, so page tests can render it without a data layer.
 
-export function MyShiftsCard({ shifts }: { shifts: MyShiftRow[] }) {
+export function MyShiftsCard({ shifts, showHeading = true }: { shifts: MyShiftRow[]; showHeading?: boolean }) {
   return (
-    <section className={`mt-4 p-4 ${STAFF_CARD}`}>
-      <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
+    <section aria-label={showHeading ? undefined : "Published shifts"} className={`mt-4 p-4 ${STAFF_CARD}`}>
+      {showHeading ? <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
         <OwnerIcon name="calendar" size={16} className="text-ink-3" />
         My shifts
-      </h2>
+      </h2> : null}
       {shifts.length === 0 ? (
         <p className="mt-2 text-[13px] text-ink-3">
           No published shifts in the next two weeks.

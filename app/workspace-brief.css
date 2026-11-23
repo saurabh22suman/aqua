@@ -1,0 +1,97 @@
+/* Shared visual tokens for the authenticated roles, setup and sign-in.
+   Owner Home and signed-link HTML retain their own scoped composition. */
+@font-face {
+  font-family: "KhelSuite Text";
+  src: url("../docs/design/floodlit-owner-2026-11-20/dm-sans-latin.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
+
+html[data-theme] {
+  --workspace-canvas: #edf2eb;
+  --workspace-paper: #fcfdf9;
+  --workspace-ink: #132b25;
+  --workspace-muted: #52645e;
+  --workspace-line: #d8e2d8;
+  --workspace-action: #1b5140;
+  --workspace-on-action: #fff;
+  --workspace-selection: #e2eee3;
+  --font-sans: "KhelSuite Text", system-ui, sans-serif;
+  --font-display: var(--font-sans);
+  --color-deck: var(--workspace-canvas);
+  --color-paper: var(--workspace-paper);
+  --color-ink: var(--workspace-ink);
+  --color-ink-2: var(--workspace-muted);
+  --color-ink-3: var(--workspace-muted);
+  --color-line: var(--workspace-line);
+  --color-sidebar: var(--workspace-paper);
+  --accent: var(--workspace-action);
+  --accent-strong: var(--workspace-action);
+  --accent-ink: var(--workspace-action);
+  --accent-soft: var(--workspace-selection);
+  --action-surface: var(--workspace-action);
+  --action-foreground: var(--workspace-on-action);
+  --action-surface-hover: color-mix(in srgb, var(--workspace-action) 88%, var(--workspace-ink));
+  --focus-ring: var(--workspace-action);
+  --selected-ink: var(--workspace-action);
+  --selected-surface: var(--workspace-selection);
+  --surface-canvas: var(--workspace-canvas);
+  --surface-raised: var(--workspace-paper);
+  --surface-featured: var(--workspace-selection);
+  --owner-heading-weight: 650;
+  --radius-card: 16px;
+}
+
+html[data-theme="lavender"] {
+  --workspace-canvas: #efedf4;
+  --workspace-paper: #fdfcff;
+  --workspace-ink: #221d33;
+  --workspace-muted: #5a5067;
+  --workspace-line: #dfd9e9;
+  --workspace-action: #503583;
+  --workspace-selection: #ece5f7;
+}
+
+html[data-theme="dark"] {
+  --workspace-canvas: #151e1b;
+  --workspace-paper: #1e2b25;
+  --workspace-ink: #f1f7f0;
+  --workspace-muted: #c3d2c5;
+  --workspace-line: #3b5045;
+  --workspace-action: #a6e3c3;
+  --workspace-on-action: #10251a;
+  --workspace-selection: #304c3c;
+}
+
+[data-workspace-heading] h1 {
+  font-size: clamp(1.5rem, 4.8vw, 1.95rem);
+  letter-spacing: -.035em;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+[data-workspace-heading] :is(p, span) {
+  overflow-wrap: anywhere;
+}
+
+[data-staff-surface] :is(a, button, select, summary):focus-visible,
+[data-platform-brief] :is(a, button, select, summary):focus-visible {
+  scroll-margin-block: 12px;
+}
+
+@media (max-width: 1023px) {
+  html:has([data-staff-surface],[data-platform-brief]) {
+    scroll-padding-block: 68px calc(76px + env(safe-area-inset-bottom));
+  }
+
+  [data-staff-surface] [data-staff-page] {
+    padding-inline: clamp(12px, 3.6vw, 18px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-staff-surface], [data-platform-brief] {
+    scroll-behavior: auto;
+  }
+}

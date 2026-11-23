@@ -1,38 +1,62 @@
 "use client";
 
-import { OpsTabs } from "@/components/ops/ops-tabs";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/components/ui/cn";
 
-// PR4 (ops console improvements) — every existing panel on tenant
-// detail grouped into tabs (Overview / Configuration / Entitlements /
-// Locations / Messaging / Audit) instead of one long scroll. Each tab
-// is a real route (not client-side state), so a link to a specific
-// tab is shareable and the back button works as expected.
-//
-// Ops redesign (28 October 2026): the bar is the shared Ops tab bar
-// (components/ops/ops-tabs.tsx), and it carries the GST destination
-// as well. The GST page already existed and already worked, but it was
-// reachable only from a sentence link inside the Configuration page —
-// a screen an operator could easily miss. A tax rate is a
-// configuration setting, so it sits next to Configuration; every other
-// destination keeps its place.
-//
-// The current tab is resolved from the URL inside the shared bar, so
-// the tab bar and the navigation rail can never disagree.
-export function TenantTabNav({ tenantId }: { tenantId: string }) {
+const tenantSections = [
+  { label: "Workspace", links: [{ path: "", label: "Overview" }] },
+  { label: "Setup", links: [
+    { path: "/configuration", label: "Configuration" },
+    { path: "/tax", label: "GST" },
+    { path: "/entitlements", label: "Entitlements" },
+    { path: "/locations", label: "Locations" },
+  ] },
+  { label: "Investigation", links: [
+    { path: "/messaging", label: "Messaging" },
+    { path: "/audit", label: "Audit" },
+    { path: "/diagnostics", label: "Diagnostics", adminOnly: true },
+  ] },
+] as const;
+
+export function TenantTabNav({
+  tenantId,
+  canViewDiagnostics,
+}: {
+  tenantId: string;
+  canViewDiagnostics: boolean;
+}) {
+  const pathname = usePathname();
   const base = `/ops/tenants/${tenantId}`;
+
   return (
-    <OpsTabs
-      label="Tenant"
-      tabs={[
-        { href: base, label: "Overview" },
-        { href: `${base}/configuration`, label: "Configuration" },
-        { href: `${base}/tax`, label: "GST" },
-        { href: `${base}/entitlements`, label: "Entitlements" },
-        { href: `${base}/locations`, label: "Locations" },
-        { href: `${base}/messaging`, label: "Messaging" },
-        { href: `${base}/audit`, label: "Audit" },
-        { href: `${base}/diagnostics`, label: "Diagnostics" },
-      ]}
-    />
+    <nav aria-label="Tenant" className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-b border-line">
+      {tenantSections.map(({ label, links }) => (
+        <div key={label} role="group" aria-label={label} className="min-w-0">
+          <p aria-hidden="true" className="px-2 text-xs font-medium text-ink-3">{label}</p>
+          <div className="flex flex-wrap gap-x-1">
+            {links.filter((link) => !("adminOnly" in link) || canViewDiagnostics).map(({ path, label }) => {
+              const href = base + path;
+              const current = pathname === href;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={current ? "page" : undefined}
+                  className={cn(
+                    "inline-flex min-h-11 items-center rounded-t-md border-b-2 px-2 text-[13px] font-medium transition-colors hover:bg-deck hover:text-ink focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)]",
+                    current
+                      ? "border-[var(--accent-strong)] bg-paper text-[var(--accent-ink)]"
+                      : "border-transparent text-ink-2",
+                  )}
+                >
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
   );
 }

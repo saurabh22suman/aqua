@@ -280,9 +280,10 @@ export function LoginForm() {
 
       <Link
         href="/login/reset"
+        aria-label="Forgot PIN? Reset with WhatsApp"
         className="mt-4 flex min-h-[44px] items-center justify-center text-[14px] text-ink-2 underline underline-offset-2"
       >
-        Forgot PIN? Reset with WhatsApp
+        Forgot PIN?
       </Link>
     </div>
   );

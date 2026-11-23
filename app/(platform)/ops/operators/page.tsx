@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import {
@@ -13,6 +14,8 @@ import {
 import { OperatorList } from "./operator-list";
 import { currentOperatorSessionId } from "@/db/platform-operators-read";
 import { readPlatformSessionToken } from "@/lib/auth/platform-cookie";
+
+export const metadata: Metadata = { title: "Operator accounts" };
 
 export const dynamic = "force-dynamic";
 

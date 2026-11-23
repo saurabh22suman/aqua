@@ -28,7 +28,7 @@ export default async function StaffCreatePage() {
   // renders "Instructor".
   const terminology = await getTerminologyAction().then(ownerTerminology);
   return (
-    <OwnerPage>
+    <OwnerPage workflow="edit">
       <Link
         href="/owner/staff"
         className="mb-4 inline-flex min-h-11 items-center gap-1 text-[13px] text-ink-3 hover:text-ink"

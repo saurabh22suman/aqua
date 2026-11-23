@@ -16,7 +16,7 @@ export default async function MemberImportPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "members.write");
   return (
-    <OwnerPage className="max-w-3xl">
+    <OwnerPage workflow="edit" className="max-w-3xl">
       <BackLink href="/owner/members" label="Members" />
 
       <PageHeader

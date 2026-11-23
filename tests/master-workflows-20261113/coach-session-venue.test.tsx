@@ -12,7 +12,7 @@ it("shows the session venue before opening the register", async () => {
   expect(screen.getByTestId("coach-today-session").textContent).toContain("North venue");
 });
 it("shows the venue in the coach schedule task row", async () => {
-  render(await CoachSchedulePage());
+  render(await CoachSchedulePage({}));
   expect(screen.getByTestId("coach-schedule-session").textContent).toContain("North venue");
 });
 it("shows the authorized venue on the next-session task too", async () => {

@@ -148,10 +148,10 @@ export function SystemQueueSummary({
       </p>
       <p className="mt-2">
         <Link
-          href="/ops/recovery"
+          href="/ops/recovery#dead-letter-jobs"
           className="text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
         >
-          Open the recovery console
+          Open dead-letter jobs in Recovery
         </Link>
       </p>
     </div>

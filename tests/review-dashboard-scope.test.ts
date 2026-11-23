@@ -333,35 +333,46 @@ describe("review dashboard location scope (A07)", () => {
 // Owner Home composition, pinned as a source scan (the same shape the
 // repo's kpi-label-size and date-display-sweep guards use).
 //
-// Superseded 2026-10-25 by the approved owner redesign. The first
-// screen now leads with the figures (each label stating its basis),
-// then the one dominant shortcut, then the 60/40 workspace (today's
-// classes beside the exceptions), then the single trend panel. The
-// honesty contracts survive: the money figure is today's captured
-// total and says so, register state is never called attendance, and
-// the phantom "Today's facilities" heading stays gone.
-//
-// Owner Lavender B (27 October 2026): the screen opens with the day,
-// the academy and the scope, and the sections were split into the
-// components/owner-home/ modules. The scan follows the composition:
-// the ORDER is still read from the dashboard's own JSX (the block
-// markers below), and the wording guards read the file that owns the
-// wording.
+// 20 November 2026 — the approved workspace redesign settles the top of
+// the screen: "Club overview", then the two-card row (the deep financial
+// snapshot and the real priority), then the existing overview totals,
+// then the day's detail (the next session INSIDE the agenda and the real
+// collections trend), then the full attention queue. The honesty
+// contracts survive: the money figure is today's captured total and says
+// so, register state is never called attendance, and the phantom
+// "Today's facilities" heading stays gone.
 describe("owner Home composition and labels", () => {
-  it("orders the actual header, permission-gated collections, sessions and attention", () => {
+  it("orders context, the two-card overview, the day's detail and the attention queue", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
     const context = src.indexOf("<OwnerHomeHeader");
-    const summary = src.indexOf("<OwnerHomeMoney");
-    const sessions = src.indexOf("<OwnerHomeTimeline");
+    const snapshot = src.indexOf("<OwnerHomeFinancialSnapshot");
+    const priority = src.indexOf("courtside-workspace-priority");
+    const totals = src.indexOf("courtside-scoreline");
+    const agenda = src.indexOf("<OwnerHomeTimeline");
+    const nextSession = src.indexOf("<OwnerHomeNextSession");
+    const trend = src.indexOf("<OwnerHomeCollectionsTrend");
     const attention = src.indexOf("<OwnerHomeAttention");
     expect(context).toBeGreaterThan(-1);
-    expect(summary).toBeGreaterThan(context);
-    expect(sessions).toBeGreaterThan(summary);
-    expect(attention).toBeGreaterThan(sessions);
-    expect(src).toContain("can.readFees && data.money ? <OwnerHomeMoney");
-    expect(src).toContain("can.recordPayment && can.readFees ? fees.dues : null");
+    expect(snapshot).toBeGreaterThan(context);
+    expect(priority).toBeGreaterThan(snapshot);
+    expect(agenda).toBeGreaterThan(priority);
+    // The next session is the agenda's own lead, so it is written inside
+    // the timeline element: agenda first, then the next-session card.
+    expect(nextSession).toBeGreaterThan(agenda);
+    expect(trend).toBeGreaterThan(nextSession);
+    expect(totals).toBeGreaterThan(trend);
+    expect(attention).toBeGreaterThan(totals);
+    // The financial card only exists behind the existing finance grant,
+    // and its overdue drill-down uses the fees hub's overdue flag.
+    expect(src).toMatch(/can\.readFees \? \([\s\S]+?<OwnerHomeFinancialSnapshot/);
+    expect(src).toContain('scopeParams({ tab: "dues", overdue: "1" })');
     // The old gross-only label and the phantom facilities heading are gone.
-    expect(src).not.toContain("Payments recorded today");
+    const snapshotSrc = readFileSync(
+      "components/owner-home/owner-home-financial-snapshot.tsx",
+      "utf8",
+    );
+    expect(snapshotSrc).toContain("Payments recorded today");
+    expect(snapshotSrc).toContain("Outstanding now");
     expect(src).not.toContain("Today's facilities");
     // Completion is stated as marks recorded, never as attendance.
     const sessionState = readFileSync(

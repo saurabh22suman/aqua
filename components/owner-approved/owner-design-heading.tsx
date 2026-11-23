@@ -9,7 +9,7 @@ export function OwnerDesignHeading({ title, purpose, eyebrow, action, className,
   action?: ReactNode;
 } & Omit<HTMLAttributes<HTMLDivElement>, "title">) {
   return (
-    <div className={cn("mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 lg:mb-6", className)} {...rest}>
+    <div data-owner-design-heading className={cn("mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 lg:mb-6", className)} {...rest}>
       <div className="min-w-0 flex-1">
         {eyebrow ? <p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-3">{eyebrow}</p> : null}
         <h1 className="font-display text-[27px] font-semibold leading-[1.15] tracking-[-0.8px] text-ink lg:text-[31px]">{title}</h1>

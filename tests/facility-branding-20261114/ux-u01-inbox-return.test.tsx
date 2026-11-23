@@ -14,8 +14,8 @@ it.each([["member", "/member"], ["guardian", "/family"]] as const)("returns %s i
   state.audience.mockResolvedValue({ read: async () => [] });
   render(await SelfInboxPage({ audience }));
   expect(state.audience).toHaveBeenCalledWith(audience, null);
-  expect(screen.getByRole("link", { name: /back to (member|family) home/i }).getAttribute("href")).toBe(href);
-  expect(screen.getByText(/nothing yet/i)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Home" }).getAttribute("href")).toBe(href);
+  expect(screen.getByText(/^No announcements yet\./)).toBeTruthy();
 });
 it("denies before reading or showing a return link", async () => {
   state.audience.mockResolvedValue(null);

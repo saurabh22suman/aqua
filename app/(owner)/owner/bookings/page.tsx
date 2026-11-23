@@ -90,9 +90,9 @@ export default async function OwnerBookingsPage(props: { searchParams?: Promise<
   }
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="planner">
       <PageHeader title="Bookings" />
-      {canManagePrices ? (
+      {canManagePrices && activePrices !== 0 ? (
         <p className="mt-2">
           <Link
             href="/owner/settings/booking-prices"
@@ -148,13 +148,15 @@ export default async function OwnerBookingsPage(props: { searchParams?: Promise<
       ) : null}
 
       {facilities.length > 0 ? (
-        <div className="mt-5">
+        <div role="region" aria-label="Booking calendar and board" className="mt-5">
           <BookingScreen
+            compactOwner={ctx.roleKey === "owner" || ctx.roleKey === "manager"}
             facilities={facilities}
             timezone={timezone}
             today={today}
             terminology={terminology}
             canCreate={canCreate}
+            canBill={hasPermission(ctx, "payments.record")}
             canScanPass={canScanPass}
             canCorrectInvoice={canCorrectInvoice}
             canManagePrices={canManagePrices}

@@ -17,8 +17,8 @@ describe("recipient-only owner-surface announcement navigation", () => {
   it.each(readers)("gives %s a desktop inbox without the composer grant", (_role, grants) => {
     const permissions = new Set<string>(grants);
     render(<OwnerSideNav groups={ownerSidebarGroupsForPermissions(permissions)} />);
-    expect(screen.getByRole("link", { name: "Announcements inbox" }).getAttribute("href")).toBe("/owner/inbox");
-    expect(screen.queryByRole("link", { name: "Announcements" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Announcements" }).getAttribute("href")).toBe("/owner/inbox");
+    expect(screen.getAllByRole("link", { name: "Announcements" })).toHaveLength(1);
     expect(permissions.has("messaging.send")).toBe(false);
   });
   it.each(readers)("lets %s open the inbox from mobile More without a fifth tab", async (_role, grants) => {
@@ -27,16 +27,18 @@ describe("recipient-only owner-surface announcement navigation", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(Array.from(nav.children).filter(element => element.tagName === "A")).toHaveLength(3);
     fireEvent.click(screen.getByText("More", { exact: true }));
-    expect(within(nav).getByRole("link", { name: "Announcements inbox" }).getAttribute("href")).toBe("/owner/inbox");
+    expect(within(nav).getByRole("link", { name: "Announcements" }).getAttribute("href")).toBe("/owner/inbox");
   });
-  it("keeps the personal inbox reachable when a custom sender lacks roster-read permission", () => {
+  it("gives a custom sender one entry on the alternate inbox route", () => {
     render(<OwnerSideNav groups={ownerSidebarGroupsForPermissions(new Set(["messaging.send"]))} />);
-    expect(screen.getByRole("link", { name: "Announcements inbox" }).getAttribute("href")).toBe("/owner/inbox");
+    const entry = screen.getByRole("link", { name: "Announcements" });
+    expect(entry.getAttribute("href")).toBe("/owner/announcements");
+    expect(entry.getAttribute("aria-current")).toBe("page");
   });
-  it("keeps authorized senders on their existing compose-and-inbox destination", () => {
+  it("keeps authorized senders on their Publish with a single sidebar entry", () => {
     const permissions = new Set(["messaging.send", "members.read"]);
     render(<OwnerSideNav groups={ownerSidebarGroupsForPermissions(permissions)} />);
     expect(screen.getByRole("link", { name: "Announcements" }).getAttribute("href")).toBe("/owner/announcements");
-    expect(screen.queryByRole("link", { name: "Announcements inbox" })).toBeNull();
+    expect(screen.getAllByRole("link", { name: "Announcements" })).toHaveLength(1);
   });
 });

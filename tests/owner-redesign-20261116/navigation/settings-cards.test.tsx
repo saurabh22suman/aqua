@@ -20,7 +20,7 @@ it("names the business wrapper and clubs distinctly in the category", async () =
   expect(screen.getByRole("link", { name: "Open Business profile & default billing" }).getAttribute("href")).toBe("/owner/settings/academy");
   expect(screen.getByRole("link", { name: "Open Club" }).getAttribute("href")).toBe("/owner/settings/locations");
   expect(screen.getByRole("link", { name: "Open Business branding" }).getAttribute("href")).toBe("/owner/settings/branding");
-  expect(screen.getByRole("link", { name: "Open Business rules" }).getAttribute("href")).toBe("/owner/settings/configuration");
+  expect(screen.getByRole("link", { name: "Open Academy rules" }).getAttribute("href")).toBe("/owner/settings/configuration");
 });
 it("opens compact category tasks and retains every destination in the category", async () => {
   render(await SettingsPage({ searchParams: Promise.resolve({}) }));

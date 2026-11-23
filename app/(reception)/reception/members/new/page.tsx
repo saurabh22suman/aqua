@@ -2,6 +2,7 @@ import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm } from "@/lib/terminology/keys";
 import { staffTerminology } from "@/lib/terminology/staff-terms";
+import { BackLink } from "@/components/ui/BackLink";
 import { MemberCreateForm } from "@/components/member-create-form";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
@@ -17,10 +18,12 @@ export default async function ReceptionNewMemberPage() {
 
   return (
     <StaffPage>
+      <BackLink href="/reception/members" label="Member search" />
       <StaffPageHeader title={`Add ${resolveTerm(terminology, "member", 1)}`} />
       <div className="mt-4">
         <MemberCreateForm
           locations={locations}
+          layout="reception"
           memberDetailBasePath="/reception/members"
           terminology={terminology}
         />

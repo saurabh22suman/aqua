@@ -30,7 +30,7 @@ export default async function StaffListPage() {
   // controls on the staff directory. Server issuance checks remain unchanged.
   const otherOwners = owners.filter((owner) => owner.membershipId !== ctx.membershipId);
   return (
-    <OwnerPage>
+    <OwnerPage workflow="directory">
       {/* The directory is the main task, so the header carries exactly one
           dominant action — the SAME shared create action as Members: the
           round floating action above the phone navigation and the inline
@@ -41,6 +41,7 @@ export default async function StaffListPage() {
           staff.read only is never offered a create affordance. */}
       <PageHeader
         title="Staff"
+        purpose="Everyone on the team. A staff record is not a login — app access is granted from Invitations."
         action={
           canWriteStaff ? (
             <OwnerCreateAction
@@ -96,7 +97,7 @@ export default async function StaffListPage() {
           Team directory
         </h2>
         <div className="mt-1">
-          <StaffBoard rows={rows} />
+          <StaffBoard compactFilters={ctx.roleKey === "owner"} rows={rows} />
         </div>
       </section>
 

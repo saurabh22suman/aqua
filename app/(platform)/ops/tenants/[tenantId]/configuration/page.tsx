@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -13,6 +14,7 @@ import type { ConfigKeyName } from "@/db/config-definitions";
 import {
   OpsEmptyState,
   OpsPage,
+  OpsPageHeader,
   OpsSection,
 } from "@/components/ops/ops-primitives";
 import { ChangeRequests } from "./change-requests";
@@ -23,6 +25,8 @@ import { TenantSelector } from "./tenant-selector";
 import { ResolutionChain } from "./resolution-chain";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 import { OfflineRuntime } from "./offline-runtime";
+
+export const metadata: Metadata = { title: "Tenant configuration" };
 
 // O-06 (docs/ops-platform-design.md §6) — the effective-configuration
 // viewer. Answers "why can't my coach see Reports?" from resolved
@@ -153,7 +157,8 @@ export default async function EffectiveConfigurationPage({
 
   return (
     <OpsPage>
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <OpsPageHeader title="Configuration" />
+      <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
         <p className="max-w-2xl text-[14px] text-ink-2">
           Every value this tenant resolves, where it came from, and what each
           role can reach. The resolved values are read-only and no member data

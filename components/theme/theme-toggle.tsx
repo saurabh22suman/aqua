@@ -2,7 +2,8 @@
 
 import Palette from "lucide-react/dist/esm/icons/palette.mjs";
 import { useTheme } from "@/components/theme/theme-provider";
-import { THEMES, type ThemeId } from "@/lib/theme/themes";
+import { themeDefinition } from "@/lib/theme/courtside";
+import type { ThemeId } from "@/lib/theme/themes";
 
 // UI foundation — the appearance control.
 //
@@ -26,21 +27,30 @@ const NEXT_THEME: Record<ThemeId, ThemeId> = {
 export function ThemeToggle({
   className = "",
   compact = false,
+  courtside = false,
 }: {
   className?: string;
   /** Icon-only header control; the accessible name still describes it. */
   compact?: boolean;
+  /**
+   * Owner redesign: name the presets by their courtside names. The ids,
+   * the cookie and the provider are untouched — only the label and
+   * tooltip text change.
+   */
+  courtside?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
   const next = NEXT_THEME[theme];
+  const currentPreset = themeDefinition(theme, courtside);
+  const nextPreset = themeDefinition(next, courtside);
 
   return (
     <button
       type="button"
       data-testid="theme-toggle"
       onClick={() => setTheme(next)}
-      aria-label={`Theme: ${THEMES[theme].label}. Switch to ${THEMES[next].label}`}
-      title={THEMES[next].description}
+      aria-label={`Theme: ${currentPreset.label}. Switch to ${nextPreset.label}`}
+      title={nextPreset.description}
       className={[
         "inline-flex min-h-12 flex-none items-center gap-2 rounded-ctl border border-[var(--control-border)] bg-paper px-4 text-[16px] font-medium text-ink-2",
         compact ? "justify-center px-3" : "",
@@ -51,7 +61,7 @@ export function ThemeToggle({
         .join(" ")}
     >
       <Palette size={18} strokeWidth={1.8} aria-hidden="true" />
-      {compact ? null : <span className="hidden sm:inline">{THEMES[theme].label}</span>}
+      {compact ? null : <span className="hidden sm:inline">{currentPreset.label}</span>}
     </button>
   );
 }

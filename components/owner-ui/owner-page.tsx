@@ -11,13 +11,17 @@ import { cn } from "@/components/ui/cn";
 //
 // Vertical spacing stays with the page (`className`) because a form and a
 // long ledger do not share one top/bottom rhythm.
+type OwnerWorkflow = "planner" | "ledger" | "directory" | "record" | "edit" | "report" | "settings" | "setup";
+
 export function OwnerPage({
   className,
+  workflow,
   ...rest
-}: HTMLAttributes<HTMLElement>) {
+}: HTMLAttributes<HTMLElement> & { workflow?: OwnerWorkflow }) {
   return (
     <main
       data-owner-page
+      data-owner-workflow={workflow}
       className={cn("px-4 pb-8 pt-6 lg:px-7 lg:pb-7 lg:pt-[30px]", className)}
       {...rest}
     />

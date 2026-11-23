@@ -17,12 +17,14 @@ export function RosterPublishPanel({
   weekLocationId,
   pending,
   onPublish,
+  inSheet = false,
 }: {
   weekStart: string;
   locations: Array<{ id: string; name: string }>;
   weekLocationId: string | null;
   pending: boolean;
   onPublish: (locationId: string | null) => void;
+  inSheet?: boolean;
 }) {
   const [publishLocationId, setPublishLocationId] = useState(
     weekLocationId ?? "",
@@ -37,7 +39,7 @@ export function RosterPublishPanel({
     "all locations";
 
   return (
-    <div className="rounded-card border border-line bg-paper p-3.5">
+    <div className={inSheet ? "space-y-3" : "rounded-card border border-line bg-paper p-3.5"}>
       <p className="text-[12px] font-medium text-ink-2">
         Publish the week of {formatDateIST(weekStart)}
       </p>

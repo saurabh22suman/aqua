@@ -18,7 +18,7 @@ vi.mock("@/lib/auth/ops-operation", () => ({
 vi.mock("@/lib/actions/platform-auth", () => ({
   platformAuthStatusAction: async () => ({
     kind: "authenticated",
-    role: "operator",
+    role: "admin",
   }),
 }));
 vi.mock("@/lib/params", () => ({

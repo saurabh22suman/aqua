@@ -1,32 +1,37 @@
+import { Suspense } from "react";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { OwnerStageScope } from "@/components/owner-home/owner-facility-scope";
 import { formatFullDateIST } from "@/lib/time/tz";
-import { greetingFor } from "@/components/owner-home/greeting";
-import type { ReactNode } from "react";
-import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
 
-// Owner Home — the context header.
+// Owner Today — the head of the photographic stage.
 //
-// The approved mock (evening reference, 3 November 2026) opens with a compact
-// time-of-day greeting and the club's own day. The facility in scope is NOT
-// repeated under the date: the header row's facility switcher already states
-// it, and one fact keeps one owner. The greeting is computed, never invented —
-// no personal name is available in the authorised Owner context.
-export function OwnerHomeHeader({
-  today,
-}: {
-  displayName: string;
-  /**
-   * The location the figures cover. Kept in the API (callers still pass
-   * it) but NOT printed here: the header row's facility switcher already
-   * states it, and one fact keeps one owner.
-   */
-  scopeLabel: string | null;
-  /** The tenant's own day (ISO date). */
-  today: string;
-  illustration?: ReactNode;
-}) {
+// Floodlit puts the date and the authorized facility scope at the top of
+// the stage, with the page title under them; the figures follow inside
+// the same block. The scope is the REAL switcher (see
+// owner-facility-scope.tsx); its option list is resolved and
+// location-filtered by the owner layout, so this header adds no read and
+// no grant.
+export function OwnerHomeHeader({ today }: { today: string }) {
   return (
-    <header data-testid="owner-home-context">
-      <OwnerDesignHeading title={greetingFor()} purpose={formatFullDateIST(today)} />
-    </header>
+    <>
+      <header className="floodlit-hero-top">
+        <p className="floodlit-date">
+          <OwnerIcon name="calendar" size={15} />
+          <time dateTime={today}>{formatFullDateIST(today)}</time>
+        </p>
+        <Suspense
+          fallback={
+            <span role="status" className="sr-only">
+              Loading clubs…
+            </span>
+          }
+        >
+          <OwnerStageScope />
+        </Suspense>
+      </header>
+      <h1 id="owner-home-title" className="floodlit-title">
+        Club overview
+      </h1>
+    </>
   );
 }

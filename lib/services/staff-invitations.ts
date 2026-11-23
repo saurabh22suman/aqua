@@ -67,11 +67,7 @@ export const STAFF_INVITABLE_ROLES = [
   "admin",
   "coach",
   "receptionist",
-  // O-08 — worker and accountant close the attachment gap: before
-  // this they could not be invited at all, so they could never carry
-  // a location list (or a staff record).
   "worker",
-  "accountant",
   // Manager has operational authority within the owner-selected scope.
   MANAGER_ROLE_KEY,
 ] as const;
@@ -380,11 +376,7 @@ export async function inviteStaff(
     const STAFF_TYPE_FOR_ROLE: Partial<Record<StaffInvitableRoleKey, StaffType>> = {
       coach: "coach",
       receptionist: "receptionist",
-      // O-08 — worker and accountant can hold a location too; before
-      // this they got a membership but no staff record, so they could
-      // never be attached to a site or paid per location.
       worker: "worker",
-      accountant: "accountant",
     };
     const staffType = STAFF_TYPE_FOR_ROLE[input.roleKey];
     let invitedStaffId: string | null = null;

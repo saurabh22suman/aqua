@@ -5,13 +5,7 @@ import { readShowcaseState } from "@/lib/services/showcase/state";
 import { readSelfHome } from "@/lib/services/self-home";
 import { Button } from "@/components/ui/Button";
 import { BackLink } from "@/components/ui/BackLink";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/Card";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 
@@ -71,118 +65,83 @@ export default async function FamilyShowcasePage({
   const needsName = !subject.chosenName;
 
   return (
-    <main className="mx-auto w-full max-w-xl px-4 py-8">
+    <main className="mx-auto w-full max-w-xl px-4 pb-8 pt-4">
       <BackLink href="/family" label="Family home" />
-      <h1 className="font-display text-[22px] font-semibold text-marine">
-        Your child&rsquo;s achievements page
-      </h1>
-      <p className="mt-1 text-ink-2">For {childName}{memberCode ? ` · Member code ${memberCode}` : ""}</p>
-      <p className="mt-1 text-[13px] text-ink-3">
-        A page with the skills the club&rsquo;s coaches recorded, under a name
-        you choose. Your child&rsquo;s own choice about the page is theirs
-        alone.
-      </p>
+      <header>
+        <h1 className="text-[26px] font-semibold leading-tight tracking-tight text-ink">Achievements page</h1>
+        <p className="mt-1 break-words text-[15px] font-medium text-ink">
+          {childName}
+          {memberCode ? <span className="ml-2 text-[12px] font-normal text-ink-3">Member code {memberCode}</span> : null}
+        </p>
+        <p className="mt-2 max-w-[56ch] text-[13px] leading-relaxed text-ink-2">
+          The page can show skills recorded by the club’s coaches. Your child’s own choice about publishing still applies.
+        </p>
+      </header>
 
       {refused ? (
-        <p
-          role="status"
-          className="mt-4 rounded-card border border-line bg-paper px-4 py-3 text-[13px] text-ink-2"
-        >
+        <p role="status" className="mt-4 rounded-ctl border border-line bg-paper px-4 py-3 text-[13px] text-ink-2">
           {refused}
         </p>
       ) : null}
 
-      <Card className="mt-5">
-        <CardHeader>
-          <div>
-            <CardTitle>Where the page stands</CardTitle>
-            <CardDescription>{subject.reason}</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {subject.chosenName ? (
-            <p className="text-[13px] text-ink-2">
-              The page shows the name{" "}
-              <span className="font-medium text-ink">{subject.chosenName}</span>
-              . The name is set once, when the page is first set up.
+      <section aria-labelledby="publication-status" className="mt-4 rounded-card border border-line bg-paper p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="publication-status" className="text-[16px] font-semibold text-ink">Publication status</h2>
+          <StatusBadge tone={subject.publicPath ? "good" : "neutral"}>{subject.publicPath ? "Public" : "Private"}</StatusBadge>
+        </div>
+        <p className="mt-2 text-[13px] text-ink-2">{subject.reason}</p>
+        {subject.chosenName ? (
+          <p className="mt-2 text-[13px] text-ink-2">
+            Public name <strong className="break-words text-ink">{subject.chosenName}</strong>
+          </p>
+        ) : null}
+        {subject.publicPath ? (
+          <a href={subject.publicPath} target="_blank" rel="noopener noreferrer"
+            className="mt-1 inline-flex min-h-11 items-center font-medium text-water underline">
+            View public page
+          </a>
+        ) : null}
+        {!canApprove && !canTakeDown && subject.isMinor === false ? (
+          <p className="mt-2 text-[13px] text-ink-2">This member is an adult and can manage their own page.</p>
+        ) : null}
+      </section>
+
+      {canApprove && !subject.publicPath ? (
+        <section aria-labelledby="public-approval" className="mt-3 rounded-card border border-line bg-paper p-4">
+          <h2 id="public-approval" className="text-[16px] font-semibold text-ink">Public name and approval</h2>
+          <form method="post" action="/api/self/showcase" className="mt-2 space-y-3">
+            <input type="hidden" name="action" value="approve" />
+            <input type="hidden" name="memberId" value={memberId} />
+            {needsName ? (
+              <div className="space-y-2">
+                <p id="public-name-help" className="text-[13px] leading-relaxed text-ink-2">
+                  Check the spelling before approving. The public name cannot be changed after it is set, even if you take the page down.
+                  Only the chosen name appears on the public page.
+                </p>
+                <Label htmlFor="chosenName" required>Public name</Label>
+                <Input id="chosenName" name="chosenName" maxLength={60} required aria-describedby="public-name-help" />
+              </div>
+            ) : null}
+            <p className="text-[12px] leading-relaxed text-ink-2">
+              If another linked guardian withdrew approval, the page stays private until that guardian approves again.
             </p>
-          ) : null}
+            <Button type="submit" variant="primary">Approve the page</Button>
+          </form>
+        </section>
+      ) : null}
 
-          {subject.publicPath ? (
-            <a
-              href={subject.publicPath}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center text-[13px] text-ink underline"
-            >
-              View public page
-            </a>
-          ) : null}
-
-          {canApprove && !subject.publicPath ? (
-            <form
-              method="post"
-              action="/api/self/showcase"
-              className="mt-4 flex flex-col gap-3"
-            >
-              <input type="hidden" name="action" value="approve" />
-              <input type="hidden" name="memberId" value={memberId} />
-              {needsName ? (
-                <>
-                  <Label htmlFor="chosenName" required>
-                    The name your page will show
-                  </Label>
-                  <Input
-                    id="chosenName"
-                    name="chosenName"
-                    maxLength={60}
-                    placeholder="A name your child is happy to be known by"
-                    required
-                  />
-                  <p className="text-[12px] text-ink-3">
-                    This is the only name that appears. The legal name is
-                    never published. Check the spelling: the name cannot be
-                    changed after it is set, even if you take the page down.
-                    If you need help with the name, contact your club; changing
-                    it is not available in this release.
-                  </p>
-                </>
-              ) : null}
-              <Button type="submit" variant="primary">
-                Approve the page
-              </Button>
-            </form>
-          ) : null}
-
-          {canTakeDown ? (
-            <form
-              method="post"
-              action="/api/self/showcase"
-              className="mt-4"
-            >
-              <input type="hidden" name="action" value="revoke" />
-              <input type="hidden" name="memberId" value={memberId} />
-              <Button type="submit" variant="destructive">
-                {subject.publicPath ? "Take the page down" : "Keep the page private"}
-              </Button>
-            </form>
-          ) : null}
-
-          {!canApprove && !canTakeDown ? (
-            <p className="mt-4 text-[13px] text-ink-2">
-              This member is an adult now, so only their own decision counts.
-              Ask them, and they can publish or take down their own page.
-            </p>
-          ) : null}
-
-          {canApprove ? (
-            <p className="mt-4 text-[12px] text-ink-3">
-              If another linked guardian has withdrawn their agreement, the
-              page stays private until that guardian approves again.
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {canTakeDown ? (
+        <section aria-labelledby="privacy-choice" className="mt-3 rounded-card border border-line bg-paper p-4">
+          <h2 id="privacy-choice" className="text-[16px] font-semibold text-ink">Privacy choice</h2>
+          <form method="post" action="/api/self/showcase" className="mt-2">
+            <input type="hidden" name="action" value="revoke" />
+            <input type="hidden" name="memberId" value={memberId} />
+            <Button type="submit" variant={subject.publicPath ? "destructive" : "secondary"}>
+              {subject.publicPath ? "Take the page down" : "Keep the page private"}
+            </Button>
+          </form>
+        </section>
+      ) : null}
     </main>
   );
 }

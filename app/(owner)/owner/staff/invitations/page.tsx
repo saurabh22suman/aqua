@@ -1,10 +1,14 @@
 import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
 import { OwnerCreateAction } from "@/components/owner-ui/owner-create-action";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { OwnerLink } from "@/components/owner-ui/owner-link";
 import { listInvitationsAction } from "@/lib/actions/staff-invitations";
 import { InvitationsBoard } from "@/components/invitations-board";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { buttonClasses } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
+import type { InvitationState } from "@/components/invitations-board";
 
 // Owner OpenPen management lane (29 October 2026).
 //
@@ -12,26 +16,49 @@ import { PageHeader } from "@/components/ui/PageHeader";
 // record without a login, and an invite carries an explicit role and
 // location scope. Creating or sharing a link is not proof it was
 // delivered; revocation has its own confirmation.
-export default async function StaffInvitationsPage() {
+const INVITATION_STATES: InvitationState[] = [
+  "all",
+  "invited",
+  "active",
+  "revoked",
+];
+
+function readState(value: string | undefined): InvitationState {
+  return INVITATION_STATES.find((state) => state === value) ?? "all";
+}
+
+export default async function StaffInvitationsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ state?: string }>;
+}) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "staff.invite");
   await requireLiveOwnerSettingsPage(ctx);
   const rows = await listInvitationsAction();
+  const state = readState((await searchParams)?.state);
+  const compactOwner = ctx.roleKey === "owner";
   return (
-    <OwnerPage>
+    <OwnerPage workflow="directory">
       <PageHeader
         title="Invitations"
-        purpose="Pending and active logins. Revoking an active row removes that person's access to the academy."
-        action={
-          // The SAME shared create action as Staff and Members: one
-          // accessible "Invite staff" action, floating on a phone and
-          // labelled on a desktop. The page already requires staff.invite.
+        purpose={compactOwner ? "Manage sign-in access." : "Pending, active and revoked login access. Filter by state or find a person, then issue a single-use link or revoke access."}
+        action={compactOwner ? (
+          <OwnerLink
+            href="/owner/staff/invitations/new"
+            className={buttonClasses({ variant: "primary", size: "sm" })}
+            data-testid="staff-invite-action"
+          >
+            <OwnerIcon name="plus" size={16} />
+            Invite staff
+          </OwnerLink>
+        ) : (
           <OwnerCreateAction
             href="/owner/staff/invitations/new"
             label="Invite staff"
             testId="staff-invite-action"
           />
-        }
+        )}
       />
 
       {/* ONE visible heading: the page title already names this page, so
@@ -39,10 +66,10 @@ export default async function StaffInvitationsPage() {
           keeps the section named for a screen reader. */}
       <section
         aria-label="Invitations"
-        className="mt-5 rounded-card border border-line bg-paper p-5"
+        className={compactOwner ? "mt-4" : "mt-5 rounded-card border border-line bg-paper p-5"}
       >
-        <div className="mt-2">
-          <InvitationsBoard rows={rows} />
+        <div className={compactOwner ? undefined : "mt-2"}>
+          <InvitationsBoard compactFilters={compactOwner} rows={rows} state={state} />
         </div>
       </section>
 

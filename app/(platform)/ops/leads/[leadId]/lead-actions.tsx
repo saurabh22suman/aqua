@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
+import { ProvisioningReview } from "@/components/ops/console/provisioning-review";
 import { OpsWriteGate } from "@/components/ops/ops-display";
 
 // O-10 — lifecycle + conversion island on the lead detail page.
@@ -24,6 +25,7 @@ import { OpsWriteGate } from "@/components/ops/ops-display";
 
 export function LeadActions({
   leadId,
+  businessName,
   currentStatus,
   hasLinkedTenant = false,
   linkedTenantId,
@@ -34,6 +36,7 @@ export function LeadActions({
   canWrite,
 }: {
   leadId: string;
+  businessName: string;
   currentStatus: string;
   hasLinkedTenant?: boolean;
   linkedTenantId?: string | null;
@@ -49,6 +52,9 @@ export function LeadActions({
   const [error, setError] = useState<string | null>(null);
   const [lostReason, setLostReason] = useState("");
   const [completionReason, setCompletionReason] = useState("");
+  const [slug, setSlug] = useState(defaultSlug);
+  const [locationName, setLocationName] = useState(defaultLocationName);
+  const [presetKey, setPresetKey] = useState(defaultPreset);
   const [convertResult, setConvertResult] = useState<ConvertLeadResult | null>(
     null,
   );
@@ -190,7 +196,7 @@ export function LeadActions({
                     <span className="mb-1 block text-[12px] font-medium text-ink-2">
                       Tenant slug
                     </span>
-                    <Input name="slug" required defaultValue={defaultSlug} />
+                    <Input name="slug" required value={slug} onChange={(event) => setSlug(event.target.value)} />
                   </label>
                   <label className="block">
                     <span className="mb-1 block text-[12px] font-medium text-ink-2">
@@ -199,16 +205,16 @@ export function LeadActions({
                     <Input
                       name="locationName"
                       required
-                      defaultValue={defaultLocationName}
+                      value={locationName}
+                      onChange={(event) => setLocationName(event.target.value)}
                     />
                   </label>
                 </div>
-                <p className="text-[13px] text-ink-2">The trial deadline is 14 days from provisioning; its exact time is shown in IST after creation.</p>
                 <label className="block">
                   <span className="mb-1 block text-[12px] font-medium text-ink-2">
                     Preset
                   </span>
-                  <Select name="preset" defaultValue={defaultPreset}>
+                  <Select name="preset" value={presetKey} onChange={(event) => setPresetKey(event.target.value)}>
                     {presetOptions.map((preset) => (
                       <option key={preset.key} value={preset.key}>
                         {preset.name} ({preset.key})
@@ -216,6 +222,17 @@ export function LeadActions({
                     ))}
                   </Select>
                 </label>
+                <ProvisioningReview
+                  title="Review business setup"
+                  fields={[
+                    { label: "Business account", value: businessName },
+                    { label: "Tenant URL slug", value: slug.trim() || "Enter a slug" },
+                    { label: "Primary club", value: locationName.trim() || "Enter a club name" },
+                    { label: "Preset", value: presetOptions.find((preset) => preset.key === presetKey)?.name ?? "Qualification-based preset" },
+                  ]}
+                >
+                  Starts a 14-day trial. Invite the owner from the tenant workspace after provisioning.
+                </ProvisioningReview>
                 <Button type="submit" variant="primary" disabled={pending}>
                   {pending ? "Provisioning…" : "Provision trial tenant"}
                 </Button>
@@ -224,7 +241,12 @@ export function LeadActions({
             </>
           ) : null}
           {convertResult ? (
-            <OpsPanel tone="info" className="mt-4" title="Provisioning result">
+            <OpsPanel
+              tone={convertResult.kind === "error" ? "error" : convertResult.presetApplied ? "info" : "warn"}
+              role={convertResult.kind === "error" ? "alert" : "status"}
+              className="mt-4"
+              title="Provisioning result"
+            >
               {convertResult.kind === "ok" ? (
                 <>
                   Trial tenant created with {convertResult.locationsCreated} location

@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { members, memberStatusTransitions, type MemberStatus } from "@/db/schema/people";
 import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
@@ -16,50 +16,67 @@ export async function transitionMemberStatus(
   ctx: MutationActor,
   input: { memberId: string; toStatus: MemberStatus; reason: string },
 ): Promise<TransitionResult> {
+  return withTenant(ctx.tenantId, async (tx) =>
+    transitionMemberStatusInTx(tx, ctx, input),
+  );
+}
+
+// The transaction body of transitionMemberStatus, shared with the
+// enquiry conversion: withTenant() cannot nest, so a caller that
+// already owns a transaction (and must commit the member's status
+// together with the enquiry update) needs the body rather than a
+// second transaction. Same rules, refusals, status row and audit row;
+// only the transaction boundary moves.
+export async function transitionMemberStatusInTx(
+  tx: TenantTx,
+  ctx: MutationActor,
+  input: { memberId: string; toStatus: MemberStatus; reason: string },
+  acceptCurrentStatus = false,
+): Promise<TransitionResult> {
   if (!input.reason.trim()) {
     return { ok: false, error: "A reason is required to change a member's status." };
   }
 
-  return withTenant(ctx.tenantId, async (tx) => {
-    if (!await visibleMember(tx, ctx, input.memberId)) return { ok: false, error: "Member not found." };
-    const [member] = await tx
-      .select({ status: members.status })
-      .from(members)
-      .where(and(eq(members.id, asMemberId(input.memberId)), eq(members.tenantId, ctx.tenantId)))
-      .for("update");
-    if (!member) return { ok: false, error: "Member not found." };
+  if (!await visibleMember(tx, ctx, input.memberId)) return { ok: false, error: "Member not found." };
+  const [member] = await tx
+    .select({ status: members.status })
+    .from(members)
+    .where(and(eq(members.id, asMemberId(input.memberId)), eq(members.tenantId, ctx.tenantId)))
+    .for("update");
+  if (!member) return { ok: false, error: "Member not found." };
 
-    const fromStatus = member.status as MemberStatus;
-    if (fromStatus === input.toStatus) {
-      return { ok: false, error: `Member is already ${input.toStatus}.` };
-    }
-    const allowed = MEMBER_STATUS_TRANSITIONS[fromStatus] ?? [];
-    if (!allowed.includes(input.toStatus)) {
-      return {
-        ok: false,
-        error: `Cannot move a member from ${fromStatus} to ${input.toStatus}.`,
-      };
-    }
+  const fromStatus = member.status as MemberStatus;
+  if (fromStatus === input.toStatus) {
+    return acceptCurrentStatus
+      ? { ok: true }
+      : { ok: false, error: `Member is already ${input.toStatus}.` };
+  }
+  const allowed = MEMBER_STATUS_TRANSITIONS[fromStatus] ?? [];
+  if (!allowed.includes(input.toStatus)) {
+    return {
+      ok: false,
+      error: `Cannot move a member from ${fromStatus} to ${input.toStatus}.`,
+    };
+  }
 
-    await tx
-      .update(members)
-      .set({ status: input.toStatus, updatedAt: new Date(), updatedBy: ctx.userId })
-      .where(eq(members.id, asMemberId(input.memberId)));
+  await tx
+    .update(members)
+    .set({ status: input.toStatus, updatedAt: new Date(), updatedBy: ctx.userId })
+    .where(eq(members.id, asMemberId(input.memberId)));
 
-    await tx.insert(memberStatusTransitions).values({
-      tenantId: ctx.tenantId,
-      memberId: asMemberId(input.memberId),
-      fromStatus,
-      toStatus: input.toStatus,
-      reason: input.reason,
-      changedBy: ctx.userId,
-    });
-    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, actorType: ctx.userId ? "user" : "system", requestId: ctx.requestId,
-      action: "member.status", entityType: "member", entityId: input.memberId,
-      before: { status: fromStatus }, after: { status: input.toStatus, reason: input.reason } });
-
-    return { ok: true };
+  await tx.insert(memberStatusTransitions).values({
+    tenantId: ctx.tenantId,
+    memberId: asMemberId(input.memberId),
+    fromStatus,
+    toStatus: input.toStatus,
+    reason: input.reason,
+    changedBy: ctx.userId,
   });
+  await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, actorType: ctx.userId ? "user" : "system", requestId: ctx.requestId,
+    action: "member.status", entityType: "member", entityId: input.memberId,
+    before: { status: fromStatus }, after: { status: input.toStatus, reason: input.reason } });
+
+  return { ok: true };
 }
 
 export function pauseMember(

@@ -40,9 +40,12 @@ function writeFacilityCookie(value: string | null): void {
 
 export function FacilitySwitcher({
   locations,
+  facilityNoun = "Club",
 }: {
   locations: { id: string; name: string }[];
+  facilityNoun?: "Club" | "Facility";
 }) {
+  const allLabel = facilityNoun === "Facility" ? "All facilities" : "All clubs";
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const dailyClose = pathname === "/owner/reports/collections" && searchParams.get("view") !== "trends";
@@ -59,9 +62,9 @@ export function FacilitySwitcher({
   // label may be shortened or ellipsised; the scope never is.
   const selectedLabel =
     current === "all"
-      ? "All clubs"
+      ? allLabel
       : (locations.find((location) => location.id === current)?.name ??
-        "All clubs");
+        allLabel);
   useEffect(() => {
     setCurrent(urlFacility);
   }, [urlFacility]);
@@ -101,7 +104,7 @@ export function FacilitySwitcher({
   return (
     <div className="print:hidden">
       <label htmlFor="facility-switcher" className="sr-only">
-        Club
+        {facilityNoun}
       </label>
       {/* The shared PICKER: the 10px control radius, 16px control text
           and the very lightly tinted picker surface. It opens the shared
@@ -125,11 +128,11 @@ export function FacilitySwitcher({
           data-testid="facility-switcher"
           value={current}
           onChange={(e) => onChange(e.target.value)}
-          aria-label="Club"
+          aria-label={facilityNoun}
           title={selectedLabel}
           className="min-h-11 rounded-[10px] bg-paper pl-9 pr-8 text-base lg:text-[13px]"
         >
-          <option value="all">All clubs</option>
+          <option value="all">{allLabel}</option>
           {locations.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}

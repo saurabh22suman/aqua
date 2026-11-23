@@ -218,6 +218,6 @@ describe("consolidated per-facility view (W1-6)", () => {
       <OwnerDashboard data={DASHBOARD} branding={BRANDING} terminology={TERMINOLOGY} />,
     );
     expect(document.body.textContent).not.toContain("80% attendance");
-    expect(document.body.textContent).toContain("Today’s sessions");
+    expect(document.body.textContent).toContain("On the schedule");
   });
 });

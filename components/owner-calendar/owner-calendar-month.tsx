@@ -5,7 +5,6 @@
 // month is an overview, not a schedule — the day and week views are
 // where an event's time and place are read.
 
-import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 export type CalendarMonthCell = {
   /** yyyy-mm-dd. */
@@ -42,7 +41,7 @@ export function OwnerCalendarMonth({
               {week.map((cell) => (
                 <td key={cell.date} className="p-0.5 align-top">
                   {cell.inMonth ? (
-                    <Link
+                    <a
                       href={hrefFor(cell.date)}
                       className={`flex min-h-[44px] flex-col items-center justify-center rounded-ctl text-[13px] ${
                         cell.count > 0 ? "bg-water-soft text-ink" : "text-ink-3"
@@ -56,7 +55,7 @@ export function OwnerCalendarMonth({
                           {cell.count}
                         </span>
                       ) : null}
-                    </Link>
+                    </a>
                   ) : (
                     <span className="block min-h-[44px]" />
                   )}

@@ -13,6 +13,7 @@ import { DemoBanner } from "@/components/demo-banner";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import { THEME_COOKIE, resolveThemeCookie } from "@/lib/theme/storage";
 import "./globals.css";
+import "./workspace-brief.css";
 
 export const metadata: Metadata = {
   title: {

@@ -16,6 +16,14 @@ import { cookies } from "next/headers";
 import { FACILITY_COOKIE } from "@/lib/facility";
 import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import { ownerFacilityHref, resolveOwnerFacility } from "@/lib/owner-scope/facility";
+import {
+  parseScheduleDate,
+  parseScheduleView,
+  scheduleCalendarHref,
+  scheduleListHref,
+  type ScheduleView,
+} from "@/lib/owner-scope/schedule";
+import { ScheduleSurfaceSwitch } from "@/components/owner-approved/operations/schedule-surface-switch";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 // U-04 — owner schedule surface.
@@ -31,12 +39,6 @@ import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 // location is not. The grid read carries the coach's name; this page
 // pairs it with the session list, which carries the id.
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function clampAnchor(value: string | undefined, fallback: string): string {
-  return value && DATE_RE.test(value) ? value : fallback;
-}
-
 export default async function OwnerSchedulePage({
   searchParams,
 }: {
@@ -50,20 +52,16 @@ export default async function OwnerSchedulePage({
   // timezone read must not require the unrelated members.read capability.
   const [tenant] = await withTenant(ctx.tenantId, (tx) => tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1));
   const timezone = tenant?.timezone ?? "Asia/Kolkata";
-  const view =
-    params.view === "month"
-      ? "month"
-      : params.view === "day"
-        ? "day"
-        : params.view === "agenda"
-          ? "agenda"
-          : "week";
+  // One Schedule job: the calendar keeps the owner's chosen day and
+  // view, and the List switch carries them to /owner/sessions as return
+  // context (the list's own window stays "today + 14 days").
+  const view: ScheduleView = parseScheduleView(params.view) ?? "week";
   const today = todayInZone(timezone);
-  const anchor = clampAnchor(params.date, today);
+  const anchor = parseScheduleDate(params.date) ?? today;
   const cookieStore = await cookies();
   const scope = resolveOwnerFacility({ facility: params.facility, location: params.location, cookie: cookieStore.get(FACILITY_COOKIE)?.value });
   if (!scope.ok || (scope.facilityId && !(await canSelectFacility(ctx, scope.facilityId)))) {
-    return <OwnerPage><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href="/owner/schedule?facility=all">View available clubs</Link></OwnerPage>;
+    return <OwnerPage workflow="planner"><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href="/owner/schedule?facility=all">View available clubs</Link></OwnerPage>;
   }
   const locationId = scope.facilityId;
 
@@ -112,12 +110,27 @@ export default async function OwnerSchedulePage({
     ownerFacilityHref(`/owner/schedule?view=${view}&date=${date}`, locationId);
 
   return (
-    <OwnerPage>
-      <OwnerDesignHeading title="Schedule" />
+    <OwnerPage workflow="planner">
+      <OwnerDesignHeading
+        title="Schedule"
+        className="owner-planner-heading"
+        action={
+          <ScheduleSurfaceSwitch
+            active="calendar"
+            calendarHref={scheduleCalendarHref({ facilityId: locationId, date: anchor, view })}
+            listHref={
+              ctx.permissions.has("programs.write")
+                ? scheduleListHref({ facilityId: locationId, date: anchor, view })
+                : undefined
+            }
+          />
+        }
+      />
 
       <OwnerScheduleGrid
+        compactPlanner={ctx.roleKey === "owner" || ctx.roleKey === "manager"}
         canManagePrograms={ctx.permissions.has("programs.read")}
-        canManageExceptions={ctx.permissions.has("programs.write")}
+        canEditPrograms={ctx.permissions.has("programs.write")}
         view={view}
         anchor={anchor}
         locationId={locationId}

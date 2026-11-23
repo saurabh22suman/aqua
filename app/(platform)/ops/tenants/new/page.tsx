@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { listActivePlans } from "@/db/platform-tenant-create";
@@ -6,6 +7,8 @@ import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { NewTenantForm } from "./new-tenant-form";
 import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 import { OpsWriteGate } from "@/components/ops/ops-display";
+
+export const metadata: Metadata = { title: "New business account" };
 
 // Phase 1.5 — create-tenant page. Sits under /ops/tenants/new;
 // the listing page at /ops/tenants already links here with a

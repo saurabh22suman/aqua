@@ -173,12 +173,12 @@ export function EnquiryList({
   }
 
   return (
-    <ul data-testid="enquiries-list">
+    <ul className="rounded-card border border-line bg-paper px-3.5" data-testid="enquiries-list">
       {enquiries.map((e) => (
         <li key={e.id} className="border-b border-line last:border-0">
-          <Link href={`${detailHrefPrefix}/${e.id}`} className="flex items-center gap-3 py-3">
+          <Link href={`${detailHrefPrefix}/${e.id}`} aria-label={`Open ${e.fullName}`} className="flex items-center gap-3 py-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[14px] font-medium">{e.fullName}</p>
+              <p className="break-words text-[14px] font-medium">{e.fullName}</p>
               <p className="mt-0.5 text-[12px] text-ink-3">
                 {e.source}
                 {e.phone ? ` · ${formatPhoneIN(e.phone)}` : ""}

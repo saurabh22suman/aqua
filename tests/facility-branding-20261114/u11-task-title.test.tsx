@@ -31,7 +31,7 @@ const cases = [
   ["app/(owner)/owner/programs/layout.tsx", metadata10, Layout10, "Programs · Aqua"],
   ["app/(owner)/owner/reports/layout.tsx", metadata11, Layout11, "Reports · Aqua"],
   ["app/(owner)/owner/schedule/layout.tsx", metadata12, Layout12, "Schedule · Aqua"],
-  ["app/(owner)/owner/sessions/layout.tsx", metadata13, Layout13, "Sessions · Aqua"],
+  ["app/(owner)/owner/sessions/layout.tsx", metadata13, Layout13, "Schedule list · Aqua"],
   ["app/(owner)/owner/settings/layout.tsx", metadata14, Layout14, "Settings · Aqua"],
   ["app/(owner)/owner/staff/layout.tsx", metadata15, Layout15, "Staff · Aqua"],
 ] as const;

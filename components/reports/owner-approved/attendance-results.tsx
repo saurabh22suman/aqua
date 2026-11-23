@@ -1,6 +1,7 @@
 import type { AttendanceByBatchInsight } from "@/lib/services/owner-insights";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
-export function AttendanceResults({ data }: { data: AttendanceByBatchInsight }) {
+export function AttendanceResults({ data, batchHref, focusedBatchId }: { data: AttendanceByBatchInsight; batchHref?: (batchId: string) => string; focusedBatchId?: string }) {
   const { marks, register } = data.summary;
   const rate = marks.total ? Math.round(((marks.present + marks.late) / marks.total) * 100) : null;
   return <section className="mt-4 rounded-card border border-line bg-paper p-4" aria-labelledby="attendance-summary-title">
@@ -14,7 +15,14 @@ export function AttendanceResults({ data }: { data: AttendanceByBatchInsight }) 
       <p className="mt-2 text-sm text-ink-2">{marks.present} present · {marks.late} late · {marks.absent} absent</p>
     </>}
     <p className="mt-4 text-sm text-ink-2">{register.sessionsWithRoster ? `${register.completedRegisters} of ${register.sessionsWithRoster} registers complete · ${register.unmarkedSlots} unmarked (unknown)` : "No registers with a roster in this range."}</p>
-    {data.rows.length ? <ul aria-label="Attendance groups" className="mt-4 divide-y divide-line border-t border-line">{data.rows.map(row => <li key={row.batchId} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-sm"><span className="min-w-0 font-medium">{row.batchName}</span><span className="whitespace-nowrap text-ink-2">{row.marks.total} recorded</span></li>)}</ul> : null}
+    {data.rows.length ? <ul aria-label="Attendance groups" className="mt-4 divide-y divide-line border-t border-line">{data.rows.map(row => {
+      const href = batchHref?.(row.batchId);
+      const current = focusedBatchId === row.batchId;
+      return <li key={row.batchId} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-sm">
+        {href && !current ? <Link href={href} className="inline-flex min-h-11 min-w-0 items-center font-medium underline underline-offset-2 hover:no-underline">{row.batchName}</Link> : <span className="min-w-0 font-medium">{row.batchName}</span>}
+        <span className="whitespace-nowrap text-ink-2">{row.marks.total} recorded</span>
+      </li>;
+    })}</ul> : null}
     <details className="mt-4 border-t border-line pt-3">
       <summary className="min-h-11 cursor-pointer text-sm font-medium text-ink">View data and method</summary>
       <p className="text-sm text-ink-2">{rate === null ? "No recorded marks in this range." : `${rate}% recorded present or late`}</p>

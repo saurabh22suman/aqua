@@ -8,6 +8,8 @@ import { readAuthorizedBrandingTarget } from "@/lib/services/branding-target";
 import { readTargetManifestData } from "@/lib/services/branding-target-asset";
 import { PWA_ICONS, tenantInstallManifest } from "@/lib/offline/pwa-manifest";
 import type { Metadata } from "next";
+import { buttonClasses } from "@/components/ui/Button";
+import { ClubEntryCard } from "../entry-card";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +39,17 @@ export async function generateMetadata(props: InstallProps): Promise<Metadata> {
 
 export default async function TenantInstallPage(props: InstallProps) {
   const { tenantId, source, branding } = await authorizedInstall(props);
-  return <main className="mx-auto min-h-dvh max-w-xl px-4 py-8">
-    <TenantManifestLink tenantId={tenantId} source={source} />
-    <h1 className="font-display text-2xl font-semibold text-ink">Install {branding.name}</h1>
-    <p className="mt-4 text-base text-ink-2">Use your browser’s install or add-to-home-screen option for this club. Your browser or device may require you to remain signed in to retrieve its private icon.</p>
-    <Link href={`/clubs/${tenantId}/launch`} className="mt-6 inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Continue to your club</Link>
-  </main>;
+  return (
+    <ClubEntryCard title={`Install ${branding.name}`}>
+      <TenantManifestLink tenantId={tenantId} source={source} />
+      <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-ink-2">
+        <li>Open your browser’s menu or share options.</li>
+        <li>Choose <strong className="text-ink">Install app</strong> or <strong className="text-ink">Add to Home Screen</strong>.</li>
+        <li>Check the club name and confirm. Stay signed in if your device needs to fetch the club icon.</li>
+      </ol>
+      <Link href={`/clubs/${tenantId}/launch`} className={buttonClasses({ variant: "primary", className: "mt-5 w-full sm:w-auto" })}>
+        Continue to your club
+      </Link>
+    </ClubEntryCard>
+  );
 }

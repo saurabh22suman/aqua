@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 vi.mock("@/lib/actions/platform-preset-apply", () => ({ applyPresetAction: vi.fn() }));
 vi.mock("@/lib/actions/platform-tenants", () => ({ createTenantAction: vi.fn() }));
@@ -19,5 +19,7 @@ it("updates the provisioning hierarchy from the typed names", () => {
   render(<NewTenantForm defaultTimezone="Asia/Kolkata" defaultCurrency="INR" defaultLocationName="Main" plans={[]} defaultPlanKey="" presets={[]} defaultPresetKey="" />);
   fireEvent.change(screen.getByLabelText(/business account name/i), { target: { value: "Ocean Business" } });
   fireEvent.change(screen.getByLabelText(/first club name/i), { target: { value: "Bay Club" } });
-  expect(screen.getByText(/Ocean Business.*Bay Club/)).toBeDefined();
+  const review = within(screen.getByRole("region", { name: "Review business setup" }));
+  expect(review.getByText("Ocean Business")).toBeDefined();
+  expect(review.getByText("Bay Club")).toBeDefined();
 });

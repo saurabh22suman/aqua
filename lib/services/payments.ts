@@ -29,6 +29,11 @@ import {
   type PaymentIntentConflict,
 } from "@/lib/services/payment-intent-core";
 import { preparePaymentIntent } from "@/lib/services/payment-intents";
+import { COLLECTION_HOLD_COPY } from "@/lib/collection-hold";
+import {
+  collectionHoldFromBookings,
+  lockInvoiceBookingsInTx,
+} from "@/lib/services/collection-eligibility";
 
 // C-33 — payments recorded at the counter (cash, UPI reference, bank
 // transfer). A payment against an invoice updates paid_paise and the
@@ -158,6 +163,16 @@ export async function recordPayment(
       });
     }
     const access = await resolveLocationAccess(tx, ctx);
+    // Local audit batch (2026-11-21) — booking THEN invoice. Booking
+    // billing reads and locks the same two rows in this order, so a new
+    // payment serializes against booking cancellation here rather than
+    // racing it. No linked booking is an ordinary invoice: the query
+    // returns no rows and the invoice path is unchanged.
+    const linkedBookings = await lockInvoiceBookingsInTx(
+      tx,
+      ctx.tenantId,
+      input.invoiceId,
+    );
     const rows = await tx
       .select()
       .from(invoices)
@@ -213,6 +228,17 @@ export async function recordPayment(
           conflict: "already_recorded",
         };
       }
+    }
+
+    // The authoritative re-check, under this transaction's booking and
+    // invoice row locks. The prepare guard keeps a held collection from
+    // creating a new intent in the first place; this check closes the
+    // race where cancellation commits after preparation. A committed
+    // replay above is money already recorded and is deliberately not
+    // refused here.
+    const collectionHold = collectionHoldFromBookings(linkedBookings);
+    if (collectionHold) {
+      return { ok: false, error: COLLECTION_HOLD_COPY[collectionHold].refusal };
     }
 
     if (invoice.status === "void") {

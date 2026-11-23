@@ -1,3 +1,7 @@
+import { Suspense } from "react";
+import { resolvePresetScope } from "@/db/preset-engine";
+import { withTenant } from "@/db/tenant";
+import { OwnerStageScope } from "@/components/owner-home/owner-facility-scope";
 import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -9,6 +13,12 @@ import { getOwnerChartsAction } from "@/lib/actions/owner-home-charts";
 import { FACILITY_COOKIE, resolveFacilityValue, resolveRequestedFacility } from "@/lib/facility";
 import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { ManagementBrief } from "@/components/owner-home/management-brief";
+import { OwnerBriefHome } from "@/components/owner-home/owner-brief/owner-brief-home";
+import {
+  buildOwnerHomeBriefView,
+  listOwnerBriefFacilities,
+} from "@/lib/services/owner-home-brief";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
@@ -57,6 +67,7 @@ export default async function OwnerHomePage({
   if (!hasFeature(ctx, "reports")) {
     return (
       <OwnerPage>
+        <div className="mb-4 max-w-56"><Suspense fallback={null}><OwnerStageScope /></Suspense></div>
         <h1 className="text-2xl font-semibold text-ink">Overview unavailable</h1>
         <p className="mt-2 text-ink-3">Reports are not available for this club.</p>
         <OptionalWorkspaceGuide
@@ -147,6 +158,67 @@ export default async function OwnerHomePage({
     checklist.totalCount === 3 && checklist.items.length === 3 &&
     ["add_members", "create_batch", "assign_coach"].every((key) => checklist.items.some((item) => item.key === key)) &&
     checklist.completedCount === 0;
+  const preset = await withTenant(ctx.tenantId, tx =>
+    resolvePresetScope(tx, ctx.tenantId, data.scopeLocationName ? facility ?? undefined : undefined),
+  ).catch(() => null);
+  const sport: "pool" | "court" = preset?.startsWith("swimming@") ? "pool" : "court";
+
+  // Owners retain the interactive financial brief. Managers and administrators
+  // use the same presentation primitives with operational work first.
+  if (ctx.roleKey === "owner" || ctx.roleKey === "manager" || ctx.roleKey === "admin") {
+    const facilities = await listOwnerBriefFacilities(ctx);
+    const brief = buildOwnerHomeBriefView({
+      data,
+      charts: chartsData,
+      facilities,
+      branding,
+      requestedFacility: facility ?? null,
+      can: {
+        fees: can.readFees && hasFeature(ctx, "billing"),
+        schedule: can.viewSchedule,
+        enquiries: can.readEnquiries,
+      },
+    });
+    if (ctx.roleKey !== "owner") {
+      return (
+        <OwnerPage data-testid="owner-home" data-management-brief className="brief-page">
+          <ManagementBrief brief={brief} sport={sport} attention={data.needsAttention} />
+        </OwnerPage>
+      );
+    }
+    return (
+      <OwnerPage
+        data-testid="owner-home"
+        data-brief-owner=""
+        className="brief-page"
+      >
+        <OwnerBriefHome initialView={brief} sport={sport} />
+        {isNewAcademy ? (
+          <OwnerLink
+            href="/owner/onboarding"
+            className="mt-4 inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-4 text-sm font-medium text-ink hover:bg-deck"
+          >
+            Set up your club
+          </OwnerLink>
+        ) : null}
+        <OptionalWorkspaceGuide
+          key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
+          startCollapsed
+          preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
+          title="A look around today"
+          intro="Explore the brief at your own pace. This guide makes no changes."
+          regionLabel="Optional daily overview guide"
+          itemLabel="Overview area"
+          items={[
+            { key: "money", title: "Money", detail: "Recorded payments and the current outstanding balance." },
+            { key: "today", title: "Club today", detail: "The next session and overdue enquiry follow-ups." },
+            ...(isNewAcademy ? [{ key: "setup", title: "Set up your club", detail: "Finish the available register checks." }] : []),
+          ]}
+        />
+      </OwnerPage>
+    );
+  }
+
   return (
     <OwnerDashboard
       data={data}
@@ -156,14 +228,9 @@ export default async function OwnerHomePage({
       can={can}
       period={period}
       facility={facility}
-      artworkIdentity={{ tenantId: ctx.tenantId, userId: ctx.userId }}
       chartsData={chartsData}
-      // The seed for the small club artwork. The tenant id makes the
-      // picture stable for the visit: a re-render or a hydration pass
-      // never swaps the art under the owner.
-      illustrationSeed={ctx.tenantId}
+      floodlitSport={sport}
       guideKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
-
     />
   );
 }

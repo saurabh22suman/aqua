@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   commitMemberImportAction,
   previewMemberImportAction,
@@ -8,7 +8,8 @@ import {
 import { memberImportErrorsCsv } from "@/lib/services/member-import-csv";
 import { formatDateIST } from "@/lib/time/tz";
 import { StickyActionBar } from "@/components/ui/StickyActionBar";
-import { Button } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import type {
@@ -35,7 +36,7 @@ type ActivePreview = {
   preview: MemberImportPreview;
 };
 
-export function MemberImportForm() {
+export function MemberImportForm({ membersHref = "/owner/members" }: { membersHref?: string }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [active, setActive] = useState<ActivePreview | null>(null);
   const [committed, setCommitted] = useState<
@@ -45,6 +46,7 @@ export function MemberImportForm() {
   const [busy, setBusy] = useState(false);
   const [attested, setAttested] = useState(false);
   const [evidenceNote, setEvidenceNote] = useState("");
+  const [inputKey, setInputKey] = useState(0);
   const checkSeq = useRef(0);
   const committing = useRef(false);
 
@@ -119,6 +121,22 @@ export function MemberImportForm() {
   const preview = active?.preview ?? null;
   const errorRows = committed ? committed.errors : (preview?.errors ?? []);
 
+  // A finished import is a terminal state, not a dead end: the operator
+  // can go to the register or clear the finished file and start another
+  // one without reloading the page. The file input is remounted so the
+  // same filename can be chosen again.
+  function startAnotherImport() {
+    checkSeq.current += 1;
+    setFileName(null);
+    setActive(null);
+    setCommitted(null);
+    setError(null);
+    setBusy(false);
+    setAttested(false);
+    setEvidenceNote("");
+    setInputKey((current) => current + 1);
+  }
+
   // MF-04 — the file's own state, independent of the preview's row counts.
   // "Reading" only describes an in-flight read; a failed read, a checked
   // preview and a finished import each get their own truthful label.
@@ -132,6 +150,9 @@ export function MemberImportForm() {
     if (error) return `Could not check ${fileName}.`;
     return `Selected ${fileName}.`;
   })();
+
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { if (preview) reviewHeading.current?.focus(); }, [preview]);
 
   function downloadErrors() {
     if (errorRows.length === 0) return;
@@ -147,13 +168,14 @@ export function MemberImportForm() {
   }
   return (
     <div className="space-y-5">
-      <section className="rounded-card border border-line bg-paper p-4">
+      <section className="owner-work-panel">
         <label className="block" htmlFor="member-import-file">
           <span className="block text-[13px] font-medium text-ink-2">
             CSV file
           </span>
           <input
             id="member-import-file"
+            key={inputKey}
             type="file"
             accept=".csv,text/csv"
             onChange={(event) => {
@@ -168,7 +190,7 @@ export function MemberImportForm() {
       </section>
 
       {busy && !preview ? (
-        <p className="text-[13px] text-ink-3">Checking the file…</p>
+        <p role="status" className="text-[13px] text-ink-3">Checking the file…</p>
       ) : null}
 
       {error ? (
@@ -182,7 +204,7 @@ export function MemberImportForm() {
 
       {preview ? (
         <section className="rounded-card border border-line bg-paper p-4">
-          <h2 className="font-display text-[16px] font-semibold">
+          <h2 ref={reviewHeading} tabIndex={-1} className="font-display text-[16px] font-semibold">
             Review {active?.fileName}
           </h2>
           <p className="mt-0.5 text-[12px] text-ink-3" data-testid="import-preview-file">
@@ -214,6 +236,13 @@ export function MemberImportForm() {
                   the file
                 </span>
               </div>
+              {preview.rows.length === 0 ? (
+                <p role="alert" className="mt-2 text-[13px] text-ink-2">
+                  {preview.errors.length > 0
+                    ? "No rows can be imported yet. Correct the rows below in your file, then choose it again."
+                    : "This file has no data rows. Add rows below the header and choose it again."}
+                </p>
+              ) : null}
               <p className="mt-2 text-[13px] text-ink-2">
                 Preview makes no changes. Consent is recorded only after you confirm prior consent and import.
               </p>
@@ -330,11 +359,8 @@ export function MemberImportForm() {
       ) : null}
 
       {committed ? (
-        <section
-          role="status"
-          className="rounded-card border border-line bg-paper p-4"
-        >
-          <p className="text-[13px] text-ink">
+        <section className="rounded-card border border-line bg-paper p-4">
+          <p role="status" className="text-[13px] text-ink">
             Imported {committed.imported} member
             {committed.imported === 1 ? "" : "s"}
             {committed.skipped > 0
@@ -366,6 +392,17 @@ export function MemberImportForm() {
               </button>
             </>
           ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href={membersHref}
+              className={buttonClasses({ variant: "primary", size: "md" })}
+            >
+              View members
+            </Link>
+            <Button type="button" variant="secondary" onClick={startAnotherImport}>
+              Import another file
+            </Button>
+          </div>
         </section>
       ) : null}
     </div>

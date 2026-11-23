@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
@@ -6,7 +7,9 @@ import { asTenantId } from "@/lib/ids";
 import { runOpsGlobalRead, runOpsRead } from "@/lib/auth/ops-operation";
 import { withoutTestArtifactFeatureKeys } from "@/lib/feature-artifacts";
 import { TenantFeatureToggles } from "../tenant-feature-toggles";
-import { SectionHeader } from "../tenant-detail-shared";
+import { OpsPageHeader } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Tenant entitlements" };
 
 export default async function TenantEntitlementsPage({
   params,
@@ -76,11 +79,8 @@ export default async function TenantEntitlementsPage({
   );
 
   return (
-    <section>
-      <SectionHeader
-        title="Entitlements"
-        subtitle="Every GA and Beta feature is listed, so one this club's plan does not carry can still be granted for it. Per-tenant overrides toggle each row on or off (and may carry an expiry)."
-      />
+    <section className="space-y-5">
+      <OpsPageHeader title="Entitlements" lede="Compare what the plan includes with this tenant’s overrides and their expiry dates." />
       <TenantFeatureToggles
         tenantId={detail.id}
         initial={featureRows}

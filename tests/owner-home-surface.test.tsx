@@ -23,10 +23,8 @@
 // What this file pins (the intended behaviour, asserted before the
 // implementation):
 //
-//   1. the four summary tiles are pastel surfaces and carry a
-//      state-coloured icon chip;
-//   2. the overdue tile only takes the late surface when money is
-//      actually past due — a zero is not an alert;
+//   1. the financial summary distinguishes recorded payments and open invoices;
+//   2. a zero balance does not surface a late priority;
 //   3. the period control's selected pill wears the preset accent, not
 //      the marine structural colour;
 //   4. the chart band renders a labelled SVG chart for a phone, and
@@ -191,8 +189,8 @@ function charts(overrides: Partial<OwnerChartsData> = {}): OwnerChartsData {
 
 afterEach(cleanup);
 
-describe("owner Home — the summary tiles carry a visible hierarchy", () => {
-  it("paints the four tiles as pastel surfaces with a state-coloured icon chip", () => {
+describe("owner Home — the financial summary", () => {
+  it("gives recorded payments and open invoices a distinct financial surface", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -201,13 +199,14 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
         can={ALL_CAN}
       />,
     );
-    const money = screen.getByTestId("owner-home-money-surface");
-    expect(money.textContent).toContain("Collected today");
+    const money = screen.getByRole("region", { name: "Financial snapshot" });
+    expect(money.textContent).toContain("Payments recorded today");
+    expect(money.textContent).toContain("Outstanding now");
     expect(money.textContent).toContain("₹21,000");
     expect(screen.getByText("Collections trend unavailable.")).toBeTruthy();
   });
 
-  it("does not paint an alert on a tile whose money is not late", () => {
+  it("shows a real zero without surfacing a late priority", () => {
     render(
       <OwnerDashboard
         data={dashboard({
@@ -226,10 +225,11 @@ describe("owner Home — the summary tiles carry a visible hierarchy", () => {
         can={ALL_CAN}
       />,
     );
-    const money = screen.getByTestId("owner-home-money-surface");
+    const money = screen.getByRole("region", { name: "Financial snapshot" });
     expect(money.textContent).toContain("₹0");
     expect(screen.getByText("Collections trend unavailable.")).toBeTruthy();
-    expect(money.className).not.toContain("bg-late-soft");
+    expect(money.textContent).toContain("Of which ₹0 overdue");
+    expect(screen.getByTestId("owner-home-priority").textContent).toContain("Nothing needs your attention today");
   });
 });
 

@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { CafeBillPanel } from "@/components/cafe-bill-panel";
 import { CafeErrorNote } from "@/components/cafe-error-note";
 import { CafeReceipt } from "@/components/cafe-payment-panel";
@@ -27,7 +26,14 @@ const STATUS_LABEL: Record<string, string> = {
   billed: "Bill raised",
 };
 
-export function CafeOpenOrders({ orders }: { orders: OpenCafeOrderRow[] }) {
+export function CafeOpenOrders({
+  orders,
+  emptyActionHref,
+}: {
+  orders: OpenCafeOrderRow[];
+  /** The page's new-order section, when that half is available. */
+  emptyActionHref?: string;
+}) {
   const router = useRouter();
   const [bill, setBill] = useState<CafeBill | null>(null);
   const [paid, setPaid] = useState(false);
@@ -95,11 +101,36 @@ export function CafeOpenOrders({ orders }: { orders: OpenCafeOrderRow[] }) {
   }
 
   if (orders.length === 0) {
+    // finish/staff — a compact empty list. On a phone the full centred
+    // empty block pushed the new-order counter below the first screen;
+    // the page's own "New counter order" section is the verb.
     return (
-      <EmptyState
-        title="No open café orders"
-        body="Orders placed at the counter appear here until their bill is settled."
-      />
+      <section
+        className="rounded-card border border-line bg-paper px-4 py-3"
+        data-testid="cafe-open-orders-empty"
+      >
+        <h2 className="font-display text-[15px] font-semibold text-ink">
+          Open orders
+        </h2>
+        <p className="mt-1 text-[14px] font-medium text-ink">
+          No open café orders
+        </p>
+        <p className="mt-1 text-[13px] leading-snug text-ink-3">
+          Orders placed at the counter appear here until their bill is settled.
+        </p>
+        {emptyActionHref ? (
+          <a
+            href={emptyActionHref}
+            className={buttonClasses({
+              variant: "secondary",
+              size: "sm",
+              className: "mt-3",
+            })}
+          >
+            Start an order
+          </a>
+        ) : null}
+      </section>
     );
   }
 
@@ -108,9 +139,14 @@ export function CafeOpenOrders({ orders }: { orders: OpenCafeOrderRow[] }) {
       className="rounded-card border border-line bg-paper p-4"
       data-testid="cafe-open-orders"
     >
-      <h2 className="font-display text-[15px] font-semibold text-ink">
-        Open orders
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-display text-[15px] font-semibold text-ink">
+          Open orders
+        </h2>
+        <p className="text-[12px] text-ink-3 tabular-nums">
+          {orders.length} {orders.length === 1 ? "order" : "orders"}
+        </p>
+      </div>
 
       {error ? <CafeErrorNote message={error} /> : null}
 

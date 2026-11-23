@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { mockMessagingEnabled } from "@/lib/messaging/provider";
@@ -7,6 +8,8 @@ import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { WhatsAppMock } from "./whatsapp-mock";
 import { OpsPage, OpsPageHeader, OpsPanel } from "@/components/ops/ops-primitives";
 import { OpsWriteGate } from "@/components/ops/ops-display";
+
+export const metadata: Metadata = { title: "WhatsApp simulator" };
 
 // C-40a — the non-production WhatsApp mock. Not reachable in
 // production: the env boot guard refuses WHATSAPP_PROVIDER=mock, the

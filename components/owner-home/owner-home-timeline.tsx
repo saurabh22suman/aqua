@@ -1,4 +1,5 @@
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
+import type { ReactNode } from "react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import {
@@ -91,13 +92,25 @@ export function OwnerHomeTimeline({
   sessionsLabel,
   sessionLabel,
   coachLabel,
+  lead,
+  id,
+  dateLabel,
 }: {
+  dateLabel?: string;
   lanes: readonly TodaysLane[];
   scheduleHref: string | null;
   nextClass: NextClass | null;
   sessionsLabel: string;
   sessionLabel: string;
   coachLabel: string;
+  /**
+   * The next session, placed after the agenda by Home so the
+   * day's schedule and the next booked session read as one block. The
+   * node is supplied by the caller (already scoped and permission-checked).
+   */
+  lead?: ReactNode;
+  /** The page anchor (Home jumps here from its totals row). */
+  id?: string;
 }) {
   const nextIndex = nextUpcomingIndex(lanes);
   const sessionCount = lanes.length;
@@ -109,10 +122,11 @@ export function OwnerHomeTimeline({
   const nextIsFolded = nextIndex >= MAX_VISIBLE_ROWS && nextLane !== null;
 
   return (
-    <section data-testid="owner-home-today" aria-label="Your club today" className="rounded-[18px] border border-line bg-paper">
+    <section id={id} tabIndex={id ? -1 : undefined} data-testid="owner-home-today" aria-label="Your club today" className="rounded-[18px] border border-line bg-paper">
       <div className="px-4 pt-4">
         <SectionHeader
-          title="Today’s sessions"
+          title="On the schedule"
+          subtitle={dateLabel}
           trailing={
             scheduleHref ? (
               <Link
@@ -128,7 +142,9 @@ export function OwnerHomeTimeline({
 
       {sessionCount === 0 ? (
         <div className="px-4 pb-4">
-          {nextClass ? (
+          {lead ? (
+            <p className="pt-3 text-[13px] text-ink-2">No sessions today</p>
+          ) : nextClass ? (
             <>
               <p className="text-[13px] text-ink-2">No sessions today</p>
               <p className="text-[13.5px] font-medium">Next: {nextClass.batchName}</p>
@@ -172,6 +188,7 @@ export function OwnerHomeTimeline({
           ) : null}
         </div>
       )}
+      {lead}
     </section>
   );
 }

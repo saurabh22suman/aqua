@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getMemberDetailAction, getMemberIdCardContextAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
@@ -15,7 +16,7 @@ import { requireUuidParam } from "@/lib/params";
 import { formatPhoneIN } from "@/lib/phone";
 import { getNotificationDestinationsAction } from "@/lib/actions/notification-destinations";
 import { MemberNotificationDestinations } from "@/components/member-notification-destinations";
-import { BackLink } from "@/components/ui/BackLink";
+import { BackToReceptionSearch } from "@/components/reception/member-search-navigation";
 import { PersonAvatar } from "@/components/avatar";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import {
@@ -32,13 +33,25 @@ import {
 // reception needs right after registration — identity, guardians,
 // consent, enrolment — not lifecycle controls or attendance history,
 // which live on the owner-side detail page.
+//
+// Batch 4 — identity first, then the desk tasks in the order reception
+// actually performs them: see the invoice/receipt, enrol in a batch,
+// start or change a plan. Printable identity, notifications, guardians
+// and consent follow as member records. The anchors are same-page DOM
+// targets; no new route, capability or commercial workflow is added.
+const TASK_SECTION =
+  "scroll-mt-24 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--focus-ring)]";
+
 export default async function ReceptionMemberDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ memberId: string }>;
+  searchParams?: Promise<{ searchReturn?: string }>;
 }) {
   const ctx = await requireReception();
   const { memberId } = await params;
+  const query = await searchParams;
   requireUuidParam(memberId);
   const [member, cardCtx, terminology, timezone] = await Promise.all([
     getMemberDetailAction(memberId),
@@ -56,7 +69,7 @@ export default async function ReceptionMemberDetailPage({
 
   return (
     <StaffPage>
-      <BackLink href="/reception/members" label="Search" />
+      <BackToReceptionSearch memberId={memberId} namespace={`${ctx.tenantId}:${ctx.userId}`} token={query?.searchReturn} />
 
       <div
         className="mt-2 flex items-start gap-3"
@@ -64,7 +77,7 @@ export default async function ReceptionMemberDetailPage({
       >
         <PersonAvatar name={member.fullName} seed={member.memberId} size={48} className="flex-none" />
         <div className="min-w-0 flex-1">
-          <h1 className="text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink">
+          <h1 className="text-[22px] font-medium leading-tight tracking-[-0.01em] text-ink">
             {member.fullName}
           </h1>
           <p className="mt-1 text-[12.5px] leading-snug text-ink-3">
@@ -74,101 +87,141 @@ export default async function ReceptionMemberDetailPage({
         </div>
       </div>
 
-      {cardCtx && terminology ? (
-        <div className="print-isolate-block mt-4">
-          <MemberIdCard
-            tenantSlug={cardCtx.tenantSlug}
-            tenantDisplayName={cardCtx.displayName}
-            tenantAccent={cardCtx.accent}
-            initials={cardCtx.initials}
-            memberFullName={member.fullName}
-            memberCode={member.memberCode}
-            memberUuid={member.memberId}
-            terminology={terminology}
-          />
-        </div>
-      ) : null}
+      <nav aria-label="Member tasks" className="mt-4">
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 [&_a]:w-full [&_a]:justify-center">
+          <li>
+            <Link replace prefetch={false} href="#member-invoices" aria-label="Invoices and payments" className="inline-flex min-h-11 items-center rounded-pill border border-line bg-paper px-3.5 text-[13px] font-medium text-water">
+              Invoices
+            </Link>
+          </li>
+          <li>
+            <Link replace prefetch={false} href="#member-enrolment" aria-label="Batch enrolment" className="inline-flex min-h-11 items-center rounded-pill border border-line bg-paper px-3.5 text-[13px] font-medium text-water">
+              Enrolment
+            </Link>
+          </li>
+          <li>
+            <Link replace prefetch={false} href="#member-plans" aria-label="Membership plans" className="inline-flex min-h-11 items-center rounded-pill border border-line bg-paper px-3.5 text-[13px] font-medium text-water">
+              Plans
+            </Link>
+          </li>
+          <li>
+            <Link replace prefetch={false} href="#member-records" aria-label="Member records" className="inline-flex min-h-11 items-center rounded-pill border border-line bg-paper px-3.5 text-[13px] font-medium text-ink-2">
+              Records
+            </Link>
+          </li>
+        </ul>
+      </nav>
 
-      {destinations ? (
-        <MemberNotificationDestinations key={memberId} memberId={memberId} {...destinations} />
-      ) : null}
-      <MemberEnrolmentPanel
-        memberId={member.memberId}
-        terminology={terminology}
-        canEnrol={hasPermission(ctx, "members.write")}
-        canWaitlist={hasPermission(ctx, "enquiries.write")}
-      />
+      <section id="member-invoices" aria-labelledby="member-invoices-title" tabIndex={-1} className={`mt-5 ${TASK_SECTION}`}>
+        <h2 id="member-invoices-title" className="text-[15px] font-medium leading-tight text-ink">
+          Invoices and payments
+        </h2>
+        <MemberInvoicesPanel
+          showHeading={false}
+          memberId={member.memberId}
+          canWrite={hasPermission(ctx, "invoices.write")}
+          canVoid={hasPermission(ctx, "settings.manage")}
+          canRecord={hasPermission(ctx, "payments.record")}
+          canRefund={hasPermission(ctx, "payments.refund")}
+          canReadPayments={hasPermission(ctx, "payments.read")}
+          timezone={timezone}
+        />
+      </section>
 
-      <MemberSubscriptionPanel
-        memberId={member.memberId}
-        canManage={hasPermission(ctx, "members.write")}
-      />
+      <section id="member-enrolment" tabIndex={-1} className={TASK_SECTION}>
+        <MemberEnrolmentPanel
+          memberId={member.memberId}
+          terminology={terminology}
+          canEnrol={hasPermission(ctx, "members.write")}
+          canWaitlist={hasPermission(ctx, "enquiries.write")}
+        />
+      </section>
 
-      <MemberInvoicesPanel
-        memberId={member.memberId}
-        canWrite={hasPermission(ctx, "invoices.write")}
-        canVoid={hasPermission(ctx, "settings.manage")}
-        canRecord={hasPermission(ctx, "payments.record")}
-        canRefund={hasPermission(ctx, "payments.refund")}
-        canReadPayments={hasPermission(ctx, "payments.read")}
-        timezone={timezone}
-      />
+      <section id="member-plans" tabIndex={-1} className={TASK_SECTION}>
+        <MemberSubscriptionPanel
+          memberId={member.memberId}
+          canManage={hasPermission(ctx, "members.write")}
+        />
+      </section>
 
-      {member.isMinor ? (
-        <StaffSection
-          title={
-            <span className="flex items-center gap-2">
-              <OwnerIcon name="members" size={16} className="text-ink-3" />
-              Guardians
-            </span>
-          }
-        >
-          {member.guardians.length === 0 ? (
-            <p className="mt-2 text-[13px] text-ink-3">
-              No {resolveTerm(terminology, "guardian", 1)} on file.
-            </p>
-          ) : (
-            <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
-              {member.guardians.map((g) => (
-                <li key={g.personId} className="px-3.5 py-2.5 text-[13px]">
-                  <span className="font-medium text-ink">{g.fullName}</span>
-                  <span className="text-ink-3"> — {g.relationship}</span>
-                  {g.phone ? <span className="text-ink-3"> · {formatPhoneIN(g.phone)}</span> : null}
-                  {g.isPrimary ? (
-                    <span className="ml-1.5 text-[12px] text-ink-2">primary</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </StaffSection>
-      ) : null}
+      <section id="member-records" tabIndex={-1} className={TASK_SECTION}>
+        <StaffSection title="Member records">
+          {cardCtx && terminology ? (
+            <div className="print-isolate-block mt-3">
+              <MemberIdCard
+                tenantSlug={cardCtx.tenantSlug}
+                tenantDisplayName={cardCtx.displayName}
+                tenantAccent={cardCtx.accent}
+                initials={cardCtx.initials}
+                memberFullName={member.fullName}
+                memberCode={member.memberCode}
+                memberUuid={member.memberId}
+                terminology={terminology}
+              />
+            </div>
+          ) : null}
 
-      <StaffSection
-        title={
-          <span className="flex items-center gap-2">
-            <OwnerIcon name="lock" size={16} className="text-ink-3" />
-            Consent
-          </span>
-        }
-      >
-        {member.consents.length === 0 ? (
-          <p className="mt-2 text-[13px] text-ink-3">No consent on file.</p>
-        ) : (
-          <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
-            {member.consents.map((c, i) => (
-              <li key={i} className="px-3.5 py-2.5 text-[13px]">
-                <span className="font-medium capitalize text-ink">{c.purpose}</span>
-                <span className="text-ink-3">
-                  {" "}
-                  — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"},
-                  granted by {c.granterName || "self"}
+          {destinations ? (
+            <MemberNotificationDestinations key={memberId} memberId={memberId} {...destinations} />
+          ) : null}
+
+          {member.isMinor ? (
+            <StaffSection
+              title={
+                <span className="flex items-center gap-2">
+                  <OwnerIcon name="members" size={16} className="text-ink-3" />
+                  Guardians
                 </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </StaffSection>
+              }
+            >
+              {member.guardians.length === 0 ? (
+                <p className="mt-2 text-[13px] text-ink-3">
+                  No {resolveTerm(terminology, "guardian", 1)} on file.
+                </p>
+              ) : (
+                <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
+                  {member.guardians.map((g) => (
+                    <li key={g.personId} className="px-3.5 py-2.5 text-[13px]">
+                      <span className="font-medium text-ink">{g.fullName}</span>
+                      <span className="text-ink-3"> — {g.relationship}</span>
+                      {g.phone ? <span className="text-ink-3"> · {formatPhoneIN(g.phone)}</span> : null}
+                      {g.isPrimary ? (
+                        <span className="ml-1.5 text-[12px] text-ink-2">primary</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </StaffSection>
+          ) : null}
+
+          <StaffSection
+            title={
+              <span className="flex items-center gap-2">
+                <OwnerIcon name="lock" size={16} className="text-ink-3" />
+                Consent
+              </span>
+            }
+          >
+            {member.consents.length === 0 ? (
+              <p className="mt-2 text-[13px] text-ink-3">No consent on file.</p>
+            ) : (
+              <ul className={`mt-2 divide-y divide-line ${STAFF_CARD}`}>
+                {member.consents.map((c, i) => (
+                  <li key={i} className="px-3.5 py-2.5 text-[13px]">
+                    <span className="font-medium capitalize text-ink">{c.purpose}</span>
+                    <span className="text-ink-3">
+                      {" "}
+                      — {c.withdrawnAt ? `withdrawn ${formatDateIST(c.withdrawnAt)}` : "active"},
+                      granted by {c.granterName || "self"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </StaffSection>
+        </StaffSection>
+      </section>
     </StaffPage>
   );
 }

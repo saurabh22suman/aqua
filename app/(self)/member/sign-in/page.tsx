@@ -33,7 +33,7 @@ export default async function MemberSignInPage({
   const raw = typeof params.clubId === "string" ? params.clubId : "";
   const clubId = UUID_RE.test(raw) ? raw : undefined;
   return (
-    <LoginWelcome>
+    <LoginWelcome activeRole="member" clubId={clubId}>
       <SelfSignInForm audience="member" clubId={clubId} />
     </LoginWelcome>
   );

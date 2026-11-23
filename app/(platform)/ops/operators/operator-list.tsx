@@ -50,7 +50,7 @@ export function OperatorList({
                 ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <OpsStatusPill tone={operator.role === "admin" ? "water" : "neutral"}>
+                <OpsStatusPill tone="neutral">
                   {operator.role === "admin" ? "Administrator" : "Viewer"}
                 </OpsStatusPill>
                 <OpsStatusPill tone={operator.status === "active" ? "good" : "warn"}>
@@ -84,7 +84,7 @@ export function OperatorList({
 
             <OpsSection
               className="mt-4"
-              title="Sessions"
+              title="Sign-in sessions"
               subtitle="A session ends when it expires or when an administrator ends it."
             >
               {own.length === 0 ? (
@@ -97,6 +97,9 @@ export function OperatorList({
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-[13px] text-ink">
                             <span title={session.id}>{shortOperatorId(session.id)}</span>
+                            {isOwn && session.id === currentSessionId ? (
+                              <span className="ml-2 text-ink-2">Your current session</span>
+                            ) : null}
                           </p>
                           <OpsStatusPill tone={session.state === "active" ? "good" : "neutral"}>
                             {session.state === "active" ? "Live" : "Expired"}
@@ -124,7 +127,7 @@ export function OperatorList({
 
             <OpsSection
               className="mt-4"
-              title="Maintenance"
+              title="Account-wide changes"
               subtitle="Every change is recorded with a reason. Changing the role or the status ends the operator's open sessions."
             >
               {isOwn ? (

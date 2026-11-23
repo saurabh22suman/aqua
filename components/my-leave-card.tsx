@@ -48,17 +48,19 @@ export function MyLeaveCard({
   types,
   balances,
   requests,
+  showHeading = true,
 }: {
   types: LeaveTypeRow[];
   balances: LeaveBalanceRow[];
   requests: LeaveRequestRow[];
+  showHeading?: boolean;
 }) {
   return (
-    <section className={`mt-4 p-4 ${STAFF_CARD}`}>
-      <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
+    <section aria-label={showHeading ? undefined : "Leave balances and requests"} className={`mt-4 p-4 ${STAFF_CARD}`}>
+      {showHeading ? <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
         <OwnerIcon name="calendar" size={16} className="text-ink-3" />
         Leave
-      </h2>
+      </h2> : null}
 
       <ul className="mt-2 divide-y divide-line">
         {balances.map((balance) => (

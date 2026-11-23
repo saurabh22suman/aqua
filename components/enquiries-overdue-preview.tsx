@@ -9,9 +9,10 @@ import { StatusBadge } from "@/components/ui/StatusBadge";
 import type { OverdueFollowUp } from "@/lib/services/enquiries";
 import { formatDateIST } from "@/lib/time/tz";
 
-export function EnquiriesOverduePreview({ followUps, detailHrefPrefix }: {
+export function EnquiriesOverduePreview({ followUps, detailHrefPrefix, onShowQueue }: {
   followUps: OverdueFollowUp[];
   detailHrefPrefix: string;
+  onShowQueue?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (followUps.length === 0) return null;
@@ -25,7 +26,6 @@ export function EnquiriesOverduePreview({ followUps, detailHrefPrefix }: {
           <h2 className="font-display text-[18px] font-semibold text-ink">Overdue follow-ups</h2>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <StatusBadge tone="late">{sorted.length} overdue</StatusBadge>
-            <span className="text-[13px] text-ink-2">Earliest due first</span>
           </div>
         </div>
       </div>
@@ -43,7 +43,12 @@ export function EnquiriesOverduePreview({ followUps, detailHrefPrefix }: {
           </li>
         ))}
       </ul>
-      {sorted.length > 3 ? <Button variant="ghost" size="sm" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show fewer" : "Show all"}</Button> : null}
+      {onShowQueue || sorted.length > 3 ? (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {onShowQueue ? <Button variant="secondary" size="sm" aria-label="Show follow-up queue" onClick={onShowQueue}>Queue</Button> : null}
+          {sorted.length > 3 ? <Button variant="ghost" size="sm" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? "Show fewer" : "Show all"}</Button> : null}
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -12,12 +12,15 @@ export function SegmentedTabs({
   tabs,
   active,
   ariaLabel = "Sections",
+  documentNavigation = false,
 }: {
   tabs: ReadonlyArray<{ key: string; label: string; href: string }>;
   active: string;
   ariaLabel?: string;
+  documentNavigation?: boolean;
 }) {
   const navRef = useRef<HTMLElement | null>(null);
+  const TabLink = documentNavigation ? "a" : Link;
 
   useEffect(() => {
     const nav = navRef.current;
@@ -51,7 +54,7 @@ export function SegmentedTabs({
       {tabs.map((tab) => {
         const isActive = tab.key === active;
         return (
-          <Link
+          <TabLink
             key={tab.key}
             href={tab.href}
             aria-current={isActive ? "page" : undefined}
@@ -60,7 +63,7 @@ export function SegmentedTabs({
             }`}
           >
             {tab.label}
-          </Link>
+          </TabLink>
         );
       })}
     </nav>

@@ -22,7 +22,7 @@ export default async function ReceptionClosePage() {
       <BackLink href="/reception" label="Today" />
       <StaffPageHeader
         title="Close day"
-        meta="Count the cash at your counter and confirm it against today's recorded collections. The owner can reopen a closed day."
+        meta="Count the drawer, compare it with expected cash, and close your counter."
       />
       <ReceptionCloseDay
         summary={summary}

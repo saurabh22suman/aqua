@@ -50,6 +50,11 @@ import { PlanRevenueCard } from "@/components/reports/analytics-cards";
 
 type Params = { period?: string; from?: string; to?: string; facility?: string };
 
+const reportGroups: ReadonlyArray<{ id: string; title: string; families: readonly ReportFamily[] }> = [
+  { id: "financial-reports", title: "Money", families: ["collections"] },
+  { id: "operations-reports", title: "Club operations", families: ["members", "staff", "batches", "attendance"] },
+];
+
 export default async function ReportsPage({ searchParams }: { searchParams?: Promise<Params> }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.operational");
@@ -66,6 +71,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const to = custom ? params.to ?? "" : addDays(window.toDate, 1);
   const parsed = ownerInsightInputSchema.safeParse({ from, to, ...(facility ? { locationId: facility } : {}) });
   const invalid = invalidFacility || invalidPreset || (custom && params.period !== undefined) || !parsed.success;
+  const reportsEnabled = hasFeature(ctx, "reports");
   const canStaff = hasPermission(ctx, "staff.attendance");
   const canMoney = hasPermission(ctx, "reports.financial") && hasPermission(ctx, "invoices.read") && hasFeature(ctx, "reports") && hasFeature(ctx, "billing");
   const available: ReportFamily[] = ["attendance", "members", "batches", ...(canStaff ? ["staff" as const] : []), ...(canMoney ? ["collections" as const] : [])];
@@ -74,18 +80,19 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const heading = (
     <PageHeader
       title="Reports"
-      action={
-        <Link href={scoped("/owner/settings/reports")} aria-label="Customize reports" title="Customize reports" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-ctl border border-line bg-paper text-ink hover:bg-deck">
-          {/* The approved mock has no sliders glyph for this control, so
-              the shared `settings` outline is used and documented here
-              rather than substituting unrelated imagery: the control
-              opens the report SETTINGS page. */}
-          <OwnerIcon name="settings" size={20} />
+      action={reportsEnabled ? (
+        <Link
+          href={scoped("/owner/settings/reports")}
+          className="inline-flex min-h-11 items-center gap-2 rounded-ctl border border-line bg-paper px-3 text-sm font-medium text-ink hover:bg-deck"
+        >
+          <OwnerIcon name="settings" size={16} />
+          Report preferences
         </Link>
-      }
+      ) : null}
     />
   );
-  if (invalid || !hasFeature(ctx, "reports")) return <OwnerPage>{heading}<p role="alert" className="mt-4 text-sm">{invalid ? "Invalid report range or facility. Choose a valid selection." : "Reports are unavailable."}</p></OwnerPage>;
+  if (invalid) return <OwnerPage workflow="directory">{heading}<p role="alert" className="mt-4 text-sm">Invalid report range or facility. Choose a valid selection.</p><Link href={`/owner/reports?${new URLSearchParams({ period: "last7", facility: invalidFacility ? "all" : params.facility ?? facility ?? "all" })}`} className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-[var(--accent-ink)] underline underline-offset-2">Start again</Link></OwnerPage>;
+  if (!reportsEnabled) return <OwnerPage workflow="directory">{heading}<p role="alert" className="mt-4 text-sm">Reports are unavailable.</p></OwnerPage>;
   const terminology = await getTerminologyAction().then(ownerTerminology);
   const memberLabel = titleCase(resolveTerm(terminology, "member", "other"));
   const batchLabel = titleCase(resolveTerm(terminology, "batch", "other"));
@@ -154,40 +161,39 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     settle(() => getFacilityUtilisationAction(facility ? { locationId: facility } : {})),
     canMoney ? settle(() => getMoneyAnalyticsAction({ from, to }, facility)) : null,
   ]);
-  return <OwnerPage>{heading}
+  return <OwnerPage workflow="directory" data-owner-money-page="reports">{heading}
     <p className="mt-3 text-sm text-ink-2">{formatPeriodRangeIST(from, to)}{facility ? " · Selected facility" : " · All permitted facilities"}</p>
+    {custom ? <p className="mt-1 text-sm text-ink-2">Some report cards need a standard range. <Link href={scoped("/owner/reports", { period: "last7" })} className="inline-flex min-h-11 items-center font-medium text-[var(--accent-ink)] underline underline-offset-2">Use Last 7 days</Link></p> : null}
     <Link href={scoped("/owner/settings/reports")} className="block empty:hidden"><ReportPreferencesEmpty identity={identity} available={available} /></Link>
-    {/* empty:hidden — when every family is hidden by the operator's report
-        visibility preference the recovery notice appears and this list has no
-        children, so it must not paint an empty bordered card then
-        (confirmed in production Chrome: a 358x2px bordered box). */}
-    {/* Category cards, one per supported report family. empty:hidden keeps the
-        confirmed 358x2px empty-card defect from returning when every family is
-        hidden by the operator's report-visibility preference. */}
-    <div data-testid="report-categories" className="mt-4 grid grid-cols-2 gap-3 max-[339px]:grid-cols-1 lg:grid-cols-3 empty:hidden">
-      {rows.map((row) => (
-        <ReportPreferenceFilter key={row.family} identity={identity} available={available} family={row.family}>
-          {row.href ? (
-            <Link href={row.href} data-testid="report-card" data-family={row.family} aria-label={`${row.title} report`} className="group flex min-h-24 min-w-0 flex-col justify-between rounded-card border border-line bg-paper p-3 hover:bg-deck focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus,var(--accent-strong))]">
-              <span className="flex items-start justify-between gap-2">
-                <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-deck text-ink-2"><OwnerIcon name={CATEGORY_ICON[row.family]} size={20} /></span>
-                <OwnerIcon name="chevron" size={18} className="mt-1 flex-none text-ink-3" />
-              </span>
-              <span className="mt-2 block min-w-0">
-                <span className="block break-words text-[14px] font-medium leading-snug text-ink">{row.title}</span>
-                <span className="mt-0.5 block break-words text-[12px] leading-snug text-ink-3">{row.purpose}</span>
-              </span>
-            </Link>
-          ) : (
-            <div data-testid="report-card" data-family={row.family} aria-label={`${row.title} report`} className="flex min-h-24 min-w-0 flex-col justify-between rounded-card border border-dashed border-line bg-paper p-3">
-              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px] bg-deck text-ink-3"><OwnerIcon name={CATEGORY_ICON[row.family]} size={20} /></span>
-              <span className="mt-2 block min-w-0">
-                <span className="block break-words text-[14px] font-medium leading-snug text-ink-2">{row.title}</span>
-                <span className="mt-0.5 block break-words text-[12px] leading-snug text-ink-3">{row.note ?? row.purpose}</span>
-              </span>
-            </div>
-          )}
-        </ReportPreferenceFilter>
+    <div data-testid="report-categories" className="owner-report-directory">
+      {reportGroups.map(group => (
+        <section key={group.title} className="owner-report-group" aria-labelledby={group.id}>
+          <h2 id={group.id}>{group.title}</h2>
+          <div className="owner-report-links">
+            {rows.filter(row => group.families.includes(row.family)).map((row) => (
+              <ReportPreferenceFilter key={row.family} identity={identity} available={available} family={row.family}>
+                {row.href ? (
+                  <Link href={row.href} data-testid="report-card" data-family={row.family} aria-label={`${row.title} report`} className="owner-report-destination">
+                    <span className="owner-report-glyph"><OwnerIcon name={CATEGORY_ICON[row.family]} size={20} /></span>
+                    <span className="block min-w-0">
+                      <span className="block break-words text-[14px] font-medium leading-snug text-ink">{row.title}</span>
+                      <span className="mt-0.5 block break-words text-[12px] leading-snug text-ink-3">{row.purpose}</span>
+                    </span>
+                    <OwnerIcon name="chevron" size={18} className="ml-auto flex-none text-ink-3" />
+                  </Link>
+                ) : (
+                  <div data-testid="report-card" data-family={row.family} aria-label={`${row.title} report`} className="owner-report-destination is-unavailable">
+                    <span className="owner-report-glyph"><OwnerIcon name={CATEGORY_ICON[row.family]} size={20} /></span>
+                    <span className="block min-w-0">
+                      <span className="block break-words text-[14px] font-medium leading-snug text-ink-2">{row.title}</span>
+                      <span className="mt-0.5 block break-words text-[12px] leading-snug text-ink-3">{row.note ?? row.purpose}</span>
+                    </span>
+                  </div>
+                )}
+              </ReportPreferenceFilter>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
     <details className="mt-5"><summary className="min-h-11 cursor-pointer text-sm font-semibold">More reports</summary><div className="grid items-start gap-3 lg:grid-cols-2">

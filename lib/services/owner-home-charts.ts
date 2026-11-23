@@ -53,6 +53,7 @@ export type CollectionsBucket = {
   digital: number;
   other: number;
   totalPaise: number;
+  paymentCount?: number;
 };
 
 export type GroupTotal = {
@@ -260,6 +261,7 @@ export async function getOwnerCharts(
       digital: 0,
       other: 0,
       totalPaise: 0,
+      paymentCount: 0,
     }));
     const byKey = new Map(buckets.map((bucket) => [bucket.key, bucket]));
     const methodTotals = new Map<string, { paise: number; count: number }>();
@@ -269,6 +271,7 @@ export async function getOwnerCharts(
       if (bucket) {
         bucket[methodGroup(row.method)] += paise;
         bucket.totalPaise += paise;
+        bucket.paymentCount += Number(row.count);
       }
     }
     let totalPaise = 0;

@@ -39,7 +39,7 @@ export default async function TerminologySettingsPage({
 
   const data = await getTerminologyAction();
   return (
-    <OwnerPage>
+    <OwnerPage workflow="settings">
       <BackLink href="/owner/settings" label="Settings" />
 
       <PageHeader

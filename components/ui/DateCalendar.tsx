@@ -74,6 +74,8 @@ export type DateCalendarProps = {
   popupRef?: RefObject<HTMLElement | null>;
   /** The accessible name of the calendar. */
   label?: string;
+  /** Keep the picker inside the active modal's scroll and focus boundary. */
+  inline?: boolean;
 };
 
 export function DateCalendar({
@@ -87,6 +89,7 @@ export function DateCalendar({
   anchor,
   popupRef,
   label = "Choose a date",
+  inline = false,
 }: DateCalendarProps) {
   const max = maxIsoDate && parseCalendarDate(maxIsoDate) ? maxIsoDate : undefined;
   const selected = (!max || value <= max) ? parseCalendarDate(value) : null;
@@ -109,6 +112,7 @@ export function DateCalendar({
   // week month is a different height, so the popup is measured again
   // when the month changes and is placed against its real height.
   useLayoutEffect(() => {
+    if (inline) return;
     const popup = popupNode.current;
     if (!popup) return;
     const previousMaxHeight = popup.style.maxHeight;
@@ -116,12 +120,13 @@ export function DateCalendar({
     const naturalHeight = popup.offsetHeight;
     popup.style.maxHeight = previousMaxHeight;
     setHeight(naturalHeight);
-  }, [view]);
+  }, [inline, view]);
 
   // The popup follows the viewport: it is measured and placed again
   // when the window is resized or the page is scrolled, so it never
   // sits where it can no longer be reached.
   useEffect(() => {
+    if (inline) return;
     function update() {
       setLayout(calendarPopupLayout(anchor, height, clientViewport()));
     }
@@ -132,7 +137,7 @@ export function DateCalendar({
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
     };
-  }, [anchor, height]);
+  }, [anchor, height, inline]);
 
   // The chosen day keeps the keyboard focus while the calendar is open.
   useEffect(() => {
@@ -236,14 +241,14 @@ export function DateCalendar({
       aria-label={label}
       data-date-calendar={id}
       onKeyDown={handlePopupKeyDown}
-      style={{
+      style={inline ? undefined : {
         top: layout.top,
         left: layout.left,
         width: layout.width,
         maxHeight: layout.maxHeight,
         overflowY: "auto",
       }}
-      className="fixed z-50 rounded-card border border-line bg-paper p-3 shadow-lg"
+      className={`${inline ? "mt-2 w-full" : "fixed z-50 shadow-lg"} rounded-card border border-line bg-paper p-3`}
     >
       <DateCalendarHeader view={view} maxIsoDate={max} onViewChange={showMonth} />
 
@@ -284,6 +289,7 @@ export function DateCalendar({
     </div>
   );
 
+  if (inline) return popup;
   if (typeof document === "undefined") return null;
   return createPortal(popup, document.body);
 }

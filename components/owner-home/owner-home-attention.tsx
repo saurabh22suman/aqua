@@ -33,6 +33,7 @@ export function OwnerHomeAttention({
   count,
   summary,
   onEmpty,
+  footer,
 }: {
   rows: readonly OwnerAttentionRow[];
   /**
@@ -46,17 +47,18 @@ export function OwnerHomeAttention({
   summary: string;
   /** What the panel says when nothing needs attention. */
   onEmpty?: ReactNode;
+  footer?: ReactNode;
 }) {
   return (
     <section
       data-testid="owner-home-attention"
-      aria-label="Needs your decision"
-      className="overflow-hidden rounded-[18px] border border-line bg-paper"
+      aria-label="Needs attention"
+      className="courtside-attention overflow-hidden rounded-card border border-line bg-paper"
     >
-      <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-5">
+      <div className="courtside-section-heading flex items-center justify-between gap-3 px-5 py-4">
         <div className="min-w-0">
-          <h2 className="font-display text-[18px] font-semibold">Needs your decision</h2>
-          <p className="mt-0.5 text-[12.5px] text-ink-3">{summary}</p>
+          <h2 className="font-display text-[18px] font-semibold">Needs attention</h2>
+          {summary ? <p className="mt-0.5 text-[12.5px] text-ink-3">{summary}</p> : null}
         </div>
         {count > 0 ? <CountChip count={count} tone="warn" /> : null}
       </div>
@@ -75,7 +77,6 @@ export function OwnerHomeAttention({
               <AttentionListItem
                 key={`${row.title}-${index}`}
                 row={row}
-                divided={index > 0}
               />
             ))}
           </ul>
@@ -89,7 +90,6 @@ export function OwnerHomeAttention({
                   <AttentionListItem
                     key={`${row.title}-hidden-${index}`}
                     row={row}
-                    divided
                   />
                 ))}
               </ul>
@@ -97,6 +97,7 @@ export function OwnerHomeAttention({
           ) : null}
         </>
       )}
+      {footer}
     </section>
   );
 }
@@ -104,10 +105,8 @@ export function OwnerHomeAttention({
 /** One attention row: a chip, a reason, and where it can be dealt with. */
 function AttentionListItem({
   row,
-  divided,
 }: {
   row: OwnerAttentionRow;
-  divided: boolean;
 }) {
   const body = (
     <>
@@ -127,7 +126,7 @@ function AttentionListItem({
   const classes =
     "flex items-start gap-3 px-5 py-3.5 motion-fast transition-colors hover:bg-deck/60";
   return (
-    <li className={divided ? "border-t border-line" : ""}>
+    <li className="border-t border-line">
       {row.href ? (
         <Link href={row.href} className={classes}>
           {body}

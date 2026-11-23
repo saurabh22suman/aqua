@@ -67,8 +67,8 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
         },
         {
           href: "/owner/settings/configuration",
-          label: "Business rules",
-          detail: "Business-wide settings and requests for platform-held values.",
+          label: "Academy rules",
+          detail: "Attendance notifications, club-wide rules and platform settings.",
         },
       ],
     },
@@ -158,27 +158,15 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
       ],
     },
     {
-      key: "communications",
-      label: "Communications",
-      summary: "Who gets told what, and when.",
-      items: [
-        {
-          href: "/owner/settings/alerts",
-          label: "Absence alerts",
-          detail: "When coaches and parents should be told about missed sessions.",
-        },
-        {
-          href: "/owner/announcements",
-          label: "Announcements",
-          detail: "Write and send a message to members and guardians.",
-        },
-      ],
-    },
-    {
       key: "appearance",
       label: "Personal preferences",
-      summary: "Your display and report preferences.",
+      summary: "Your starting facility and display preferences.",
       items: [
+        {
+          href: "/owner/settings/workspace",
+          label: "Default facility",
+          detail: "Choose where this workspace opens on this device.",
+        },
         {
           href: "/owner/settings/appearance",
           // Named for what the owner changes there, not for the internal
@@ -189,7 +177,7 @@ export function settingCategories(flags: SettingFlags): SettingCategory[] {
         {
           href: "/owner/settings/reports",
           label: "Report preferences",
-          detail: "Your personal report display preferences.",
+          detail: "Choose which reports appear on this device.",
         },
       ],
     },

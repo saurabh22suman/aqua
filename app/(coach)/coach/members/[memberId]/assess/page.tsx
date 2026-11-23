@@ -68,6 +68,7 @@ export default async function AssessMemberPage({
         />
       )}
       <AssessmentBoard
+        key={memberId}
         memberId={memberId}
         progress={progress}
         canAssess={canAssess}

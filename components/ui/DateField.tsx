@@ -268,6 +268,7 @@ export function DateField({
           onDismiss={() => calendar.closeCalendar(true)}
           anchor={calendar.anchor}
           popupRef={calendar.popupRef}
+          inline={Boolean(calendar.wrapperRef.current?.closest("dialog[open]"))}
         />
       ) : null}
       {formatHint !== "none" ? (

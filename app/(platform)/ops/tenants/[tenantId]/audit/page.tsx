@@ -1,10 +1,13 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
 import { runOpsRead } from "@/lib/auth/ops-operation";
-import { DATETIME_FMT, SectionHeader, ActivityDetail } from "../tenant-detail-shared";
-import { OpsCardFlush, OpsEmptyState } from "@/components/ops/ops-primitives";
+import { DATETIME_FMT, ActivityDetail } from "../tenant-detail-shared";
+import { OpsPageHeader, OpsCardFlush, OpsEmptyState } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Tenant audit log" };
 
 // PR4 (ops console improvements) — Audit tab, moved verbatim from
 // the Overview page's "Recent activity" section.
@@ -31,11 +34,8 @@ export default async function TenantAuditPage({
   if (!detail) notFound();
 
   return (
-    <section>
-      <SectionHeader
-        title="Recent activity"
-        subtitle="Last 20 platform events scoped to this tenant"
-      />
+    <section className="space-y-4">
+      <OpsPageHeader title="Audit log" lede="Last 20 platform events for this tenant." />
       {detail.recentActivity.length === 0 ? (
         <OpsEmptyState
           title="No activity yet"

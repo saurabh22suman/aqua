@@ -193,6 +193,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
             )}
             {pending ? "Saving…" : "Save changes"}
           </Button>
+          <a href="#branding-identity-preview" className="inline-flex min-h-11 items-center text-sm font-medium text-[var(--accent-ink)]">Preview identity</a>
         </div>
       </div>
 
@@ -201,7 +202,7 @@ export function BrandingForm({ initial }: { initial: FormState }) {
         data-testid="branding-preview"
       >
         <div className="rounded-card border border-line bg-paper p-4 sm:p-5">
-          <h2 className="font-display text-[16px] font-semibold">
+          <h2 id="branding-identity-preview" tabIndex={-1} className="font-display text-[16px] font-semibold">
             Identity preview
           </h2>
           <div className="mt-4 flex items-center gap-4">

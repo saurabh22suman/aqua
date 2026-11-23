@@ -13,3 +13,14 @@ it.each([
   render(<SelfHome audience={audience} scopeKind="self_session" tenantId="synthetic" view={{ clubName: "Example", audience, entries: [] }} />);
   expect(screen.getByRole("link", { name: /announcements/i }).getAttribute("href")).toBe(href);
 });
+
+it.each([["member", "/member"], ["guardian", "/family"]] as const)(
+  "links %s home to account and announcements near the top",
+  (audience, base) => {
+    render(<SelfHome audience={audience} scopeKind="self_session" tenantId="synthetic" view={{ clubName: "Example", audience, entries: [] }} />);
+    const group = screen.getByRole("navigation", { name: "Workspace" });
+    expect(group.querySelector('a[href="' + base + '/account"]')).toBeTruthy();
+    expect(group.querySelector('a[aria-current="page"]')).toMatchObject({ textContent: "Home" });
+    expect(group.compareDocumentPosition(screen.getByRole("heading", { level: 1 })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  },
+);

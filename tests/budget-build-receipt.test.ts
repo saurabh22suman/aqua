@@ -41,9 +41,18 @@ describe("budget build reuse", () => {
     rmSync(join(root, "new.ts")); rmSync(join(root, ".next/BUILD_ID"));
     expect(() => requireBudgetBuild(root)).toThrow();
   });
-  it("still applies the font limit to a valid receipt", () => {
-    const root = fixture(); writeFileSync(join(root, ".next/static/media/font.woff2"), Buffer.alloc(61 * 1024)); recordBudgetBuild(root);
-    expect(() => font(root, ["--reuse-build"])).toThrow();
+  it("enforces the combined 150 KiB font limit on a valid receipt", () => {
+    const root = fixture();
+    const first = join(root, ".next/static/media/font.woff2");
+    const second = join(root, ".next/static/media/another-font.woff2");
+    writeFileSync(first, Buffer.alloc(100 * 1024));
+    writeFileSync(second, Buffer.alloc(50 * 1024));
+    recordBudgetBuild(root);
+    expect(font(root, ["--reuse-build"])).toContain("Within budget (2 files)");
+
+    writeFileSync(second, Buffer.alloc(50 * 1024 + 1));
+    recordBudgetBuild(root);
+    expect(() => font(root, ["--reuse-build"])).toThrow(/exceeds the 150/);
   });
   it("keeps standalone default building and rejects unknown flags", () => {
     const root = fixture(); mkdirSync(join(root, "bin"));

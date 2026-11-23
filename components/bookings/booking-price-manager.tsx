@@ -37,6 +37,7 @@ export function BookingPriceManager({
   const [editing, setEditing] = useState<BookingPriceRuleRow | null>(null);
   const [formOpen, setFormOpen] = useState(rules.length === 0);
   const [notice, setNotice] = useState<string | null>(null);
+  const activeRules = rules.filter(rule => rule.isActive).length;
 
   function refresh() {
     setEditing(null);
@@ -53,6 +54,10 @@ export function BookingPriceManager({
 
   return (
     <div className="space-y-4">
+      <section aria-label="Pricing rule coverage" className="owner-work-panel flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+        <p><strong className="tabular-nums">{activeRules}</strong> active {activeRules === 1 ? "rule" : "rules"}</p>
+        <p><strong className="tabular-nums">{facilities.length}</strong> bookable {facilities.length === 1 ? "resource" : "resources"}</p>
+      </section>
       {!formOpen ? (
         <div className="flex justify-end">
           <Button

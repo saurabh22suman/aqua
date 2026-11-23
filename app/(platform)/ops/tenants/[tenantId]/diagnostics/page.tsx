@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -14,6 +15,8 @@ import {
   DiagnosticsRefusal,
   DiagnosticsScopeNotice,
 } from "./diagnostics-sections";
+
+export const metadata: Metadata = { title: "Tenant account diagnostics" };
 
 export const dynamic = "force-dynamic";
 

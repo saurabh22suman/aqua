@@ -1,10 +1,14 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantDetail } from "@/db/platform-tenants";
 import { asTenantId } from "@/lib/ids";
 import { runOpsRead } from "@/lib/auth/ops-operation";
-import { DATE_FMT, SectionHeader } from "../tenant-detail-shared";
-import { OpsCardFlush, OpsEmptyState } from "@/components/ops/ops-primitives";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { DATE_FMT } from "../tenant-detail-shared";
+import { OpsPageHeader, OpsCardFlush, OpsEmptyState } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Tenant locations" };
 
 // PR4 (ops console improvements) — Locations tab, moved verbatim from
 // the Overview page's single scroll.
@@ -29,11 +33,8 @@ export default async function TenantLocationsPage({
   if (!detail) notFound();
 
   return (
-    <section>
-      <SectionHeader
-        title="Locations"
-        subtitle={`${detail.locations.length} live · deleted locations hidden`}
-      />
+    <section className="space-y-4">
+      <OpsPageHeader title="Locations" lede={`${detail.locations.length} ${detail.locations.length === 1 ? "active location" : "active locations"}`} />
       {detail.locations.length === 0 ? (
         <OpsEmptyState
           title="No locations yet"
@@ -54,9 +55,7 @@ export default async function TenantLocationsPage({
                   </p>
                 </div>
                 {loc.isPrimary ? (
-                  <span className="rounded-pill bg-water-soft px-3 py-1 text-[11px] font-medium text-water">
-                    Primary
-                  </span>
+                  <StatusBadge tone="neutral">Primary</StatusBadge>
                 ) : null}
               </li>
             ))}

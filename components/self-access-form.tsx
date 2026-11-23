@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type KeyboardEvent } from "react";
+import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { PhoneField } from "@/components/auth/phone-field";
 import { PinField } from "@/components/auth/pin-field";
@@ -85,6 +85,7 @@ export function SelfSignInForm({
   const [pinBlurred, setPinBlurred] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
 
   const pinValid = PIN_RULE.test(pin);
   // The rule is only complained about once the field has been left.
@@ -101,7 +102,8 @@ export function SelfSignInForm({
   }
 
   async function submit(): Promise<void> {
-    if (busy) return;
+    if (submitting.current) return;
+    submitting.current = true;
     setError(null);
     setBusy(true);
     try {
@@ -156,6 +158,7 @@ export function SelfSignInForm({
       );
       focusField("self-phone");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
@@ -173,11 +176,11 @@ export function SelfSignInForm({
       </h1>
       <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
         {audience === "member"
-          ? "Use the mobile number and PIN for your club account."
-          : "Use the mobile number and PIN for your own club account."}
+          ? "Open your membership with the mobile number and PIN linked to it."
+          : "Use your own linked mobile number and PIN to open your family’s memberships."}
       </p>
 
-      <form onSubmit={onSubmit} aria-busy={busy} className="space-y-5">
+      <form onSubmit={onSubmit} aria-busy={busy} className="mt-5 space-y-4">
         <PhoneField
           id="self-phone"
           value={phone}
@@ -200,6 +203,7 @@ export function SelfSignInForm({
           <p
             role="alert"
             data-testid="self-form-error"
+            data-auth-feedback
             className="text-[13px] leading-relaxed text-ink-2"
           >
             {error}
@@ -209,28 +213,19 @@ export function SelfSignInForm({
           type="submit"
           variant="primary"
           size="lg"
-          pill
           disabled={!canSubmit}
-          className="w-full disabled:opacity-40"
+          className="w-full disabled:opacity-60"
         >
-          {busy ? "One moment…" : "Sign in"}
+          {busy ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      <div className="mt-4 flex flex-col items-center gap-1">
-        <Link
-          href={audience === "member" ? "/family/sign-in" : "/member/sign-in"}
-          className="flex min-h-[44px] items-center text-[14px] text-ink-2 underline underline-offset-2"
-        >
-          {audience === "member"
-            ? "Signing in for your family?"
-            : "Signing in for yourself?"}
-        </Link>
+      <div className="mt-4 border-t border-line pt-1">
         <Link
           href={audience === "member" ? "/member/activate" : "/family/activate"}
           className="flex min-h-[44px] items-center text-[14px] text-ink-2 underline underline-offset-2"
         >
-          Got an invitation link?
+          Invitation help
         </Link>
       </div>
     </div>

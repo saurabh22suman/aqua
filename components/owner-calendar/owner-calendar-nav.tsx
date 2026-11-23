@@ -9,7 +9,6 @@
 // server-driven surface navigates by URL, a client-driven one calls a
 // handler. The appearance is the shared primitive's either way.
 
-import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
 import { buttonClasses } from "@/components/ui/Button";
 
@@ -36,14 +35,14 @@ export function CalendarNavControl({
   });
   if ("href" in target) {
     return (
-      <Link
+      <a
         href={target.href}
         className={classNames}
         data-testid={testId}
         aria-label={ariaLabel}
       >
         {children}
-      </Link>
+      </a>
     );
   }
   return (

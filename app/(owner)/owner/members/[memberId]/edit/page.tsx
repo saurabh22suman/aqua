@@ -53,7 +53,7 @@ export default async function EditMemberPage({
   const editHref = `/owner/members/${member.memberId}/edit${editQuery.size ? `?${editQuery}` : ""}`;
 
   return (
-    <OwnerPage className="max-w-3xl">
+    <OwnerPage workflow="edit" className="max-w-3xl">
       <BackLink href={profileHref} label="Member details" />
       <PageHeader
         className="mt-2"

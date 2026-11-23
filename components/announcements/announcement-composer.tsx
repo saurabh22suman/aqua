@@ -4,6 +4,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { previewAnnouncementAudienceAction, sendAnnouncementAction } from "@/lib/actions/announcements";
 import type { AnnouncementAudiencePreview, AnnouncementAudiencePreviewInput } from "@/lib/services/announcements";
+import { formatDateTimeIST } from "@/lib/time/tz";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -23,6 +24,8 @@ export function AnnouncementComposer({
   batchLabel,
   guardianLabel,
   canSelectBatch = true,
+  canSendClubWide = true,
+  canReviewHistory = true,
 }: {
   batches: Array<{ id: string; name: string }>;
   // Resolved through resolveTerm on the server (L3 scan: "members"
@@ -32,6 +35,8 @@ export function AnnouncementComposer({
   batchLabel: string;
   guardianLabel: string;
   canSelectBatch?: boolean;
+  canSendClubWide?: boolean;
+  canReviewHistory?: boolean;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -41,12 +46,14 @@ export function AnnouncementComposer({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [review, setReview] = useState<{key:string; result:Extract<AnnouncementAudiencePreview,{ok:true}>} | null>(null);
+  const [unknownOutcome, setUnknownOutcome] = useState(false);
+  const sendInFlight = useRef(false);
   const [reviewBusy, setReviewBusy] = useState(false);
   const reviewEpoch = useRef(0);
   const reviewKey = `${audience}:${audience === "batch" ? batchId : ""}`;
   const reviewed = review?.key === reviewKey ? review.result : null;
 
-  function clearReview() { reviewEpoch.current += 1; setReview(null); setMessage(null); }
+  function clearReview() { reviewEpoch.current += 1; setReview(null); if (!unknownOutcome) setMessage(null); }
   async function reviewAudience() {
     if (!audience || (audience === "batch" && !batchId)) return;
     const input: AnnouncementAudiencePreviewInput = audience === "batch" ? {audience,batchId} : {audience};
@@ -63,7 +70,8 @@ export function AnnouncementComposer({
   }
 
   async function send() {
-    if (!audience || !reviewed || reviewed.inApp.eligibleCount + reviewed.whatsapp.eligibleCount === 0 || reviewBusy || busy) return;
+    if (!audience || !reviewed || reviewed.inApp.eligibleCount + reviewed.whatsapp.eligibleCount === 0 || reviewBusy || busy || unknownOutcome || sendInFlight.current) return;
+    sendInFlight.current = true;
     setBusy(true);
     setMessage(null);
     try {
@@ -80,9 +88,9 @@ export function AnnouncementComposer({
           ...(audience === "batch" ? { batchId } : {}),
         });
       } catch {
-        setMessage(
-          "The result could not be confirmed — the announcement may or may not have been sent. Messaging may not be enabled for this academy, or the response did not reach this screen. Refresh the sent list before retrying, so an announcement is not sent twice.",
-        );
+        setUnknownOutcome(true);
+        setMessage("The announcement may or may not have been sent. Check sent history before sending it again.");
+        router.refresh();
         return;
       }
       setMessage(
@@ -108,6 +116,7 @@ export function AnnouncementComposer({
         }
       }
     } finally {
+      sendInFlight.current = false;
       setBusy(false);
     }
   }
@@ -120,12 +129,11 @@ export function AnnouncementComposer({
         void send();
       }}
     >
-      <h2 className="font-display text-[16px] font-semibold text-ink">
+      <h2 id="compose-announcement" tabIndex={-1} className="font-display text-[16px] font-semibold text-ink">
         Compose an announcement
       </h2>
       <p className="mt-1 max-w-[65ch] text-[12.5px] text-ink-3">
-        Creates in-app notifications and queues WhatsApp updates for selected
-        contacts and relevant staff. Student updates require active communications consent.
+        Review who can receive the update. Sending creates in-app notices and queues WhatsApp updates for contacts with communications consent.
       </p>
 
       <div className="mt-3 space-y-3">
@@ -134,6 +142,7 @@ export function AnnouncementComposer({
             <Input
               {...field}
               value={title}
+              disabled={busy}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={160}
               placeholder="Pool closed on Saturday"
@@ -146,6 +155,7 @@ export function AnnouncementComposer({
             <Textarea
               {...field}
               value={body}
+              disabled={busy}
               onChange={(e) => setBody(e.target.value)}
               rows={4}
               maxLength={4000}
@@ -159,14 +169,15 @@ export function AnnouncementComposer({
             <Select
               {...field}
               value={audience}
+              disabled={busy}
               onChange={(e) =>
                 { clearReview(); setReviewBusy(false); setAudience(e.target.value as "" | "all" | "batch" | "parents"); }
               }
             >
               <option value="">Choose an audience</option>
-              <option value="all">Everyone</option>
+              {canSendClubWide ? <option value="all">Everyone</option> : null}
               {canSelectBatch ? <option value="batch">One {batchLabel.toLowerCase()}</option> : null}
-              <option value="parents">Parents and {guardianLabel.toLowerCase()}</option>
+              {canSendClubWide ? <option value="parents">Parents and {guardianLabel.toLowerCase()}</option> : null}
             </Select>
           )}
         </Field>
@@ -187,6 +198,7 @@ export function AnnouncementComposer({
                 <Select
                   {...field}
                   value={batchId}
+                  disabled={busy}
                   onChange={(e) => { clearReview(); setReviewBusy(false); setBatchId(e.target.value); }}
                 >
                   <option value="">Choose a {batchLabel.toLowerCase()}</option>
@@ -202,11 +214,11 @@ export function AnnouncementComposer({
         ) : null}
       </div>
 
-      <Button type="button" variant="secondary" size="md" className="mt-3" onClick={() => void reviewAudience()} disabled={!audience || (audience === "batch" && !batchId) || reviewBusy || busy}>
+      <Button type="button" variant="secondary" size="md" className="mt-3" onClick={() => void reviewAudience()} disabled={!audience || (audience === "batch" && !batchId) || reviewBusy || busy || unknownOutcome}>
         {reviewBusy ? "Reviewing…" : "Review audience"}
       </Button>
       {reviewed ? <div className="mt-3 rounded-ctl border border-line p-3 text-[13px] text-ink-2" role="status">
-        <p>{audience === "all" ? "Everyone" : audience === "parents" ? "Parents and guardians" : batches.find((batch) => batch.id === batchId)?.name} · estimate as of {reviewed.asOf}</p>
+        <p>{audience === "all" ? "Everyone" : audience === "parents" ? "Parents and guardians" : batches.find((batch) => batch.id === batchId)?.name} · estimate as of {formatDateTimeIST(reviewed.asOf)}</p>
         <p>{reviewed.inApp.eligibleCount} eligible in-app account destinations · {reviewed.whatsapp.eligibleCount} eligible WhatsApp destinations</p>
         {reviewed.inApp.exclusions ? <p>In-app exclusions: {reviewed.inApp.exclusions.unlinked} unlinked, {reviewed.inApp.exclusions.revokedOrPending} revoked or pending.</p> : null}
         {reviewed.whatsapp.exclusions ? <p>WhatsApp exclusions: {reviewed.whatsapp.exclusions.noDestination} without destination, {reviewed.whatsapp.exclusions.noConsent} without consent, {reviewed.whatsapp.exclusions.revokedOrOutOfScope} revoked or out of scope.</p> : null}
@@ -218,7 +230,7 @@ export function AnnouncementComposer({
         variant="primary"
         size="md"
         disabled={
-          busy ||
+          busy || unknownOutcome ||
           title.trim().length === 0 ||
           body.trim().length === 0 ||
           !reviewed || reviewBusy || (reviewed.inApp.eligibleCount + reviewed.whatsapp.eligibleCount === 0) ||
@@ -230,9 +242,17 @@ export function AnnouncementComposer({
       </Button>
 
       {message ? (
-        <p role="status" className="mt-2 text-[12px] text-ink-2">
-          {message}
-        </p>
+        <p role={unknownOutcome ? "alert" : "status"} className="mt-2 text-sm text-ink-2">{message}</p>
+      ) : null}
+      {unknownOutcome ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {canReviewHistory ? <a className="inline-flex min-h-11 items-center text-sm underline" href="#sent-announcements">Check sent history</a> : (
+            <p className="text-sm text-ink-2">Ask someone with access to sent history to check this announcement.</p>
+          )}
+          <Button variant="secondary" size="sm" onClick={() => {
+            setUnknownOutcome(false); setReview(null); setMessage(null);
+          }}>I checked history</Button>
+        </div>
       ) : null}
     </form>
   );

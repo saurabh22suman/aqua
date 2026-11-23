@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/Input";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { SectionHeading } from "@/components/ui/PageHeader";
 import {
   AddItemForm,
@@ -24,7 +26,7 @@ import type { LocationOption } from "@/lib/services/people";
 // never mutates without the action returning ok.
 
 
-function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
+function AddCategoryForm({ locations, inDialog = false }: { locations: LocationOption[]; inDialog?: boolean }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
@@ -57,12 +59,12 @@ function AddCategoryForm({ locations }: { locations: LocationOption[] }) {
 
   return (
     <section
-      className="rounded-card border border-line bg-paper p-4 space-y-3"
+      className={inDialog ? "space-y-3" : "rounded-card border border-line bg-paper p-4 space-y-3"}
       data-testid="menu-add-category"
     >
-      <h2 className="font-display text-[16px] font-semibold text-ink">
+      {inDialog ? null : <h2 className="font-display text-[16px] font-semibold text-ink">
         Add a category
-      </h2>
+      </h2>}
       <label className="block">
         <span className="block text-[12px] font-medium text-ink-2 mb-1">
           Category name
@@ -229,18 +231,42 @@ export function MenuManager({
   categories,
   items,
   locations,
+  taskSheet = false,
 }: {
   categories: MenuCategoryRow[];
   items: MenuItemRow[];
   locations: LocationOption[];
+  taskSheet?: boolean;
 }) {
+  const [facility, setFacility] = useState("all");
+  const [addOpen, setAddOpen] = useState(false);
+  const inScope = (category: MenuCategoryRow) => facility === "all" || category.locationId === facility;
+  const shown = categories.filter(inScope);
   return (
     <div className="space-y-5">
+      {taskSheet && locations.length > 0 ? <>
+        <Button type="button" variant="primary" onClick={() => setAddOpen(true)} aria-haspopup="dialog">
+          <OwnerIcon name="plus" size={16} /> Add a category
+        </Button>
+        <Dialog open={addOpen} onOpenChange={setAddOpen} title="Add a category">
+          <AddCategoryForm locations={locations} inDialog />
+        </Dialog>
+      </> : null}
       <section>
         <SectionHeading
           title="Menu catalogue"
         />
-        {categories.length === 0 ? (
+        {locations.length > 1 ? (
+          <div className="owner-work-panel mt-2 space-y-1">
+            <label htmlFor="menu-facility" className="block text-sm font-medium">Menu facility</label>
+            <Select id="menu-facility" value={facility} onChange={event => setFacility(event.target.value)}>
+              <option value="all">All facilities</option>
+              {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
+            </Select>
+          </div>
+        ) : null}
+        {facility !== "all" && shown.length === 0 ? <p role="status" className="mt-2 text-sm text-ink-2">No categories at this facility.</p> : null}
+        {categories.length === 0 && facility === "all" ? (
           <p
             className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3"
             data-testid="menu-empty"
@@ -251,8 +277,8 @@ export function MenuManager({
         ) : (
           <div className="mt-2 space-y-4">
             {categories.map((category) => (
+              <div key={category.id} hidden={!inScope(category)}>
               <CategoryCard
-                key={category.id}
                 category={category}
                 locationName={
                   locations.find((l) => l.id === category.locationId)?.name ??
@@ -260,12 +286,13 @@ export function MenuManager({
                 }
                 items={items.filter((item) => item.categoryId === category.id)}
               />
+              </div>
             ))}
           </div>
         )}
       </section>
 
-      <AddCategoryForm locations={locations} />
+      {taskSheet ? null : <AddCategoryForm locations={locations} />}
     </div>
   );
 }

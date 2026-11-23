@@ -68,7 +68,7 @@ const EXEMPTIONS: Exemption[] = [
   {
     file: "lib/actions/auth-ui.ts",
     exportedName: "homeForSessionAction",
-    reason: "Pre-auth: the action decides which surface a just-OTP-verified session belongs to. No tenant data; no mutation.",
+    reason: "Post-auth landing: validates the signed-in session and any remembered live membership before selecting an active-business cookie. No tenant data write.",
   },
   {
     file: "lib/actions/auth-ui.ts",

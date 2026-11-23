@@ -1,12 +1,15 @@
 "use server";
 
-import { activeClubFromHeaders } from "@/lib/auth/active-club";
-import { headers } from "next/headers";
+import { ACTIVE_CLUB_COOKIE, activeClubFromHeaders } from "@/lib/auth/active-club";
+import { cookies, headers } from "next/headers";
 import { auth } from "@/lib/auth/server";
 import { withPlatform } from "@/db/scope";
 import { resolveSessionForLogin, type SessionResolution } from "@/db/platform";
 import { devVerificationCode } from "@/db/platform";
 import { phoneNumberSchema } from "@/lib/schemas";
+import { listClubChoices } from "@/db/club-selection";
+import { parseFacilityValue } from "@/lib/facility";
+import { lastBusinessKey, ownerStartPath, workspacePreferenceCookie } from "@/lib/services/workspace-opening";
 
 // Phase 1.6 — `homeForSessionAction` now distinguishes the
 // "operational tenant available" path (returns the role's home
@@ -25,7 +28,23 @@ export async function homeForSessionAction(): Promise<SessionResolution> {
   const h = await headers();
   const session = await withPlatform(() => auth.api.getSession({ headers: h }));
   if (!session?.user) return { kind: "none" };
-  return resolveSessionForLogin(session.user.id, activeClubFromHeaders(h));
+  const active = activeClubFromHeaders(h);
+  const home = await resolveSessionForLogin(session.user.id, active);
+  if (home.kind !== "ok") return home;
+
+  const store = await cookies();
+  if (home.path === "/clubs" && !active) {
+    const remembered = parseFacilityValue(store.get(lastBusinessKey(session.user.id))?.value);
+    if (remembered) {
+      const choices = await listClubChoices(session.user.id, new Date(session.session.createdAt));
+      const choice = choices.find(({ tenantId }) => tenantId === remembered);
+      if (choice) {
+        store.set(ACTIVE_CLUB_COOKIE, choice.tenantId, { ...workspacePreferenceCookie, maxAge: 30 * 24 * 60 * 60 });
+        return { kind: "ok", path: await ownerStartPath(choice.homePath, session.user.id, choice.tenantId, store) };
+      }
+    }
+  }
+  return { kind: "ok", path: await ownerStartPath(home.path, session.user.id, active, store) };
 }
 
 export async function devCodeAction(rawPhone: string): Promise<string | null> {

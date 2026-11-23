@@ -4,6 +4,7 @@ import { Check, ChevronRight } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
 import { buttonClasses } from "@/components/ui/Button";
 import type { OnboardingChecklist } from "@/lib/services/onboarding-checklist";
 
@@ -29,19 +30,33 @@ export function OnboardingChecklistView({ data, guideKey }: { data: OnboardingCh
   const nextIndex = data.items.findIndex((it) => !it.complete && Boolean(it.cta));
 
   return (
-    <OwnerPage>
+    <OwnerPage workflow="setup">
+      <BackLink href="/owner" label="Home" />
       <PageHeader
-        title={unavailable ? "Register checks unavailable" : allDone ? limited ? "Available register checks complete" : "Register setup complete" : "Set up your first register"}
+        title={
+          unavailable
+            ? "Register checks unavailable"
+            : allDone
+              ? limited
+                ? "Available register checks complete"
+                : "Register setup complete"
+              : data.completedCount > 0
+                ? "Finish setting up your register"
+                : "Set up your first register"
+        }
+        purpose={
+          unavailable
+            ? "These checks need an available facility and permission to see the member register."
+            : allDone
+              ? "These register checks are complete. This is not a whole-club readiness check."
+              : "Work through the checks in order. The next incomplete check carries the action."
+        }
       />
 
       {allDone && limited && data.scopeIsLimited && (
         <p className="mt-3 max-w-2xl text-sm text-ink-2">This reflects the facilities visible to you.</p>
       )}
-      {unavailable ? (
-        <p className="mt-4 max-w-2xl text-sm text-ink-2">Register checks are unavailable with your current access.</p>
-      ) : (
-        <OptionalWorkspaceGuide key={guideKey} preferenceKey={guideKey} items={data.items.map(({ key, title, detail, complete }) => ({ key, title, detail, complete }))} />
-      )}
+      {unavailable ? <p className="mt-4 max-w-2xl text-sm text-ink-2">Register checks are unavailable with your current access.</p> : null}
 
       {!unavailable && <section
         className="mt-5 max-w-2xl rounded-card border border-line bg-paper"
@@ -130,6 +145,7 @@ export function OnboardingChecklistView({ data, guideKey }: { data: OnboardingCh
           </Link>
         </div>
       </section>}
+      {!unavailable ? <OptionalWorkspaceGuide key={guideKey} preferenceKey={guideKey} items={data.items.map(({ key, title, detail, complete }) => ({ key, title, detail, complete }))} /> : null}
     </OwnerPage>
   );
 }

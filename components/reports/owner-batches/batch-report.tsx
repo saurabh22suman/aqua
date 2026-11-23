@@ -1,22 +1,27 @@
 import type { OwnerBatchRow } from "@/lib/services/owner-batch-report";
 import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 
-export function BatchReport({ rows, canViewFinancial, collectionsHref = "/owner/reports/collections", batchOne = "batch", batchMany = "batches" }: { rows: OwnerBatchRow[]; canViewFinancial: boolean; collectionsHref?: string; batchOne?: string; batchMany?: string }) {
+export function BatchReport({ rows, canViewFinancial, collectionsHref = "/owner/reports/collections", batchOne = "batch", batchMany = "batches", batchHref }: { rows: OwnerBatchRow[]; canViewFinancial: boolean; collectionsHref?: string; batchOne?: string; batchMany?: string; batchHref?: (batchId: string) => string }) {
+  // Sort only the capacity view. Equal states retain their scoped server order.
+  const capacityRows = [...rows].sort((left, right) => {
+    const pressure = (row: OwnerBatchRow) => row.reservedPlaces > row.capacity ? 2 : row.capacity > 0 && row.reservedPlaces === row.capacity ? 1 : 0;
+    return pressure(right) - pressure(left);
+  });
   return <div className="mt-4 space-y-4">
-    <section className="rounded-card border border-line bg-paper p-4 sm:p-5">
-      <h2 className="font-display text-[16px] font-semibold">{`Places by ${batchOne}`}</h2>
-      <p className="mt-1 text-[13px] text-ink-3">Current reserved places and capacity</p>
+    <section aria-labelledby="places-by-batch" className="owner-work-panel">
+      <h2 id="places-by-batch" className="font-display text-[16px] font-semibold">{`Places by ${batchOne}`}</h2>
+      <p className="mt-1 text-[13px] text-ink-3">{`Current reserved places and capacity${rows.length ? ` · ${rows.length} ${batchMany}` : ""}`}</p>
       {rows.length === 0 ? <p className="py-5 text-[13px] text-ink-3">{`No ${batchMany} in this selection.`}</p> :
-        <ul className="mt-3 divide-y divide-line">{rows.map(row => {
-          const pct = Math.min(100, Math.round(row.reservedPlaces / row.capacity * 100));
+        <ul className="mt-3 divide-y divide-line">{capacityRows.map(row => {
+          const pct = row.capacity > 0 ? Math.min(100, Math.round(row.reservedPlaces / row.capacity * 100)) : 0;
           return <li key={row.batchId} className="py-3 first:pt-1">
             <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3">
-              <div className="min-w-0"><p className="text-[14px] font-medium">{row.batchName}</p>
+              <div className="min-w-0"><p className="text-[14px] font-medium">{batchHref ? <Link href={batchHref(row.batchId)} className="inline-flex min-h-11 items-center underline underline-offset-2 hover:no-underline">{row.batchName}</Link> : row.batchName}</p>
                 <p className="text-[12px] text-ink-3">{row.programName}{row.locationName ? ` · ${row.locationName}` : ""}</p></div>
               <p className="whitespace-nowrap text-[13px] font-medium tabular-nums">{row.reservedPlaces} of {row.capacity}</p>
             </div>
             <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded-pill bg-deck"><div className="h-full rounded-pill bg-[var(--accent-strong)]" style={{width:`${pct}%`}} /></div>
-            {row.reservedPlaces > row.capacity ? <p className="mt-1 text-[12px] text-ink-2">Over capacity</p> : null}
+            {row.reservedPlaces > row.capacity ? <p className="mt-1 text-[12px] font-semibold text-warn">Over capacity</p> : row.capacity > 0 && row.reservedPlaces === row.capacity ? <p className="mt-1 text-[12px] text-ink-2">At capacity</p> : null}
           </li>;
         })}</ul>}
       <details className="mt-2 text-[12.5px] text-ink-3">

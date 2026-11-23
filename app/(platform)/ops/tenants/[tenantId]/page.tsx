@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
@@ -6,12 +7,15 @@ import { getSampleDataState } from "@/db/sample-data-state";
 import { listActivePlans } from "@/db/platform-tenant-create";
 import { asTenantId } from "@/lib/ids";
 import { runOpsGlobalRead, runOpsRead } from "@/lib/auth/ops-operation";
+import { OpsPageHeader, OpsPanel, OpsTextLink } from "@/components/ops/ops-primitives";
 import { formatDateTimeIST } from "@/lib/time/tz";
 import { InviteOwnerForm } from "./invite-owner-form";
 import { RemoveSampleDataButton } from "./remove-sample-data-button";
 import { StatusTransitionControls } from "./status-transitions";
 import { PlanCommercialControls } from "@/components/ops/tenant-controls/plan-commercial-controls";
 import { DATE_FMT, DATETIME_FMT, SectionHeader, DescriptionRow, StatCard } from "./tenant-detail-shared";
+
+export const metadata: Metadata = { title: "Tenant overview" };
 
 // PR4 (ops console improvements) — the Overview tab. Status, settings,
 // stats and the owner-invite action — the things an operator checks
@@ -62,9 +66,34 @@ export default async function PlatformTenantDetailPage({
   );
   if (!eligiblePlans) redirect("/ops/login");
 
+  const needsTrialReview = detail.status === "trial" &&
+    (!detail.trialExpiresAt || detail.trialExpiresAt.getTime() <= Date.now());
+  const nextDecision = needsTrialReview
+    ? {
+        title: detail.trialExpiresAt ? "Trial has ended" : "Trial has no end date",
+        body: canWrite ? "Review the plan and trial deadline before deciding what to do next." : "An Ops administrator can review the plan and update the trial deadline.",
+        href: "#commercial",
+        label: "Review plan and trial",
+      }
+    : detail.status === "suspended"
+      ? {
+          title: "Tenant access is suspended",
+          body: "Check the audit log for the reason before discussing reactivation.",
+          href: `/ops/tenants/${detail.id}/audit`,
+          label: "Open tenant audit log",
+        }
+      : null;
+
   return (
     <>
-      <section>
+      <OpsPageHeader title="Tenant overview" lede="Review service status, the plan and onboarding for this tenant." />
+      {nextDecision ? (
+        <OpsPanel tone="warn" className="mt-4" title={nextDecision.title}>
+          <p>{nextDecision.body}</p>
+          <OpsTextLink href={nextDecision.href}>{nextDecision.label}</OpsTextLink>
+        </OpsPanel>
+      ) : null}
+      <section className="mt-6">
         <SectionHeader
           title="Status"
           subtitle="Suspends and reactivations take effect immediately and write to the audit log."
@@ -109,7 +138,7 @@ export default async function PlatformTenantDetailPage({
         </div>
       </section>
 
-      <section className="mt-8">
+      <section id="commercial" className="mt-8 scroll-mt-4">
         <SectionHeader
           title="Commercial"
           subtitle="The plan this club is on, and the trial end date recorded against it."
