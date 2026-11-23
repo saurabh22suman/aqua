@@ -1,9 +1,10 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 export default function Loading() {
   return (
     <OwnerPage className="max-w-2xl">
+      <SkeletonStatus>Loading menu settings…</SkeletonStatus>
       <Skeleton w={20} h={3} />
       <Skeleton w={28} h={7} className="mt-3" />
       <Skeleton w={64} h={3} className="mt-3" />

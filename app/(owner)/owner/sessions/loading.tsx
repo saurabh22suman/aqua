@@ -1,31 +1,31 @@
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 
-// Session exceptions cold-load: heading, range control, management
-// table. The skeleton is aria-hidden, so the route announces the surface
-// it is loading for a screen reader — visually hidden, so the skeleton's
-// geometry is exactly what it was.
 export default function Loading() {
   return (
-    <OwnerPage>
-      <p role="status" className="sr-only">Loading sessions</p>
-      <Skeleton w={64} h={6} />
-      <Skeleton w={80} h={3} className="mt-3" />
+    <OwnerPage workflow="planner">
+      <SkeletonStatus>Loading sessions…</SkeletonStatus>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <Skeleton w={36} h={7} />
+          <Skeleton w={62} h={3} className="mt-2" />
+        </div>
+        <Skeleton w={35} h={11} rounded="rounded-pill" />
+      </div>
       <div className="mt-5 flex gap-2">
-        <Skeleton w={16} h={11} className="rounded-ctl" />
-        <Skeleton w={20} h={11} className="rounded-ctl" />
-        <Skeleton w={20} h={11} className="rounded-ctl" />
+        <Skeleton w="full" h={11} rounded="rounded-ctl" className="flex-1" />
+        <Skeleton w={30} h={11} rounded="rounded-ctl" />
       </div>
-      <div className="mt-4 rounded-card border border-line bg-paper p-5">
-        <Skeleton w={52} h={4} />
-        <Skeleton w={96} h={3} className="mt-2" />
-        {[0, 1, 2, 3].map((row) => (
-          <div key={row} className="mt-4 border-t border-line pt-3">
-            <Skeleton w={64} h={4} />
-            <Skeleton w={40} h={3} className="mt-2" />
-          </div>
+      <Skeleton w={34} h={4} className="mb-2 mt-5" />
+      <ul aria-hidden="true" className="space-y-2">
+        {[0, 1, 2].map((row) => (
+          <li key={row} className="rounded-card border border-line bg-paper px-4 py-3">
+            <Skeleton w={27} h={5} rounded="rounded-pill" />
+            <Skeleton w={40} h={4} className="mt-2" />
+            <Skeleton w={32} h={3} className="mt-2" />
+          </li>
         ))}
-      </div>
+      </ul>
     </OwnerPage>
   );
 }

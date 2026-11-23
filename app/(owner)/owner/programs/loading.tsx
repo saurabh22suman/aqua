@@ -1,5 +1,5 @@
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { Skeleton, SkeletonTable } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus, SkeletonTable } from "@/components/skeleton";
 
 // Programs cold-load: heading, program catalogue, batch table. The
 // skeleton is aria-hidden, so the route announces the surface it is
@@ -8,7 +8,7 @@ import { Skeleton, SkeletonTable } from "@/components/skeleton";
 export default function Loading() {
   return (
     <OwnerPage>
-      <p role="status" className="sr-only">Loading programs</p>
+      <SkeletonStatus>Loading programs…</SkeletonStatus>
       <Skeleton w={64} h={6} />
       <Skeleton w={96} h={3} className="mt-3" />
       <div className="mt-5 space-y-5">

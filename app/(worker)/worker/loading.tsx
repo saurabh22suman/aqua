@@ -1,10 +1,11 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { StaffPage } from "@/components/staff-ui/staff-page";
 
 // Worker cold-load mirrors Today: heading, shift and attendance.
 export default function Loading() {
   return (
     <StaffPage>
+      <SkeletonStatus>Loading your workday…</SkeletonStatus>
       <Skeleton w={22} h={7} />
       <Skeleton w={26} h={3} className="mt-2" />
 

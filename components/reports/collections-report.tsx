@@ -19,6 +19,8 @@ import { formatDateIST, formatDateTimeIST } from "@/lib/time/tz";
 import { Dialog } from "@/components/ui/Dialog";
 import { navigateFacility } from "@/components/facility-navigation";
 import { CollectionsScopePicker } from "@/components/reports/owner-approved/collections-scope-picker";
+import { CollectionsEvidenceSkeleton } from "@/components/reports/collections-evidence-skeleton";
+import { SkeletonStatus } from "@/components/skeleton";
 import type { MouseEvent } from "react";
 
 // C-34 — the daily collection report: totals by method and by the
@@ -347,9 +349,10 @@ export function CollectionsReport({
           </button>
         </div>
       ) : report === null ? (
-        <p role="status" className="text-[13px] text-ink-3">
-          Loading collections for {scopeLabel}…
-        </p>
+        <>
+          <SkeletonStatus>{`Loading collections for ${scopeLabel}…`}</SkeletonStatus>
+          <CollectionsEvidenceSkeleton />
+        </>
       ) : (
         <>
           <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

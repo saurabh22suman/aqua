@@ -1,5 +1,5 @@
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 
 // Owner bookings cold-load. Mirrors the composed page: heading, the
 // price notice line, then the day board beside the selected slot. The
@@ -10,11 +10,11 @@ import { Skeleton } from "@/components/skeleton";
 export default function Loading() {
   return (
     <OwnerPage>
-      <p role="status" className="sr-only">Loading bookings</p>
+      <SkeletonStatus>Loading bookings…</SkeletonStatus>
       <Skeleton w={32} h={6} />
       <Skeleton w={96} h={3} className="mt-3" />
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-5">
+      <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-5">
         <div className="rounded-card border border-line bg-paper p-5 lg:col-span-3">
           <Skeleton w={36} h={4} />
           <Skeleton w={56} h={3} className="mt-2" />

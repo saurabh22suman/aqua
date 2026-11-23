@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Owner light · People lane (3 November 2026) — the import route's own fallback
@@ -7,16 +7,16 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 // Same correction as `members/new/loading.tsx`: without a sibling boundary this
 // route fell back to `owner/loading.tsx`, the HOME composition, painted under a
 // file-import screen. This skeleton is the import task's own small shape — the
-// page frame, the file-check card and the action row — announced as busy. It
+// page frame, the file-check card and the action row. It
 // does not wrap the profile or the edit page.
 //
 // No Home collections or timeline, no directory rows, and no invented counts or
 // row values: every block is a placeholder, not a number.
 export default function Loading() {
   return (
-    <OwnerPage className="max-w-3xl" aria-busy="true">
-      <div role="status" aria-busy="true" aria-live="polite">
-        <span className="sr-only">Loading the import…</span>
+    <OwnerPage workflow="edit" className="max-w-3xl">
+      <SkeletonStatus>Loading the import…</SkeletonStatus>
+      <div>
         <div aria-hidden="true">
           <Skeleton w={18} h={4} />
           <Skeleton w={40} h={6} className="mt-4" />

@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { StaffPage } from "@/components/staff-ui/staff-page";
 
 // Coach home cold-load. Shape mirrors the operational brief: page
@@ -6,6 +6,7 @@ import { StaffPage } from "@/components/staff-ui/staff-page";
 export default function Loading() {
   return (
     <StaffPage>
+      <SkeletonStatus>Loading your coaching workspace…</SkeletonStatus>
       <div className="flex items-start justify-between gap-3">
         <div>
           <Skeleton w={14} h={7} />

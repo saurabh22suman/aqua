@@ -1,9 +1,10 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { StaffPage } from "@/components/staff-ui/staff-page";
 
 export default function Loading() {
   return (
     <StaffPage className="max-w-xl">
+      <SkeletonStatus>Loading bookings…</SkeletonStatus>
       <Skeleton w={22} h={7} />
       <Skeleton w={60} h={4} className="mt-3" />
       <div className="mt-6 rounded-2xl border border-line bg-paper p-4">

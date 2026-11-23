@@ -6,7 +6,7 @@ import { Upload } from "lucide-react";
 import { listMembersAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { MembersBoard } from "@/components/members-board";
-import { MembersListLoading } from "@/components/members-list-loading";
+import MembersListLoading from "./loading";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";

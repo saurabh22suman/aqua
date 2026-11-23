@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Fees hub cold-load: heading + tab strip, four period/current figures, then
@@ -7,6 +7,7 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 export default function Loading() {
   return (
     <OwnerPage>
+      <SkeletonStatus>Loading fees…</SkeletonStatus>
       <Skeleton w={32} h={6} />
       <Skeleton w={72} h={3} className="mt-2" />
 

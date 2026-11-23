@@ -1,9 +1,10 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 export default function Loading() {
   return (
     <OwnerPage>
+      <SkeletonStatus>Loading staff leave…</SkeletonStatus>
       <Skeleton w={18} h={4} />
       <Skeleton w={28} h={6} className="mt-3" />
       <Skeleton w={56} h={3} className="mt-3" />

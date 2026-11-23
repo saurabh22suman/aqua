@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Owner booking-prices cold-load. The page resolves the facility
@@ -11,6 +11,7 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 export default function Loading() {
   return (
     <OwnerPage className="max-w-2xl">
+      <SkeletonStatus>Loading booking prices…</SkeletonStatus>
       <div className="flex items-center gap-2">
         <Skeleton w={14} h={3} />
         <Skeleton w={18} h={3} />

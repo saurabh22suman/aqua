@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // U-07 — locations settings cold-load: heading, then one card per
@@ -7,6 +7,7 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 export default function Loading() {
   return (
     <OwnerPage>
+      <SkeletonStatus>Loading facilities…</SkeletonStatus>
       <Skeleton w={16} h={4} />
       <Skeleton w={32} h={5} className="mt-2" />
       <Skeleton w={56} h={4} className="mt-2" />

@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { StaffPage } from "@/components/staff-ui/staff-page";
 
 // Assess cold-load. Shape mirrors the AssessmentBoard: back link,
@@ -6,6 +6,7 @@ import { StaffPage } from "@/components/staff-ui/staff-page";
 export default function Loading() {
   return (
     <StaffPage>
+      <SkeletonStatus>Loading the assessment…</SkeletonStatus>
       <Skeleton w={16} h={4} className="mb-4" />
       <Skeleton w={44} h={5} />
       <Skeleton w={60} h={3} className="mt-2" />

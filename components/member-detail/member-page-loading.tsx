@@ -1,4 +1,4 @@
-import { Skeleton, SkeletonCard, SkeletonLine } from "@/components/skeleton";
+import { Skeleton, SkeletonCard, SkeletonLine, SkeletonStatus } from "@/components/skeleton";
 
 // Owner light · People lane (3 November 2026) — the member PROFILE and EDIT
 // fallbacks.
@@ -12,7 +12,7 @@ import { Skeleton, SkeletonCard, SkeletonLine } from "@/components/skeleton";
 //     rendered above this fallback, so this component NEVER draws a header;
 //   - it never shows directory rows — a member profile or a member form must
 //     not look like the members list;
-//   - it announces itself (`role="status"`, `aria-busy`) with real copy for a
+//   - it announces itself with real copy for a
 //     screen reader, and the placeholder blocks stay `aria-hidden` inside the
 //     shared Skeleton primitive.
 //
@@ -32,12 +32,9 @@ export function MemberPageLoading({
 
   return (
     <div
-      role="status"
-      aria-busy="true"
-      aria-live="polite"
       className={variant === "profile" ? "contents" : variant === "section" ? "mt-3" : "mt-4"}
     >
-      <span className="sr-only">{label}</span>
+      <SkeletonStatus>{label}</SkeletonStatus>
       {variant === "edit" ? (
         <EditFormSkeleton />
       ) : variant === "section" ? (

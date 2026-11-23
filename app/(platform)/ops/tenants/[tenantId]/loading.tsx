@@ -1,10 +1,11 @@
-import { Skeleton, SkeletonStat, SkeletonCard } from "@/components/skeleton";
+import { Skeleton, SkeletonStat, SkeletonCard, SkeletonStatus } from "@/components/skeleton";
 
 // Phase 1.7 — loading state for the tenant detail page.
 
 export default function PlatformTenantDetailLoading() {
   return (
     <div className="max-w-5xl">
+      <SkeletonStatus>Loading club details…</SkeletonStatus>
       <Skeleton w={20} h={4} className="mb-4" />
       <div className="flex items-baseline gap-4">
         <Skeleton w={56} h={8} />

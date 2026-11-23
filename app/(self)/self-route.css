@@ -417,61 +417,6 @@
   justify-self: end;
 }
 
-/* Loading feedback */
-.self-skel-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 59px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--color-line);
-}
-.self-skel {
-  display: block;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--color-ink) 8%, var(--color-paper));
-}
-.self-skel-mark {
-  width: 30px;
-  height: 30px;
-}
-.self-skel-brand {
-  width: 128px;
-  height: 13px;
-}
-.self-skel-mast {
-  height: 107px;
-  border-radius: var(--self-card-radius);
-}
-.self-skel-row {
-  height: 46px;
-}
-.self-skel-card {
-  display: grid;
-  gap: 10px;
-  padding: 16px 14px;
-}
-.self-skel-line {
-  height: 12px;
-}
-.self-skel-line-short {
-  width: 58%;
-}
-.self-loading-note {
-  margin: 0;
-  padding: 4px 2px;
-  font-size: 12.5px;
-  color: var(--color-ink-3);
-}
-@media (prefers-reduced-motion: no-preference) {
-  .self-skel {
-    animation: self-skel-pulse 1.4s ease-in-out infinite alternate;
-  }
-  @keyframes self-skel-pulse {
-    from { opacity: 0.62; }
-    to { opacity: 1; }
-  }
-}
 @media (max-width: 350px) {
   .self-main { padding-inline: 9px; }
   .self-toprow { padding-inline: 10px; }

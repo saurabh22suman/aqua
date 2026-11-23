@@ -1,4 +1,4 @@
-import { Skeleton, SkeletonCard, SkeletonLine } from "@/components/skeleton";
+import { Skeleton, SkeletonCard, SkeletonLine, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Owner light · People lane (4 November 2026) — the member segment's transition
@@ -11,9 +11,9 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 // rows, and it announces itself rather than showing an unexplained blank.
 export default function Loading() {
   return (
-    <OwnerPage>
-      <div role="status" aria-busy="true" aria-live="polite">
-        <span className="sr-only">Loading details…</span>
+    <OwnerPage workflow="record">
+      <SkeletonStatus>Loading member details…</SkeletonStatus>
+      <div aria-hidden="true">
         <Skeleton w={20} h={4} />
         <div className="mt-2 rounded-card border border-line bg-paper p-4">
           <Skeleton w={38} h={6} />

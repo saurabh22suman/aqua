@@ -13,12 +13,12 @@ import { MemberPageLoading } from "@/components/member-detail/member-page-loadin
 // the edit page, so the experiment stays one nearest-boundary change.
 //
 // The status announcement comes from the shared form skeleton
-// (`role="status"`, `aria-busy`, "Loading the member form…"); the back/header
+// ("Loading the member form…"); the back/header
 // placeholders are decorative. No directory rows, no Home collections or
 // timeline, no invented counts.
 export default function Loading() {
   return (
-    <OwnerPage className="max-w-3xl" aria-busy="true">
+    <OwnerPage workflow="edit" className="max-w-3xl">
       <div aria-hidden="true">
         <Skeleton w={18} h={4} />
         <Skeleton w={40} h={6} className="mt-4" />

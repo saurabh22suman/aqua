@@ -1,19 +1,7 @@
 import type { ReactNode } from "react";
 
-// Phase 1.5–1.7 cleanup — skeleton primitive. DESIGN.md §3 says
-// "skeletons, never spinners" because users are on flaky poolside
-// 4G where a spinner reads as broken; a placeholder block matches
-// the layout that's about to arrive.
-//
-// These components take width/height as numbers of Tailwind units
-// (default 4px each), so a 4-column row of `<Skeleton w={32} h={4} />`
-// matches the spacing of the eventual content rather than guessing
-// from CSS. `rounded` keeps the placeholder consistent with the
-// card radii used elsewhere in the design system.
-
-function tone(extra?: string): string {
-  return `bg-deck animate-pulse${extra ? ` ${extra}` : ""}`;
-}
+// Dimensions use Tailwind spacing units. A preferred width shrinks with its
+// container, including inside flex rows and narrow grid tracks.
 
 export function Skeleton({
   w = 32,
@@ -21,7 +9,7 @@ export function Skeleton({
   rounded = "rounded",
   className,
 }: {
-  w?: number;
+  w?: number | "full";
   h?: number;
   rounded?: string;
   className?: string;
@@ -29,9 +17,30 @@ export function Skeleton({
   return (
     <div
       aria-hidden="true"
-      className={`${tone(className)} ${rounded}`}
-      style={{ width: `${w * 0.25}rem`, height: `${h * 0.25}rem` }}
+      data-skeleton
+      className={`min-w-0 max-w-full bg-line motion-safe:animate-pulse motion-safe:[animation-iteration-count:2] ${rounded} ${className ?? ""}`}
+      style={{ width: w === "full" ? "100%" : `${w * 0.25}rem`, height: `${h * 0.25}rem` }}
     />
+  );
+}
+
+export function SkeletonStatus({ children }: { children: string }) {
+  return <p role="status" className="sr-only">{children}</p>;
+}
+
+export function SkeletonList({ className }: { className?: string }) {
+  return (
+    <ul aria-hidden="true" className={`divide-y divide-line rounded-card border border-line bg-paper px-4 ${className ?? ""}`}>
+      {[0, 1, 2].map((row) => (
+        <li key={row} className="flex items-center gap-3 py-3.5">
+          <div className="min-w-0 flex-1">
+            <Skeleton w={34} h={4} />
+            <Skeleton w={46} h={3} className="mt-2" />
+          </div>
+          <Skeleton w={13} h={5} rounded="rounded-pill" className="shrink-0" />
+        </li>
+      ))}
+    </ul>
   );
 }
 

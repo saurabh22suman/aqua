@@ -1,10 +1,11 @@
 import { OwnerPage } from "@/components/owner-ui/owner-page";
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 
 // Onboarding cold-load: heading plus the check-count surface.
 export default function Loading() {
   return (
     <OwnerPage>
+      <SkeletonStatus>Loading club setup…</SkeletonStatus>
       <Skeleton w={64} h={6} />
       <Skeleton w={80} h={3} className="mt-3" />
       <div className="mt-5 max-w-2xl rounded-card border border-line bg-paper p-5">

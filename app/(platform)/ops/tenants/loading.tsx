@@ -1,4 +1,4 @@
-import { Skeleton, SkeletonTable } from "@/components/skeleton";
+import { Skeleton, SkeletonTable, SkeletonStatus } from "@/components/skeleton";
 
 // Phase 1.7 — loading state for the tenant list. Renders the
 // surrounding chrome (header, action button placeholder, search
@@ -12,6 +12,7 @@ import { Skeleton, SkeletonTable } from "@/components/skeleton";
 export default function PlatformTenantsLoading() {
   return (
     <div className="max-w-6xl">
+      <SkeletonStatus>Loading clubs…</SkeletonStatus>
       <Skeleton w={16} h={3} className="mb-2" />
       <Skeleton w={48} h={8} className="mb-2" />
       <Skeleton w={64} h={4} />

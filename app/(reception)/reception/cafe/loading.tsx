@@ -1,9 +1,10 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { StaffPage } from "@/components/staff-ui/staff-page";
 
 export default function Loading() {
   return (
     <StaffPage className="max-w-xl">
+      <SkeletonStatus>Loading the café counter…</SkeletonStatus>
       <Skeleton w={24} h={7} />
       <Skeleton w={56} h={4} className="mt-3" />
       <div className="mt-7 grid grid-cols-2 gap-3">

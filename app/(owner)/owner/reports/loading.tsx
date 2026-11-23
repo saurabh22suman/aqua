@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Reports cold-load. Shape mirrors app/(owner)/owner/reports/page.tsx:
@@ -8,6 +8,7 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 export default function Loading() {
   return (
     <OwnerPage>
+      <SkeletonStatus>Loading reports…</SkeletonStatus>
       <Skeleton w={20} h={5} />
       <Skeleton w={56} h={4} className="mt-2" />
 

@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // Skills editor cold-load. Shape mirrors /owner/settings/skills: the
@@ -8,6 +8,7 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 export default function Loading() {
   return (
     <OwnerPage className="max-w-2xl">
+      <SkeletonStatus>Loading skills…</SkeletonStatus>
       <Skeleton w={32} h={3} />
       <Skeleton w={36} h={5} className="mt-2" />
       <Skeleton w={72} h={3} className="mt-2" />
