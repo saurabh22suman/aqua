@@ -20,7 +20,7 @@ export function OwnerDefaultFacilityForm({
         <h2 className="text-sm font-medium text-ink-2">Saved default</h2>
         <p className="mt-1 font-semibold">{facilities.find(entry => entry.id === selected)?.name ?? "All facilities"}</p>
       </section>
-      <label htmlFor="starting-facility" className="block text-sm font-semibold">Default facility</label>
+      <label htmlFor="starting-facility" className="block text-sm font-semibold">Open the app at</label>
       <Select id="starting-facility" name="facility" value={facility} onChange={(event) => setFacility(event.target.value)} aria-describedby="default-facility-help">
         <option value="all">All facilities</option>
         {facilities.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}

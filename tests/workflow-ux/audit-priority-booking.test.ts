@@ -1,14 +1,16 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
-import { Pool } from "pg";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import type { Pool } from "pg";
 import { setTimeout as delay } from "node:timers/promises";
 import { v7 as uuidv7 } from "uuid";
-import { env } from "@/lib/env";
+import { startIsolatedDb, type IsolatedDb } from "@/tests/helpers/isolated-db";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
 import { addDays, todayInZone, zonedWallTimeToInstant } from "@/lib/time/tz";
 
 // Covers the owner-review hold on an already-issued booking invoice.
 
-const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
+let fixture: IsolatedDb;
+let admin: Pool;
+let appPool: Pool;
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
@@ -35,6 +37,14 @@ function wall(dateIso: string, time: string): string {
 const TOMORROW = addDays(todayInZone(TZ), 1);
 
 beforeAll(async () => {
+  fixture = await startIsolatedDb();
+  admin = fixture.admin;
+  vi.stubEnv("DATABASE_URL", fixture.appUri);
+  vi.stubEnv("APP_LOGIN_PASSWORD", decodeURIComponent(new URL(fixture.appUri).password));
+  const { seedPlatformCatalogue } = await import("@/db/seed-platform");
+  await seedPlatformCatalogue(fixture.adminUri);
+  vi.resetModules();
+  appPool = (await import("@/db/client")).pool;
   bookings = await import("@/lib/services/bookings");
   billing = await import("@/lib/services/booking-billing");
   payments = await import("@/lib/services/payments");
@@ -79,33 +89,9 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await admin.query("delete from payment_intents where tenant_id = $1", [tenant]);
-  await admin.query("delete from receipts where tenant_id = $1", [tenant]);
-  await admin.query("delete from payments where tenant_id = $1", [tenant]);
-  await admin.query("delete from invoice_line_items where tenant_id = $1", [
-    tenant,
-  ]);
-  await admin.query("delete from bookings where tenant_id = $1", [tenant]);
-  await admin.query("delete from invoices where tenant_id = $1", [tenant]);
-  await admin.query("delete from booking_price_rules where tenant_id = $1", [
-    tenant,
-  ]);
-  await admin.query("delete from facility_sub_units where tenant_id = $1", [
-    tenant,
-  ]);
-  await admin.query("delete from facilities where tenant_id = $1", [tenant]);
-  await admin.query("delete from members where tenant_id = $1", [tenant]);
-  await admin.query("delete from persons where tenant_id = $1", [tenant]);
-  await admin.query("delete from tenant_memberships where tenant_id = $1", [tenant]);
-  await admin.query("delete from role_permissions where tenant_id = $1", [tenant]);
-  await admin.query("delete from roles where tenant_id = $1", [tenant]);
-  await admin.query("delete from locations where tenant_id = $1", [tenant]);
-  await admin.query("delete from tenant_features where tenant_id=$1", [tenant]);
-  await admin.query("delete from tenants where id = $1", [tenant]);
-  await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[actor]);
-  await admin.end();
-  const client = await import("@/db/client");
-  await client.pool.end().catch(() => {});
+  await appPool?.end();
+  await fixture?.stop();
+  vi.unstubAllEnvs();
 });
 
 async function issue(dayTime: string, end: string) {

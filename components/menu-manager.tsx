@@ -258,7 +258,7 @@ export function MenuManager({
         />
         {locations.length > 1 ? (
           <div className="owner-work-panel mt-2 space-y-1">
-            <label htmlFor="menu-facility" className="block text-sm font-medium">Menu facility</label>
+            <label htmlFor="menu-facility" className="block text-sm font-medium">Selling location</label>
             <Select id="menu-facility" value={facility} onChange={event => setFacility(event.target.value)}>
               <option value="all">All facilities</option>
               {locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}

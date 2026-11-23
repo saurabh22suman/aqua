@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
 const FILE = "components/ui/StatCard.tsx";
-const DASHBOARD = "components/owner-dashboard.tsx";
+const DASHBOARD = "components/owner-home/owner-brief/owner-brief-home.tsx";
 
 describe("owner dashboard KPI labels (F36)", () => {
   it("has no text-[11px] labels left", () => {
@@ -26,11 +26,10 @@ describe("owner dashboard KPI labels (F36)", () => {
   });
 
   it("the current owner dashboard uses a labelled collections surface", () => {
-    // The redesigned dashboard uses OwnerHomeMoney rather than the retired KPI tiles.
     const dashboard = readFileSync(join(ROOT, DASHBOARD), "utf8");
-    const money = readFileSync(join(ROOT, "components/owner-home/owner-home-money.tsx"), "utf8");
-    expect(dashboard).toContain("<OwnerHomeMoney");
-    expect(money).toContain('aria-label="Collections"');
-    expect(money).toMatch(/<h2[^>]*>Collected today<\/h2>/);
+    const money = readFileSync(join(ROOT, "components/owner-home/owner-brief/owner-collections-money.tsx"), "utf8");
+    expect(dashboard).toContain("<OwnerCollectionsMoney");
+    expect(money).toContain('aria-label="Collections summary"');
+    expect(money).toMatch(/<h2>.*"Collected today".*<\/h2>/);
   });
 });

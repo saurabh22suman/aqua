@@ -550,7 +550,7 @@ export function ProgramsBatchesBoard({
       </section>
       {batches.length > 0 ? (
         <section aria-label="Batch search" className="owner-work-panel">
-          <label htmlFor="find-batch" className="text-[13px] font-medium text-ink">Find a batch</label>
+          <label htmlFor="find-batch" className="text-[13px] font-medium text-ink">Find a {resolveTerm(terminology, "batch", 1)}</label>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Input ref={batchSearchRef} id="find-batch" type="search" value={batchQuery} readOnly={editing}
               onChange={(event) => setBatchQuery(event.target.value)} placeholder="Batch, program, coach or club"

@@ -10,7 +10,7 @@ import type { EnquiryStage } from "@/db/schema/enquiries";
 import type { EnquiryDetail, NewMemberDetails } from "@/lib/services/enquiries";
 import type { LocationOption } from "@/lib/services/people";
 import type { BatchWithProgramName } from "@/lib/services/programs";
-import type { TerminologyState } from "@/lib/terminology/keys";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 import { EnquiryFollowUps } from "@/components/enquiry-follow-ups";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { StatusBadge, ENQUIRY_STAGE_TONE } from "@/components/ui/StatusBadge";
@@ -200,7 +200,7 @@ export function EnquiryDetailView({
                 <Field id="enquiry-trial-batch" label="Trial batch" required>
                   {(field) => (
                     <Select {...field} value={batchId} onChange={(event) => setBatchId(event.target.value)}>
-                      <option value="">Select trial batch</option>
+                      <option value="">Select trial {resolveTerm(terminology, "batch", 1)}</option>
                       {batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name} · {batch.programName}</option>)}
                     </Select>
                   )}

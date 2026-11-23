@@ -37,7 +37,7 @@ export function ReceptionDuesList({ dues, canCollect, limit }: { dues: DeskDueRo
     <section className="mt-4 space-y-3" aria-label="Open invoices">
       <div className={`space-y-2 p-4 ${STAFF_CARD}`}>
         <label className="block text-sm font-semibold" htmlFor="desk-dues-query">Find a due invoice</label>
-        <p id="desk-dues-search-hint" className="text-xs text-ink-2">Name, invoice number, member code or phone</p>
+        <p id="desk-dues-search-hint" className="text-xs text-ink-2">Name, invoice number, code or phone</p>
         <Input id="desk-dues-query" type="search" aria-describedby="desk-dues-search-hint" value={query}
           onChange={(event) => setQuery(event.target.value)} />
         <div className="flex flex-wrap gap-2" role="group" aria-label="Due date">

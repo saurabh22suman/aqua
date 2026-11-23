@@ -89,7 +89,7 @@ export function UpcomingSessionsList({
   const inWindow = useMemo(() => {
     if (range === "all") return sessions;
     const end = range === "today" ? today : weekEnd;
-    return sessions.filter(session => session.sessionDate >= today && session.sessionDate <= end);
+    return sessions.filter(row => row.sessionDate >= today && row.sessionDate <= end);
   }, [sessions, range, today, weekEnd]);
 
   const withoutCoach = inWindow.filter(session =>

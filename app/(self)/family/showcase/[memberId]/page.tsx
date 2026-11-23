@@ -102,7 +102,7 @@ export default async function FamilyShowcasePage({
           </a>
         ) : null}
         {!canApprove && !canTakeDown && subject.isMinor === false ? (
-          <p className="mt-2 text-[13px] text-ink-2">This member is an adult and can manage their own page.</p>
+          <p className="mt-2 text-[13px] text-ink-2">Adults can manage their own pages.</p>
         ) : null}
       </section>
 

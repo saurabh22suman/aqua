@@ -122,7 +122,7 @@ export function EnquiryCaptureCard({
               onChange={(e) => onLocationId(e.target.value)}
               data-testid="enquiry-capture-location"
             >
-              <option value="">Choose a facility</option>
+              <option value="">Choose…</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>
                   {l.name}

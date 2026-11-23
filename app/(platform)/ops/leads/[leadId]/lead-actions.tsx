@@ -54,7 +54,7 @@ export function LeadActions({
   const [completionReason, setCompletionReason] = useState("");
   const [slug, setSlug] = useState(defaultSlug);
   const [locationName, setLocationName] = useState(defaultLocationName);
-  const [presetKey, setPresetKey] = useState(defaultPreset);
+  const [selectedPreset, setSelectedPreset] = useState(defaultPreset);
   const [convertResult, setConvertResult] = useState<ConvertLeadResult | null>(
     null,
   );
@@ -214,7 +214,7 @@ export function LeadActions({
                   <span className="mb-1 block text-[12px] font-medium text-ink-2">
                     Preset
                   </span>
-                  <Select name="preset" value={presetKey} onChange={(event) => setPresetKey(event.target.value)}>
+                  <Select name="preset" value={selectedPreset} onChange={(event) => setSelectedPreset(event.target.value)}>
                     {presetOptions.map((preset) => (
                       <option key={preset.key} value={preset.key}>
                         {preset.name} ({preset.key})
@@ -228,7 +228,7 @@ export function LeadActions({
                     { label: "Business account", value: businessName },
                     { label: "Tenant URL slug", value: slug.trim() || "Enter a slug" },
                     { label: "Primary club", value: locationName.trim() || "Enter a club name" },
-                    { label: "Preset", value: presetOptions.find((preset) => preset.key === presetKey)?.name ?? "Qualification-based preset" },
+                    { label: "Preset", value: presetOptions.find((preset) => preset.key === selectedPreset)?.name ?? "Qualification-based preset" },
                   ]}
                 >
                   Starts a 14-day trial. Invite the owner from the tenant workspace after provisioning.

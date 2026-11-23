@@ -173,7 +173,7 @@ export default async function BatchDetailPage({
             {nextSession ? (
               <div className="min-w-0 border-t border-line pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-[15px] font-semibold text-ink">Next session roster</h3>
+                  <h3 className="text-[15px] font-semibold text-ink">Next {resolveTerm(terminology, "session", 1)} roster</h3>
                   {roster ? <span className="text-[12px] tabular-nums text-ink-3">{roster.rows.length} on roster</span> : null}
                 </div>
                 {rosterFailed ? (

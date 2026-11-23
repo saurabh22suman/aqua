@@ -164,7 +164,7 @@ export function EnquiryNewMemberFields({
               setLocationId(e.target.value);
             }}
           >
-            <option value="">Select facility</option>
+            <option value="">Select {resolveTerm(terminology, "facility", 1)}</option>
             {locations.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -240,7 +240,7 @@ export function EnquiryNewMemberFields({
                 </ul>
               ) : null}
               <details className="rounded-ctl border border-line px-3">
-                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-2">Add a new guardian</summary>
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-ink-2">Add a new {resolveTerm(terminology, "guardian", 1)}</summary>
                 <div className="space-y-2 pb-3">
                   <Field id="enquiry-guardian-name" label="Guardian full name">
                     {(field) => (

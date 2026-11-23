@@ -1,3 +1,4 @@
+import { resolveTerm } from "@/lib/terminology/keys";
 import { Suspense } from "react";
 import { resolvePresetScope } from "@/db/preset-engine";
 import { withTenant } from "@/db/tenant";
@@ -192,7 +193,7 @@ export default async function OwnerHomePage({
         data-brief-owner=""
         className="brief-page"
       >
-        <OwnerBriefHome initialView={brief} sport={sport} />
+        <OwnerBriefHome initialView={brief} sport={sport} facilityNoun={resolveTerm(terminology, "facility", 1)} />
         {isNewAcademy ? (
           <OwnerLink
             href="/owner/onboarding"

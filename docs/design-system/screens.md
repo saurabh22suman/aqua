@@ -175,6 +175,8 @@ owner shell. Entry: `/owner`.
 | `/owner/reports` | `reports.operational` | Operational reports: attendance, funnel, retention, coach load, utilisation | populated · insufficient history · empty · error per card · loading |
 | `/owner/reports/collections` | `reports.financial` | Daily collections and the cash count | populated · not confirmed · confirmed · closed · reopen refused |
 | `/owner/settings` | `settings.manage` | Grouped settings, account block, sign-out | populated · category open · setup incomplete · empty categories |
+| `/owner/account` | Owner-surface session | Personal appearance, role switching and sign-out | one role · linked roles · role lookup unavailable |
+| `/owner/settings/workspace` | `dashboard.view` and reports entitlement | Choose the default facility within the current account's scope | All facilities · named facility · saved · unavailable |
 | `/owner/settings/academy` | `settings.manage` and live Owner | Club identity and separate legal billing default: address, state and GSTIN | populated · incomplete default · validation error · open orders · review · saved · unsaved draft · uncertain save |
 | `/owner/settings/activities` | `settings.manage` | The activities this academy offers | populated · empty · saved |
 | `/owner/settings/alerts` | `settings.manage` | Absence alert thresholds | populated · validation error · saved |
@@ -400,7 +402,8 @@ Entry: `/coach`.
 | `/coach/members/[memberId]` | `members.read.assigned` | One swimmer: attendance, progress | populated · progress module off · not found · error |
 | `/coach/members/[memberId]/assess` | `levels.assess` plus feature `swim.levels` | Record a skill assessment | populated · module off · not allowed · saved · error |
 | `/coach/curriculum` | `levels.read` plus feature `swim.levels`; editing `levels.write` | Read and (for a curriculum lead) maintain the ladder | module off · populated · read-only · error |
-| `/coach/me` | `staff.self` | Own shifts, own attendance, own leave, sign-out | populated · empty · pending · error |
+| `/coach/me` | Coach-surface session | Account settings, role switching and sign-out | populated · available roles · role lookup unavailable |
+| `/coach/workday` | `staff.self` | Check in, see shifts and request leave | checked in · no shifts · pending leave · section retry |
 | `/coach/announcements` | Live coach-surface session; recipient-scoped read | Read announcements addressed to the signed-in person | populated · empty · unavailable |
 
 ### `/coach` — Coach Today
@@ -476,7 +479,8 @@ Role: receptionist. Frame: bottom navigation, mobile only. Entry:
 | `/reception/close` | `payments.record` | Count the cash and close the counter | open · counted · confirmed · closed · over-threshold refused · mismatch |
 | `/reception/cafe` | `payments.record` (the desk entry also requires the `cafe.pos` entitlement) | Take a counter order and settle it | empty menu · order open · billed · paid · voided |
 | `/reception/bookings` | — | Deliberately hidden: the route returns `404` until the price-rule admin ships | not reachable |
-| `/reception/me` | `staff.self` (the page also needs `members.read`) | Own shifts, own attendance, own leave, sign-out | populated · empty · error |
+| `/reception/me` | Reception-surface session and `members.read` | Account settings, role switching and sign-out | populated · available roles · role lookup unavailable |
+| `/reception/workday` | `staff.self` | Check in, see shifts and request leave | checked in · no shifts · pending leave · section retry |
 | `/reception/announcements` | Live reception-surface session; recipient-scoped read | Read announcements addressed to the signed-in person | populated · empty · unavailable |
 
 ### `/reception` — Reception Today
@@ -550,12 +554,14 @@ limit named); error.
 
 ## Worker surface
 
-Role: worker. Frame: no bottom navigation — self-service cards and sign-out
-only. Entry: `/worker`.
+Role: worker. Today, Schedule and Me are the main destinations. Entry: `/worker`.
 
 | Route | Gate | Primary task | States |
 | --- | --- | --- | --- |
-| `/worker` | `staff.self` | Own shifts, own attendance, own leave | populated · no shifts · not checked in · pending leave · error |
+| `/worker` | `staff.self` | See the next shift and check in or out | upcoming shift · not checked in · checked in · error |
+| `/worker/shifts` | `staff.self` | See the published roster and open Leave | populated · no published shifts · retry |
+| `/worker/leave` | `staff.self` | Check balances, request leave and see past requests | balances · pending · approved · retry |
+| `/worker/me` | `staff.self` | Account settings, role switching and sign-out | populated · available roles · role lookup unavailable |
 | `/worker/announcements` | Live worker-surface session; recipient-scoped read | Read announcements addressed to the signed-in person | populated · empty · unavailable |
 
 ## Signed-in recipient and club-install routes
@@ -566,12 +572,11 @@ These routes exist in the combined candidate; UUIDs and audience selectors choos
 | --- | --- | --- | --- |
 | `/member/announcements` | Live member self scope, revalidated in the scoped read | Read and mark own announcements | populated · empty · not found |
 | `/family/announcements` | Live guardian self scope, revalidated in the scoped read | Read and mark own announcements | populated · empty · not found |
+| `/member/account` | Live member resolver scope | Role switching, install and sign-out | available roles · sign-in required · retry |
+| `/family/account` | Live guardian resolver scope | Role switching, install and sign-out | available roles · sign-in required · retry |
 | `/clubs/[tenantId]/install` | Live staff, member or guardian authority for the selected tenant and source | Open the private club-specific install instructions | authorized · unavailable or not found |
 
-**Mobile (`390×844`).** Identity block first (name, phone), then the three
-self-service cards, then sign-out. Every read returns only the caller's own
-rows; there is no route to another person's shifts, and no bottom navigation
-because there is no second destination.
+**Mobile (`390×844`).** Today shows the next shift and attendance. Schedule shows published shifts and opens Leave. Me holds identity and account controls. The workday reads return only the caller’s own rows.
 
 **States.** Populated; no shifts this fortnight; not checked in today; a
 leave request pending or approved; error.

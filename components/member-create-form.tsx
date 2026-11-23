@@ -390,7 +390,7 @@ export function MemberCreateForm({
           {guardian.mode === "existing" ? (
             <div className="flex items-center justify-between rounded-ctl bg-water-soft px-3 py-2">
               <div className="min-w-0">
-                <p className="text-[12px] font-medium text-ink-2">Selected guardian</p>
+                <p className="text-[12px] font-medium text-ink-2">Selected {resolveTerm(terminology, "guardian", 1)}</p>
                 <p className="break-words text-[14px] font-medium text-ink">{guardian.label}</p>
                 {guardian.phone ? <p className="text-[13px] text-ink-2">{formatPhoneIN(guardian.phone)}</p> : null}
               </div>

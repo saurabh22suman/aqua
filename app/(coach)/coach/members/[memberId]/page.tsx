@@ -87,7 +87,6 @@ export default async function CoachMemberDetailPage({
               <li key={index} className="flex flex-wrap items-center justify-between gap-x-3 py-1.5">
                 <div className="min-w-0">
                   <p className="break-words text-[14px] font-medium text-ink">{guardian.fullName}</p>
-                  <p className="text-[12px] text-ink-3">Guardian</p>
                 </div>
                 <CoachContact name={guardian.fullName} phone={guardian.phone} />
               </li>
@@ -96,7 +95,7 @@ export default async function CoachMemberDetailPage({
         ) : null}
         {showMemberPhone ? (
           <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3">
-            <p className="text-[13px] font-medium text-ink-2">Member phone</p>
+            <p className="text-[13px] font-medium text-ink-2">Phone</p>
             <CoachContact name={m.fullName} phone={m.phone} />
           </div>
         ) : null}

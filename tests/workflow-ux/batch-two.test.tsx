@@ -73,7 +73,7 @@ it("filters the scoped dues list by the exact invoice number without losing its 
 it("shows the supported invoice identifiers outside the search field", async () => {
   render(await ReceptionDuesPage());
   const search = screen.getByRole("searchbox", { name: "Find a due invoice" });
-  const help = screen.getByText("Name, invoice number, member code or phone");
+  const help = screen.getByText("Name, invoice number, code or phone");
   expect(search.getAttribute("aria-describedby")).toBe(help.id);
 });
 

@@ -8,6 +8,7 @@ import { getScheduleGridAction } from "@/lib/actions/schedule-grid";
 import { addDays, formatWallTime24hIST } from "@/lib/time/tz";
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { getOwnerHomeBriefAction } from "@/lib/actions/owner-home-brief";
+import { titleCase } from "@/lib/terminology/keys";
 import { FACILITY_COOKIE } from "@/lib/facility";
 import type { OwnerBriefSession, OwnerBriefView } from "@/lib/services/owner-home-brief";
 import { OwnerCollectionsMoney } from "@/components/owner-home/owner-brief/owner-collections-money";
@@ -30,9 +31,11 @@ function writeFacilityCookie(value: string | null): void {
 export function OwnerBriefHome({
   initialView,
   sport,
+  facilityNoun = "facility",
 }: {
   initialView: OwnerBriefView;
   sport: "pool" | "court";
+  facilityNoun?: string;
 }) {
   const [view, setView] = useState(initialView);
   const [pending, setPending] = useState<string | null>(null);
@@ -202,6 +205,7 @@ export function OwnerBriefHome({
             onSelect={(facilityId) => void switchFacility(facilityId)}
             disabled={pending !== null}
             facilityCount={view.facilities.length}
+            facilityNoun={facilityNoun}
           />
         ) : null}
       </div>
@@ -257,7 +261,7 @@ export function OwnerBriefHome({
           >
             <div>
               <span className="brief-grip" aria-hidden="true" />
-              <h2 id="brief-scope-title">Facility scope</h2>
+              <h2 id="brief-scope-title">{titleCase(facilityNoun)} scope</h2>
             </div>
             <button
               type="button"

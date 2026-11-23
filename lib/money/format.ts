@@ -18,12 +18,16 @@ const RUPEE_FORMATTER = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+function rupeesFromPaise(paise: bigint): bigint {
+  return paise / 100n;
+}
+
 export function formatINR(paise: number | bigint): string {
   if ((typeof paise === "number" && !Number.isSafeInteger(paise)) || paise < 0) {
     throw new Error(`formatINR expects a non-negative integer paise value, got ${paise}`);
   }
   const exact = BigInt(paise);
-  return RUPEE_FORMATTER.formatToParts(exact / 100n).map(part =>
+  return RUPEE_FORMATTER.formatToParts(rupeesFromPaise(exact)).map(part =>
     part.type === "fraction" ? String(exact % 100n).padStart(2, "0") : part.value).join("");
 }
 
@@ -62,7 +66,7 @@ export function formatINRWhole(paise: number | bigint): string {
   }
   const exact = BigInt(paise);
   if (exact > 0n && exact < 50n) return "Under ₹1";
-  return WHOLE_RUPEE_FORMATTER.format((exact + 50n) / 100n);
+  return WHOLE_RUPEE_FORMATTER.format(rupeesFromPaise(exact + 50n));
 }
 
 export function parsePaise(formatted: string): number {

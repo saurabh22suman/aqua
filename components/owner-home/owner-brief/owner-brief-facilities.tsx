@@ -18,10 +18,12 @@ export function OwnerBriefFacilities({
   onSelect,
   disabled,
   facilityCount,
+  facilityNoun,
 }: {
   onSelect: (facilityId: string) => void;
   disabled: boolean;
   facilityCount: number;
+  facilityNoun: string;
 }) {
   const [rows, setRows] = useState<OwnerBriefFacilityMoney[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -55,7 +57,7 @@ export function OwnerBriefFacilities({
             <OwnerIcon name="pin" size={17} />
           </span>
           <span className="brief-row-copy">
-            <strong>By facility</strong>
+            <strong>By {facilityNoun}</strong>
             <span className="brief-secondary">{facilityCount} facilities</span>
           </span>
           <span className={`brief-tail${open ? " is-open" : ""}`}>

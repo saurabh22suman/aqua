@@ -98,7 +98,7 @@ export function OperatorList({
                           <p className="text-[13px] text-ink">
                             <span title={session.id}>{shortOperatorId(session.id)}</span>
                             {isOwn && session.id === currentSessionId ? (
-                              <span className="ml-2 text-ink-2">Your current session</span>
+                              <span className="ml-2 text-ink-2">Signed in here</span>
                             ) : null}
                           </p>
                           <OpsStatusPill tone={session.state === "active" ? "good" : "neutral"}>

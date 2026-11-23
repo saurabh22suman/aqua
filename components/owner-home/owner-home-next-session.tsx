@@ -22,7 +22,7 @@ export function OwnerHomeNextSession({
         <>
           <time aria-label={formatWallTime12h(time)}>{time}</time>
           <div className="min-w-0 flex-1">
-            <p className="floodlit-next-label">Next session</p>
+            <p className="floodlit-next-label">Up next</p>
             <h3>{nextClass.batchName}</h3>
             <p className="floodlit-next-meta">
               {[formatWeekdayDateIST(nextClass.sessionDate), nextClass.coachName, siteLabel].filter(Boolean).join(" · ")}

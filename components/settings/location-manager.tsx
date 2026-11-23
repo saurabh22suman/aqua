@@ -67,7 +67,7 @@ export function LocationManager({
       {locations.length > 0 && canWrite ? (
         <div className="owner-work-panel flex flex-wrap items-center justify-between gap-x-3">
           <span className="text-sm font-semibold">{locations.length} {locations.length === 1 ? "facility" : "facilities"}</span>
-          <a href="#add-physical-facility" className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--accent-ink)]">Add a facility</a>
+          <a href="#add-physical-facility" className="inline-flex min-h-11 items-center text-sm font-semibold text-[var(--accent-ink)]">Add a location</a>
         </div>
       ) : null}
       {locations.map((location) => (
