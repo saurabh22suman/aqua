@@ -2,7 +2,7 @@
    Owner Home and signed-link HTML retain their own scoped composition. */
 @font-face {
   font-family: "KhelSuite Text";
-  src: url("../docs/design/floodlit-owner-2026-11-20/dm-sans-latin.woff2") format("woff2");
+  src: url("./assets/floodlit/dm-sans-latin.woff2") format("woff2");
   font-style: normal;
   font-weight: 400 800;
   font-display: swap;

@@ -1,13 +1,13 @@
 /* Exact self-hosted faces from the approved Floodlit reference. */
 @font-face {
   font-family: "Floodlit Display";
-  src: url("../../docs/design/floodlit-owner-2026-11-20/barlow-condensed-bold-latin.woff2") format("woff2");
+  src: url("../assets/floodlit/barlow-condensed-bold-latin.woff2") format("woff2");
   font-weight: 700;
   font-display: swap;
 }
 @font-face {
   font-family: "Floodlit Text";
-  src: url("../../docs/design/floodlit-owner-2026-11-20/dm-sans-latin.woff2") format("woff2");
+  src: url("../assets/floodlit/dm-sans-latin.woff2") format("woff2");
   font-weight: 100 1000;
   font-display: swap;
 }
@@ -111,14 +111,14 @@
   pointer-events: none;
 }
 [data-floodlit-owner] .floodlit-hero::before {
-  background-image: url("../../docs/design/floodlit-owner-2026-11-20/court.webp");
+  background-image: url("../assets/floodlit/court.webp");
   background-size: cover;
   background-position: right 57%;
 }
 [data-floodlit-owner][data-floodlit-sport="pool"] .floodlit-hero::before,
 [data-floodlit-owner] [data-floodlit-sport="pool"] .floodlit-hero::before,
 [data-floodlit-owner] .floodlit-hero[data-floodlit-sport="pool"]::before {
-  background-image: url("../../docs/design/floodlit-owner-2026-11-20/pool.webp");
+  background-image: url("../assets/floodlit/pool.webp");
 }
 [data-floodlit-owner] .floodlit-hero::after {
   background:

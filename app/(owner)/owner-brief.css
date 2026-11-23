@@ -294,14 +294,14 @@ button.brief-scope:enabled { cursor: pointer; }
   background:
     linear-gradient(90deg, var(--brief-mast) 0%, color-mix(in srgb, var(--brief-mast) 94%, transparent) 26%, transparent 92%),
     linear-gradient(0deg, color-mix(in srgb, var(--brief-mast) 48%, transparent), transparent 54%),
-    url("../../docs/design/floodlit-owner-2026-11-20/court.webp") right 56% / cover;
+    url("../assets/floodlit/court.webp") right 56% / cover;
 }
 
 .brief-home[data-brief-sport="pool"] .brief-mast::before {
   background:
     linear-gradient(90deg, var(--brief-mast) 0%, color-mix(in srgb, var(--brief-mast) 94%, transparent) 26%, transparent 92%),
     linear-gradient(0deg, color-mix(in srgb, var(--brief-mast) 48%, transparent), transparent 54%),
-    url("../../docs/design/floodlit-owner-2026-11-20/pool.webp") right 56% / cover;
+    url("../assets/floodlit/pool.webp") right 56% / cover;
 }
 
 .brief-mast p {

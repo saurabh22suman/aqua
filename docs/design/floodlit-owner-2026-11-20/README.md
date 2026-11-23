@@ -27,10 +27,10 @@ separately runnable. [HTML reference](KhelSuite-Floodlit.html)
 - Use the one layout for both sports. Swap the verified club artwork and
   existing tenant terminology through configuration.
 
-[Badminton artwork](court.webp) · [Aquatics artwork](pool.webp)
-· [Barlow Condensed WOFF2](barlow-condensed-bold-latin.woff2)
-· [DM Sans WOFF2](dm-sans-latin.woff2)
-· [Barlow license](barlow-ofl.txt) · [DM Sans license](dmsans-ofl.txt)
+[Badminton artwork](../../../app/assets/floodlit/court.webp) · [Aquatics artwork](../../../app/assets/floodlit/pool.webp)
+· [Barlow Condensed WOFF2](../../../app/assets/floodlit/barlow-condensed-bold-latin.woff2)
+· [DM Sans WOFF2](../../../app/assets/floodlit/dm-sans-latin.woff2)
+· [Barlow license](../../../app/assets/floodlit/barlow-ofl.txt) · [DM Sans license](../../../app/assets/floodlit/dmsans-ofl.txt)
 
 The approved font pair totals 59,376 bytes. Ship the exact self-hosted files
 on Floodlit Owner Home. The 150 KiB gate counts all emitted WOFF2 assets
