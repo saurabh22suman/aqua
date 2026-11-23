@@ -95,7 +95,7 @@ export function EnquiryFollowUps({ enquiry, canWrite }: { enquiry: EnquiryDetail
                 </p>
               </div>
               {f.doneAt ? (
-                <span className="flex-none text-[11.5px] text-good">Done</span>
+                <span className="flex-none text-[11.5px] text-ink-2">Done</span>
               ) : canWrite ? (
                 <Button
                   type="button"
@@ -191,7 +191,7 @@ export function EnquiryFollowUps({ enquiry, canWrite }: { enquiry: EnquiryDetail
         </div>
       </details> : null}
       {message ? <p role="status" className="mt-3 text-sm text-ink-2">{message}</p> : null}
-      {error ? <p role="alert" className="mt-3 text-sm text-late">{error}</p> : null}
+      {error ? <p role="alert" className="mt-3 text-sm text-ink-2">{error}</p> : null}
     </section>
   );
 }

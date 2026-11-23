@@ -48,7 +48,7 @@ it("does not mislabel a server site or permission refusal as a phone error", asy
   fireEvent.change(phone, { target: { value: "9876543210" } });
   create.mockRejectedValue(new Error("site denied"));
   submit();
-  expect((await screen.findByRole("alert")).textContent).toMatch(/could not save the enquiry/i);
+  expect((await screen.findByRole("alert")).textContent).toMatch(/could not confirm the save/i);
   expect(phone.getAttribute("aria-invalid")).not.toBe("true");
   expect(phone.value).toBe("9876543210");
 });

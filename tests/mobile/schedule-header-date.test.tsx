@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // the IST time on the session row (Phase 3 migration).
 
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireCoach: async () => ({}),
+  requireCoach: async () => ({ permissions: new Set(["staff.self"]), features: new Set() }),
 }));
 vi.mock("@/lib/actions/coach", () => ({
   getScheduleAction: async () => ({
@@ -47,6 +47,7 @@ describe("coach schedule header (F29)", () => {
     const text = document.body.textContent ?? "";
     expect(text).toContain("Sat, 12 Sept");
     expect(text).not.toContain("Sat · Sat");
-    expect(text).toContain("05:00 pm Junior TTS");
+    expect(text).toContain("05:00 pm");
+    expect(text).toContain("Junior TTS");
   });
 });

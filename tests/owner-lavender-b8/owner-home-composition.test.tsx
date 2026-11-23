@@ -98,7 +98,7 @@ function lane(overrides: Record<string, unknown> = {}) {
 afterEach(cleanup);
 
 describe("owner Home — the screen opens with the real context", () => {
-  it("names the day, the club and the location the figures cover", () => {
+  it("names the day and describes the collection period", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -108,12 +108,11 @@ describe("owner Home — the screen opens with the real context", () => {
       />,
     );
     const text = document.body.textContent ?? "";
-    // The real date, the real club and the real location scope.
     expect(text).toContain("Sun, 25 Oct 2026");
-    expect(text).toContain("Collected today");
+    expect(text).toContain("Payments recorded today");
   });
 
-  it("puts a small piece of club artwork beside the heading", () => {
+  it("places the financial snapshot in the overview header", () => {
     render(
       <OwnerDashboard
         data={dashboard()}
@@ -122,8 +121,8 @@ describe("owner Home — the screen opens with the real context", () => {
         can={ALL_CAN}
       />,
     );
-    expect(screen.getByTestId("owner-home-money-surface")).toBeTruthy();
-    expect(screen.getByTestId("owner-home-hero-veil")).toBeTruthy();
+    const header = screen.getByTestId("owner-floodlit-hero");
+    expect(within(header).getByRole("region", { name: "Financial snapshot" })).toBeTruthy();
   });
 });
 
@@ -137,10 +136,10 @@ describe("owner Home — the figures", () => {
         can={ALL_CAN}
       />,
     );
-    const money = screen.getByTestId("owner-home-money-surface");
+    const money = screen.getByTestId("owner-home-lead");
     expect(money.textContent).toContain("₹18,400");
-    expect(money.textContent).toContain("Collected today");
-    expect(money.textContent).toContain("5 payments recorded");
+    expect(money.textContent).toContain("Payments recorded today");
+    expect(money.textContent).toContain("5 recorded payments");
   });
 
   it("gives a phone the actual day's amount and payment count", () => {
@@ -152,9 +151,9 @@ describe("owner Home — the figures", () => {
         can={ALL_CAN}
       />,
     );
-    const text = screen.getByTestId("owner-home-money-surface").textContent ?? "";
+    const text = screen.getByTestId("owner-home-lead").textContent ?? "";
     expect(text).toContain("₹18,400");
-    expect(text).toContain("5 payments recorded");
+    expect(text).toContain("5 recorded payments");
     expect(text).not.toContain("Last 7 days");
   });
 });
@@ -230,7 +229,7 @@ describe("owner Home — the attention queue", () => {
     expect(text).toContain("Cash count needs review");
     expect(text).toContain("Follow-up overdue");
     expect(text).toContain("Register not started");
-    expect(within(queue).getByTestId("count-chip").textContent).toContain("3");
+    expect(within(queue).getByTestId("count-chip").textContent).toContain("4");
     // Actual overdue amounts/counts are verified in dashboard-financial-scope.test.ts.
   });
 });

@@ -261,7 +261,7 @@ export function EnquiriesBoard({
     />
     {error ? <Button size="sm" disabled={checking} onClick={() => void checkSavedEnquiries()}>{checking ? "Checking saved enquiries…" : "Check saved enquiries"}</Button> : null}
     {saved ? (
-      <div className="space-y-1 rounded-ctl border border-line bg-good-soft p-3">
+      <div className="space-y-1 rounded-ctl border border-line bg-deck p-3">
         <p role="status" className="text-sm text-ink">Enquiry saved for {saved.fullName}.</p>
         <Link href={`${detailHrefPrefix}/${saved.id}`} className={buttonClasses({ size: "sm" })}>Open saved enquiry</Link>
       </div>

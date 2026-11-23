@@ -92,7 +92,7 @@ it("does not allow a previous search result to be chosen during another search",
   const oldResult = await screen.findByTestId("payment-member-m1") as HTMLButtonElement;
   fireEvent.change(input, { target: { value: "A2" } });
   fireEvent.submit(input.closest("form")!);
-  expect(oldResult.disabled).toBe(true);
+  expect(screen.queryByTestId("payment-member-m1")).toBeNull();
   fireEvent.click(oldResult);
   expect(mocks.invoices).not.toHaveBeenCalled();
   await act(async () => resolve([]));

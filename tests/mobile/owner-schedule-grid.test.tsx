@@ -74,7 +74,7 @@ describe("U-04 schedule grid", () => {
     expect(document.body.textContent).toContain("Riya Nair");
   });
 
-  it("contains horizontal scrolling within the labelled day chooser", () => {
+  it("groups the compact week in one labelled day chooser", () => {
     const { container } = render(
       <OwnerScheduleGrid
         view="week"
@@ -87,10 +87,10 @@ describe("U-04 schedule grid", () => {
         todayHref="#"
       />,
     );
-    const scrollRegions = container.querySelectorAll(".overflow-x-auto");
-    expect(scrollRegions.length).toBe(1);
-    expect(scrollRegions[0]?.getAttribute("aria-label")).toBe("Choose a day");
-    expect(scrollRegions[0]?.tagName).toBe("NAV");
+    const chooser = container.querySelector('nav[aria-label="Choose a day"]');
+    expect(chooser).toBeTruthy();
+    expect(chooser?.classList.contains("owner-planner-week")).toBe(true);
+    expect(chooser?.querySelectorAll("a,button").length).toBe(7);
     expect(container.querySelectorAll(".min-w-\\[520px\\]").length).toBe(0);
   });
 

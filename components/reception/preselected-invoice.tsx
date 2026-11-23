@@ -42,7 +42,7 @@ export function PreselectedInvoice({ initial }: { initial: InvoiceDetail }) {
     <p className="text-[13px] text-ink-2">Balance {formatINR(invoice.outstandingPaise)}</p>
     {holdCopy ? (
       <div className="rounded-ctl border border-line bg-deck px-3 py-2">
-        <p className="text-[13px] font-semibold text-warn">{holdCopy.label}</p>
+        <p className="text-[13px] font-semibold text-ink">{holdCopy.label}</p>
         <p className="mt-0.5 text-[13px] text-ink-2">{holdCopy.description}</p>
       </div>
     ) : null}

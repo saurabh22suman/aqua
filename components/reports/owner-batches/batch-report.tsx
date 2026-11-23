@@ -21,7 +21,7 @@ export function BatchReport({ rows, canViewFinancial, collectionsHref = "/owner/
               <p className="whitespace-nowrap text-[13px] font-medium tabular-nums">{row.reservedPlaces} of {row.capacity}</p>
             </div>
             <div aria-hidden="true" className="mt-2 h-2 overflow-hidden rounded-pill bg-deck"><div className="h-full rounded-pill bg-[var(--accent-strong)]" style={{width:`${pct}%`}} /></div>
-            {row.reservedPlaces > row.capacity ? <p className="mt-1 text-[12px] font-semibold text-warn">Over capacity</p> : row.capacity > 0 && row.reservedPlaces === row.capacity ? <p className="mt-1 text-[12px] text-ink-2">At capacity</p> : null}
+            {row.reservedPlaces > row.capacity ? <p className="mt-1 text-[12px] font-semibold text-ink">Over capacity</p> : row.capacity > 0 && row.reservedPlaces === row.capacity ? <p className="mt-1 text-[12px] text-ink-2">At capacity</p> : null}
           </li>;
         })}</ul>}
       <details className="mt-2 text-[12.5px] text-ink-3">
