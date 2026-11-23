@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { InvoiceReversalForm } from "@/components/member-detail/invoice-reversal-form";
@@ -50,22 +50,28 @@ afterEach(() => {
 });
 
 async function sendReversalWithLostResponse(committed: typeof earlier) {
-  mocks.recover.mockResolvedValue({ open: null, lastCommitted: earlier });
-  mocks.reverse.mockImplementationOnce(async () => {
-    mocks.recover.mockResolvedValue({ open: null, lastCommitted: committed });
-    throw new Error("Response lost");
-  }).mockResolvedValueOnce({ ok: true });
+  type Recovery = { open: null; lastCommitted: typeof earlier };
+  const initial = Promise.withResolvers<Recovery>();
+  const afterLoss = Promise.withResolvers<Recovery>();
+  mocks.recover.mockReturnValueOnce(initial.promise).mockReturnValueOnce(afterLoss.promise);
+  mocks.reverse.mockRejectedValueOnce(new Error("Response lost")).mockResolvedValueOnce({ ok: true });
   mocks.mint.mockReturnValueOnce("attempt-1").mockReturnValueOnce("attempt-2");
 
   render(<TestForm />);
   fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "100" } });
   fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Test correction" } });
+  await act(async () => {
+    initial.resolve({ open: null, lastCommitted: earlier });
+  });
   const separate = { name: "Record a separate reversal" };
   fireEvent.click(await screen.findByRole("button", separate));
   fireEvent.click(screen.getByRole("button", { name: "Confirm new operation" }));
   const confirm = screen.getAllByRole("button", separate).at(-1)!;
   fireEvent.click(confirm);
   await waitFor(() => expect(mocks.recover).toHaveBeenCalledTimes(2));
+  await act(async () => {
+    afterLoss.resolve({ open: null, lastCommitted: committed });
+  });
   expect(mocks.reverse).toHaveBeenNthCalledWith(1, expect.objectContaining({
     idempotencyKey: "attempt-1", observedIntentId: "earlier", amountPaise: 10_000,
   }));
