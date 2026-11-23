@@ -37,7 +37,7 @@ vi.mock("@/lib/actions/terminology", () => ({
   getTerminologyAction: async () => ({ overrides: {}, locale: "en" }),
 }));
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireCoach: async () => ({}),
+  requireCoach: async () => ({ permissions: new Set(["staff.self"]), features: new Set() }),
   // U-08 — the reception page reads ctx.permissions to decide whether
   // the check-ins panel offers the one-tap mark; C03 also reads
   // ctx.features for the module cards.

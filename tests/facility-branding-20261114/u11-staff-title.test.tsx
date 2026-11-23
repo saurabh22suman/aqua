@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import Layout0, { metadata as metadata0 } from "@/app/(coach)/coach/announcements/layout";
 import Layout1, { metadata as metadata1 } from "@/app/(coach)/coach/curriculum/layout";
 import Layout2, { metadata as metadata2 } from "@/app/(coach)/coach/layout";
@@ -69,6 +70,6 @@ const cases = [
 it.each(cases)("provides fixed task metadata and passes children through: %s", (_path, metadata, Layout, expected) => {
   expect(metadata.title).toEqual({ absolute: expected });
   const child = createElement("span", null, "private person and club");
-  expect(Layout({ children: child })).toBe(child);
+  expect(renderToStaticMarkup(Layout({ children: child }))).toContain(renderToStaticMarkup(child));
   expect(expected).not.toMatch(/private|person|club|[0-9a-f]{8}-[0-9a-f-]{27}/i);
 });

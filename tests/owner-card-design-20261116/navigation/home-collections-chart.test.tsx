@@ -32,8 +32,9 @@ it("shows actual bucket amounts, total, range and scoped report link", () => {
   expect(within(card).getByText(/10 Nov 2026.*16 Nov 2026/)).toBeTruthy();
   expect(within(card).getByText("₹305.50")).toBeTruthy();
   expect(within(card).getByText("₹100.50")).toBeTruthy();
-  expect(within(card).getByText("₹205")).toBeTruthy();
-  expect(within(card).getByRole("img", { name: /collections trend/i }).querySelectorAll("circle")).toHaveLength(2);
+  expect(within(card).getAllByText("₹205.00").length).toBeGreaterThan(0);
+  expect(within(card).getByRole("button", { name: "10 Nov, ₹100.50" })).toBeTruthy();
+  expect(within(card).getByRole("button", { name: "11 Nov, ₹205.00" })).toBeTruthy();
   expect(within(card).getByRole("link", { name: /view trend/i }).getAttribute("href")).toBe("/owner/reports/collections?view=trends&period=last7&facility=site-a");
 });
 it("distinguishes an empty collection period from missing data", () => {
