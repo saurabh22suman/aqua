@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const push = vi.hoisted(() => vi.fn());
 const replace = vi.hoisted(() => vi.fn());
 const navigateFacility = vi.hoisted(() => vi.fn());
+const layoutRole = vi.hoisted(() => ({ key: "owner" }));
 vi.mock("@/components/facility-navigation", () => ({ navigateFacility }));
 vi.mock("@/db/tenant", () => ({ withTenant: async () => true }));
 vi.mock("@/lib/services/staff", () => ({ getCurrentStaffIdentity: async () => null }));
@@ -68,8 +69,8 @@ vi.mock("@/lib/auth/context", () => ({
   NotFoundError: class NotFoundError extends Error {},
   requireDefaultCtx: async () => ({
     tenantId: "t1",
-    roleKey: "owner",
-    permissions: new Set([
+    roleKey: layoutRole.key,
+    permissions: new Set(layoutRole.key === "accountant" ? ["invoices.read", "payments.read", "reports.financial"] : [
       "members.read",
       "invoices.read",
       "enquiries.read",
@@ -209,6 +210,20 @@ describe("owner layout hosts the switcher (W1-6)", () => {
     const layout = await OwnerLayout({ children: null });
     render(layout);
     expect(screen.getByTestId("facility-switcher")).toBeTruthy();
+  });
+
+  it("offers the existing Accountant a personal Account in the shared shell", async () => {
+    layoutRole.key = "accountant";
+    try {
+      render(await OwnerLayout({ children: null }));
+      expect(screen.getByRole("link", { name: "Account — Accountant" }).getAttribute("href")).toBe("/owner/account");
+      const control = screen.getByTestId("owner-header-account").querySelector("summary");
+      expect(control).not.toBeNull();
+      fireEvent.click(control!);
+      expect(screen.getByRole("link", { name: "Account settings" }).getAttribute("href")).toBe("/owner/account");
+    } finally {
+      layoutRole.key = "owner";
+    }
   });
 });
 

@@ -49,7 +49,7 @@ export default async function WorkerHomePage() {
             </section>
           )}
           {attendance.status === "fulfilled" ? (
-            <MyAttendanceCard attendance={attendance.value} id="today-attendance" />
+            <MyAttendanceCard attendance={attendance.value} date={today} id="today-attendance" />
           ) : (
             <StaffSectionError sectionId="today-attendance" title="Today's attendance"
               message="Attendance unavailable. Try again to check in or out."

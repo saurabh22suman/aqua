@@ -51,6 +51,7 @@ type ReportState = { scope: string; data: DailyCollection };
 
 export function CollectionsReport({
   defaultDate,
+  initialDate = defaultDate,
   locations,
   facilityLabel,
   canConfirm,
@@ -60,6 +61,7 @@ export function CollectionsReport({
   compactOwner = false,
 }: {
   defaultDate: string;
+  initialDate?: string;
   locations: Array<{ id: string; name: string }>;
   // Resolved from the tenant's vocabulary on the server (L3 scan:
   // "facility" can read as "lane" under the swim preset).
@@ -72,7 +74,7 @@ export function CollectionsReport({
   showNavigation?: boolean;
   compactOwner?: boolean;
 }) {
-  const [onDate, setOnDate] = useState(defaultDate);
+  const [onDate, setOnDate] = useState(initialDate);
   const [locationId, setLocationId] = useState(() => initialLocationId !== undefined ? (locations.some(location => location.id === initialLocationId) ? initialLocationId : "") : locations[0]?.id ?? "");
   const [state, setState] = useState<ReportState | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -97,6 +99,7 @@ export function CollectionsReport({
     const seq = ++requestSeq.current;
     if (!scope.onDate || !scope.locationId) return;
     const key = `${scope.onDate}|${scope.locationId}`;
+    setState(null);
     setLoadError(false);
     try {
       const data = await getDailyCollectionAction({

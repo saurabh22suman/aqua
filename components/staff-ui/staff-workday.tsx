@@ -128,9 +128,11 @@ export async function loadStaffWorkday(
 export function StaffWorkdaySections({
   workday,
   pageHref,
+  date,
 }: {
   workday: StaffWorkday;
   pageHref: string;
+  date: string;
 }) {
   if (workday.allUnavailable) {
     return <StaffSelfServiceError retryHref={pageHref} />;
@@ -141,6 +143,7 @@ export function StaffWorkdaySections({
       {workday.attendance.status === "ready" ? (
         <MyAttendanceCard
           attendance={workday.attendance.value}
+          date={date}
           id="today-attendance"
         />
       ) : (

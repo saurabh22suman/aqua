@@ -77,6 +77,7 @@ const enquiryFixture = {
 
 const mocks = vi.hoisted(() => ({
   ctx: { permissions: new Set<string>(), features: new Set<string>() },
+  canSelectFacility: vi.fn(),
   attendance: vi.fn(),
   enquiries: vi.fn(),
   dashboard: vi.fn(),
@@ -92,6 +93,10 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/lib/actions/dashboard", () => ({
   getOwnerDashboardAction: (...args: unknown[]) => mocks.dashboard(...args),
+}));
+
+vi.mock("@/lib/services/selected-facility-access", () => ({
+  canSelectFacility: mocks.canSelectFacility,
 }));
 
 vi.mock("@/lib/actions/branding", () => ({
@@ -144,6 +149,7 @@ beforeEach(() => {
     "invoices.read",
   ]);
   mocks.ctx.features = new Set(["reports", "members", "enquiries", "billing"]);
+  mocks.canSelectFacility.mockResolvedValue(true);
   mocks.attendance.mockResolvedValue(attendanceFixture);
   mocks.enquiries.mockResolvedValue(enquiryFixture);
   mocks.dashboard.mockResolvedValue(dashboardFixture);
@@ -159,7 +165,9 @@ describe("Owner Home — the insights wiring", () => {
       await OwnerHomePage({ searchParams: Promise.resolve({ facility: FACILITY }) }),
     );
 
-    expect(mocks.dashboard).toHaveBeenCalledWith({facility:FACILITY});
+    expect(mocks.canSelectFacility).toHaveBeenCalledWith(mocks.ctx, FACILITY);
+    expect(mocks.canSelectFacility).toHaveBeenCalledBefore(mocks.dashboard);
+    expect(mocks.dashboard).toHaveBeenCalledWith({ facility: FACILITY });
     expect(mocks.attendance).not.toHaveBeenCalled();
     expect(mocks.enquiries).not.toHaveBeenCalled();
   });

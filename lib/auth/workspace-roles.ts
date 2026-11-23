@@ -123,7 +123,8 @@ export async function readSelfWorkspaceRoles(resolver: SelfScopeResolver): Promi
       : null;
     const alreadySignedIn = sameStaffSession && active?.tenantId === tenantId && !active.requiresSelection &&
       active.roleKey === staff.roleKey && !isSessionExpiredForRole(staff.roleKey, new Date(sameStaffSession.session.createdAt).getTime());
-    choices.push({ label: staff.roleName, href: alreadySignedIn ? staff.homePath : "/login",
+    const target = new URLSearchParams({ clubId: tenantId, role: staff.roleKey });
+    choices.push({ label: staff.roleName, href: alreadySignedIn ? staff.homePath : `/login?${target}`,
       detail: alreadySignedIn ? "Open your staff workspace" : "Confirm with your PIN" });
   }
   return { current: SELF_ROLES[audience].label, choices };

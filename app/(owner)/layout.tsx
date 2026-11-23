@@ -111,7 +111,7 @@ export default async function OwnerLayout({ children }: { children: ReactNode })
       scopeUserId={ctx.userId}
       accountName={identity?.fullName ?? null}
       accountLabel={ownerRoleLabel(ctx.roleKey)}
-      accountHref={operations ? "/owner/account" : undefined}
+      accountHref={operations || ctx.roleKey === "accountant" ? "/owner/account" : undefined}
       guideHomeHref={ctx.permissions.has("dashboard.view") ? "/owner" : undefined}
       canChooseDefaultFacility={ctx.permissions.has("dashboard.view") && ctx.features.has("reports")}
     >

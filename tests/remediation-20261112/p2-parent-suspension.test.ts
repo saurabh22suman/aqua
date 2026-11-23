@@ -5,6 +5,8 @@ import { fixture } from "./fixture";
 import { getParentViewData } from "@/lib/services/parent-view";
 import { signParentLinkToken } from "@/lib/services/parent-link";
 import { GET } from "@/app/p/[token]/route";
+import { GET as downloadReceipt } from "@/app/p/[token]/receipt/[paymentId]/route";
+import { NextRequest } from "next/server";
 let f:Awaited<ReturnType<typeof fixture>>;
 beforeAll(async()=>{f=await fixture();});afterAll(async()=>{await f?.cleanup();});
 async function payment(){
@@ -32,5 +34,45 @@ describe("F05 legacy parent links revalidate club availability",()=>{
     const {token}=signParentLinkToken({tenantId:f.tenantId,personId:f.memberId});
     const response=await GET(new Request(`http://localhost/p/${token}`),{params:Promise.resolve({token})});
     expect(await response.text()).not.toContain("Synthetic member");expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+});
+
+describe("legacy Parent receipt eligibility", () => {
+  function receipt(token: string, paymentId: string) {
+    return downloadReceipt(new NextRequest("http://localhost"), { params: Promise.resolve({ token, paymentId }) });
+  }
+
+  it("serves a captured receipt for a live child and refuses cached and new PDFs after soft deletion", async () => {
+    await f.admin.query("update tenants set status='active' where id=$1", [f.tenantId]);
+    const { token } = signParentLinkToken({ tenantId: f.tenantId, personId: f.memberId });
+    const existing = await payment();
+    const fresh = await payment();
+    const initial = await receipt(token, existing);
+    expect(initial.status).toBe(200);
+    expect(initial.headers.get("cache-control")).toBe("private, no-store");
+    expect(Buffer.from(await initial.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
+    await f.admin.query("update members set deleted_at=now() where id=$1", [f.memberId]);
+    try {
+      expect(await view()).toBeNull();
+      expect((await receipt(token, existing)).status).toBe(404);
+      expect((await receipt(token, fresh)).status).toBe(404);
+      expect((await f.admin.query("select id from receipts where payment_id=$1", [fresh])).rowCount).toBe(0);
+    } finally {
+      await f.admin.query("update members set deleted_at=null where id=$1", [f.memberId]);
+    }
+  });
+
+  it("refuses a non-captured payment and preserves expired, foreign and sibling denial", async () => {
+    const id = await payment();
+    const { token } = signParentLinkToken({ tenantId: f.tenantId, personId: f.memberId });
+    const expired = signParentLinkToken({ tenantId: f.tenantId, personId: f.memberId, ttlSeconds: -1 });
+    const foreign = signParentLinkToken({ tenantId: f.otherTenant, personId: f.memberId });
+    const sibling = signParentLinkToken({ tenantId: f.tenantId, personId: randomUUID() });
+    for (const denied of [expired, foreign, sibling]) {
+      expect((await receipt(denied.token, id)).status).toBe(404);
+    }
+    await f.admin.query("update payments set status='pending' where id=$1", [id]);
+    expect((await receipt(token, id)).status).toBe(404);
+    expect((await f.admin.query("select id from receipts where payment_id=$1", [id])).rowCount).toBe(0);
   });
 });

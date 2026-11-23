@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listMembersAction } from "@/lib/actions/people";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
 import type { InvoiceRow } from "@/lib/services/invoices";
@@ -44,6 +44,14 @@ export function PaymentRecordForm() {
   const pendingQueryRef = useRef<string | null>(null);
   const searchRequest = useRef(0);
   const memberRequest = useRef(0);
+  const invoiceHeading = useRef<HTMLHeadingElement>(null);
+  const moveToInvoices = useRef(false);
+
+  useEffect(() => {
+    if (!moveToInvoices.current || !invoiceHeading.current) return;
+    moveToInvoices.current = false;
+    invoiceHeading.current.focus();
+  }, [member, invoices, invoiceError]);
 
   const trimmedQuery = query.trim();
   const busy = pendingQuery !== null;
@@ -93,42 +101,45 @@ export function PaymentRecordForm() {
     }
   }
 
-  async function chooseMember(next: MemberListRow) {
-    if (pendingQueryRef.current !== null || paymentBusy) return;
+  async function loadInvoices(memberId: string, reason: "lookup" | "after-payment") {
     const request = ++memberRequest.current;
+    setInvoices(null);
+    setInvoiceError(null);
+    try {
+      const rows = openInvoices(await listMemberInvoicesAction(memberId));
+      if (request !== memberRequest.current) return;
+      const collectible = rows.filter((row) => !row.collectionHold);
+      const current = collectible.find((row) => row.id === invoiceId);
+      setInvoices(rows);
+      setInvoiceId(previous => {
+        if (collectible.some(row => row.id === previous)) return previous;
+        return reason === "lookup" && collectible.length === 1 ? collectible[0]!.id : "";
+      });
+      return current?.outstandingPaise ?? null;
+    } catch {
+      if (request !== memberRequest.current) return;
+      setInvoiceError(reason);
+    }
+  }
+
+  function chooseMember(next: MemberListRow) {
+    if (pendingQueryRef.current !== null || paymentBusy) return;
+    const samePayer = member?.memberId === next.memberId;
+    moveToInvoices.current = true;
     setMember(next);
     setResults(null);
-    setInvoiceError(null);
     setError(null);
-    if (member?.memberId !== next.memberId) {
-      setInvoices(null);
+    if (!samePayer) {
       setInvoiceId("");
       setPaymentMessage(null);
       setReceiptId(null);
     }
-    try {
-      const rows = openInvoices(await listMemberInvoicesAction(next.memberId));
-      if (request !== memberRequest.current) return;
-      setInvoices(rows);
-      // Keep a still-open invoice selected while the payer is unchanged;
-      // otherwise fall back to the single open invoice, if there is one.
-      const collectible = rows.filter((row) => !row.collectionHold);
-      setInvoiceId((prev) =>
-        collectible.some((row) => row.id === prev)
-          ? prev
-          : collectible.length === 1 ? collectible[0]!.id : "",
-      );
-    } catch {
-      if (request !== memberRequest.current) return;
-      setInvoiceError("lookup");
-    }
+    void loadInvoices(next.memberId, samePayer ? invoiceError ?? "lookup" : "lookup");
   }
 
   function handleChildBusy(next: boolean) {
     setPaymentBusy(next);
     if (next) {
-      // A new submission clears the previous list-refresh error; the
-      // outcome message is replaced by the new result.
       setError(null);
       setPaymentMessage(null);
       setReceiptId(null);
@@ -136,18 +147,9 @@ export function PaymentRecordForm() {
   }
 
   async function refreshAfterRecord(): Promise<number | null | undefined> {
-    if (!member) return undefined;
-    try {
-      const rows = openInvoices(
-        await listMemberInvoicesAction(member.memberId),
-      );
-      const current = rows.find((row) => row.id === invoiceId);
-      setInvoices(rows);
-      setInvoiceId(current?.collectionHold ? "" : current?.id ?? "");
-      return current?.outstandingPaise ?? null;
-    } catch {
-      setInvoiceError("after-payment");
-      return undefined;
+    if (member) {
+      moveToInvoices.current = true;
+      return loadInvoices(member.memberId, "after-payment");
     }
   }
 
@@ -212,7 +214,7 @@ export function PaymentRecordForm() {
 
       {member ? (
         <section aria-labelledby="selected-payment-member" className="rounded-card border border-line bg-deck p-4">
-          <h2 id="selected-payment-member" className="text-base font-semibold text-ink">Invoices for {member.fullName}</h2>
+          <h2 ref={invoiceHeading} id="selected-payment-member" tabIndex={-1} className="scroll-mt-20 text-base font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">Invoices for {member.fullName}</h2>
           <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-ink-2">
             <span className="font-mono">
               {member.memberCode}
@@ -291,7 +293,7 @@ export function PaymentRecordForm() {
           key={selectedInvoice.id}
           invoice={selectedInvoice}
           onRecorded={refreshAfterRecord}
-          searchBusy={busy}
+          searchBusy={busy || paymentBusy}
           onBusyChange={handleChildBusy}
           onMessage={setPaymentMessage}
           onReceipt={setReceiptId}

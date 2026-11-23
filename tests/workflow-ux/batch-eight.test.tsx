@@ -60,6 +60,19 @@ it("anchors the member work with their identity and offers a retry when fee acce
   expect(screen.getByRole("link", { name: "Your achievements page" }).getAttribute("href")).toBe("/member/showcase");
 });
 
+it("names the linked child on family batch notices and leaves a whole-club update unlabelled", async () => {
+  state.selfRead.mockResolvedValue([
+    { ...notice, childNames: ["Mira Patel"] },
+    { ...earlier, childNames: [] },
+  ]);
+  render(await SelfInboxPage({ audience: "guardian" }));
+  const childNotice = screen.getByRole("heading", { name: notice.title }).closest("li")!;
+  const wholeClub = screen.getByRole("heading", { name: earlier.title }).closest("li")!;
+  expect(within(childNotice).getByText("For Mira Patel")).toBeTruthy();
+  expect(within(childNotice).getByRole("button", { name: `Mark ${notice.title} as read` })).toBeTruthy();
+  expect(within(wholeClub).queryByText(/For Mira Patel/)).toBeNull();
+});
+
 it("totals only the displayed fees exactly and jumps to payments without changing the receipt form", () => {
   render(<SelfBilling homeHref="/member" receiptBase="/api/self/billing/receipt" data={{
     outstanding: Array.from({ length: 10 }, (_, index) => ({

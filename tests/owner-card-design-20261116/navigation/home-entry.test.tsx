@@ -2,14 +2,16 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ permissions: new Set<string>(), features: new Set<string>(), allowFacility: false }));
+const state = vi.hoisted(() => ({ permissions: new Set<string>(), features: new Set<string>(), allowFacility: false, roleKey: "owner", facilityCookie: undefined as string | undefined }));
 vi.mock("@/lib/auth/surface-guard", () => ({ requireOwner: async () => state }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => state.facilityCookie ? { value: state.facilityCookie } : undefined }) }));
 vi.mock("next/navigation", () => ({ redirect: (href: string) => { throw new Error(`REDIRECT:${href}`); } }));
 vi.mock("@/lib/actions/dashboard", () => ({ getOwnerDashboardAction: vi.fn(() => { throw new Error("dashboard read not allowed"); }) }));
+vi.mock("@/lib/actions/terminology", () => ({ getTerminologyAction: async () => ({ locale: "en", overrides: {} }) }));
 vi.mock("@/lib/services/selected-facility-access", () => ({ canSelectFacility: async () => state.allowFacility }));
 import OwnerHomePage from "@/app/(owner)/owner/page";
 
-afterEach(() => { cleanup(); state.allowFacility = false; });
+afterEach(() => { cleanup(); state.allowFacility = false; state.facilityCookie = undefined; });
 it("sends a limited operational reader to schedule before programs", async () => {
   state.permissions = new Set(["programs.read", "attendance.read"]);
   state.features = new Set(["programs", "attendance"]);
@@ -76,4 +78,16 @@ it("refuses malformed or unauthorized explicit facility before redirecting", asy
   cleanup();
   render(await OwnerHomePage({ searchParams: Promise.resolve({ facility: "11111111-1111-4111-8111-111111111111" }) }));
   expect(screen.getByRole("heading", { name: "Facility unavailable" })).toBeTruthy();
+});
+
+it.each(["manager", "admin", "owner"])("recovers from an unavailable facility on %s Home before reading figures", async (roleKey) => {
+  state.roleKey = roleKey;
+  state.permissions = new Set(["dashboard.view"]);
+  state.features = new Set(["reports"]);
+  const unavailable = "22222222-2222-4222-8222-222222222222";
+  const params = roleKey === "owner" ? {} : { facility: unavailable };
+  if (roleKey === "owner") state.facilityCookie = unavailable;
+  render(await OwnerHomePage({ searchParams: Promise.resolve(params) }));
+  expect(screen.getByRole("heading", { name: "Facility unavailable" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "View available facilities" }).getAttribute("href")).toBe("/owner?facility=all");
 });

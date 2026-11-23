@@ -58,6 +58,7 @@ export default async function RegisterPage({
 
       <div className="mt-4">
         <RegisterBoard
+          key={sessionId}
           sessionId={sessionId}
           sessionContext={[data.batchName, time, data.locationName].filter(Boolean).join(" · ")}
           rows={data.rows}

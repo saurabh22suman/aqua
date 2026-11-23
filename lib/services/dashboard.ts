@@ -497,7 +497,7 @@ export async function getOwnerDashboard(
         detail: `${c.locationName} — ${c.onDate}: ${formatINR(Math.abs(c.variancePaise))} ${direction}`,
         // PR3-C3 — the collections report is where the count and its
         // variance are reconciled.
-        href: "/owner/reports/collections",
+        href: `/owner/reports/collections?${new URLSearchParams({ facility: c.locationId, date: c.onDate })}`,
       });
     }
 

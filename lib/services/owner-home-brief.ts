@@ -272,7 +272,9 @@ export function buildOwnerHomeBriefView({
       overdue: "1",
       facility: facilityId ?? "all",
     }).toString()}`,
-    cashHref: `/owner/reports/collections?facility=${facilityId ?? "all"}`,
+    cashHref: `/owner/reports/collections?${new URLSearchParams(data.cashReview
+      ? { facility: data.cashReview.locationId, date: data.cashReview.onDate }
+      : { facility: facilityId ?? "all" })}`,
     can,
   };
 }

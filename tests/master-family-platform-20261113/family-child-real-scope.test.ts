@@ -9,8 +9,16 @@ import { readSelfHome } from "@/lib/services/self-home";
 import { billingSubjectInTx } from "@/lib/services/self-billing";
 import { readAuthorizedBrandingTarget } from "@/lib/services/branding-target";
 import { getScopedSelfReceiptInTx } from "@/lib/services/receipts";
+import { markSelfNotificationReadInTx, readSelfNotificationsInTx } from "@/lib/services/announcements";
 
 let f: Awaited<ReturnType<typeof fixture>>, second: string, unrelated: string, unlinked: string, linkIds: string[], firstPayment: string;
+const notices = [
+  { id: randomUUID(), title: "First child's batch", audience: "batch" },
+  { id: randomUUID(), title: "Second child's batch", audience: "batch" },
+  { id: randomUUID(), title: "Another batch", audience: "batch" },
+  { id: randomUUID(), title: "Guardian update", audience: "parents" },
+  { id: randomUUID(), title: "Academy update", audience: "all" },
+] as const;
 beforeAll(async () => {
   f = await fixture();
   const { rows: [actor] } = await f.admin.query<{ phone: string }>("select phone from users where id=$1", [f.userId]);
@@ -31,9 +39,21 @@ beforeAll(async () => {
   await f.admin.query("insert into payments(id,tenant_id,invoice_id,member_id,location_id,amount_paise,method,status) values ($1,$2,$3,$4,$5,10000,'cash','captured')", [firstPayment, f.tenantId, invoice, f.memberId, f.locationA]);
   const session = await mintSelfServiceSession({ tenantId: f.tenantId, userId: f.userId, audience: "guardian", subjectId: null, linkIds, accountPhone: actor.phone });
   request.token = session.cookieValue;
+  await f.admin.query("insert into enrolments (id, tenant_id, member_id, batch_id, enrolled_on) values (gen_random_uuid(),$1,$2,$3,'2026-01-01'),(gen_random_uuid(),$1,$4,$5,'2026-01-01')",
+    [f.tenantId, f.memberId, f.batchA, second, f.batchB]);
+  for (const [index, notice] of notices.entries()) {
+    const announcementId = randomUUID();
+    const batchId = [f.batchA, f.batchB, f.batchUnlocated][index] ?? null;
+    await f.admin.query("insert into announcements (id,tenant_id,title,body,audience,batch_id,sent_at) values ($1,$2,$3,'Update',$4,$5,now())",
+      [announcementId, f.tenantId, notice.title, notice.audience, batchId]);
+    await f.admin.query("insert into notifications (id,tenant_id,user_id,announcement_id,title,body) values ($1,$2,$3,$4,$5,'Update')",
+      [notice.id, f.tenantId, f.userId, announcementId, notice.title]);
+  }
 });
 afterAll(async () => {
   if (!f) return;
+  await f.admin.query("delete from notifications where tenant_id=$1", [f.tenantId]);
+  await f.admin.query("delete from announcements where tenant_id=$1", [f.tenantId]);
   await f.admin.query("delete from self_service_session_links where tenant_id=$1", [f.tenantId]);
   await f.admin.query("delete from self_service_sessions where tenant_id=$1", [f.tenantId]);
   await f.admin.query("delete from guardian_child_links where tenant_id=$1", [f.tenantId]);
@@ -65,10 +85,27 @@ it("only serves a captured receipt for the selected authorized child", async () 
   expect(results.sibling.ok).toBe(false);
   expect(results.unlinked.ok).toBe(false);
 });
+it("returns the applicable child names and checks the same scope before mark-read", async () => {
+  const resolver = await resolveScopedSelfScope("guardian");
+  expect(resolver).not.toBeNull();
+  await resolver!.read(async (tx, scope) => {
+    const rows = await readSelfNotificationsInTx(tx, scope);
+    expect(rows.map(row => row.id).sort()).toEqual([notices[0].id, notices[1].id, notices[3].id, notices[4].id].sort());
+    const names = new Map(rows.map(row => [row.id, row.childNames]));
+    expect(names.get(notices[0].id)).toEqual(["Synthetic member"]);
+    expect(names.get(notices[1].id)).toEqual(["Second child"]);
+    expect(names.get(notices[3].id)).toEqual([]);
+    expect(names.get(notices[4].id)).toEqual([]);
+    expect(await markSelfNotificationReadInTx(tx, scope, notices[2].id)).toEqual({ ok: false });
+    expect(await markSelfNotificationReadInTx(tx, scope, notices[1].id)).toEqual({ ok: true });
+  });
+});
 it("refuses the bound session after a linked child is revoked", async () => {
   await f.admin.query("update guardian_child_links set status='revoked',revoked_at=now(),revoked_by_user_id=$1 where id=$2", [f.userId, linkIds[1]]);
   const resolver = await resolveScopedSelfScope("guardian");
   expect(resolver).not.toBeNull();
   await expect(resolver!.read((tx, scope) => readSelfHome(tx, scope, "guardian"))).rejects.toThrow();
+  await expect(resolver!.read(readSelfNotificationsInTx)).rejects.toThrow();
+  await expect(resolver!.read((tx, scope) => markSelfNotificationReadInTx(tx, scope, notices[1].id))).rejects.toThrow();
   expect(await readAuthorizedBrandingTarget(f.tenantId, "guardian", async () => "private")).toBeNull();
 });

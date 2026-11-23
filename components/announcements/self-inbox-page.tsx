@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { resolveSelfScope } from "@/lib/auth/self-scope";
 import { NotFoundError } from "@/lib/auth/context";
-import { readSelfNotificationsInTx, type NotificationRow } from "@/lib/services/announcements";
+import { readSelfNotificationsInTx, type SelfNotificationRow } from "@/lib/services/announcements";
 import { markSelfNotificationAction } from "@/lib/actions/self-notifications";
 import { formatDateTimeIST } from "@/lib/time/tz";
 import { SelfWorkspaceNav } from "@/components/self-workspace-nav";
@@ -23,7 +23,7 @@ export async function SelfInboxPage({ audience }: { audience: "member" | "guardi
   const unread = (rows ?? []).filter((row) => row.readAt === null);
   const earlier = (rows ?? []).filter((row) => row.readAt !== null);
 
-  function section(rows: NotificationRow[], label: string, id: string) {
+  function section(rows: SelfNotificationRow[], label: string, id: string) {
     if (!rows.length) return null;
     return (
       <section aria-labelledby={id} className="min-w-0 rounded-card border border-line bg-paper p-4">
@@ -35,6 +35,7 @@ export async function SelfInboxPage({ audience }: { audience: "member" | "guardi
                 <h3 className="break-words font-semibold">{row.title}</h3>
                 {row.readAt ? <StatusBadge tone="neutral">Read</StatusBadge> : null}
               </div>
+              {!ownInbox && row.childNames?.length ? <p className="text-sm text-ink-2">For {row.childNames.join(", ")}</p> : null}
               <p className="whitespace-pre-wrap break-words text-sm text-ink-2">{row.body}</p>
               <time className="block text-xs text-ink-2" dateTime={row.createdAt}>{formatDateTimeIST(row.createdAt)}</time>
               {row.readAt ? null : (

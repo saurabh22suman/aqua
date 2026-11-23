@@ -1,4 +1,4 @@
-import { resolveTerm } from "@/lib/terminology/keys";
+import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { Suspense } from "react";
 import { resolvePresetScope } from "@/db/preset-engine";
 import { withTenant } from "@/db/tenant";
@@ -11,7 +11,7 @@ import { getBrandingAction } from "@/lib/actions/branding";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
 import { getOwnerChartsAction } from "@/lib/actions/owner-home-charts";
-import { FACILITY_COOKIE, resolveFacilityValue, resolveRequestedFacility } from "@/lib/facility";
+import { FACILITY_COOKIE, resolveRequestedFacility } from "@/lib/facility";
 import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import { OwnerDashboard } from "@/components/owner-dashboard";
 import { ManagementBrief } from "@/components/owner-home/management-brief";
@@ -27,6 +27,20 @@ import { OwnerLink } from "@/components/owner-ui/owner-link";
 import { requireOwner } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { hasBookingEntitlement } from "@/lib/auth/booking-entitlement";
+
+async function unavailableFacility(destination: string) {
+  const terminology = ownerTerminology(await getTerminologyAction());
+  const facility = resolveTerm(terminology, "facility", 1);
+  return (
+    <OwnerPage>
+      <h1 className="font-display text-xl font-semibold">{titleCase(facility)} unavailable</h1>
+      <p className="mt-2 text-sm text-ink-2">This {facility} is unavailable for your account.</p>
+      <OwnerLink href={`${destination}?facility=all`} className="mt-3 inline-flex min-h-11 items-center text-sm text-[var(--accent-ink)] underline">
+        View available {resolveTerm(terminology, "facility", "other")}
+      </OwnerLink>
+    </OwnerPage>
+  );
+}
 
 // W1-6 continuation — the landing page now honours the facility
 // switcher end-to-end: the URL wins, the remembered cookie is the
@@ -58,7 +72,7 @@ export default async function OwnerHomePage({
     if (destination) {
       const scope = resolveRequestedFacility({ facility: params.facility });
       if (!scope.valid || (scope.facilityId && !(await canSelectFacility(ctx, scope.facilityId)))) {
-        return <OwnerPage><h1 className="font-display text-xl font-semibold">Facility unavailable</h1><p className="mt-2 text-sm text-ink-2">This facility is unavailable for your account.</p><OwnerLink href={`${destination}?facility=all`} className="mt-3 inline-flex min-h-11 items-center text-sm text-[var(--accent-ink)] underline">View available facilities</OwnerLink></OwnerPage>;
+        return unavailableFacility(destination);
       }
       const query = params.facility === undefined ? "" : `?${new URLSearchParams({ facility: params.facility })}`;
       redirect(`${destination}${query}`);
@@ -93,10 +107,13 @@ export default async function OwnerHomePage({
     );
   }
   const cookieStore = await cookies();
-  const facility = resolveFacilityValue(
-    params.facility,
-    cookieStore.get(FACILITY_COOKIE)?.value,
-  );
+  const { valid, facilityId: facility } = resolveRequestedFacility({
+    facility: params.facility,
+    cookie: cookieStore.get(FACILITY_COOKIE)?.value,
+  });
+  if (!valid || (facility && !(await canSelectFacility(ctx, facility)))) {
+    return unavailableFacility("/owner");
+  }
 
   // The dashboard trend band defaults to a genuine Last 7 days window
   // (today and the preceding six IST calendar dates). Day and Month

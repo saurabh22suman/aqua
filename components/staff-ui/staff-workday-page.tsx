@@ -27,7 +27,7 @@ export async function StaffWorkdayPage({ ctx, href, backHref, backLabel }: {
     <StaffPage>
       <BackLink href={backHref} label={backLabel} />
       <StaffPageHeader title="My workday" />
-      <StaffWorkdaySections workday={workday} pageHref={href} />
+      <StaffWorkdaySections workday={workday} pageHref={href} date={today} />
     </StaffPage>
   );
 }

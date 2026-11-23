@@ -6,19 +6,24 @@ import { resolveScopedSelfScope } from "@/lib/auth/self-scope";
 import { ensureBaUserForPhone, pinLogin, setCredential } from "@/lib/services/credentials";
 import { mintSelfServiceSession } from "@/lib/services/self-service-session";
 import { ACTIVE_CLUB_COOKIE } from "@/lib/auth/active-club";
+import { homeForSessionAction } from "@/lib/actions/auth-ui";
+import { lastBusinessKey } from "@/lib/services/workspace-opening";
 
-const request = vi.hoisted(() => ({ headers: new Headers(), selfToken: "" }));
+const request = vi.hoisted(() => ({ headers: new Headers(), selfToken: "", preferences: new Map<string, string>(), set: vi.fn(), delete: vi.fn() }));
 vi.mock("next/headers", () => ({
   headers: async () => request.headers,
   cookies: async () => ({
     get: (name: string) => name === "aqua_self_session" && request.selfToken
-      ? { value: request.selfToken } : undefined,
+      ? { value: request.selfToken } : request.preferences.has(name) ? { value: request.preferences.get(name) } : undefined,
+    set: request.set,
+    delete: request.delete,
   }),
 }));
 
 let f: Awaited<ReturnType<typeof fixture>>;
 let staffCookie: string;
 let memberToken: string;
+let betterAuthId: string;
 const memberLink = randomUUID();
 const anotherMembership = randomUUID();
 const sameRole = randomUUID();
@@ -30,6 +35,7 @@ beforeAll(async () => {
     "select phone from users where id=$1", [f.receptionistId],
   );
   const identity = await ensureBaUserForPhone(person.phone);
+  betterAuthId = identity;
   await setCredential(identity, "123456");
   const login = await pinLogin(person.phone, "123456");
   expect(login.status).toBe(200);
@@ -64,6 +70,9 @@ afterAll(async () => {
 beforeEach(() => {
   request.headers = new Headers({ cookie: `${staffCookie}; ${ACTIVE_CLUB_COOKIE}=${f.tenantId}` });
   request.selfToken = "";
+  request.preferences.clear();
+  request.set.mockClear();
+  request.delete.mockClear();
 });
 
 it("offers a verified member role with PIN confirmation and keeps same-role business switching separate", async () => {
@@ -84,8 +93,34 @@ it("uses an existing role session only for the same verified account and busines
   expect(options?.choices).toEqual([{ label: "Reception", href: "/reception", detail: "Open your staff workspace" }]);
   request.headers = new Headers();
   expect((await readSelfWorkspaceRoles(member!))?.choices).toEqual([
-    { label: "Reception", href: "/login", detail: "Confirm with your PIN" },
+    { label: "Reception", href: `/login?clubId=${f.tenantId}&role=receptionist`, detail: "Confirm with your PIN" },
   ]);
+});
+
+it("opens the explicitly chosen business after PIN confirmation ahead of a remembered business", async () => {
+  request.headers = new Headers({ cookie: staffCookie });
+  request.preferences.set(lastBusinessKey(betterAuthId), f.otherTenant);
+  await expect(homeForSessionAction({ clubId: f.tenantId, role: "receptionist" })).resolves.toEqual({
+    kind: "ok", path: "/reception",
+  });
+  expect(request.set).toHaveBeenCalledWith(ACTIVE_CLUB_COOKIE, f.tenantId, expect.anything());
+  request.set.mockClear();
+  await homeForSessionAction();
+  expect(request.set).toHaveBeenCalledWith(ACTIVE_CLUB_COOKIE, f.otherTenant, expect.anything());
+});
+
+it("returns to business selection when the chosen staff role is no longer live", async () => {
+  request.headers = new Headers({ cookie: staffCookie });
+  request.preferences.set(lastBusinessKey(betterAuthId), f.tenantId);
+  await f.admin.query("update tenant_memberships set status='revoked' where tenant_id=$1 and user_id=$2", [f.otherTenant, f.receptionistId]);
+  try {
+    await expect(homeForSessionAction({ clubId: f.otherTenant, role: "receptionist" })).resolves.toEqual({
+      kind: "ok", path: "/clubs?unavailable=1",
+    });
+    expect(request.set).not.toHaveBeenCalledWith(ACTIVE_CLUB_COOKIE, expect.anything(), expect.anything());
+  } finally {
+    await f.admin.query("update tenant_memberships set status='active' where id=$1", [anotherMembership]);
+  }
 });
 
 it("withholds a revoked or unrelated linked role while offering the other assigned staff role", async () => {

@@ -120,6 +120,24 @@ const CHARTS = {
   },
 } as OwnerChartsData;
 
+it("links an all-facilities cash review to the variance's date and facility", () => {
+  const view = buildOwnerHomeBriefView({
+    data: {
+      ...DATA,
+      cashReview: { locationId: LOCATIONS[1]!.id, locationName: LOCATIONS[1]!.name, onDate: "2026-11-20", variancePaise: 85000 },
+    },
+    charts: null,
+    branding: BRANDING,
+    facilities: LOCATIONS,
+    requestedFacility: null,
+    can: { fees: true, schedule: true, enquiries: true },
+  });
+  const href = new URL(view.cashHref, "https://aqua.local");
+  expect(href.pathname).toBe("/owner/reports/collections");
+  expect(href.searchParams.get("facility")).toBe(LOCATIONS[1]!.id);
+  expect(href.searchParams.get("date")).toBe("2026-11-20");
+});
+
 const CAN = { fees: true, schedule: true, enquiries: true };
 
 describe("owner Home brief read model", () => {
@@ -169,7 +187,8 @@ describe("owner Home brief read model", () => {
     expect(view.overdueHref).toContain("tab=dues");
     expect(view.overdueHref).toContain("overdue=1");
     expect(view.overdueHref).toContain(`facility=${LOCATIONS[1]!.id}`);
-    expect(view.cashHref).toContain(`facility=${LOCATIONS[1]!.id}`);
+    expect(new URL(view.cashHref, "https://aqua.local").searchParams.get("facility")).toBe(DATA.cashReview?.locationId);
+    expect(new URL(view.cashHref, "https://aqua.local").searchParams.get("date")).toBe(DATA.cashReview?.onDate);
     expect(view.session?.href).toContain(`facility=${LOCATIONS[1]!.id}`);
   });
 

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { tenantIsOperational } from "@/db/tenant-availability";
 import { withTenant } from "@/db/tenant";
 import { receipts } from "@/db/schema/receipts";
@@ -95,14 +95,20 @@ async function loadReceiptRow(
     .leftJoin(persons, eq(persons.id, members.personId))
     .innerJoin(locations, eq(locations.id, payments.locationId))
     .innerJoin(tenants, eq(tenants.id, payments.tenantId))
-    .where(and(eq(payments.id, paymentId), eq(payments.tenantId, tenantId)))
+    .where(and(
+      eq(payments.id, paymentId),
+      eq(payments.tenantId, tenantId),
+      // Self-service receipts use the legacy Parent view's live-child and
+      // captured-payment rules before reading or generating the PDF.
+      memberId === undefined ? undefined : and(
+        eq(members.id, asMemberId(memberId)),
+        isNull(members.deletedAt),
+        eq(payments.status, "captured"),
+      ),
+    ))
     .limit(1);
   const row = rows[0];
   if (!row) return null;
-  // The member route serves ONE member's receipts. A guest payment has
-  // no member, so it is never served there — the parent link can never
-  // hand a stranger a walk-in receipt.
-  if (memberId && row.payment.memberId !== memberId) return null;
   return {
     payment: row.payment,
     invoice: row.invoice,
@@ -260,7 +266,7 @@ export async function getOrCreateReceipt(
 // is attributed to the token route (system/api) — no staff user acted.
 //
 // WR-1 — a walk-in payment has no member, so this route never serves
-// one: the member check in loadReceiptRow refuses it.
+// one: loadReceiptRow checks the member and payment before PDF access.
 export async function getReceiptForMember(
   tenantId: ActionCtx["tenantId"],
   memberId: string,

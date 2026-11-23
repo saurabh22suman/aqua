@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { ownerTerminology } from "@/lib/terminology/owner-terms";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
@@ -14,7 +15,7 @@ import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerPage } from "@/components/owner-ui/owner-page";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { cookies } from "next/headers";
-import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { FACILITY_COOKIE, resolveFacilityValue, resolveRequestedFacility } from "@/lib/facility";
 import { getOwnerCharts } from "@/lib/services/owner-home-charts";
 import { isOwnerPeriodKey } from "@/lib/time/owner-periods";
 import { CollectionsTrends } from "@/components/reports/owner-approved/collections-trends";
@@ -25,7 +26,7 @@ import { CollectionsViews } from "@/components/reports/owner-approved/collection
 // (reports.financial gates the read at the action layer); confirming
 // is a counter action (payments.record).
 
-export default async function CollectionsPage({ searchParams }: { searchParams?: Promise<{ view?: string; period?: string; facility?: string }> }) {
+export default async function CollectionsPage({ searchParams }: { searchParams?: Promise<{ view?: string; period?: string; facility?: string; date?: string }> }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.financial");
   const params = searchParams ? await searchParams : {};
@@ -61,7 +62,21 @@ export default async function CollectionsPage({ searchParams }: { searchParams?:
   ]);
   const locations = access.unrestricted ? allLocations : allLocations.filter(location => access.locationIds.includes(location.id));
   const defaultDate = todayInZone(timezone);
-  const requestedFacility = params.facility === "all" ? undefined : params.facility ?? cookieStore.get(FACILITY_COOKIE)?.value;
+  const scope = resolveRequestedFacility({ facility: params.facility, cookie: cookieStore.get(FACILITY_COOKIE)?.value });
+  const date = z.iso.date().safeParse(params.date ?? defaultDate);
+  if (!scope.valid || (scope.facilityId && !locations.some(location => location.id === scope.facilityId))) {
+    const query = new URLSearchParams({ facility: "all", ...(date.success && params.date !== undefined ? { date: date.data } : {}) });
+    return <OwnerPage workflow="ledger">
+      <PageHeader title="Facility unavailable" purpose="Choose an available facility to review collections." />
+      <Link href={`/owner/reports/collections?${query}`} className="mt-3 inline-flex min-h-11 items-center text-sm underline">View available facilities</Link>
+    </OwnerPage>;
+  }
+  if (!date.success) {
+    return <OwnerPage workflow="ledger">
+      <PageHeader title="Date unavailable" purpose="Choose a valid date to review collections." />
+      <Link href={`/owner/reports/collections?facility=${scope.facilityId ?? "all"}`} className="mt-3 inline-flex min-h-11 items-center text-sm underline">Open daily collections</Link>
+    </OwnerPage>;
+  }
 
   return (
     <OwnerPage workflow="ledger" data-owner-money-page="collections">
@@ -71,12 +86,14 @@ export default async function CollectionsPage({ searchParams }: { searchParams?:
       />
       <details className="mt-2 text-sm text-ink-2"><summary className="min-h-11 cursor-pointer">About daily close</summary><p>Payments are grouped by method and recipient. Confirm the physical cash count; any variance is shown, never adjusted away.</p></details>
       <CollectionsReport
+        key={`${date.data}|${scope.facilityId ?? "all"}`}
         defaultDate={defaultDate}
+        initialDate={date.data}
         locations={locations}
         facilityLabel={resolveTerm(terminology, "facility", 1)}
         canConfirm={hasPermission(ctx, "payments.record")}
         canReopen={hasPermission(ctx, "settings.manage")}
-        initialLocationId={requestedFacility}
+        initialLocationId={scope.facilityId}
         compactOwner={ctx.roleKey === "owner"}
         showNavigation
       />

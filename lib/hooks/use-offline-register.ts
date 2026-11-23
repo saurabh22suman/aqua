@@ -10,6 +10,7 @@ import { replayAttendance } from "@/lib/offline/replay";
 
 export type Mark = "present" | "absent" | "late";
 type LastError = { at: number; message: string };
+type MarkWrite = { clientId: string; status: Mark; pending: boolean; error: string | null };
 declare global {
   interface Window { __flushQueue?: () => Promise<void>; __waitForPendingWrites?: () => Promise<void>; }
 }
@@ -17,13 +18,14 @@ declare global {
 export function useOfflineRegister(sessionId: string, rows: RosterRow[], initialStatuses: Record<string, Mark>,
   offlineSyncEnabled: boolean, identity?: OfflineIdentity | null) {
   const [marks, setMarks] = useState<Record<string, Mark>>(initialStatuses);
-  const [pending, setPending] = useState(0), [saving, setSaving] = useState(0);
+  const [pending, setPending] = useState(0);
+  const [markWrites, setMarkWrites] = useState<Record<string, MarkWrite | undefined>>({});
   const [retryable, setRetryable] = useState(0);
   const [lastSynced, setLastSynced] = useState<number | null>(null);
   const [lastError, setLastError] = useState<LastError | null>(null);
   const [review, setReview] = useState<Array<{ clientId: string; memberId: string }>>([]);
   const [online, setOnline] = useState(true), [sessionEnded, setSessionEnded] = useState(false);
-  const running = useRef(false), inFlight = useRef(0);
+  const running = useRef(false), inFlight = useRef(new Set<string>());
   const waiters = useRef<Array<() => void>>([]);
   const offlineAvailable = offlineSyncEnabled && Boolean(identity && identity.expiresAt > Date.now());
   const fail = (error: unknown) => setLastError({ at: Date.now(), message: error instanceof Error ? error.message : String(error) });
@@ -76,13 +78,13 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
   };
 
   function waitForPendingWrites(): Promise<void> {
-    return inFlight.current === 0 ? Promise.resolve() : new Promise(resolve => waiters.current.push(resolve));
+    return inFlight.current.size === 0 ? Promise.resolve() : new Promise(resolve => waiters.current.push(resolve));
   }
 
   useEffect(() => {
     const connected = () => { setOnline(true); if (offlineAvailable) void flush.current(); };
     const disconnected = () => setOnline(false);
-    const ended = () => { setSessionEnded(true); setMarks({}); setPending(0); setRetryable(0); setReview([]); };
+    const ended = () => { setSessionEnded(true); setMarks({}); setPending(0); setRetryable(0); setReview([]); setMarkWrites({}); };
     const cleared = (event: Event) => {
       if (identity && (event as CustomEvent<{ scope: string }>).detail?.scope === identity.scope) ended();
     };
@@ -120,25 +122,61 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, identity?.scope, identity?.expiresAt, offlineAvailable]);
 
-  function mark(memberId: string, next: Mark): Promise<void> {
-    const clientId = crypto.randomUUID();
-    if (!offlineAvailable) {
-      if (!navigator.onLine) { fail(new Error("Offline — marking is unavailable until you reconnect.")); return Promise.resolve(); }
-      return markAttendanceSessionAction({ sessionId, memberId, status: next, clientId }).then(result => {
-        if (!result.ok) { fail(new Error(result.error ?? "Mark failed.")); return; }
-        setMarks(current => ({ ...current, [memberId]: next })); setLastError(null); setLastSynced(Date.now());
-      }).catch(fail);
-    }
-    if (sessionEnded) return Promise.resolve();
-    inFlight.current++; setSaving(count => count + 1);
-    return ensureIdentity().then(active => enqueueMark({ clientId, sessionId, memberId, status: next,
-      savedAt: Date.now(), attempts: 0, scope: active.scope, expiresAt: active.expiresAt }))
-      .then(() => { setMarks(current => ({ ...current, [memberId]: next })); return refreshFromQueue(); })
-      .then(() => { void flush.current(); }).catch(fail).finally(() => {
-        inFlight.current--; setSaving(count => count - 1);
-        if (!inFlight.current) { const pendingWaiters = waiters.current; waiters.current = []; for (const done of pendingWaiters) done(); }
+  async function mark(memberId: string, status: Mark): Promise<void> {
+    if (sessionEnded || inFlight.current.has(memberId)) return;
+    const previous = markWrites[memberId];
+    const sameMark = previous?.status === status ? previous : undefined;
+    const clientId = sameMark?.clientId ?? crypto.randomUUID();
+    const writing = { clientId, status, pending: true, error: sameMark?.error ?? null };
+    const failed = (error: string) => setMarkWrites(current => ({
+      ...current, [memberId]: { ...writing, pending: false, error },
+    }));
+
+    inFlight.current.add(memberId);
+    setMarkWrites(current => ({ ...current, [memberId]: writing }));
+    try {
+      if (offlineAvailable) {
+        const active = await ensureIdentity();
+        await enqueueMark({ clientId, sessionId, memberId, status, savedAt: Date.now(), attempts: 0,
+          scope: active.scope, expiresAt: active.expiresAt });
+      } else {
+        if (!navigator.onLine) {
+          failed("Mark did not save. Reconnect to retry.");
+          return;
+        }
+        const result = await markAttendanceSessionAction({ sessionId, memberId, status, clientId });
+        if (!result.ok) {
+          failed(result.error ? `Mark did not save. ${result.error}` : "Mark did not save. Try again.");
+          return;
+        }
+        setLastSynced(Date.now());
+      }
+      setMarks(current => ({ ...current, [memberId]: status }));
+      setMarkWrites(current => {
+        const next = { ...current };
+        delete next[memberId];
+        return next;
       });
+      if (offlineAvailable) {
+        // The enqueue has already committed even if its read-back fails.
+        setPending(count => count + 1);
+        await refreshFromQueue().catch(fail);
+        void flush.current();
+      }
+    } catch {
+      failed(offlineAvailable ? "Mark did not save on this device." : "Mark not confirmed. Retry to check and save it.");
+    } finally {
+      inFlight.current.delete(memberId);
+      if (!inFlight.current.size) {
+        const pendingWaiters = waiters.current;
+        waiters.current = [];
+        for (const done of pendingWaiters) done();
+      }
+    }
   }
+  const writeStates = Object.values(markWrites);
+  const saving = writeStates.filter(write => write?.pending).length;
+  const hasSyncFailure = lastError !== null && retryable > 0;
   const markedCount = useMemo(() => Object.values(marks).filter(Boolean).length, [marks]);
   return { marks, mark, markedCount, pending, retryable, online, saving, waitForPendingWrites, review,
     discardReview: async (clientId: string) => {
@@ -153,6 +191,7 @@ export function useOfflineRegister(sessionId: string, rows: RosterRow[], initial
       await refreshFromQueue();
     },
     savedAtLabel: lastSynced ? formatTimeIST(new Date(lastSynced)) : null,
-    hasActiveFailure: lastError !== null,
+    hasActiveFailure: lastError !== null || writeStates.some(write => write?.error),
+    hasSyncFailure, markWrites,
     retrySync: () => flush.current(), offlineAvailable, sessionEnded };
 }

@@ -15,7 +15,7 @@ import { resolveAudienceUserIds } from "@/lib/services/announcement-audience";
 import { locationVisible, locationPredicate, resolveLocationAccess, resolveCallerMembership } from "@/lib/services/location-access";
 import { callerHasPermission } from "@/lib/services/resource-access";
 import { enqueueAnnouncementNotifications, resolveAnnouncementNotificationTargets } from "@/lib/messaging/notification-events";
-import { members } from "@/db/schema/people";
+import { members, persons } from "@/db/schema/people";
 import { enrolments } from "@/db/schema/scheduling";
 
 // U-06 — announcements and the in-app notification fan-out.
@@ -111,16 +111,25 @@ export type NotificationRow = {
   createdAt: string;
 };
 
+export type SelfNotificationRow = NotificationRow & { childNames: string[] };
+
 // Only call inside resolveSelfScope(...).read: that transaction rechecks and
 // holds the live account/link/child authority while this projection runs.
-export async function readSelfNotificationsInTx(tx: TenantTx, scope: SelfScope): Promise<NotificationRow[]> {
+export async function readSelfNotificationsInTx(tx: TenantTx, scope: SelfScope): Promise<SelfNotificationRow[]> {
   const subjectIds = scope.audience === "member" ? (scope.memberId ? [scope.memberId] : []) : scope.childMemberIds;
   if (!subjectIds.length) return [];
-  const enrolled = await tx.selectDistinct({ batchId: enrolments.batchId }).from(enrolments)
+  const enrolled = await tx.selectDistinct({ batchId: enrolments.batchId, memberId: members.id, childName: persons.fullName }).from(enrolments)
     .innerJoin(members, and(eq(members.id, enrolments.memberId), eq(members.tenantId, scope.tenantId), eq(members.status, "active"), isNull(members.deletedAt)))
+    .innerJoin(persons, and(eq(persons.id, members.personId), eq(persons.tenantId, scope.tenantId)))
     .innerJoin(batches, and(eq(batches.id, enrolments.batchId), eq(batches.tenantId, scope.tenantId), isNull(batches.deletedAt)))
     .where(and(eq(enrolments.tenantId, scope.tenantId), inArray(enrolments.memberId, subjectIds)));
-  const batchIds = enrolled.map((row) => row.batchId);
+  const childrenByBatch = new Map<string, string[]>();
+  for (const { batchId, childName } of enrolled) {
+    const names = childrenByBatch.get(batchId) ?? [];
+    names.push(childName);
+    childrenByBatch.set(batchId, names);
+  }
+  const batchIds = [...childrenByBatch.keys()];
   const rows = await tx.select({ id: notifications.id, title: notifications.title, body: notifications.body,
     announcementId: notifications.announcementId, readAt: notifications.readAt, createdAt: notifications.createdAt,
     audience: announcements.audience, batchId: announcements.batchId })
@@ -131,7 +140,13 @@ export async function readSelfNotificationsInTx(tx: TenantTx, scope: SelfScope):
       batchIds.length ? and(eq(announcements.audience, "batch"), inArray(announcements.batchId, batchIds)) : sql`false`,
     )))
     .orderBy(desc(notifications.createdAt)).limit(50);
-  return rows.map((row) => ({ id: row.id, title: row.title, body: row.body, announcementId: row.announcementId, readAt: row.readAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString() }));
+  return rows.map((row) => ({
+    id: row.id, title: row.title, body: row.body, announcementId: row.announcementId,
+    readAt: row.readAt?.toISOString() ?? null, createdAt: row.createdAt.toISOString(),
+    childNames: scope.audience === "guardian" && row.audience === "batch" && row.batchId
+      ? childrenByBatch.get(row.batchId) ?? []
+      : [],
+  }));
 }
 
 // Caller must supply the authoritative scope from resolver.read, not its

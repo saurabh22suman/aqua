@@ -84,7 +84,10 @@ export function LoginForm() {
 
   async function openWorkspace() {
     try {
-      const home = await homeForSessionAction();
+      const intent = new URLSearchParams(window.location.search);
+      const home = intent.has("clubId") || intent.has("role")
+        ? await homeForSessionAction({ clubId: intent.get("clubId"), role: intent.get("role") })
+        : await homeForSessionAction();
       setWorkspacePending(false);
       if (home.kind === "ok") {
         router.push(home.path);

@@ -1,6 +1,5 @@
 import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { STAFF_CARD } from "@/components/staff-ui/staff-page";
-import { formatTimeIST } from "@/lib/time/tz";
 import { StaffCheckInControls } from "@/components/staff-check-in-controls";
 import type { MyAttendanceRow } from "@/lib/services/staff-attendance";
 
@@ -12,38 +11,21 @@ import type { MyAttendanceRow } from "@/lib/services/staff-attendance";
 
 export function MyAttendanceCard({
   attendance,
+  date,
   id,
 }: {
   attendance: MyAttendanceRow | null;
+  date: string;
   /** Page-local anchor so a summary can point at the one action. */
   id?: string;
 }) {
-  const checkedIn = Boolean(attendance?.checkedInAt);
-  const checkedOut = Boolean(attendance?.checkedOutAt);
-
-  let summary = "Not checked in yet.";
-  if (checkedIn && attendance?.checkedInAt) {
-    summary = `Checked in ${formatTimeIST(attendance.checkedInAt)}`;
-    if (attendance.lateMinutes > 0) {
-      summary += ` · ${attendance.lateMinutes} min late`;
-    }
-    if (checkedOut && attendance.checkedOutAt) {
-      summary += ` · out ${formatTimeIST(attendance.checkedOutAt)}`;
-    }
-  } else if (attendance && !checkedIn) {
-    summary =
-      attendance.note ??
-      `Marked ${attendance.status.replace("_", " ")} for today.`;
-  }
-
   return (
     <section id={id} className={`mt-4 scroll-mt-4 p-4 ${STAFF_CARD}`}>
       <h2 className="flex items-center gap-2 text-[15px] font-medium text-ink">
         <OwnerIcon name="check" size={16} className="text-ink-3" />
         Today&apos;s attendance
       </h2>
-      <p className="mt-2 text-[13px] text-ink-2">{summary}</p>
-      <StaffCheckInControls checkedIn={checkedIn} checkedOut={checkedOut} />
+      <StaffCheckInControls initialAttendance={attendance} date={date} />
     </section>
   );
 }
