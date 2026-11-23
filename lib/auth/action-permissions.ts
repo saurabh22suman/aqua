@@ -156,6 +156,9 @@ export const ACTION_PERMISSION_MAP: PermissionActionMap = {
 
   // Owner dashboard
   getOwnerDashboardAction: "dashboard.view",
+  getOwnerHomeBriefAction: "dashboard.view",
+  getOwnerHomeFacilityMoneyAction: "dashboard.view",
+  saveOwnerDefaultFacilityAction: "dashboard.view",
   getOwnerChartsAction: "dashboard.view",
   getOnboardingChecklistAction: "members.read",
 

@@ -14,5 +14,5 @@ it("loads the real validation module on interaction and rejects malformed GSTIN"
   fireEvent.change(gstin, { target: { value: "invalid" } });
   fireEvent.click(screen.getByRole("button", { name: "Review club default" }));
   await waitFor(() => expect(gstin.getAttribute("aria-invalid")).toBe("true"));
-  expect(document.activeElement).toBe(gstin);
+  await waitFor(() => expect(document.activeElement).toBe(gstin));
 });

@@ -8,7 +8,7 @@ const { resolveMembership, canSelect, workspace, jar } = vi.hoisted(() => {
 
 vi.mock("@/db/platform", () => ({ resolveDefaultMembership: resolveMembership }));
 vi.mock("@/lib/services/selected-facility-access", () => ({ canSelectFacility: canSelect }));
-vi.mock("@/lib/auth/surface-guard", () => ({ requireOwner: async () => workspace }));
+vi.mock("@/lib/auth/context", () => ({ requireDefaultCtx: async () => workspace }));
 vi.mock("next/headers", () => ({ cookies: async () => jar }));
 
 import { ownerDefaultFacilityKey, ownerStartPath } from "@/lib/services/workspace-opening";

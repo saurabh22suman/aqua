@@ -11,7 +11,8 @@ import CoachLayout from "@/app/(coach)/layout";
 import ReceptionLayout from "@/app/(reception)/layout";
 import WorkerLayout from "@/app/(worker)/layout";
 
-it.each([["coach", CoachLayout], ["reception", ReceptionLayout], ["worker", WorkerLayout]] as const)("shows the active club on the %s task surface", async (_role, Layout) => {
+it.each([["coach", CoachLayout], ["reception", ReceptionLayout], ["worker", WorkerLayout]] as const)("shows the active club on the %s task surface", async (role, Layout) => {
+  state.role = role;
   const html = renderToStaticMarkup(await Layout({ children: <p>Task</p> }));
   expect(html).toContain("Example Sports Club");
 });
@@ -21,7 +22,11 @@ it.each([["coach", CoachLayout], ["receptionist", ReceptionLayout], ["worker", W
   const html = renderToStaticMarkup(await Layout({ children: <p>Task</p> }));
   expect(html).not.toContain("#workspace-guide");
   state.role = "unmatched";
-  const other = renderToStaticMarkup(await Layout({ children: <p>Task</p> }));
-  expect(other).not.toContain("#workspace-guide");
+  if (role === "worker") {
+    await expect(Layout({ children: <p>Task</p> })).rejects.toThrow("NOT_FOUND");
+  } else {
+    const other = renderToStaticMarkup(await Layout({ children: <p>Task</p> }));
+    expect(other).not.toContain("#workspace-guide");
+  }
   state.role = "coach";
 });

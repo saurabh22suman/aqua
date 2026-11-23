@@ -3,7 +3,9 @@
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { requirePermission } from "@/lib/auth/permission";
-import { requireOwner } from "@/lib/auth/surface-guard";
+import { notFound } from "next/navigation";
+import { requireDefaultCtx } from "@/lib/auth/context";
+import { canAccessSurface, SURFACE_OWNER } from "@/lib/auth/surface-access";
 import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import { ownerDefaultFacilityKey, workspacePreferenceCookie } from "@/lib/services/workspace-opening";
 
@@ -15,7 +17,8 @@ export async function saveOwnerDefaultFacilityAction(
   form: FormData,
 ): Promise<DefaultFacilityState> {
   const preference = facilityPreference.safeParse(form.get("facility"));
-  const ctx = await requireOwner();
+  const ctx = await requireDefaultCtx();
+  if (!canAccessSurface(ctx.roleKey, SURFACE_OWNER)) notFound();
   requirePermission(ctx, "dashboard.view");
   if (!preference.success) return { error: "Choose All or an available facility." };
   if (preference.data !== "all" && !await canSelectFacility(ctx, preference.data)) {

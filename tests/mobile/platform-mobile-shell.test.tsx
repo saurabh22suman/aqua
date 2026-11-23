@@ -84,11 +84,11 @@ describe("PlatformLayout mobile shell (F1)", () => {
 });
 
 describe("PlatformHome cards (F34)", () => {
-  it("includes a Presets card linking to /ops/presets", async () => {
+  it("opens the tenant directory directly from the overview", async () => {
     render(await PlatformHome());
 
-    const presets = screen.getByText("Presets").closest("a");
-    expect(presets?.getAttribute("href")).toBe("/ops/presets");
+    const findTenant = screen.getByRole("link", { name: "Find a tenant" });
+    expect(findTenant.getAttribute("href")).toBe("/ops/tenants");
   });
 });
 

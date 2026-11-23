@@ -20,5 +20,5 @@ it("passes the authorized club mark separately from the signed-in person", async
   expect(captured.props.clubName).toBe("Example Club");
   expect(captured.props.tenantId).toBe("tenant-a");
   expect(captured.nav).toHaveBeenCalledWith(expect.any(Set), captured.terms);
-  expect(captured.sidebar).toHaveBeenCalledWith(expect.any(Set), captured.terms);
+  expect(captured.sidebar).toHaveBeenCalledWith(expect.any(Set), captured.terms, expect.any(Set));
 });

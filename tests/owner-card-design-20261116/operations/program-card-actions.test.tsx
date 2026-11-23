@@ -20,14 +20,14 @@ it("groups the program editor actions in order and keeps create beside the live 
 it("puts visible named actions and real batch context with their program", () => {
   render(<ProgramsBatchesBoard canManage initialPrograms={[{ id: "p", name: "Badminton" } as Program]} initialBatches={[{ id: "b", programId: "p", programName: "Badminton", name: "Morning", daysOfWeek: [1], startTime: "07:00", endTime: "08:00", capacity: 12, locationId: "l", locationName: "MP18", coachId: null, coachName: "Anita" } as BatchWithProgramName]} coaches={[]} locations={[{ id: "l", name: "MP18" }]} terminology={{ overrides: {}, locale: "en" }} />);
   const card = screen.getByRole("group", { name: "Badminton" });
-  expect(within(card).getByRole("button", { name: "Edit Badminton" }).textContent).toContain("Edit program");
+  expect(within(card).getByRole("button", { name: "Edit Badminton" }).textContent?.trim()).toBe("Edit");
   expect(within(card).getByRole("button", { name: "Add batch to Badminton" }).textContent).toContain("Add batch");
   expect(card.textContent).toContain("MP18");
   expect(card.textContent).toContain("Anita");
   expect(card.textContent).toContain("12 places");
   expect(card.textContent).toContain("Mon");
   expect(within(card).getByRole("link", { name: "View batch Morning" }).getAttribute("href")).toContain("/owner/batches/b");
-  expect(within(card).getByRole("button", { name: "Edit Morning" }).textContent).toContain("Edit batch");
+  expect(within(card).getByRole("button", { name: "Edit Morning" }).textContent?.trim()).toBe("Edit");
   const details = within(card).getByRole("group", { name: "Morning details" });
   const actions = within(card).getByRole("group", { name: "Morning actions" });
   expect(details.textContent).toContain("MP18");

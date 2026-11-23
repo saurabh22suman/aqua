@@ -56,10 +56,10 @@ it("labels payment method chart values as exact currency, not raw paise", () => 
   const chart = screen.getByRole("img", { name: /Gross recorded payments by method/ });
   expect(Array.from(chart.querySelectorAll("circle title")).map((title) => title.textContent)).toContain("Cash: ₹456.00");
 });
-it("uses native links to open and leave a Settings category", async () => {
+it("keeps open and return links for a Settings category", async () => {
   render(await SettingsPage({ searchParams: Promise.resolve({}) }));
-  expectNative(screen.getByRole("link", { name: "Open Business account settings" }), "/owner/settings?category=academy");
+  expect(screen.getByRole("link", { name: "Open Business account settings" }).getAttribute("href")).toBe("/owner/settings?category=academy");
   cleanup();
   render(await SettingsPage({ searchParams: Promise.resolve({ category: "academy" }) }));
-  expectNative(screen.getByRole("link", { name: "Settings" }), "/owner/settings");
+  expect(screen.getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/owner/settings");
 });

@@ -19,9 +19,9 @@ vi.mock("@/components/tenant-sign-out", () => ({TenantSignOut:() => null}));
 import OwnerSettings from "@/app/(owner)/owner/settings/page";
 import CoachMe from "@/app/(coach)/coach/me/page";
 import ReceptionMe from "@/app/(reception)/reception/me/page";
-import WorkerHome from "@/app/(worker)/worker/page";
+import WorkerMe from "@/app/(worker)/worker/me/page";
 afterEach(cleanup);
-it.each([['owner',() => OwnerSettings({})],['coach',CoachMe],['receptionist',ReceptionMe],['worker',WorkerHome]] as const)("offers the current club install from the %s account area", async (role, page) => {
+it.each([['owner',() => OwnerSettings({})],['coach',CoachMe],['receptionist',ReceptionMe],['worker',WorkerMe]] as const)("offers the current club install from the %s account area", async (role, page) => {
   state.role = role;
   render(await page());
   expect(screen.getByRole("link",{name:/install this club/i}).getAttribute("href")).toBe(`/clubs/${state.tenantId}/install?source=staff`);
