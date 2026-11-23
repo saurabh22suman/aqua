@@ -444,9 +444,10 @@ const contracts: Record<string, { action: string; code: string; imports: Record<
       store.set(ACTIVE_CLUB_COOKIE,selected.tenantId,{ httpOnly: true,secure: process.env.NODE_ENV === "production",
         sameSite: "lax",path: "/",maxAge: 30*24*60*60 });
       store.delete(FACILITY_COOKIE);
-      return { kind: "ok", path: selected.homePath };
+      store.set(lastBusinessKey(session.user.id), selected.tenantId, workspacePreferenceCookie);
+      return { kind: "ok", path: await ownerStartPath(selected.homePath, session.user.id, selected.tenantId, store) };
     }`,
-    imports: { zod: ["z"], "next/headers": ["headers", "cookies"], "@/lib/auth/server": ["auth"], "@/db/scope": ["withPlatform"], "@/db/club-selection": ["listClubChoices"], "@/lib/auth/active-club": ["ACTIVE_CLUB_COOKIE"], "@/lib/facility": ["FACILITY_COOKIE"] },
+    imports: { zod: ["z"], "next/headers": ["headers", "cookies"], "@/lib/auth/server": ["auth"], "@/db/scope": ["withPlatform"], "@/db/club-selection": ["listClubChoices"], "@/lib/auth/active-club": ["ACTIVE_CLUB_COOKIE"], "@/lib/facility": ["FACILITY_COOKIE"], "@/lib/services/workspace-opening": ["lastBusinessKey", "ownerStartPath", "workspacePreferenceCookie"] },
   },
 };
 
