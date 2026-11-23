@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   PostgreSqlContainer,
   type StartedPostgreSqlContainer,
@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { asTenantId, asUserId } from "@/lib/ids";
-import { addDays, todayInZone } from "@/lib/time/tz";
+import { addDays } from "@/lib/time/tz";
 import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // R.8 (docs/five-day-work-guide.md, V-20) — absence alerts.
@@ -31,6 +31,7 @@ let parentView: ParentViewModule;
 const RUN = Date.now().toString(36);
 const tenantId = asTenantId(uuidv7());
 const userId = asUserId(uuidv7());
+const ownerRole = uuidv7(), ownerMembership = uuidv7();
 const locationId = uuidv7();
 const programId = uuidv7();
 const batchId = uuidv7();
@@ -41,7 +42,9 @@ const memberB = uuidv7();
 const TZ = "Asia/Kolkata";
 
 const ctx = { tenantId, userId };
-const today = todayInZone(TZ);
+// All four marks must be in the same month; a live clock on the first
+// three days of a month silently changes the dataset and its denominator.
+const today = "2026-11-13";
 const day = (n: number) => addDays(today, -n);
 
 beforeAll(async () => {
@@ -60,6 +63,8 @@ beforeAll(async () => {
 
   alerts = await import("@/lib/services/absence-alerts");
   parentView = await import("@/lib/services/parent-view");
+  vi.useFakeTimers({toFake:["Date"]});
+  vi.setSystemTime(new Date("2026-11-13T08:00:00Z"));
 
   admin = new Pool({ connectionString: adminUri });
   await admin.query(
@@ -74,6 +79,9 @@ beforeAll(async () => {
     userId,
     `+9193${String(Date.now()).slice(-8)}`,
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[ownerRole,tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'settings.manage'),($1,$2,'members.read')",[tenantId,ownerRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[ownerMembership,tenantId,userId,ownerRole]);
   await admin.query(
     "insert into programs (id, tenant_id, name) values ($1, $2, 'Squad')",
     [programId, tenantId],
@@ -131,6 +139,9 @@ afterAll(async () => {
     await admin.query("delete from programs where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from members where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1::uuid", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1::uuid", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1::uuid", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1::uuid", [tenantId]);
     await admin.query("delete from tenants where id = $1::uuid", [tenantId]);
     await admin.query("delete from users where id = $1::uuid", [userId]);
@@ -139,14 +150,15 @@ afterAll(async () => {
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});
   await container?.stop();
+  vi.useRealTimers();
 });
 
 describe("absence alert settings (R.8)", () => {
   it("defaults to 50% and is owner-configurable", async () => {
     expect(await alerts.getAbsenceAlertThreshold(ctx)).toBe(50);
-    await alerts.updateAbsenceAlertThreshold(ctx, 35);
+    expect(await alerts.updateAbsenceAlertThreshold(ctx, 35)).toEqual({ok:true});
     expect(await alerts.getAbsenceAlertThreshold(ctx)).toBe(35);
-    await alerts.updateAbsenceAlertThreshold(ctx, 50);
+    expect(await alerts.updateAbsenceAlertThreshold(ctx, 50)).toEqual({ok:true});
   });
 });
 

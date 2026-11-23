@@ -1,8 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
-import { sessions } from "@/db/schema/scheduling";
+import { attendance, sessions } from "@/db/schema/scheduling";
+import { tenants } from "@/db/schema/tenants";
+import { todayInZone } from "@/lib/time/tz";
+import { lockTenantSchedule } from "@/lib/services/scheduling-lock";
 import { detectSessionConflicts } from "@/lib/services/coach-conflicts";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { enqueueSessionNotification } from "@/lib/messaging/notification-events";
 import { writeAudit } from "@/lib/audit/write";
 import {
@@ -61,8 +64,14 @@ export type SessionLifecycleResult =
       conflictingSessionIds?: string[];
     };
 
+function lifecycleAuditActor(ctx: MutationActor) {
+  return ctx.systemActor === true
+    ? { actorType: "system" as const, actorId: null, source: "job" as const, requestId: ctx.requestId ?? null }
+    : { actorType: "user" as const, actorId: ctx.userId, source: "web" as const, requestId: ctx.requestId ?? null };
+}
+
 export async function cancelSession(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   sessionId: string,
 ): Promise<SessionLifecycleResult> {
   return withTenant(ctx.tenantId, async (tx) => {
@@ -90,7 +99,7 @@ export async function cancelSession(
           eq(sessions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1).for("update");
     if (!s) {
       return {
         kind: "error",
@@ -113,12 +122,11 @@ export async function cancelSession(
         newSessionDate: s.sessionDate,
       };
     }
-    // A 'held' session has attendance rows already in
-    // 'present' / 'late' state — rolling it back to
-    // 'cancelled' would silently orphan the day's mark. The
-    // owner-facing flow should not see this; coach-side
-    // cancellation happens before the session is held.
-    if (s.status === "held") {
+    // Attendance writers hold this same session lock. Check saved marks
+    // after acquiring it, so cancellation cannot race a pending mark.
+    const [mark] = await tx.select({ id: attendance.id }).from(attendance)
+      .where(and(eq(attendance.tenantId, ctx.tenantId), eq(attendance.sessionId, s.id))).limit(1);
+    if (s.status === "held" || mark) {
       return {
         kind: "error",
         code: "cannot_cancel_held",
@@ -136,8 +144,8 @@ export async function cancelSession(
       .where(eq(sessions.id, sessionId));
 
     await enqueueSessionNotification(tx, ctx.tenantId, sessionId, "cancelled");
-    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, action: "session.cancel.notification",
-      entityType: "session", entityId: sessionId, after: { status: "cancelled" }, requestId: ctx.requestId });
+    await writeAudit(tx, { tenantId: ctx.tenantId, ...lifecycleAuditActor(ctx), action: "session.cancel.notification",
+      entityType: "session", entityId: sessionId, after: { status: "cancelled" } });
     return {
       kind: "ok",
       sessionId: s.id,
@@ -155,10 +163,12 @@ export type RescheduleSessionInput = {
 };
 
 export async function rescheduleSession(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: RescheduleSessionInput,
 ): Promise<SessionLifecycleResult> {
-  if (input.newEndsAt <= input.newStartsAt) {
+  if (!(input.newStartsAt instanceof Date) || !(input.newEndsAt instanceof Date) ||
+    !Number.isFinite(input.newStartsAt.getTime()) || !Number.isFinite(input.newEndsAt.getTime()) ||
+    input.newEndsAt <= input.newStartsAt) {
     return {
       kind: "error",
       code: "invalid",
@@ -183,6 +193,11 @@ export async function rescheduleSession(
         message: "Scheduling authority is required to reschedule a session.",
       };
     }
+    const [tenant] = await tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId));
+    if (!tenant || todayInZone(tenant.timezone, input.newStartsAt.getTime()) !== input.newSessionDate) {
+      return { kind: "error", code: "invalid", message: "Session date must match the local start date." };
+    }
+    await lockTenantSchedule(tx, ctx.tenantId);
     const [s] = await tx
       .select({
         id: sessions.id,
@@ -190,6 +205,8 @@ export async function rescheduleSession(
         sessionDate: sessions.sessionDate,
         coachId: sessions.coachId,
         locationId: sessions.locationId,
+        startsAt: sessions.startsAt,
+        endsAt: sessions.endsAt,
       })
       .from(sessions)
       .where(
@@ -198,7 +215,7 @@ export async function rescheduleSession(
           eq(sessions.tenantId, ctx.tenantId),
         ),
       )
-      .limit(1);
+      .limit(1).for("update");
     if (!s) {
       return {
         kind: "error",
@@ -240,7 +257,7 @@ export async function rescheduleSession(
           tx,
         },
       );
-      if (conflicts.conflicts.length > 0) {
+      if (conflicts.hasConflicts) {
         return {
           kind: "error",
           code: "coach_conflict",
@@ -267,11 +284,13 @@ export async function rescheduleSession(
           updatedBy: ctx.userId,
         })
         .where(eq(sessions.id, input.sessionId));
-    } else if (s.sessionDate === input.newSessionDate) {
+    } else if (s.sessionDate === input.newSessionDate &&
+      s.startsAt.getTime() === input.newStartsAt.getTime() &&
+      s.endsAt.getTime() === input.newEndsAt.getTime()) {
       return {
         kind: "error",
         code: "no_change",
-        message: "Session is already on that date.",
+        message: "Session already has that date and time.",
       };
     } else {
       // Rescheduling a scheduled (or held) session — the date
@@ -288,8 +307,8 @@ export async function rescheduleSession(
         .where(eq(sessions.id, input.sessionId));
     }
     await enqueueSessionNotification(tx, ctx.tenantId, input.sessionId, "rescheduled");
-    await writeAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.userId, action: "session.reschedule.notification",
-      entityType: "session", entityId: input.sessionId, after: { sessionDate: input.newSessionDate }, requestId: ctx.requestId });
+    await writeAudit(tx, { tenantId: ctx.tenantId, ...lifecycleAuditActor(ctx), action: "session.reschedule.notification",
+      entityType: "session", entityId: input.sessionId, after: { sessionDate: input.newSessionDate } });
     return {
       kind: "ok",
       sessionId: s.id,

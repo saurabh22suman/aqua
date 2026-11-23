@@ -2,6 +2,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+
 // PR3-C7 — reception's counter surfaces: Today carries a session-count
 // chip and a search entry, the search route lists matches by
 // name/phone/code, the payment screen still records (PR2) and the
@@ -105,9 +107,10 @@ describe("reception member search (PR3-C7)", () => {
 
 describe("reception payment screen composition (PR3-C7)", () => {
   it("carries the recording form and never the booking tile", async () => {
-    render(await CollectPaymentPage());
-    expect(document.body.textContent).toContain("Record a payment");
-    expect(document.body.textContent).toContain("Show the payer a QR");
+    render(await CollectPaymentPage({}));
+    expect(screen.getByRole("heading", { name: "Collect payment" })).toBeTruthy();
+    expect(screen.getByLabelText("Find member")).toBeTruthy();
+    expect(document.body.textContent).toContain("Confirm payment before recording it.");
     expect(document.body.textContent).not.toMatch(/Reserve a lane or court/i);
   });
 });

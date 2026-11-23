@@ -65,6 +65,8 @@ export type TenantFixture = {
   batchIds: Map<string, string>;
   /** Unrestricted (all-locations) caller with a resolved identity. */
   ownerCtx: ActionCtx;
+  ownerMembershipId: string;
+  ownerRoleId: string;
   /** Caller restricted to locationIds[0]. */
   scopedCtx: ActionCtx;
   /** The context the report action passes today: tenant only. */
@@ -129,6 +131,8 @@ export async function createTenantFixture(
   );
 
   const locationIds: [string, string, string] = [uuidv7(), uuidv7(), uuidv7()];
+  const ownerId = asUserId(uuidv7()), scopedId = asUserId(uuidv7());
+  const ownerRole = uuidv7(), scopedRole = uuidv7(), ownerMembership = uuidv7(), scopedMembership = uuidv7();
   const memberIds: string[] = [];
   const batchIds = new Map<string, string>();
 
@@ -217,6 +221,12 @@ export async function createTenantFixture(
     }
   });
 
+  await admin.query("insert into users(id,phone) values($1,$2),($3,$4)", [ownerId, `+91${String(BigInt('0x' + ownerId.replaceAll('-', '').slice(-12)) % 9000000000n + 1000000000n)}`, scopedId, `+91${String(BigInt('0x' + scopedId.replaceAll('-', '').slice(-12)) % 9000000000n + 1000000000n)}`]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$3,'owner','Owner','/owner',0),($2,$3,'admin','Admin','/owner',1)", [ownerRole, scopedRole, tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'reports.operational'),($1,$3,'reports.operational')", [tenantId, ownerRole, scopedRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$3,$4,$6,'active',true),($2,$3,$5,$7,'active',false)", [ownerMembership, scopedMembership, tenantId, ownerId, scopedId, ownerRole, scopedRole]);
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [uuidv7(), tenantId, scopedMembership, locationIds[0]]);
+
   const cleanup = async () => {
     // Children before parents: attendance → sessions → enrolments →
     // batches → programs → members → persons → locations → tenant.
@@ -230,8 +240,12 @@ export async function createTenantFixture(
     ]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
+    await admin.query("delete from membership_locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id = any($1::uuid[]) and not exists (select 1 from audit_log where actor_id = users.id)", [[ownerId, scopedId]]);
   };
 
   return {
@@ -239,9 +253,11 @@ export async function createTenantFixture(
     locationIds,
     memberIds,
     batchIds,
+    ownerMembershipId: ownerMembership,
+    ownerRoleId: ownerRole,
     ownerCtx: {
       tenantId,
-      userId: asUserId(uuidv7()),
+      userId: ownerId,
       roleKey: "owner",
       allLocations: true,
       locationIds: [],
@@ -249,7 +265,7 @@ export async function createTenantFixture(
     },
     scopedCtx: {
       tenantId,
-      userId: asUserId(uuidv7()),
+      userId: scopedId,
       roleKey: "admin",
       allLocations: false,
       locationIds: [locationIds[0]],

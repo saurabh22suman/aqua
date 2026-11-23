@@ -66,13 +66,15 @@ describe("WaitlistBoard (R.5)", () => {
     render(<WaitlistBoard batchId="b1" initialRows={ROWS} canManage />);
     fireEvent.click(screen.getByRole("button", { name: /promote next/i }));
     await vi.waitFor(() =>
-      expect(promoteHeadAction).toHaveBeenCalledWith({ batchId: "b1" }),
+      expect(promoteHeadAction).toHaveBeenCalledWith({ batchId: "b1", expectedEntryId: "w1" }),
     );
   });
 
-  it("removes a member from the queue through the action", async () => {
+  it("confirms removal of the selected member before calling the action", async () => {
     render(<WaitlistBoard batchId="b1" initialRows={ROWS} canManage />);
-    fireEvent.click(screen.getAllByRole("button", { name: /remove/i })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Review removal of Aadhya Sharma" }));
+    expect(cancelWaitlistAction).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Remove from waitlist" }));
     await vi.waitFor(() =>
       expect(cancelWaitlistAction).toHaveBeenCalledWith({
         memberId: "m1",

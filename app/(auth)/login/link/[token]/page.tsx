@@ -1,5 +1,7 @@
 import { previewLoginLink } from "@/lib/services/invite-link";
 import { LoginLinkRedeemForm } from "@/components/login-link-redeem-form";
+import { LoginWelcome } from "@/components/auth/login-welcome";
+import { BackLink } from "@/components/ui/BackLink";
 import { formatDateTimeIST } from "@/lib/time/tz";
 
 // Public redeem page for staff magic-link login. Pre-auth by
@@ -17,13 +19,13 @@ export default async function LoginLinkPage({
 
   if (preview.kind === "error") {
     return (
-      <main className="px-5 pt-10">
+      <LoginWelcome>
         <h1 className="font-display text-[19px] font-semibold">Link expired or invalid</h1>
         <p className="mt-2 text-[14px] text-ink-2">
-          This login link doesn&apos;t work — it may have expired or already been used.
-          Ask your club for a fresh one.
+          Ask your club for a fresh link if you still need to set up access. If you already have a PIN, sign in with it below.
         </p>
-      </main>
+        <div className="mt-4"><BackLink href="/login" label="Sign in" /></div>
+      </LoginWelcome>
     );
   }
 

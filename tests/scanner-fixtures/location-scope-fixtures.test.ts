@@ -44,6 +44,16 @@ export async function x(tx: any) { return tx.select().from(members); }`;
     expect(scanLocationScope(source, "app/page.tsx").violation).toBe(false);
   });
 
+  it("recognizes only the reviewed person-location predicate and rejects drift", () => {
+    const file = "lib/services/person-location-scope.ts";
+    const source = readFileSync(file, "utf8");
+    expect(scanLocationScope(source, file).violation).toBe(false);
+    const mutated = source.replace("if(access.denied) return sql`false`;", "if(access.denied) return undefined;");
+    expect(mutated).not.toBe(source);
+    expect(scanLocationScope(mutated, file).violation).toBe(true);
+    expect(scanLocationScope(source, "lib/services/unreviewed.ts").violation).toBe(true);
+  });
+
   it("scans the real tree with no violations (CI parity)", () => {
     const violations = listServiceFiles().filter((file) => {
       const source = readFileSync(join(process.cwd(), file), "utf8");

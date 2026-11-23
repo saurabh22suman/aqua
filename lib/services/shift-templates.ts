@@ -9,7 +9,7 @@ import {
   resolveLocationAccess,
 } from "@/lib/services/location-access";
 import { normalizeWall, wallTime } from "@/lib/services/shift-time";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // V-23 — shift templates: the named wall-time blocks a roster starts
 // from. Split from the shift mutation service so each file stays
@@ -42,7 +42,7 @@ function firstIssue(error: z.ZodError): string {
 }
 
 export async function createShiftTemplate(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<TemplateResult> {
   const parsed = shiftTemplateInput.safeParse(raw);

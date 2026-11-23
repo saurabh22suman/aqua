@@ -15,7 +15,7 @@ const PROD_ENV = {
   APP_LOGIN_PASSWORD: "test-pw",
   BETTER_AUTH_SECRET: "secret",
   BETTER_AUTH_URL: "https://aqua.example.com",
-  PARENT_LINK_SECRET: "parent-secret",
+  PARENT_LINK_SECRET: "synthetic-parent-secret-at-least-32-characters",
   NODE_ENV: "production",
 };
 

@@ -43,6 +43,8 @@ let locationB = "";
 // that is not a real users row cannot be recorded, so the actor is
 // seeded below like the other rows of this fixture.
 const actorUserId = asUserId(randomUUID());
+const scopedManagerId = asUserId(randomUUID());
+const scopedReceptionId = asUserId(randomUUID());
 
 // A management caller: every location, and the unresolved queue.
 const manager = () => ({
@@ -58,7 +60,7 @@ const manager = () => ({
 // its own facility).
 const scopedManager = () => ({
   tenantId,
-  userId: actorUserId,
+  userId: scopedManagerId,
   roleKey: "admin",
   allLocations: false,
   locationIds: [locationA],
@@ -69,7 +71,7 @@ const scopedManager = () => ({
 // queue is not its to see.
 const scopedNonManager = () => ({
   tenantId,
-  userId: actorUserId,
+  userId: scopedReceptionId,
   roleKey: "receptionist",
   allLocations: false,
   locationIds: [locationA],
@@ -110,6 +112,8 @@ beforeAll(async () => {
   const { startIsolatedDb } = await import("@/tests/helpers/isolated-db");
   db = await startIsolatedDb();
   admin = db.admin;
+  const { seedPlatformCatalogue } = await import("@/db/seed-platform");
+  await seedPlatformCatalogue(db.adminUri);
   process.env.DATABASE_URL = db.appUri;
   process.env.APP_LOGIN_PASSWORD = "isolated-test-pw";
   vi.resetModules();
@@ -129,11 +133,14 @@ beforeAll(async () => {
   locationB = await insertLocation(tenantId, "Scope B", false);
   const otherLocation = await insertLocation(otherTenantId, "Other Site", true);
 
-  // The actor of every caller context in this file.
-  await admin.query("insert into users (id, phone) values ($1, $2)", [
-    actorUserId,
-    "+919900000901",
-  ]);
+  // Each claimed role has its own live identity and matching location grant.
+  await admin.query("insert into users(id,phone) values($1,$2),($3,$4),($5,$6)", [actorUserId, "+919900000901", scopedManagerId, "+919900000902", scopedReceptionId, "+919900000903"]);
+  const ownerRole = randomUUID(), adminRole = randomUUID(), receptionRole = randomUUID();
+  const managerMembership = randomUUID(), receptionMembership = randomUUID();
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$4,'owner','Owner','/owner',0),($2,$4,'admin','Admin','/owner',1),($3,$4,'receptionist','Reception','/reception',3)", [ownerRole, adminRole, receptionRole, tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'settings.manage'),($1,$2,'enquiries.read'),($1,$2,'enquiries.write'),($1,$3,'settings.manage'),($1,$3,'enquiries.read'),($1,$3,'enquiries.write'),($1,$4,'enquiries.read'),($1,$4,'enquiries.write')", [tenantId, ownerRole, adminRole, receptionRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$4,$5,$8,'active',true),($2,$4,$6,$9,'active',false),($3,$4,$7,$10,'active',false)", [randomUUID(), managerMembership, receptionMembership, tenantId, actorUserId, scopedManagerId, scopedReceptionId, ownerRole, adminRole, receptionRole]);
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$3,$4,$6),($2,$3,$5,$6)", [randomUUID(), randomUUID(), tenantId, managerMembership, receptionMembership, locationA]);
 
   // E1 — located, visible. E2 — located elsewhere. E3 — unresolved
   // (no location: the management review queue). E4 — soft deleted.

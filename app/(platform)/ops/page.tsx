@@ -1,31 +1,33 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  Activity,
-  ArrowDown,
-  ArrowUp,
-  ClipboardList,
-  MessageCircle,
-  SlidersHorizontal,
-} from "lucide-react";
-import { mockMessagingEnabled } from "@/lib/messaging/provider";
+import Activity from "lucide-react/dist/esm/icons/activity.mjs";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import {
   getPlatformMetricsSummary,
   getNeedsAttentionQueue,
-  type MetricDelta,
 } from "@/db/platform-overview";
 import { listPlatformActivity } from "@/db/platform-activity";
+import { runOpsGlobalRead } from "@/lib/auth/ops-operation";
 import { StatusBadge, type StatusTone } from "@/components/ui/StatusBadge";
+import {
+  OpsCardFlush,
+  OpsEmptyState,
+  OpsPage,
+  OpsPageHeader,
+  OpsPanel,
+  OpsSection,
+} from "@/components/ops/ops-primitives";
+import { cn } from "@/components/ui/cn";
+import {
+  classifySnapshot,
+  snapshotMetaText,
+} from "@/components/ops/reliability/snapshot-freshness";
+import { SnapshotFreshnessNotice } from "@/components/ops/reliability/snapshot-freshness-notice";
+import { OpsOverviewMetrics } from "./ops-overview-metrics";
+import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 
-// PR3 (ops console improvements) — Overview becomes a dashboard.
-//
-// Layout decision: the needs-attention queue is the primary element,
-// not the KPI strip. The KPIs are glanceable context ("is the
-// platform generally okay"); the queue is what an operator actually
-// acts on, the same "what needs me right now" pattern already proven
-// on the owner dashboard. It gets the dominant width; quick actions
-// and recent activity share a narrower secondary column.
+export const metadata: Metadata = { title: "Platform operations" };
 
 const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   dateStyle: "medium",
@@ -33,51 +35,13 @@ const DATE_FMT = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-function DeltaLine({ label, delta }: { label: string; delta: MetricDelta }) {
-  if (delta.previous == null) {
-    return (
-      <p className="mt-1 text-[12px] text-ink-3">{label} — no comparison yet</p>
-    );
-  }
-  const diff = delta.current - delta.previous;
-  if (diff === 0) {
-    return <p className="mt-1 text-[12px] text-ink-3">No change from last month</p>;
-  }
-  const Icon = diff > 0 ? ArrowUp : ArrowDown;
-  return (
-    <p className="mt-1 flex items-center gap-1 text-[12px] text-ink-3">
-      <Icon size={11} strokeWidth={2.5} aria-hidden="true" />
-      {diff > 0 ? "+" : ""}
-      {diff} from last month
-    </p>
-  );
-}
-
-function KpiCard({
-  label,
-  delta,
-}: {
-  label: string;
-  delta: MetricDelta;
-}) {
-  return (
-    <div className="rounded-card bg-paper border border-line p-4">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">{label}</p>
-      <p className="mt-1 font-display text-[28px] font-semibold text-marine tabular-nums">
-        {delta.current}
-      </p>
-      <DeltaLine label={label} delta={delta} />
-    </div>
-  );
-}
-
 const SEVERITY_TONE: Record<"attention" | "at_risk", StatusTone> = {
   attention: "warn",
   at_risk: "late",
 };
 const SEVERITY_LABEL: Record<"attention" | "at_risk", string> = {
-  attention: "Medium",
-  at_risk: "High",
+  attention: "Needs review",
+  at_risk: "High priority",
 };
 
 export default async function PlatformHome() {
@@ -88,178 +52,109 @@ export default async function PlatformHome() {
   if (status.kind === "unauthenticated") redirect("/ops/verify");
 
   const [metrics, queue, activity] = await Promise.all([
-    getPlatformMetricsSummary(),
-    getNeedsAttentionQueue(11),
-    listPlatformActivity({ limit: 5 }),
+    runOpsGlobalRead(
+      "platform.metrics.summary",
+      () => getPlatformMetricsSummary(),
+      "ops_page",
+    ),
+    runOpsGlobalRead(
+      "tenant.health.queue",
+      () => getNeedsAttentionQueue(11),
+      "ops_page",
+    ),
+    runOpsGlobalRead(
+      "activity.list",
+      () => listPlatformActivity({ limit: 5 }),
+      "ops_page",
+    ),
   ]);
+  // A null global read means the actor was not authenticated at the
+  // boundary. This page already redirected above, so this is unreachable
+  // defence — never a silent empty dashboard.
+  if (!metrics || !queue) redirect("/ops/login");
+  const recent = activity?.rows ?? [];
+  // The snapshot's OWN timestamp decides what the console may say about
+  // its age: no health read, no worker, no backup — this console holds
+  // no such evidence, and none of it is implied here.
+  const snapshot = classifySnapshot(metrics.asOf, new Date());
 
   return (
-    <div className="max-w-6xl">
-      <div className="flex items-baseline justify-between gap-4">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-            Overview
-          </p>
-          <h1 className="mt-2 font-display text-[28px] font-semibold text-marine">
-            Aqua control plane
-          </h1>
-          <p className="mt-2 text-[15px] text-ink-2">
-            Signed in as <span className="font-medium">{status.role}</span>.
-          </p>
-        </div>
-        {metrics.asOf ? (
-          <p className="text-[12px] text-ink-3 whitespace-nowrap">
-            Last refreshed {DATE_FMT.format(metrics.asOf)} IST
-          </p>
-        ) : null}
-      </div>
+    <OpsPage>
+      <OpsPageHeader
+        title="Platform operations"
+        actions={<Link href="/ops/tenants" className="inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-3 text-sm font-semibold text-ink">Find a tenant</Link>}
+        meta={snapshotMetaText(snapshot)}
+      />
 
-      {!metrics.asOf ? (
-        <p className="mt-6 rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2">
-          No metrics snapshot yet — the platform.metrics-snapshot job runs
-          nightly. Counts below are unavailable until it runs once.
-        </p>
-      ) : (
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <KpiCard label="Active tenants" delta={metrics.activeTenants} />
-          <KpiCard label="On trial" delta={metrics.trialTenants} />
-          <KpiCard label="At risk" delta={metrics.atRiskTenants} />
-          <KpiCard label="Open ops tasks" delta={metrics.openOpsTasks} />
-        </div>
-      )}
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <section className="lg:col-span-2">
-          <div className="flex items-baseline justify-between">
-            <h2 className="font-display text-[18px] font-semibold text-marine">
-              Needs attention
-            </h2>
-            <span className="text-[12px] text-ink-3">
-              {queue.length} {queue.length === 1 ? "item" : "items"}
-            </span>
-          </div>
+          <OpsSection
+            title="Needs attention"
+            subtitle="Live issues across tenants, ordered by priority"
+            actions={
+              <span className="text-[12px] text-ink-3">
+                {queue.length} {queue.length === 1 ? "item" : "items"}
+              </span>
+            }
+          />
           {queue.length === 0 ? (
-            <div className="mt-3 rounded-card bg-paper border border-line px-5 py-10 text-center">
-              <p className="text-[14px] font-medium text-ink">Nothing needs attention</p>
-              <p className="mt-1 text-[12px] text-ink-3">
-                Every tenant is healthy, or the metrics snapshot hasn&apos;t run yet.
-              </p>
-            </div>
+            <OpsEmptyState
+              title="Nothing needs attention"
+              body="There are no open issues in the current checks for invoices, trials, activity, messages or change requests."
+            />
           ) : (
-            <div className="mt-3 rounded-card bg-paper border border-line overflow-hidden">
+            <OpsCardFlush>
+              <ul>
               {queue.map((item, i) => (
-                <div
+                <li
                   key={`${item.tenantId}-${item.text}-${i}`}
-                  className="border-b border-line last:border-b-0 px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+                  className={cn(
+                    "flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 last:border-b-0",
+                    i === 0 && "border-s-4 border-s-[var(--accent-strong)] bg-deck/40",
+                  )}
                 >
                   <div className="min-w-0">
-                    <p className="text-[13px] font-medium text-ink truncate">
-                      {item.tenantName}
-                    </p>
-                    <p className="mt-0.5 text-[12px] text-ink-2">{item.text}</p>
+                    <p className="text-[15px] font-semibold text-ink">{item.text}</p>
+                    <p className="mt-0.5 text-[13px] text-ink-2">{item.tenantName}</p>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-[12px] text-ink-3 tabular-nums">
-                      {item.ageDays != null ? `${item.ageDays}d` : "—"}
-                    </span>
+                  <div className="flex flex-none items-center gap-3">
                     <StatusBadge tone={SEVERITY_TONE[item.severity]}>
                       {SEVERITY_LABEL[item.severity]}
                     </StatusBadge>
                     <Link
                       href={`/ops/tenants/${item.tenantId}`}
-                      className="text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2"
+                      aria-label={`Review tenant ${item.tenantName}: ${item.text}`}
+                      className="inline-flex min-h-11 items-center text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2"
                     >
-                      View
+                      Review tenant
                     </Link>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+              </ul>
+            </OpsCardFlush>
           )}
         </section>
 
         <div className="space-y-6">
           <section>
-            <h2 className="font-display text-[18px] font-semibold text-marine">
-              Quick actions
-            </h2>
-            <div className="mt-3 grid grid-cols-1 gap-2">
-              <Link
-                href="/ops/tenants"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
-              >
-                <p className="text-[13px] font-medium text-ink">Tenants</p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  List every tenant, drill into settings, suspend or churn.
-                </p>
-              </Link>
-              <Link
-                href="/ops/features"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
-              >
-                <p className="text-[13px] font-medium text-ink">Feature catalogue</p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  Editable list of every feature Aqua ships.
-                </p>
-              </Link>
-              <Link
-                href="/ops/presets"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
-              >
-                <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
-                  <SlidersHorizontal size={13} strokeWidth={2} /> Presets
-                </p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  Apply a feature and vocabulary preset to a tenant.
-                </p>
-              </Link>
-              <Link
-                href="/ops/leads"
-                className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
-              >
-                <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
-                  <ClipboardList size={13} strokeWidth={2} /> Leads
-                </p>
-                <p className="mt-0.5 text-[12px] text-ink-3">
-                  Sales pipeline: qualification answers become the tenant&apos;s preset and configuration.
-                </p>
-              </Link>
-              {mockMessagingEnabled() ? (
-                <Link
-                  href="/ops/whatsapp"
-                  className="rounded-card bg-paper border border-line p-3 hover:border-[var(--accent-strong)] transition-colors duration-150"
-                >
-                  <p className="text-[13px] font-medium text-ink flex items-center gap-1.5">
-                    <MessageCircle size={13} strokeWidth={2} /> WhatsApp mock
-                  </p>
-                  <p className="mt-0.5 text-[12px] text-ink-3">
-                    Non-production: send and receive mock messages through the real pipeline.
-                  </p>
-                </Link>
-              ) : null}
-            </div>
-          </section>
-
-          <section>
-            <div className="flex items-baseline justify-between">
-              <h2 className="font-display text-[18px] font-semibold text-marine">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
                 Recent activity
               </h2>
               <Link
                 href="/ops/activity"
-                className="text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2 flex items-center gap-1"
+                className="flex items-center gap-1 text-[12px] font-medium text-[var(--accent-ink)] hover:underline underline-offset-2"
               >
                 <Activity size={12} strokeWidth={2} /> View all
               </Link>
             </div>
-            {activity.rows.length === 0 ? (
-              <p className="mt-3 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
-                No platform activity yet.
-              </p>
+            {recent.length === 0 ? (
+              <OpsEmptyState title="No platform activity yet" />
             ) : (
-              <div className="mt-3 rounded-card bg-paper border border-line overflow-hidden">
-                {activity.rows.map((row) => (
-                  <div key={row.id} className="border-b border-line last:border-b-0 px-4 py-3">
+              <OpsCardFlush>
+                {recent.map((row) => (
+                  <div key={row.id} className="border-b border-line px-4 py-3 last:border-b-0">
                     <p className="text-[12px] text-ink">
                       {row.action}
                       {row.tenantName ? (
@@ -271,11 +166,40 @@ export default async function PlatformHome() {
                     </p>
                   </div>
                 ))}
-              </div>
+              </OpsCardFlush>
             )}
           </section>
         </div>
       </div>
-    </div>
+      <SnapshotFreshnessNotice snapshot={snapshot} />
+
+      {!metrics.asOf ? (
+        <OpsPanel tone="pending" className="mt-6" title="No metrics snapshot yet">
+          The platform.metrics-snapshot job runs nightly. The figures below
+          are unavailable until it runs once; the needs-attention queue is
+          live and does not depend on it.
+        </OpsPanel>
+      ) : (
+        <OpsOverviewMetrics
+          activeTenants={metrics.activeTenants}
+          trialTenants={metrics.trialTenants}
+          atRiskTenants={metrics.atRiskTenants}
+          openOpsTasks={metrics.openOpsTasks}
+        />
+      )}
+
+      <OptionalWorkspaceGuide
+        startCollapsed
+        title="A look around Ops"
+        intro="Explore the overview at your own pace. This guide makes no changes."
+        regionLabel="Optional Ops overview guide"
+        itemLabel="Overview area"
+        items={[
+          { key: "snapshot", title: "Snapshot", detail: "The snapshot panel says when metrics are available and how recent they are." },
+          { key: "attention", title: "Needs attention", detail: "This live list shows the most pressing items currently returned by the queue." },
+          { key: "activity", title: "Recent activity", detail: "The activity panel shows recent platform activity." },
+        ]}
+      />
+    </OpsPage>
   );
 }

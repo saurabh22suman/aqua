@@ -1,12 +1,19 @@
-import Link from "next/link";
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
+import { buttonClasses } from "@/components/ui/Button";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { cookies } from "next/headers";
-import { Calendar, CalendarDays } from "lucide-react";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { listBatchesAction, listCoachesAction, listProgramsAction } from "@/lib/actions/programs";
 import { listLocationsAction } from "@/lib/actions/people";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { ProgramsBatchesBoard } from "@/components/programs-batches-board";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
-import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { FACILITY_COOKIE, parseFacilityValue, resolveFacilityValue } from "@/lib/facility";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
+import { ownerFacilityHref } from "@/lib/owner-scope/facility";
+import { scheduleDestination } from "@/lib/owner-scope/schedule";
 
 export default async function ProgramsPage({
   searchParams,
@@ -17,53 +24,61 @@ export default async function ProgramsPage({
   requirePagePermission(ctx, "programs.read");
   const params = searchParams ? await searchParams : {};
   const cookieStore = await cookies();
+  const requestedFacility = params.facility ?? cookieStore.get(FACILITY_COOKIE)?.value;
   const facility = resolveFacilityValue(
     params.facility,
     cookieStore.get(FACILITY_COOKIE)?.value,
   );
+  if ((requestedFacility !== undefined && requestedFacility !== "all" && !parseFacilityValue(requestedFacility)) ||
+      (facility && !(await canSelectFacility(ctx, facility)))) {
+    return <OwnerPage workflow="directory"><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href="/owner/programs?facility=all" className={buttonClasses({variant:"secondary",size:"md"})}>View available clubs</Link></OwnerPage>;
+  }
+  // These options come from existing staff/member reads. Do not invoke an
+  // editor-only action a read-only catalogue viewer is not allowed to call.
+  const canManage = ctx.permissions.has("programs.write");
+  const canManageBatches = canManage && ctx.permissions.has("staff.read") && ctx.permissions.has("members.read");
+  // Audit simplification (21 November 2026) — Schedule is ONE job with a
+  // Calendar / List surface. Point at the surface this profile may
+  // actually open instead of offering two competing buttons; program
+  // setup stays on this page.
+  const scheduleHref = scheduleDestination(ctx.permissions);
   const [programs, batches, coaches, locations, terminology] = await Promise.all([
     listProgramsAction(),
     listBatchesAction(facility ? { locationId: facility } : undefined),
-    listCoachesAction(),
+    canManageBatches ? listCoachesAction() : Promise.resolve([]),
     // Wave 2 — facility picker for batch create/edit.
-    listLocationsAction(),
+    canManageBatches ? listLocationsAction() : Promise.resolve([]),
     // ProgramsBatchesBoard → BatchCreateForm / BatchEditForm use
     // closed-key `coach` and "Add a program first" copy (L3 audit).
-    getTerminologyAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
 
   return (
-    <main className="px-5 pt-10">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-[19px] font-semibold">Programs</h1>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/owner/schedule"
-            className="inline-flex items-center gap-1.5 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] font-medium text-ink-2"
-            data-testid="link-schedule"
-          >
-            <CalendarDays size={14} className="text-ink-3" />
-            Schedule
-          </Link>
-          <Link
-            href="/owner/sessions"
-            className="inline-flex items-center gap-1.5 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[12.5px] font-medium text-ink-2"
-            data-testid="link-sessions"
-          >
-            <Calendar size={14} className="text-ink-3" />
-            Sessions
-          </Link>
-        </div>
-      </div>
-      <div className="mt-4">
-        <ProgramsBatchesBoard
+    <OwnerPage workflow="directory">
+      <ProgramsBatchesBoard
+          key={facility ?? "all"}
+          scopeLabel={facility ? batches.find((batch) => batch.locationId === facility)?.locationName ?? locations.find((location) => location.id === facility)?.name ?? "selected club" : "all available clubs"}
+          toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            {scheduleHref ? <Link
+              href={ownerFacilityHref(scheduleHref, facility)}
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+              data-testid="link-schedule"
+            >
+              <OwnerIcon name="calendar" size={15} className="text-ink-3" />
+              Schedule
+            </Link> : null}
+          </div>
+          }
           initialPrograms={programs}
           initialBatches={batches}
           coaches={coaches}
           locations={locations}
           terminology={terminology}
+          selectedFacilityId={facility ?? undefined}
+          canManage={canManage}
+          canManageBatches={canManageBatches}
         />
-      </div>
-    </main>
+    </OwnerPage>
   );
 }

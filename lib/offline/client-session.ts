@@ -1,6 +1,15 @@
 import { offlineCacheStateSchema, offlineSessionStateSchema } from "./identity";
 import { clearOfflineStorage, storedOfflineIdentity } from "./idb";
 
+// The two cache names this subsystem owns. public/sw.js is a static
+// file and cannot import them, so the literals live in both places —
+// keep them in step. (They drifted once: BOTH clear paths — the
+// scoped one here and the worker's full clear — deleted
+// "aqua-shell-v1" long after the shell cache had been renamed to v2,
+// so neither removed the live shell cache.)
+export const SHELL_CACHE = "aqua-shell-v2";
+export const META_CACHE = "aqua-offline-state-v2";
+
 export async function readOfflineSessionState() {
   const response = await fetch("/api/offline/session", { credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error("Could not verify the offline session.");
@@ -16,9 +25,10 @@ export async function localOfflineScope(): Promise<string | null> {
   const active = await storedOfflineIdentity();
   if (active) return active.scope;
   if (!("caches" in window)) return null;
-  const response = await (await caches.open("aqua-offline-state-v2")).match(new URL("/__aqua_offline_state", window.location.origin).href);
+  const response = await (await caches.open(META_CACHE)).match(new URL("/__aqua_offline_state", window.location.origin).href);
   const parsed = offlineCacheStateSchema.safeParse(response ? await response.json() : {});
-  return parsed.success ? parsed.data.identity?.scope ?? parsed.data.blockedScope ?? null : null;
+  return parsed.success ? parsed.data.identity?.scope ??
+    (parsed.data.blockedUntil && parsed.data.blockedUntil <= Date.now() ? null : parsed.data.blockedScope ?? null) : null;
 }
 
 export async function clearOfflineData(expectedScope?: string | null): Promise<boolean> {
@@ -40,18 +50,22 @@ export async function clearOfflineData(expectedScope?: string | null): Promise<b
   if ("caches" in window) {
     // Keep the controller's logout tombstone until a different server session
     // authenticates. Deleting it would allow an in-flight logout to re-cache.
-    const meta = await caches.open("aqua-offline-state-v2");
+    const meta = await caches.open(META_CACHE);
     const key = new URL("/__aqua_offline_state", window.location.origin).href;
     const old = await meta.match(key);
     const parsed = offlineCacheStateSchema.safeParse(old ? await old.json() : {});
     if (expectedScope !== undefined) unregister = !parsed.success || !parsed.data.identity || parsed.data.identity.scope === expectedScope;
     const scope = previous?.scope ?? expectedScope;
     if (scope && (!parsed.success || !parsed.data.identity || parsed.data.identity.scope === scope)) {
-      await meta.put(key, new Response(JSON.stringify({ blockedScope: scope })));
+      const expiresAt = previous?.expiresAt ?? (parsed.success ? parsed.data.identity?.expiresAt ??
+        (parsed.data.blockedScope === scope ? parsed.data.blockedUntil : undefined) : undefined);
+      const legacyBlocked = parsed.success && parsed.data.blockedScope === scope && !parsed.data.blockedUntil;
+      await meta.put(key, new Response(JSON.stringify(expiresAt && expiresAt > Date.now()
+        ? { blockedScope: scope, blockedUntil: expiresAt } : legacyBlocked ? { blockedScope: scope } : {})));
     }
     await Promise.all((await caches.keys()).filter(key => expectedScope === undefined
-      ? key.startsWith("aqua-") && key !== "aqua-offline-state-v2"
-      : key === "aqua-shell-v1" || (expectedScope && key === `aqua-private-v2-${expectedScope}`))
+      ? key.startsWith("aqua-") && key !== META_CACHE
+      : key === SHELL_CACHE || (expectedScope && key === `aqua-private-v2-${expectedScope}`))
       .map(key => caches.delete(key)));
   }
   if (unregister && "serviceWorker" in navigator) {

@@ -1,216 +1,260 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listMembersAction } from "@/lib/actions/people";
 import { listMemberInvoicesAction } from "@/lib/actions/invoices";
-import { recordPaymentAction } from "@/lib/actions/payments";
-import { parseRupeesToPaise } from "@/lib/payment-qr";
-import { formatINR } from "@/lib/money/format";
-import { formatDateIST } from "@/lib/time/tz";
 import type { InvoiceRow } from "@/lib/services/invoices";
 import type { MemberListRow } from "@/lib/services/people";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { formatINR } from "@/lib/money/format";
+import { COLLECTION_HOLD_COPY } from "@/lib/collection-hold";
+import { formatDateIST } from "@/lib/time/tz";
+import { PaymentRecordRecoveryForm } from "@/components/reception/payment-record-recovery-form";
 
 // PR2-C3 — the counter recording half of /reception/collect-payment.
-// A receptionist finds the member, picks an open invoice and records
-// cash or UPI through the existing recordPayment service (no parallel
-// money path). UPI requires its reference; the server's refusal is
-// shown verbatim.
-
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+// The picker is deliberately thin: find the member, choose an open
+// invoice, and let the recovery form own the payment attempt. Every
+// method the service accepts is offered in that form — cash, UPI, bank
+// transfer, card terminal and other — because a collection that cannot be
+// recorded honestly is either mis-booked or lost.
 
 function openInvoices(invoices: InvoiceRow[]): InvoiceRow[] {
-  return invoices.filter(
-    (invoice) =>
-      invoice.status !== "void" &&
-      invoice.status !== "paid" &&
-      invoice.outstandingPaise > 0,
+  return invoices.filter((invoice) =>
+    (invoice.status === "issued" || invoice.status === "partial") && invoice.outstandingPaise > 0,
   );
 }
 
 export function PaymentRecordForm() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<MemberListRow[] | null>(null);
+  const [searchedQuery, setSearchedQuery] = useState<string | null>(null);
+  const [pendingQuery, setPendingQuery] = useState<string | null>(null);
   const [member, setMember] = useState<MemberListRow | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[] | null>(null);
   const [invoiceId, setInvoiceId] = useState("");
-  const [amountText, setAmountText] = useState("");
-  const [method, setMethod] = useState<"cash" | "upi">("cash");
-  const [reference, setReference] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<"lookup" | "after-payment" | null>(null);
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [receiptId, setReceiptId] = useState<string | null>(null);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const composing = useRef(false);
+  const queryRef = useRef("");
+  const pendingQueryRef = useRef<string | null>(null);
+  const searchRequest = useRef(0);
+  const memberRequest = useRef(0);
+  const invoiceHeading = useRef<HTMLHeadingElement>(null);
+  const moveToInvoices = useRef(false);
 
-  const selectedInvoice =
-    invoices?.find((invoice) => invoice.id === invoiceId) ?? null;
-  const amountPaise = parseRupeesToPaise(amountText);
+  useEffect(() => {
+    if (!moveToInvoices.current || !invoiceHeading.current) return;
+    moveToInvoices.current = false;
+    invoiceHeading.current.focus();
+  }, [member, invoices, invoiceError]);
+
+  const trimmedQuery = query.trim();
+  const busy = pendingQuery !== null;
+  // Results belong only to the query that produced them; a typed change
+  // disarms them immediately so a stale payer can never be picked.
+  const editing = searchedQuery !== null && trimmedQuery.length > 0 && trimmedQuery !== searchedQuery;
+  const collectibleInvoices = invoices?.filter((invoice) => !invoice.collectionHold) ?? [];
+  const heldInvoices = invoices?.filter((invoice) => invoice.collectionHold) ?? [];
+  const selectedInvoice = collectibleInvoices.find((invoice) => invoice.id === invoiceId) ?? null;
+
+  function updateQuery(next: string) {
+    queryRef.current = next;
+    setQuery(next);
+    if (next.trim() !== searchedQuery) {
+      setResults(null);
+      setError(null);
+    }
+  }
 
   async function search() {
-    setBusy(true);
+    const searchFor = queryRef.current.trim();
+    if (!searchFor || composing.current || paymentBusy) return;
+    if (pendingQueryRef.current === searchFor) return;
+    const request = ++searchRequest.current;
+    pendingQueryRef.current = searchFor;
+    setPendingQuery(searchFor);
     setError(null);
+    // Same-query refreshes stay disabled in place; a different query drops
+    // the old rows before its own lookup can be answered.
+    if (searchFor !== searchedQuery) setResults(null);
+    setSearchedQuery(searchFor);
     try {
-      setResults(await listMembersAction({ search: query.trim() }));
+      const rows = await listMembersAction({ search: searchFor });
+      if (request !== searchRequest.current) return;
+      if (queryRef.current.trim() !== searchFor) return;
+      setResults(rows);
     } catch {
+      if (request !== searchRequest.current) return;
+      if (queryRef.current.trim() !== searchFor) return;
+      setResults(null);
       setError("Could not search members.");
     } finally {
-      setBusy(false);
+      if (request === searchRequest.current) {
+        pendingQueryRef.current = null;
+        setPendingQuery(null);
+      }
     }
   }
 
-  async function chooseMember(next: MemberListRow) {
+  async function loadInvoices(memberId: string, reason: "lookup" | "after-payment") {
+    const request = ++memberRequest.current;
+    setInvoices(null);
+    setInvoiceError(null);
+    try {
+      const rows = openInvoices(await listMemberInvoicesAction(memberId));
+      if (request !== memberRequest.current) return;
+      const collectible = rows.filter((row) => !row.collectionHold);
+      const current = collectible.find((row) => row.id === invoiceId);
+      setInvoices(rows);
+      setInvoiceId(previous => {
+        if (collectible.some(row => row.id === previous)) return previous;
+        return reason === "lookup" && collectible.length === 1 ? collectible[0]!.id : "";
+      });
+      return current?.outstandingPaise ?? null;
+    } catch {
+      if (request !== memberRequest.current) return;
+      setInvoiceError(reason);
+    }
+  }
+
+  function chooseMember(next: MemberListRow) {
+    if (pendingQueryRef.current !== null || paymentBusy) return;
+    const samePayer = member?.memberId === next.memberId;
+    moveToInvoices.current = true;
     setMember(next);
     setResults(null);
-    setInvoices(null);
-    setInvoiceId("");
-    setMessage(null);
     setError(null);
-    try {
-      const rows = openInvoices(await listMemberInvoicesAction(next.memberId));
-      setInvoices(rows);
-      const first = rows[0];
-      if (first) {
-        setInvoiceId(first.id);
-        setAmountText((first.outstandingPaise / 100).toFixed(2));
-      }
-    } catch {
-      setError("Could not load invoices for this member.");
+    if (!samePayer) {
+      setInvoiceId("");
+      setPaymentMessage(null);
+      setReceiptId(null);
+    }
+    void loadInvoices(next.memberId, samePayer ? invoiceError ?? "lookup" : "lookup");
+  }
+
+  function handleChildBusy(next: boolean) {
+    setPaymentBusy(next);
+    if (next) {
+      setError(null);
+      setPaymentMessage(null);
+      setReceiptId(null);
     }
   }
 
-  function submit() {
-    if (!selectedInvoice) return;
-    if (amountPaise === null || amountPaise <= 0n) {
-      setError("Enter an amount like 2500 or 2500.50.");
-      return;
+  async function refreshAfterRecord(): Promise<number | null | undefined> {
+    if (member) {
+      moveToInvoices.current = true;
+      return loadInvoices(member.memberId, "after-payment");
     }
-    if (method !== "cash" && reference.trim().length === 0) {
-      setError("A UPI payment needs its reference (UTR / transaction id).");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    void (async () => {
-      try {
-        const result = await recordPaymentAction({
-          invoiceId: selectedInvoice.id,
-          amountPaise: Number(amountPaise),
-          method,
-          ...(method === "cash" ? {} : { reference: reference.trim() }),
-        });
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-        setMessage(
-          result.invoiceStatus === "paid"
-            ? "Payment recorded. Invoice is now paid."
-            : "Payment recorded. Invoice is now partially paid.",
-        );
-        const rows = openInvoices(
-          await listMemberInvoicesAction(member!.memberId),
-        );
-        setInvoices(rows);
-        setInvoiceId(rows[0]?.id ?? "");
-        setAmountText(rows[0] ? (rows[0].outstandingPaise / 100).toFixed(2) : "");
-        setReference("");
-      } catch {
-        setError("The payment could not be recorded. Try again.");
-      } finally {
-        setBusy(false);
-      }
-    })();
   }
 
   return (
     <section className="rounded-card bg-paper border border-line p-5 space-y-4">
-      <div>
-        <h2 className="font-display text-[15px] font-semibold text-ink">
-          Record a payment
-        </h2>
-        <p className="mt-1 text-[12.5px] text-ink-3">
-          Cash or UPI against an open invoice — the same ledger the owner
-          sees.
-        </p>
-      </div>
+      <form onSubmit={(event) => { event.preventDefault(); void search(); }} aria-busy={busy}>
+        <Field id="payment-member-search" label="Find member" description="Name, phone or member code">
+          {(field) => (
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <Input
+                {...field}
+                value={query}
+                onChange={(event) => updateQuery(event.target.value)}
+                onCompositionStart={() => { composing.current = true; }}
+                onCompositionEnd={() => { composing.current = false; }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && (composing.current || event.nativeEvent.isComposing)) event.preventDefault();
+                }}
+                data-testid="payment-member-search"
+                className="w-full min-w-0"
+              />
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={paymentBusy || trimmedQuery.length === 0 || pendingQuery === trimmedQuery}
+              >
+                Search
+              </Button>
+            </div>
+          )}
+        </Field>
 
-      <div>
-        <label className="block" htmlFor="payment-member-search">
-          <span className="block text-[12px] font-medium text-ink-2 mb-1">
-            Find member
-          </span>
-          <div className="flex gap-2">
-            <input
-              id="payment-member-search"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Name, phone or member code"
-              className={inputClass}
-              data-testid="payment-member-search"
-            />
-            <button
-              type="button"
-              onClick={() => void search()}
-              disabled={busy || query.trim().length === 0}
-              className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 text-[12.5px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
-            >
-              Search
-            </button>
-          </div>
-        </label>
-
-        {results ? (
-          results.length === 0 ? (
-            <p className="mt-2 text-[12.5px] text-ink-3">No members found.</p>
-          ) : (
-            <ul className="mt-2 space-y-1">
-              {results.map((row) => (
-                <li key={row.memberId}>
-                  <button
-                    type="button"
-                    onClick={() => void chooseMember(row)}
-                    data-testid={`payment-member-${row.memberId}`}
-                    className="w-full min-h-11 rounded-ctl border border-line px-3 py-2 text-left text-[13px] text-ink hover:border-[var(--accent-strong)]"
-                  >
-                    {row.fullName}
-                    <span className="ml-2 font-mono text-[11.5px] text-ink-3">
-                      {row.memberCode}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )
+        {busy && pendingQuery === trimmedQuery ? (
+          <p role="status" className="mt-2 text-[12.5px] text-ink-3">Searching members…</p>
+        ) : editing ? (
+          <p role="status" className="mt-2 text-[12.5px] text-ink-3">Press Search to update results.</p>
+        ) : results ? (
+          <p role="status" className="mt-2 text-[12.5px] text-ink-3">{results.length === 0 ? "No members found." : `${results.length} ${results.length === 1 ? "member" : "members"} found.`}</p>
         ) : null}
-      </div>
+        {!editing && results && results.length > 0 ? (
+          <ul className="mt-2 space-y-1">
+            {results.map((row) => (
+              <li key={row.memberId}>
+                <button
+                  type="button"
+                  disabled={busy || paymentBusy}
+                  onClick={() => void chooseMember(row)}
+                  data-testid={`payment-member-${row.memberId}`}
+                  className="w-full min-h-11 rounded-ctl border border-line px-3 py-2 text-left text-[13px] text-ink hover:border-[var(--accent-strong)]"
+                >
+                  {row.fullName}
+                  <span className="ml-2 font-mono text-[11.5px] text-ink-3">
+                    {row.memberCode}
+                  </span>
+                  <span className="ml-2 text-[11.5px] text-ink-3">{row.locationName}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </form>
 
       {member ? (
-        <div>
-          <p className="text-[13px] font-medium text-ink">
-            {member.fullName}
-            <span className="ml-2 font-mono text-[11.5px] text-ink-3">
+        <section aria-labelledby="selected-payment-member" className="rounded-card border border-line bg-deck p-4">
+          <h2 ref={invoiceHeading} id="selected-payment-member" tabIndex={-1} className="scroll-mt-20 text-base font-semibold text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">Invoices for {member.fullName}</h2>
+          <p className="mt-1 flex flex-wrap gap-x-2 text-sm text-ink-2">
+            <span className="font-mono">
               {member.memberCode}
             </span>
+            <span>{member.locationName}</span>
           </p>
 
-          {invoices === null ? (
-            <p className="mt-1 text-[12.5px] text-ink-3">Loading invoices…</p>
+          {invoiceError ? (
+            <div className="mt-3 space-y-2 rounded-ctl border border-line bg-paper p-3">
+              <p role="alert" className="text-sm text-ink">
+                {invoiceError === "lookup"
+                  ? "Could not load invoices. Check your connection and try again."
+                  : "Payment recorded, but the invoice list could not be refreshed. Refresh invoices before recording another payment."}
+              </p>
+              <Button variant="secondary" size="sm" disabled={busy || paymentBusy} onClick={() => void chooseMember(member)}>
+                Retry invoice lookup
+              </Button>
+            </div>
+          ) : invoices === null ? (
+            <p role="status" className="mt-3 text-sm text-ink-2">Loading invoices…</p>
           ) : invoices.length === 0 ? (
             <p className="mt-1 text-[12.5px] text-ink-3">
               No open invoices for this member.
             </p>
           ) : (
+            <>
+            {!selectedInvoice && collectibleInvoices.length > 1 ? <p className="mt-2 text-sm text-ink-2">Choose the invoice this payment belongs to.</p> : null}
             <ul className="mt-2 space-y-1">
-              {invoices.map((invoice) => (
+              {collectibleInvoices.map((invoice) => (
                 <li key={invoice.id}>
                   <button
                     type="button"
+                    disabled={paymentBusy}
                     onClick={() => {
                       setInvoiceId(invoice.id);
-                      setAmountText((invoice.outstandingPaise / 100).toFixed(2));
                       setError(null);
-                      setMessage(null);
+                      setPaymentMessage(null);
+                      setReceiptId(null);
                     }}
+                    aria-pressed={invoiceId === invoice.id}
                     data-testid={`payment-invoice-${invoice.id}`}
                     className={`w-full min-h-11 rounded-ctl border px-3 py-2 text-left text-[13px] ${
                       invoiceId === invoice.id
@@ -225,82 +269,36 @@ export function PaymentRecordForm() {
                     <span className="ml-2 text-[11.5px] text-ink-3">
                       due {formatDateIST(invoice.dueOn)}
                     </span>
+                    <span className="ml-2 text-[11.5px] text-ink-3">{invoice.locationName}</span>
                   </button>
                 </li>
               ))}
+              {heldInvoices.map((invoice) => invoice.collectionHold && (
+                <li key={invoice.id} className="rounded-ctl border border-line px-3 py-2 text-[13px] text-ink-2">
+                  <p className="font-medium">{COLLECTION_HOLD_COPY[invoice.collectionHold].label}</p>
+                  <p className="mt-1 break-words">
+                    <span className="font-mono">{invoice.invoiceNumber}</span>
+                    {" · "}{formatINR(invoice.outstandingPaise)} outstanding
+                  </p>
+                </li>
+              ))}
             </ul>
+            </>
           )}
-        </div>
+        </section>
       ) : null}
 
-      {selectedInvoice ? (
-        <div className="space-y-3 border-t border-line pt-3">
-          <label className="block" htmlFor="payment-amount">
-            <span className="block text-[12px] font-medium text-ink-2 mb-1">
-              Amount (₹)
-            </span>
-            <input
-              id="payment-amount"
-              value={amountText}
-              onChange={(event) => setAmountText(event.target.value)}
-              inputMode="decimal"
-              className={inputClass}
-              data-testid="payment-amount"
-            />
-          </label>
-
-          <fieldset>
-            <legend className="text-[12px] font-medium text-ink-2 mb-1">
-              Method
-            </legend>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 text-[13px] text-ink">
-                <input
-                  type="radio"
-                  name="payment-method"
-                  checked={method === "cash"}
-                  onChange={() => setMethod("cash")}
-                />
-                Cash
-              </label>
-              <label className="flex items-center gap-2 text-[13px] text-ink">
-                <input
-                  type="radio"
-                  name="payment-method"
-                  checked={method === "upi"}
-                  onChange={() => setMethod("upi")}
-                />
-                UPI
-              </label>
-            </div>
-          </fieldset>
-
-          {method === "upi" ? (
-            <label className="block" htmlFor="payment-reference">
-              <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                UPI reference (UTR / transaction id)
-              </span>
-              <input
-                id="payment-reference"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                className={inputClass}
-                data-testid="payment-reference"
-              />
-            </label>
-          ) : null}
-
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy}
-            className="min-h-11 w-full rounded-pill px-5 py-2.5 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-          >
-            {busy ? "Recording…" : "Record payment"}
-          </button>
-        </div>
+      {selectedInvoice && !invoiceError ? (
+        <PaymentRecordRecoveryForm
+          key={selectedInvoice.id}
+          invoice={selectedInvoice}
+          onRecorded={refreshAfterRecord}
+          searchBusy={busy || paymentBusy}
+          onBusyChange={handleChildBusy}
+          onMessage={setPaymentMessage}
+          onReceipt={setReceiptId}
+        />
       ) : null}
-
       {error ? (
         <p
           role="alert"
@@ -309,10 +307,11 @@ export function PaymentRecordForm() {
           {error}
         </p>
       ) : null}
-      {message ? (
-        <p role="status" className="text-[12.5px] text-ink-2">
-          {message}
-        </p>
+      {paymentMessage ? (
+        <section className="rounded-ctl border border-line bg-paper p-3" aria-label="Payment outcome">
+          <p role="status" className="text-sm text-ink">{paymentMessage}</p>
+          {receiptId ? <a href={`/api/receipts/${encodeURIComponent(receiptId)}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center text-sm underline">View receipt</a> : null}
+        </section>
       ) : null}
     </section>
   );

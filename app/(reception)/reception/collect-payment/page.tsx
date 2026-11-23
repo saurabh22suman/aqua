@@ -1,39 +1,45 @@
 import { requireReception } from "@/lib/auth/surface-guard";
-import { listPaymentQrsAction } from "@/lib/actions/payment-qrs";
-import { CollectPayment } from "@/components/collect-payment";
 import { PaymentRecordForm } from "@/components/payment-record-form";
+import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
+import { getInvoiceAction } from "@/lib/actions/invoices";
+import { hasFeature, hasPermission } from "@/lib/auth/permission";
+import { PreselectedInvoice } from "@/components/reception/preselected-invoice";
+import Link from "next/link";
+import { buttonClasses } from "@/components/ui/Button";
 
-// C-36 — reception's collect-payment screen: show a QR for the payer
-// to scan, and record the payment once it lands (PR2-C3 — the screen
-// used to display a QR and nothing else). Recording rides the existing
-// payments service; the receptionist already holds payments.record.
-
-export default async function CollectPaymentPage() {
-  await requireReception();
-  const qrs = (await listPaymentQrsAction()).filter((qr) => qr.isActive);
-
+// C-36 — reception's collect-payment screen. The selected invoice is the
+// single amount source: its payment form shows the bill-linked UPI QR and
+// records the payment once it lands (PR2-C3). Recording rides the existing
+// payments service; the receptionist already holds payments.record. There is
+// no separate generic QR/amount panel on this route.
+export default async function CollectPaymentPage({ searchParams }: { searchParams?: Promise<{invoice?: string}> }) {
+  const ctx = await requireReception();
+  const requested = (await searchParams)?.invoice;
+  const allowed = hasPermission(ctx, "invoices.read") && hasPermission(ctx, "payments.record") && hasFeature(ctx, "billing");
+  const lookup = requested && allowed
+    ? await getInvoiceAction(requested).then((invoice) => ({ invoice, failed: false }), () => ({ invoice: null, failed: true }))
+    : { invoice: null, failed: false };
   return (
-    <main className="px-5 pt-10 pb-8 max-w-lg">
-      <h1 className="font-display text-[22px] font-semibold text-marine">
-        Collect payment
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Show the payer a QR to scan, then record the payment against their
-        invoice.
-      </p>
+    <StaffPage className="max-w-xl">
+      <StaffPageHeader
+        title="Collect payment"
+        meta="Confirm payment before recording it."
+      />
 
-      <div className="mt-6 space-y-6">
-        {qrs.length === 0 ? (
-          <p className="rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
-            No payment QR is active. Ask the owner to add one in Settings →
-            Payment QRs.
-          </p>
-        ) : (
-          <CollectPayment qrs={qrs} />
-        )}
-
-        <PaymentRecordForm />
+      <div className="mt-6">
+        {lookup.invoice ? <PreselectedInvoice initial={lookup.invoice} /> : requested || !allowed ? (
+          <section className="space-y-3 rounded-card border border-line bg-paper p-4">
+            <p role="alert" className="text-sm">
+              {lookup.failed ? "Could not load the invoice. Check your connection and try again." : "Invoice is not available for collection."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {lookup.failed && requested ? <a href={`/reception/collect-payment?invoice=${encodeURIComponent(requested)}`} aria-label="Retry invoice lookup" className={buttonClasses({ variant: "primary", size: "sm" })}>Retry</a> : null}
+              {allowed ? <Link href="/reception/collect-payment" aria-label="Find another invoice" className={buttonClasses({ size: "sm" })}>Find another</Link> : null}
+              <Link href="/reception/dues" aria-label="Return to dues" className={buttonClasses({ variant: "ghost", size: "sm" })}>Dues</Link>
+            </div>
+          </section>
+        ) : <PaymentRecordForm />}
       </div>
-    </main>
+    </StaffPage>
   );
 }

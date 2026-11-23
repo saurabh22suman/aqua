@@ -1,19 +1,26 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   platformLogin,
+  platformVerifyTotp,
   lookupPlatformSession,
-  platformLogout,
+  platformLogoutWithResult,
   PlatformAuthError,
 } from "@/db/platform-auth";
+import {
+  OPS_PREAUTH_LOGOUT_NOOP,
+  OPS_PREAUTH_REJECTED,
+  recordUnauthEvent,
+} from "@/db/platform-auth-attempt";
 import {
   readPlatformSessionToken,
   writePlatformSessionCookie,
   clearPlatformSessionCookie,
 } from "@/lib/auth/platform-cookie";
-import { env } from "@/lib/env";
+import { platformRequestMeta } from "@/lib/auth/platform-request-meta";
 
 // Every action opens with (1) parse, (2) — here the second line is the
 // permission check, which lives in the platform scope itself
@@ -49,29 +56,26 @@ export async function loginPlatformAction(
     password: String(formData.get("password") ?? ""),
   });
   if (!parsed.success) {
+    // Malformed input is an operation too — and it is reachable WITHOUT a
+    // credential, so it is written under the bounded pre-auth policy
+    // (db/platform-auth-attempt.ts): one short transaction under one
+    // global admission lock decides whether the individual row, an
+    // aggregate or nothing is written. The submitted values are NOT
+    // recorded — only the phase and the outcome.
+    await recordUnauthEvent({
+      action: OPS_PREAUTH_REJECTED,
+      detail: { phase: "password", outcome: "malformed" },
+      ipAddress: (await platformRequestMeta()).ipAddress,
+      phase: "password",
+      outcome: "malformed",
+      correlationId: randomUUID(),
+    });
     return { kind: "error", message: "Enter a valid email and password." };
   }
-  // Without the env operator door there is no password door. The
-  // platform signs in with a WhatsApp code sent to a registered phone
-  // (lib/auth/whatsapp-route.ts), and the email + password form is
-  // not rendered in that configuration either
-  // (app/(platform)/ops/login/page.tsx). Saying so here keeps a
-  // stale client from believing a password would ever work.
-  if (env.OPS_EMAIL === undefined || env.OPS_PASSWORD === undefined) {
-    return {
-      kind: "error",
-      message: "Use your registered phone and WhatsApp code to sign in.",
-    };
-  }
-  // The env operator door (db/platform-auth-env.ts): the credentials
-  // live in the deployment's environment, they are compared in
-  // constant time, and the session comes back fully authenticated — no
-  // TOTP, no registered phone. platformLogin routes there whenever
-  // the pair is set, so this is exactly the door the operator
-  // configured.
+  // Both configured-env and database passwords require the authenticator.
   let fullyAuthenticated = false;
   try {
-    const result = await platformLogin(parsed.data);
+    const result = await platformLogin(parsed.data, await platformRequestMeta());
     // The cookie is host-scoped: it is written without a Domain
     // attribute, so the platform session never reaches the tenant
     // apex and the tenant session never reaches the platform host.
@@ -93,9 +97,7 @@ export async function loginPlatformAction(
     }
     throw err;
   }
-  // redirect() throws a framework signal and must stay outside the
-  // try/catch above. The env door authenticates fully, so this
-  // lands on the control plane and not on a second-factor challenge.
+  // redirect() is a framework signal; keep it outside the catch.
   redirect(fullyAuthenticated ? "/ops" : "/ops/verify");
 }
 
@@ -110,18 +112,78 @@ export async function verifyPlatformTotpAction(
     code: String(formData.get("code") ?? ""),
   });
   if (!parsed.success) {
+    await recordUnauthEvent({
+      action: OPS_PREAUTH_REJECTED,
+      detail: { phase: "totp", outcome: "malformed" },
+      ipAddress: (await platformRequestMeta()).ipAddress,
+      phase: "totp",
+      outcome: "malformed",
+      correlationId: randomUUID(),
+    });
     return { kind: "error", message: "Enter the 6-digit code from your authenticator." };
   }
-  await clearPlatformSessionCookie();
-  redirect("/ops/login");
+  const token = await readPlatformSessionToken();
+  if (!token) {
+    // A missing challenge is an operation: without a row an operator
+    // cannot tell a challenge that was never presented from one that was
+    // never requested. It is reachable WITHOUT a credential, so it is
+    // written under the bounded pre-auth policy. No token, no code and no
+    // address identity is recorded here, and the refusal (the redirect) is
+    // unchanged whether or not the event can be written.
+    await recordUnauthEvent({
+      action: OPS_PREAUTH_REJECTED,
+      detail: { phase: "totp", outcome: "missing_challenge" },
+      ipAddress: (await platformRequestMeta()).ipAddress,
+      phase: "totp",
+      outcome: "missing_challenge",
+      correlationId: randomUUID(),
+    });
+    redirect("/ops/login");
+  }
+  try {
+    const result = await platformVerifyTotp({ sessionToken: token, code: parsed.data.code }, await platformRequestMeta());
+    await writePlatformSessionCookie(result.sessionToken);
+  } catch (err) {
+    if (err instanceof PlatformAuthError) {
+      return { kind: "error", message: "Invalid or expired code. Try again later or start sign-in again." };
+    }
+    throw err;
+  }
+  redirect("/ops");
 }
 
 export type PlatformLogoutResult = { kind: "ok" };
 
 export async function logoutPlatformAction(): Promise<PlatformLogoutResult> {
   const token = await readPlatformSessionToken();
-  if (token) await platformLogout(token);
+  // The PUBLIC sign-out keeps its signature (the protected tier1 suite
+  // asserts it resolves to undefined); the result helper tells this action
+  // whether a session was really removed.
+  const { removed } = token
+    ? await platformLogoutWithResult(token)
+    : { removed: false };
   await clearPlatformSessionCookie();
+  if (!removed) {
+    // A truthful NOOP: no session was removed, so the DOMAIN sign-out
+    // event is not written — a sign-out that did not happen must never be
+    // presented as one. The OPERATION is still recorded, as a distinct
+    // noop event under the bounded pre-auth policy (an unauthenticated
+    // caller can reach it by sending a bogus cookie).
+    //
+    // No secrets: the reason is a fixed code, and neither the token, its
+    // hash, the session id nor the actor is recorded.
+    await recordUnauthEvent({
+      action: OPS_PREAUTH_LOGOUT_NOOP,
+      detail: {
+        phase: "logout",
+        reason: token ? "unknown_session" : "missing_session",
+      },
+      ipAddress: (await platformRequestMeta()).ipAddress,
+      phase: "logout",
+      outcome: token ? "unknown_session" : "missing_session",
+      correlationId: randomUUID(),
+    });
+  }
   return { kind: "ok" };
 }
 

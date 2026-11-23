@@ -45,6 +45,8 @@ beforeAll(async () => {
   await bootstrapRoles(adminUri, appPassword);
   const { runMigrations } = await import("@/db/migrate");
   await runMigrations(adminUri);
+  const { seedPlatformCatalogue } = await import("@/db/seed-platform");
+  await seedPlatformCatalogue(adminUri);
 
   const tenantModule = await import("@/db/tenant");
   const generatorModule = await import("@/lib/jobs/session-generator");
@@ -59,6 +61,10 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, status) values ($1, $2, 'O-02 Service', 'active')",
     [tenantId, `o02-service-${RUN}`],
   );
+  const receptionRole = uuidv7();
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'receptionist', 'Reception', '/reception', 0)", [receptionRole, tenantId]);
+  await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1, $2, 'attendance.mark')", [tenantId, receptionRole]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [uuidv7(), tenantId, userId, receptionRole]);
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Main', true)",
     [locationId, tenantId],

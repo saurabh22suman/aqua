@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // The substitute control is a separate client island with its own
@@ -38,6 +38,46 @@ function session(overrides: Partial<UpcomingSessionRow> = {}): UpcomingSessionRo
 afterEach(cleanup);
 
 describe("UpcomingSessionsList — F3 times in IST", () => {
+  it("shows the applied Owner dates and lets coverage work within that window", () => {
+    render(<UpcomingSessionsList
+      compactOwner
+      dateWindow={{ fromDate: "2026-11-23", toDate: "2026-12-07" }}
+      initialSessions={[
+        session({ id: "today", sessionDate: "2026-11-23", batchName: "Morning squad" }),
+        session({ id: "tomorrow", sessionDate: "2026-11-24", batchName: "Junior squad", coachName: null }),
+        session({ id: "last-day", sessionDate: "2026-12-07", batchName: "December squad" }),
+      ]}
+      terminology={TERMINOLOGY}
+      coaches={[]}
+      canManage
+    />);
+
+    const trigger = () => screen.getByRole("button", { name: /^Session dates/ });
+    const open = () => {
+      fireEvent.click(trigger());
+      return within(screen.getByRole("dialog", { name: "Session dates" }));
+    };
+    expect(trigger().textContent).toMatch(/23 Nov/);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /Next 7 days/ })).toBeNull();
+
+    fireEvent.click(open().getByRole("button", { name: /Next 7 days/ }));
+    expect(screen.queryByRole("dialog", { name: "Session dates" })).toBeNull();
+    expect(trigger().textContent).toMatch(/29 Nov/);
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+
+    const needsCover = screen.getByRole("button", { name: /Needs cover/ });
+    fireEvent.click(needsCover);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    expect(screen.getByRole("article", { name: /Junior squad/ })).toBeTruthy();
+
+    fireEvent.click(open().getByRole("button", { name: /Full window/ }));
+    expect(needsCover.getAttribute("aria-pressed")).toBe("true");
+    expect(trigger().textContent).toMatch(/7 Dec/);
+    fireEvent.click(needsCover);
+    expect(screen.getByRole("article", { name: /December squad/ })).toBeTruthy();
+  });
+
   it("renders 11:30Z–12:30Z as 05:00 pm–06:00 pm, not 11:30–12:30", () => {
     const { container } = render(
       <UpcomingSessionsList

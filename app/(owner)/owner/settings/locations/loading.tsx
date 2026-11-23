@@ -1,11 +1,13 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 // U-07 — locations settings cold-load: heading, then one card per
 // location with fields and the hours editor.
 
 export default function Loading() {
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
+      <SkeletonStatus>Loading facilities…</SkeletonStatus>
       <Skeleton w={16} h={4} />
       <Skeleton w={32} h={5} className="mt-2" />
       <Skeleton w={56} h={4} className="mt-2" />
@@ -21,6 +23,6 @@ export default function Loading() {
           <Skeleton w={36} h={9} className="mt-3 rounded-pill" />
         </div>
       ))}
-    </main>
+    </OwnerPage>
   );
 }

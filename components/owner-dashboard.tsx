@@ -1,62 +1,30 @@
-import Link from "next/link";
-import {
-  CalendarRange,
-  ClipboardList,
-  ListChecks,
-  Receipt,
-  TriangleAlert,
-  Users,
-  Wallet,
-} from "lucide-react";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { OwnerHomeCharts } from "@/components/owner-home-charts";
-import { OwnerHomeActions } from "@/components/owner-home/owner-home-actions";
-import { OwnerAccountControl } from "@/components/owner-home/owner-account-control";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { OwnerHomeAttention } from "@/components/owner-home/owner-home-attention";
 import type { OwnerAttentionRow } from "@/components/owner-home/owner-home-attention";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
 import { OwnerHomeHeader } from "@/components/owner-home/owner-home-header";
-import { OwnerHomeIllustration } from "@/components/owner-home/owner-home-illustration";
-import { OwnerHomeMetrics } from "@/components/owner-home/owner-home-metrics";
+import { OwnerHomePriority } from "@/components/owner-home/owner-home-priority";
+import { OwnerScoreCell } from "@/components/owner-home/owner-scoreline";
+import { OwnerHomeNextSession } from "@/components/owner-home/owner-home-next-session";
+import { OwnerHomeFinancialSnapshot } from "@/components/owner-home/owner-home-financial-snapshot";
 import { OwnerHomeTimeline } from "@/components/owner-home/owner-home-timeline";
-import type { RegisterTone } from "@/components/owner-home/session-state";
+import { OwnerHomeCollectionsTrend } from "@/components/owner-home/owner-home-collections-trend";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
 import {
-  OwnerInsightsHome,
   type OwnerInsightsHomeData,
 } from "@/components/owner-insights-home/owner-insights-home";
-import type { ChartMetric, OwnerChartsData } from "@/lib/services/owner-home-charts";
+import type { OwnerChartsData } from "@/lib/services/owner-home-charts";
+import type { OwnerPeriodKey } from "@/lib/time/owner-periods";
 import type {
   NeedsAttentionItem,
   OwnerDashboardData,
 } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
-import { resolveTerm, titleCase, type TerminologyState } from "@/lib/terminology/keys";
-import { formatINRCompact } from "@/lib/money/format";
-import { addDays } from "@/lib/time/tz";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
+import { addDays, formatWeekdayDateIST } from "@/lib/time/tz";
 
-// Owner Home — the daily oversight workspace (composition contract in
-// DESIGN.md §7, and the approved Lavender Option B composition).
-//
-// The owner is a reviewer, not an operator: the screen answers "what
-// is happening, what is owed, what needs me" and never becomes a
-// capture form or an attendance-marking console.
-//
-// Order, top to bottom on desktop:
-//   1. the day, the club and the location the figures cover, with a
-//      small piece of club artwork beside the heading
-//   2. Summary — four figures whose labels state whether they are
-//      today's, a current balance, or a count
-//   3. one dominant shortcut (collect money) + quiet secondary actions
-//   4. today's classes | the attention queue
-//   5. money at a glance — the collections and payment-mix panels on
-//      one shared period
-//   6. the insights preview — attendance by batch and enquiries by
-//      current stage, one line each, detail a disclosure away
-//
-// Every figure is a real read from lib/services/dashboard; zeroes say
-// so in words ("No payments recorded today yet"), an unavailable
-// percentage is "—", and completion (marks recorded) is never labelled
-// attendance. Nothing here invents growth, targets, profit or weather.
-
+// Today is composed from the existing scoped dashboard and chart reads.
 const MAX_ATTENTION_ROWS = 3;
 
 type Can = {
@@ -69,21 +37,19 @@ type Can = {
   // caller that does not need the insights drill-down can leave it
   // unset — the link is simply not offered.
   readEnquiries?: boolean;
-};
-
-// The reserved money/attention tokens live in this file — the one the
-// semantic-token rule sanctions for the owner's attention list — so the
-// tone classes are chosen here and handed down. A new file may not
-// carry these tokens itself.
-const ATTENTION_ICON_CLASS: Record<"warn" | "late", string> = {
-  warn: "bg-warn-soft text-warn",
-  late: "bg-late-soft text-late",
-};
-
-const REGISTER_TONE_CLASS: Record<RegisterTone, string> = {
-  neutral: "text-ink-3",
-  warn: "text-warn",
-  good: "text-good",
+  // Whether the caller may open the programs and batches board, and
+  // the staff directory. These are UI names for what the destinations
+  // themselves enforce; an unset flag withholds the shortcut.
+  readPrograms?: boolean;
+  readStaff?: boolean;
+  readMembers?: boolean;
+  bookCourt?: boolean;
+  // Whether the caller may open the collections TREND report. The
+  // destination enforces reports.financial, invoices.read and the
+  // reports/billing entitlements, so the flag is computed with exactly
+  // those checks — the "View trend" link is never offered to someone
+  // the report would refuse.
+  viewTrend?: boolean;
 };
 
 /**
@@ -97,10 +63,8 @@ function isMoneyLate(item: NeedsAttentionItem): boolean {
 
 export function OwnerDashboard({
   data,
-  branding,
   terminology,
   chartsData,
-  insights = null,
   showOnboarding = false,
   can = {
     addMember: false,
@@ -109,10 +73,13 @@ export function OwnerDashboard({
     readFees: false,
     viewSchedule: false,
   },
-  trend = "attendance",
   facility = null,
-  illustrationSeed = null,
+  period = "last7",
+  guideKey,
+  floodlitSport = "court",
 }: {
+  guideKey?: string;
+  floodlitSport?: "court" | "pool";
   data: OwnerDashboardData;
   branding: BrandingData;
   terminology: TerminologyState;
@@ -125,38 +92,29 @@ export function OwnerDashboard({
   // academy with one unfinished checklist item does not.
   showOnboarding?: boolean;
   can?: Can;
-  trend?: ChartMetric;
+  // The selected range for the trend band and the attendance summary.
+  // One range, one owner: the range strip above the band.
+  period?: OwnerPeriodKey;
   // The resolved facility scope, carried into every drill-down link so
   // a narrowed Home never opens an unnarrowed destination.
   facility?: string | null;
-  // A stable seed for the club artwork. The caller passes the tenant
-  // id so the picture is chosen once for the visit.
-  illustrationSeed?: string | null;
 }) {
-  const displayName = branding.displayName ?? data.tenantName;
-  const membersOther = resolveTerm(terminology, "member", "other");
-  const memberOne = resolveTerm(terminology, "member", 1);
-  const batchesOther = resolveTerm(terminology, "batch", "other");
-  const batchOne = resolveTerm(terminology, "batch", 1);
   const sessionsOther = resolveTerm(terminology, "session", "other");
   const sessionsOne = resolveTerm(terminology, "session", 1);
   const coachOne = resolveTerm(terminology, "coach", 1);
-  const enquiryOne = resolveTerm(terminology, "enquiry", 1);
-  const facilitiesOther = resolveTerm(terminology, "facility", "other");
-  const programsOther = resolveTerm(terminology, "program", "other");
 
-  const scopeLabel =
-    data.scopeLocationName ??
-    (data.facilityBreakdown.length > 1 ? "All locations" : null);
-  const attention = data.needsAttention;
-  const hasOverdue = data.money.overdueInvoiceCount > 0;
+  const attention = data.needsAttention.filter((item) => can.readFees || (!isMoneyLate(item) && item.title !== "Cash count needs review"));
   const sessionCount = data.todaysLanes.length;
+  const nextClass = data.nextClass;
+  // The agenda and calendar already cover a next session listed today.
+  const separateNextClass = nextClass && (
+    nextClass.sessionDate !== data.today ||
+    !data.todaysLanes.some(lane => lane.batchId === nextClass.batchId)
+  ) ? nextClass : null;
 
-  const withFacility = (href: string) =>
-    facility ? `${href}${href.includes("?") ? "&" : "?"}facility=${facility}` : href;
   const scopeParams = (params: Record<string, string>) => {
     const query = new URLSearchParams(params);
-    if (facility) query.set("facility", facility);
+    query.set("facility", facility ?? "all");
     return `/owner/fees?${query.toString()}`;
   };
 
@@ -168,10 +126,28 @@ export function OwnerDashboard({
     }),
     dues: scopeParams({ tab: "dues" }),
   };
-  const membersHref = withFacility("/owner/members");
-  const scheduleHref = facility
-    ? `/owner/schedule?date=${data.today}&location=${facility}`
-    : `/owner/schedule?date=${data.today}`;
+  const membersHref = `/owner/members?${new URLSearchParams({ facility: facility ?? "all" }).toString()}`;
+  const scheduleHref = `/owner/schedule?${new URLSearchParams({ date: data.today, facility: facility ?? "all" }).toString()}`;
+  // The scoreboard's own calendar link: the NEXT session's real date, not
+  // today's. It stays field-for-field scoped with the facility the figure
+  // was read under, and is only built when the caller may open Schedule.
+  const nextSessionHref = data.nextClass
+    ? `/owner/schedule?${new URLSearchParams({ date: data.nextClass.sessionDate, facility: facility ?? "all" }).toString()}`
+    : null;
+  // The trend report is the REAL drill-down for the collections figure,
+  // and it carries the same scope and the same range the card was read
+  // under — a narrowed Home never opens an unnarrowed destination.
+  // Overdue is the same dues read the finance card's figures came from,
+  // narrowed by the fees hub's own overdue flag; the destination applies
+  // the tenant-local due-date cut, so Home never invents one.
+  const overdueHref = scopeParams({ tab: "dues", overdue: "1" });
+  const trendHref = can.viewTrend && can.readFees
+    ? `/owner/reports/collections?${new URLSearchParams({
+        view: "trends",
+        period: chartsData?.period.key ?? period,
+        facility: facility ?? "all",
+      })}`
+    : null;
 
   // The attention queue: the first rows carry the list, and a row that
   // is about money that is LATE is never one of the folded ones.
@@ -184,261 +160,143 @@ export function OwnerDashboard({
       hiddenAttention.push(item);
     }
   }
+  // The priority card is the first item of the service's own priority
+  // order (cash discrepancy, then the billing decision, then the
+  // follow-ups, then the register) — never a separately chosen item.
+  const priorityItem = attention[0] ?? null;
+  const priorityIsOverdue = priorityItem ? isMoneyLate(priorityItem) : false;
+  const overdueCount = data.money?.overdueInvoiceCount ?? 0;
+  const oldest = data.money?.oldestOverdueDays;
+  const priorityDetail = priorityIsOverdue && overdueCount > 0
+    ? `${overdueCount} ${overdueCount === 1 ? "invoice" : "invoices"} past due${oldest ? ` · oldest ${oldest} ${oldest === 1 ? "day" : "days"} late` : ""}`
+    : priorityItem?.detail;
+  const attentionDestination = (item: NeedsAttentionItem) => isMoneyLate(item)
+    ? overdueHref
+    : item.href === "/owner/reports/collections"
+      ? `/owner/reports/collections?${new URLSearchParams({ facility: facility ?? "all" })}`
+      : item.href;
+  const priorityHref = priorityItem ? attentionDestination(priorityItem) : undefined;
+  const priorityAction = priorityItem?.title === "Cash count needs review" ? "Open cash count"
+    : priorityIsOverdue ? "Open overdue invoices"
+    : priorityItem?.title === "Follow-up overdue" ? "Open enquiry"
+    : priorityItem?.title === "Register not started" ? "View register"
+    : "Review";
   const attentionRows = (items: NeedsAttentionItem[]): OwnerAttentionRow[] =>
-    items.map((item) => {
-      const tone: "late" | "warn" = isMoneyLate(item) ? "late" : "warn";
-      return {
-        title: item.title,
-        detail: item.detail,
-        href: item.href,
-        tone,
-        iconClassName: ATTENTION_ICON_CLASS[tone],
-      };
-    });
+    items.map((item) => ({
+      title: item.title,
+      detail: item.detail,
+      href: attentionDestination(item),
+    }));
 
-  // The artwork is chosen from the club's own programme names.
-  const programNames = [
-    ...data.todaysLanes.map((lane) => lane.programName),
-    ...(data.nextClass ? [data.nextClass.programName] : []),
-  ].filter((name): name is string => typeof name === "string" && name.length > 0);
+  const showAttention = attention.length > 0 || can.readFees || showOnboarding;
+
+  // Keep the authorized quick action below the agenda and collections.
+  const enquiryAction =
+    can.captureEnquiry && can.readEnquiries ? (
+      <Link
+        href="/owner/enquiries?capture=1"
+        className="inline-flex min-h-11 items-center gap-1.5 text-[12.5px] font-medium text-[var(--accent-ink)]"
+      >
+        <OwnerIcon name="plus" size={16} />
+        New enquiry
+      </Link>
+    ) : null;
 
   return (
-    <main data-testid="owner-home" className="px-5 pt-5 pb-8">
-      {/* 1 — the day, the club and the scope, with the club artwork. */}
-      <OwnerHomeHeader
-        displayName={displayName}
-        scopeLabel={scopeLabel}
-        today={data.today}
-        illustration={
-          <div className="flex flex-none items-center gap-2">
-            {/* The phone's account control. On a desktop the same
-                affordance is the shell's sidebar account row, so the
-                two are never on screen together. */}
-            <OwnerAccountControl className="lg:hidden" />
-            <OwnerHomeIllustration
-              programNames={programNames}
-              seed={illustrationSeed ?? `${data.tenantName}|${data.today}`}
-            />
-          </div>
-        }
-      />
-
-      {/* 2 — Summary. Each label states its basis: today, current
-          balance, or a count. A figure that could not be read is "—",
-          never ₹0. The tiles are pastel surfaces with a state-coloured
-          icon chip (batch 4), so four figures can be scanned instead
-          of read as four identical white cards. A phone keeps the two
-          money figures as cards and the other two as one compact line. */}
-      <OwnerHomeMetrics
-        cards={[
-          {
-            key: "collected",
-            label: "Collected today",
-            value: formatINRCompact(data.money.collectedTodayPaise),
-            hint:
-              data.money.collectedTodayCount === 0
-                ? "No payments recorded today yet"
-                : `${data.money.collectedTodayCount} payment${
-                    data.money.collectedTodayCount === 1 ? "" : "s"
-                  } recorded`,
-            href: can.readFees ? fees.collected : undefined,
-            tone: "money",
-            icon: { node: <Wallet size={17} strokeWidth={2} />, tone: "good" },
-          },
-          {
-            key: "overdue",
-            label: "Overdue",
-            value: (
-              <span className={hasOverdue ? "text-late" : undefined}>
-                {formatINRCompact(data.money.overduePaise)}
-              </span>
-            ),
-            hint:
-              hasOverdue
-                ? `${data.money.overdueInvoiceCount} invoice${
-                    data.money.overdueInvoiceCount === 1 ? "" : "s"
-                  } past due · ${formatINRCompact(data.money.outstandingPaise)} outstanding`
-                : `Nothing past due · ${formatINRCompact(
-                    data.money.outstandingPaise,
-                  )} outstanding`,
-            href: can.readFees ? fees.dues : undefined,
-            // The late surface is for money that IS late. A quiet
-            // morning is a calm tile, not an alarm.
-            tone: hasOverdue ? "late" : "paper",
-            icon: {
-              node: <TriangleAlert size={17} strokeWidth={2} />,
-              tone: hasOverdue ? "late" : "neutral",
-            },
-          },
-          {
-            key: "members",
-            label: `Active ${membersOther}`,
-            value: data.activeMemberCount,
-            hint: `${data.activeBatchCount} ${
-              data.activeBatchCount === 1 ? batchOne : batchesOther
-            } running`,
-            href: membersHref,
-            tone: "info",
-            icon: { node: <Users size={17} strokeWidth={2} />, tone: "water" },
-            compactOnly: true,
-          },
-          {
-            key: "sessions",
-            label: `${titleCase(sessionsOther)} today`,
-            value: sessionCount,
-            hint:
-              sessionCount === 0
-                ? "Nothing scheduled today"
-                : `${data.todayTotal} ${membersOther} enrolled`,
-            href: can.viewSchedule ? scheduleHref : undefined,
-            tone: "butter",
-            icon: {
-              node: <CalendarRange size={17} strokeWidth={2} />,
-              tone: "marine",
-            },
-            compactOnly: true,
-          },
-        ]}
-        compactSummary={`${data.activeMemberCount} active ${membersOther} · ${data.activeBatchCount} ${
-          data.activeBatchCount === 1 ? batchOne : batchesOther
-        } · ${sessionCount} ${sessionCount === 1 ? sessionsOne : sessionsOther} today`}
-      />
-
-      {/* 3 — one dominant shortcut. Money is the owner's authority, so
-          collecting a payment is the primary action and goes to the
-          real journey (Dues → open an invoice → record payment), never
-          to a history list. Secondary actions are quiet. */}
-      <OwnerHomeActions
-        collectHref={can.recordPayment ? fees.dues : null}
-        addMemberHref={can.addMember ? "/owner/members/new" : null}
-        captureEnquiryHref={can.captureEnquiry ? "/owner/enquiries" : null}
-        memberLabel={memberOne}
-        enquiryLabel={enquiryOne}
-      />
-
-      {/* 4 — desktop 60/40: the day's classes beside the exceptions.
-          On mobile the queue comes first so the actionable items are
-          reachable early; the day's classes follow. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-5 lg:items-start">
-        <div className="order-2 min-w-0 lg:order-1 lg:col-span-3">
-          <OwnerHomeTimeline
-            lanes={data.todaysLanes}
-            marked={data.todayMarked}
-            enrolled={data.todayTotal}
-            membersLabel={membersOther}
-            coachLabel={coachOne}
-            sessionsLabel={sessionCount === 1 ? sessionsOne : sessionsOther}
-            registerToneClass={(tone) => REGISTER_TONE_CLASS[tone]}
-            scheduleHref={can.viewSchedule ? scheduleHref : null}
-            nextClass={data.nextClass}
+    <OwnerPage
+      data-testid="owner-home"
+      data-floodlit-owner=""
+      data-floodlit-sport={floodlitSport}
+      className="floodlit-workspace courtside-home"
+    >
+      <section
+        className="floodlit-hero"
+        data-testid="owner-floodlit-hero"
+        aria-labelledby="owner-home-title"
+      >
+        <OwnerHomeHeader today={data.today} />
+        {can.readFees ? (
+          <OwnerHomeFinancialSnapshot
+            money={data.money}
+            paymentsHref={fees.collected}
+            invoicesHref={fees.dues}
+            overdueHref={priorityIsOverdue ? null : overdueHref}
           />
-        </div>
+        ) : null}
+      </section>
 
-        <div className="order-1 min-w-0 lg:order-2 lg:col-span-2">
+      <OwnerHomePriority
+        className="floodlit-priority priority courtside-workspace-priority"
+        item={priorityItem}
+        detail={priorityDetail}
+        action={priorityAction}
+        actionHref={priorityHref}
+      />
+
+      <div className={`floodlit-support${can.readFees ? "" : " floodlit-support-single"}`}>
+        <OwnerHomeTimeline
+          id="owner-agenda"
+          lanes={data.todaysLanes}
+          dateLabel={formatWeekdayDateIST(data.today)}
+          coachLabel={coachOne}
+          sessionLabel={sessionsOne}
+          sessionsLabel={sessionCount === 1 ? sessionsOne : sessionsOther}
+          scheduleHref={can.viewSchedule ? scheduleHref : null}
+          nextClass={data.nextClass}
+          lead={separateNextClass ? (
+            <OwnerHomeNextSession
+              nextClass={separateNextClass}
+              siteLabel={data.scopeLocationName}
+              scheduleHref={can.viewSchedule ? nextSessionHref ?? scheduleHref : null}
+            />
+          ) : null}
+        />
+        {can.readFees ? <OwnerHomeCollectionsTrend data={chartsData} href={trendHref} /> : null}
+      </div>
+      {enquiryAction ? <div className="flex justify-end">{enquiryAction}</div> : null}
+
+      <ul className="courtside-scoreline" aria-label="Overview totals">
+        <OwnerScoreCell count={sessionCount} label="Sessions today" icon="calendar" href="#owner-agenda" />
+        <OwnerScoreCell count={attention.length} label="Need attention" icon="alert" href={showAttention ? "#owner-attention" : undefined} />
+        <OwnerScoreCell count={data.activeMemberCount} label="Active members" icon="members" href={can.readMembers ? membersHref : undefined} />
+      </ul>
+
+      {showAttention ? (
+        <div id="owner-attention" tabIndex={-1}>
           <OwnerHomeAttention
             rows={attentionRows(visibleAttention)}
             hiddenRows={attentionRows(hiddenAttention)}
             count={attention.length}
-            summary={
-              attention.length === 0
-                ? "Nothing needs your attention today"
-                : `${attention.length} thing${
-                    attention.length === 1 ? "" : "s"
-                  } to keep your club on track`
-            }
-            onEmpty={
-              showOnboarding ? (
-                <p className="mt-1 text-[12.5px] text-ink-3">
-                  Setting the academy up is the next thing worth doing.
-                </p>
-              ) : undefined
-            }
+            summary={attention.length === 0 ? "No items to review today" : ""}
+            onEmpty={showOnboarding ? <p className="text-[13px] text-ink-2">Finish setting up your club.</p> : undefined}
+            footer={can.readFees && data.money ? (
+              <Link className="courtside-attention-action" href={fees.dues}>
+                <OwnerIcon name="invoice" size={18} />
+                <span><strong>{can.recordPayment ? "Record payment" : "Review open invoices"}</strong><small>Fees and payments</small></span>
+                <OwnerIcon name="chevron" size={16} />
+              </Link>
+            ) : null}
           />
         </div>
-      </div>
+      ) : null}
 
-      {/* 5 — money at a glance: the collections panel and the payment
-          mix on ONE shared period, scoped to the selected facility and
-          the tenant's own time zone. */}
-      <OwnerHomeCharts
-        data={chartsData ?? null}
-        metric={trend}
-        facility={facility}
-        canReadFees={can.readFees}
-        today={data.today}
+      {showOnboarding ? (
+        <Link href="/owner/onboarding" className="mt-4 inline-flex min-h-11 items-center rounded-ctl border border-line bg-paper px-4 text-sm font-medium text-ink hover:bg-deck">Set up your club</Link>
+      ) : null}
+      <OptionalWorkspaceGuide
+        key={guideKey}
+        startCollapsed
+        preferenceKey={guideKey}
+        title="A look around today"
+        intro="Explore the overview at your own pace. This guide makes no changes."
+        regionLabel="Optional daily overview guide"
+        itemLabel="Overview area"
+        items={[
+          { key: "sessions", title: "Today's sessions", detail: "See the day's schedule and the next booked session." },
+          ...(showAttention ? [{ key: "attention", title: "Needs attention", detail: "Review outstanding tasks and follow-ups." }] : []),
+          ...(showOnboarding ? [{ key: "setup", title: "Register checks", detail: "The setup link opens the available register checks." }] : []),
+        ]}
       />
-
-      {/* 6 — the insights section: the two read models (attendance by
-          batch, enquiries by current stage) as one quiet preview with
-          the detail a disclosure away. It is absent, not empty, when
-          the caller may not read operational reports. */}
-      {insights ? (
-        <OwnerInsightsHome
-          data={insights}
-          facility={facility}
-          canOpenEnquiries={can.readEnquiries ?? false}
-        />
-      ) : null}
-
-      {/* W1-6 — consolidated per-facility view, only for multi-site
-          tenants; a single site needs no comparison. */}
-      {data.facilityBreakdown.length > 1 ? (
-        <section className="mt-4">
-          <SectionHeader
-            className="mb-2"
-            title={`By ${facilitiesOther}`}
-          />
-          <ul className="divide-y divide-line rounded-card border border-line bg-paper">
-            {data.facilityBreakdown.map((row) => (
-              <li
-                key={row.locationId}
-                className="flex items-center justify-between gap-3 px-3.5 py-3"
-              >
-                <span className="min-w-0 truncate text-[13.5px] font-medium">
-                  {row.locationName}
-                </span>
-                <span className="flex-none text-[12px] text-ink-3">
-                  {row.activeMembers} active ·{" "}
-                  {row.attendancePct === null
-                    ? "no attendance yet"
-                    : `${row.attendancePct}% this week`}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* Phone access to the destinations the four-item bottom nav does
-          not carry. Desktop reaches them from the sidebar. */}
-      <div className="mt-4 grid grid-cols-2 gap-2 lg:hidden">
-        {[
-          { href: "/owner/fees", label: "Fees & payments", icon: Receipt },
-          {
-            href: "/owner/enquiries",
-            label: titleCase(resolveTerm(terminology, "enquiry", "other")),
-            icon: ClipboardList,
-          },
-          {
-            href: "/owner/programs",
-            label: `${titleCase(programsOther)} & ${batchesOther}`,
-            icon: CalendarRange,
-          },
-          { href: "/owner/staff", label: "Staff", icon: Users },
-          ...(showOnboarding
-            ? [{ href: "/owner/onboarding", label: "Onboarding", icon: ListChecks }]
-            : []),
-        ].map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="flex min-h-[48px] items-center gap-2.5 rounded-ctl border border-line bg-paper px-3.5 py-2"
-          >
-            <link.icon size={16} className="flex-none text-ink-3" aria-hidden="true" />
-            <span className="text-[13px] font-medium">{link.label}</span>
-          </Link>
-        ))}
-      </div>
-    </main>
+    </OwnerPage>
   );
 }

@@ -1,8 +1,12 @@
-import Link from "next/link";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listMenuAction } from "@/lib/actions/menu";
 import { listLocationsAction } from "@/lib/actions/people";
 import { MenuManager } from "@/components/menu-manager";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { SettingsPrerequisite } from "@/components/settings/settings-states";
 
 // K-07 — owner menu management. Reads ride settings.read; every
 // write goes through the K-01 actions gated on settings.manage
@@ -12,38 +16,39 @@ import { MenuManager } from "@/components/menu-manager";
 export default async function OwnerMenuPage() {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
   const [menu, locations] = await Promise.all([
     listMenuAction({}),
     listLocationsAction(),
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner/settings"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Settings
-        </Link>
-        {" / "}
-        café menu
-      </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Café menu
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Categories and items the counter sells, with price, GST rate
-        and SAC code. Reception sees this menu at the café counter and
-        cannot change it.
-      </p>
+    <OwnerPage workflow="settings" className="max-w-2xl">
+      <BackLink href="/owner/settings" label="Settings" />
+      <PageHeader
+        title={<>Café menu</>}
+        purpose={<>Every item carries a price, a GST rate and a SAC code.
+        Reception sees this menu at the café counter and cannot change
+        it.</>}
+      />
+      {/* A menu category belongs to a site. An academy with no site cannot
+          finish this task, so name the prerequisite and the way to fix it. */}
+      {locations.length === 0 ? (
+        <SettingsPrerequisite
+          title="No physical facility yet"
+          body="The café menu is attached to a site. Add a physical facility before building the menu."
+          actionLabel="Add a physical facility"
+          actionHref="/owner/settings/locations"
+        />
+      ) : null}
       <div className="mt-5">
         <MenuManager
           categories={menu.categories}
           items={menu.items}
           locations={locations}
+          taskSheet={ctx.roleKey === "owner"}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

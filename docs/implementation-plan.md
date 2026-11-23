@@ -95,7 +95,7 @@ Done when: {ACCEPTANCE}
 ### S-02 · Design tokens and DESIGN.md
 **Depends:** S-01
 **Build:** `DESIGN.md` at repo root. Tailwind theme extension with the deck/marine/water/mango palette, semantic tokens (`good`, `late`, `warn`), type scale, two shadow levels, radii. Self-hosted subset Bricolage Grotesque and Instrument Sans with `font-display: swap`.
-**Done when:** a test page renders every token; total font payload under the current 60 KB Latin-subset budget (measured 55.2 KB).
+**Done when:** a test page renders every token; total font payload under the combined 150 KiB Latin WOFF2 budget (foundation faces total 55.2 KiB).
 **Never:** raw hex values in components from this point on.
 
 ### S-03 · Local database

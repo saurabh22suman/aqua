@@ -32,10 +32,9 @@ describe("the operator console's metadata", () => {
     expect(layout.metadata?.manifest).toBeNull();
   });
 
-  it("changes nothing else about the console's metadata", async () => {
-    // The console keeps the inherited title, description, theme colour
-    // and viewport: only the manifest link is withdrawn.
+  it("keeps the console title and disables install metadata", async () => {
     const layout = await import("@/app/(platform)/layout");
-    expect(Object.keys(layout.metadata ?? {}).sort()).toEqual(["manifest"]);
+    expect(layout.metadata?.title).toEqual({ default: "Platform operations", template: "%s · Aqua Ops" });
+    expect(Object.keys(layout.metadata ?? {}).sort()).toEqual(["manifest", "title"]);
   });
 });

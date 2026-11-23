@@ -6,9 +6,10 @@ import { locations } from "@/db/schema";
 import { getOwnerCharts } from "@/lib/services/owner-home-charts";
 import { listHubTransactions } from "@/lib/services/fees-hub";
 import { createMember } from "@/lib/services/register";
-import { addDays, todayInZone } from "@/lib/time/tz";
+import { addDays } from "@/lib/time/tz";
 import { asTenantId, asUserId, type TenantId } from "@/lib/ids";
 import { privilegedFixturePool as admin } from "./db/privileged-fixture";
+import { seedRoleTemplates } from "@/lib/services/roles";
 
 // Owner Home chart aggregation, end to end against the disposable test DB:
 // the facility scope can only narrow, the periods reconcile with the
@@ -16,6 +17,8 @@ import { privilegedFixturePool as admin } from "./db/privileged-fixture";
 // Home category drill-down lands on the same filtered rows.
 
 const TZ = "Asia/Kolkata";
+const DAY = "2026-11-10";
+const NOW = Date.parse(`${DAY}T12:00:00+05:30`);
 const RUN = Date.now().toString(36);
 
 let tenantId: TenantId = asTenantId("");
@@ -36,7 +39,7 @@ const restrictedA = {
   roleKey: "admin",
   allLocations: false,
   locationIds: [] as string[],
-  permissions: new Set(["dashboard.view", "reports.financial", "payments.read"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "payments.read", "invoices.read"]),
 };
 
 beforeAll(async () => {
@@ -56,8 +59,16 @@ beforeAll(async () => {
     locationA = rows[0]!.id;
     locationB = rows[1]!.id;
   });
+  const scopedMembership = randomUUID();
+  const phone = () => `+91${String(BigInt("0x" + randomUUID().replaceAll("-", "").slice(0, 12)) % 9_000_000_000n + 1_000_000_000n)}`;
+  await admin.query("insert into users(id,phone) values($1,$2),($3,$4)", [owner.userId, phone(), restrictedA.userId, phone()]);
+  await seedRoleTemplates(tenantId);
+  await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'reports',true),($1,'billing',true)", [tenantId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [randomUUID(), tenantId, owner.userId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='admin'", [scopedMembership, tenantId, restrictedA.userId]);
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, scopedMembership, locationA]);
   const a = await createMember(
-    { tenantId },
+    { tenantId, userId: owner.userId },
     {
       fullName: "Chart Member A",
       dateOfBirth: "1990-01-01",
@@ -71,7 +82,7 @@ beforeAll(async () => {
   if (!a.ok) throw new Error(a.error);
   memberA = a.memberId;
   const b = await createMember(
-    { tenantId },
+    { tenantId, userId: owner.userId },
     {
       fullName: "Chart Member B",
       dateOfBirth: "1990-01-01",
@@ -85,7 +96,7 @@ beforeAll(async () => {
   if (!b.ok) throw new Error(b.error);
   memberB = b.memberId;
 
-  const today = todayInZone(TZ);
+  const today = DAY;
   const makeInvoice = async (locationId: string, memberId: string, suffix: string) => {
     const id = uuidv7();
     await admin.query(
@@ -100,7 +111,7 @@ beforeAll(async () => {
   const invoiceA = await makeInvoice(locationA, memberA, "A");
   const invoiceB = await makeInvoice(locationB, memberB, "B");
 
-  const receivedAt = new Date(Date.now() - 60 * 60 * 1000);
+  const receivedAt = new Date(NOW - 60 * 60 * 1000);
   await admin.query(
     `insert into payments (id, tenant_id, invoice_id, member_id, location_id,
        amount_paise, method, received_at, status)
@@ -135,16 +146,22 @@ afterAll(async () => {
     await admin.query("delete from consents where tenant_id = $1", [tenantId]);
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
+    await admin.query("delete from membership_locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_features where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
     await admin.query("delete from config_values where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)", [[owner.userId, restrictedA.userId]]);
   }
   await admin.end();
 });
 
 describe("owner Home charts — aggregation and scope", () => {
   it("totals captured payments and groups them cash / digital / other", async () => {
-    const data = await getOwnerCharts({ tenantId, ...owner }, { period: "day" });
+    const data = await getOwnerCharts({ tenantId, ...owner }, { period: "day", now: NOW });
     expect(data.collections.totalPaise).toBe(100000);
     expect(data.collections.paymentCount).toBe(2);
     const groups = Object.fromEntries(data.collections.groups.map((g) => [g.key, g.paise]));
@@ -159,7 +176,7 @@ describe("owner Home charts — aggregation and scope", () => {
   it("narrows to the caller's locations and cannot be widened by the URL", async () => {
     const scoped = await getOwnerCharts(
       { tenantId, ...restrictedA },
-      { period: "day" },
+      { period: "day", now: NOW },
     );
     expect(scoped.collections.totalPaise).toBe(60000);
     expect(scoped.collections.groups.find((g) => g.key === "digital")?.paise).toBe(0);
@@ -167,13 +184,13 @@ describe("owner Home charts — aggregation and scope", () => {
     // Asking for B while only A is allowed returns nothing, never B's money.
     const widened = await getOwnerCharts(
       { tenantId, ...restrictedA },
-      { period: "day", locationId: locationB },
+      { period: "day", locationId: locationB, now: NOW },
     );
     expect(widened.collections.totalPaise).toBe(0);
   }, 60_000);
 
   it("drills into exactly the filtered transactions behind a group total", async () => {
-    const today = todayInZone(TZ);
+    const today = DAY;
     const digital = await listHubTransactions(
       { tenantId, ...owner },
       { from: today, to: addDays(today, 1), group: "digital" },
@@ -190,7 +207,7 @@ describe("owner Home charts — aggregation and scope", () => {
   }, 60_000);
 
   it("reads attendance as unknown when a period has no marks", async () => {
-    const data = await getOwnerCharts({ tenantId, ...owner }, { period: "day" });
+    const data = await getOwnerCharts({ tenantId, ...owner }, { period: "day", now: NOW });
     expect(data.attendance.total).toBe(0);
     expect(data.attendance.pct).toBeNull();
     expect(data.attendance.buckets.every((bucket) => bucket.pct === null)).toBe(true);

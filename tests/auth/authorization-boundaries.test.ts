@@ -5,6 +5,8 @@ import { env } from "@/lib/env";
 import { asTenantId, asUserId } from "@/lib/ids";
 import { seedRoleTemplates } from "@/lib/services/roles";
 import { deleteAuditRowsForTenant } from "@/tests/helpers/audit-log-cleanup";
+import { inviteStaffAction } from "@/lib/actions/staff-invitations";
+import { inviteStaff, type InviteStaffInput } from "@/lib/services/staff-invitations";
 import { enrolMemberAction } from "@/lib/actions/enrolment";
 import { markAttendanceSessionAction } from "@/lib/actions/coach";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
@@ -40,6 +42,7 @@ const userAdmin = asUserId(uuidv7());
 const userScopedOwner = asUserId(uuidv7());
 const userReception = asUserId(uuidv7());
 const userAccountant = asUserId(uuidv7());
+const attendanceReceptionist = asUserId(uuidv7());
 const RUN = Date.now().toString(36);
 const phones = new Map<string, string>();
 const cookies = new Map<string, string>();
@@ -47,9 +50,9 @@ const cookies = new Map<string, string>();
 async function signIn(role: "owner" | "admin" | "scopedOwner" | "reception" | "accountant") {
   const saved = cookies.get(role);
   if (saved) { session.cookie = saved; return; }
-  const response = await loginWithPin(new Request("http://localhost/api/login/pin", {
+  const response = await loginWithPin(new Request(`${new URL(process.env.BETTER_AUTH_URL!).origin}/api/login/pin`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", origin: new URL(process.env.BETTER_AUTH_URL!).origin, host: new URL(process.env.BETTER_AUTH_URL!).host },
     body: JSON.stringify({ phone: phones.get(role), pin: "123456" }),
   }));
   if (response.status !== 200) throw new Error(`PIN login failed for ${role}: ${response.status}`);
@@ -142,7 +145,7 @@ afterAll(async () => {
     }
     await admin.query("delete from tenants where id=$1", [id]);
   }
-  await admin.query("delete from users where id=any($1::uuid[])", [[userOwner, userAdmin, userScopedOwner, userReception, userAccountant]]);
+  await admin.query("delete from users where id=any($1::uuid[])", [[userOwner, userAdmin, userScopedOwner, userReception, userAccountant, attendanceReceptionist]]);
   for (const key of ["owner", "admin", "scopedOwner", "reception", "accountant"]) {
     const id = `boundary-${key}-${RUN}`;
     await admin.query("delete from ba_session where user_id=$1", [id]);
@@ -153,6 +156,16 @@ afterAll(async () => {
 });
 
 describe("authenticated authorization boundaries", () => {
+  it("rejects new Accountant invitations before creating a user or membership", async () => {
+    await signIn("owner");
+    const phone = `+919${String(Date.now()).slice(-9)}`;
+    const input = { phone, fullName: "Retired role", roleKey: "accountant", locationIds: [] };
+    expect(await inviteStaffAction(input)).toMatchObject({ kind: "error", code: "invalid" });
+    expect(await inviteStaff({ tenantId, userId: userOwner }, input as unknown as InviteStaffInput))
+      .toMatchObject({ kind: "error", code: "invalid" });
+    expect((await admin.query("select id from users where phone=$1", [phone])).rowCount).toBe(0);
+  });
+
   it("H01 rejects a scoped enrolment into another location", async () => {
     await signIn("reception");
     expect(await enrolMemberAction({ memberId: memberA, batchId: batchB })).toMatchObject({ ok: false });
@@ -161,6 +174,7 @@ describe("authenticated authorization boundaries", () => {
   });
 
   it("H01 rejects a missing actor while allowing explicitly authorized broader access", async () => {
+    // @ts-expect-error Runtime guards must still reject an untyped caller without identity.
     expect(await enrolMember({ tenantId }, { memberId: memberA, batchId: batchB })).toMatchObject({ ok: false });
     await signIn("owner");
     expect(await enrolMemberAction({ memberId: memberA, batchId: batchB })).toMatchObject({ ok: true });
@@ -175,25 +189,31 @@ describe("authenticated authorization boundaries", () => {
     // service boundary coaches, the front desk and jobs use.
     await signIn("owner");
     await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: outsiderA,
-      status: "present", clientId: `nonroster-${RUN}` })).rejects.toThrow();
+      status: "present", clientId: `nonroster-${RUN}` })).resolves.toMatchObject({ ok: false, code: "reauth" });
     await expect(markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
-      status: "present", clientId: `roster-${RUN}` })).rejects.toThrow();
+      status: "present", clientId: `roster-${RUN}` })).resolves.toMatchObject({ ok: false, code: "reauth" });
     expect((await admin.query("select id from attendance where session_id=$1 and member_id=any($2::uuid[])",
       [sessionB, [outsiderA, memberB]])).rowCount).toBe(0);
 
-    const systemCtx = { tenantId, systemActor: true as const };
-    await expect(markAttendance(systemCtx, { sessionId: sessionB, memberId: outsiderA,
+    const receptionistMembership = uuidv7();
+    const { rows: roles } = await admin.query<{ id: string }>("select id from roles where tenant_id=$1 and key='receptionist'", [tenantId]);
+    await admin.query("insert into users(id,phone) values($1,$2)", [attendanceReceptionist, `+91${String(BigInt('0x' + attendanceReceptionist.replaceAll('-', '').slice(0, 12)) % 9000000000n + 1000000000n)}`]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)", [receptionistMembership, tenantId, attendanceReceptionist, roles[0]!.id]);
+    const staffCtx = { tenantId, userId: attendanceReceptionist, roleKey: "receptionist", permissions: new Set(["attendance.mark"]) };
+    await expect(markAttendance(staffCtx, { sessionId: sessionB, memberId: outsiderA,
       status: "present", clientId: `nonroster-svc-${RUN}` })).rejects.toThrow();
-    await expect(markAttendance(systemCtx, { sessionId: sessionB, memberId: otherMember,
+    await expect(markAttendance(staffCtx, { sessionId: sessionB, memberId: otherMember,
       status: "present", clientId: `foreign-svc-${RUN}` })).rejects.toThrow();
-    await markAttendance(systemCtx, { sessionId: sessionB, memberId: memberB,
+    await markAttendance(staffCtx, { sessionId: sessionB, memberId: memberB,
       status: "present", clientId: `roster-svc-${RUN}` });
     expect((await admin.query("select id from attendance where session_id=$1 and member_id=$2",
       [sessionB, memberB])).rowCount).toBe(1);
 
     await signIn("reception");
     expect(await markAttendanceSessionAction({ sessionId: sessionB, memberId: memberB,
-      status: "present", clientId: `foreign-site-${RUN}` })).toMatchObject({ ok: false, error: "Session not found." });
+      status: "present", clientId: `foreign-site-${RUN}` })).toMatchObject({ ok: false, code: "terminal", error: "This mark needs review." });
+    expect((await admin.query("select client_id from attendance where session_id=$1 and member_id=$2",
+      [sessionB, memberB])).rows[0]?.client_id).toBe(`roster-svc-${RUN}`);
   });
 
   it("H03 denies receptionist issuance and invalid or out-of-location targets", async () => {

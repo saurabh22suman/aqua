@@ -20,8 +20,8 @@ import { addDays, todayInZone, zonedWallTimeToInstant } from "@/lib/time/tz";
 //     proven across a wide price/rate sweep, because the base/tax
 //     split is derived with splitTotal and passed explicitly, never
 //     recomputed by a rounding path that can differ;
-//   * a walk-in booking is recorded but not billable (no member, no
-//     anonymous payment path) — the refusal names the reason;
+//   * a walk-in booking is billed to a named guest (no member; no
+//     anonymous payment path); the invoice remains bound to that guest;
 //   * cancelling writes a booking.cancel audit row; a cancelled
 //     booking cannot be billed.
 
@@ -32,6 +32,7 @@ const TZ = "Asia/Kolkata";
 const tenant = asTenantId(uuidv7());
 const loc = uuidv7();
 const actor = asUserId(uuidv7());
+const roleId = uuidv7(), membershipId = uuidv7();
 const personId = uuidv7();
 const memberId = asMemberId(uuidv7());
 const facilityId = uuidv7();
@@ -61,14 +62,18 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, status, timezone, gstin) values ($1, $2, 'Booking Flow', 'active', $3, '27ABCDE1234F1Z5')",
     [tenant, `v04-${RUN}`, TZ],
   );
+  for (const id of [tenant]) await admin.query("insert into tenant_features(tenant_id,feature_key,enabled) values($1,'pool.booking',true)", [id]);
   await admin.query(
     "insert into locations (id, tenant_id, name, is_primary) values ($1, $2, 'Flow Site', true)",
     [loc, tenant],
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9197${String(Date.now()).slice(-8)}`,
+    `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`,
   ]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$2,'owner','Owner','/owner',0)",[roleId,tenant]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) select $1,$2,p.key from (values ('bookings.read'),('bookings.write'),('invoices.read'),('invoices.write'),('payments.record')) p(key)",[tenant,roleId]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[membershipId,tenant,actor,roleId]);
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Flow Member')",
     [personId, tenant],
@@ -93,6 +98,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  await admin.query("delete from receipts where tenant_id = $1", [tenant]);
   await admin.query("delete from payments where tenant_id = $1", [tenant]);
   await admin.query("delete from invoice_line_items where tenant_id = $1", [
     tenant,
@@ -108,8 +114,13 @@ afterAll(async () => {
   await admin.query("delete from facilities where tenant_id = $1", [tenant]);
   await admin.query("delete from members where tenant_id = $1", [tenant]);
   await admin.query("delete from persons where tenant_id = $1", [tenant]);
+  await admin.query("delete from tenant_memberships where tenant_id = $1", [tenant]);
+  await admin.query("delete from role_permissions where tenant_id = $1", [tenant]);
+  await admin.query("delete from roles where tenant_id = $1", [tenant]);
   await admin.query("delete from locations where tenant_id = $1", [tenant]);
+  await admin.query("delete from tenant_features where tenant_id=$1", [tenant]);
   await admin.query("delete from tenants where id = $1", [tenant]);
+  await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[actor]);
   await admin.end();
   const client = await import("@/db/client");
   await client.pool.end().catch(() => {});
@@ -214,7 +225,7 @@ describe("V-04 staff booking flow", () => {
     }
   });
 
-  it("records a walk-in but refuses to bill it — no anonymous payment path", async () => {
+  it("bills a named walk-in once as a guest", async () => {
     const created = await bookings.createBooking(ctx, {
       facilityId,
       subUnitId: null,
@@ -226,14 +237,19 @@ describe("V-04 staff booking flow", () => {
     if (!created.ok) return;
 
     const billed = await billing.requestBookingBill(ctx, created.bookingId);
-    expect(billed.ok).toBe(false);
-    if (!billed.ok) expect(billed.error).toMatch(/member/i);
-
-    const { rows } = await admin.query<{ invoice_id: string | null }>(
-      "select invoice_id from bookings where id = $1",
+    expect(billed.ok).toBe(true);
+    if (!billed.ok) return;
+    const again = await billing.requestBookingBill(ctx, created.bookingId);
+    expect(again.ok).toBe(true);
+    if (!again.ok) return;
+    expect(again.bill.invoiceId).toBe(billed.bill.invoiceId);
+    const { rows } = await admin.query(
+      "select b.id as booking_id, b.invoice_id, i.tenant_id, i.location_id, i.member_id, i.payer_kind, i.guest_name, i.total_paise::text from bookings b join invoices i on i.id=b.invoice_id and i.tenant_id=b.tenant_id where b.id=$1",
       [created.bookingId],
     );
-    expect(rows[0]!.invoice_id).toBeNull();
+    expect(rows).toEqual([expect.objectContaining({ booking_id: created.bookingId, invoice_id: billed.bill.invoiceId, tenant_id: tenant, location_id: loc, member_id: null, payer_kind: "guest", guest_name: "Walk-in Guest", total_paise: String(PRICE) })]);
+    const count = await admin.query<{ n: string }>("select count(*)::text n from invoices where tenant_id=$1 and payer_kind='guest' and guest_name=$2", [tenant, "Walk-in Guest"]);
+    expect(count.rows[0]?.n).toBe("1");
   });
 
   it("writes a booking.cancel audit row, and a cancelled booking cannot be billed", async () => {

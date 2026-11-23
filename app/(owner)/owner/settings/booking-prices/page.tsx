@@ -1,8 +1,15 @@
-import Link from "next/link";
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { listActivitiesAction } from "@/lib/actions/activities";
 import { listBookingPriceRulesAction } from "@/lib/actions/booking-price-admin";
+import { getTerminologyAction } from "@/lib/actions/terminology";
 import { BookingPriceManager } from "@/components/bookings/booking-price-manager";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { BackLink } from "@/components/ui/BackLink";
+import { SettingsPrerequisite } from "@/components/settings/settings-states";
 
 // Batch 6 — owner/admin configuration of the booking price catalogue.
 //
@@ -15,34 +22,41 @@ import { BookingPriceManager } from "@/components/bookings/booking-price-manager
 // holds `settings.read` but not `settings.manage`, so the front desk
 // can neither see nor change prices.
 
-export default async function BookingPricesPage() {
+export default async function BookingPricesPage({searchParams}: {searchParams?: Promise<{resource?:string; date?:string; slot?:string; facility?:string}>}) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
+  const selected = searchParams ? await searchParams : {};
+  const returnParams = new URLSearchParams();
+  for (const key of ["resource", "date", "slot", "facility"] as const) {
+    if (selected[key]) returnParams.set(key, selected[key]);
+  }
 
-  const [facilities, rules] = await Promise.all([
+  const [facilities, rules, terminology] = await Promise.all([
     listActivitiesAction(),
     listBookingPriceRulesAction(),
+    getTerminologyAction().then(ownerTerminology),
   ]);
 
+
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-ink-3">
-        <Link
-          href="/owner/settings"
-          className="hover:text-ink underline-offset-2 hover:underline"
-        >
-          Settings
-        </Link>
-        {" / "}
-        booking prices
-      </p>
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Booking prices
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        What a slot costs. A booking takes the price that matches its day
-        and time; a booking already taken keeps the price it was quoted.
-      </p>
+    <OwnerPage workflow="settings" className="max-w-2xl">
+      <BackLink href="/owner/settings" label="Settings" />
+      <PageHeader
+        title={<>Booking slot prices</>}
+        purpose={<>Set resource slot prices by day and time.</>}
+      />
+      {returnParams.has("resource") ? <Link href={`/owner/bookings?${returnParams}`} className="inline-flex min-h-11 items-center underline">Return to selected booking slot</Link> : null}
+      {/* Prices are attached to resources. Without one the catalogue looks
+          empty for a reason the owner can fix, so name that reason here. */}
+      {facilities.length === 0 ? (
+        <SettingsPrerequisite
+          title="No sports resources yet"
+          body="A booking price belongs to a resource. Add a pool, court or table first, then return here to price its slots."
+          actionLabel="Add sports resources"
+          actionHref="/owner/settings/activities"
+        />
+      ) : null}
       <div className="mt-5">
         <BookingPriceManager
           facilities={facilities.map((facility) => ({
@@ -51,8 +65,9 @@ export default async function BookingPricesPage() {
             locationName: facility.locationName,
           }))}
           rules={rules}
+          terminology={terminology}
         />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

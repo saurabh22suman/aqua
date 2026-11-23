@@ -100,6 +100,7 @@ beforeAll(async () => {
        ($2, $4, 'owner', 'Owner', '/owner', 1)`,
     [roleA, roleB, tenantA, tenantB],
   );
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'messaging.send'),($1,$2,'settings.manage'),($3,$4,'messaging.send'),($3,$4,'settings.manage')",[tenantA,roleA,tenantB,roleB]);
   await admin.query(
     `insert into tenant_memberships (id, tenant_id, user_id, role_id, status) values
        ($1, $2, $3, $4, 'active'),
@@ -129,6 +130,14 @@ afterAll(async () => {
   await client.pool.end().catch(() => {});
 });
 
+async function recipientIds(announcementId: string): Promise<string[]> {
+  const { rows } = await admin.query<{ user_id: string }>(
+    "select user_id from notifications where tenant_id=$1 and announcement_id=$2 order by user_id",
+    [tenantA, announcementId],
+  );
+  return rows.map(row => row.user_id);
+}
+
 describe("U-06 announcements and in-app notifications", () => {
   it("fans out `all` to memberships + member accounts + guardian accounts", async () => {
     const sent = await svc.sendAnnouncement(ctxA, {
@@ -139,6 +148,7 @@ describe("U-06 announcements and in-app notifications", () => {
     expect(sent.ok).toBe(true);
     if (!sent.ok) return;
     expect(sent.recipientCount).toBe(3);
+    expect(await recipientIds(sent.id)).toEqual([staffA, memberUser, guardianUser].sort());
 
     const mine = await svc.listMyNotifications(ctxA);
     expect(mine).toHaveLength(1);
@@ -154,7 +164,8 @@ describe("U-06 announcements and in-app notifications", () => {
     });
     expect(sent.ok).toBe(true);
     if (!sent.ok) return;
-    expect(sent.recipientCount).toBe(2);
+    expect(sent.recipientCount).toBe(3);
+    expect(await recipientIds(sent.id)).toEqual([staffA, memberUser, guardianUser].sort());
   });
 
   it("fans out `parents` to guardian accounts only", async () => {
@@ -166,6 +177,7 @@ describe("U-06 announcements and in-app notifications", () => {
     expect(sent.ok).toBe(true);
     if (!sent.ok) return;
     expect(sent.recipientCount).toBe(1);
+    expect(await recipientIds(sent.id)).toEqual([guardianUser]);
   });
 
   it("writes one audit row per send, carrying the recipient count", async () => {
@@ -219,7 +231,7 @@ describe("U-06 announcements and in-app notifications", () => {
       batchId: batchB,
     });
     expect(sent.ok).toBe(false);
-    if (!sent.ok) expect(sent.error).toMatch(/not found/i);
+    if (!sent.ok) expect(sent.error).toMatch(/not authorized/i);
   });
 
   it("refuses a batch audience without a batch id", async () => {

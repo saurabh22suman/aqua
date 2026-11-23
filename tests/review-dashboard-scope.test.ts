@@ -51,7 +51,7 @@ const restrictedAdmin: ReviewCtx = {
   roleKey: "admin",
   allLocations: false,
   locationIds: [locA],
-  permissions: new Set(["dashboard.view"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read"]),
 };
 
 const unrestrictedOwner: ReviewCtx = {
@@ -60,7 +60,7 @@ const unrestrictedOwner: ReviewCtx = {
   roleKey: "owner",
   allLocations: true,
   locationIds: [],
-  permissions: new Set(["dashboard.view"]),
+  permissions: new Set(["dashboard.view", "reports.financial", "invoices.read"]),
 };
 
 beforeAll(async () => {
@@ -89,6 +89,20 @@ beforeAll(async () => {
     "insert into users(id, phone) values ($1,'+919820700101'),($2,'+919820700102')",
     [adminUserId, ownerUserId],
   );
+  const { seedRoleTemplates } = await import("@/lib/services/roles");
+  await seedRoleTemplates(tenantId);
+  const adminMembershipId = randomUUID();
+  await admin.query(
+    `insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations)
+     select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='admin'`,
+    [adminMembershipId, tenantId, adminUserId],
+  );
+  await admin.query(
+    `insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations)
+     select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'`,
+    [randomUUID(), tenantId, ownerUserId],
+  );
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, adminMembershipId, locA]);
   await admin.query(
     "insert into programs(id,tenant_id,name) values($1,$2,'RD Program')",
     [programId, tenantId],
@@ -239,6 +253,7 @@ describe("review dashboard location scope (A07)", () => {
     );
 
     const ownerAll = await dashboard.getOwnerDashboard(unrestrictedOwner, {});
+    if (!ownerAll.money) throw new Error("Owner money must be available for this scope test");
     expect(ownerAll.money.collectedTodayPaise).toBe(150000);
     expect(ownerAll.money.collectedTodayCount).toBe(2);
     expect(ownerAll.money.outstandingPaise).toBe(350000);
@@ -248,6 +263,7 @@ describe("review dashboard location scope (A07)", () => {
     expect(ownerAll.needsAttention.some((item) => item.title === "Overdue fees")).toBe(true);
 
     const scopedA = await dashboard.getOwnerDashboard(restrictedAdmin, {});
+    if (!scopedA.money) throw new Error("Scoped money must be available for this scope test");
     expect(scopedA.money.collectedTodayPaise).toBe(100000);
     expect(scopedA.money.collectedTodayCount).toBe(1);
     expect(scopedA.money.outstandingPaise).toBe(100000);
@@ -264,6 +280,7 @@ describe("review dashboard location scope (A07)", () => {
     const scopedAtoB = await dashboard.getOwnerDashboard(restrictedAdmin, {
       locationId: locB,
     });
+    if (!scopedAtoB.money) throw new Error("Narrowed money must be available for this scope test");
     expect(scopedAtoB.money.collectedTodayPaise).toBe(0);
     expect(scopedAtoB.money.outstandingPaise).toBe(0);
     expect(scopedAtoB.money.overduePaise).toBe(0);
@@ -316,35 +333,46 @@ describe("review dashboard location scope (A07)", () => {
 // Owner Home composition, pinned as a source scan (the same shape the
 // repo's kpi-label-size and date-display-sweep guards use).
 //
-// Superseded 2026-10-25 by the approved owner redesign. The first
-// screen now leads with the figures (each label stating its basis),
-// then the one dominant shortcut, then the 60/40 workspace (today's
-// classes beside the exceptions), then the single trend panel. The
-// honesty contracts survive: the money figure is today's captured
-// total and says so, register state is never called attendance, and
-// the phantom "Today's facilities" heading stays gone.
-//
-// Owner Lavender B (27 October 2026): the screen opens with the day,
-// the academy and the scope, and the sections were split into the
-// components/owner-home/ modules. The scan follows the composition:
-// the ORDER is still read from the dashboard's own JSX (the block
-// markers below), and the wording guards read the file that owns the
-// wording.
+// 20 November 2026 — the approved workspace redesign settles the top of
+// the screen: "Club overview", then the two-card row (the deep financial
+// snapshot and the real priority), then the existing overview totals,
+// then the day's detail (the next session INSIDE the agenda and the real
+// collections trend), then the full attention queue. The honesty
+// contracts survive: the money figure is today's captured total and says
+// so, register state is never called attendance, and the phantom
+// "Today's facilities" heading stays gone.
 describe("owner Home composition and labels", () => {
-  it("leads with the context, then the summary, then the dominant action, then the workspace, then one trend panel", () => {
+  it("orders context, the two-card overview, the day's detail and the attention queue", () => {
     const src = readFileSync("components/owner-dashboard.tsx", "utf8");
     const context = src.indexOf("<OwnerHomeHeader");
-    const summary = src.indexOf("<OwnerHomeMetrics");
-    const action = src.indexOf("<OwnerHomeActions");
+    const snapshot = src.indexOf("<OwnerHomeFinancialSnapshot");
+    const priority = src.indexOf("courtside-workspace-priority");
+    const totals = src.indexOf("courtside-scoreline");
+    const agenda = src.indexOf("<OwnerHomeTimeline");
+    const nextSession = src.indexOf("<OwnerHomeNextSession");
+    const trend = src.indexOf("<OwnerHomeCollectionsTrend");
     const attention = src.indexOf("<OwnerHomeAttention");
-    const trend = src.indexOf("<OwnerHomeCharts");
     expect(context).toBeGreaterThan(-1);
-    expect(summary).toBeGreaterThan(context);
-    expect(action).toBeGreaterThan(summary);
-    expect(attention).toBeGreaterThan(action);
-    expect(trend).toBeGreaterThan(attention);
+    expect(snapshot).toBeGreaterThan(context);
+    expect(priority).toBeGreaterThan(snapshot);
+    expect(agenda).toBeGreaterThan(priority);
+    // The next session is the agenda's own lead, so it is written inside
+    // the timeline element: agenda first, then the next-session card.
+    expect(nextSession).toBeGreaterThan(agenda);
+    expect(trend).toBeGreaterThan(nextSession);
+    expect(totals).toBeGreaterThan(trend);
+    expect(attention).toBeGreaterThan(totals);
+    // The financial card only exists behind the existing finance grant,
+    // and its overdue drill-down uses the fees hub's overdue flag.
+    expect(src).toMatch(/can\.readFees \? \([\s\S]+?<OwnerHomeFinancialSnapshot/);
+    expect(src).toContain('scopeParams({ tab: "dues", overdue: "1" })');
     // The old gross-only label and the phantom facilities heading are gone.
-    expect(src).not.toContain("Payments recorded today");
+    const snapshotSrc = readFileSync(
+      "components/owner-home/owner-home-financial-snapshot.tsx",
+      "utf8",
+    );
+    expect(snapshotSrc).toContain("Payments recorded today");
+    expect(snapshotSrc).toContain("Outstanding now");
     expect(src).not.toContain("Today's facilities");
     // Completion is stated as marks recorded, never as attendance.
     const sessionState = readFileSync(

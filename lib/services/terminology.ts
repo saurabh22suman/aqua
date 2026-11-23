@@ -1,9 +1,10 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { tenants } from "@/db/schema/tenants";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asTenantId, type TenantId } from "@/lib/ids";
 import {
   DEFAULT_LOCALE,
@@ -117,7 +118,7 @@ export async function getTerminology(
 }
 
 export async function updateTermOverride(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: UpdateTermOverrideInput,
 ): Promise<UpdateTermOverrideResult> {
   const parsed = setInputSchema.safeParse(rawInput);
@@ -131,6 +132,9 @@ export async function updateTermOverride(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "invalid", message: "Only the academy owner can change this setting." };
+    }
     const current = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
     const keyOverrides: LocaleOverrides = {
       ...current.overrides[input.key],
@@ -190,7 +194,7 @@ export async function updateTermOverride(
 }
 
 export async function clearTermOverride(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   rawInput: { key: TermKey; locale: Locale },
 ): Promise<ClearTermOverrideResult> {
   const parsed = z
@@ -206,6 +210,9 @@ export async function clearTermOverride(
   const input = parsed.data;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "invalid", message: "Only the academy owner can change this setting." };
+    }
     const current = await readTerminologyFromTx(tx, asTenantId(ctx.tenantId));
     const previous = current.overrides[input.key]?.en ?? null;
     const next: TerminologyOverrides = { ...current.overrides };

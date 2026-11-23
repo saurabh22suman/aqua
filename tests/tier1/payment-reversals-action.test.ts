@@ -25,6 +25,7 @@ vi.mock("@/lib/services/payment-reversals", () => ({
 import { reversePaymentAction } from "@/lib/actions/payment-reversals";
 
 const PAYMENT_ID = "11111111-1111-7111-8111-111111111111";
+const OPERATION_KEY = "33333333-3333-7333-8333-333333333333";
 const ctx = { tenantId: "22222222-2222-7222-8222-222222222222", userId: "u1" };
 
 describe("reversePaymentAction (PR2-C8)", () => {
@@ -41,6 +42,16 @@ describe("reversePaymentAction (PR2-C8)", () => {
     expect(reversePayment).not.toHaveBeenCalled();
   });
 
+  it("rejects missing operation fields before authorization or service", async () => {
+    const base = { paymentId: PAYMENT_ID, amountPaise: 1000, reason: "Duplicate entry" };
+    for (const input of [base, { ...base, idempotencyKey: OPERATION_KEY }, { ...base, observedIntentId: null }]) {
+      expect((await reversePaymentAction(input)).ok).toBe(false);
+    }
+    expect(requireDefaultCtx).not.toHaveBeenCalled();
+    expect(requirePermission).not.toHaveBeenCalled();
+    expect(reversePayment).not.toHaveBeenCalled();
+  });
+
   it("requires payments.refund and forwards to the service", async () => {
     requireDefaultCtx.mockResolvedValue(ctx);
     reversePayment.mockResolvedValue({
@@ -53,6 +64,8 @@ describe("reversePaymentAction (PR2-C8)", () => {
       paymentId: PAYMENT_ID,
       amountPaise: 1000,
       reason: "Duplicate entry",
+      idempotencyKey: OPERATION_KEY,
+      observedIntentId: null,
     });
 
     expect(requirePermission).toHaveBeenCalledWith(ctx, "payments.refund");
@@ -60,6 +73,8 @@ describe("reversePaymentAction (PR2-C8)", () => {
       paymentId: PAYMENT_ID,
       amountPaise: 1000,
       reason: "Duplicate entry",
+      idempotencyKey: OPERATION_KEY,
+      observedIntentId: null,
     });
     expect(result.ok).toBe(true);
   });
@@ -75,6 +90,8 @@ describe("reversePaymentAction (PR2-C8)", () => {
         paymentId: PAYMENT_ID,
         amountPaise: 1000,
         reason: "Duplicate entry",
+        idempotencyKey: OPERATION_KEY,
+        observedIntentId: null,
       }),
     ).rejects.toThrow("Forbidden");
     expect(reversePayment).not.toHaveBeenCalled();

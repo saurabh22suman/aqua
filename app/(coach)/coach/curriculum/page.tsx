@@ -1,11 +1,16 @@
-import Link from "next/link";
-import { BookOpen } from "lucide-react";
 import { requireCoach } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
 import { listSkillLaddersAction } from "@/lib/actions/skill-ladder";
 import { SkillLadderManager } from "@/components/skill-ladder-manager";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BackLink } from "@/components/ui/BackLink";
+import { buttonClasses } from "@/components/ui/Button";
+import type { SkillLadderRow } from "@/lib/services/skill-ladder";
+import {
+  STAFF_CARD,
+  StaffPage,
+  StaffPageHeader,
+} from "@/components/staff-ui/staff-page";
 
 // R02 (2026-10-13 role-workflow audit) — the delegated curriculum
 // maintainer's editing surface. It lives on the coach surface because
@@ -17,52 +22,68 @@ import { BackLink } from "@/components/ui/BackLink";
 //
 // Scope statement: the framework is academy-wide; this page does not
 // imply per-activity isolation.
+//
+// finish/staff — a failed framework read is its own state. It used to
+// throw to the global error boundary; the page now says the curriculum
+// is unavailable and retries in place, without pretending the academy
+// has no ladder.
 export default async function CoachCurriculumPage() {
   const ctx = await requireCoach();
   const enabled = hasFeature(ctx, "swim.levels") && hasPermission(ctx, "levels.read");
-  const ladders = enabled ? await listSkillLaddersAction() : [];
+  let ladders: SkillLadderRow[] | null = [];
+  if (enabled) {
+    ladders = await listSkillLaddersAction().catch(() => null);
+  }
   const canEdit = hasPermission(ctx, "levels.write");
 
   return (
-    <main className="px-5 pt-6 pb-8">
+    <StaffPage>
       <BackLink href="/coach/me" label="Me" />
-      <h1 className="mt-2 flex items-center gap-2 font-display text-[19px] font-semibold">
-        <BookOpen size={18} className="text-ink-2" aria-hidden="true" />
-        Curriculum
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        The levels and skills coaches assess against, with the four-band
-        rubric.{" "}
-        {canEdit
-          ? "Changes are saved to the academy-wide framework and audited."
-          : "The owner can delegate editing to one curriculum lead."}
-      </p>
+      <StaffPageHeader
+        title="Curriculum"
+        meta={
+          canEdit
+            ? "The levels and skills coaches assess against, with the four-band rubric. Changes are saved to the academy-wide framework and audited."
+            : "The levels and skills coaches assess against, with the four-band rubric. Ask the owner if you should maintain the curriculum."
+        }
+      />
 
-      {enabled ? (
-        <SkillLadderManager ladders={ladders} canEdit={canEdit} />
-      ) : (
-        <div className="mt-4 rounded-card border border-line bg-paper">
+      {!enabled ? (
+        <div className={`mt-4 ${STAFF_CARD}`}>
           <EmptyState
             title="Skill ladders aren't enabled"
             body="This academy's plan doesn't include the skill-level module, so there is no ladder to view."
           />
         </div>
-      )}
-
-      {!canEdit ? (
-        <p className="mt-4 text-[12.5px] text-ink-3">
-          Read-only. Ask the owner if you should maintain the curriculum.
-        </p>
-      ) : null}
-
-      <div className="mt-6">
-        <Link
-          href="/coach/me"
-          className="text-[13px] text-ink-3 underline underline-offset-2"
+      ) : ladders === null ? (
+        <section
+          aria-labelledby="curriculum-unavailable"
+          className={`mt-4 p-4 ${STAFF_CARD}`}
+          data-testid="curriculum-unavailable"
         >
-          Back to Me
-        </Link>
-      </div>
-    </main>
+          <h2
+            id="curriculum-unavailable"
+            className="text-[15px] font-medium text-ink"
+          >
+            Curriculum unavailable
+          </h2>
+          <p role="alert" className="mt-1 text-[13px] leading-snug text-ink-2">
+            Could not load the curriculum. No changes were made.
+          </p>
+          <a
+            href="/coach/curriculum"
+            className={buttonClasses({
+              variant: "secondary",
+              size: "sm",
+              className: "mt-3",
+            })}
+          >
+            Retry curriculum
+          </a>
+        </section>
+      ) : (
+        <SkillLadderManager ladders={ladders} canEdit={canEdit} />
+      )}
+    </StaffPage>
   );
 }

@@ -6,7 +6,8 @@ import { z } from "zod";
 // to the URL (so links are shareable and server pages read it first).
 // Pages resolve `searchParams.facility` first, then the cookie.
 //
-// Only a well-formed UUID is ever accepted; data services combine the
+// An explicit "all" clears the filter; otherwise only a well-formed UUID
+// is accepted. Data services combine the
 // value with the standard O-08 location predicate, so a forged value
 // for a location the caller cannot see returns no rows rather than
 // widening access.
@@ -39,10 +40,25 @@ export function parseFacilityValue(value: string | null | undefined): string | u
   return parsed.success ? parsed.data : undefined;
 }
 
+/** Parse a requested filter, not an authorization decision. Invalid explicit values never fall back. */
+export function resolveRequestedFacility(input: {
+  facility?: string | null;
+  location?: string | null;
+  cookie?: string | null;
+}): { valid: boolean; facilityId: string | undefined } {
+  const value = input.facility ?? input.location ?? input.cookie;
+  if (value == null || value === "all" || (input.facility == null && input.location === "")) {
+    return { valid: true, facilityId: undefined };
+  }
+  const facilityId = parseFacilityValue(value);
+  return { valid: facilityId !== undefined, facilityId };
+}
+
 export function resolveFacilityValue(
   searchParam: string | null | undefined,
   cookieValue: string | null | undefined,
 ): string | undefined {
+  if (searchParam === "all") return undefined;
   return parseFacilityValue(searchParam) ?? parseFacilityValue(cookieValue);
 }
 
@@ -55,6 +71,7 @@ export const FACILITY_SCOPED_PATH_PREFIXES = [
   "/owner/members",
   "/owner/fees",
   "/owner/programs",
+  "/owner/bookings",
   "/owner/reports",
 ] as const;
 

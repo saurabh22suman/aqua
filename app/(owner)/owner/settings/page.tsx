@@ -1,361 +1,267 @@
-import Link from "next/link";
-import {
-  Award,
-  BellRing,
-  Building2,
-  CalendarOff,
-  ChevronRight,
-  ClipboardList,
-  CreditCard,
-  Dumbbell,
-  Languages,
-  ListChecks,
-  MapPin,
-  Megaphone,
-  Palette,
-  QrCode,
-  Receipt,
-  SlidersHorizontal,
-  Users,
-  Utensils,
-} from "lucide-react";
+import { requireLiveOwnerSettingsPage } from "@/lib/auth/owner-settings-page-guard";
+import { hasBookingEntitlement } from "@/lib/auth/booking-entitlement";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
+import ChevronLeft from "lucide-react/dist/esm/icons/chevron-left.mjs";
+import ListChecks from "lucide-react/dist/esm/icons/list-checks.mjs";
+import ChevronRight from "lucide-react/dist/esm/icons/chevron-right.mjs";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { ClubMark } from "@/components/branding/club-mark";
+import { OpenWorkspaceGuideLink } from "@/components/onboarding/guide-help-button";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { getOnboardingChecklistAction } from "@/lib/actions/onboarding-checklist";
 import { TenantSignOut } from "@/components/tenant-sign-out";
+import { StaffClubInstallLink } from "@/components/staff-club-install-link";
 import { listAdminLocationsAction } from "@/lib/actions/locations";
+import { withTenant } from "@/db/tenant";
+import { clubDisplayName } from "@/db/club-selection";
+import { getBranding } from "@/lib/services/branding";
+import { locationVisible, resolveLocationAccess } from "@/lib/services/location-access";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { readStaffWorkspaceRoles } from "@/lib/auth/workspace-roles";
 import { formatPhoneIN } from "@/lib/phone";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { WorkspaceRoleSwitch } from "@/components/settings/workspace-role-switch";
+import {
+  categoryIcon,
+  settingCategories,
+  SettingsSurfaceItems,
+  SettingsTaskSurface,
+} from "@/components/settings/settings-surfaces";
 
-// Owner UX audit (2026-10-24): Settings was fourteen equal-weight
-// links under one heading, with Configuration and the specialist
-// settings overlapping the groups above them. The owner had to read
-// fourteen rows to find opening hours.
-//
-// Settings is now a compact list of SIX categories, each with a
-// one-line summary, and opening a category shows only that category's
-// destinations. Every destination below is the EXISTING canonical edit
-// screen — no setting is re-implemented here, and nothing is exposed
-// that the academy does not actually support.
-//
-// F-23 — branding, terminology, staff and the onboarding checklist live
-// here. U-07 adds the locations + business-hours editor; the label
-// stays singular for a single-site tenant so the concept of multiple
-// locations never appears until one exists.
-// K2 — the Account block at the foot of the page: the bottom nav's 4th
-// slot is Settings (admin-y), not a "Me" tab, so the identity block
-// + sign-out lives here instead.
-
-type SettingItem = {
-  href: string;
-  label: string;
-  detail: string;
-  icon: typeof MapPin;
-  testId?: string;
-};
-
-type SettingCategory = {
-  key: string;
-  label: string;
-  summary: string;
-  items: SettingItem[];
-};
-
-// The category map. The order is the order an owner thinks in: what
-// the academy IS, what it TEACHES, what it COSTS, who WORKS there,
-// what it SAYS, and how it LOOKS.
-//
-// Two entries are gated at runtime, because the academy decides them:
-// the skill ladder is only offered when the module is on (V-09), and a
-// single-site tenant never sees the concept of multiple locations
-// (U-07).
-function categories(flags: { ladderEnabled: boolean; multiLocation: boolean }): SettingCategory[] {
-  return [
-  {
-    key: "academy",
-    label: "Academy",
-    summary: "Your profile, your sites, opening hours and closures.",
-    items: [
-      {
-        href: "/owner/settings/academy",
-        label: "Academy profile",
-        detail: "Name, currency, time zone and GSTIN for invoices.",
-        icon: Building2,
-      },
-      {
-        href: "/owner/settings/locations",
-        label: flags.multiLocation ? "Locations" : "Academy location",
-        detail: flags.multiLocation
-          ? "Every site, its address and its business hours."
-          : "Address and business hours for your academy.",
-        icon: MapPin,
-        testId: "settings-locations",
-      },
-      {
-        href: "/owner/settings/holidays",
-        label: "Holidays & closures",
-        detail: "Days the academy is closed, so no sessions are scheduled.",
-        icon: CalendarOff,
-      },
-    ],
-  },
-  {
-    key: "programs",
-    label: "Programs & facilities",
-    summary: "What you teach, the levels, and the batches you run.",
-    items: [
-      {
-        href: "/owner/settings/activities",
-        label: "Activities",
-        detail: "The sports and activities this academy offers.",
-        icon: Dumbbell,
-      },
-      ...(flags.ladderEnabled
-        ? [
-            {
-              href: "/owner/settings/skills",
-              label: "Skill ladder",
-              detail: "The levels swimmers move through, and their rubrics.",
-              icon: Award,
-            },
-          ]
-        : []),
-      {
-        href: "/owner/programs",
-        label: "Programs & batches",
-        detail: "Create the programs you run and the batches inside them.",
-        icon: ClipboardList,
-      },
-    ],
-  },
-  {
-    key: "fees",
-    label: "Fees & payments",
-    summary: "What you charge, how you take it, and what the counter sells.",
-    items: [
-      {
-        href: "/owner/settings/plans",
-        label: "Membership plans",
-        detail: "The priced plans a member can subscribe to.",
-        icon: CreditCard,
-      },
-      {
-        href: "/owner/settings/payment-qrs",
-        label: "Payment QR codes",
-        detail: "The QR a parent scans to pay.",
-        icon: QrCode,
-      },
-      {
-        href: "/owner/settings/menu",
-        label: "Café menu",
-        detail: "What the counter sells, and what it costs.",
-        icon: Utensils,
-      },
-    ],
-  },
-  {
-    key: "team",
-    label: "Team & access",
-    summary: "Who works here, and what each of them can do.",
-    items: [
-      {
-        href: "/owner/staff",
-        label: "Staff",
-        detail: "Coaches, reception and the access each role has.",
-        icon: Users,
-      },
-    ],
-  },
-  {
-    key: "communications",
-    label: "Communications",
-    summary: "Who gets told what, and when.",
-    items: [
-      {
-        href: "/owner/settings/alerts",
-        label: "Absence alerts",
-        detail: "When coaches and parents should be told about missed sessions.",
-        icon: BellRing,
-      },
-      {
-        href: "/owner/announcements",
-        label: "Announcements",
-        detail: "Write and send a message to members and guardians.",
-        icon: Megaphone,
-      },
-    ],
-  },
-  {
-    key: "appearance",
-    label: "Appearance & advanced",
-    summary: "Branding, the words you use, and platform-level changes.",
-    items: [
-      {
-        href: "/owner/settings/branding",
-        label: "Branding",
-        detail: "Your name, mark and accent colour.",
-        icon: Palette,
-      },
-      {
-        href: "/owner/settings/terminology",
-        label: "Vocabulary",
-        detail: "What you call members, sessions and facilities.",
-        icon: Languages,
-      },
-      {
-        href: "/owner/settings/configuration",
-        label: "Configuration requests",
-        detail: "Ask the platform to change a setting it owns.",
-        icon: SlidersHorizontal,
-      },
-    ],
-  },
-  ];
-}
+// Club identity, scoped facilities and personal choices are separate tasks.
+// Existing category deep links and each destination's server guard remain intact.
 
 export default async function Page({
   searchParams,
 }: {
-  searchParams?: Promise<{ category?: string }>;
+  searchParams?: Promise<{ category?: string; q?: string }>;
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "settings.manage");
+  await requireLiveOwnerSettingsPage(ctx);
 
   const params = searchParams ? await searchParams : {};
 
   // V-09 — the ladder editor is only offered when the module is on.
   const ladderEnabled = ctx.features.has("swim.levels");
-  const identity = await getCurrentStaffIdentity(ctx);
+  const [identity, roleOptions] = await Promise.all([
+    getCurrentStaffIdentity(ctx),
+    readStaffWorkspaceRoles(ctx).catch(() => undefined),
+  ]);
   // U-07 — a single-location tenant never sees the concept of multiple
   // sites: the label stays singular until a second location exists.
-  // The page itself is still reachable, because adding that second
-  // location is the only way the concept ever becomes real.
-  const locations = await listAdminLocationsAction();
+  const [allLocations, branding] = await Promise.all([listAdminLocationsAction(), getBranding(ctx).catch(() => null)]);
+  const locations = ctx.allLocations !== false ? allLocations : await withTenant(ctx.tenantId, async (tx) => {
+    const access = await resolveLocationAccess(tx, ctx);
+    return allLocations.filter((location) => locationVisible(access, location.id));
+  });
   const multiLocation = locations.length > 1;
-  // W1-6 continuation — the checklist is a first-run aid, so it is
-  // gone from every owner surface once complete: no dashboard tile,
-  // no Settings row. The /owner/onboarding page stays live for anyone
-  // who types the URL or is sent there by support.
+  // Completed setup is reachable from Help. Incomplete setup stays visible.
   const checklist = await getOnboardingChecklistAction().catch(() => null);
-  const setupComplete = checklist ? checklist.items.every((item) => item.complete) : false;
+  const hasChecklist = checklist !== null && checklist.items.length > 0;
+  const fullChecklist = hasChecklist && !checklist.scopeIsLimited && checklist.totalCount === 3 && checklist.items.length === 3 &&
+    ["add_members", "create_batch", "assign_coach"].every((key) => checklist.items.some((item) => item.key === key));
+  const setupComplete = fullChecklist && checklist.items.every((item) => item.complete);
 
-  const CATEGORIES = categories({ ladderEnabled, multiLocation });
-  const active = CATEGORIES.find((c) => c.key === params.category);
+  const destinationPermissions: Readonly<Record<string, readonly string[]>> = {
+    "/owner/programs": ["programs.read"],
+    "/owner/staff": ["staff.read"],
+    "/owner/staff/invitations": ["staff.invite"],
+    "/owner/bookings": ["bookings.read", "members.read"],
+    "/owner/settings/academy": ["settings.read"],
+    "/owner/settings/locations": ["settings.read"],
+    "/owner/settings/activities": ["settings.read", "members.read"],
+    "/owner/settings/plans": ["settings.read", "members.read"],
+    "/owner/settings/menu": ["settings.read", "members.read"],
+    "/owner/settings/booking-prices": ["settings.read"],
+    "/owner/settings/payment-qrs": ["settings.read"],
+    "/owner/settings/skills": ["levels.read"],
+    "/owner/settings/workspace": ["dashboard.view"],
+    "/owner/settings/reports": ["reports.operational"],
+  };
+  const CATEGORIES = settingCategories({
+    ladderEnabled,
+    multiLocation,
+    // The booking desk needs bookings.read AND the pool.booking
+    // entitlement; without either the route does not exist for the
+    // caller, so the link is withheld rather than offered and broken.
+    canReadBookings:
+      ctx.permissions.has("bookings.read") && hasBookingEntitlement(ctx.features),
+  }).map((category) => ({
+    ...category,
+    items: category.items.filter((item) => {
+      const permissions = destinationPermissions[item.href] ?? [];
+      return permissions.every((permission) => ctx.permissions.has(permission)) &&
+        (!["/owner/settings/workspace", "/owner/settings/reports"].includes(item.href) || ctx.features.has("reports"));
+    }),
+  })).filter((category) => category.items.length > 0);
+  const category = params.category === "communications" ? "academy" : params.category;
+  const active = CATEGORIES.find((candidate) => candidate.key === category);
+  const searchQuery = typeof params.q === "string" ? params.q.trim().slice(0, 100) : "";
+  const searchTerms = searchQuery.toLocaleLowerCase().split(/\s+/);
+  const matchingItems = searchQuery ? CATEGORIES.flatMap(category => category.items).filter(item => {
+    const reference = `${item.label} ${item.detail ?? ""}`.toLocaleLowerCase();
+    return searchTerms.every(term => reference.includes(term));
+  }) : [];
+  const groups = [
+    { label: "Business administration", categories: CATEGORIES.filter((category) => category.key !== "appearance") },
+    { label: "Personal preferences", categories: CATEGORIES.filter((category) => category.key === "appearance") },
+  ];
 
   return (
-    <main className="px-5 pt-6 pb-8 max-w-2xl">
+    <OwnerPage workflow="settings">
       {active ? (
         <Link
           href="/owner/settings"
-          className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink-2"
+          className="inline-flex min-h-11 items-center gap-1.5 text-[13px] font-medium text-ink-2"
         >
-          <ChevronRight size={14} className="rotate-180 text-ink-3" aria-hidden="true" />
+          <ChevronLeft size={16} className="text-ink-3" aria-hidden="true" />
           Settings
         </Link>
       ) : null}
 
-      <h1 className="font-display text-[19px] font-semibold mt-2">
-        {active ? active.label : "Settings"}
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        {active
-          ? active.summary
-          : setupComplete
-            ? "Everything you can change about the academy, grouped by what you are doing."
-            : "Everything you can change about the academy, grouped by what you are doing."}
-      </p>
+      <OwnerDesignHeading
+        title={active ? active.label : "Settings"}
+        purpose={active ? active.summary : "Your business account, clubs and preferences"}
+        className="mt-1"
+      />
 
-      {!setupComplete ? (
-        <>
-          <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Setup</h2>
+      {!active ? <form action="/owner/settings" className="owner-work-panel flex flex-wrap items-end gap-2">
+        <label htmlFor="settings-search" className="grid min-w-0 flex-1 basis-48 gap-1 text-[13px] font-medium text-ink">
+          Search settings
+          <input id="settings-search" name="q" type="search" defaultValue={searchQuery} maxLength={100}
+            className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px]" />
+        </label>
+        <button type="submit" className="min-h-11 rounded-ctl bg-[var(--action-surface)] px-4 text-sm font-medium text-[var(--action-foreground)]">Find settings</button>
+      </form> : null}
+
+      {!active && !searchQuery ? <>
+        <section aria-label="Business account" className="flex min-w-0 flex-wrap items-center gap-3 rounded-[18px] border border-line bg-paper p-[18px] lg:p-5">
+          {branding ? <ClubMark name={clubDisplayName(branding.fallbackDisplayName, branding)} logoUrl={branding.logoUrl} accent={branding.accent} size={44} /> : null}
+          <div className="min-w-0 flex-1"><p className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-2">Business account</p>
+            <p className="mt-1 break-words font-display text-[18px] font-semibold">{branding ? clubDisplayName(branding.fallbackDisplayName, branding) : "Business account unavailable"}</p>
+            <p className="mt-1 text-[12px] text-ink-2">{locations.length} {locations.length === 1 ? "club" : "clubs"}</p>
+          </div>
+          {branding ? <Link href="/owner/settings/academy" className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)]">Manage</Link> : <Link href="/owner/settings" className="inline-flex min-h-11 items-center text-[13px] text-[var(--accent-ink)] underline">Retry business account</Link>}
+        </section>
+        <section className="mt-5" aria-labelledby="facility-settings-heading">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id="facility-settings-heading" className="font-display text-[18px] font-semibold">Club settings</h2>
+            {/* The overview cards open one club; this keeps the place where
+                clubs are added or given their address and hours reachable
+                without a detour through a club's financial page. */}
+            <Link
+              href="/owner/settings/locations"
+              className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2"
+            >
+              {locations.length === 1 ? "Manage club" : "Manage clubs"}
+            </Link>
+          </div>
+          {locations.length ? <ul className="mt-3 grid gap-3 lg:grid-cols-2">
+            {locations.map((location) => <li key={location.id}>
+              <Link href={`/owner/settings/locations/${location.id}`} aria-label={`Club: ${location.name}`} className="flex min-h-11 items-center gap-3 rounded-[18px] border border-line bg-paper p-[18px] focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-[var(--focus-ring)] lg:p-5">
+                <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-ink)]"><OwnerIcon name="pin" size={20} /></span><span className="min-w-0 flex-1 break-words text-[14px] font-medium">{location.name}</span><ChevronRight size={18} aria-hidden="true" />
+              </Link>
+            </li>)}
+          </ul> : <p className="mt-2 text-[13px] text-ink-2">No clubs available to you.</p>}
+        </section>
+      </> : null}
+
+      {hasChecklist && !setupComplete && !searchQuery ? (
+        <div className="mt-5">
           <Link
             href="/owner/onboarding"
-            className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3 mb-2"
+            className="flex items-center gap-3 rounded-card border border-line bg-paper px-5 py-4"
             data-testid="settings-onboarding"
           >
-            <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-warn-soft text-warn">
-              <ListChecks size={16} strokeWidth={2} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-medium leading-tight">
-                Onboarding checklist
-              </p>
-              <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-                See what&apos;s left before members and coaches are ready to go.
-              </p>
-            </div>
-            <ChevronRight size={18} className="text-ink-3 flex-none" />
+            <span className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-warn-soft text-warn">
+              <ListChecks size={16} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[14px] font-medium leading-tight">
+                {fullChecklist ? "Onboarding checklist" : "Available register checks"}
+              </span>
+              <span className="mt-0.5 block text-[12px] leading-tight text-ink-3">
+                {fullChecklist ? "See what's left before members and coaches are ready to go." : "Review the checks available to you."}
+              </span>
+            </span>
+            <span className="flex-none text-[13px] text-ink-3">Open</span>
           </Link>
-        </>
+        </div>
       ) : null}
 
       {active ? (
-        // One category at a time — the audit's "open one category at a
-        // time, rather than showing every form together".
-        <ul className="mt-5">
-          {active.items.map((item) => (
-            <li key={item.href} className="mb-2">
-              <Link
-                href={item.href}
-                className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3"
-                data-testid={item.testId}
-              >
-                <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
-                  <item.icon size={16} strokeWidth={2} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium leading-tight">{item.label}</p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">{item.detail}</p>
-                </div>
-                <ChevronRight size={18} className="text-ink-3 flex-none" />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-5">
+          <SettingsTaskSurface
+            title={active.label}
+            icon={categoryIcon(active.key)}
+          >
+            <SettingsSurfaceItems items={active.items} />
+          </SettingsTaskSurface>
+        </div>
+      ) : searchQuery ? (
+        <section aria-label="Settings results" className="mt-4 rounded-card border border-line bg-paper p-4">
+          <SectionHeading title="Matching settings" trailing={<Link href="/owner/settings" className="inline-flex min-h-11 items-center text-sm text-[var(--accent-ink)] underline">Clear search</Link>} />
+          {matchingItems.length ? <SettingsSurfaceItems items={matchingItems} /> : <p className="mt-2 text-sm text-ink-2">No settings match “{searchQuery}”.</p>}
+        </section>
       ) : (
-        <ul className="mt-5">
-          {CATEGORIES.map((category) => (
-            <li key={category.key} className="mb-2">
-              <Link
-                href={`/owner/settings?category=${category.key}`}
-                className="flex items-center gap-3 bg-paper border border-line rounded-ctl px-3.5 min-h-[56px] py-3"
-                data-testid={`settings-category-${category.key}`}
-              >
-                <div className="h-9 w-9 rounded-[11px] grid place-items-center flex-none bg-water-soft text-water">
-                  {category.key === "academy" ? (
-                    <Building2 size={16} strokeWidth={2} />
-                  ) : category.key === "programs" ? (
-                    <ClipboardList size={16} strokeWidth={2} />
-                  ) : category.key === "fees" ? (
-                    <Receipt size={16} strokeWidth={2} />
-                  ) : category.key === "team" ? (
-                    <Users size={16} strokeWidth={2} />
-                  ) : category.key === "communications" ? (
-                    <Megaphone size={16} strokeWidth={2} />
-                  ) : (
-                    <Palette size={16} strokeWidth={2} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-medium leading-tight">{category.label}</p>
-                  <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">{category.summary}</p>
-                </div>
-                <ChevronRight size={18} className="text-ink-3 flex-none" />
-              </Link>
-            </li>
+        <div className="mt-5 grid items-start gap-4 lg:grid-cols-2">
+          {groups.map((group) => (
+            <section key={group.label} className="min-w-0"><h2 className="font-display text-[18px] font-semibold">{group.label}</h2><div className="mt-3 overflow-hidden rounded-[18px] border border-line bg-paper px-[18px]">
+          {group.label === "Personal preferences" ? group.categories.flatMap((category) => category.items).map((item) => (
+            <Link key={item.href} href={item.href} aria-label={`Open ${item.label}`} className="flex min-h-11 items-center gap-3 border-b border-line py-3 hover:bg-deck focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
+              <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-ink)]"><OwnerIcon name={item.href === "/owner/settings/appearance" ? "settings" : "reports"} size={20} /></span>
+              <span className="min-w-0 flex-1"><span className="block text-[14px] font-medium text-ink">{item.label}</span><span className="mt-1 block text-[12px] leading-snug text-ink-3">{item.detail}</span></span>
+              <ChevronRight size={18} className="flex-none text-ink-3" aria-hidden="true" />
+            </Link>
+          )) : group.categories.map((category) => (
+            <Link key={category.key} href={`/owner/settings?category=${category.key}`}
+              aria-label={`Open ${category.label} settings`}
+              className="flex min-h-11 min-w-0 items-center gap-3 border-b border-line py-3 last:border-0 hover:bg-deck focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]">
+              {categoryIcon(category.key) ? <span className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-[var(--accent-soft)] text-[var(--accent-ink)]"><OwnerIcon name={categoryIcon(category.key)!} size={20} /></span> : null}
+              <span className="min-w-0 flex-1">
+                <span className="block break-words font-display text-[15px] font-semibold">{category.label}</span>
+                <span className="mt-1 block text-[12px] text-ink-2">{category.summary}</span>
+              </span>
+              <ChevronRight size={18} className="flex-none text-ink-3" aria-hidden="true" />
+            </Link>
           ))}
-        </ul>
+          </div></section>))}
+        </div>
       )}
 
-      <h2 className="font-display text-[15px] font-semibold mt-7 mb-2.5">Account</h2>
-      <section className="rounded-card border border-line bg-paper p-4">
-        <p className="font-display text-[14px] font-semibold">
-          {identity?.fullName ?? "Signed in"}
-        </p>
-        <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
-        </p>
+      {setupComplete || ctx.permissions.has("dashboard.view") ? (
+        <details className="mt-5 rounded-card border border-line bg-paper px-5">
+          <summary className="min-h-11 cursor-pointer py-3 font-medium text-ink">Help</summary>
+          <div className="flex flex-wrap gap-x-5 border-t border-line pb-2">
+            {ctx.permissions.has("dashboard.view") ? <OpenWorkspaceGuideLink homeHref="/owner" /> : null}
+            {setupComplete ? (
+              <Link href="/owner/onboarding" className="inline-flex min-h-11 items-center text-[13px] font-medium text-[var(--accent-ink)] underline underline-offset-2">
+                Review completed setup
+              </Link>
+            ) : null}
+          </div>
+        </details>
+      ) : null}
+
+      <section aria-label="Your account" className="mt-5 rounded-card border border-line bg-paper p-5">
+        <SectionHeading title="Your account" />
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3.5">
+          <div className="min-w-0">
+            <p className="text-[14px] font-medium leading-snug">
+              {identity?.fullName ?? "Signed in"}
+            </p>
+            <p className="mt-0.5 font-mono text-[12.5px] text-ink-3">
+              {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
+            </p>
+          </div>
+          <TenantSignOut showClubSwitch={roleOptions?.showBusinessSwitch ?? false} />
+        </div>
+        <WorkspaceRoleSwitch options={roleOptions} settingsHref="/owner/settings" className="mt-3" />
+        <StaffClubInstallLink tenantId={ctx.tenantId} />
       </section>
-      <TenantSignOut className="mt-3" />
-    </main>
+    </OwnerPage>
   );
 }

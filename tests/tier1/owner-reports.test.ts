@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { withTenant } from "@/db/tenant";
 import { locations, programs, enquiries, members, batches } from "@/db/schema";
 import { sessions, attendance } from "@/db/schema/scheduling";
@@ -20,7 +21,6 @@ import {
   asUserId,
   asMemberId,
   type TenantId,
-  type UserId,
 } from "@/lib/ids";
 
 // Phase 4 — owner reports service tests. TDD; the action + UI
@@ -33,9 +33,10 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] });
 let locationId = "";
 let programId = "";
 
@@ -48,6 +49,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Reports Test', $3, $4)",
     [tenantId, `reports-${RUN}`, plan?.id ?? null, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
+
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -82,7 +88,11 @@ afterAll(async () => {
     await admin.query("delete from programs where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
@@ -110,7 +120,7 @@ describe("getAttendanceReport (Phase 4.3)", () => {
         endTime: "07:00",
       }).returning(),
     );
-    await enrolMember({ tenantId }, { memberId, batchId: batchRow.id });
+    await enrolMember(actor(), { memberId, batchId: batchRow.id });
     const today = todayInZone(TZ);
     const [sessionRow] = await withTenant(tenantId, async (tx) =>
       tx.insert(sessions).values({
@@ -132,7 +142,7 @@ describe("getAttendanceReport (Phase 4.3)", () => {
     );
 
     const period = defaultMonthPeriod(TZ);
-    const rows = await getAttendanceReport({ tenantId }, period);
+    const rows = await getAttendanceReport(actor(), period);
     const mine = rows.find((r) => r.batchId === batchRow.id);
     expect(mine?.sessionCount).toBe(1);
     expect(mine?.totalMarks).toBe(1);
@@ -160,7 +170,7 @@ describe("getEnquiryFunnel (Phase 4.4)", () => {
     );
 
     const period = defaultMonthPeriod(TZ);
-    const rows = await getEnquiryFunnel({ tenantId }, period);
+    const rows = await getEnquiryFunnel(actor(), period);
     const walkIn = rows.find((r) => r.source === "walk-in");
     const online = rows.find((r) => r.source === "online");
     expect(walkIn?.total).toBe(2);
@@ -177,7 +187,7 @@ describe("getRetentionView (Phase 4.5)", () => {
   it("returns aggregate numbers only — never a per-member list", async () => {
     await seedMember(`r-${RUN}-ret1`);
     await seedMember(`r-${RUN}-ret2`);
-    const row = await getRetentionView({ tenantId });
+    const row = await getRetentionView(actor());
     expect(row.memberCountAtRisk).toBeGreaterThanOrEqual(0);
     expect(row.totalActiveMembers).toBeGreaterThanOrEqual(0);
     expect(row.membersWithZeroLast30).toBeGreaterThanOrEqual(0);
@@ -199,7 +209,7 @@ describe("getCoachLoad (Phase 4.6)", () => {
     // The seeded environment may have existing batches without
     // coaches; an empty list is therefore fine. When sessions
     // exist with a coach assigned, the row appears.
-    const rows = await getCoachLoad({ tenantId }, defaultMonthPeriod(TZ));
+    const rows = await getCoachLoad(actor(), defaultMonthPeriod(TZ));
     expect(rows.every((r) => r.coachStaffId !== "")).toBe(true);
   });
 });
@@ -254,7 +264,7 @@ import { todayInZone } from "@/lib/time/tz";
 
 async function seedMember(label: string): Promise<string> {
   const result = await createMember(
-    { tenantId, userId: SYSTEM_USER },
+    actor(),
     {
       fullName: `Member ${label}`,
       dateOfBirth: "1990-01-01",

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { tenantIsOperational } from "@/db/tenant-availability";
 import { withTenant } from "@/db/tenant";
 import { attendance, sessions } from "@/db/schema/scheduling";
 import { batches } from "@/db/schema/programs";
@@ -129,6 +130,7 @@ export async function getParentViewData(args: {
   monthEnd: string;
 }): Promise<ParentViewData | null> {
   return withTenant(args.tenantId, async (tx) => {
+    if (!await tenantIsOperational(tx, args.tenantId)) return null;
     const [child] = await tx
       .select({
         id: members.id,

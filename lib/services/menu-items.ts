@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
@@ -14,7 +15,7 @@ import {
   updateItemInput,
   uuid,
 } from "@/lib/services/menu-core";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import type { MenuMutationResult } from "@/lib/services/menu-core";
 
 // K-01 — menu item mutations. See lib/services/menu.ts for the
@@ -26,7 +27,7 @@ function nameFilter(name: string) {
 }
 
 export async function createMenuItem(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = itemInput.safeParse(raw);
@@ -35,6 +36,9 @@ export async function createMenuItem(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const categoryRows = await tx
       .select()
@@ -121,7 +125,7 @@ export async function createMenuItem(
 }
 
 export async function updateMenuItem(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = updateItemInput.safeParse(raw);
@@ -130,6 +134,9 @@ export async function updateMenuItem(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()
@@ -230,7 +237,7 @@ export async function updateMenuItem(
 }
 
 export async function archiveMenuItem(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<MenuMutationResult> {
   const parsed = z.object({ itemId: uuid }).safeParse(raw);
@@ -238,6 +245,9 @@ export async function archiveMenuItem(
   if (!ctx.userId) return { ok: false, error: "Not authenticated." };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const rows = await tx
       .select()

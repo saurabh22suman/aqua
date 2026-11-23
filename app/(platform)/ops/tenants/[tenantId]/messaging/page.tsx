@@ -1,10 +1,14 @@
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { platformAuthStatusAction } from "@/lib/actions/platform-auth";
 import { getTenantHeader } from "@/db/platform-tenants";
 import { getTenantMessagingSummary } from "@/db/platform-tenant-messaging";
 import { asTenantId } from "@/lib/ids";
-import { requireUuidParam } from "@/lib/params";
-import { SectionHeader, DescriptionRow, DATETIME_FMT } from "../tenant-detail-shared";
+import { runOpsRead } from "@/lib/auth/ops-operation";
+import { DescriptionRow, DATETIME_FMT } from "../tenant-detail-shared";
+import { OpsPageHeader, OpsCardFlush, OpsPanel, OpsTextLink } from "@/components/ops/ops-primitives";
+
+export const metadata: Metadata = { title: "Tenant messaging" };
 
 const PROVIDER_LABEL: Record<string, string> = {
   mock: "Non-production mock",
@@ -15,9 +19,15 @@ const PROVIDER_LABEL: Record<string, string> = {
 // WhatsApp connection state. C-40a ships a provider abstraction with
 // a non-production mock; there is no per-tenant WABA onboarding
 // record yet (that lands with C-40's real Cloud API adapter), so
-// "connected" here means "has sent at least one message" via
+// "connected" here means "an outbound attempt has been logged" via
 // whichever provider actually handled it — not a stored connection
 // flag, because no such flag exists to read.
+//
+// Ops redesign (28 October 2026): the page shows ONLY the data that
+// exists. It does not invent a provider connection, a message count
+// the platform does not have, or a credential state. The panel says
+// what "connected" actually means here, so an operator does not read
+// a live metric that is really a proxy.
 export default async function TenantMessagingPage({
   params,
 }: {
@@ -27,39 +37,56 @@ export default async function TenantMessagingPage({
   if (auth.kind !== "authenticated") redirect("/ops/login");
 
   const { tenantId } = await params;
-  requireUuidParam(tenantId);
-  const header = await getTenantHeader(asTenantId(tenantId));
-  if (!header) notFound();
-  const summary = await getTenantMessagingSummary(header.id);
+  // ONE operation for this page: the header is read INSIDE the summary
+  // boundary, so the page does not emit a second `tenant.header` row on top
+  // of the shared layout's header operation. No new union name.
+  const summary = await runOpsRead(
+    "tenant.messaging.summary",
+    tenantId,
+    async () => {
+      const header = await getTenantHeader(asTenantId(tenantId));
+      if (!header) return null;
+      return getTenantMessagingSummary(header.id);
+    },
+    "ops_page",
+  );
+  if (!summary) notFound();
 
   return (
     <section>
-      <SectionHeader
-        title="Messaging"
-        subtitle="WhatsApp connection state for this tenant. No credentials or message content are shown here."
-      />
-      <div className="rounded-card bg-paper border border-line overflow-hidden">
+      <OpsPageHeader title="Messaging" lede="Outbound attempts for this tenant." />
+      <OpsCardFlush className="mt-3">
         <DescriptionRow
-          label="Provider"
+          label="Last observed provider"
           value={
             summary.provider
               ? (PROVIDER_LABEL[summary.provider] ?? summary.provider)
-              : "Not connected — no messages sent yet"
+              : "No outbound attempts yet"
           }
         />
         <DescriptionRow
-          label="Last message sent"
-          value={summary.lastSentAt ? DATETIME_FMT.format(summary.lastSentAt) : "—"}
+          label="Last outbound attempt"
+          value={summary.lastSentAt ? `${DATETIME_FMT.format(summary.lastSentAt)} IST` : "—"}
         />
         <DescriptionRow
-          label="Sent, last 7 days"
+          label="Outbound attempts, last 7 days"
           value={String(summary.sentCount7d)}
         />
         <DescriptionRow
           label="Failed, last 7 days"
           value={String(summary.failedCount7d)}
         />
-      </div>
+      </OpsCardFlush>
+      {auth.role === "admin" && summary.failedCount7d > 0 ? (
+        <div className="mt-3">
+          <OpsTextLink href="/ops/recovery#failed-sends">Review platform failed sends</OpsTextLink>
+        </div>
+      ) : null}
+      <OpsPanel tone="warn" className="mt-4" title="Provider connection is not verified here">
+        There is no per-tenant WhatsApp account record yet, so this panel does
+        not read a stored connection flag. It reports whichever provider
+        actually handled the traffic.
+      </OpsPanel>
     </section>
   );
 }

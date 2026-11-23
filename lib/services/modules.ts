@@ -12,7 +12,7 @@ import {
   normalizeCapabilities,
   type ActivityTypeCapabilities,
 } from "@/lib/services/activity-types";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // M-04/M-05 — the module registry service. `modules` is the platform
 // catalogue (read through db/platform-modules.ts); `tenant_modules` is
@@ -124,7 +124,7 @@ export async function listModulesForTenant(
 }
 
 export async function registerTenantModule(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   moduleKey: string,
 ): Promise<RegisterModuleResult> {
   const record = await getModuleRecord(moduleKey);
@@ -169,7 +169,7 @@ export type ModuleApplyOptions = { additive?: boolean };
 // DIFFERENT version is refused — version changes are explicit
 // (upgradeModule), never an implicit side effect of apply.
 export async function applyModule(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   moduleKey: string,
   options: ModuleApplyOptions = {},
 ): Promise<ModuleMutationResult> {
@@ -224,7 +224,7 @@ export async function applyModule(
 }
 
 export async function upgradeModule(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   moduleKey: string,
   version: number,
   options: ModuleApplyOptions = {},

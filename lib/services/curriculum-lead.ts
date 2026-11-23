@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, eq, isNull } from "drizzle-orm";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { staff } from "@/db/schema/staff";
@@ -5,7 +6,7 @@ import { membershipLocations, tenantMemberships } from "@/db/schema/memberships"
 import { roles } from "@/db/schema/roles";
 import { locations } from "@/db/schema/locations";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { asStaffId } from "@/lib/ids";
 
 // R02 (2026-10-13 role-workflow audit) — delegated curriculum
@@ -46,7 +47,9 @@ export type CurriculumLeadResult =
         | "no_login"
         | "membership_inactive"
         | "role_missing"
-        | "not_delegatable";
+        | "not_delegatable"
+        | "owner_required"
+        | "uncertain";
       message: string;
     };
 
@@ -159,11 +162,15 @@ export async function getCurriculumLeadState(
 }
 
 export async function setCurriculumLead(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   staffId: string,
   enabled: boolean,
 ): Promise<CurriculumLeadResult> {
-  return withTenant(ctx.tenantId, async (tx) => {
+  try {
+  return await withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { kind: "error", code: "owner_required", message: "Only the academy owner can delegate curriculum access." };
+    }
     const target = await loadDelegationTarget(tx, ctx.tenantId, staffId);
     if (!target) {
       return { kind: "error", code: "not_found", message: "Staff member not found." };
@@ -234,4 +241,7 @@ export async function setCurriculumLead(
 
     return { kind: "ok", isLead: enabled };
   });
+  } catch {
+    return { kind: "error", code: "uncertain", message: "Could not confirm the change. Refresh and check the staff record before trying again." };
+  }
 }

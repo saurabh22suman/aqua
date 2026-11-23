@@ -1,9 +1,14 @@
-import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant } from "@/db/tenant";
 import { payments } from "@/db/schema/payments";
 import { paymentReversals } from "@/db/schema/payment-reversals";
-import { invoices, type InvoiceStatus, type InvoiceSource } from "@/db/schema/invoices";
+import {
+  invoices,
+  type InvoiceStatus,
+  type InvoiceSource,
+  type InvoicePayerKind,
+} from "@/db/schema/invoices";
 import { members, persons } from "@/db/schema/people";
 import { locations } from "@/db/schema/locations";
 import { tenants } from "@/db/schema/tenants";
@@ -19,6 +24,8 @@ import {
   methodsForGroup,
 } from "@/lib/money/payment-groups";
 import type { PaymentMethod } from "@/db/schema/payments";
+import { asCollectionHold, type CollectionHold } from "@/lib/collection-hold";
+import { invoiceCollectionHoldSql } from "@/lib/services/collection-eligibility";
 
 // U-02 — the Fees & Payments hub reads. This is one place over the
 // existing C-29…C-39 spine: an overview (collected / outstanding), a
@@ -28,6 +35,13 @@ import type { PaymentMethod } from "@/db/schema/payments";
 // no surface here.
 //
 // All reads are location-scoped through the standard O-08 predicate.
+//
+// WR-1 / Option A — a guest invoice (a walk-in bill) has no member,
+// so every member join in this file is a LEFT join and every row
+// carries the PAYER's display name: the member's name for a member
+// payer, the invoice's guest name for a guest payer. The collection
+// and outstanding totals never joined members, so guest money was
+// always in them — that part of the reconciliation does not move.
 
 export type FeesOverview = {
   from: string | null;
@@ -43,13 +57,21 @@ export type FeesOverview = {
   /** Past-due balance by age, in whole days late (IST due dates). */
   overdueAgeing: { bucket: "1-7" | "8-30" | "31+"; paise: number; count: number }[];
   today: string;
+  /** Undefined means unavailable, not an empty period. Values are gross captured paise. */
+  methodTotals?: { method: PaymentMethod; paise: number }[];
+  /** Omitted when live invoices.read is absent. */
+  followUps?: { id: string; invoiceNumber: string; payerName: string; dueOn: string; outstandingPaise: number }[];
 };
 
 export type HubInvoiceRow = {
   id: string;
   invoiceNumber: string;
-  memberId: string;
-  memberName: string;
+  // WR-1 — a guest invoice has no member.
+  memberId: string | null;
+  memberName: string | null;
+  // Which kind of payer this document names, and the name to show.
+  payerKind: InvoicePayerKind;
+  payerName: string;
   totalPaise: number;
   paidPaise: number;
   outstandingPaise: number;
@@ -58,10 +80,16 @@ export type HubInvoiceRow = {
   issuedOn: string;
   dueOn: string;
   locationName: string;
+  // Local audit batch (2026-11-21) — a linked booking was cancelled. The
+  // row and its balance stay visible, but collection is held for owner
+  // review. Optional so existing fixtures and ordinary invoices are
+  // unchanged.
+  collectionHold?: CollectionHold;
 };
 
 export type HubTransactionRow = {
   id: string;
+  paymentId?: string;
   receivedAt: string;
   amountPaise: number;
   method: PaymentMethod;
@@ -69,6 +97,8 @@ export type HubTransactionRow = {
   invoiceNumber: string | null;
   memberId: string | null;
   memberName: string | null;
+  // WR-1 — the payer's display name for this payment.
+  payerName: string | null;
   locationName: string;
   receivedByName: string | null;
   // PR2-C9 — reversals appear as their own negative rows so the
@@ -80,6 +110,12 @@ export type HubTransactionRow = {
 export const feesInvoiceFilterInput = z.object({
   status: z.enum(["dues", "all"]).default("all"),
   locationId: z.string().uuid().optional(),
+  search: z.string().trim().max(120).optional(),
+  invoiceStatus: z.enum(["issued", "partial"]).optional(),
+  // A subset of Dues: only invoices already past their due date in the
+  // tenant's own calendar. Optional so every existing caller and the
+  // normal Dues list keep their current behaviour.
+  overdueOnly: z.boolean().optional(),
 });
 
 export const feesTransactionsInput = z.object({
@@ -104,12 +140,20 @@ const DUES_STATUSES: InvoiceStatus[] = ["issued", "partial"];
 export type DeskDueRow = {
   id: string;
   invoiceNumber: string;
-  memberName: string;
-  memberCode: string;
+  // WR-1 — a guest due has no member, no member code and no phone.
+  memberName: string | null;
+  memberCode: string | null;
   phone: string | null;
+  // The name to show for whoever is billed: the member's name for a
+  // member payer, the guest's name for a walk-in payer.
+  payerName: string;
   dueOn: string;
   outstandingPaise: number;
   overdue: boolean;
+  // Local audit batch (2026-11-21) — the desk must not offer collection
+  // (or a collections call shortcut) when a linked booking was cancelled.
+  // The balance remains visible for owner review.
+  collectionHold?: CollectionHold;
 };
 
 export const DESK_DUES_LIMIT = 50;
@@ -143,30 +187,40 @@ export async function listDeskDues(
         memberName: persons.fullName,
         memberCode: members.memberCode,
         phone: persons.phone,
+        guestName: invoices.guestName,
         dueOn: invoices.dueOn,
         totalPaise: invoices.totalPaise,
         paidPaise: invoices.paidPaise,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
-      .innerJoin(
+      // WR-1 — a guest invoice has no member, so the member join is a
+      // LEFT join: an unpaid walk-in bill is a due like any other and
+      // must not vanish from the counter's list.
+      .leftJoin(
         members,
         and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)),
       )
-      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(persons, eq(persons.id, members.personId))
       .where(and(...conditions))
       .orderBy(asc(invoices.dueOn), asc(invoices.createdAt))
       .limit(limit);
 
-    return rows.map((row) => ({
-      id: row.id,
-      invoiceNumber: row.invoiceNumber,
-      memberName: row.memberName,
-      memberCode: row.memberCode,
-      phone: row.phone,
-      dueOn: row.dueOn,
-      outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
-      overdue: row.dueOn < today,
-    }));
+    return rows.map((row) => {
+      const collectionHold = asCollectionHold(row.collectionHold);
+      return {
+        id: row.id,
+        invoiceNumber: row.invoiceNumber,
+        memberName: row.memberName,
+        memberCode: row.memberCode,
+        phone: row.phone,
+        payerName: row.memberName ?? row.guestName ?? "",
+        dueOn: row.dueOn,
+        outstandingPaise: toSafePaise(row.totalPaise - row.paidPaise),
+        overdue: row.dueOn < today,
+        ...(collectionHold ? { collectionHold } : {}),
+      };
+    });
   });
 }
 
@@ -207,6 +261,9 @@ export async function getFeesOverview(
       .from(payments)
       .where(and(...paymentConditions));
 
+    const methodRows = await tx.select({ method: payments.method, paise: sql<string>`sum(${payments.amountPaise})::text` })
+      .from(payments).where(and(...paymentConditions)).groupBy(payments.method);
+
     const dueConditions = [
       eq(invoices.tenantId, ctx.tenantId),
       inArray(invoices.status, DUES_STATUSES),
@@ -214,6 +271,15 @@ export async function getFeesOverview(
     ];
     if (locationId) dueConditions.push(eq(invoices.locationId, locationId));
     if (invPredicate) dueConditions.push(invPredicate);
+
+    const followUps = await callerHasPermission(tx, ctx, "invoices.read")
+      ? (await tx.select({ id: invoices.id, invoiceNumber: invoices.invoiceNumber, memberName: persons.fullName, guestName: invoices.guestName, dueOn: invoices.dueOn, total: invoices.totalPaise, paid: invoices.paidPaise })
+        .from(invoices)
+        .leftJoin(members, and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)))
+        .leftJoin(persons, and(eq(persons.id, members.personId), eq(persons.tenantId, ctx.tenantId)))
+        .where(and(...dueConditions)).orderBy(asc(invoices.dueOn), asc(invoices.createdAt), asc(invoices.id)).limit(3))
+        .map((row) => ({ id: row.id, invoiceNumber: row.invoiceNumber, payerName: row.memberName ?? row.guestName ?? "", dueOn: row.dueOn, outstandingPaise: toSafePaise(row.total - row.paid) }))
+      : undefined;
 
     const [outstanding] = await tx
       .select({
@@ -288,10 +354,19 @@ export async function getFeesOverview(
     return {
       from: period.from,
       to: period.to,
-      // Net of reversals: the ledger's negative rows are subtracted
-      // here so the headline reconciles with the transaction list.
-      collectedPaise:
-        toSafePaise(BigInt(collected?.paise ?? "0") - BigInt(reversed?.paise ?? "0")),
+      // GROSS captured payments for the period. A reversal is
+      // ledger-only and is NEVER netted into this figure — the
+      // approved contract says so twice: docs/design-system/screens.md
+      // (/owner/fees): "A reversal is stated beside the total and is
+      // ledger-only: it is never netted into the collected figure",
+      // and docs/design-system/flows.md O1: "it is ledger-only, and it
+      // is never netted into the collected total". The reversed total
+      // is stated BESIDE it (reversedPaise / reversalCount) and the
+      // ledger carries the reversal rows, so the owner sees the
+      // correction without the collection figure being rewritten.
+      // This matches the owner home chart, the daily collection report
+      // and daily_rollups, which are all gross too.
+      collectedPaise: toSafePaise(collected?.paise ?? "0"),
       paymentCount: Number(collected?.count ?? 0),
       reversedPaise: toSafePaise(reversed?.paise ?? "0"),
       reversalCount: Number(reversed?.count ?? 0),
@@ -301,6 +376,8 @@ export async function getFeesOverview(
       overdueInvoiceCount: Number(overdue?.count ?? 0),
       overdueAgeing,
       today,
+      methodTotals: methodRows.map((row) => ({ method: row.method as PaymentMethod, paise: toSafePaise(row.paise) })).sort((a, b) => PAYMENT_METHODS.indexOf(a.method) - PAYMENT_METHODS.indexOf(b.method)),
+      followUps,
     };
   });
 }
@@ -315,12 +392,30 @@ export async function listHubInvoices(
   return withTenant(ctx.tenantId, async (tx) => {
     const access = await resolveLocationAccess(tx, ctx);
     const conditions = [eq(invoices.tenantId, ctx.tenantId)];
-    if (parsed.data.status === "dues") {
+    // overdueOnly is always a Dues subset, even if a caller pairs it with
+    // the wider status: it must never return a settled or void document.
+    if (parsed.data.status === "dues" || parsed.data.overdueOnly) {
       conditions.push(inArray(invoices.status, DUES_STATUSES));
       conditions.push(sql`${invoices.totalPaise} > ${invoices.paidPaise}`);
     }
+    if (parsed.data.overdueOnly) {
+      // Same clock choice as getFeesOverview: the tenant's timezone,
+      // falling back to UTC, so "overdue" means the same calendar day
+      // everywhere the owner sees a late balance.
+      const [tenant] = await tx
+        .select({ timezone: tenants.timezone })
+        .from(tenants)
+        .where(eq(tenants.id, ctx.tenantId));
+      const today = todayInZone(tenant?.timezone ?? "UTC");
+      conditions.push(lt(invoices.dueOn, today));
+    }
     if (parsed.data.locationId) {
       conditions.push(eq(invoices.locationId, parsed.data.locationId));
+    }
+    if (parsed.data.invoiceStatus) conditions.push(eq(invoices.status, parsed.data.invoiceStatus));
+    if (parsed.data.search) {
+      const term = `%${parsed.data.search.replace(/[\\%_]/g, "\\$&")}%`;
+      conditions.push(or(ilike(invoices.invoiceNumber, term), ilike(persons.fullName, term), ilike(persons.phone, term), ilike(invoices.guestName, term))!);
     }
     const predicate = locationPredicate(invoices.locationId, access);
     if (predicate) conditions.push(predicate);
@@ -331,6 +426,8 @@ export async function listHubInvoices(
         invoiceNumber: invoices.invoiceNumber,
         memberId: invoices.memberId,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
+        payerKind: invoices.payerKind,
         totalPaise: invoices.totalPaise,
         paidPaise: invoices.paidPaise,
         status: invoices.status,
@@ -338,43 +435,77 @@ export async function listHubInvoices(
         issuedOn: invoices.issuedOn,
         dueOn: invoices.dueOn,
         locationName: locations.name,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
-      .innerJoin(
+      // WR-1 — a guest invoice has no member, so the member join is a
+      // LEFT join: a walk-in bill is a row of the owner's ledger like
+      // any other, and it must not disappear from it.
+      .leftJoin(
         members,
         and(eq(members.id, invoices.memberId), eq(members.tenantId, ctx.tenantId)),
       )
-      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(persons, eq(persons.id, members.personId))
       .innerJoin(locations, eq(locations.id, invoices.locationId))
       .where(and(...conditions))
       .orderBy(
-        parsed.data.status === "dues" ? asc(invoices.dueOn) : desc(invoices.issuedOn),
+        parsed.data.status === "dues" || parsed.data.overdueOnly
+          ? asc(invoices.dueOn)
+          : desc(invoices.issuedOn),
         desc(invoices.createdAt),
       );
 
-    return rows.map((r) => ({
-      id: r.id,
-      invoiceNumber: r.invoiceNumber,
-      memberId: r.memberId,
-      memberName: r.memberName,
-      totalPaise: toSafePaise(r.totalPaise),
-      paidPaise: toSafePaise(r.paidPaise),
-      outstandingPaise: toSafePaise(r.totalPaise - r.paidPaise),
-      status: r.status as InvoiceStatus,
-      source: r.source as InvoiceSource,
-      issuedOn: r.issuedOn,
-      dueOn: r.dueOn,
-      locationName: r.locationName,
-    }));
+    return rows.map((r) => {
+      const collectionHold = asCollectionHold(r.collectionHold);
+      return {
+        id: r.id,
+        invoiceNumber: r.invoiceNumber,
+        memberId: r.memberId,
+        memberName: r.memberName,
+        payerKind: r.payerKind as InvoicePayerKind,
+        payerName: r.memberName ?? r.guestName ?? "",
+        totalPaise: toSafePaise(r.totalPaise),
+        paidPaise: toSafePaise(r.paidPaise),
+        outstandingPaise: toSafePaise(r.totalPaise - r.paidPaise),
+        status: r.status as InvoiceStatus,
+        source: r.source as InvoiceSource,
+        issuedOn: r.issuedOn,
+        dueOn: r.dueOn,
+        locationName: r.locationName,
+        ...(collectionHold ? { collectionHold } : {}),
+      };
+    });
   });
 }
 
-export async function listHubTransactions(
+export const HUB_TRANSACTION_LIMIT = 200;
+
+export type HubTransactionPage = {
+  rows: HubTransactionRow[];
+  /** Every row the filter matches — not only the page shown. */
+  totalCount: number;
+  /** True when `rows` is a prefix of the matching rows. */
+  truncated: boolean;
+  limit: number;
+};
+
+/**
+ * The transaction ledger page.
+ *
+ * The rows are the newest matching entries; the count is the number
+ * of entries the filter matches IN FULL, so a screen that shows the
+ * first N can say so honestly instead of implying the list is
+ * exhaustive (the overview's collected figure covers every payment in
+ * the period, so a silent truncation made the two disagree).
+ */
+export async function listHubTransactionsPage(
   ctx: ActionCtx,
   raw: unknown,
-): Promise<HubTransactionRow[]> {
+): Promise<HubTransactionPage> {
   const parsed = feesTransactionsInput.safeParse(raw);
-  if (!parsed.success) return [];
+  if (!parsed.success) {
+    return { rows: [], totalCount: 0, truncated: false, limit: HUB_TRANSACTION_LIMIT };
+  }
 
   return withTenant(ctx.tenantId, async (tx) => {
     const [tenant] = await tx
@@ -412,9 +543,13 @@ export async function listHubTransactions(
         invoiceNumber: invoices.invoiceNumber,
         memberId: payments.memberId,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
         locationName: locations.name,
         receiverName: userNameFor(payments.tenantId, payments.receivedBy),
         receiverRole: userRoleNameFor(payments.tenantId, payments.receivedBy),
+        // The number of payments the filter matches, counted before
+        // the limit — so a truncated page can say what it left out.
+        matchingCount: sql<number>`count(*) over ()::int`,
       })
       .from(payments)
       .leftJoin(
@@ -429,7 +564,7 @@ export async function listHubTransactions(
       .innerJoin(locations, eq(locations.id, payments.locationId))
       .where(and(...conditions))
       .orderBy(desc(payments.receivedAt))
-      .limit(200);
+      .limit(HUB_TRANSACTION_LIMIT);
 
     // PR2-C9 — reversal rows, joined back to the payment for location
     // scoping and display context. Negative amount so the list nets.
@@ -451,6 +586,7 @@ export async function listHubTransactions(
     const reversalRows = await tx
       .select({
         id: paymentReversals.id,
+        paymentId: payments.id,
         reversedAt: paymentReversals.createdAt,
         amountPaise: paymentReversals.amountPaise,
         reason: paymentReversals.reason,
@@ -458,9 +594,13 @@ export async function listHubTransactions(
         invoiceNumber: invoices.invoiceNumber,
         memberId: payments.memberId,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
         locationName: locations.name,
         receiverName: userNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
         receiverRole: userRoleNameFor(paymentReversals.tenantId, paymentReversals.reversedBy),
+        // The number of reversals the filter matches, counted before
+        // the limit — the other half of the honest total.
+        matchingCount: sql<number>`count(*) over ()::int`,
       })
       .from(paymentReversals)
       .innerJoin(
@@ -482,11 +622,12 @@ export async function listHubTransactions(
       .innerJoin(locations, eq(locations.id, payments.locationId))
       .where(and(...reversalConditions))
       .orderBy(desc(paymentReversals.createdAt))
-      .limit(200);
+      .limit(HUB_TRANSACTION_LIMIT);
 
     const combined: HubTransactionRow[] = [
       ...rows.map((r) => ({
         id: r.id,
+        paymentId: r.id,
         receivedAt: r.receivedAt.toISOString(),
         amountPaise: toSafePaise(r.amountPaise),
         method: r.method as PaymentMethod,
@@ -494,6 +635,9 @@ export async function listHubTransactions(
         invoiceNumber: r.invoiceNumber,
         memberId: r.memberId,
         memberName: r.memberName,
+        // WR-1 — a guest payment has no member, so the payer's name
+        // comes from the invoice it settled.
+        payerName: r.memberName ?? r.guestName ?? null,
         locationName: r.locationName,
         receivedByName: userLabel(r.receiverName, r.receiverRole),
         kind: "payment" as const,
@@ -501,6 +645,7 @@ export async function listHubTransactions(
       })),
       ...reversalRows.map((r) => ({
         id: r.id,
+        paymentId: r.paymentId,
         receivedAt: r.reversedAt.toISOString(),
         amountPaise: -toSafePaise(r.amountPaise),
         method: r.method as PaymentMethod,
@@ -508,6 +653,7 @@ export async function listHubTransactions(
         invoiceNumber: r.invoiceNumber,
         memberId: r.memberId,
         memberName: r.memberName,
+        payerName: r.memberName ?? r.guestName ?? null,
         locationName: r.locationName,
         receivedByName: userLabel(r.receiverName, r.receiverRole),
         kind: "reversal" as const,
@@ -515,6 +661,26 @@ export async function listHubTransactions(
       })),
     ].sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
 
-    return combined.slice(0, 200);
+    const page = combined.slice(0, HUB_TRANSACTION_LIMIT);
+    const totalCount =
+      Number(rows[0]?.matchingCount ?? 0) +
+      Number(reversalRows[0]?.matchingCount ?? 0);
+    return {
+      rows: page,
+      totalCount,
+      truncated: totalCount > page.length,
+      limit: HUB_TRANSACTION_LIMIT,
+    };
   });
+}
+
+/**
+ * The ledger rows alone. The same read as listHubTransactionsPage,
+ * without the count — for callers that only need the rows.
+ */
+export async function listHubTransactions(
+  ctx: ActionCtx,
+  raw: unknown,
+): Promise<HubTransactionRow[]> {
+  return (await listHubTransactionsPage(ctx, raw)).rows;
 }

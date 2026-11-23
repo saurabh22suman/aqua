@@ -1,10 +1,11 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 
 // Phase 1.7 — loading state for the operator landing screen.
 
 export default function PlatformHomeLoading() {
   return (
     <div className="max-w-2xl">
+      <SkeletonStatus>Loading the operator console…</SkeletonStatus>
       <Skeleton w={16} h={3} className="mb-2" />
       <Skeleton w={56} h={8} className="mb-2" />
       <Skeleton w={40} h={4} />

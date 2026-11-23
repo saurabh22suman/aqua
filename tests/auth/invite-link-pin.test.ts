@@ -24,7 +24,6 @@ import { env } from "@/lib/env";
 import { withTenant } from "@/db/tenant";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { locations } from "@/db/schema/locations";
-import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import { persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
 import { seedRoleTemplates } from "@/lib/services/roles";
@@ -44,7 +43,7 @@ const RUN = Date.now().toString(36);
 const RUN_NUM = Date.now() % 1000000;
 const phone = (suffix: string) => `+91988${RUN_NUM}${suffix}`;
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const ownerId: UserId = asUserId(uuidv7());
 
 let tenantId: TenantId = asTenantId("");
 const membershipByTest: Record<string, string> = {};
@@ -63,12 +62,14 @@ beforeAll(async () => {
     await tx.insert(locations).values({ tenantId, name: "Main", isPrimary: true });
   });
   await seedRoleTemplates(tenantId);
-  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
-  // sentinel needs a real row before an audited mutation runs.
+  // Invitations must be issued by a live owner, not a system sentinel.
   await admin.query(
-    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [SYSTEM_USER, `system-pin-link-${RUN}`],
+    "insert into users (id, phone) values ($1, $2)",
+    [ownerId, `owner-pin-link-${RUN}`],
   );
+  const ownerRole = await admin.query<{ id: string }>("select id from roles where tenant_id = $1 and key = 'owner'", [tenantId]);
+  if (!ownerRole.rows[0]) throw new Error("owner role missing");
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [uuidv7(), tenantId, ownerId, ownerRole.rows[0].id]);
   for (const [test, suffix] of [
     ["previewNone", "01"],
     ["noPin", "02"],
@@ -79,7 +80,7 @@ beforeAll(async () => {
     ["inviteGuard", "07"],
   ] as const) {
     const invited = await inviteStaff(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ownerId },
       { phone: phone(suffix), fullName: "Pin Link Coach", roleKey: "coach", locationIds: [] },
     );
     if (invited.kind !== "ok") throw new Error(`setup invite failed: ${invited.kind}`);
@@ -90,8 +91,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (tenantId) {
+    await admin.query("delete from invite_link_uses where tenant_id = $1", [tenantId]);
     await withTenant(tenantId, async (tx) => {
-      await tx.delete(inviteLinkUses).where(eq(inviteLinkUses.tenantId, tenantId));
       await tx.delete(staff).where(eq(staff.tenantId, tenantId));
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
@@ -114,6 +115,7 @@ afterAll(async () => {
     await admin.query("delete from ba_user where phone_number = $1", [p]);
     await admin.query("delete from users where phone = $1", [p]);
   }
+  await admin.query("delete from users where id = $1", [ownerId]);
   await admin.end();
 });
 

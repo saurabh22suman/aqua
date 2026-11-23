@@ -1,10 +1,11 @@
-import { Skeleton, SkeletonCard } from "@/components/skeleton";
+import { Skeleton, SkeletonCard, SkeletonStatus } from "@/components/skeleton";
 
 // Phase 1.7 — loading state for the feature catalogue.
 
 export default function PlatformFeaturesLoading() {
   return (
     <div className="max-w-4xl">
+      <SkeletonStatus>Loading features…</SkeletonStatus>
       <Skeleton w={20} h={3} className="mb-2" />
       <Skeleton w={56} h={8} className="mb-2" />
       <Skeleton w={72} h={4} />

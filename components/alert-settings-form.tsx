@@ -2,11 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { updateAbsenceAlertThresholdAction } from "@/lib/actions/absence-alerts";
 
-// R.8 — owner setting for the low-attendance alert threshold.
-// Default 50%; the monthly alert also requires at least 4 recorded
-// marks, so one missed session never fires it.
+// Owner OpenPen management lane (29 October 2026).
+//
+// Absence alerts: the fixed academy rule is stated as a rule, not a
+// field. The owner edits ONE threshold, and the four-mark requirement is
+// written beside it so a single missed session never reads as an alert.
 export function AlertSettingsForm({
   initialThreshold,
 }: {
@@ -14,7 +18,7 @@ export function AlertSettingsForm({
 }) {
   const router = useRouter();
   const [value, setValue] = useState(String(initialThreshold));
-  const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "saved" | "error" | "unconfirmed">("idle");
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -37,49 +41,82 @@ export function AlertSettingsForm({
       }
       setStatus("saved");
       router.refresh();
+    } catch {
+      setStatus("unconfirmed");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
-      <div>
-        <label className="block text-[12px] text-ink-3 mb-1">
-          Alert when monthly attendance is below (%)
-        </label>
-        <input
-          type="number"
-          min={0}
-          max={100}
-          inputMode="numeric"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="min-h-11 w-28 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-          data-testid="alert-threshold"
-          aria-label="Attendance alert threshold percent"
-        />
+    <div className="max-w-[700px] rounded-card border border-line bg-paper p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line pb-3.5">
+        <div className="min-w-0">
+          <p className="text-[14px] font-medium text-ink">
+            Three consecutive absences
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            Fixed academy alert rule — always alerts.
+          </p>
+        </div>
+        <span className="flex-none rounded-ctl bg-deck px-2.5 py-1 text-[11px] font-medium text-ink-2">
+          Fixed academy alert rule
+        </span>
       </div>
-      <p className="text-[12px] text-ink-3">
-        Needs at least 4 marked sessions this month, so a single miss
-        never alerts. Three consecutive absences always alert.
-      </p>
-      <button
-        type="button"
-        onClick={save}
-        disabled={busy}
-        className="rounded-ctl bg-[var(--accent-strong)] px-3.5 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
-      >
-        {busy ? "Saving…" : "Save"}
-      </button>
-      {status === "saved" ? (
-        <p className="text-[12px] text-ink-2">Saved.</p>
-      ) : null}
-      {status === "error" ? (
-        <p className="text-[12px] text-ink-2">
-          Threshold must be a whole number from 0 to 100.
+
+      <div className="pt-4">
+        <section aria-label="Effective alert threshold" className="owner-work-panel mb-3">
+          <h2 className="text-sm font-semibold">Saved monthly threshold</h2>
+          <p className="mt-1 text-lg font-semibold tabular-nums">{initialThreshold}%</p>
+        </section>
+        <label className="block" htmlFor="alert-threshold">
+          <span className="mb-1 block text-[13px] font-medium text-ink-2">
+            Monthly attendance below (%)
+          </span>
+          <Input
+            id="alert-threshold"
+            type="number"
+            min={0}
+            max={100}
+            inputMode="numeric"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="w-28"
+            data-testid="alert-threshold"
+          />
+        </label>
+        <p className="mt-2 text-[12px] text-ink-3">
+          At least four marked sessions are required this month, so a single
+          miss never alerts. Alerts appear once a week at most.
         </p>
-      ) : null}
+        <p className="mt-2 text-[12px] text-ink-3">
+          Attendance counts present and late marks. For example, 40% attendance
+          is not below a 20% threshold, so no monthly low-attendance alert fires.
+          The consecutive-absence rule remains separate.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button
+            variant="primary"
+            size="md"
+            type="button"
+            onClick={save}
+            disabled={busy}
+          >
+            {busy ? "Saving…" : "Save threshold"}
+          </Button>
+          {status === "saved" ? (
+            <p role="status" className="text-[12px] text-ink-2">
+              Saved.
+            </p>
+          ) : null}
+          {status === "error" ? (
+            <p role="alert" className="text-[12px] text-ink-2">
+              Threshold must be a whole number from 0 to 100.
+            </p>
+          ) : null}
+        </div>
+        {status === "unconfirmed" ? <p role="alert" className="mt-2 text-sm text-ink-2">Could not confirm the save. Reload to check the effective threshold. Your draft is still here.</p> : null}
+      </div>
     </div>
   );
 }

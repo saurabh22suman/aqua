@@ -5,6 +5,7 @@ import { Check, Copy, Eye, Link2 } from "lucide-react";
 import { issueParentLinkAction } from "@/lib/actions/parent-link";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { formatDateTimeIST } from "@/lib/time/tz";
+import { resolveTerm, type TerminologyState } from "@/lib/terminology/keys";
 
 // C-45 — owner-side control to mint a parent-page link for the
 // member whose detail page this lives on. The link is what a parent
@@ -18,10 +19,12 @@ export function ParentLinkPanel({
   memberId,
   memberName,
   primaryGuardianName,
+  terminology = { locale: "en", overrides: {} },
 }: {
   memberId: string;
   memberName: string;
   primaryGuardianName: string | null;
+  terminology?: TerminologyState;
 }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -80,9 +83,22 @@ export function ParentLinkPanel({
           <p className="mt-0.5 text-[13px] text-ink">
             A 7-day read-only page for{" "}
             <span className="font-medium">{primaryGuardianName ?? memberName}</span>
-            {" —"} next session, this month&apos;s attendance, recent history.
-            Zero JavaScript on the page itself.
+            . Anyone with the link can open it until it expires.
           </p>
+          {/* What the page shows is a LIST, so it lives in a disclosure
+              rather than as a paragraph beside the description. */}
+          <details className="mt-1">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center text-[12.5px] font-medium text-ink-2 marker:content-none">
+              What the page shows
+            </summary>
+            <ul className="mt-0.5 text-[12.5px] text-ink-3">
+              <li>Next {resolveTerm(terminology, "session", 1)}</li>
+              <li>This month&apos;s attendance</li>
+              <li>Recent history</li>
+              <li>The membership plan</li>
+              <li>Any outstanding fees</li>
+            </ul>
+          </details>
         </div>
         {!open ? (
           <Button

@@ -54,6 +54,7 @@ vi.mock("@/lib/actions/global-search", () => ({
 
 import { OwnerShell } from "@/components/owner-shell";
 import { TENANT_SURFACE_NAV } from "@/lib/nav";
+import { ownerSidebarGroupsForPermissions } from "@/lib/nav";
 
 afterEach(cleanup);
 
@@ -103,11 +104,11 @@ describe("owner shell — the navigation scrolls on its own", () => {
     // case that renders the shell-level sign-out.
     renderShell([TENANT_SURFACE_NAV.owner[0]!]);
     const scrollRegion = screen.getByTestId("owner-side-nav-scroll");
-    expect(within(scrollRegion).queryByText("Aqua")).toBeNull();
+    expect(within(scrollRegion).queryByTestId("owner-shell-brand")).toBeNull();
     expect(within(scrollRegion).queryByRole("button")).toBeNull();
 
     const sidebar = screen.getByTestId("owner-sidebar");
-    expect(within(sidebar).getByText("Aqua")).toBeTruthy();
+    expect(within(sidebar).getByTestId("owner-shell-brand").textContent).toContain("KhelSuite");
     expect(within(sidebar).getByRole("button")).toBeTruthy();
   });
 
@@ -138,9 +139,12 @@ describe("owner shell — one vertical scroll owner for the page", () => {
   });
 
   it("keeps the mobile bottom nav unchanged below lg", () => {
-    renderShell();
+    render(<OwnerShell navItems={TENANT_SURFACE_NAV.owner} sidebarGroups={ownerSidebarGroupsForPermissions(new Set(["members.read","invoices.read"]))} locations={[]}><p>Page content</p></OwnerShell>);
     const mobileNav = screen.getByTestId("owner-mobile-nav");
     expect(mobileNav.className).toContain("lg:hidden");
-    expect(within(mobileNav).getAllByRole("link")).toHaveLength(4);
+    // The fourth primary slot is a More disclosure, whose links are not primary slots.
+    const primary = within(mobileNav).getByRole("navigation", {name:"Primary"});
+    expect(primary.children).toHaveLength(4);
+    expect(within(primary).getByText("More")).toBeTruthy();
   });
 });

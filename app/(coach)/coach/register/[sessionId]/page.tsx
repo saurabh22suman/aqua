@@ -1,66 +1,72 @@
-import Link from "next/link";
 import { getRosterAction } from "@/lib/actions/coach";
 import { RegisterBoard } from "@/components/register-board";
 import { OFFLINE_SYNC_ENABLED } from "@/lib/feature-flags";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { requireCoach } from "@/lib/auth/surface-guard";
-import { formatTimeIST } from "@/lib/time/tz";
+import { formatDateIST, formatTimeIST } from "@/lib/time/tz";
 import { requireUuidParam } from "@/lib/params";
+import { BackLink } from "@/components/ui/BackLink";
+import { StaffPage, StaffPageHeader } from "@/components/staff-ui/staff-page";
 
 export default async function RegisterPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams?: Promise<{ day?: string }>;
 }) {
   await requireCoach();
   const { sessionId } = await params;
+  const { day } = (await searchParams) ?? {};
+  const fromSchedule = typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day);
+  const backHref = fromSchedule ? `/coach/schedule?day=${day}` : "/coach";
+  const backLabel = fromSchedule ? "Back to schedule" : "Today";
   requireUuidParam(sessionId);
   const [data, terminology] = await Promise.all([
     getRosterAction(sessionId),
-    // L3 audit — the empty-state copy (`Session not found`) routes
-    // through the closed-key resolver. No current preset overrides
-    // `session`, but the uniform contract is what keeps a future
-    // preset (e.g. a "sparring" tennis preset) from drifting
-    // silently. The fetch is cheap and only paid once per page.
-    getTerminologyAction(),
+    // Use the same presentation vocabulary in the empty state and board,
+    // while retaining any non-core terminology overrides.
+    getTerminologyAction().then(staffTerminology),
   ]);
 
   if (!data) {
     return (
-      <main className="px-5 pt-10">
-        <p className="text-[15px] font-medium">
+      <StaffPage>
+        <BackLink href={backHref} label={backLabel} />
+        <p className="text-[15px] font-medium text-ink">
           {titleCase(resolveTerm(terminology, "session", 1))} not found
         </p>
-        <Link href="/coach" className="mt-2 inline-flex items-center min-h-[44px] text-[13px] text-ink-3 underline">
-          Back to today
-        </Link>
-      </main>
+        <p className="mt-2 text-[13px] text-ink-3">
+          This register is not part of your batches, or it no longer exists.
+        </p>
+      </StaffPage>
     );
   }
 
   const time = formatTimeIST(data.startsAt);
 
   return (
-    <main className="px-5 pt-6">
-      {/* min-h-44px target: the old 13px inline link was ~20px tall,
-          unreachable one-handed mid-register. [automatable] */}
-      <Link href="/coach" className="inline-flex items-center min-h-[44px] text-[13px] text-ink-3 underline underline-offset-2">
-        ← Today
-      </Link>
-      <h1 className="mt-2 font-display text-[19px] font-semibold text-marine">
-        {time} · {data.batchName}
-      </h1>
+    <StaffPage className="px-5">
+      <BackLink href={backHref} label={backLabel} />
+      <StaffPageHeader
+        title={`${time} · ${data.batchName}`}
+        meta={formatDateIST(data.startsAt)}
+      />
+      <p className="mt-1 break-words text-[13px] text-ink-2">{data.locationName ? `Venue: ${data.locationName}` : "Venue not recorded"}</p>
 
       <div className="mt-4">
         <RegisterBoard
+          key={sessionId}
           sessionId={sessionId}
+          sessionContext={[data.batchName, time, data.locationName].filter(Boolean).join(" · ")}
           rows={data.rows}
           offlineSyncEnabled={data.offlineSyncEnabled && OFFLINE_SYNC_ENABLED}
           offlineIdentity={data.offlineIdentity}
           terminology={terminology}
         />
       </div>
-    </main>
+    </StaffPage>
   );
 }

@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { useRef, useState } from "react";
 import {
   updateSkillLevelAction,
   updateSkillNodeAction,
@@ -10,14 +13,16 @@ import type {
   SkillLadderRow,
 } from "@/lib/services/skill-ladder";
 import { EmptyState } from "@/components/ui/EmptyState";
+import {
+  SkillFramework,
+  type SkillSelection,
+} from "@/components/skill-ladder-framework";
 
 // V-09 — the ladder editor. Lists the generic framework the bridge
 // populated and edits level names, skill names and the four-band
 // rubric. Every save is one audited mutation; the list below the
 // inputs is the source of truth (no optimistic state).
 
-const INPUT =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 const BAND_LABELS: Array<{ key: string; label: string }> = [
   { key: "1", label: "Band 1" },
   { key: "2", label: "Band 2" },
@@ -30,41 +35,48 @@ function LevelCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  async function save() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await updateSkillLevelAction({ nodeId: node.id, name });
+      setMessage(result.ok ? "Saved." : result.error);
+    } catch {
+      setMessage("Could not save this level. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mt-3 rounded-card border border-line bg-paper p-3.5">
       <label className="block">
         <span className="mb-0.5 block text-[11px] uppercase tracking-wide text-ink-3">
           Level
         </span>
-        <input
+        <Input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (message) setMessage(null);
+          }}
           maxLength={120}
           readOnly={!canEdit}
-          className={INPUT}
           data-testid={`level-name-${node.id}`}
         />
       </label>
       {canEdit ? (
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-2"
+            type="button"
           disabled={busy || name.trim().length === 0}
-          onClick={() => {
-            setBusy(true);
-            setMessage(null);
-            void (async () => {
-              const result = await updateSkillLevelAction({
-                nodeId: node.id,
-                name,
-              });
-              setMessage(result.ok ? "Saved." : result.error);
-              setBusy(false);
-            })();
-          }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          aria-busy={busy}
+          onClick={() => void save()}
+          >
           {busy ? "Saving…" : "Save level"}
-        </button>
+        </Button>
       ) : (
         <p className="mt-2 text-[12px] text-ink-3">
           Read only. Curriculum editing is delegated to the academy’s
@@ -72,9 +84,12 @@ function LevelCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
         </p>
       )}
       {message ? (
-        <p role="status" className="mt-1.5 text-[12px] text-ink-3">
-          {message}
-        </p>
+        <p
+        role={message === "Saved." ? "status" : "alert"}
+        className="mt-1.5 text-[12px] text-ink-2"
+      >
+        {message}
+      </p>
       ) : null}
     </div>
   );
@@ -91,23 +106,41 @@ function SkillCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  async function save() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await updateSkillNodeAction({ nodeId: node.id, name, rubric });
+      setMessage(result.ok ? "Saved." : result.error);
+    } catch {
+      setMessage("Could not save this skill. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <li className="border-t border-line py-3 first:border-0 first:pt-0">
+    <div className="border-t border-line py-3 first:border-0 first:pt-0">
       <label className="block">
         <span className="mb-0.5 block text-[11px] uppercase tracking-wide text-ink-3">
           Skill
         </span>
-        <input
+        <Input
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (message) setMessage(null);
+          }}
           maxLength={120}
           readOnly={!canEdit}
-          className={INPUT}
           data-testid={`skill-name-${node.id}`}
         />
       </label>
+      <section aria-label="Rubric readiness" className="mt-2 rounded-ctl bg-deck p-2 text-[13px] text-ink-2">
+        {BAND_LABELS.filter(({ key }) => rubric[key]?.trim()).length} of {BAND_LABELS.length} rubric bands have guidance
+      </section>
       <details className="mt-2">
-        <summary className="cursor-pointer text-[12.5px] text-ink-3">
+        <summary className="inline-flex min-h-11 cursor-pointer items-center text-[12.5px] text-ink-3">
           Rubric — what each band means
         </summary>
         <div className="mt-2 space-y-2">
@@ -116,15 +149,15 @@ function SkillCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
               <span className="mb-0.5 block text-[11px] text-ink-3">
                 {label}
               </span>
-              <textarea
+              <Textarea
                 value={rubric[key] ?? ""}
-                onChange={(e) =>
-                  setRubric((prev) => ({ ...prev, [key]: e.target.value }))
-                }
+                onChange={(e) => {
+                  setRubric((prev) => ({ ...prev, [key]: e.target.value }));
+                  if (message) setMessage(null);
+                }}
                 rows={2}
                 maxLength={2000}
                 readOnly={!canEdit}
-                className={INPUT}
                 data-testid={`skill-rubric-${key}-${node.id}`}
               />
             </label>
@@ -132,34 +165,44 @@ function SkillCard({ node, canEdit }: { node: SkillLadderNodeRow; canEdit: boole
         </div>
       </details>
       {canEdit ? (
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="mt-2"
+            type="button"
           disabled={busy || name.trim().length === 0}
-          onClick={() => {
-            setBusy(true);
-            setMessage(null);
-            void (async () => {
-              const result = await updateSkillNodeAction({
-                nodeId: node.id,
-                name,
-                rubric,
-              });
-              setMessage(result.ok ? "Saved." : result.error);
-              setBusy(false);
-            })();
-          }}
-          className="mt-2 min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-5 text-[13px] font-semibold text-paper disabled:opacity-60"
-        >
+          aria-busy={busy}
+          onClick={() => void save()}
+          >
           {busy ? "Saving…" : "Save skill"}
-        </button>
+        </Button>
       ) : null}
       {message ? (
-        <p role="status" className="mt-1.5 text-[12px] text-ink-3">
+        <p
+          role={message === "Saved." ? "status" : "alert"}
+          className="mt-1.5 text-[12px] text-ink-2"
+        >
           {message}
         </p>
       ) : null}
-    </li>
+    </div>
   );
+}
+
+type Selection = SkillSelection;
+
+function firstSelection(ladders: SkillLadderRow[]): Selection | null {
+  const levels = ladders.flatMap((ladder) =>
+    ladder.nodes.filter((node) => node.parentId === null),
+  );
+  const skills = ladders.flatMap((ladder) =>
+    ladder.nodes
+      .filter((node) => node.parentId !== null)
+      .sort((a, b) => a.ordinal - b.ordinal),
+  );
+  if (skills[0]) return { nodeId: skills[0].id, kind: "skill" };
+  if (levels[0]) return { nodeId: levels[0].id, kind: "level" };
+  return null;
 }
 
 export function SkillLadderManager({
@@ -169,51 +212,90 @@ export function SkillLadderManager({
   ladders: SkillLadderRow[];
   canEdit: boolean;
 }) {
+  const [selected, setSelected] = useState<Selection | null>(() =>
+    firstSelection(ladders),
+  );
+  const detailRef = useRef<HTMLElement>(null);
+  const levels = ladders.flatMap((ladder) =>
+    ladder.nodes.filter((node) => node.parentId === null).map((node) => ({ ladder, node })),
+  );
+  const skills = ladders.flatMap((ladder) =>
+    ladder.nodes
+      .filter((node) => node.parentId !== null)
+      .map((node) => ({ ladder, node })),
+  );
+  const effective =
+    selected && (levels.some((item) => item.node.id === selected.nodeId) ||
+      skills.some((item) => item.node.id === selected.nodeId))
+      ? selected
+      : firstSelection(ladders);
+  const selectedName =
+    [...levels, ...skills].find((item) => item.node.id === effective?.nodeId)?.node.name ?? "";
+
+  // On a phone the framework sits above the editor; after a selection,
+  // bring the editor into view and focus it for keyboard/screen readers.
+  function handleSelect(next: Selection) {
+    setSelected(next);
+    if (window.matchMedia?.("(max-width: 1023px)").matches) {
+      window.requestAnimationFrame(() => {
+        detailRef.current?.scrollIntoView({ block: "start" });
+        detailRef.current?.focus({ preventScroll: true });
+      });
+    }
+  }
+
   if (ladders.length === 0) {
     return (
       <div className="rounded-card border border-line bg-paper">
         <EmptyState
           title="No skill ladder yet"
-          body="Apply the swimming preset (or add levels by hand) and the ladder appears here, editable."
+          body="Ask your platform operator to apply a skill preset."
         />
       </div>
     );
   }
 
   return (
-    <div>
-      {ladders.map((ladder) => {
-        const levels = ladder.nodes.filter((n) => n.parentId === null);
-        const skillsOf = (levelId: string) =>
-          ladder.nodes
-            .filter((n) => n.parentId === levelId)
-            .sort((a, b) => a.ordinal - b.ordinal);
-        return (
-          <section key={ladder.id} className="mt-5">
-            <h2 className="font-display text-[15px] font-semibold">
-              {ladder.name}
-            </h2>
-            <p className="mt-0.5 text-[12px] text-ink-3">
-              Activity type: {ladder.activityTypeKey}
-            </p>
-            {levels.map((level) => (
-              <div key={level.id}>
-                <LevelCard node={level} canEdit={canEdit} />
-                <ul className="mt-1 rounded-card border border-line bg-paper px-3.5">
-                  {skillsOf(level.id).map((skill) => (
-                    <SkillCard key={skill.id} node={skill} canEdit={canEdit} />
-                  ))}
-                  {skillsOf(level.id).length === 0 ? (
-                    <li className="py-3 text-[12px] text-ink-3">
-                      No skills under this level yet.
-                    </li>
-                  ) : null}
-                </ul>
-              </div>
-            ))}
-          </section>
-        );
-      })}
+    <div className="grid gap-5 lg:grid-cols-5 lg:items-start">
+      <SkillFramework ladders={ladders} selected={effective} onSelect={handleSelect} canEdit={canEdit} />
+
+      <section
+        ref={detailRef}
+        tabIndex={-1}
+        className="min-w-0 scroll-mt-4 lg:col-span-3"
+        aria-label="Selected framework detail"
+      >
+        <p className="sr-only" role="status">
+          Showing {effective?.kind === "level" ? "level" : "skill"}{" "}
+          {selectedName}
+        </p>
+        <h2 className="font-display text-[16px] font-semibold">
+          Selected {effective?.kind === "level" ? "level" : "skill"}{" "}
+          <span className="font-sans text-[13px] font-normal text-ink-3">
+            · {selectedName}
+          </span>
+        </h2>
+        <div className="mt-3 space-y-3">
+          {levels.map(({ node }) => (
+            <div
+              key={`level-${node.id}`}
+              data-testid={`level-editor-${node.id}`}
+              hidden={effective?.kind !== "level" || effective?.nodeId !== node.id}
+            >
+              <LevelCard node={node} canEdit={canEdit} />
+            </div>
+          ))}
+          {skills.map(({ node }) => (
+            <div
+              key={`skill-${node.id}`}
+              data-testid={`skill-editor-${node.id}`}
+              hidden={effective?.kind !== "skill" || effective?.nodeId !== node.id}
+            >
+              <SkillCard node={node} canEdit={canEdit} />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

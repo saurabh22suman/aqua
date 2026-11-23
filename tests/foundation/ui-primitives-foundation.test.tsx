@@ -38,7 +38,9 @@ describe("Input and Textarea", () => {
     render(<Input aria-label="Phone" />);
     const input = screen.getByLabelText("Phone");
     expect(input.className).toContain("text-[16px]");
-    expect(input.className).toContain("min-h-11");
+    // Tailwind spacing units are 4px; 12 (48px) preserves the 44px floor.
+    const units = Number(input.className.match(/(?:^|\s)min-h-(\d+)(?:\s|$)/)?.[1]);
+    expect(units).toBeGreaterThanOrEqual(11);
   });
 
   it("marks an invalid input for assistive technology", () => {

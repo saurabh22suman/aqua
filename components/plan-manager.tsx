@@ -1,5 +1,11 @@
 "use client";
 
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down.mjs";
+
+import { Button } from "@/components/ui/Button";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { Select } from "@/components/ui/Select";
+import { Input } from "@/components/ui/Input";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -21,8 +27,6 @@ import { parseRupeesToPaise } from "@/lib/payment-qr";
 // (all-access when none is chosen). Prices are GST-exclusive; the GST
 // rate is configured per facility/activity in the ops console.
 
-const inputClass =
-  "w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 // Owner-UI review P1 (2026-10-13) — price parsing is validated before
 // any write. An invalid price is a visible field error, never a silent
@@ -46,15 +50,48 @@ function parsePlanPrice(raw: string): { paise: number } | { error: string } {
 type LocationOption = { id: string; name: string };
 type ActivityOption = { id: string; name: string; locationId: string };
 
+// Dot SS-06 — each stored plan kind keeps its own owner-facing name and
+// price unit. Presentation only: the amounts, invoice snapshots and
+// charging paths are unchanged. Per-session and drop-in plans are billed
+// through invoices, so they must never read as a one-time subscription.
 function kindLabel(plan: {
   kind: PlanKind;
   durationDays: number | null;
   sessions: number | null;
 }): string {
-  if (plan.kind === "duration" || plan.kind === "term")
-    return `${plan.durationDays} days`;
-  if (plan.kind === "sessions") return `${plan.sessions} classes`;
-  return "one-time";
+  switch (plan.kind) {
+    case "duration":
+      return `${plan.durationDays}-day membership`;
+    case "term":
+      return `${plan.durationDays}-day term`;
+    case "sessions":
+      return `${plan.sessions}-class pack`;
+    case "one_time":
+      return "one-time charge";
+    case "per_session":
+      return "pay-as-you-go";
+    case "drop_in":
+      return "drop-in";
+  }
+}
+
+function amountUnit(kind: PlanKind): string {
+  switch (kind) {
+    case "duration":
+      return "per membership";
+    case "term":
+      return "per term";
+    case "sessions":
+      return "per pack";
+    case "one_time":
+      // B2 — "one-time charge" already carries the unit; a second
+      // "one-time" suffix repeated it. The amount shows bare.
+      return "";
+    case "per_session":
+      return "per session";
+    case "drop_in":
+      return "per drop-in";
+  }
 }
 
 export function PlanManager({
@@ -72,6 +109,7 @@ export function PlanManager({
   const [pending, startTransition] = useTransition();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [activeOnly, setActiveOnly] = useState(false);
 
   function run(key: string, fn: () => Promise<PlanMutationResult>) {
     setPendingKey(key);
@@ -92,7 +130,66 @@ export function PlanManager({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
+      <section className="rounded-card border border-line bg-paper p-4 sm:p-5">
+      <h2 className="font-display text-[16px] font-semibold text-ink">
+        Plans catalogue
+      </h2>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" checked={activeOnly} onChange={event => setActiveOnly(event.target.checked)} />
+          Active plans only
+        </label>
+        <p role="status" className="text-[13px] text-ink-2">{plans.filter(plan => plan.isActive).length} active · {plans.filter(plan => !plan.isActive).length} archived</p>
+      </div>
+      {plans.length === 0 ? <div className="mt-2 text-[13px] text-ink-3"><p>No plans yet.</p>{locations.length > 0 ? <p className="mt-1">Facilities: {locations.map(location => location.name).join(", ")}</p> : null}</div> : <div className="mt-2 divide-y divide-line">
+      {locations.map((location) => {
+        const rows = [...(byLocation.get(location.id) ?? [])].sort((left, right) => Number(right.isActive) - Number(left.isActive));
+        return (
+          <section key={location.id} className="py-3 first:pt-2 last:pb-0">
+            <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
+              {location.name}
+            </h2>
+            {rows.length === 0 ? (
+              <p className="mt-2 text-[13px] text-ink-3">
+                No plans at this facility yet.
+              </p>
+            ) : (
+              <div className="mt-2 overflow-hidden">
+                {activeOnly && !rows.some(plan => plan.isActive) ? <p className="text-sm text-ink-2">No active plans at this facility.</p> : null}
+                {rows.map((plan) => (
+                  <div key={plan.id} hidden={activeOnly && !plan.isActive}>
+                  <PlanRowEditor
+                    plan={plan}
+                    pending={pending && pendingKey === plan.id}
+                    message={messages[plan.id] ?? null}
+                    onSave={(patch) =>
+                      run(plan.id, () => updatePlanAction({ id: plan.id, ...patch }))
+                    }
+                    onArchive={() => run(plan.id, () => archivePlanAction({ id: plan.id }))}
+                  />
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+      </div>}
+      </section>
+
+      <details className="group rounded-card border border-line bg-paper px-4 py-2 sm:px-5">
+      <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-display text-[16px] font-semibold">Add plan<span className="flex flex-none items-center gap-2"><OwnerIcon name="plus" size={18} className="group-open:hidden" /><ChevronDown size={18} aria-hidden="true" className="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" /></span></summary>
+      <CustomPlanForm
+        locations={locations}
+        activities={activities}
+        pending={pending}
+        message={messages.custom ?? null}
+        onSubmit={(input) => run("custom", () => createPlanAction(input))}
+      />
+      </details>
+      <details className="rounded-card border border-line bg-paper px-4 py-2 sm:px-5">
+      <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 font-display text-[16px] font-semibold">Use a preset template<ChevronDown size={18} aria-hidden="true" className="shrink-0" /></summary>
       <ActivateTemplateForm
         templates={templates}
         plans={plans}
@@ -103,45 +200,7 @@ export function PlanManager({
         message={messages.activate ?? null}
         onSubmit={(input) => run("activate", () => activatePlanFromShapeAction(input))}
       />
-
-      {locations.map((location) => {
-        const rows = byLocation.get(location.id) ?? [];
-        return (
-          <section key={location.id}>
-            <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-              {location.name}
-            </h2>
-            {rows.length === 0 ? (
-              <p className="mt-2 rounded-card bg-paper border border-line px-4 py-4 text-[13px] text-ink-3">
-                No plans at this facility yet.
-              </p>
-            ) : (
-              <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
-                {rows.map((plan) => (
-                  <PlanRowEditor
-                    key={plan.id}
-                    plan={plan}
-                    pending={pending && pendingKey === plan.id}
-                    message={messages[plan.id] ?? null}
-                    onSave={(patch) =>
-                      run(plan.id, () => updatePlanAction({ id: plan.id, ...patch }))
-                    }
-                    onArchive={() => run(plan.id, () => archivePlanAction({ id: plan.id }))}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        );
-      })}
-
-      <CustomPlanForm
-        locations={locations}
-        activities={activities}
-        pending={pending}
-        message={messages.custom ?? null}
-        onSubmit={(input) => run("custom", () => createPlanAction(input))}
-      />
+      </details>
     </div>
   );
 }
@@ -187,7 +246,7 @@ function ActivateTemplateForm({
   );
 
   return (
-    <section className="rounded-card bg-paper border border-line p-5 space-y-3">
+    <section className="space-y-3 pb-3">
       <h2 className="font-display text-[16px] font-semibold text-ink">
         Activate a preset template
       </h2>
@@ -206,29 +265,29 @@ function ActivateTemplateForm({
               <span className="block text-[12px] font-medium text-ink-2 mb-1">
                 Facility
               </span>
-              <select
+              <Select
                 value={locationId}
                 onChange={(e) => {
                   setLocationId(e.target.value);
                   setActivityId("");
                 }}
-                className={inputClass}
+
               >
                 {locations.map((location) => (
                   <option key={location.id} value={location.id}>
                     {location.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="block">
               <span className="block text-[12px] font-medium text-ink-2 mb-1">
                 Activity
               </span>
-              <select
+              <Select
                 value={activityId}
                 onChange={(e) => setActivityId(e.target.value)}
-                className={inputClass}
+
               >
                 <option value="">All activities (all-access)</option>
                 {facilityActivities.map((activity) => (
@@ -236,16 +295,16 @@ function ActivateTemplateForm({
                     {activity.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="block">
               <span className="block text-[12px] font-medium text-ink-2 mb-1">
                 Template
               </span>
-              <select
+              <Select
                 value={shapeId}
                 onChange={(e) => setShapeId(e.target.value)}
-                className={inputClass}
+
               >
                 {templates.map((template) => (
                   <option key={template.shapeId} value={template.shapeId}>
@@ -257,13 +316,13 @@ function ActivateTemplateForm({
                     })}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="block">
               <span className="block text-[12px] font-medium text-ink-2 mb-1">
                 Price (₹, GST exclusive)
               </span>
-              <input
+              <Input
                 value={price}
                 onChange={(e) => {
                   setPrice(e.target.value);
@@ -272,7 +331,7 @@ function ActivateTemplateForm({
                 inputMode="decimal"
                 placeholder="2500"
                 aria-invalid={priceError !== null}
-                className={inputClass}
+
               />
               {priceError ? (
                 <span role="alert" className="mt-1 block text-[12px] text-ink-2">
@@ -282,8 +341,11 @@ function ActivateTemplateForm({
             </label>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              type="button"
+            <Button
+            variant="primary"
+            size="md"
+            className="inline-flex items-center justify-center"
+            type="button"
               disabled={pending || alreadyActivated}
               onClick={() => {
                 const parsed = parsePlanPrice(price);
@@ -299,10 +361,9 @@ function ActivateTemplateForm({
                   amountPaise: parsed.paise,
                 });
               }}
-              className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-            >
+          >
               {pending && pendingKey === "activate" ? "Saving…" : "Set price & activate"}
-            </button>
+            </Button>
             {alreadyActivated ? (
               <span className="text-[12px] text-ink-3">
                 Already activated here — edit the plan below.
@@ -348,6 +409,7 @@ function PlanRowEditor({
           <span className="text-[12px] text-ink-3">
             · {plan.activityName ?? "all activities"} · {kindLabel(plan)} ·{" "}
             {formatINR(plan.amountPaise)}
+            {amountUnit(plan.kind) ? ` ${amountUnit(plan.kind)}` : ""}
           </span>
         </span>
         {!plan.isActive ? (
@@ -365,14 +427,14 @@ function PlanRowEditor({
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Name
             </span>
-            <input
+            <Input
               value={name}
               onChange={(e) => {
                 setName(e.target.value);
                 setNameError(null);
               }}
               aria-invalid={nameError !== null}
-              className={inputClass}
+
             />
             {nameError ? (
               <span role="alert" className="mt-1 block text-[12px] text-ink-2">
@@ -384,7 +446,7 @@ function PlanRowEditor({
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Price (₹)
             </span>
-            <input
+            <Input
               value={price}
               onChange={(e) => {
                 setPrice(e.target.value);
@@ -392,7 +454,7 @@ function PlanRowEditor({
               }}
               inputMode="decimal"
               aria-invalid={priceError !== null}
-              className={inputClass}
+
             />
             {priceError ? (
               <span role="alert" className="mt-1 block text-[12px] text-ink-2">
@@ -402,7 +464,10 @@ function PlanRowEditor({
           </label>
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <button
+          <Button
+            variant="primary"
+            size="md"
+            className="inline-flex items-center justify-center"
             type="button"
             disabled={pending}
             onClick={() => {
@@ -422,19 +487,19 @@ function PlanRowEditor({
               setNameError(null);
               onSave({ name: name.trim(), amountPaise: parsed.paise });
             }}
-            className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {pending ? "Saving…" : "Save"}
-          </button>
+          </Button>
           {plan.isActive ? (
-            <button
+            <Button
+          variant="secondary"
+          size="md"
+          className="inline-flex items-center justify-center border border-line text-ink-2 hover:text-ink"
               type="button"
               disabled={pending}
-              onClick={onArchive}
-              className="inline-flex min-h-11 items-center justify-center rounded-pill border border-line px-4 py-2 text-[12px] text-ink-2 hover:text-ink disabled:opacity-50"
-            >
-              Archive
-            </button>
+              onClick={onArchive}>
+        Archive
+      </Button>
           ) : null}
         </div>
       </details>
@@ -475,7 +540,7 @@ function CustomPlanForm({
   );
 
   return (
-    <section className="rounded-card bg-paper border border-line p-5 space-y-3">
+    <section className="space-y-3 pb-3">
       <h2 className="font-display text-[16px] font-semibold text-ink">
         Add a custom plan
       </h2>
@@ -484,29 +549,29 @@ function CustomPlanForm({
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Facility
           </span>
-          <select
+          <Select
             value={locationId}
             onChange={(e) => {
               setLocationId(e.target.value);
               setActivityId("");
             }}
-            className={inputClass}
+
           >
             {locations.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Activity
           </span>
-          <select
+          <Select
             value={activityId}
             onChange={(e) => setActivityId(e.target.value)}
-            className={inputClass}
+
           >
             <option value="">All activities (all-access)</option>
             {facilityActivities.map((activity) => (
@@ -514,20 +579,20 @@ function CustomPlanForm({
                 {activity.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="block">
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Name
           </span>
-          <input
+          <Input
             value={name}
             onChange={(e) => {
               setName(e.target.value);
               setNameError(null);
             }}
             aria-invalid={nameError !== null}
-            className={inputClass}
+
           />
           {nameError ? (
             <span role="alert" className="mt-1 block text-[12px] text-ink-2">
@@ -539,10 +604,10 @@ function CustomPlanForm({
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Kind
           </span>
-          <select
+          <Select
             value={kind}
             onChange={(e) => setKind(e.target.value as PlanKind)}
-            className={inputClass}
+
           >
             <option value="duration">Duration (days)</option>
             <option value="term">Term (days)</option>
@@ -550,18 +615,18 @@ function CustomPlanForm({
             <option value="one_time">One-time</option>
             <option value="per_session">Pay-as-you-go (invoice)</option>
             <option value="drop_in">Drop-in (invoice)</option>
-          </select>
+          </Select>
         </label>
         {kind === "duration" || kind === "term" ? (
           <label className="block">
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Days
             </span>
-            <input
+            <Input
               value={durationDays}
               onChange={(e) => setDurationDays(e.target.value)}
               inputMode="numeric"
-              className={inputClass}
+
             />
           </label>
         ) : null}
@@ -570,11 +635,11 @@ function CustomPlanForm({
             <span className="block text-[12px] font-medium text-ink-2 mb-1">
               Classes
             </span>
-            <input
+            <Input
               value={sessions}
               onChange={(e) => setSessions(e.target.value)}
               inputMode="numeric"
-              className={inputClass}
+
             />
           </label>
         ) : null}
@@ -582,7 +647,7 @@ function CustomPlanForm({
           <span className="block text-[12px] font-medium text-ink-2 mb-1">
             Price (₹, GST exclusive)
           </span>
-          <input
+          <Input
             value={price}
             onChange={(e) => {
               setPrice(e.target.value);
@@ -591,7 +656,7 @@ function CustomPlanForm({
             inputMode="decimal"
             placeholder="2500"
             aria-invalid={priceError !== null}
-            className={inputClass}
+
           />
           {priceError ? (
             <span role="alert" className="mt-1 block text-[12px] text-ink-2">
@@ -601,8 +666,11 @@ function CustomPlanForm({
         </label>
       </div>
       <div className="flex items-center gap-3">
-        <button
-          type="button"
+        <Button
+            variant="primary"
+            size="md"
+            className="inline-flex items-center justify-center"
+            type="button"
           disabled={pending || locations.length === 0}
           onClick={() => {
             const parsed = parsePlanPrice(price);
@@ -628,10 +696,9 @@ function CustomPlanForm({
               ...(kind === "sessions" ? { sessions: Number(sessions) } : {}),
             });
           }}
-          className="inline-flex min-h-11 items-center justify-center rounded-pill px-5 py-2 text-[13px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
-        >
+          >
           {pending ? "Saving…" : "Add plan"}
-        </button>
+        </Button>
         {message ? (
           <span role="status" className="text-[12px] text-ink-2">
             {message}

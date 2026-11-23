@@ -103,11 +103,32 @@ function wrapDocument(title: string, body: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0D3B36">
+<meta name="theme-color" content="#edf2eb">
 <meta name="referrer" content="no-referrer">
 <title>${esc(title)}</title>
+<style>
+  * { box-sizing: border-box }
+  main.parent-brief section { border-radius: 14px !important }
+  main.parent-brief h1 { overflow-wrap: anywhere }
+  .parent-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px }
+  .parent-links a {
+    display: inline-flex; min-height: 44px; align-items: center;
+    color: #1b5140; background: #fcfdf9; border: 1px solid #d8e2d8;
+    border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 700;
+  }
+  .parent-receipt {
+    display: inline-flex; min-height: 44px; align-items: center; padding: 6px 10px;
+    border: 1px solid #d8e2d8; border-radius: 8px; color: #0d3b36; font-weight: 650;
+  }
+  .parent-payment { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px }
+  a:focus-visible { outline: 2px solid #1b5140; outline-offset: 3px }
+  [id] { scroll-margin-top: 12px }
+  @media (max-width: 420px) {
+    main.parent-brief section { padding: 16px !important; margin-bottom: 11px !important }
+  }
+</style>
 </head>
-<body style="margin:0;background:${TOKENS.deck};">${body}</body>
+<body style="margin:0;background:#edf2eb;">${body}</body>
 </html>`;
 }
 
@@ -287,12 +308,14 @@ function renderParentView(args: {
 
   const paymentItems = (args.fees?.payments ?? [])
     .map((payment) => {
-      const receiptLink = args.receiptBase
-        ? ` <a href="${esc(args.receiptBase)}/${esc(payment.id)}" style="color:#0D3B36;text-decoration:underline;">Receipt</a>`
-        : "";
-      return `<li style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
-<span style="color:${TOKENS.ink};font-weight:500;">${esc(formatINR(payment.amountPaise))}</span>
-<span style="color:${TOKENS.ink3};">${esc(methodText(payment.method))} &middot; ${esc(DAY_FMT.format(new Date(payment.receivedAt)))}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}${receiptLink}</span>
+      const paymentDate = DAY_FMT.format(new Date(payment.receivedAt));
+      const receiptLink = args.receiptBase && payment.invoiceNumber
+        ? `<a class="parent-receipt" aria-label="${esc(`Download receipt for ${payment.invoiceNumber}, ${paymentDate}, ${formatINR(payment.amountPaise)}`)}" href="${esc(args.receiptBase)}/${esc(payment.id)}">Download receipt</a>`
+        : `<span style="color:${TOKENS.ink3};">No invoice receipt</span>`;
+      return `<li class="parent-payment" style="padding:10px 0;border-bottom:1px solid rgba(15,31,28,.06);font-size:13px;">
+<div><div style="color:${TOKENS.ink};font-weight:600;">${esc(formatINR(payment.amountPaise))} · ${esc(methodText(payment.method))}</div>
+<div style="color:${TOKENS.ink3};">${esc(paymentDate)}${payment.invoiceNumber ? ` &middot; ${esc(payment.invoiceNumber)}` : ""}</div></div>
+${receiptLink}
 </li>`;
     })
     .join("");
@@ -341,25 +364,30 @@ ${paymentItems.length === 0 ? `<p style="font-size:13px;color:${TOKENS.ink2};mar
 <p style="font-size:13px;color:${TOKENS.ink2};margin:0;line-height:1.5;">Questions about this page? Contact your academy.</p>
 </section>`;
 
-  const body = `<main style="max-width:560px;margin:0 auto;padding:0 16px 56px;font-family:'Instrument Sans',system-ui,sans-serif;color:${TOKENS.ink};background-color:${TOKENS.deck};min-height:100vh;">
-<header style="padding:32px 0 24px;display:flex;align-items:center;gap:16px;">
+  const body = `<main class="parent-brief" style="max-width:560px;margin:0 auto;padding:0 16px 56px;font-family:'Instrument Sans',system-ui,sans-serif;color:${TOKENS.ink};background-color:#edf2eb;min-height:100vh;">
+<header style="padding:20px 0 16px;display:flex;align-items:center;gap:16px;">
 <svg viewBox="0 0 100 100" width="56" height="56" role="img" aria-label="${displayName} mark">
 <rect x="0" y="0" width="100" height="100" rx="22" ry="22" fill="${accentBg}" />
 <text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-family="'Bricolage Grotesque',system-ui,sans-serif" font-weight="600" font-size="${clubInitials.length === 1 ? 50 : 36}" fill="${accentInk}">${clubInitials}</text>
 </svg>
 <div>
 <p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0;">${memberTerm} view</p>
-<h1 style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;font-weight:600;margin:4px 0 0;color:#0D3B36;">${displayName}</h1>
+<p style="font-size:17px;font-weight:600;margin:4px 0 0;color:#0D3B36;">${displayName}</p>
 </div>
 </header>
 
 <section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
 <p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0 0 8px;">${memberTerm}</p>
-<p style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:26px;font-weight:600;margin:0;color:#0D3B36;">${fullName}</p>
+<h1 style="font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:26px;font-weight:600;margin:0;color:#0D3B36;">${fullName}</h1>
 <p style="font-size:13px;color:${TOKENS.ink2};margin:6px 0 0;font-family:monospace;">${memberCode}</p>
 </section>
 
-<section style="background-color:#0D3B36;color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;">
+<nav class="parent-links" aria-label="Family information">
+<a href="#next-session">Next ${sessionOne}</a>
+<a href="#fees">Fees and receipts</a>
+</nav>
+
+<section id="next-session" style="background-color:#0D3B36;color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;">
 <p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:rgba(255,255,255,.70);margin:0 0 8px;">Next ${sessionOne}</p>
 ${nextSessionHtml}
 </section>
@@ -377,7 +405,7 @@ ${recentListHtml}
 ${runwayHtml}
 </section>
 
-<section style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
+<section id="fees" style="background-color:#FFFFFF;border-radius:20px;padding:24px;margin-bottom:16px;border:1px solid rgba(15,31,28,.10);">
 <p style="font-size:11px;font-weight:500;letter-spacing:.10em;text-transform:uppercase;color:${TOKENS.ink3};margin:0 0 12px;">Fees</p>
 ${feesHtml}
 </section>

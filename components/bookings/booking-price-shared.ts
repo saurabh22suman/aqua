@@ -5,6 +5,8 @@
 // The labels are shown Monday-first because that is how an owner reads
 // a week; the VALUES never change.
 
+import { formatWallTime12h } from "@/lib/time/tz";
+
 export type PriceFacilityOption = {
   id: string;
   name: string;
@@ -44,5 +46,11 @@ export function windowSummary(
   endTime: string | null,
 ): string {
   if (!startTime && !endTime) return "All day";
-  return `${startTime ?? "00:00"}–${endTime ?? "24:00"}`;
+  const start = formatWallTime12h(startTime ?? "00:00");
+  if (!endTime || endTime === "24:00") {
+    // The window runs to the end of that day: the next midnight. The
+    // label says so the way the calendar says it.
+    return `${start}–${formatWallTime12h("00:00")} (+1d)`;
+  }
+  return `${start}–${formatWallTime12h(endTime)}`;
 }

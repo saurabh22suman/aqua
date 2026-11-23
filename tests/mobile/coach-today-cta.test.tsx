@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // same CTA.
 
 vi.mock("@/lib/auth/surface-guard", () => ({
-  requireCoach: async () => ({}),
+  requireCoach: async () => ({ permissions: new Set(["staff.self"]), features: new Set() }),
 }));
 vi.mock("@/lib/actions/coach", () => ({
   getCoachHomeAction: async () => ({

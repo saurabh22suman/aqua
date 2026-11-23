@@ -9,6 +9,7 @@ import { sessions } from "@/db/schema/scheduling";
 import { whatsappNotificationOutbox } from "@/db/schema/whatsapp";
 import { normaliseToE164 } from "@/lib/phone";
 import type { StaffId } from "@/lib/ids";
+import { isCoachLikeRoleKey } from "@/lib/services/resource-access";
 
 export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsappNotificationOutbox.$inferSelect): Promise<boolean> {
   if (!row.recipientUserId) return false;
@@ -20,7 +21,7 @@ export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsap
     .innerJoin(roles, and(eq(roles.id, tenantMemberships.roleId), eq(roles.tenantId, row.tenantId)))
     .where(and(eq(tenantMemberships.tenantId, row.tenantId), eq(tenantMemberships.userId, row.recipientUserId),
       invitation ? eq(tenantMemberships.id, invitation) : eq(roles.key, row.recipientRole!),
-      inArray(tenantMemberships.status, invitation ? ["invited", "active"] : ["active"]), isNull(tenantMemberships.deletedAt)));
+      inArray(tenantMemberships.status, invitation ? ["invited", "active"] : ["active"]), isNull(tenantMemberships.deletedAt), isNull(users.deletedAt), isNull(roles.deletedAt)));
   for (const membership of memberships) {
     if (normaliseToE164(membership.phone) !== row.phone) continue;
     if (invitation) return true;
@@ -37,13 +38,14 @@ export async function staffNotificationAllowed(tx: TenantTx, row: typeof whatsap
       if (!batch) continue;
       locationId = batch.locationId; coachId = batch.coachId;
     }
+    if (row.scopeBatchId && locationId === null && !membership.allLocations) continue;
     if (locationId && !membership.allLocations) {
       const [site] = await tx.select({ id: membershipLocations.id }).from(membershipLocations).where(and(
         eq(membershipLocations.tenantId, row.tenantId), eq(membershipLocations.membershipId, membership.id),
         eq(membershipLocations.locationId, locationId))).limit(1);
       if (!site) continue;
     }
-    if (membership.role === "coach" && (row.scopeSessionId || row.scopeBatchId)) {
+    if (isCoachLikeRoleKey(membership.role) && (row.scopeSessionId || row.scopeBatchId)) {
       if (!coachId) continue;
       const [coach] = await tx.select({ id: staff.id }).from(staff).where(and(eq(staff.id, coachId),
         eq(staff.tenantId, row.tenantId), eq(staff.userId, row.recipientUserId), isNull(staff.deletedAt))).limit(1);

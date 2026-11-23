@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { listLocationsAction } from "@/lib/actions/people";
@@ -7,9 +7,15 @@ import {
   listRosterWeekAction,
   listShiftTemplatesAction,
 } from "@/lib/actions/shifts";
-import { addDays, todayInZone, weekdayOf } from "@/lib/time/tz";
-import { BackLink } from "@/components/ui/BackLink";
+import { addDays, formatWeekdayDateIST, todayInZone, weekdayOf } from "@/lib/time/tz";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { StaffRosterBoard } from "@/components/staff-roster-board";
+import { OwnerPeriodStrip } from "@/components/owner-ui/owner-period-strip";
+import { OwnerFormDate } from "@/components/owner-ui/owner-form-date";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 // V-23 — the owner's weekly roster builder. Draft shifts are built
 // here and published as a week; until publication they are invisible
@@ -58,86 +64,138 @@ export default async function StaffRosterPage({
   const base = (date: string) =>
     `/owner/staff/roster?week=${date}${locationId ? `&location=${locationId}` : ""}`;
 
+  const currentWeek = mondayOf(todayInZone(timezone));
+  const draftCount = shifts.filter((shift) => !shift.publishedAt).length;
+  const publishedCount = shifts.length - draftCount;
+  const compactOwner = ctx.roleKey === "owner";
+  const weekLabel = `${formatWeekdayDateIST(`${weekStart}T12:00:00Z`)} – ${formatWeekdayDateIST(`${weekEnd}T12:00:00Z`)}`;
+  const scopeLabel = locationId
+    ? locations.find(location => location.id === locationId)?.name ?? "Selected facility"
+    : "All facilities";
+  const publishState =
+    shifts.length === 0
+      ? "No shifts yet"
+      : draftCount > 0
+        ? `${draftCount} draft shift${draftCount === 1 ? "" : "s"} to publish`
+        : `All ${publishedCount} shift${publishedCount === 1 ? "" : "s"} published`;
+
   return (
-    <main className="px-5 pt-6 pb-8">
-      <BackLink href="/owner/staff" label="Staff" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">Roster</h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Week of {weekStart} ({timezone}). Publish the week when it is
-        ready — staff see their shifts on the Me tab.
-      </p>
+    <OwnerPage workflow="planner">
+      <PageHeader
+        title={<>Roster</>}
+        purpose={<>Build the week and publish it when it is ready. Staff see their
+        published shifts on the Me tab.</>}
+      />
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Link
-          href="/owner/staff/check-in-qr"
-          className="inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
-        >
-          Premises check-in QR →
-        </Link>
-        <Link
-          href="/owner/staff/leave"
-          className="inline-flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
-        >
-          Leave requests →
-        </Link>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      {compactOwner ? (
+        <>
+          <OwnerPeriodStrip label="Roster week and facility" value={`${weekLabel} · ${scopeLabel}`}
+            period="week" previous={{ href: base(addDays(weekStart, -7)) }} next={{ href: base(addDays(weekStart, 7)) }}>
+            <form method="get" className="space-y-3">
+              <OwnerFormDate name="week" label="Week with this date" initialDate={weekStart} />
+              {locations.length > 1 ? <label htmlFor="owner-roster-location" className="grid gap-1 text-sm font-medium">
+                Facility
+                <Select id="owner-roster-location" name="location" defaultValue={locationId ?? ""}>
+                  <option value="">All facilities</option>
+                  {locations.map(location => <option value={location.id} key={location.id}>{location.name}</option>)}
+                </Select>
+              </label> : locationId ? <input type="hidden" name="location" value={locationId} /> : null}
+              <div className="flex flex-wrap gap-2"><Button type="submit" data-testid="roster-apply">Apply</Button>
+                <Link href={base(currentWeek)} aria-current={weekStart === currentWeek ? "page" : undefined} className={buttonClasses({variant:"secondary", size:"sm"})}>This week</Link>
+              </div>
+            </form>
+          </OwnerPeriodStrip>
+          <nav aria-label="Related roster tasks" className="mt-1 flex flex-wrap gap-2">
+            <Link href="/owner/staff/leave" className={buttonClasses({ variant:"ghost", size:"sm" })}>Leave requests</Link>
+            <Link href="/owner/staff/check-in-qr" className={buttonClasses({ variant:"ghost", size:"sm" })}>Check-in poster</Link>
+          </nav>
+        </>
+      ) : <>
+      <nav
+        aria-label="Roster week"
+        className="mt-4 flex flex-wrap items-center gap-2"
+      >
         <Link
           href={base(addDays(weekStart, -7))}
-          className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
-          ← Prev
+          Previous week
         </Link>
         <Link
           href={base(todayInZone(timezone))}
-          className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+          aria-current={weekStart === currentWeek ? "page" : undefined}
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
           Today
         </Link>
         <Link
           href={base(addDays(weekStart, 7))}
-          className="flex min-h-[44px] items-center rounded-ctl border border-line bg-paper px-3 text-[13px]"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
-          Next →
+          Next week
         </Link>
-      </div>
+        <Link
+          href="/owner/staff/leave"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
+        >
+          Leave requests
+        </Link>
+        <Link
+          href="/owner/staff/check-in-qr"
+          className={buttonClasses({ variant: "secondary", size: "md" })}
+        >
+          Check-in poster
+        </Link>
+      </nav>
 
       {locations.length > 1 ? (
         <form method="get" className="mt-3 flex flex-wrap items-end gap-2">
           <input type="hidden" name="week" value={weekStart} />
-          <label className="block">
-            <span className="mb-0.5 block text-[11px] text-ink-3">Location</span>
-            <select
-              name="location"
-              defaultValue={locationId ?? ""}
-              className="min-h-[44px] rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none"
-            >
-              <option value="">All locations</option>
-              {locations.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="min-h-[44px] rounded-pill bg-[var(--accent-strong)] px-4 text-[13px] font-semibold text-paper"
-          >
+          <Field id="roster-location" label="Location">
+            {() => (
+              <Select
+                id="roster-location"
+                name="location"
+                defaultValue={locationId ?? ""}
+              >
+                <option value="">All locations</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          {/* P2 (independent review) — a standard form action beside a
+              shared control is the shared STANDARD control (48px, the
+              10px radius, 16px text), not the old 44px pill. */}
+          <Button type="submit" variant="primary" size="md" data-testid="roster-apply">
             Apply
-          </button>
+          </Button>
         </form>
       ) : null}
 
-      <StaffRosterBoard
-        weekStart={weekStart}
-        shifts={shifts}
-        templates={templates}
-        staff={staff}
-        locations={locations}
-        weekLocationId={locationId ?? null}
-      />
-    </main>
+      </>}
+
+      <section className="owner-working-week mt-4 rounded-card border border-line bg-paper p-4 sm:p-5">
+        <h2 className="font-display text-[16px] font-semibold text-ink">
+          Working week
+        </h2>
+        <p className="mt-0.5 text-[12.5px] text-ink-3">
+          {!compactOwner ? `Week of ${weekLabel} · ${scopeLabel} · ` : null}
+          {publishState}
+        </p>
+        <StaffRosterBoard
+          weekStart={weekStart}
+          shifts={shifts}
+          templates={templates}
+          staff={staff}
+          locations={locations}
+          weekLocationId={locationId ?? null}
+          compactPublication={compactOwner}
+        />
+      </section>
+    </OwnerPage>
   );
 }

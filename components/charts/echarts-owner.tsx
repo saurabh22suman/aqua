@@ -6,6 +6,7 @@ import { BarChart, LineChart, PieChart } from "echarts/charts";
 import {
   AriaComponent,
   GridComponent,
+  LegendComponent,
   TitleComponent,
   TooltipComponent,
 } from "echarts/components";
@@ -24,12 +25,19 @@ import { compactPaiseINR } from "@/lib/dashboard-charts";
 // preset the reader is in. The doughnut's centre states the selected
 // period's total so the ring does not need a separate legend to be
 // understood.
+//
+// The desktop chart draws its OWN legend (painted from the same chart
+// tokens), because the HTML legend is the phone's and is hidden above
+// the chart breakpoint — so the Legend component has to be registered,
+// or ECharts logs "Component legend is used but not imported" and
+// silently draws no legend at all.
 
 echarts.use([
   BarChart,
   LineChart,
   PieChart,
   GridComponent,
+  LegendComponent,
   TooltipComponent,
   TitleComponent,
   AriaComponent,
@@ -240,10 +248,13 @@ export default function OwnerChart(props: OwnerChartProps) {
           aria: { enabled: true, description: props.ariaLabel },
           title: {
             text: formatINRCompact(props.totalPaise),
-            subtext: "collected",
+            // The centre states what the number is, so the ring is
+            // readable without a legend (owner redesign, 27 October
+            // 2026: "a donut, total in its centre").
+            subtext: "Total collected",
             left: "center",
-            top: "40%",
-            textStyle: { color: ink, fontSize: 18, fontWeight: 600 },
+            top: "38%",
+            textStyle: { color: ink, fontSize: 17, fontWeight: 600 },
             subtextStyle: { color: ink3, fontSize: 11 },
           },
           tooltip: {

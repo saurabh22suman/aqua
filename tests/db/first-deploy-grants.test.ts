@@ -31,3 +31,19 @@ it("restricts new append-only tables and their partitions on the first deploy", 
     and (has_table_privilege('app_user',c.oid,'UPDATE') or has_table_privilege('app_user',c.oid,'DELETE'))`);
   expect(rows).toEqual([]);
 });
+
+it("keeps staff invite-use records append-only on deploy and re-bootstrap", async () => {
+  const readGrants = async () => {
+    const { rows: [grants] } = await client.query(`select
+      has_table_privilege('app_user','invite_link_uses','SELECT') as can_read,
+      has_table_privilege('app_user','invite_link_uses','INSERT') as can_insert,
+      has_table_privilege('app_user','invite_link_uses','UPDATE') as can_update,
+      has_table_privilege('app_user','invite_link_uses','DELETE') as can_delete`);
+    return grants;
+  };
+  const appendOnly = { can_read: true, can_insert: true, can_update: false, can_delete: false };
+  expect(await readGrants()).toEqual(appendOnly);
+  const { bootstrapRoles } = await import("@/db/bootstrap-roles");
+  await bootstrapRoles(container.getConnectionUri(), "first-deploy-test");
+  expect(await readGrants()).toEqual(appendOnly);
+});

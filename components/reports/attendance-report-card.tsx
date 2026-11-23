@@ -30,7 +30,7 @@ export async function AttendanceReportCard({
   return (
     <article className="bg-paper border border-line rounded-card p-4">
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-[15px] font-semibold">
+        <h2 className="font-display text-[16px] font-semibold">
           Attendance by {resolveTerm(terminology, "batch", 1)}
         </h2>
         <a

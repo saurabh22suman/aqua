@@ -1,33 +1,40 @@
-import Link from "next/link";
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
+import { isLiveOwnerForSettings } from "@/lib/auth/owner-settings-page-guard";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { cookies } from "next/headers";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
 import { hasPermission } from "@/lib/auth/permission";
-import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
+import { withTenant } from "@/db/tenant";
+import { tenants } from "@/db/schema/tenants";
+import { eq } from "drizzle-orm";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { resolveTerm, titleCase } from "@/lib/terminology/keys";
 import { listPlansAction } from "@/lib/actions/membership-plans";
 import { defaultMonthPeriod } from "@/lib/services/owner-reports";
-import { FACILITY_COOKIE, resolveFacilityValue } from "@/lib/facility";
+import { FACILITY_COOKIE, resolveRequestedFacility } from "@/lib/facility";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
 import {
   getFeesOverviewAction,
   listHubInvoicesAction,
   listHubTransactionsAction,
 } from "@/lib/actions/fees-hub";
-import { formatINR } from "@/lib/money/format";
-import { formatDateIST, formatDateTimeIST, formatPeriodRangeIST } from "@/lib/time/tz";
+import { formatINR, formatINRWhole } from "@/lib/money/format";
 import { methodLabel } from "@/lib/services/payments";
 import {
   groupLabel,
   isPaymentGroup,
   isPaymentMethod,
 } from "@/lib/money/payment-groups";
-import { BackLink } from "@/components/ui/BackLink";
+import { buttonClasses } from "@/components/ui/Button";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { SectionHeading } from "@/components/ui/PageHeader";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
 import { FEES_TABS, FeesTabs, type FeesTab } from "@/components/fees/fees-tabs";
 import { FeesInvoiceList } from "@/components/fees/fees-invoice-list";
-import { DataTable } from "@/components/ui/DataTable";
-import { StatCard } from "@/components/ui/StatCard";
+import { FeesTransactionList } from "@/components/fees/fees-transaction-list";
+import { FeesPeriodControl } from "@/components/fees/fees-period-control";
+import { FeesSummaryMetrics } from "@/components/fees/fees-summary-metrics";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-import { ProgressBar } from "@/components/ui/ProgressBar";
 
 // U-02 — the Fees & Payments hub: Overview / Transactions / Dues /
 // Invoices / Plans over the existing C-29…C-39 services. Tabs are
@@ -40,7 +47,6 @@ const TAB_KEYS = new Set(FEES_TABS.map((t) => t.key));
 function resolveTab(value: string | undefined): FeesTab {
   return TAB_KEYS.has(value as FeesTab) ? (value as FeesTab) : "overview";
 }
-
 export default async function FeesPage({
   searchParams,
 }: {
@@ -51,25 +57,38 @@ export default async function FeesPage({
     facility?: string;
     method?: string;
     group?: string;
+    invoice?: string;
+    overdue?: string;
   }>;
 }) {
   const ctx = await requireOwner();
   requirePagePermission(ctx, "reports.financial");
-  // Plans management is settings.manage; reads stay open.
-  const canManageSettings = hasPermission(ctx, "settings.manage");
   const params = searchParams ? await searchParams : {};
   const tab = resolveTab(params.tab);
+  // This subset is independent of the reporting window.
+  const overdueOnly = tab === "dues" && params.overdue === "1";
   const cookieStore = await cookies();
-  const facility = resolveFacilityValue(
-    params.facility,
-    cookieStore.get(FACILITY_COOKIE)?.value,
-  );
-  const timezone = await getTenantTimezoneAction();
+  const scope = resolveRequestedFacility({
+    facility: params.facility,
+    cookie: cookieStore.get(FACILITY_COOKIE)?.value,
+  });
+  const facility = scope.facilityId;
+  if (!scope.valid || (facility && !(await canSelectFacility(ctx, facility)))) {
+    const recovery = new URLSearchParams({ tab, facility: "all" });
+    if (overdueOnly) recovery.set("overdue", "1");
+    if (params.from && /^\d{4}-\d{2}-\d{2}$/.test(params.from)) recovery.set("from", params.from);
+    if (params.to && /^\d{4}-\d{2}-\d{2}$/.test(params.to)) recovery.set("to", params.to);
+    return <OwnerPage workflow="ledger"><OwnerDesignHeading title="Club unavailable" purpose="This club is unavailable for your account." /><Link href={`/owner/fees?${recovery.toString()}`} className={buttonClasses({ variant: "secondary", size: "md" })}>View available clubs</Link></OwnerPage>;
+  }
+  // Plans management is settings.manage; reads stay open.
+  const canManageSettings = hasPermission(ctx, "settings.manage") && await isLiveOwnerForSettings(ctx);
+  const [tenant] = await withTenant(ctx.tenantId, (tx) => tx.select({ timezone: tenants.timezone }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1));
+  const timezone = tenant?.timezone ?? "Asia/Kolkata";
   const period =
     params.from && params.to
       ? { from: params.from, to: params.to }
       : defaultMonthPeriod(timezone);
-  const terminology = await getTerminologyAction();
+  const terminology = await getTerminologyAction().then(ownerTerminology);
   const memberLabel = titleCase(resolveTerm(terminology, "member", 1));
   // Home's payment-mix drill-down narrows this list (and only this list).
   const method = isPaymentMethod(params.method) ? params.method : undefined;
@@ -79,12 +98,28 @@ export default async function FeesPage({
     : group
       ? `${groupLabel(group)} payments`
       : null;
+  // OpenPen reference — only period-bound tabs name the reporting period.
+  // Dues and Invoices describe current documents, so a month label there
+  // would falsely narrow the balances to that period.
+  const purpose =
+    tab === "overview"
+      ? "Review fees and payments."
+      : tab === "transactions"
+        ? "Recorded payments and their receipts."
+        : tab === "dues"
+          ? overdueOnly
+            ? "Overdue balances only, with due dates and invoice state."
+            : "Current balances, with due dates and invoice state."
+          : tab === "invoices"
+            ? "Invoice documents, including paid and partial records."
+            : "Read the plans catalogue; manage pricing in Settings.";
 
   const [overview, invoices, transactions, plans] = await Promise.all([
     getFeesOverviewAction({ ...period, ...(facility ? { locationId: facility } : {}) }),
     tab === "dues" || tab === "invoices"
       ? listHubInvoicesAction({
           status: tab === "dues" ? "dues" : "all",
+          ...(overdueOnly ? { overdueOnly: true } : {}),
           ...(facility ? { locationId: facility } : {}),
         })
       : Promise.resolve([]),
@@ -95,101 +130,36 @@ export default async function FeesPage({
           ...(method ? { method } : {}),
           ...(group ? { group } : {}),
         })
-      : Promise.resolve([]),
+      : // The ledger returns rows plus the count the filter matches, so a
+        // truncated list can say so honestly instead of presenting a page as
+        // the whole ledger.
+        Promise.resolve({
+          rows: [],
+          totalCount: 0,
+          truncated: false,
+          limit: 200,
+        }),
     tab === "plans" ? listPlansAction() : Promise.resolve([]),
   ]);
   return (
-    <main className="px-5 pt-6 pb-8">
-      <BackLink href="/owner/reports" label="Reports" />
-      <h1 className="mt-2 font-display text-[19px] font-semibold">
-        Fees &amp; payments
-      </h1>
-      <p className="mt-1.5 text-[13px] text-ink-3">
-        Collect, reconcile and review — one place over plans, invoices,
-        counter payments and receipts. Period{" "}
-        {formatPeriodRangeIST(period.from, period.to)} ({timezone}).
-      </p>
+    <OwnerPage workflow="ledger" data-owner-money-page="fees">
+      <OwnerDesignHeading title="Fees & payments" purpose={purpose} />
 
       <div className="mt-4">
         <FeesTabs
           active={tab}
           period={period}
-          facility={facility}
+          facility={facility ?? "all"}
           canManageSettings={canManageSettings}
         />
       </div>
 
+      {tab === "overview" || tab === "transactions" ? (
+        <FeesPeriodControl compact={ctx.roleKey === "owner"} tab={tab} from={period.from} to={period.to} facility={facility ?? "all"} timezone={timezone} method={method} group={group} />
+      ) : null}
+
       {tab === "overview" ? (
-        <section className="mt-4 space-y-3">
-          <div className="rounded-card border border-line bg-paper p-4">
-            <p className="text-[12px] font-medium text-ink-3">Collected this period</p>
-            <p className="kpi mt-1 text-[30px] font-semibold">
-              {formatINR(overview.collectedPaise)}
-            </p>
-            <p className="mt-1 text-[12.5px] text-ink-3">
-              {overview.paymentCount} payment
-              {overview.paymentCount === 1 ? "" : "s"} recorded at the counter
-              {overview.reversedPaise > 0
-                ? `, net of ${formatINR(overview.reversedPaise)} reversed (${overview.reversalCount})`
-                : ""}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard
-              label="Outstanding"
-              value={formatINR(overview.outstandingPaise)}
-              hint={`${overview.dueInvoiceCount} invoice${
-                overview.dueInvoiceCount === 1 ? "" : "s"
-              } with a balance`}
-              href={`/owner/fees?tab=dues&from=${period.from}&to=${period.to}${
-                facility ? `&facility=${facility}` : ""
-              }`}
-              tone="paper"
-            />
-            <StatCard
-              label="Overdue"
-              value={
-                <span className={overview.overduePaise > 0 ? "text-late" : undefined}>
-                  {formatINR(overview.overduePaise)}
-                </span>
-              }
-              hint={`${overview.overdueInvoiceCount} past the due date · today ${formatDateIST(
-                overview.today,
-              )}`}
-              tone="paper"
-            />
-          </div>
-          {overview.overdueInvoiceCount > 0 ? (
-            <div className="rounded-card border border-line bg-paper p-4">
-              <h3 className="font-display text-[15px] font-semibold">Overdue ageing</h3>
-              <p className="mt-0.5 text-[12.5px] text-ink-3">
-                Days past the due date (IST). This is money owed, not money
-                collected; invoices due today are not yet late.
-              </p>
-              <ul className="mt-3 space-y-2.5">
-                {overview.overdueAgeing.map((row) => (
-                  <li key={row.bucket}>
-                    <div className="flex items-baseline justify-between gap-3 text-[12.5px]">
-                      <span className="font-medium text-ink-2">{row.bucket} days</span>
-                      <span className="tabular-nums text-ink-2">
-                        {formatINR(row.paise)} · {row.count} invoice
-                        {row.count === 1 ? "" : "s"}
-                      </span>
-                    </div>
-                    <div className="mt-1">
-                      <ProgressBar
-                        value={row.paise}
-                        max={overview.overduePaise}
-                        tone="late"
-                        label={`${row.bucket} days overdue`}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </section>
+        <FeesSummaryMetrics overview={overview} facility={facility} period={period} />
       ) : null}
 
       {tab === "transactions" ? (
@@ -201,106 +171,70 @@ export default async function FeesPage({
           {activeFilter ? (
             <Link
               href={`/owner/fees?tab=transactions&from=${period.from}&to=${period.to}${
-                facility ? `&facility=${facility}` : ""
+                `&facility=${facility ?? "all"}`
               }`}
               className="mt-1 inline-flex min-h-[44px] items-center text-[12.5px] text-water"
             >
               Clear filter
             </Link>
           ) : null}
-          <div className="mt-2">
-            <DataTable
-              columns={[
-                {
-                  key: "received",
-                  label: "Received",
-                  render: (t) => (
-                    <span className="text-ink-3">{formatDateTimeIST(t.receivedAt)}</span>
-                  ),
-                },
-                {
-                  key: "member",
-                  label: memberLabel,
-                  render: (t) => <span className="text-ink">{t.memberName ?? "—"}</span>,
-                },
-                {
-                  key: "invoice",
-                  label: "Invoice",
-                  render: (t) => (
-                    <span className="font-mono text-ink-3">{t.invoiceNumber ?? "—"}</span>
-                  ),
-                },
-                {
-                  key: "method",
-                  label: "Method",
-                  render: (t) =>
-                    t.kind === "reversal" ? (
-                      <span className="text-ink-2">
-                        Reversal
-                        {t.reason ? <span className="ml-1 text-ink-3">{t.reason}</span> : null}
-                      </span>
-                    ) : (
-                      <span className="text-ink-2">
-                        {methodLabel(t.method)}
-                        {t.reference ? (
-                          <span className="ml-1 text-ink-3">{t.reference}</span>
-                        ) : null}
-                      </span>
-                    ),
-                },
-                {
-                  key: "amount",
-                  label: "Amount",
-                  align: "right",
-                  render: (t) => (
-                    <span
-                      className={`font-mono ${t.amountPaise < 0 ? "text-late" : "text-ink"}`}
-                    >
-                      {t.amountPaise < 0
-                        ? `−${formatINR(Math.abs(t.amountPaise))}`
-                        : formatINR(t.amountPaise)}
-                    </span>
-                  ),
-                },
-              ]}
-              rows={transactions}
-              rowKey={(t) => t.id}
-              empty={
-                <p className="text-[13px] text-ink-3">
-                  No counter payments in this period.
-                </p>
-              }
-            />
-          </div>
+          {transactions.truncated ? (
+            <p className="mt-2 text-[12.5px] text-ink-3">
+              Showing the newest {transactions.rows.length} of{" "}
+              {transactions.totalCount} transactions in this period. Narrow the
+              period or the filter to see the rest.
+            </p>
+          ) : null}
+          <FeesTransactionList rows={transactions.rows} memberLabel={memberLabel} canReadReceipts={hasPermission(ctx, "invoices.read")} />
         </section>
       ) : null}
 
       {tab === "dues" ? (
         <section className="mt-4">
-          <h2 className="font-display text-[15px] font-semibold">Dues</h2>
-          <p className="mt-1 text-[12.5px] text-ink-3">
-            Oldest due first. Open an invoice to record what the counter
-            collected — the balance updates and the receipt becomes available.
-          </p>
+          <nav aria-label="Dues view" className="owner-pastel-switch">
+            <Link
+              href={`/owner/fees?${new URLSearchParams({ tab: "dues", facility: facility ?? "all", ...period })}`}
+              aria-current={!overdueOnly ? "page" : undefined}
+              aria-label="View all dues"
+            >
+              All dues
+            </Link>
+            <Link
+              href={`/owner/fees?${new URLSearchParams({ tab: "dues", overdue: "1", facility: facility ?? "all", ...period })}`}
+              aria-current={overdueOnly ? "page" : undefined}
+            >
+              Overdue
+            </Link>
+          </nav>
+          <div className={`owner-money-kpi mt-3${overdueOnly ? " is-overdue" : ""}`}>
+            <h2>{overdueOnly ? "Overdue invoices" : "Outstanding invoices"}</h2>
+            <p className="owner-money-value">
+              {formatINRWhole(overdueOnly ? overview.overduePaise : overview.outstandingPaise)}
+            </p>
+            <p>{overdueOnly ? overview.overdueInvoiceCount : overview.dueInvoiceCount} with a balance · Oldest due first</p>
+          </div>
           <FeesInvoiceList
             initial={invoices}
             filter="dues"
             facility={facility}
+            overdueOnly={overdueOnly}
             canWrite={hasPermission(ctx, "invoices.write")}
             canVoid={hasPermission(ctx, "settings.manage")}
             canRecord={hasPermission(ctx, "payments.record")}
             canRefund={hasPermission(ctx, "payments.refund")}
             canReadPayments={hasPermission(ctx, "payments.read")}
+            caption={overdueOnly ? "Overdue invoices" : "Outstanding invoices"}
+            navigationNamespace={`${ctx.tenantId}:${ctx.userId}`}
           />
         </section>
       ) : null}
 
       {tab === "invoices" ? (
         <section className="mt-4">
-          <h2 className="font-display text-[15px] font-semibold">Invoices</h2>
-          <p className="mt-1 text-[12.5px] text-ink-3">
-            Every document, newest first — including settled and voided ones.
-          </p>
+          <SectionHeading
+            title="Invoice ledger"
+            subtitle="Every document, newest first — including settled and voided ones."
+          />
           <FeesInvoiceList
             initial={invoices}
             filter="all"
@@ -310,23 +244,24 @@ export default async function FeesPage({
             canRecord={hasPermission(ctx, "payments.record")}
             canRefund={hasPermission(ctx, "payments.refund")}
             canReadPayments={hasPermission(ctx, "payments.read")}
+            caption="Invoice ledger"
+            initialInvoiceId={params.invoice}
           />
         </section>
       ) : null}
 
       {tab === "plans" ? (
         <section className="mt-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-display text-[15px] font-semibold">Plans</h2>
-            {canManageSettings ? (
-              <Link
-                href="/owner/settings/plans"
-                className="text-[13px] text-water"
-              >
-                Manage plans →
-              </Link>
-            ) : null}
-          </div>
+          <SectionHeading
+            title="Available membership plans"
+            trailing={
+              canManageSettings ? (
+                <Link href="/owner/settings/plans" className="text-[13px] text-water">
+                  Manage plans →
+                </Link>
+              ) : null
+            }
+          />
           {plans.length === 0 ? (
             <p className="mt-2 text-[13px] text-ink-3">
               No priced plans yet. Price a preset template or add your own
@@ -356,12 +291,8 @@ export default async function FeesPage({
               ))}
             </ul>
           )}
-          <p className="mt-2 text-[12px] text-ink-3">
-            Discount codes are a Phase 5 feature and are not part of this
-            release.
-          </p>
         </section>
       ) : null}
-    </main>
+    </OwnerPage>
   );
 }

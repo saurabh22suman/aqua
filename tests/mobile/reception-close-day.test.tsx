@@ -60,7 +60,7 @@ afterEach(() => {
 });
 
 describe("ReceptionCloseDay committed-close refresh", () => {
-  it("keeps the success message when the post-close refresh fails", async () => {
+  it("keeps the success message and prevents resubmitting when the post-close refresh fails", async () => {
     confirmCashCountAction.mockResolvedValue({ ok: true, variancePaise: 0 });
     getReceptionCloseSummaryAction.mockRejectedValue(new Error("offline"));
 
@@ -68,7 +68,7 @@ describe("ReceptionCloseDay committed-close refresh", () => {
     await confirmCount();
 
     await screen.findByText(/closed — counted cash matched/i);
-    expect(document.body.textContent).not.toMatch(/couldn't save the count/i);
+    expect(document.body.textContent).not.toMatch(/couldn't confirm the cash close/i);
     expect(getReceptionCloseSummaryAction).toHaveBeenCalledTimes(1);
     await waitFor(() =>
       expect(
@@ -77,8 +77,9 @@ describe("ReceptionCloseDay committed-close refresh", () => {
             name: /confirm cash count/i,
           }) as HTMLButtonElement
         ).disabled,
-      ).toBe(false),
+      ).toBe(true),
     );
+    expect(screen.getByRole("button", { name: "Check close status" })).toBeTruthy();
   });
 
   it("keeps the check-before-retry copy for a genuine save failure", async () => {
@@ -87,7 +88,7 @@ describe("ReceptionCloseDay committed-close refresh", () => {
     renderClose();
     await confirmCount();
 
-    await screen.findByText(/couldn't save the count/i);
+    await screen.findByText(/couldn't confirm the cash close/i);
     expect(document.body.textContent).toMatch(/check whether the day closed/i);
     expect(getReceptionCloseSummaryAction).not.toHaveBeenCalled();
   });

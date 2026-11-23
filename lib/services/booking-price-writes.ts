@@ -1,3 +1,4 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, eq } from "drizzle-orm";
 import { withTenant } from "@/db/tenant";
 import { bookingPriceRules, type BookingPriceRule } from "@/db/schema/bookings";
@@ -18,7 +19,7 @@ import {
   type BookingPriceRuleToggleResult,
   type SaveBookingPriceRuleResult,
 } from "@/lib/services/booking-price-rules";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 
 // Batch 6 — the WRITE half of booking price administration.
 //
@@ -57,7 +58,7 @@ import type { ActionCtx } from "@/lib/auth/context";
 // that rule, absent = a new one. Every write is one transaction with
 // its audit row.
 export async function saveBookingPriceRule(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<SaveBookingPriceRuleResult> {
   const parsed = saveBookingPriceRuleInput.safeParse(raw);
@@ -75,6 +76,9 @@ export async function saveBookingPriceRule(
   if (windowError) return { ok: false, error: windowError };
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
 
     let existing: BookingPriceRule | undefined;
@@ -216,7 +220,7 @@ export async function saveBookingPriceRule(
 // Activate or deactivate one rule. Deactivating is how a club retires
 // a price without deleting the audit trail of what it used to be.
 export async function setBookingPriceRuleActive(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<BookingPriceRuleToggleResult> {
   const parsed = setBookingPriceRuleActiveInput.safeParse(raw);
@@ -225,6 +229,9 @@ export async function setBookingPriceRuleActive(
   const actorId = ctx.userId;
 
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const access = await resolveLocationAccess(tx, ctx);
     const [existing] = await tx
       .select()

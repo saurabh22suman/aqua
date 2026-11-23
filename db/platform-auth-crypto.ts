@@ -10,7 +10,8 @@ import {
 // manageable and the env-login module can share the exact same
 // hashing/comparison code without importing through the login flow.
 
-export const PLATFORM_SESSION_TTL_SECONDS = 60 * 60 * 8; // 8h, sliding on activity
+export const PLATFORM_SESSION_TTL_SECONDS = 60 * 60 * 8; // 8h after authenticator verification
+export const PLATFORM_CHALLENGE_TTL_SECONDS = 5 * 60;
 export const SCRYPT_N = 16384; // CPU/memory cost — Node default; raised for prod if desired
 
 export class PlatformAuthError extends Error {
@@ -22,7 +23,8 @@ export class PlatformAuthError extends Error {
       | "session_expired"
       | "session_invalid"
       | "second_factor_required"
-      | "user_suspended",
+      | "user_suspended"
+      | "rate_limited",
     message: string,
   ) {
     super(message);

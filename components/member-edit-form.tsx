@@ -2,18 +2,45 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { updateMemberAction } from "@/lib/actions/people";
 import type { LocationOption, MemberDetail } from "@/lib/services/people";
 import { DateField } from "@/components/ui/DateField";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { Dialog } from "@/components/ui/Dialog";
+import {
+  memberEditDocumentNavigation,
+  resolveHistoryEditReturn,
+  resolveMemberEditReturn,
+  useMemberEditOrigin,
+  type MemberEditExpectation,
+} from "@/components/member-detail/member-edit-entry";
+import { hasMembersReturnIntent } from "@/components/members-list-navigation";
 
 export function MemberEditForm({
   member,
   locations,
+  returnHref,
+  originIntent,
 }: {
   member: MemberDetail;
   locations: LocationOption[];
+  // Where the owner goes back to: the profile, in the scope the edit was
+  // opened under. Optional — a consumer without it keeps today's plain
+  // destination.
+  returnHref?: string;
+  // Present only when the server page can prove which entry this edit came
+  // from. The client matches the one-time intent; when it does, Cancel returns
+  // with the browser's own Back instead of a fresh profile navigation.
+  originIntent?: MemberEditExpectation;
 }) {
   const router = useRouter();
+  const profileHref = returnHref ?? `/owner/members/${member.memberId}`;
+  const capturedOrigin = useMemberEditOrigin(originIntent ?? null);
   const [fullName, setFullName] = useState(member.fullName);
   const [phone, setPhone] = useState(member.phone ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(member.dateOfBirth ?? "");
@@ -22,10 +49,23 @@ export function MemberEditForm({
   const [locationId, setLocationId] = useState(member.locationId);
   const [medicalNotes, setMedicalNotes] = useState(member.medicalNotes ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [saveUnconfirmed, setSaveUnconfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const changes = ([
+    ["Full name", fullName !== member.fullName],
+    ["Phone", phone !== (member.phone ?? "")],
+    ["Date of birth", dateOfBirth !== (member.dateOfBirth ?? "")],
+    ["Joined on", joinedOn !== member.joinedOn],
+    ["Gender", gender !== (member.gender ?? "")],
+    ["Location", locationId !== member.locationId],
+    ["Medical notes", medicalNotes !== (member.medicalNotes ?? "")],
+  ] as const).filter(([, changed]) => changed).map(([label]) => label);
+  const dirty = changes.length > 0;
 
   async function submit() {
     setError(null);
+    setSaveUnconfirmed(false);
     if (!fullName.trim() || !dateOfBirth || !locationId) {
       setError("Full name, date of birth and location are required.");
       return;
@@ -46,9 +86,10 @@ export function MemberEditForm({
         setError(result.error);
         return;
       }
-      router.push(`/owner/members/${member.memberId}`);
+      router.push(profileHref);
     } catch {
-      setError("The change could not be saved. Check the fields and try again.");
+      setSaveUnconfirmed(true);
+      setError("Could not confirm the save. Your draft is still here.");
     } finally {
       setBusy(false);
     }
@@ -56,90 +97,211 @@ export function MemberEditForm({
 
   return (
     <div className="space-y-2.5">
-      <label className="block">
-        <span className="block text-[12px] text-ink-3 mb-1">Full name</span>
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="Full name"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
-      </label>
-      <label className="block">
-        <span className="block text-[12px] text-ink-3 mb-1">Phone (optional)</span>
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone (optional)"
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
-      </label>
-      <div>
-        <label htmlFor="edit-dob" className="block text-[12px] text-ink-3 mb-1">
-          Date of birth
-        </label>
-        <DateField id="edit-dob" value={dateOfBirth} onChange={setDateOfBirth} />
+      <section aria-label="Changes to save" className="rounded-ctl border border-line bg-deck px-3 py-2.5">
+        <p role="status" className="text-[13px] font-medium text-ink">
+          {dirty ? `${changes.length} ${changes.length === 1 ? "field" : "fields"} changed` : "No unsaved changes"}
+        </p>
+        {dirty ? <p className="mt-0.5 text-[12px] text-ink-2">{changes.join(" · ")}</p> : null}
+      </section>
+      <h2 className="font-display text-[16px] font-semibold">
+        Personal details
+      </h2>
+      <Field id="edit-full-name-field" label="Full name">
+        {(field) => (
+          <Input
+            {...field}
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Full name"
+          />
+        )}
+      </Field>
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+        <Field id="edit-phone-field" label="Phone (optional)">
+          {(field) => (
+            <Input
+              {...field}
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone (optional)"
+            />
+          )}
+        </Field>
+        <Field id="edit-dob" label="Date of birth" required>
+          {(field) => (
+            <DateField
+              {...field}
+              value={dateOfBirth}
+              onChange={setDateOfBirth}
+              data-testid="member-dob"
+            />
+          )}
+        </Field>
+        <Field id="edit-joined-on" label="Joined on">
+          {(field) => (
+            <DateField
+              {...field}
+              value={joinedOn}
+              onChange={setJoinedOn}
+              data-testid="member-joined-on"
+            />
+          )}
+        </Field>
+        <Field id="edit-location-field" label="Location">
+          {(field) => (
+            <Select
+              {...field}
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+            >
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
-      <div>
-        <label
-          htmlFor="edit-joined-on"
-          className="block text-[12px] text-ink-3 mb-1"
+      <Field id="edit-gender-field" label="Gender (optional)">
+        {(field) => (
+          <Select
+            {...field}
+            value={gender}
+            onChange={(e) => setGender(e.target.value)}
+          >
+            <option value="">Not specified</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </Select>
+        )}
+      </Field>
+      <section aria-label={originIntent ? "Care notes" : undefined} className={originIntent ? "owner-work-panel" : undefined}>
+        {originIntent ? <h2 className="mb-2 font-semibold">Care notes</h2> : null}
+        <Field id="edit-medical-notes-field" label="Medical notes (optional)">
+          {(field) => (
+            <Textarea
+              {...field}
+              value={medicalNotes}
+              onChange={(e) => setMedicalNotes(e.target.value)}
+              placeholder="Medical notes (optional)"
+              rows={2}
+            />
+          )}
+        </Field>
+      </section>
+
+      {error ? (
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2.5">
+          <p role="alert" className="text-[13px] text-ink-2">{error}</p>
+          {saveUnconfirmed ? <a href={profileHref} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-[13px] font-medium text-water underline">
+            Check saved profile in a new tab
+          </a> : null}
+        </div>
+      ) : null}
+
+      <div className="flex gap-2 pt-1">
+        {originIntent ? (
+          // Keep document navigation when there is no scoped origin to restore.
+          <a
+            href={profileHref}
+            className={`${buttonClasses({ variant: "secondary", size: "md" })} flex-1`}
+            onClick={(event) => {
+              if (busy || dirty) {
+                event.preventDefault();
+                if (!busy) setConfirmDiscard(true);
+                return;
+              }
+              // A modified click belongs to the browser.
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey ||
+                event.button !== 0
+              ) {
+                return;
+              }
+              // Proven origin (module capture or this entry's own record):
+              // return the way it came.
+              if (
+                resolveMemberEditReturn(capturedOrigin, originIntent) ??
+                resolveHistoryEditReturn(originIntent)
+              ) {
+                event.preventDefault();
+                router.back();
+                return;
+              }
+              // No proven origin, but the in-memory directory return for THIS
+              // namespace and facility would be lost by a document load: keep
+              // the client route.
+              if (hasMembersReturnIntent(originIntent.namespace, originIntent.facility)) {
+                event.preventDefault();
+                router.push(profileHref);
+              }
+            }}
+          >
+            Cancel
+          </a>
+        ) : (
+          // Legacy consumer without the optional props: today's Next Link.
+          <Link
+            href={profileHref}
+            className={`${buttonClasses({ variant: "secondary", size: "md" })} flex-1`}
+            onClick={(event) => {
+              if (busy || dirty) {
+                event.preventDefault();
+                if (!busy) setConfirmDiscard(true);
+              }
+            }}
+          >
+            Cancel
+          </Link>
+        )}
+        <Button
+          type="button"
+          variant="primary"
+          size="md"
+          onClick={submit}
+          disabled={busy}
+          className="flex-[2]"
         >
-          Joined on
-        </label>
-        <DateField
-          id="edit-joined-on"
-          value={joinedOn}
-          onChange={setJoinedOn}
-          data-testid="member-joined-on"
-        />
+          {busy ? "Saving…" : "Save changes"}
+        </Button>
       </div>
-      <select
-        value={gender}
-        onChange={(e) => setGender(e.target.value)}
-        aria-label="Gender"
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      >
-        <option value="">Gender (optional)</option>
-        <option value="male">Male</option>
-        <option value="female">Female</option>
-        <option value="other">Other</option>
-      </select>
-      <select
-        value={locationId}
-        onChange={(e) => setLocationId(e.target.value)}
-        aria-label="Location"
-        className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-      >
-        {locations.map((l) => (
-          <option key={l.id} value={l.id}>
-            {l.name}
-          </option>
-        ))}
-      </select>
-      <label className="block">
-        <span className="block text-[12px] text-ink-3 mb-1">Medical notes (optional)</span>
-        <textarea
-          value={medicalNotes}
-          onChange={(e) => setMedicalNotes(e.target.value)}
-          placeholder="Medical notes (optional)"
-          rows={2}
-          className="w-full min-h-11 rounded-ctl border border-line bg-paper px-3 py-2.5 text-[16px]"
-        />
-      </label>
-
-      {error ? <p className="text-[13px] text-ink-3">{error}</p> : null}
-
-      <button
-        type="button"
-        onClick={submit}
-        disabled={busy}
-        className="w-full rounded-ctl bg-[var(--accent-strong)] py-3 text-[14px] font-medium text-white disabled:opacity-50"
-      >
-        {busy ? "Saving…" : "Save changes"}
-      </button>
+      <Dialog
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Discard changes?"
+        description="Your unsaved changes will be lost."
+        hideClose
+        footer={<>
+          <Button type="button" onClick={() => setConfirmDiscard(false)}>Keep editing</Button>
+          <Button type="button" variant="secondary" onClick={() => {
+            setConfirmDiscard(false);
+            if (!originIntent) {
+              router.push(profileHref);
+              return;
+            }
+            if (
+              resolveMemberEditReturn(capturedOrigin, originIntent) ??
+              resolveHistoryEditReturn(originIntent)
+            ) {
+              router.back();
+              return;
+            }
+            if (hasMembersReturnIntent(originIntent.namespace, originIntent.facility)) {
+              router.push(profileHref);
+              return;
+            }
+            // Direct edit with no proven origin and no scoped state to keep.
+            memberEditDocumentNavigation.assign(profileHref);
+          }}>Discard changes</Button>
+        </>}
+      />
     </div>
   );
 }

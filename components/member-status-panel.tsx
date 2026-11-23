@@ -6,17 +6,21 @@ import { transitionMemberStatusAction } from "@/lib/actions/people";
 import { MEMBER_STATUS_LABELS, MEMBER_STATUS_TRANSITIONS } from "@/lib/member-status-graph";
 import type { MemberStatus } from "@/db/schema/people";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 
 export function MemberStatusPanel({
   memberId,
   status,
   canWrite,
+  summary,
 }: {
   memberId: string;
   status: MemberStatus;
   // R10 (2026-10-13 role-workflow audit) — transitions ride
   // members.write; readers see the current state without the controls.
   canWrite: boolean;
+  summary?: { plans: Array<{name:string; status:string}> | null; balance?: string | null };
 }) {
   const router = useRouter();
   const [target, setTarget] = useState<MemberStatus | null>(null);
@@ -52,28 +56,39 @@ export function MemberStatusPanel({
     }
   }
 
-  if (!canWrite || options.length === 0) return null;
+  if ((!canWrite || options.length === 0) && !summary) return null;
 
   return (
-    <div className="mt-3">
-      <p className="text-[12px] text-ink-3">
-        Separate from the paid plan — pausing one does not pause the other.
-      </p>
+    <>
+    {summary ? <div className="space-y-1 text-[13px] text-ink-2">
+      <p>Participation: {MEMBER_STATUS_LABELS[status]}</p>
+      <p>Membership plan: {summary.plans === null ? "Unavailable" : summary.plans.length ? summary.plans.map(plan => `${plan.name} · ${plan.status}`).join(", ") : "No active or paused plan"}</p>
+      {summary.balance !== undefined ? <p>Outstanding: {summary.balance ?? "Unavailable"}</p> : null}
+      <p>Participation and plan status are separate.</p>
+    </div> : null}
+    {canWrite && options.length > 0 ? (
+    <details className="mt-3">
+      <summary className="min-h-11 cursor-pointer content-center text-[13px] text-ink-2">Change participation status</summary>
       {target ? (
         <div className="rounded-card border border-line bg-paper p-3.5 space-y-2.5">
           <p className="text-[13px] font-medium">
             Move to {MEMBER_STATUS_LABELS[target]} — why?
           </p>
-          <label htmlFor={reasonId} className="block text-[13px] text-ink-2">Reason for status change</label>
-          <input id={reasonId} disabled={busy}
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason"
-            className="w-full min-h-11 rounded-ctl border border-line bg-deck px-3 py-2 text-[16px]"
-            data-testid="status-reason"
-            autoFocus
-          />
+          <Field id={reasonId} label="Reason for status change">
+            {(field) => (
+              <Input
+                {...field}
+                id={reasonId}
+                disabled={busy}
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason"
+                data-testid="status-reason"
+                autoFocus
+              />
+            )}
+          </Field>
           {error ? <p role="alert" className="text-[12px] text-late">{error}</p> : null}
           <div className="flex gap-2">
             <Button
@@ -111,6 +126,8 @@ export function MemberStatusPanel({
           ))}
         </div>
       )}
-    </div>
+    </details>
+    ) : null}
+    </>
   );
 }

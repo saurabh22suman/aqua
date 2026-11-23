@@ -1,16 +1,29 @@
-import Link from "next/link";
-import { UserCog } from "lucide-react";
+import { ownerTerminology } from "@/lib/terminology/owner-terms";
+import { OwnerLink as Link } from "@/components/owner-ui/owner-link";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { hasPermission } from "@/lib/auth/permission";
 import { listUpcomingSessions } from "@/lib/services/coach-schedule";
 import { listCoaches } from "@/lib/services/programs";
-import { listBatches } from "@/lib/services/programs";
 import { UpcomingSessionsList } from "@/components/upcoming-sessions-list";
 import { getTerminologyAction } from "@/lib/actions/terminology";
 import { getTenantTimezoneAction } from "@/lib/actions/tenant-timezone";
 import { daysAheadWindow } from "@/lib/time/tz";
 import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
-import { BackLink } from "@/components/ui/BackLink";
+import { buttonClasses } from "@/components/ui/Button";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { OwnerDesignHeading } from "@/components/owner-approved/owner-design-heading";
+import { ScheduleSurfaceSwitch } from "@/components/owner-approved/operations/schedule-surface-switch";
+import { cookies } from "next/headers";
+import { FACILITY_COOKIE } from "@/lib/facility";
+import { canSelectFacility } from "@/lib/services/selected-facility-access";
+import { ownerFacilityHref, resolveOwnerFacility } from "@/lib/owner-scope/facility";
+import {
+  SCHEDULE_CALENDAR_PATH,
+  parseScheduleDate,
+  parseScheduleView,
+  scheduleCalendarHref,
+  scheduleListHref,
+} from "@/lib/owner-scope/schedule";
 
 // F3 (R.1) — owner-facing upcoming-sessions page. Lists every
 // scheduled session in the tenant over the next two weeks, with
@@ -18,82 +31,110 @@ import { BackLink } from "@/components/ui/BackLink";
 // the surface the audit's R.1 promised ("Coach substitution —
 // records who actually took the session. ... If substitution
 // does not write the substitute, the wrong coach is paid and
-// the bug is invisible from the register surface.") and that
-// did not exist before this commit — the action existed, the
-// service existed, but the user could not reach them.
+// the bug is invisible from the register surface.").
 //
-// Permission: management-only (owner / admin). The session
-// data includes substitute buttons that mutate production data;
-// coaches use the existing coach-side surfaces (their schedule
-// page lists their own sessions and uses them).
+// Audit simplification (21 November 2026) — this is the LIST surface
+// of the single Schedule job, not a separate destination. The
+// Calendar / List switch is in the heading; program setup stays on
+// /owner/programs. The URL and the programs.write guard are unchanged.
+//
+// The `date`/`view` parameters are return context for the calendar
+// only. The list keeps its shipped "today + 14 days" upcoming window
+// and Today / Next 7 days / Full window filters: adding a date anchor
+// here would change what the list MEANS, so it is deliberately not
+// applied to the query.
 
-export default async function SessionsPage() {
+export default async function SessionsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ facility?: string; location?: string; date?: string; view?: string }>;
+}) {
   await requireOwner();
   const ctx = await requireDefaultCtx();
   requirePagePermission(ctx, "programs.write");
+
+  const params = (await searchParams) ?? {};
+  const cookieStore = await cookies();
+  const scope = resolveOwnerFacility({
+    facility: params.facility,
+    location: params.location,
+    cookie: cookieStore.get(FACILITY_COOKIE)?.value,
+  });
+  if (!scope.ok || (scope.facilityId && !(await canSelectFacility(ctx, scope.facilityId)))) {
+    return (
+      <OwnerPage workflow="planner">
+        <OwnerDesignHeading
+          title="Facility unavailable"
+          purpose="This facility is unavailable for your account."
+        />
+        <Link href="/owner/sessions?facility=all">View available facilities</Link>
+      </OwnerPage>
+    );
+  }
+  const facility = scope.facilityId;
+
+  const returnDate = parseScheduleDate(params.date);
+  const returnView = parseScheduleView(params.view);
 
   const timezone = await getTenantTimezoneAction();
   const { fromDate, toDate } = daysAheadWindow(timezone, 14);
 
   const [upcoming, coaches, terminology] = await Promise.all([
-    listUpcomingSessions(ctx, fromDate, toDate),
+    listUpcomingSessions(ctx, fromDate, toDate, facility),
     listCoaches(ctx),
     // The substitute coach picker labels itself with closed-key
-    // `coach` (L3 audit). Fetching once at the page so the
-    // UpcomingSessionsList → SessionSubstituteControl prop
-    // drill is just data, not extra round trips.
-    getTerminologyAction(),
+    // `coach` (L3 audit).
+    getTerminologyAction().then(ownerTerminology),
   ]);
 
-  // unused here, but importing keeps the export live for tests
-  // that may assert the page resolves both lists.
-  void listBatches;
+  // Only an authorized calendar is offered; only a valid carried day
+  // and view are replayed, otherwise the calendar opens on its own
+  // default rather than on a broken anchor.
+  const calendarHref = hasPermission(ctx, "attendance.read")
+    ? returnDate && returnView
+      ? scheduleCalendarHref({ facilityId: facility, date: returnDate, view: returnView })
+      : ownerFacilityHref(SCHEDULE_CALENDAR_PATH, facility)
+    : undefined;
+  const listHref = scheduleListHref({
+    facilityId: facility,
+    date: returnDate,
+    view: returnView,
+  });
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <BackLink href="/owner/programs" label="Programs" />
-
-      <div className="flex items-center gap-2">
-        <UserCog size={20} className="text-ink-2" />
-        <h1 className="font-display text-[19px] font-semibold">Sessions</h1>
-      </div>
-      <p className="mt-1 text-[12.5px] text-ink-3">
-        Upcoming sessions across every batch — substitute a coach when
-        someone is unavailable. The change is recorded so the register
-        reads who actually ran the session.
-      </p>
-
-      <Link
-        href="/owner/schedule"
-        className="mt-4 flex items-center justify-between rounded-card border border-line bg-paper px-3.5 py-3"
-      >
-        <span>
-          <span className="block text-[14px] font-medium text-ink">
-            Schedule grid
-          </span>
-          <span className="block text-[12px] text-ink-3">
-            Week or month view with each batch&apos;s capacity lane and a
-            location filter.
-          </span>
-        </span>
-        <span className="text-[13px] text-ink-3">→</span>
-      </Link>
-
-      <UpcomingSessionsList
-        initialSessions={upcoming}
-        coaches={coaches}
-        terminology={terminology}
-        timezone={timezone}
-        canManage={hasPermission(ctx, "programs.write")}
+    <OwnerPage workflow="planner">
+      <OwnerDesignHeading
+        title="Schedule"
+        purpose="Find a session to change its coach, time or status."
+        action={
+          <>
+            <ScheduleSurfaceSwitch
+              active="list"
+              calendarHref={calendarHref}
+              listHref={listHref}
+            />
+            {hasPermission(ctx, "programs.read") ? <Link
+              href={ownerFacilityHref("/owner/programs", facility)}
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
+              Programs &amp; batches
+            </Link> : null}
+          </>
+        }
       />
 
-      <div className="mt-6 rounded-card border border-line bg-paper p-4">
-        <p className="text-[12.5px] text-ink-3">
-          The window opens on today. Use Manage on a row to substitute,
-          cancel or reschedule it inline — reschedules guard against coach
-          conflicts before they save.
-        </p>
+      <div className="mt-5">
+        <UpcomingSessionsList
+          key={facility ?? "all"}
+          initialSessions={upcoming}
+          coaches={coaches}
+          terminology={terminology}
+          timezone={timezone}
+          dateWindow={{ fromDate, toDate }}
+          compactOwner={ctx.roleKey === "owner"}
+          canManage={hasPermission(ctx, "programs.write")}
+        />
       </div>
-    </main>
+    </OwnerPage>
   );
 }

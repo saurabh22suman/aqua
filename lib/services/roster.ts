@@ -11,7 +11,7 @@ import {
 } from "@/lib/services/location-access";
 import { addDays } from "@/lib/time/tz";
 import type { StaffId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // V-23 — the roster reads and the publish gate. Split from the
 // template/shift mutation service so each file stays reviewable; the
@@ -111,7 +111,7 @@ export type PublishRosterResult =
   | { ok: false; error: string };
 
 export async function publishRosterWeek(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<PublishRosterResult> {
   const parsed = publishRosterInput.safeParse(raw);

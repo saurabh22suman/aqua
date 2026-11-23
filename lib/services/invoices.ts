@@ -15,11 +15,22 @@ import { asMemberId } from "@/lib/ids";
 import type { ActionCtx } from "@/lib/auth/context";
 import { toSafePaise } from "@/lib/money/safe-paise";
 import type { InvoiceStatus, InvoiceSource } from "@/db/schema/invoices";
+import type { InvoicePayerKind } from "@/db/schema/invoices";
+import { invoiceIssuerSnapshot } from "@/lib/services/facility-billing-snapshot";
+import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { invoiceCorrectionEligibilityInTx, type InvoiceCorrectionEligibility } from "@/lib/services/invoice-correction-eligibility";
+import { asCollectionHold, type CollectionHold } from "@/lib/collection-hold";
+import { invoiceCollectionHoldSql } from "@/lib/services/collection-eligibility";
 
 // C-32 — invoice reads. Location-scoped (O-08): a scoped receptionist
 // sees only their own facility's documents. The write paths live in
 // invoice-mutations.ts (ctx-facing) and invoice-issue.ts (the shared
 // in-transaction core).
+//
+// WR-1 / Option A — a guest invoice has no member, so the member join
+// here is a LEFT join. The document must still open: an invoice the
+// owner can see in the fees ledger but cannot open is a row that
+// disappears exactly where the money is.
 
 export type { InvoiceStatus };
 
@@ -38,11 +49,17 @@ export type InvoiceRow = {
   status: InvoiceStatus;
   source: InvoiceSource;
   gstin: string | null;
+  issuer?: BillingIssuer | null;
   locationId: string;
   locationName: string;
   subscriptionId: string | null;
   activityName: string | null;
   createdAt: string;
+  // Local audit batch (2026-11-21) — the confirmed "hold collection for
+  // owner review" policy. Present only when a linked booking was
+  // cancelled; the amounts, payments and receipts all remain visible.
+  // Optional so existing fixtures and ordinary invoices are unchanged.
+  collectionHold?: CollectionHold;
 };
 
 export type InvoiceLineRow = {
@@ -59,8 +76,13 @@ export type InvoiceLineRow = {
 };
 
 export type InvoiceDetail = InvoiceRow & {
-  memberId: string;
-  memberName: string;
+  correctionEligibility?: InvoiceCorrectionEligibility;
+  // WR-1 — a guest invoice has no member.
+  memberId: string | null;
+  memberName: string | null;
+  // Which kind of payer this document names, and the name to show.
+  payerKind: InvoicePayerKind;
+  payerName: string;
   lines: InvoiceLineRow[];
 };
 
@@ -68,12 +90,14 @@ type InvoiceJoinRow = {
   invoice: typeof invoices.$inferSelect;
   locationName: string;
   activityName: string | null;
+  collectionHold: string | null;
 };
 
 function toRow(row: InvoiceJoinRow): InvoiceRow {
   const inv = row.invoice;
   const total = toSafePaise(inv.totalPaise);
   const paid = toSafePaise(inv.paidPaise);
+  const collectionHold = asCollectionHold(row.collectionHold);
   return {
     id: inv.id,
     invoiceNumber: inv.invoiceNumber,
@@ -89,11 +113,13 @@ function toRow(row: InvoiceJoinRow): InvoiceRow {
     status: inv.status as InvoiceStatus,
     source: inv.source as InvoiceSource,
     gstin: inv.gstin,
+    issuer: invoiceIssuerSnapshot(inv),
     locationId: inv.locationId,
     locationName: row.locationName,
     subscriptionId: inv.subscriptionId,
     activityName: row.activityName,
     createdAt: inv.createdAt.toISOString(),
+    ...(collectionHold ? { collectionHold } : {}),
   };
 }
 
@@ -115,6 +141,7 @@ export async function listMemberInvoices(
         invoice: invoices,
         locationName: locations.name,
         activityName: facilities.name,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
       .innerJoin(locations, eq(locations.id, invoices.locationId))
@@ -150,17 +177,21 @@ export async function getInvoice(
         invoice: invoices,
         locationName: locations.name,
         memberName: persons.fullName,
+        guestName: invoices.guestName,
+        collectionHold: invoiceCollectionHoldSql(invoices.tenantId, invoices.id),
       })
       .from(invoices)
       .innerJoin(locations, eq(locations.id, invoices.locationId))
-      .innerJoin(
+      // WR-1 — a guest invoice has no member, so this join cannot be an
+      // inner join: the document must still open.
+      .leftJoin(
         members,
         and(
           eq(members.id, invoices.memberId),
           eq(members.tenantId, ctx.tenantId),
         ),
       )
-      .innerJoin(persons, eq(persons.id, members.personId))
+      .leftJoin(persons, eq(persons.id, members.personId))
       .where(
         and(eq(invoices.id, invoiceId), eq(invoices.tenantId, ctx.tenantId)),
       )
@@ -184,11 +215,18 @@ export async function getInvoice(
       invoice: row.invoice,
       locationName: row.locationName,
       activityName: null,
+      collectionHold: row.collectionHold,
     });
+    const payerKind = row.invoice.payerKind as InvoicePayerKind;
     return {
       ...base,
+      correctionEligibility: await invoiceCorrectionEligibilityInTx(tx, ctx.tenantId, row.invoice.id),
       memberId: row.invoice.memberId,
       memberName: row.memberName,
+      payerKind,
+      // WR-1 — the payer's display name: the member's name for a
+      // member payer, the buyer's name for a guest payer.
+      payerName: row.memberName ?? row.guestName ?? "",
       lines: lineRows.map((line) => {
         const tax = toSafePaise(line.taxPaise);
         const split = splitIntraStateTax(tax);

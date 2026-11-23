@@ -12,7 +12,7 @@ import { getOwnerCharts, type OwnerChartsData } from "@/lib/services/owner-home-
 
 const inputSchema = z
   .object({
-    period: z.enum(["day", "week", "month"]).optional(),
+    period: z.enum(["day", "last7", "week", "month"]).optional(),
     facility: z.string().uuid().optional(),
   })
   .optional();
@@ -21,6 +21,8 @@ export async function getOwnerChartsAction(raw?: unknown): Promise<OwnerChartsDa
   const parsed = inputSchema.parse(raw);
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "dashboard.view");
+  requirePermission(ctx, "reports.financial");
+  requirePermission(ctx, "invoices.read");
   return getOwnerCharts(ctx, {
     ...(parsed?.period ? { period: parsed.period } : {}),
     ...(parsed?.facility ? { locationId: parsed.facility } : {}),

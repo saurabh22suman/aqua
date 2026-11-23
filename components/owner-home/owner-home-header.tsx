@@ -1,49 +1,37 @@
+import { Suspense } from "react";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { OwnerStageScope } from "@/components/owner-home/owner-facility-scope";
 import { formatFullDateIST } from "@/lib/time/tz";
-import type { ReactNode } from "react";
 
-// Owner Home — the header that opens the screen.
+// Owner Today — the head of the photographic stage.
 //
-// The approved board opens with three real things and then the work:
-// the day, the club, and the location the figures cover. Nothing here
-// is decorative and nothing here is invented — the date is the
-// tenant's own day, the name is the academy's, and the location is
-// the scope the figures were read under.
-//
-// The heading says "Your club today" rather than a greeting: a greeting
-// ("a good day for your club") asserts how the day is going, and the
-// day may have three overdue payments in it.
-export function OwnerHomeHeader({
-  displayName,
-  scopeLabel,
-  today,
-  illustration,
-}: {
-  displayName: string;
-  /** The location the figures cover, or "All locations". */
-  scopeLabel: string | null;
-  /** The tenant's own day (ISO date). */
-  today: string;
-  illustration?: ReactNode;
-}) {
+// Floodlit puts the date and the authorized facility scope at the top of
+// the stage, with the page title under them; the figures follow inside
+// the same block. The scope is the REAL switcher (see
+// owner-facility-scope.tsx); its option list is resolved and
+// location-filtered by the owner layout, so this header adds no read and
+// no grant.
+export function OwnerHomeHeader({ today }: { today: string }) {
   return (
-    <header
-      data-testid="owner-home-context"
-      className="flex items-start justify-between gap-4"
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
-          {formatFullDateIST(today)}
+    <>
+      <header className="floodlit-hero-top">
+        <p className="floodlit-date">
+          <OwnerIcon name="calendar" size={15} />
+          <time dateTime={today}>{formatFullDateIST(today)}</time>
         </p>
-        <h1 className="mt-1.5 font-display text-[24px] font-semibold leading-tight tracking-[-0.02em] sm:text-[28px]">
-          Your club today
-        </h1>
-        <p className="mt-1 text-[13px] leading-relaxed text-ink-3">
-          {"Here’s how things are looking at "}
-          <span className="font-medium text-ink-2">{displayName}</span>
-          {scopeLabel ? ` · ${scopeLabel}` : ""}
-        </p>
-      </div>
-      {illustration ? <div className="flex-none">{illustration}</div> : null}
-    </header>
+        <Suspense
+          fallback={
+            <span role="status" className="sr-only">
+              Loading clubs…
+            </span>
+          }
+        >
+          <OwnerStageScope />
+        </Suspense>
+      </header>
+      <h1 id="owner-home-title" className="floodlit-title">
+        Club overview
+      </h1>
+    </>
   );
 }

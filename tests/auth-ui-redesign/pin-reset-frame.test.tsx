@@ -32,17 +32,19 @@ describe("PIN recovery screen", () => {
   });
 
   it("uses the same frame as the sign-in screen", () => {
-    render(<ResetPinPage />);
+    const recovery = render(<ResetPinPage />);
 
-    // One main landmark, the editorial panel, the brand lockup.
+    // One main landmark inside the shared sign-in frame.
     expect(screen.getAllByRole("main")).toHaveLength(1);
-    expect(
-      screen.getByRole("complementary", { name: /about aqua/i }),
-    ).toBeTruthy();
+    expect(screen.getByRole("main").hasAttribute("data-login-welcome")).toBe(true);
     expect(screen.getAllByText("Aqua").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("heading", { level: 1, name: /reset your pin/i }),
     ).toBeTruthy();
+
+    recovery.unmount();
+    render(<LoginPage />);
+    expect(screen.getByRole("main").hasAttribute("data-login-welcome")).toBe(true);
   });
 
   it("keeps the way back to sign-in", () => {

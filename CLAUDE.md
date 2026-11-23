@@ -8,7 +8,7 @@
 - Read the task's sections in `docs/architecture.md`; use `docs/project-scope.md`
   for scope/pricing decisions and `DESIGN.md` for every UI task.
 - Look up library APIs with Context7 first, matching installed/lockfile versions.
-  Next.js is **15.5.24**; do not apply Next 16 cache-components/proxy guidance.
+  Next.js is **15.5.28**; do not apply Next 16 cache-components/proxy guidance.
 - Setup, tooling provenance and OpenCode shortcuts: `docs/opencode-development.md`.
   Read `db/CLAUDE.md` before data-layer work.
 
@@ -19,7 +19,8 @@
   refactor verification and relevant negative/security cases. Do not fabricate
   RED for inherited code or substitute import errors/green snapshots for it.
 - For the current redesign read docs/design-system/README.md and delivery.md.
-  Two light themes only; mobile-first except ops; no heavy motion library or
+  Three approved presets (Mint Garden, Lavender Club, Slate & Amber); one layout,
+  mobile-first except ops; no heavy motion library or
   experimental framework migration. Preserve scoped offline security.
 
 ## Development and verification

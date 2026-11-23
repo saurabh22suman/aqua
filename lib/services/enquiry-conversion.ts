@@ -1,11 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
-import { withTenant } from "@/db/tenant";
+import { withTenant, type TenantTx } from "@/db/tenant";
 import { enquiries, type EnquirySource, type EnquiryStage } from "@/db/schema/enquiries";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 import { ENQUIRY_STAGE_TRANSITIONS } from "@/lib/enquiry-stage-graph";
-import { createMember, enrolMember, type GuardianInput } from "@/lib/services/register";
-import { transitionMemberStatus } from "@/lib/services/member-status";
-import { nextMemberCode } from "@/lib/services/people";
+import { createMemberInTx, enrolMemberInTx, type GuardianInput } from "@/lib/services/register";
+import { transitionMemberStatusInTx } from "@/lib/services/member-status";
+import { nextMemberCode, nextMemberCodeInTx } from "@/lib/services/people";
 import {
   visibleBatch,
   visibleMember,
@@ -15,7 +15,8 @@ import type { MemberId } from "@/lib/ids";
 import {
   enquiryConditions,
   enquiryScope,
-  visibleEnquiry,
+  lockVisibleEnquiry,
+  type VisibleEnquiry,
 } from "@/lib/services/enquiry-scope";
 import { auditEnquiryStateChanged, enquiryAuditState } from "@/lib/services/enquiry-audit";
 
@@ -23,11 +24,21 @@ import { auditEnquiryStateChanged, enquiryAuditState } from "@/lib/services/enqu
 // converting, and the conversion rate by source.
 
 const MAX_CODE_ATTEMPTS = 5;
-const DUPLICATE_CODE_MARKER = "members_tenant_member_code_key";
+// PostgreSQL assigns this name to the inline constraint in migration 0006.
+const MEMBER_CODE_CONSTRAINT = "members_tenant_id_member_code_key";
 
-function duplicateCodeMessage(err: unknown): string {
-  const e = err as { message?: string; cause?: { message?: string } };
-  return e.cause?.message ?? e.message ?? "";
+function isMemberCodeCollision(err: unknown): boolean {
+  let cursor = err;
+  for (let depth = 0; depth < 5 && cursor && typeof cursor === "object"; depth += 1) {
+    const { code, constraint, cause } = cursor as {
+      code?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+    if (code === "23505") return constraint === MEMBER_CODE_CONSTRAINT;
+    cursor = cause;
+  }
+  return false;
 }
 
 export type NewMemberDetails = {
@@ -39,203 +50,225 @@ export type NewMemberDetails = {
   consents: ConsentGrantInput[];
 };
 
-// C-14: books a trial against a real batch by creating a real member
-// (status 'trial') and enrolling them -- not a separate booking
-// record. This is NOT one atomic transaction: withTenant() cannot
-// nest (db/scope.ts), so createMember, enrolMember and the enquiry
-// update below are three sequential transactions, same shape as
-// scripts/seed.ts's createMember-then-enrolMember and
-// createMemberAction's own retry loop (lib/actions/people.ts). If
-// enrolment or the enquiry update fails after the member was created,
-// the member row still exists -- a receptionist retrying the booking
-// sees "this enquiry already has a member linked" (below) rather than
-// silently creating a second one.
+// A trial commits its member, enrolment and enquiry under the same lock.
+class BookingRefused extends Error {
+  constructor(readonly reason: string) {
+    super(reason);
+    this.name = "BookingRefused";
+  }
+}
+
 export async function bookTrial(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
-  const enquiry = await withTenant(ctx.tenantId, async (tx) => {
-    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
-    if (!visible) return null;
-    // R04 — the trial batch must be visible to the caller (tenant,
-    // live, location in scope; coach-assignment applies if ever
-    // reachable from a coach role). A forged batch id is refused
-    // before any member is created.
-    if (!(await visibleBatch(tx, ctx, input.batchId))) return null;
-    return visible;
-  });
-  if (!enquiry) return { ok: false, error: "Enquiry or batch not found." };
-  if (enquiry.memberId) return { ok: false, error: "This enquiry already has a member linked." };
-
-  const fromStage = enquiry.stage as EnquiryStage;
-  if (!(ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? []).includes("trial_scheduled")) {
-    return { ok: false, error: `Cannot book a trial from stage ${fromStage}.` };
-  }
-
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const memberCode = await nextMemberCode(ctx);
-    let created;
     try {
-      created = await createMember(ctx, {
-        fullName: enquiry.fullName,
-        phone: input.phone ?? enquiry.phone ?? undefined,
-        dateOfBirth: input.details.dateOfBirth,
-        gender: input.details.gender,
-        locationId: input.details.locationId,
-        memberCode,
-        medicalNotes: input.details.medicalNotes,
-        guardian: input.details.guardian,
-        consents: input.details.consents,
-        witnessedByUserId: ctx.userId,
-        initialStatus: "trial",
-      });
+      return await bookTrialInTx(ctx, input, memberCode);
     } catch (err) {
-      if (duplicateCodeMessage(err).includes(DUPLICATE_CODE_MARKER) && attempt < MAX_CODE_ATTEMPTS - 1) {
+      if (err instanceof BookingRefused) {
+        return { ok: false, error: err.reason };
+      }
+      if (isMemberCodeCollision(err) && attempt < MAX_CODE_ATTEMPTS - 1) {
         continue;
       }
       throw err;
     }
-    if (!created.ok) return created;
-
-    await enrolMember(ctx, { memberId: created.memberId, batchId: input.batchId });
-    await withTenant(ctx.tenantId, async (tx) => {
-      await tx
-        .update(enquiries)
-        .set({
-          memberId: created.memberId,
-          trialBatchId: input.batchId,
-          stage: "trial_scheduled",
-          // R04 — assigning the trial site also resolves a legacy
-          // unassigned enquiry; an already-assigned row is untouched.
-          ...(enquiry.locationId ? {} : { locationId: input.details.locationId as never }),
-          updatedAt: new Date(),
-          updatedBy: ctx.userId,
-        })
-        .where(eq(enquiries.id, input.enquiryId));
-      // The enquiry's own audit row goes in the SAME transaction as
-      // its update. The member's creation and the enrolment keep their
-      // own rows — this one is about what happened to the enquiry.
-      await auditEnquiryStateChanged(tx, ctx, {
-        action: "enquiry.trial_book",
-        id: input.enquiryId,
-        before: enquiryAuditState(enquiry),
-        after: {
-          ...enquiryAuditState(enquiry),
-          stage: "trial_scheduled",
-          memberId: created.memberId,
-          trialBatchId: input.batchId,
-          locationId: enquiry.locationId ?? input.details.locationId,
-        },
-      });
-    });
-    return { ok: true, memberId: created.memberId };
   }
   return { ok: false, error: "Could not generate a unique member code. Try again." };
 }
 
-// C-15: converts an enquiry to a member, preserving source
-// attribution (enquiries.source survives untouched; enquiries.member_id
-// links to the resulting member either way). Two paths: the enquiry
-// already has a member (a trial happened, C-14) -- just move that
-// member trial -> active. Or it doesn't (converting directly, no
-// trial) -- create the member fresh via createMember, same as C-06's
-// registration flow, status active immediately.
-export async function convertEnquiry(
-  ctx: ActionCtx,
-  input: { enquiryId: string; reason: string; newMember?: NewMemberDetails },
+async function bookTrialInTx(
+  ctx: MutationActor,
+  input: { enquiryId: string; batchId: string; phone?: string; details: NewMemberDetails },
+  memberCode: string,
 ): Promise<{ ok: true; memberId: MemberId } | { ok: false; error: string }> {
-  const enquiry = await withTenant(ctx.tenantId, async (tx) => {
-    const visible = await visibleEnquiry(tx, ctx, input.enquiryId);
-    if (!visible) return null;
-    if (visible.memberId && !(await visibleMember(tx, ctx, visible.memberId))) return null;
-    return visible;
-  });
-  if (!enquiry) return { ok: false, error: "Enquiry not found." };
-
-  const fromStage = enquiry.stage as EnquiryStage;
-  if (!(ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? []).includes("converted")) {
-    return { ok: false, error: `Cannot convert an enquiry from stage ${fromStage}.` };
-  }
-
-  if (enquiry.memberId) {
-    const result = await transitionMemberStatus(ctx, {
-      memberId: enquiry.memberId,
-      toStatus: "active",
-      reason: input.reason,
-    });
-    if (!result.ok) return result;
-
-    await withTenant(ctx.tenantId, async (tx) => {
-      await tx
-        .update(enquiries)
-        .set({ stage: "converted", updatedAt: new Date(), updatedBy: ctx.userId })
-        .where(eq(enquiries.id, input.enquiryId));
-      await auditEnquiryStateChanged(tx, ctx, {
-        action: "enquiry.convert",
-        id: input.enquiryId,
-        before: enquiryAuditState(enquiry),
-        after: { ...enquiryAuditState(enquiry), stage: "converted" },
-      });
-    });
-    return { ok: true, memberId: enquiry.memberId };
-  }
-
-  if (!input.newMember) {
-    return { ok: false, error: "Member details are required to convert an enquiry that never had a trial." };
-  }
-
-  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
-    const memberCode = await nextMemberCode(ctx);
-    let created;
-    try {
-      created = await createMember(ctx, {
-        fullName: enquiry.fullName,
-        phone: enquiry.phone ?? undefined,
-        dateOfBirth: input.newMember.dateOfBirth,
-        gender: input.newMember.gender,
-        locationId: input.newMember.locationId,
-        memberCode,
-        medicalNotes: input.newMember.medicalNotes,
-        guardian: input.newMember.guardian,
-        consents: input.newMember.consents,
-        witnessedByUserId: ctx.userId,
-      });
-    } catch (err) {
-      if (duplicateCodeMessage(err).includes(DUPLICATE_CODE_MARKER) && attempt < MAX_CODE_ATTEMPTS - 1) {
-        continue;
-      }
-      throw err;
+  return withTenant(ctx.tenantId, async (tx) => {
+    const enquiry = await lockVisibleEnquiry(tx, ctx, input.enquiryId);
+    // R04 — the trial batch must be visible to the caller (tenant,
+    // live, location in scope; coach-assignment applies if ever
+    // reachable from a coach role). A forged batch id is refused
+    // before any member is created.
+    if (!enquiry || !(await visibleBatch(tx, ctx, input.batchId))) {
+      throw new BookingRefused("Enquiry or batch not found.");
     }
-    if (!created.ok) return created;
+    if (enquiry.memberId) {
+      throw new BookingRefused("This enquiry already has a member linked.");
+    }
 
-    await withTenant(ctx.tenantId, async (tx) => {
-      await tx
-        .update(enquiries)
-        .set({
-          memberId: created.memberId,
-          stage: "converted",
-          // R04 — conversion resolves a legacy unassigned enquiry to
-          // the site chosen for the new member.
-          ...(enquiry.locationId ? {} : { locationId: input.newMember!.locationId as never }),
-          updatedAt: new Date(),
-          updatedBy: ctx.userId,
-        })
-        .where(eq(enquiries.id, input.enquiryId));
-      await auditEnquiryStateChanged(tx, ctx, {
-        action: "enquiry.convert",
-        id: input.enquiryId,
-        before: enquiryAuditState(enquiry),
-        after: {
-          ...enquiryAuditState(enquiry),
-          stage: "converted",
-          memberId: created.memberId,
-          locationId: enquiry.locationId ?? input.newMember!.locationId,
-        },
-      });
+    const fromStage = enquiry.stage as EnquiryStage;
+    if (!(ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? []).includes("trial_scheduled")) {
+      throw new BookingRefused(`Cannot book a trial from stage ${fromStage}.`);
+    }
+
+    const created = await createMemberInTx(tx, ctx, {
+      fullName: enquiry.fullName,
+      phone: input.phone ?? enquiry.phone ?? undefined,
+      dateOfBirth: input.details.dateOfBirth,
+      gender: input.details.gender,
+      locationId: input.details.locationId,
+      memberCode,
+      medicalNotes: input.details.medicalNotes,
+      guardian: input.details.guardian,
+      consents: input.details.consents,
+      witnessedByUserId: ctx.userId,
+      initialStatus: "trial",
+    });
+    if (!created.ok) throw new BookingRefused(created.error);
+
+    const enrolled = await enrolMemberInTx(tx, ctx, {
+      memberId: created.memberId,
+      batchId: input.batchId,
+    });
+    if (!enrolled.ok) throw new BookingRefused(enrolled.error);
+
+    await tx
+      .update(enquiries)
+      .set({
+        memberId: created.memberId,
+        trialBatchId: input.batchId,
+        stage: "trial_scheduled",
+        // R04 — assigning the trial site also resolves a legacy
+        // unassigned enquiry; an already-assigned row is untouched.
+        ...(enquiry.locationId ? {} : { locationId: input.details.locationId as never }),
+        updatedAt: new Date(),
+        updatedBy: ctx.userId,
+      })
+      .where(eq(enquiries.id, input.enquiryId));
+    await auditEnquiryStateChanged(tx, ctx, {
+      action: "enquiry.trial_book",
+      id: input.enquiryId,
+      before: enquiryAuditState(enquiry),
+      after: {
+        ...enquiryAuditState(enquiry),
+        stage: "trial_scheduled",
+        memberId: created.memberId,
+        trialBatchId: input.batchId,
+        locationId: enquiry.locationId ?? input.details.locationId,
+      },
     });
     return { ok: true, memberId: created.memberId };
+  });
+}
+
+type ConversionInput = {
+  enquiryId: string;
+  reason: string;
+  newMember?: NewMemberDetails;
+};
+
+type ConversionResult = { ok: true; memberId: MemberId } | { ok: false; error: string };
+
+// Success is identified by the enquiry's linked member. Serialize retries
+// and stage changes on the enquiry row, and commit all writes together.
+export async function convertEnquiry(
+  ctx: MutationActor,
+  input: ConversionInput,
+): Promise<ConversionResult> {
+  for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
+    try {
+      return await convertEnquiryInTx(ctx, input);
+    } catch (err) {
+      if (!isMemberCodeCollision(err)) throw err;
+    }
   }
   return { ok: false, error: "Could not generate a unique member code. Try again." };
+}
+
+async function convertEnquiryInTx(
+  ctx: MutationActor,
+  input: ConversionInput,
+): Promise<ConversionResult> {
+  return withTenant(ctx.tenantId, async (tx) => {
+    const enquiry = await lockVisibleEnquiry(tx, ctx, input.enquiryId);
+    if (!enquiry) return { ok: false, error: "Enquiry not found." };
+    const fromStage = enquiry.stage as EnquiryStage;
+
+    if (enquiry.memberId && !(await visibleMember(tx, ctx, enquiry.memberId))) {
+      return { ok: false, error: "Enquiry not found." };
+    }
+
+    if (fromStage === "converted" && enquiry.memberId) {
+      return { ok: true, memberId: enquiry.memberId };
+    }
+
+    if (!(ENQUIRY_STAGE_TRANSITIONS[fromStage] ?? []).includes("converted")) {
+      return { ok: false, error: `Cannot convert an enquiry from stage ${fromStage}.` };
+    }
+
+    if (enquiry.memberId) {
+      // A completed trial may already be active after an older partial save.
+      const acceptActive = fromStage === "trial_completed" && enquiry.trialBatchId !== null;
+      const result = await transitionMemberStatusInTx(
+        tx,
+        ctx,
+        { memberId: enquiry.memberId, toStatus: "active", reason: input.reason },
+        acceptActive,
+      );
+      if (!result.ok) return result;
+      await finishConversion(tx, ctx, enquiry, enquiry.memberId);
+      return { ok: true, memberId: enquiry.memberId };
+    }
+
+    if (!input.newMember) {
+      return { ok: false, error: "Member details are required to convert an enquiry that never had a trial." };
+    }
+
+    const newMember = input.newMember;
+    const memberCode = await nextMemberCodeInTx(tx, ctx.tenantId);
+    const created = await createMemberInTx(tx, ctx, {
+      fullName: enquiry.fullName,
+      phone: enquiry.phone ?? undefined,
+      dateOfBirth: newMember.dateOfBirth,
+      gender: newMember.gender,
+      locationId: newMember.locationId,
+      memberCode,
+      medicalNotes: newMember.medicalNotes,
+      guardian: newMember.guardian,
+      consents: newMember.consents,
+      witnessedByUserId: ctx.userId,
+    });
+    if (!created.ok) return created;
+
+    await finishConversion(tx, ctx, enquiry, created.memberId, newMember.locationId);
+    return { ok: true, memberId: created.memberId };
+  });
+}
+
+async function finishConversion(
+  tx: TenantTx,
+  ctx: MutationActor,
+  enquiry: VisibleEnquiry,
+  memberId: MemberId,
+  newMemberLocationId?: string,
+): Promise<void> {
+  await tx
+    .update(enquiries)
+    .set({
+      memberId,
+      stage: "converted",
+      // R04 — conversion resolves a legacy unassigned enquiry to the
+      // site chosen for the new member. A trial-linked conversion never
+      // rewrites the location it already has.
+      ...(enquiry.locationId || !newMemberLocationId
+        ? {}
+        : { locationId: newMemberLocationId }),
+      updatedAt: new Date(),
+      updatedBy: ctx.userId,
+    })
+    .where(eq(enquiries.id, enquiry.id));
+  await auditEnquiryStateChanged(tx, ctx, {
+    action: "enquiry.convert",
+    id: enquiry.id,
+    before: enquiryAuditState(enquiry),
+    after: {
+      ...enquiryAuditState(enquiry),
+      stage: "converted",
+      memberId,
+      locationId: enquiry.locationId ?? newMemberLocationId ?? null,
+    },
+  });
 }
 
 export type SourceConversion = { source: EnquirySource; total: number; converted: number; ratePct: number };

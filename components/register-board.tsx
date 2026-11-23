@@ -17,7 +17,7 @@ const DEFAULT_TERMINOLOGY: TerminologyState = { overrides: {}, locale: "en" };
 // areas. The domain stores `late` already; the register never offered
 // it. `warn`, not `late` — a late arrival is not the absent state.
 const TOGGLE_BASE =
-  "h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150";
+  "h-11 w-11 grid place-items-center rounded-ctl border transition-colors duration-150 motion-reduce:transition-none disabled:cursor-not-allowed disabled:opacity-60";
 const TOGGLE_TONES: Record<Mark, { on: string; label: string }> = {
   present: { on: "bg-good-soft border-good text-good", label: "Present" },
   late: { on: "bg-warn-soft border-warn text-warn", label: "Late" },
@@ -35,12 +35,14 @@ export function RegisterBoard({
   rows,
   offlineSyncEnabled,
   offlineIdentity,
+  sessionContext,
   terminology = DEFAULT_TERMINOLOGY,
 }: {
   sessionId: string;
   rows: RosterRow[];
   offlineSyncEnabled: boolean;
   offlineIdentity?: OfflineIdentity | null;
+  sessionContext?: string;
   // Closed-key vocab resolved by the parent server page (L3 audit).
   // Optional so existing callers/tests render the generic terms; the
   // page passes the tenant-resolved state.
@@ -54,13 +56,18 @@ export function RegisterBoard({
     mark,
     markedCount,
     pending,
+    retryable = pending,
     online,
     savedAtLabel,
     hasActiveFailure,
+    hasSyncFailure = hasActiveFailure,
+    markWrites = {},
     saving,
     retrySync,
     offlineAvailable,
     sessionEnded,
+    review = [],
+    discardReview,
   } = useOfflineRegister(sessionId, rows, initialStatuses, offlineSyncEnabled, offlineIdentity);
 
   // C-D1 (2026-09-13 audit) — bulk marking for the common case where
@@ -71,6 +78,7 @@ export function RegisterBoard({
   // dropped responses; sequential writes keep the count honest and let
   // the button show progress.
   const unmarked = rows.filter((r) => !marks[r.memberId]);
+  const hasUnsavedMarks = Object.values(markWrites).some(write => write?.error);
   const canMark = offlineAvailable || online;
   const [bulk, setBulk] = useState<{ done: number; total: number } | null>(null);
   if (sessionEnded) return <div role="alert" className="py-6 text-[14px] text-ink-2">
@@ -79,7 +87,7 @@ export function RegisterBoard({
   </div>;
 
   async function markAllPresent() {
-    if (bulk) return;
+    if (bulk || !canMark) return;
     const targets = [...unmarked];
     setBulk({ done: 0, total: targets.length });
     for (let i = 0; i < targets.length; i++) {
@@ -112,7 +120,8 @@ export function RegisterBoard({
           this is the same signature element the coach today-list and (once
           built) the owner/parent screens reuse. See DESIGN.md §"the lane
           strip". */}
-      <div className="sticky top-0 z-10 -mx-5 px-5 pt-3 pb-3 bg-deck/95 backdrop-blur-sm">
+      <section aria-label={sessionContext ?? "Register controls"} className="sticky top-0 z-10 pt-3 pb-3 bg-deck/95 backdrop-blur-sm">
+        {sessionContext ? <p className="mb-2 break-words text-xs font-semibold text-ink-2" data-register-context>{sessionContext}</p> : null}
         {/* Sync-failure banner (online + hasActiveFailure): the mark
             that didn't land is the single most urgent operational
             signal on this screen. Distinct colour, distinct copy,
@@ -120,7 +129,7 @@ export function RegisterBoard({
             can act on outranks a "saved locally" message that they
             can't. DESIGN.md §1.1: `late` = error / overdue state, the
             correct token here. */}
-        {online && hasActiveFailure ? (
+        {online && offlineSyncEnabled && hasSyncFailure ? (
           <button
             type="button"
             onClick={() => void retrySync()}
@@ -128,7 +137,7 @@ export function RegisterBoard({
             className="mb-2 block w-full rounded-card border border-late bg-late-soft px-4 py-3 text-left"
           >
             <p className="text-[13px] font-semibold text-late">
-              Couldn&apos;t sync {pending === 1 ? "1 mark" : `${pending} marks`}.
+              {retryable > 0 ? `Couldn't sync ${retryable === 1 ? "1 mark" : `${retryable} marks`}.` : "Couldn't sync. Check the connection."}
             </p>
             <p className="mt-0.5 text-[12px] text-late">Tap to retry.</p>
           </button>
@@ -155,10 +164,17 @@ export function RegisterBoard({
               {pending === 1 ? "1 mark" : `${pending} marks`} saved locally.
             </p>
             <p className="mt-0.5 text-[12px] text-warn">
-              Will sync when you&apos;re online.
+              {retryable > 0 ? "Eligible marks will sync when you are online." : "Reconnect to check the register."} Unsynced marks are removed when offline access expires or you sign out.
             </p>
           </div>
         ) : null}
+
+        {online && pending > 0 ? <p className="mb-2 text-[12px] text-warn" role="status">
+          Unsynced marks are removed when offline access expires or you sign out. {retryable > 0 ? "Sync them before then." : "Review them before then."}
+        </p> : null}
+        {review.length > 0 ? <div role="alert" className="mb-2 rounded-card border border-warn bg-warn-soft px-4 py-3 text-sm text-ink">
+          {review.length} unsynced {review.length === 1 ? "mark needs" : "marks need"} review. Discard the affected mark and mark it again after checking the register.
+        </div> : null}
 
         <div className="rounded-card bg-water-soft px-4 py-3">
           <div className="flex items-baseline justify-between">
@@ -170,7 +186,10 @@ export function RegisterBoard({
                   {markedCount}
                 </span>{" "}
                 of {rows.length} marked
-                <CountChip count={markedCount} label="marked" />
+                {/* The marked count is stated ONCE, here. A second pill
+                    repeating the same number said it twice on one strip;
+                    the REMAINING state is the second fact worth showing,
+                    so only that one is a pill. */}
                 {unmarked.length > 0 ? (
                   <CountChip count={unmarked.length} label="left" tone="warn" />
                 ) : null}
@@ -178,6 +197,7 @@ export function RegisterBoard({
             )}
             <p
               className="text-[11px] text-ink-3"
+              role="status"
               data-testid="sync-state"
               // Copy-independent state for the offline e2e harness (and
               // any future probe). F31 renamed the visible text and
@@ -185,9 +205,9 @@ export function RegisterBoard({
               // even though sync was working; the attribute is the
               // stable contract now.
               data-sync-state={
-                offlineSyncEnabled
-                  ? saving > 0
-                    ? "saving"
+                saving > 0 ? "saving" : hasUnsavedMarks ? "unsaved" : offlineSyncEnabled
+                  ? review.length > 0
+                      ? "review"
                     : !online
                       ? "offline"
                       : pending > 0
@@ -202,22 +222,22 @@ export function RegisterBoard({
                       : "idle"
               }
             >
-              {offlineSyncEnabled ? (
+              {saving > 0 ? "saving…" : hasUnsavedMarks ? "Review unsaved marks" : offlineSyncEnabled ? (
                 // "saving" outranks everything else: it means a write
                 // hasn't even committed to this device yet, which is a
                 // truer and more urgent state than "offline" or "syncing"
                 // (both of which describe already-durable writes). See
                 // docs/architecture.md §12.1.
-                saving > 0 ? (
-                  "saving…"
+                review.length > 0 ? (
+                  `${pending} pending · ${review.length} need review${retryable > 0 ? ` · ${retryable} pending sync` : ""}`
                 ) : !online ? (
-                  "offline — saved on device"
+                  pending > 0 ? "offline — saved on device" : "offline — no pending marks"
                 ) : pending > 0 ? (
                   `syncing ${pending}…`
                 ) : savedAtLabel ? (
                   `Saved at ${savedAtLabel}`
                 ) : (
-                  "Saved on this phone"
+                  "Loaded from server · no pending marks"
                 )
               ) : !online ? (
                 "offline — can't save"
@@ -236,11 +256,11 @@ export function RegisterBoard({
               />
             </div>
           ) : null}
-          {(unmarked.length > 0 || bulk !== null) && canMark ? (
+          {unmarked.length > 0 || bulk !== null ? (
             <Button
               variant="secondary"
               className="mt-2.5 w-full"
-              disabled={bulk !== null}
+              disabled={!canMark || bulk !== null}
               onClick={() => void markAllPresent()}
               data-testid="mark-all-present"
             >
@@ -251,18 +271,7 @@ export function RegisterBoard({
           ) : null}
         </div>
 
-        {/* Rule 1: a mark that fails to sync must be SEEN, not folded into
-            the neutral "syncing" text or left to a console.warn no one
-            reads. Distinct colour, distinct copy, stays up until a sync
-            actually succeeds. */}
-        {hasActiveFailure ? (
-          <p className="mt-2 text-[12px] text-late" data-testid="sync-error">
-            {offlineSyncEnabled
-              ? "Sync failed — retrying. Your marks are saved on this device."
-              : "That mark did not save. Try again once you're online."}
-          </p>
-        ) : null}
-      </div>
+      </section>
 
       <ul className="mt-2 pb-8">
         {rows.length === 0 ? (
@@ -274,11 +283,14 @@ export function RegisterBoard({
             />
           </li>
         ) : (
-          rows.map((r) => (
+          rows.map((r) => {
+            const write = markWrites[r.memberId];
+            return (
           <li
             key={r.memberId}
             data-member-id={r.memberId}
             data-status={marks[r.memberId] ?? ""}
+            tabIndex={-1}
             className="border-b border-line py-2 last:border-0"
           >
             <div className="flex items-center gap-3">
@@ -313,7 +325,7 @@ export function RegisterBoard({
                   button is h-11 w-11 (44px) — the hit box meets
                   DESIGN.md §2; don't "tidy" these into labelled
                   buttons. */}
-              <div className="flex gap-1.5 flex-none">
+              <div role="group" aria-label={`Attendance for ${r.name}`} className="flex gap-1.5 flex-none">
                 {TOGGLE_ORDER.map((next) => {
                   const Icon = TOGGLE_ICONS[next];
                   const active = marks[r.memberId] === next;
@@ -322,6 +334,7 @@ export function RegisterBoard({
                       key={next}
                       type="button"
                       onClick={() => mark(r.memberId, next)}
+                      disabled={!canMark || write?.pending}
                       aria-label={TOGGLE_TONES[next].label}
                       aria-pressed={active}
                       className={`${TOGGLE_BASE} ${
@@ -337,8 +350,22 @@ export function RegisterBoard({
                 })}
               </div>
             </div>
+            {write?.error ? (
+              <div className="flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
+                <p role="alert">{write.pending ? "Saving mark…" : write.error}</p>
+                <Button type="button" variant="secondary" size="sm" aria-label={`Retry mark for ${r.name}`}
+                  disabled={!canMark || write.pending} onClick={(event) => {
+                    event.currentTarget.closest("li")?.focus();
+                    void mark(r.memberId, write.status);
+                  }}>Retry mark</Button>
+              </div>
+            ) : null}
+            {review.filter(entry => entry.memberId === r.memberId).map(entry => <div key={entry.clientId} className="text-sm text-ink-2">
+              This mark needs review. <button type="button" className="min-h-11 underline" onClick={() => void discardReview(entry.clientId)}>Discard unsynced mark</button>
+            </div>)}
           </li>
-          ))
+            );
+          })
         )}
       </ul>
     </div>

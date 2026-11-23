@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // K-08 — reception café billing panels render tests.
@@ -33,6 +33,8 @@ const recordPaymentAction = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/actions/orders", () => ({ requestCafeBillAction }));
 vi.mock("@/lib/actions/payments", () => ({ recordPaymentAction }));
+// The payment form now requires a completed server recovery read before recording.
+vi.mock("@/lib/actions/payment-intents", () => ({listPaymentRecoveryAction:vi.fn(async () => ({open:null,lastCommitted:null})),cancelPaymentRecoveryAction:vi.fn()}));
 
 import { CafeOpenOrders } from "@/components/cafe-open-orders";
 import { CafeBillPanel } from "@/components/cafe-bill-panel";
@@ -169,12 +171,15 @@ describe("CafeOpenOrders — request bill then collect", () => {
     );
     expect(screen.getByTestId("cafe-bill-tax").textContent).toContain("12.50");
 
+    await waitFor(() => expect((screen.getByRole("button", { name: /record payment/i }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
     await screen.findByTestId("cafe-receipt");
     expect(recordPaymentAction).toHaveBeenCalledWith({
       invoiceId: "inv1",
       amountPaise: 26250,
       method: "cash",
+      idempotencyKey: expect.any(String),
+      observedIntentId: null,
     });
   });
 

@@ -8,7 +8,7 @@ import { tenantTimezoneInTx } from "@/lib/services/tenant-timezone";
 import { verifyPremisesQrToken } from "@/lib/services/premises-qr";
 import { todayInZone } from "@/lib/time/tz";
 import { asTenantId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import type { StaffAttendanceMethod, StaffAttendanceStatus } from "@/db/schema/staff-attendance";
 
 // V-25 — resolves what the premises check-in page shows: the tenant's
@@ -24,7 +24,7 @@ export type PremisesCheckInView = {
 };
 
 export async function resolvePremisesCheckIn(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   token: string,
 ): Promise<PremisesCheckInView | null> {
   const claims = verifyPremisesQrToken(token);

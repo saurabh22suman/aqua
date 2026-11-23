@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Owner-UI review P1 (2026-10-13) — revoking access is a named,
@@ -39,6 +39,28 @@ afterEach(() => {
 });
 
 describe("InvitationsBoard revoke confirmation (P1)", () => {
+  it("shows only identity in the Owner row and opens the correct invitation details", () => {
+    render(<InvitationsBoard rows={[{ ...ROW, fullName: "Aanya Rao" }]} compactFilters />);
+    const list = within(screen.getByTestId("invitations-list"));
+    expect(list.getByText("Aanya Rao")).toBeTruthy();
+    expect(list.getByText("+91 90000 00001")).toBeTruthy();
+    expect(list.queryByText("Worli")).toBeNull();
+    expect(list.queryByRole("button", { name: "New login link" })).toBeNull();
+    const trigger = list.getByRole("button", { name: /Invitation details for Aanya Rao/ });
+    fireEvent.click(trigger);
+    const sheet = within(screen.getByRole("dialog", { name: "Aanya Rao" }));
+    expect(sheet.getByText("Coach")).toBeTruthy();
+    expect(sheet.getByText("Active")).toBeTruthy();
+    expect(sheet.getByText("Worli")).toBeTruthy();
+    expect(sheet.getByRole("button", { name: "New login link" })).toBeTruthy();
+    fireEvent.click(sheet.getByRole("button", { name: "Revoke" }));
+    expect(sheet.getByRole("button", { name: "Revoke access" })).toBeTruthy();
+    expect(revokeInvitationAction).not.toHaveBeenCalled();
+    fireEvent.click(sheet.getByRole("button", { name: "Close" }));
+    fireEvent.click(trigger);
+    expect(sheet.queryByRole("button", { name: "Revoke access" })).toBeNull();
+  });
+
   it("requires a confirmation that names the person, role and scope", () => {
     render(<InvitationsBoard rows={[ROW]} />);
     fireEvent.click(screen.getByTestId(`revoke-${ROW.membershipId}`));

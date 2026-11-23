@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { formatDateIST } from "@/lib/time/tz";
 
 // Roster publication panel — its own scope state, deliberately
@@ -15,12 +17,14 @@ export function RosterPublishPanel({
   weekLocationId,
   pending,
   onPublish,
+  inSheet = false,
 }: {
   weekStart: string;
   locations: Array<{ id: string; name: string }>;
   weekLocationId: string | null;
   pending: boolean;
   onPublish: (locationId: string | null) => void;
+  inSheet?: boolean;
 }) {
   const [publishLocationId, setPublishLocationId] = useState(
     weekLocationId ?? "",
@@ -35,7 +39,7 @@ export function RosterPublishPanel({
     "all locations";
 
   return (
-    <div className="rounded-card border border-line bg-paper p-3.5">
+    <div className={inSheet ? "space-y-3" : "rounded-card border border-line bg-paper p-3.5"}>
       <p className="text-[12px] font-medium text-ink-2">
         Publish the week of {formatDateIST(weekStart)}
       </p>
@@ -44,24 +48,25 @@ export function RosterPublishPanel({
         to staff after publishing.
       </p>
       {locations.length > 1 ? (
-        <label className="mt-2 block">
-          <span className="mb-1 block text-[11px] text-ink-3">
-            Publication scope
-          </span>
-          <select
-            value={publishLocationId}
-            onChange={(e) => setPublishLocationId(e.target.value)}
-            className="min-h-11 w-full rounded-ctl border border-line bg-paper px-3 text-[16px] text-ink"
-            data-testid="roster-publish-scope"
-          >
-            <option value="">All locations</option>
-            {locations.map((location) => (
-              <option key={location.id} value={location.id}>
-                {location.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="mt-2">
+          <Field id="roster-publish-scope" label="Publication scope">
+            {(field) => (
+              <Select
+                {...field}
+                value={publishLocationId}
+                onChange={(e) => setPublishLocationId(e.target.value)}
+                data-testid="roster-publish-scope"
+              >
+                <option value="">All locations</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        </div>
       ) : null}
       <div className="mt-2">
         <Button

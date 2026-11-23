@@ -29,7 +29,7 @@ export const TONE_SURFACE_CLASS: Record<StatusTone, string> = {
   // shared primitive was extracted to fix. Paper + hairline keeps
   // the pill legible on both white cards and the deck page.
   neutral: "bg-paper text-ink-2 border border-line",
-  water: "bg-water-soft text-water",
+  water: "bg-water-soft text-ink",
 };
 
 // Solid variant for small swatches (legend dots), where the soft
@@ -92,7 +92,7 @@ export const SESSION_STATUS_TONE: Record<string, StatusTone> = {
   scheduled: "water",
   in_progress: "warn",
   completed: "good",
-  cancelled: "neutral",
+  cancelled: "late",
 };
 
 export const PAYMENT_STATUS_TONE: Record<string, StatusTone> = {

@@ -1,5 +1,8 @@
 import { readdirSync, realpathSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { createHash } from "node:crypto";
+import ts from "typescript";
+import { reviewedLocationContract } from "./location-scope-contracts";
 
 // O-08 (docs/ops-platform-design.md §8) — the location-scope scan.
 //
@@ -19,7 +22,24 @@ const LOCATION_TABLE_RE =
   /\.from\((members|batches|sessions|attendance)\)|from\s+(members|batches|sessions|attendance)\b/;
 
 const HELPER_MARKER = "resolveLocationAccess(";
-const RESOURCE_HELPER_RE = /\b(?:resolveLocationAccess|visibleMember|visibleBatch)\s*\(/;
+const RESOURCE_HELPERS = new Set(["resolveLocationAccess", "visibleMember", "visibleBatch"]);
+
+// This predicate builds the location filter rather than resolving the caller.
+// Its people.ts caller obtains LocationAccess from resolveLocationAccess and
+// applies the returned predicate before limiting. Pin the entire helper so a
+// changed denial or query requires review, not a permanent file exemption.
+const PERSON_LOCATION_PREDICATE_SHA256 = "97ace39aeedad80902034b7069a395b988036908af7b7ca5f36a3d1ae5e98bae";
+
+// This remains a file-level reminder, not proof that the call guards a query.
+// Parse calls rather than treating a string literal as an authorization check.
+function hasResourceHelperCall(source: string): boolean {
+  const file = ts.createSourceFile("service.ts", source, ts.ScriptTarget.Latest, true);
+  function visit(node: ts.Node): boolean {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && RESOURCE_HELPERS.has(node.expression.text)) return true;
+    return ts.forEachChild(node, visit) === true;
+  }
+  return visit(file);
+}
 
 export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
   "lib/services/dashboard.ts":
@@ -34,8 +54,6 @@ export const LOCATION_SCOPE_ALLOWLIST: Record<string, string> = {
     "owner/admin session cancellation and rescheduling (see the action gating); not a staff-scoped surface",
   "lib/services/coach-substitution.ts":
     "owner/admin substitution over the whole tenant; not a staff-scoped surface",
-  "lib/services/coach-conflicts.ts":
-    "owner/admin conflict detection; not a staff-scoped surface",
   "lib/services/coach-load.ts":
     "reports/analytics; owner surface",
   "lib/services/absence-alerts.ts":
@@ -77,15 +95,26 @@ function stripComments(source: string): string {
 export function scanLocationScope(
   source: string,
   filePath: string,
+  root = process.cwd(),
 ): { violation: boolean; reason: string | null } {
   if (!filePath.startsWith("lib/services/")) {
     return { violation: false, reason: null };
+  }
+  const reviewed = reviewedLocationContract(source, filePath, root);
+  if (reviewed !== null) {
+    return reviewed
+      ? { violation: false, reason: "exact reviewed alternate authority and caller graph" }
+      : { violation: true, reason: "reviewed alternate authority source or dependency changed or unavailable" };
   }
   const stripped = stripComments(source);
   if (!LOCATION_TABLE_RE.test(stripped)) {
     return { violation: false, reason: null };
   }
-  if (RESOURCE_HELPER_RE.test(stripped)) {
+  if (filePath === "lib/services/person-location-scope.ts" &&
+      createHash("sha256").update(source).digest("hex") === PERSON_LOCATION_PREDICATE_SHA256) {
+    return { violation: false, reason: "exact reviewed predicate over caller-resolved LocationAccess" };
+  }
+  if (hasResourceHelperCall(source)) {
     return { violation: false, reason: null };
   }
   const allowlisted = LOCATION_SCOPE_ALLOWLIST[filePath];

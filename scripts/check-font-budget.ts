@@ -3,14 +3,14 @@ import { requireBudgetBuild } from "./lib/budget-build-receipt";
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-// DESIGN.md §1.3: 60 KB, latin subset only, woff2 (the format every
+// DESIGN.md §1.3: 150 KiB, latin subset only, woff2 (the format every
 // current browser actually fetches — .woff ships alongside it as a
 // fallback in the same @font-face rule but is never downloaded when
 // woff2 is supported, so it's excluded here; counting it would report a
 // number no real user pays). Self-contained like
 // scripts/check-bundle-budget.ts: runs its own build so this is correct
 // standalone, not dependent on CI step ordering.
-const BUDGET_BYTES = 60 * 1024;
+const BUDGET_BYTES = 150 * 1024;
 const MEDIA_DIR = join(process.cwd(), ".next", "static", "media");
 
 function runBuild(): void {

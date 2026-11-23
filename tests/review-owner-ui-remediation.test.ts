@@ -6,7 +6,7 @@ import {
 import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { asTenantId, asUserId } from "@/lib/ids";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { MutationActor } from "@/lib/auth/context";
 import { updateMemberSchema } from "@/lib/schemas";
 
 // Owner-UI review remediation (2026-10-13) — data-scope correctness at
@@ -44,7 +44,7 @@ const memberRefA = randomUUID();
 const memberRefB = randomUUID();
 const PERIOD = { from: "2026-11-01", to: "2026-12-01" };
 
-const ownerCtx: ActionCtx = {
+const ownerCtx: MutationActor = {
   tenantId,
   userId: ownerUser,
   roleKey: "owner",
@@ -53,7 +53,7 @@ const ownerCtx: ActionCtx = {
   permissions: new Set(["members.read", "members.write", "reports.operational"]),
 };
 
-const scopedCtx: ActionCtx = {
+const scopedCtx: MutationActor = {
   ...ownerCtx,
   userId: scopedUser,
   roleKey: "admin",
@@ -98,6 +98,16 @@ beforeAll(async () => {
        ($1, '+919400000101'), ($2, '+919400000102')`,
     [ownerUser, scopedUser],
   );
+  const scopedMembership = randomUUID();
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'",
+    [randomUUID(), tenantId, ownerUser],
+  );
+  await admin.query(
+    "insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',false from roles where tenant_id=$2 and key='admin'",
+    [scopedMembership, tenantId, scopedUser],
+  );
+  await admin.query("insert into membership_locations(id,tenant_id,membership_id,location_id) values($1,$2,$3,$4)", [randomUUID(), tenantId, scopedMembership, locA]);
   await admin.query(
     `insert into platform_users (id, email, name, password_hash, password_salt, role, status)
      values ($1, $2, 'Owner UI Operator', 'h', 's', 'admin', 'active')`,

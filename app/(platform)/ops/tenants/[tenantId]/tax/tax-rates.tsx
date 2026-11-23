@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setTenantTaxRateAction } from "@/lib/actions/platform-tax";
 import {
@@ -8,13 +8,14 @@ import {
   parsePercentToBasisPoints,
 } from "@/lib/tax";
 import type { TaxScopeRow } from "@/lib/services/tax";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { OpsCardFlush, OpsEmptyState, OpsSection } from "@/components/ops/ops-primitives";
+import { OpsWriteGate } from "@/components/ops/ops-display";
 
 // GST rates per tenant / facility / activity. Money semantics:
 // ops-only. Each row shows the resolved rate and where it came from,
 // and edits the rate at its own scope.
-
-const inputClass =
-  "w-24 rounded-ctl border border-line bg-paper px-3 py-1.5 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
 
 function scopeLabel(row: TaxScopeRow): string {
   if (row.source.scopeType === "default") return "platform default";
@@ -25,11 +26,13 @@ function RateRow({
   row,
   pending,
   message,
+  canWrite,
   onRun,
 }: {
   row: TaxScopeRow;
   pending: boolean;
-  message: string | null;
+  message: { text: string; error: boolean } | null;
+  canWrite: boolean;
   onRun: (
     row: TaxScopeRow,
     rateBp: number,
@@ -38,6 +41,8 @@ function RateRow({
   const [value, setValue] = useState(
     formatBasisPointsAsPercent(row.rateBp).replace("%", ""),
   );
+  const [error, setError] = useState<string | null>(null);
+  const errorId = useId();
 
   return (
     <div className="border-b border-line last:border-b-0 px-4 py-3">
@@ -48,32 +53,39 @@ function RateRow({
             {formatBasisPointsAsPercent(row.rateBp)} · {scopeLabel(row)}
           </span>
         </span>
-        <div className="flex items-center gap-2">
-          <input
+        {canWrite ? <div className="flex items-center gap-2">
+          <Input
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); setError(null); }}
             inputMode="decimal"
             aria-label={`GST percent for ${row.label}`}
-            className={inputClass}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            className="w-24"
           />
           <span className="text-[12px] text-ink-3">%</span>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             disabled={pending}
             onClick={() => {
               const rateBp = parsePercentToBasisPoints(value);
-              if (rateBp === null) return;
+              if (rateBp === null) {
+                setError("Enter a percentage from 0 to 100 with at most two decimal places.");
+                return;
+              }
               onRun(row, rateBp);
             }}
-            className="rounded-pill px-4 py-1.5 text-[12px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
           >
             {pending ? "Saving…" : "Save"}
-          </button>
-        </div>
+          </Button>
+        </div> : null}
       </div>
+      {error ? <p id={errorId} role="alert" className="mt-1 text-[11px] text-ink-2">{error}</p> : null}
       {message ? (
-        <p role="status" className="mt-1 text-[11px] text-ink-2">
-          {message}
+        <p role={message.error ? "alert" : "status"} className="mt-1 text-[11px] text-ink-2">
+          {message.text}
         </p>
       ) : null}
     </div>
@@ -83,19 +95,22 @@ function RateRow({
 export function TaxRates({
   tenantId,
   config,
+  canWrite,
 }: {
   tenantId: string;
   config: { tenant: TaxScopeRow; locations: TaxScopeRow[]; activities: TaxScopeRow[] };
+  /** Resolved on the server from the session role. */
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [pendingKey, setPendingKey] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Record<string, string>>({});
+  const [messages, setMessages] = useState<Record<string, { text: string; error: boolean } | null>>({});
 
   function run(row: TaxScopeRow, rateBp: number) {
     const key = `${row.scopeType}:${row.scopeId ?? "tenant"}`;
     setPendingKey(key);
-    setMessages((prev) => ({ ...prev, [key]: "" }));
+    setMessages((prev) => ({ ...prev, [key]: null }));
     startTransition(async () => {
       const result = await setTenantTaxRateAction({
         tenantId,
@@ -105,7 +120,7 @@ export function TaxRates({
       });
       setMessages((prev) => ({
         ...prev,
-        [key]: result.ok ? "Saved." : result.error,
+        [key]: result.ok ? { text: "Saved.", error: false } : { text: result.error, error: true },
       }));
       if (result.ok) router.refresh();
       setPendingKey(null);
@@ -118,49 +133,55 @@ export function TaxRates({
       row,
       pending: pending && pendingKey === key,
       message: messages[key] ?? null,
+      canWrite,
       onRun: run,
     };
   };
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-card bg-paper border border-line overflow-hidden">
-        <RateRow {...rowProps(config.tenant)} />
-      </section>
+    <>
+      {!canWrite ? (
+        <OpsWriteGate
+          canWrite={canWrite}
+          note={
+            <>
+              Read-only: this account can browse, not change, platform data. An
+              administrator sets the GST rate.
+            </>
+          }
+        >
+          {null}
+        </OpsWriteGate>
+      ) : null}
+      <div className="space-y-6">
+        <OpsCardFlush>
+          <RateRow {...rowProps(config.tenant)} />
+        </OpsCardFlush>
 
-      <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Per facility
-        </h2>
-        {config.locations.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-3 text-[13px] text-ink-3">
-            No facilities.
-          </p>
-        ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
-            {config.locations.map((row) => (
-              <RateRow key={row.scopeId} {...rowProps(row)} />
-            ))}
-          </div>
-        )}
-      </section>
+        <OpsSection title="Per facility">
+          {config.locations.length === 0 ? (
+            <OpsEmptyState title="No facilities" />
+          ) : (
+            <OpsCardFlush>
+              {config.locations.map((row) => (
+                <RateRow key={row.scopeId} {...rowProps(row)} />
+              ))}
+            </OpsCardFlush>
+          )}
+        </OpsSection>
 
-      <section>
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-ink-3 font-medium">
-          Per activity
-        </h2>
-        {config.activities.length === 0 ? (
-          <p className="mt-2 rounded-card bg-paper border border-line px-4 py-3 text-[13px] text-ink-3">
-            No activities yet.
-          </p>
-        ) : (
-          <div className="mt-2 rounded-card bg-paper border border-line overflow-hidden">
-            {config.activities.map((row) => (
-              <RateRow key={row.scopeId} {...rowProps(row)} />
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+        <OpsSection title="Per activity">
+          {config.activities.length === 0 ? (
+            <OpsEmptyState title="No activities yet" />
+          ) : (
+            <OpsCardFlush>
+              {config.activities.map((row) => (
+                <RateRow key={row.scopeId} {...rowProps(row)} />
+              ))}
+            </OpsCardFlush>
+          )}
+        </OpsSection>
+      </div>
+    </>
   );
 }

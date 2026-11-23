@@ -77,7 +77,7 @@ describe("OnboardingChecklistView (F27)", () => {
 
   it("switches the section heading once everything is complete", () => {
     render(<OnboardingChecklistView data={ALL_DONE} />);
-    expect(screen.getByText("Completed")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Register setup complete" })).toBeTruthy();
     expect(screen.queryByText("What's left")).toBeNull();
   });
 

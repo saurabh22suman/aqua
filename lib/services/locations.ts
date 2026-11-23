@@ -1,10 +1,11 @@
+import { callerIsLiveOwnerForSettingsOrDelegation } from "@/lib/services/owner-authority";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { withTenant, type TenantTx } from "@/db/tenant";
 import { locations, type LocationKind } from "@/db/schema/locations";
-import { resolveConfig, setTenantConfigValue } from "@/db/config";
+import { resolveConfig, setOwnerTenantConfigValue } from "@/db/config";
 import { writeAudit } from "@/lib/audit/write";
-import type { ActionCtx } from "@/lib/auth/context";
+import type { ActionCtx, MutationActor } from "@/lib/auth/context";
 
 // U-07 — the owner's location editor and business-hours editor.
 //
@@ -115,7 +116,7 @@ async function selectLocations(
 }
 
 export async function createLocation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LocationMutationResult> {
   const parsed = createLocationInput.safeParse(raw);
@@ -123,6 +124,9 @@ export async function createLocation(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid location." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const [row] = await tx
       .insert(locations)
       .values({
@@ -155,7 +159,7 @@ export async function createLocation(
 }
 
 export async function updateLocation(
-  ctx: ActionCtx,
+  ctx: MutationActor,
   raw: unknown,
 ): Promise<LocationMutationResult> {
   const parsed = updateLocationInput.safeParse(raw);
@@ -163,6 +167,9 @@ export async function updateLocation(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid location." };
   }
   return withTenant(ctx.tenantId, async (tx) => {
+    if (!(await callerIsLiveOwnerForSettingsOrDelegation(tx, ctx))) {
+      return { ok: false, error: "Only the academy owner can change this setting." };
+    }
     const existingRows = await tx
       .select()
       .from(locations)
@@ -261,9 +268,9 @@ export async function setBusinessHours(
   });
   if (!exists) return { ok: false, error: "Location not found." };
 
-  // setTenantConfigValue writes the `config.set` audit row inside its
+  // setOwnerTenantConfigValue writes the `config.set` audit row inside its
   // own transaction (and validates against the code catalogue).
-  const result = await setTenantConfigValue({
+  const result = await setOwnerTenantConfigValue({
     tenantId: ctx.tenantId,
     key: BUSINESS_HOURS_KEY,
     value: parsed.data.hours,

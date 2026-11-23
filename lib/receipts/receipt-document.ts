@@ -8,9 +8,12 @@ import {
   A4_HEIGHT_PT,
   estimateTextWidthPt,
   renderPdf,
+  renderPdfPages,
   type PdfColor,
   type PdfOp,
 } from "@/lib/receipts/pdf";
+import type { BillingIssuer } from "@/lib/services/facility-billing-contract";
+import { appendSupplierBlock } from "@/lib/receipts/supplier-block";
 
 // C-39 — the receipt document. One A4 page, tenant-branded: the
 // tenant's initials on their accent band as the mark (no raster logo
@@ -20,6 +23,7 @@ import {
 // supply, SAC) so the receipt stands on its own.
 
 export type ReceiptDocumentData = {
+  supplier?: BillingIssuer | null;
   tenantDisplayName: string;
   initials: string;
   accent: AccentKey;
@@ -63,7 +67,7 @@ const LEFT = 48;
 const RIGHT = A4_WIDTH_PT - 48;
 const RIGHT_COL = 320;
 
-export function renderReceiptPdf(data: ReceiptDocumentData): Buffer {
+export function buildReceiptPages(data: ReceiptDocumentData, wrapSupplier?: (text: string) => string[]): PdfOp[][] {
   const accent = hexToColor(ACCENTS[data.accent].base);
   const ops: PdfOp[] = [];
 
@@ -170,5 +174,14 @@ export function renderReceiptPdf(data: ReceiptDocumentData): Buffer {
     color: MUTED,
   });
 
-  return renderPdf(ops, { widthPt: A4_WIDTH_PT, heightPt: A4_HEIGHT_PT });
+  const supplierPage = data.supplier
+    ? appendSupplierBlock(ops, data.supplier, y - 44, data.invoiceNumber, wrapSupplier)
+    : null;
+  return supplierPage ? [ops, supplierPage] : [ops];
+}
+
+export function renderReceiptPdf(data: ReceiptDocumentData): Buffer {
+  const pages = buildReceiptPages(data);
+  if (pages.length > 1) return renderPdfPages(pages);
+  return renderPdf(pages[0], { widthPt: A4_WIDTH_PT, heightPt: A4_HEIGHT_PT });
 }

@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { inviteOwner, type InviteOwnerResult } from "@/db/tenant-invite";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
 import { asUserId } from "@/lib/ids";
 
@@ -53,6 +54,7 @@ export async function inviteOwnerAction(
     })(),
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("tenant.invite_owner", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -63,6 +65,7 @@ export async function inviteOwnerAction(
   // (2) platform-session permission check
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("tenant.invite_owner", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -74,7 +77,7 @@ export async function inviteOwnerAction(
   }
 
   // (3) service, through the audited ops pipeline
-  return opsAction(
+  const result = await opsAction(
     {
       scope: "tenant.invite_owner",
       actorId: asUserId(status.userId),
@@ -89,5 +92,14 @@ export async function inviteOwnerAction(
         staffType: surface.data.staffType,
         actorId: asUserId(status.userId),
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("tenant.invite_owner", error, {
+      tenantId: surface.data.tenantId,
+    });
+    throw error;
+  });
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("tenant.invite_owner", "error");
+  }
+  return result;
 }

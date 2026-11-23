@@ -157,6 +157,7 @@ owner shell. Entry: `/owner`.
 | `/owner/members/[memberId]` | `members.read` | One member: status, enrolment, fees, attendance, notes | populated · payer-only projection · not found · loading · error |
 | `/owner/members/[memberId]/edit` | `members.write` | Change a member record | populated · validation error · saving · saved · not found |
 | `/owner/fees` | `reports.financial` | Money: dues, invoices, transactions | populated · empty · filtered · voided · reversed · read-only for a role without `payments.record` |
+| `/owner/invoices/[invoiceId]` | `invoices.read` | Review one invoice; write, void, payment and refund controls require their respective permissions | populated · not found · read-only · payment and reversal states |
 | `/owner/enquiries` | `enquiries.read` | Work the enquiry pipeline | populated · stage filter · no results · empty · loading · error |
 | `/owner/enquiries/[enquiryId]` | `enquiries.read` | One enquiry: stage, follow-ups, trial, conversion | populated · not found · loading · error |
 | `/owner/programs` | `programs.read` | Programs and the batches inside them | populated · empty · over-capacity batch · loading · error |
@@ -174,19 +175,23 @@ owner shell. Entry: `/owner`.
 | `/owner/reports` | `reports.operational` | Operational reports: attendance, funnel, retention, coach load, utilisation | populated · insufficient history · empty · error per card · loading |
 | `/owner/reports/collections` | `reports.financial` | Daily collections and the cash count | populated · not confirmed · confirmed · closed · reopen refused |
 | `/owner/settings` | `settings.manage` | Grouped settings, account block, sign-out | populated · category open · setup incomplete · empty categories |
-| `/owner/settings/academy` | `settings.manage` | Academy profile: name, currency, time zone, GSTIN | populated · validation error · saved |
+| `/owner/account` | Owner-surface session | Personal appearance, role switching and sign-out | one role · linked roles · role lookup unavailable |
+| `/owner/settings/workspace` | `dashboard.view` and reports entitlement | Choose the default facility within the current account's scope | All facilities · named facility · saved · unavailable |
+| `/owner/settings/academy` | `settings.manage` and live Owner | Club identity and separate legal billing default: address, state and GSTIN | populated · incomplete default · validation error · open orders · review · saved · unsaved draft · uncertain save |
 | `/owner/settings/activities` | `settings.manage` | The activities this academy offers | populated · empty · saved |
 | `/owner/settings/alerts` | `settings.manage` | Absence alert thresholds | populated · validation error · saved |
-| `/owner/settings/branding` | `settings.manage` | Display name, short name, accent | populated · validation error · saved |
+| `/owner/settings/branding` | `settings.manage` and live Owner | Display name, short name, accent, club logo and install icon | initials fallback · populated · invalid image · upload failure · saved |
 | `/owner/settings/configuration` | `settings.manage` | Request a platform-owned setting change | populated · pending request · rejected |
 | `/owner/settings/holidays` | `settings.manage` | Days the academy is closed | populated · empty · saved |
 | `/owner/settings/locations` | `settings.manage` | Locations, addresses and business hours | populated · single site · multi site · validation error · saved |
+| `/owner/settings/locations/[locationId]` | `settings.manage` and live Owner | Named physical-site billing: club inheritance, registered or unregistered override; explicit enablement; future bills only | legacy billing · saved draft · enabled · state mismatch · invalid fields · open orders · issuer review · reset · unsaved draft · uncertain save · not found |
 | `/owner/settings/menu` | `settings.manage` | The café menu | populated · empty · archived item |
 | `/owner/settings/payment-qrs` | `settings.manage` | Payment QR codes the payer scans | populated · empty · inactive · validation error |
 | `/owner/settings/plans` | `settings.manage` | Membership plans the academy sells | populated · empty · archived plan |
 | `/owner/settings/skills` | `settings.manage` plus feature `swim.levels` (editing needs `levels.write`) | The skill ladder and its rubrics | module off · populated · empty · read-only ladder |
 | `/owner/settings/terminology` | `settings.manage` | The words this academy uses | populated · validation error · saved |
 | `/owner/announcements` | `messaging.send` | Compose and send an announcement; read the notification inbox | populated · no audience · sent · failed |
+| `/owner/inbox` | Live owner-surface session; addressed-recipient read only | Read personal announcements without composer or member-directory permission | populated · empty · read/unread · unavailable · wrong surface refused |
 | `/owner/onboarding` | `members.read` | The first-run setup checklist | not started · in progress · complete |
 
 ### `/owner` — Owner Home
@@ -370,6 +375,19 @@ Loading uses skeletons, not spinners.
 `components/reports/analytics-cards.tsx`, `components/charts/echarts-owner.tsx`,
 `components/ui/EmptyState.tsx`, `components/ui/StatusBadge.tsx`.
 
+### Additional owner routes
+
+| Route | Current task and page gate |
+| --- | --- |
+| `/owner/members/[memberId]/access` | Member and family access; owner surface and `members.link.confirm`, with live scope rechecked by operations. |
+| `/owner/reports/attendance` | Attendance report; owner surface and `reports.operational`. |
+| `/owner/reports/batches` | Batch report; owner surface and `reports.operational`; unavailable facility selection is reported. |
+| `/owner/reports/members` | Member report; owner surface and `reports.operational`. |
+| `/owner/reports/staff` | Staff report; owner surface, `reports.operational` and `staff.attendance`. |
+| `/owner/settings/appearance` | Workspace appearance preferences; owner surface. |
+| `/owner/settings/reports` | Report preferences; owner surface and `reports.operational`, with unavailable state when reports are disabled. |
+| `/owner/staff/attendance` | Staff attendance; owner surface and `staff.attendance`. |
+
 ## Coach surface
 
 Role: coach, curriculum lead. Frame: bottom navigation, mobile only.
@@ -384,7 +402,9 @@ Entry: `/coach`.
 | `/coach/members/[memberId]` | `members.read.assigned` | One swimmer: attendance, progress | populated · progress module off · not found · error |
 | `/coach/members/[memberId]/assess` | `levels.assess` plus feature `swim.levels` | Record a skill assessment | populated · module off · not allowed · saved · error |
 | `/coach/curriculum` | `levels.read` plus feature `swim.levels`; editing `levels.write` | Read and (for a curriculum lead) maintain the ladder | module off · populated · read-only · error |
-| `/coach/me` | `staff.self` | Own shifts, own attendance, own leave, sign-out | populated · empty · pending · error |
+| `/coach/me` | Coach-surface session | Account settings, role switching and sign-out | populated · available roles · role lookup unavailable |
+| `/coach/workday` | `staff.self` | Check in, see shifts and request leave | checked in · no shifts · pending leave · section retry |
+| `/coach/announcements` | Live coach-surface session; recipient-scoped read | Read announcements addressed to the signed-in person | populated · empty · unavailable |
 
 ### `/coach` — Coach Today
 
@@ -459,7 +479,9 @@ Role: receptionist. Frame: bottom navigation, mobile only. Entry:
 | `/reception/close` | `payments.record` | Count the cash and close the counter | open · counted · confirmed · closed · over-threshold refused · mismatch |
 | `/reception/cafe` | `payments.record` (the desk entry also requires the `cafe.pos` entitlement) | Take a counter order and settle it | empty menu · order open · billed · paid · voided |
 | `/reception/bookings` | — | Deliberately hidden: the route returns `404` until the price-rule admin ships | not reachable |
-| `/reception/me` | `staff.self` (the page also needs `members.read`) | Own shifts, own attendance, own leave, sign-out | populated · empty · error |
+| `/reception/me` | Reception-surface session and `members.read` | Account settings, role switching and sign-out | populated · available roles · role lookup unavailable |
+| `/reception/workday` | `staff.self` | Check in, see shifts and request leave | checked in · no shifts · pending leave · section retry |
+| `/reception/announcements` | Live reception-surface session; recipient-scoped read | Read announcements addressed to the signed-in person | populated · empty · unavailable |
 
 ### `/reception` — Reception Today
 
@@ -532,17 +554,29 @@ limit named); error.
 
 ## Worker surface
 
-Role: worker. Frame: no bottom navigation — self-service cards and sign-out
-only. Entry: `/worker`.
+Role: worker. Today, Schedule and Me are the main destinations. Entry: `/worker`.
 
 | Route | Gate | Primary task | States |
 | --- | --- | --- | --- |
-| `/worker` | `staff.self` | Own shifts, own attendance, own leave | populated · no shifts · not checked in · pending leave · error |
+| `/worker` | `staff.self` | See the next shift and check in or out | upcoming shift · not checked in · checked in · error |
+| `/worker/shifts` | `staff.self` | See the published roster and open Leave | populated · no published shifts · retry |
+| `/worker/leave` | `staff.self` | Check balances, request leave and see past requests | balances · pending · approved · retry |
+| `/worker/me` | `staff.self` | Account settings, role switching and sign-out | populated · available roles · role lookup unavailable |
+| `/worker/announcements` | Live worker-surface session; recipient-scoped read | Read announcements addressed to the signed-in person | populated · empty · unavailable |
 
-**Mobile (`390×844`).** Identity block first (name, phone), then the three
-self-service cards, then sign-out. Every read returns only the caller's own
-rows; there is no route to another person's shifts, and no bottom navigation
-because there is no second destination.
+## Signed-in recipient and club-install routes
+
+These routes exist in the combined candidate; UUIDs and audience selectors choose a target but do not grant access. All target authorization is checked server-side.
+
+| Route | Gate | Primary task | States |
+| --- | --- | --- | --- |
+| `/member/announcements` | Live member self scope, revalidated in the scoped read | Read and mark own announcements | populated · empty · not found |
+| `/family/announcements` | Live guardian self scope, revalidated in the scoped read | Read and mark own announcements | populated · empty · not found |
+| `/member/account` | Live member resolver scope | Role switching, install and sign-out | available roles · sign-in required · retry |
+| `/family/account` | Live guardian resolver scope | Role switching, install and sign-out | available roles · sign-in required · retry |
+| `/clubs/[tenantId]/install` | Live staff, member or guardian authority for the selected tenant and source | Open the private club-specific install instructions | authorized · unavailable or not found |
+
+**Mobile (`390×844`).** Today shows the next shift and attendance. Schedule shows published shifts and opens Leave. Me holds identity and account controls. The workday reads return only the caller’s own rows.
 
 **States.** Populated; no shifts this fortnight; not checked in today; a
 leave request pending or approved; error.
@@ -676,6 +710,20 @@ provider is activated to satisfy a screen.
 **Keyboard.** Filters are labelled inputs, the tenant table's identity column
 is the destination, and the tenant detail tabs are a tablist with arrow-key
 movement. Focus is always visible on the dark sidebar.
+
+### Additional operator routes
+
+These are platform-session surfaces; their data reads and mutations use their
+own audited operation boundaries. Listing them does not establish Ops visual
+acceptance or grant a tenant role platform authority.
+
+| Route | Current task |
+| --- | --- |
+| `/ops/catalogue` | Inspect the SaaS plan catalogue and its configured commercial terms. |
+| `/ops/operators` | Review operator accounts and sessions; maintenance actions have their own authorization. |
+| `/ops/recovery` | Inspect recovery work; recovery mutations require their own admin guard and audit. |
+| `/ops/system` | Inspect runtime and queued-work evidence, not a synthesized health score. |
+| `/ops/tenants/[tenantId]/diagnostics` | Review tenant-scoped membership and entitlement diagnostics. |
 
 ## Non-screen endpoints
 

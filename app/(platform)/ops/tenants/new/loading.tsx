@@ -1,10 +1,11 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 
 // Phase 1.7 — loading state for the new-tenant form.
 
 export default function NewTenantLoading() {
   return (
     <div className="max-w-3xl">
+      <SkeletonStatus>Loading club setup…</SkeletonStatus>
       <Skeleton w={16} h={3} className="mb-2" />
       <Skeleton w={40} h={8} className="mb-2" />
       <Skeleton w={72} h={4} />

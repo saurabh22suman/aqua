@@ -11,17 +11,16 @@ import type {
 } from "@/lib/services/reconciliation-closed-state";
 import { formatINR } from "@/lib/money/format";
 import { parseRupeesToPaise } from "@/lib/payment-qr";
-import { formatDateTimeIST } from "@/lib/time/tz";
+import { formatDateTimeIST, formatWeekdayDateIST } from "@/lib/time/tz";
 import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 
 // M01 — the counter's close screen. Expected cash/UPI totals come from
 // the narrow close summary (assigned locations, today only); closing
 // reuses the existing confirmCashCount service, so the >₹500 reason
 // rule and the >₹2,000 owner rule stay in one place. A closed day has
 // no action here: reopening is the owner's (settings.manage).
-
-const inputClass =
-  "min-h-11 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] focus:outline-none";
 
 function varianceText(variancePaise: number): string {
   if (variancePaise === 0) return "matched";
@@ -44,11 +43,12 @@ export function ReceptionCloseDay({
   const refresh = async () => {
     const next = await getReceptionCloseSummaryAction();
     setCurrent(next);
+    return next;
   };
 
   if (current.locations.length === 0) {
     return (
-      <p className="mt-6 rounded-card border border-line bg-paper px-4 py-4 text-[13px] text-ink-3">
+      <p className="mt-6 rounded-2xl border border-line bg-paper px-4 py-4 text-[13px] text-ink-3">
         No location is assigned to you. Ask the owner to assign your counter
         before closing a day.
       </p>
@@ -56,10 +56,13 @@ export function ReceptionCloseDay({
   }
 
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-4 space-y-3">
+      <p className="text-[13px] font-medium text-ink-2">
+        Cash close for {formatWeekdayDateIST(current.onDate)}
+      </p>
       {current.locations.map((location) => (
         <CloseLocationCard
-          key={location.locationId}
+          key={`${current.onDate}:${location.locationId}`}
           location={location}
           onDate={current.onDate}
           reviewThresholdPaise={reviewThresholdPaise}
@@ -82,18 +85,19 @@ function CloseLocationCard({
   onDate: string;
   reviewThresholdPaise: number;
   ownerCloseThresholdPaise: number;
-  onChanged: () => Promise<void>;
+  onChanged: () => Promise<ReceptionCloseSummary>;
 }) {
   const [counted, setCounted] = useState("");
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<"save" | "check" | null>(null);
+  const [outcome, setOutcome] = useState<"open" | "unknown" | "saved">("open");
   const [message, setMessage] = useState<string | null>(null);
 
   if (location.closed && location.cashCount) {
     const count = location.cashCount;
     return (
       <section
-        className="rounded-card border border-line bg-paper p-4"
+        className="rounded-2xl border border-line bg-paper p-4"
         data-testid={`close-location-${location.locationId}`}
       >
         <div className="flex items-center justify-between gap-3">
@@ -128,147 +132,130 @@ function CloseLocationCard({
     );
   }
 
-  const parsedCounted = parseRupeesToPaise(counted);
-  const variance =
-    parsedCounted === null ? null : Number(parsedCounted) - location.cashPaise;
-  const needsReason =
-    variance !== null && Math.abs(variance) > reviewThresholdPaise;
-  const ownerOnly =
-    variance !== null && Math.abs(variance) > ownerCloseThresholdPaise;
+  const parsed = parseRupeesToPaise(counted);
+  const countedPaise = parsed === null ? null : Number(parsed);
+  const variance = countedPaise !== null && Number.isSafeInteger(countedPaise)
+    ? countedPaise - location.cashPaise : null;
+  const needsReason = variance !== null && Math.abs(variance) > reviewThresholdPaise;
+  const ownerOnly = variance !== null && Math.abs(variance) > ownerCloseThresholdPaise;
 
-  const confirm = async () => {
-    const paise = parseRupeesToPaise(counted);
-    if (paise === null) {
+  async function checkStatus() {
+    setPending("check");
+    try {
+      const next = await onChanged();
+      const counter = next.locations.find((item) => item.locationId === location.locationId);
+      if (next.onDate === onDate && counter && !counter.closed) {
+        if (outcome === "unknown") {
+          setOutcome("open");
+          setMessage("Still open. Review the count before confirming again.");
+        } else {
+          setMessage("The count was saved, but the refreshed status still shows open. Check again or ask the owner.");
+        }
+      }
+    } catch {
+      setMessage("Could not check the close status. Try checking again.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function confirm() {
+    if (outcome !== "open" || pending !== null || ownerOnly) return;
+    if (countedPaise === null || variance === null) {
       setMessage("Enter the counted cash, like 1200 or 1200.50.");
       return;
     }
-    setBusy(true);
+    if (needsReason && !note.trim()) {
+      setMessage("Enter a reason for the difference.");
+      return;
+    }
+
+    setPending("save");
     setMessage(null);
-    let closed = false;
     try {
       const result = await confirmCashCountAction({
         locationId: location.locationId,
         onDate,
-        countedPaise: Number(paise),
+        countedPaise,
         ...(note.trim() ? { note: note.trim() } : {}),
       });
-      if (result.ok) {
-        closed = true;
-        setMessage(
-          result.variancePaise === 0
-            ? "Closed — counted cash matched."
-            : `Closed — ${varianceText(result.variancePaise)}.`,
-        );
-      } else {
+      if (!result.ok) {
         setMessage(result.error);
+        return;
       }
+      setOutcome("saved");
+      setMessage(result.variancePaise === 0
+        ? "Closed — counted cash matched."
+        : `Closed — ${varianceText(result.variancePaise)}.`);
+      // The write was confirmed. A failed follow-up read must leave
+      // that outcome in place and never re-enable the submit button.
+      try { await onChanged(); } catch { /* The saved outcome still stands. */ }
     } catch {
-      // Genuine save failure: the close may still have gone through
-      // server-side, so the copy asks for a check before a retry.
-      setMessage(
-        "Couldn't save the count. Check whether the day closed before retrying.",
-      );
+      setOutcome("unknown");
+      setMessage("We couldn't confirm the cash close. Check whether the day closed before retrying.");
+    } finally {
+      setPending(null);
     }
-    // The refresh runs outside the save try (same shape as
-    // components/reports/collections-report.tsx): once the close is
-    // committed, a failed refresh must not fall into the save-failure
-    // copy and invite a duplicate close.
-    if (closed) {
-      try {
-        await onChanged();
-      } catch {
-        // The close is committed; the success message stands.
-      }
-    }
-    setBusy(false);
-  };
+  }
 
   return (
-    <section
-      className="rounded-card border border-line bg-paper p-4"
-      data-testid={`close-location-${location.locationId}`}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-medium text-ink">
-          {location.locationName}
-        </h2>
-        <StatusBadge tone="neutral">Open</StatusBadge>
+    <section className="rounded-card border border-line bg-paper p-4" data-testid={`close-location-${location.locationId}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="min-w-0 break-words text-[16px] font-semibold text-ink">{location.locationName}</h2>
+        <StatusBadge tone={outcome === "saved" ? "good" : outcome === "unknown" ? "warn" : "neutral"}>
+          {outcome === "saved" ? "Closed" : outcome === "unknown" ? "Status unconfirmed" : "Open"}
+        </StatusBadge>
       </div>
 
-      <p className="mt-2 text-[12px] text-ink-3">
-        {location.paymentCount} payment
-        {location.paymentCount === 1 ? "" : "s"} today · total collected{" "}
-        {formatINR(location.totalPaise)}
-      </p>
-      <dl className="mt-2 grid grid-cols-3 gap-2 text-[13px]">
-        <div>
-          <dt className="text-[11px] text-ink-3">Cash expected</dt>
-          <dd className="font-mono text-ink">{formatINR(location.cashPaise)}</dd>
-        </div>
-        <div>
-          <dt className="text-[11px] text-ink-3">UPI</dt>
-          <dd className="font-mono text-ink">{formatINR(location.upiPaise)}</dd>
-        </div>
-        <div>
-          <dt className="text-[11px] text-ink-3">Bank transfer</dt>
-          <dd className="font-mono text-ink">
-            {formatINR(location.bankTransferPaise)}
-          </dd>
-        </div>
-      </dl>
+      <div className="mt-3 rounded-ctl border border-line bg-deck px-3 py-2.5">
+        <p className="text-[12px] font-medium text-ink-2">Cash expected</p>
+        <p className="mt-0.5 text-[24px] font-semibold leading-tight tabular-nums text-ink [overflow-wrap:anywhere]">{formatINR(location.cashPaise)}</p>
+      </div>
 
-      <div className="mt-3 space-y-2">
+      <form className="mt-3 space-y-2" onSubmit={(event) => { event.preventDefault(); void confirm(); }}>
         <label className="block">
-          <span className="mb-1 block text-[12px] text-ink-2">
-            Counted cash (₹)
-          </span>
-          <input
-            inputMode="decimal"
-            value={counted}
-            onChange={(event) => setCounted(event.target.value)}
-            className={inputClass}
-            placeholder="0.00"
-          />
+          <span className="mb-1 block text-[13px] text-ink-2">Counted cash (₹)</span>
+          <Input inputMode="decimal" maxLength={24} value={counted} readOnly={outcome !== "open" || pending !== null}
+            onChange={(event) => setCounted(event.target.value)} placeholder="0.00" />
         </label>
-        {variance !== null ? (
-          <p className="text-[12px] text-ink-2">
-            {variance === 0 ? "Matches expected cash." : varianceText(variance)}
-          </p>
-        ) : null}
-        {needsReason ? (
+        <p aria-live="polite" className="text-[13px] text-ink-2">
+          {variance === null ? null : variance === 0 ? "Matches expected cash." : varianceText(variance)}
+        </p>
+        {needsReason && !ownerOnly ? (
           <label className="block">
-            <span className="mb-1 block text-[12px] text-ink-2">
-              Reason for the difference (required)
-            </span>
-            <input
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              className={inputClass}
-              placeholder="e.g. change given twice"
-            />
+            <span className="mb-1 block text-[13px] text-ink-2">Reason for the difference (required)</span>
+            <Input value={note} maxLength={500} required readOnly={outcome !== "open" || pending !== null}
+              onChange={(event) => setNote(event.target.value)} placeholder="e.g. change given twice" />
           </label>
         ) : null}
         {ownerOnly ? (
-          <p className="mt-1.5 flex items-center gap-1.5 text-[12px] text-ink-2">
-            <StatusBadge tone="warn">Owner</StatusBadge>A variance over{" "}
-            {formatINR(ownerCloseThresholdPaise)} can only be closed by the
-            owner or an admin.
+          <p className="text-[13px] text-ink-2">
+            An owner or admin must close a difference over {formatINR(ownerCloseThresholdPaise)}.
           </p>
         ) : null}
-        <button
-          type="button"
-          disabled={busy || ownerOnly}
-          onClick={() => void confirm()}
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-pill bg-[var(--accent-strong)] px-4 py-2 text-[14px] font-medium text-paper transition-colors duration-150 hover:opacity-90 disabled:opacity-60"
-        >
-          {busy ? "Saving…" : "Confirm cash count"}
-        </button>
-        {message ? (
-          <p role="status" className="text-[12px] text-ink-2">
-            {message}
-          </p>
+        <Button type="submit" variant="primary" disabled={pending !== null || ownerOnly || outcome !== "open"} className="w-full">
+          {pending === "save" ? "Saving…" : "Confirm cash count"}
+        </Button>
+        {message ? <p role="status" className="text-[13px] text-ink-2">{message}</p> : null}
+        {outcome !== "open" ? (
+          <Button type="button" variant="secondary" disabled={pending !== null} onClick={() => void checkStatus()}>
+            {pending === "check" ? "Checking close status…" : "Check close status"}
+          </Button>
         ) : null}
-      </div>
+      </form>
+
+      <details className="mt-2 border-t border-line">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 text-[13px] font-medium text-water">
+          Recorded collections
+        </summary>
+        <p className="text-[12px] text-ink-3">
+          {location.paymentCount} payment{location.paymentCount === 1 ? "" : "s"} today · {formatINR(location.totalPaise)} total
+        </p>
+        <dl className="mt-2 grid grid-cols-2 gap-3 text-[13px]">
+          <div><dt className="text-ink-3">UPI</dt><dd className="tabular-nums text-ink">{formatINR(location.upiPaise)}</dd></div>
+          <div><dt className="text-ink-3">Bank transfer</dt><dd className="tabular-nums text-ink">{formatINR(location.bankTransferPaise)}</dd></div>
+        </dl>
+      </details>
     </section>
   );
 }

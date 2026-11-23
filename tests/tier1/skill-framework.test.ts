@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
 import { asMemberId, asTenantId, asUserId } from "@/lib/ids";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // M-03 — generic skill framework. First run is deliberately red: the
 // skill_frameworks / skill_nodes / assessments tables and
@@ -52,8 +52,10 @@ beforeAll(async () => {
   );
   await admin.query("insert into users (id, phone) values ($1, $2)", [
     actor,
-    `+9192${String(Date.now()).slice(-8)}`,
+    `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`,
   ]);
+  await seedRoleTemplates(tenantA);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantA, actor]);
   await admin.query(
     "insert into persons (id, tenant_id, full_name) values ($1, $2, 'Skill Member')",
     [personA, tenantA],
@@ -66,8 +68,6 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
-  await deleteAuditRowsForTenant(admin, tenantA);
-  await deleteAuditRowsForTenant(admin, tenantB);
   await admin.query(
     "delete from assessments where tenant_id in ($1::uuid, $2::uuid)",
     [tenantA, tenantB],
@@ -92,6 +92,8 @@ afterAll(async () => {
     "delete from locations where tenant_id in ($1::uuid, $2::uuid)",
     [tenantA, tenantB],
   );
+  await admin.query("delete from tenant_memberships where tenant_id=$1", [tenantA]);
+  await admin.query("delete from role_permissions where tenant_id=$1", [tenantA]);
   await admin.query(
     "delete from roles where tenant_id in ($1::uuid, $2::uuid)",
     [tenantA, tenantB],
@@ -100,7 +102,7 @@ afterAll(async () => {
     "delete from tenants where id in ($1::uuid, $2::uuid)",
     [tenantA, tenantB],
   );
-  await admin.query("delete from users where id = $1::uuid", [actor]);
+  await admin.query("delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id=users.id)", [actor]);
   await admin.end();
 });
 

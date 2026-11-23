@@ -6,5 +6,7 @@ export {
   Donut,
   HorizontalBars,
   LineTrend,
+  ReportDataTable,
   type DonutSlice,
+  type ReportTableColumn,
 } from "./analytics-charts";

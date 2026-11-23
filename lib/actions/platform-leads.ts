@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   createLead,
   transitionLead,
+  markLeadConverted,
   type LeadMutationResult,
 } from "@/db/platform-leads";
 import {
@@ -12,8 +13,9 @@ import {
   type ConvertLeadResult,
 } from "@/db/platform-lead-conversion";
 import { requireOpsAdminAction } from "@/lib/actions/platform-auth";
+import { recordOpsMutationTrace, recordOpsThrownFailure } from "@/lib/auth/ops-operation";
 import { opsAction } from "@/db/ops-action";
-import { asUserId } from "@/lib/ids";
+import { asTenantId, asUserId } from "@/lib/ids";
 
 // O-09 (docs/ops-platform-design.md §7) — ops console actions for the
 // sales pipeline. Same preamble as every platform action: (1) parse,
@@ -56,6 +58,7 @@ export async function createLeadAction(
     locations: locationsRaw ? Number(locationsRaw) : undefined,
   });
   if (!surface.success) {
+    await recordOpsMutationTrace("platform_lead.create", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -65,6 +68,7 @@ export async function createLeadAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.create", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -90,9 +94,15 @@ export async function createLeadAction(
         { businessName, contactName, phone, city, source, qualification },
         { actorId: asUserId(status.userId) },
       ),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.create", error);
+    throw error;
+  });
   if (result.kind === "ok") {
     revalidatePath("/ops/leads");
+  }
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("platform_lead.create", "error");
   }
   return result;
 }
@@ -109,7 +119,6 @@ const transitionLeadFormInput = z.object({
   lostReason: z.string().trim().max(500).optional(),
   trialTenantId: z.string().uuid().optional(),
   trialStartsAt: z.string().datetime().optional(),
-  trialExpiresAt: z.string().datetime().optional(),
 });
 
 export async function transitionLeadAction(
@@ -118,6 +127,7 @@ export async function transitionLeadAction(
 ): Promise<LeadMutationResult> {
   const surface = transitionLeadFormInput.safeParse(input);
   if (!surface.success) {
+    await recordOpsMutationTrace("platform_lead.update", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -127,6 +137,7 @@ export async function transitionLeadAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.update", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -142,15 +153,22 @@ export async function transitionLeadAction(
       scope: "platform_lead.update",
       actorId: asUserId(status.userId),
       targetType: "platform_lead",
+      targetId: leadId,
       detail: { status: surface.data.status },
     },
     () =>
       transitionLead(leadId, surface.data, {
         actorId: asUserId(status.userId),
       }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.update", error);
+    throw error;
+  });
   if (result.kind === "ok") {
     revalidatePath(`/ops/leads/${leadId}`);
+  }
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("platform_lead.update", "error");
   }
   return result;
 }
@@ -161,6 +179,36 @@ const convertLeadFormInput = z.object({
   planKey: z.string().trim().max(60).optional(),
   preset: z.string().trim().max(60).optional(),
 });
+
+export async function completeLeadAction(leadId: string, tenantId: string, reason: string): Promise<LeadMutationResult> {
+  const parsed = z.object({ leadId: z.string().uuid(), tenantId: z.string().uuid(), reason: z.string().trim().min(1).max(500) }).safeParse({ leadId, tenantId, reason });
+  if (!parsed.success) {
+    await recordOpsMutationTrace("platform_lead.update", "invalid");
+    return { kind: "error", code: "invalid", message: "A linked tenant and reason are required." };
+  }
+  const status = await requireOpsAdminAction();
+  if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.update", "denied");
+    return { kind: "error", code: "invalid", message: "Only an administrator can complete conversion." };
+  }
+  const result = await opsAction({
+    scope: "platform_lead.update", actorId: asUserId(status.userId),
+    targetType: "platform_lead", targetId: leadId, reason: parsed.data.reason,
+    detail: { status: "converted" },
+  }, () => markLeadConverted(parsed.data.leadId, asTenantId(parsed.data.tenantId), {
+    actorId: asUserId(status.userId), reason: parsed.data.reason,
+  })).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.update", error);
+    throw error;
+  });
+  if (result.kind === "ok") {
+    revalidatePath(`/ops/leads/${leadId}`);
+    revalidatePath("/ops/leads");
+  } else {
+    await recordOpsMutationTrace("platform_lead.update", "error");
+  }
+  return result;
+}
 
 export type ConvertLeadActionResult = ConvertLeadResult;
 
@@ -176,6 +224,7 @@ export async function convertLeadAction(
     preset: String(formData.get("preset") ?? "").trim() || undefined,
   });
   if (!surface.success || !z.string().uuid().safeParse(leadId).success) {
+    await recordOpsMutationTrace("platform_lead.convert", "invalid");
     return {
       kind: "error",
       code: "invalid",
@@ -187,6 +236,7 @@ export async function convertLeadAction(
 
   const status = await requireOpsAdminAction();
   if (status.kind === "error") {
+    await recordOpsMutationTrace("platform_lead.convert", "denied");
     return {
       kind: "error",
       code: "invalid",
@@ -197,13 +247,21 @@ export async function convertLeadAction(
     };
   }
 
-  return opsAction(
+  const result = await opsAction(
     {
       scope: "platform_lead.convert",
       actorId: asUserId(status.userId),
       targetType: "platform_lead",
+      targetId: leadId,
       detail: { slug: surface.data.slug },
     },
     () => convertLead(leadId, surface.data, { actorId: asUserId(status.userId) }),
-  );
+  ).catch(async (error: unknown) => {
+    await recordOpsThrownFailure("platform_lead.convert", error);
+    throw error;
+  });
+  if (result.kind !== "ok") {
+    await recordOpsMutationTrace("platform_lead.convert", "error");
+  }
+  return result;
 }

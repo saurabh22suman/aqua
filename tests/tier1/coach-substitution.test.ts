@@ -8,14 +8,17 @@ import { persons, locations, programs, staff, members, batches } from "@/db/sche
 import { sessions, enrolments } from "@/db/schema/scheduling";
 import { substituteCoach } from "@/lib/services/coach-substitution";
 import { asTenantId, asUserId, asStaffId, asPersonId, type TenantId, type UserId } from "@/lib/ids";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const ACTOR: UserId = asUserId(uuidv7());
+const ownerRole = uuidv7(), coachRole = uuidv7();
+const ownerMembership = uuidv7(), coachAMembership = uuidv7(), coachBMembership = uuidv7();
+const extraUsers: string[] = [];
+const phone = () => `+91${String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 4_000_000_000n + 6_000_000_000n)}`;
 
 let tenantId: TenantId = asTenantId("");
 let locationId: string = ""; // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -32,12 +35,10 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone) values ($1, $2, 'Substitution Test', $3)",
     [tenantId, "substitution-" + RUN, TZ],
   );
-  // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
-  // sentinel needs a real row before an audited mutation runs.
-  await admin.query(
-    "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-    [SYSTEM_USER, `system-substitution-${RUN}`],
-  );
+  await admin.query("insert into users(id,phone) values($1,$2)",[ACTOR,phone()]);
+  await admin.query("insert into roles(id,tenant_id,key,name,home_path,home_ordinal) values($1,$3,'owner','Owner','/owner',0),($2,$3,'coach','Coach','/coach',2)",[ownerRole,coachRole,tenantId]);
+  await admin.query("insert into role_permissions(tenant_id,role_id,permission_key) values($1,$2,'programs.read'),($1,$2,'programs.write'),($1,$3,'attendance.read')",[tenantId,ownerRole,coachRole]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$2,$3,$4,'active',true)",[ownerMembership,tenantId,ACTOR,ownerRole]);
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -55,9 +56,10 @@ beforeAll(async () => {
   coachBUserId = uuidv7();
   await admin.query(
     "insert into users (id, phone) values ($1, $2), ($3, $4)",
-    [coachAUserId, "+1-" + RUN + "-coach-a", coachBUserId, "+1-" + RUN + "-coach-b"],
+    [coachAUserId, phone(), coachBUserId, phone()],
   );
 
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) values($1,$3,$4,$6,'active',true),($2,$3,$5,$6,'active',true)",[coachAMembership,coachBMembership,tenantId,coachAUserId,coachBUserId,coachRole]);
   await withTenant(tenantId, async (tx) => {
     const [personA] = await tx
       .insert(persons)
@@ -103,15 +105,10 @@ afterAll(async () => {
       await tx.delete(persons).where(eq(persons.tenantId, tenantId));
       await tx.delete(locations).where(eq(locations.tenantId, tenantId));
     });
-    await deleteAuditRowsForTenant(admin, tenantId);
-    await admin.query(
-      "delete from users where id in ($1::uuid, $2::uuid)",
-      [coachAUserId, coachBUserId],
-    );
-    await admin.query(
-      "delete from users where id = $1::uuid and not exists (select 1 from audit_log where actor_id = $1::uuid)",
-      [SYSTEM_USER],
-    );
+    await admin.query("delete from tenant_memberships where tenant_id=$1",[tenantId]);
+    await admin.query("delete from role_permissions where tenant_id=$1",[tenantId]);
+    await admin.query("delete from roles where tenant_id=$1",[tenantId]);
+    await admin.query("delete from users where id=any($1::uuid[]) and not exists (select 1 from audit_log where actor_id=users.id)",[[coachAUserId,coachBUserId,ACTOR,...extraUsers]]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
   }
   await admin.end();
@@ -121,7 +118,6 @@ beforeEach(async () => {
   await withTenant(tenantId, async (tx) => {
     await tx.delete(sessions).where(eq(sessions.tenantId, tenantId));
   });
-  await deleteAuditRowsForTenant(admin, tenantId);
   // Use a future date 5 days out — generated sessions need to be
   // dated such that the test stays stable.
   const future = new Date();
@@ -161,7 +157,7 @@ beforeEach(async () => {
 describe("substituteCoach (Phase R.1)", () => {
   it("swaps the recorded coach to the substitute", async () => {
     const result = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { sessionId, newCoachId: coachBStaffId },
     );
     expect(result.kind).toBe("ok");
@@ -182,12 +178,12 @@ describe("substituteCoach (Phase R.1)", () => {
 
   it("is idempotent when called with the same coach already assigned", async () => {
     const first = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { sessionId, newCoachId: coachBStaffId },
     );
     expect(first.kind).toBe("ok");
     const second = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { sessionId, newCoachId: coachBStaffId },
     );
     expect(second.kind).toBe("ok");
@@ -196,9 +192,10 @@ describe("substituteCoach (Phase R.1)", () => {
   it("rejects a substitute that isn't a coach in this tenant", async () => {
     // Make a non-coach staff row
     const fakeUserId = uuidv7();
+    extraUsers.push(fakeUserId);
     await admin.query(
       "insert into users (id, phone) values ($1, $2)",
-      [fakeUserId, "+1-" + RUN + "-receptionist"],
+      [fakeUserId, phone()],
     );
     const fakeStaffId = await withTenant(tenantId, async (tx) => {
       const [p] = await tx
@@ -217,7 +214,7 @@ describe("substituteCoach (Phase R.1)", () => {
       return s!.id;
     });
     const result = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { sessionId, newCoachId: fakeStaffId },
     );
     expect(result.kind).toBe("error");
@@ -228,7 +225,7 @@ describe("substituteCoach (Phase R.1)", () => {
 
   it("rejects a substitute id that doesn't exist at all", async () => {
     const result = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { sessionId, newCoachId: uuidv7() },
     );
     expect(result.kind).toBe("error");
@@ -239,7 +236,7 @@ describe("substituteCoach (Phase R.1)", () => {
 
   it("rejects a session that doesn't belong to this tenant", async () => {
     const result = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER },
+      { tenantId, userId: ACTOR },
       { sessionId: uuidv7(), newCoachId: coachBStaffId },
     );
     expect(result.kind).toBe("error");
@@ -253,7 +250,7 @@ describe("substituteCoach writes an audit row (E-02)", () => {
   it("writes exactly one session.substitute row naming the previous and next coach", async () => {
     const requestId = uuidv7();
     const result = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: ACTOR, requestId },
       { sessionId, newCoachId: coachBStaffId },
     );
     expect(result.kind).toBe("ok");
@@ -281,7 +278,7 @@ describe("substituteCoach writes an audit row (E-02)", () => {
     expect(row.entity_type).toBe("session");
     expect(row.entity_id).toBe(sessionId);
     expect(row.actor_type).toBe("staff");
-    expect(row.actor_id).toBe(SYSTEM_USER);
+    expect(row.actor_id).toBe(ACTOR);
     expect(row.request_id).toBe(requestId);
     expect(row.before).toEqual({ coachId: coachAStaffId });
     expect(row.after).toEqual({ coachId: coachBStaffId });
@@ -291,7 +288,7 @@ describe("substituteCoach writes an audit row (E-02)", () => {
   it("writes zero rows when the substitute isn't a coach in this tenant", async () => {
     const requestId = uuidv7();
     const result = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER, requestId },
+      { tenantId, userId: ACTOR, requestId },
       { sessionId, newCoachId: uuidv7() },
     );
     expect(result.kind).toBe("error");
@@ -306,14 +303,14 @@ describe("substituteCoach writes an audit row (E-02)", () => {
   it("writes zero rows when the requested coach is already assigned (no mutation)", async () => {
     const firstRequestId = uuidv7();
     const first = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER, requestId: firstRequestId },
+      { tenantId, userId: ACTOR, requestId: firstRequestId },
       { sessionId, newCoachId: coachBStaffId },
     );
     expect(first.kind).toBe("ok");
 
     const secondRequestId = uuidv7();
     const second = await substituteCoach(
-      { tenantId, userId: SYSTEM_USER, requestId: secondRequestId },
+      { tenantId, userId: ACTOR, requestId: secondRequestId },
       { sessionId, newCoachId: coachBStaffId },
     );
     expect(second.kind).toBe("ok");

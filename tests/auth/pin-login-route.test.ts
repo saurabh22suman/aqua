@@ -63,9 +63,9 @@ afterAll(async () => {
 
 async function post(body: unknown): Promise<Response> {
   return POST(
-    new Request("http://localhost/api/login/pin", {
+    new Request(`${new URL(process.env.BETTER_AUTH_URL!).origin}/api/login/pin`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", origin: new URL(process.env.BETTER_AUTH_URL!).origin, host: new URL(process.env.BETTER_AUTH_URL!).host },
       body: JSON.stringify(body),
     }),
   );

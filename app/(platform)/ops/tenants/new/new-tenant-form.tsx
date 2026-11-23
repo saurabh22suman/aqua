@@ -1,29 +1,39 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import {
   createTenantAction,
   type CreateTenantResult,
 } from "@/lib/actions/platform-tenants";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Checkbox } from "@/components/ui/Checkbox";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { ProvisioningReview } from "@/components/ops/console/provisioning-review";
+import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
 
 // Phase 1.5 — create-tenant form. H1 — uses <form action={createTenantAction}>
 // rather than onSubmit. Pre-hydration submit goes via POST to the
 // action endpoint; form fields (name, slug, timezone, currency,
 // GSTIN, locationName) never appear as query-string values.
+//
+// India-first (29 October 2026): NEW tenants are created with INR and IST. The
+// values are submitted as hidden fields so the existing server contract is
+// unchanged; the operator sees plain India context, not an ISO/IANA input.
+// Existing tenant records keep their stored currency and time zone.
 
 type Plan = { key: string; name: string; isDefault: boolean };
 type Preset = { key: string; name: string; description: string };
 
 export function NewTenantForm({
-  defaultTimezone,
-  defaultCurrency,
   defaultLocationName,
   plans,
   defaultPlanKey,
   presets,
   defaultPresetKey,
 }: {
+  // Kept for the page's create-tenant contract; the form no longer edits these.
   defaultTimezone: string;
   defaultCurrency: string;
   defaultLocationName: string;
@@ -39,17 +49,24 @@ export function NewTenantForm({
   } as CreateTenantResult);
 
   const error = state?.kind === "error" ? state.message : null;
+  const [businessName, setBusinessName] = useState("");
+  const [clubName, setClubName] = useState(defaultLocationName);
+  const [slug, setSlug] = useState("");
+  const [planKey, setPlanKey] = useState(defaultPlanKey);
+  const [presetKey, setPresetKey] = useState(defaultPresetKey);
 
   return (
     // method="post" is pinned by scripts/e2e-platform-form-leak.ts;
     // suppress the case-only hydration warning React raises for
     // server-action forms (POST vs post).
     <form action={formAction} method="post" suppressHydrationWarning className="mt-8 space-y-6">
-      <Section title="Club details" subtitle="Public-facing name and URL slug.">
-        <Field label="Club name" name="name" required autoComplete="off" />
+      <Section title="Business account" subtitle="The business account contains clubs; each club can have activities.">
+        <Field label="Business account name" name="name" required autoComplete="off" value={businessName} onChange={setBusinessName} />
         <Field
           label="Slug"
           name="slug"
+          value={slug}
+          onChange={setSlug}
           required
           autoComplete="off"
           pattern="[a-z0-9]([a-z0-9-]{0,58}[a-z0-9])?"
@@ -59,41 +76,43 @@ export function NewTenantForm({
 
       <Section
         title="Settings"
-        subtitle="Defaults applied unless the operator overrides."
+        subtitle="New tenants are created with INR and Indian Standard Time."
       >
-        <Field
-          label="Time zone"
-          name="timezone"
-          required
-          defaultValue={defaultTimezone}
-          autoComplete="off"
-          hint="IANA identifier, e.g. Asia/Kolkata."
-        />
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] font-medium text-ink">Currency · INR</p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            This new tenant is created with Indian rupees.
+          </p>
+        </div>
+        <div className="rounded-ctl border border-line bg-deck px-3 py-2">
+          <p className="text-[13px] font-medium text-ink">
+            Time zone · Indian Standard Time
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-3">
+            This new tenant uses IST (UTC+05:30).
+          </p>
+        </div>
+        <input type="hidden" name="timezone" value="Asia/Kolkata" />
+        <input type="hidden" name="currency" value="INR" />
+        <OpsPanel tone="info" title="Starts in Trial">
+          <p>This club starts in the existing Trial status on the plan you choose. No trial end date is set by this form. Activation and expiry decisions remain manual; this does not record payment or start paid billing.</p>
+        </OpsPanel>
         <SelectField
           label="Plan"
           name="planKey"
-          defaultValue={defaultPlanKey}
+          value={planKey}
+          onChange={setPlanKey}
           options={plans.map((p) => ({
             value: p.key,
             label: p.isDefault ? `${p.name} (default)` : p.name,
           }))}
         />
         <Field
-          label="Currency"
-          name="currency"
-          required
-          defaultValue={defaultCurrency}
-          autoComplete="off"
-          pattern="[A-Z]{3}"
-          maxLength={3}
-          hint="ISO 4217, three uppercase letters."
-        />
-        <Field
           label="GSTIN"
           name="gstin"
           autoComplete="off"
           maxLength={15}
-          hint="15-character GSTIN. Optional for non-India tenants."
+          hint="15-character GSTIN. Optional."
         />
       </Section>
 
@@ -104,7 +123,8 @@ export function NewTenantForm({
         <SelectField
           label="Preset"
           name="presetKey"
-          defaultValue={defaultPresetKey}
+          value={presetKey}
+          onChange={setPresetKey}
           options={presets.map((p) => ({
             value: p.key,
             label: `${p.name} (${p.key})`,
@@ -113,50 +133,46 @@ export function NewTenantForm({
       </Section>
 
       <Section
-        title="First location"
-        subtitle="Every tenant starts with one location. More can be added later."
+        title="First club"
+        subtitle="The business account starts with one club. More clubs can be added later."
       >
         <Field
-          label="Location name"
+          label="First club name"
           name="locationName"
           required
-          defaultValue={defaultLocationName}
+          value={clubName}
+          onChange={setClubName}
           autoComplete="off"
         />
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            name="locationIsPrimary"
-            defaultChecked
-            className="h-5 w-5 rounded border border-line text-[var(--accent-ink)] focus:ring-[var(--accent-strong)]"
-          />
-          <span className="text-[14px] text-ink-2">
-            This is the primary location
-          </span>
-        </label>
+        <Checkbox name="locationIsPrimary" defaultChecked>
+          This is the primary club
+        </Checkbox>
       </Section>
 
+      <ProvisioningReview
+        title="Review business setup"
+        fields={[
+          { label: "Business account", value: businessName.trim() || "Enter a business name" },
+          { label: "Tenant URL slug", value: slug.trim() || "Enter a slug" },
+          { label: "First club", value: clubName.trim() || "Enter a club name" },
+          { label: "Plan", value: plans.find((plan) => plan.key === planKey)?.name ?? "Default plan" },
+          { label: "Preset", value: presets.find((preset) => preset.key === presetKey)?.name ?? "Default preset" },
+        ]}
+      >
+        Creates a trial tenant. Set its trial deadline and invite the owner from the tenant workspace.
+      </ProvisioningReview>
+
       {error ? (
-        <p
-          role="alert"
-          className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
-        >
+        <OpsPanel tone="error" role="alert">
           {error}
-        </p>
+        </OpsPanel>
       ) : null}
 
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-pill px-6 py-3 text-[14px] font-semibold text-white bg-[var(--accent-strong)] transition-colors duration-150 disabled:opacity-60"
-        >
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="primary" disabled={isPending}>
           {isPending ? "Creating…" : "Create tenant"}
-        </button>
-        <Link
-          href="/ops/tenants"
-          className="rounded-pill px-4 py-3 text-[13px] font-medium text-ink-2 hover:text-ink hover:underline"
-        >
+        </Button>
+        <Link href="/ops/tenants" className={buttonClasses({ variant: "secondary" })}>
           Cancel
         </Link>
       </div>
@@ -174,7 +190,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-card bg-paper border border-line p-5 space-y-4">
+    <OpsCard className="space-y-4 p-5">
       <div>
         <h2 className="font-display text-[16px] font-semibold text-ink">
           {title}
@@ -184,7 +200,7 @@ function Section({
         ) : null}
       </div>
       <div className="space-y-4">{children}</div>
-    </section>
+    </OpsCard>
   );
 }
 
@@ -194,33 +210,35 @@ function Field({
   hint,
   type = "text",
   required,
-  defaultValue,
+  value,
   autoComplete,
   pattern,
   maxLength,
+  onChange,
 }: {
   label: string;
   name: string;
   hint?: string;
   type?: string;
   required?: boolean;
-  defaultValue?: string;
+  value?: string;
   autoComplete?: string;
   pattern?: string;
   maxLength?: number;
+  onChange?: (value: string) => void;
 }) {
   return (
     <label className="block">
-      <span className="block text-[13px] font-medium text-ink-2">{label}</span>
-      <input
+      <span className="mb-1 block text-[13px] font-medium text-ink-2">{label}</span>
+      <Input
         type={type}
         name={name}
         required={required}
-        defaultValue={defaultValue}
+        value={value}
         autoComplete={autoComplete}
         pattern={pattern}
         maxLength={maxLength}
-        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink placeholder:text-ink-3 focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+        onChange={onChange ? (event) => onChange(event.target.value) : undefined}
       />
       {hint ? (
         <span className="mt-1 block text-[12px] text-ink-3">{hint}</span>
@@ -232,28 +250,26 @@ function Field({
 function SelectField({
   label,
   name,
-  defaultValue,
+  value,
+  onChange,
   options,
 }: {
   label: string;
   name: string;
-  defaultValue: string;
+  value: string;
+  onChange: (value: string) => void;
   options: ReadonlyArray<{ value: string; label: string }>;
 }) {
   return (
     <label className="block">
-      <span className="block text-[13px] font-medium text-ink-2">{label}</span>
-      <select
-        name={name}
-        defaultValue={defaultValue}
-        className="mt-1 w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[16px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-      >
+      <span className="mb-1 block text-[13px] font-medium text-ink-2">{label}</span>
+      <Select name={name} value={value} onChange={(event) => onChange(event.target.value)}>
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

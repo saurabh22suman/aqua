@@ -30,6 +30,12 @@ export type ManifestLinkProps = {
 };
 
 export function ManifestLink({ pathname }: ManifestLinkProps) {
-  if (!isInstallableSurface(pathname)) return null;
+  if (!isInstallableSurface(pathname) || /^\/clubs\/[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/install\/?$/.test(pathname)) return null;
   return <link rel="manifest" href={PWA_MANIFEST_PATH} />;
+}
+
+/** Render only after the explicit install page authorizes this tenant/source. */
+export function TenantManifestLink({ tenantId, source }: { tenantId: string; source: "staff" | "member" | "guardian" }) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(tenantId) || !["staff", "member", "guardian"].includes(source)) return null;
+  return <link rel="manifest" href={`/clubs/${tenantId}/manifest.webmanifest?source=${source}`} crossOrigin="use-credentials" />;
 }

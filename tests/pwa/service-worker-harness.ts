@@ -64,30 +64,51 @@ class FakeCache {
 }
 
 function fakeIndexedDb(): unknown {
-  const store = {
-    get: () => {
-      const request: { onsuccess: (() => void) | null; result?: unknown; onerror: (() => void) | null } = {
-        onsuccess: null,
-        onerror: null,
-        result: undefined,
-      };
-      queueMicrotask(() => request.onsuccess?.());
-      return request;
-    },
-    clear: () => ({}),
-    put: () => ({}),
-  };
+  const data = new Map<string, Map<unknown, unknown>>([["queue", new Map()], ["kv", new Map()]]);
+  let previousTransaction: Promise<void> = Promise.resolve();
   const db = {
     objectStoreNames: { contains: () => true },
     transaction: () => {
-      const transaction: { oncomplete: (() => void) | null; onerror: (() => void) | null; onabort: (() => void) | null; abort: () => void } = {
-        oncomplete: null,
-        onerror: null,
-        onabort: null,
-        abort: () => {},
+      let staged: Map<string, Map<unknown, unknown>>;
+      let release!: () => void;
+      const ready = previousTransaction.then(() => { staged = new Map(Array.from(data, ([name, rows]) => [name, new Map(rows)])); });
+      previousTransaction = new Promise<void>(resolve => { release = resolve; });
+      let pending = 0, aborted = false, finished = false;
+      const transaction = {
+        oncomplete: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        onabort: null as (() => void) | null,
+        abort: () => { aborted = true; void ready.then(() => { transaction.onabort?.(); release(); }); },
+        objectStore: (name: string) => {
+          const request = <T>(work: () => T) => {
+            const result: { onsuccess: (() => void) | null; result?: T } = { onsuccess: null };
+            pending++;
+            void ready.then(() => queueMicrotask(() => {
+              if (!aborted) { result.result = work(); result.onsuccess?.(); }
+              pending--; complete();
+            }));
+            return result;
+          };
+          return {
+            get: (key: unknown) => request(() => staged.get(name)?.get(key)),
+            count: () => request(() => staged.get(name)?.size ?? 0),
+            clear: () => request(() => { staged.get(name)?.clear(); }),
+            put: (value: unknown, key: unknown) => request(() => { staged.get(name)?.set(key, value); }),
+          };
+        },
       };
-      setTimeout(() => transaction.oncomplete?.(), 0);
-      return Object.assign(transaction, { objectStore: () => store });
+      function complete() {
+        if (pending || aborted || finished) return;
+        setTimeout(() => {
+          if (pending || aborted || finished) return;
+          finished = true;
+          for (const [name, rows] of staged) data.set(name, rows);
+          transaction.oncomplete?.();
+          release();
+        }, 0);
+      }
+      void ready.then(complete);
+      return transaction;
     },
     close: () => {},
   };

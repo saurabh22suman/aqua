@@ -46,6 +46,15 @@ export function PhoneField({
           id={id}
           value={value.replace(/^\+91[\s-]*/, "")}
           onChange={(event) => onChange(event.target.value)}
+          onPaste={(event) => {
+            const input = event.currentTarget;
+            const paste = event.clipboardData.getData("text").replace(/[\s\-()]/g, "");
+            const wholeField = !input.value || (input.selectionStart === 0 && input.selectionEnd === input.value.length);
+            if (wholeField && /^\+?91\d{10}$/.test(paste)) {
+              event.preventDefault();
+              onChange(paste.replace(/^\+?91/, ""));
+            }
+          }}
           onBlur={onBlur}
           onKeyDown={onKeyDown}
           type="tel"

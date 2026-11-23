@@ -39,10 +39,10 @@ export async function addHolidayAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.manage");
-  return addHoliday(
-    { tenantId: ctx.tenantId, userId: ctx.userId },
-    parsed.data,
-  );
+  // The COMPLETE authenticated ctx: a rebuilt `{ tenantId, userId }`
+  // literal carries no role or permission set, so the service's actor
+  // rule would record this permission-checked request as a system actor.
+  return addHoliday(ctx, parsed.data);
 }
 
 export async function removeHolidayAction(
@@ -54,5 +54,5 @@ export async function removeHolidayAction(
   }
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "settings.manage");
-  return removeHoliday({ tenantId: ctx.tenantId, userId: ctx.userId }, parsed.data);
+  return removeHoliday(ctx, parsed.data);
 }

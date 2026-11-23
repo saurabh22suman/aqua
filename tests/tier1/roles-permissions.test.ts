@@ -24,6 +24,7 @@ const TENANT_IDS = [tenantA, tenantB];
 // but lists 30; this is the verbatim list, all 30 rows.
 const ALL_PERMISSION_KEYS = [
   "members.read",
+  "members.link.confirm",
   "members.read.assigned",
   "members.write",
   "members.delete",
@@ -63,8 +64,34 @@ const ALL_PERMISSION_KEYS = [
 const ROLE_MATRIX: Record<string, string[]> = {
   owner: ALL_PERMISSION_KEYS.filter((k) => k !== "attendance.mark").sort(),
   admin: ALL_PERMISSION_KEYS.filter(
-    (k) => k !== "attendance.mark" && k !== "staff.pay.read" && k !== "staff.pay.write",
+    (k) => k !== "attendance.mark" && k !== "staff.pay.read" && k !== "staff.pay.write" && k !== "members.link.confirm",
   ).sort(),
+  manager: [
+    "members.read",
+    "members.read.assigned",
+    "members.write",
+    "members.link.confirm",
+    "attendance.read",
+    "programs.read",
+    "enquiries.read",
+    "enquiries.write",
+    "invoices.read",
+    "payments.read",
+    "payments.record",
+    "payments.refund",
+    "invoices.write",
+    "reports.financial",
+    "bookings.read",
+    "bookings.write",
+    "reports.operational",
+    "levels.read",
+    "levels.assess",
+    "dashboard.view",
+    "staff.self",
+    "staff.read",
+    "staff.attendance",
+    "staff.roster",
+  ].sort(),
   accountant: [
     "invoices.read",
     "invoices.write",
@@ -138,7 +165,7 @@ afterAll(async () => {
 });
 
 describe("F-04 roles and permissions", () => {
-  it("templates seed per tenant: seven is_system roles matching the matrix", async () => {
+  it("templates seed per tenant: eight is_system roles matching the matrix", async () => {
     await admin.query(
       "insert into tenants (id, slug, name) values ($1, $2, 'Roles A'), ($3, $4, 'Roles B')",
       [tenantA, `roles-a-${RUN}`, tenantB, `roles-b-${RUN}`],
@@ -156,7 +183,7 @@ describe("F-04 roles and permissions", () => {
         "select key, is_system, name from roles where tenant_id = $1 order by key",
         [tenantId],
       );
-      expect(rows).toHaveLength(7);
+      expect(rows).toHaveLength(8);
       expect(rows.map((r) => r.key)).toEqual(TEMPLATE_KEYS);
       for (const row of rows) expect(row.is_system).toBe(true);
 

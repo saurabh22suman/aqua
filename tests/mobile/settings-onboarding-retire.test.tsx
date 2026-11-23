@@ -34,6 +34,10 @@ vi.mock("@/lib/auth/context", () => ({
   requireDefaultCtx: async () => ({ features: new Set<string>() }),
 }));
 vi.mock("@/lib/auth/permission", () => ({ requirePermission: () => {} }));
+const liveOwner = vi.hoisted(() => ({ allowed: true }));
+vi.mock("@/lib/auth/owner-settings-page-guard", () => ({
+  requireLiveOwnerSettingsPage: async () => { if (!liveOwner.allowed) throw new Error("OWNER_DENIED"); },
+}));
 vi.mock("@/lib/services/staff", () => ({
   getCurrentStaffIdentity: async () => ({ fullName: "Owner Ojaswi", phone: "+919000000001" }),
 }));
@@ -64,6 +68,12 @@ import SettingsPage from "@/app/(owner)/owner/settings/page";
 afterEach(cleanup);
 
 describe("settings onboarding row (W1-6 continuation)", () => {
+  it("refuses before rendering for a non-live owner", async () => {
+    liveOwner.allowed = false;
+    try {
+      await expect(SettingsPage({ searchParams: Promise.resolve({}) })).rejects.toThrow("OWNER_DENIED");
+    } finally { liveOwner.allowed = true; }
+  });
   it("hides the Setup row once every step is complete", async () => {
     checklist.value = {
       items: [
@@ -79,6 +89,10 @@ describe("settings onboarding row (W1-6 continuation)", () => {
     expect(screen.queryByTestId("settings-onboarding")).toBeNull();
     expect(document.body.textContent).not.toContain("Onboarding checklist");
     expect(document.body.textContent).not.toContain("Setup guide");
+    const help = screen.getByText("Help").closest("details");
+    expect(help?.open).toBe(false);
+    if (help) help.open = true;
+    expect(screen.getByRole("link", { name: "Review completed setup" }).getAttribute("href")).toBe("/owner/onboarding");
   });
 
   it("keeps the Setup row while any step is incomplete", async () => {

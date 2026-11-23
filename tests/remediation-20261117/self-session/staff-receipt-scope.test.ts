@@ -1,0 +1,33 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
+import { fixture } from "@/tests/remediation-20261112/fixture";
+const request = vi.hoisted(() => ({ context: vi.fn() }));
+vi.mock("@/lib/auth/context", async importOriginal => ({ ...await importOriginal<object>(), requireDefaultCtx: request.context }));
+import { GET } from "@/app/api/receipts/[paymentId]/route";
+import type { NextRequest } from "next/server";
+let f: Awaited<ReturnType<typeof fixture>>;
+const invoice = randomUUID(), payment = randomUUID();
+beforeAll(async () => {
+  f = await fixture();
+  await f.admin.query("insert into invoices(id,tenant_id,location_id,member_id,invoice_number,financial_year,issued_on,due_on,subtotal_paise,tax_paise,total_paise,paid_paise,status) values($1,$2,$3,$4,'SCOPE-RECEIPT','2026-27','2026-11-01','2026-11-30',10000,0,10000,10000,'paid')", [invoice, f.tenantId, f.locationB, f.memberId]);
+  await f.admin.query("insert into payments(id,tenant_id,invoice_id,member_id,location_id,amount_paise,method,status) values($1,$2,$3,$4,$5,10000,'cash','captured')", [payment, f.tenantId, invoice, f.memberId, f.locationB]);
+});
+afterAll(async () => { if (f) await f.cleanup(); });
+const call = () => GET({} as NextRequest, { params: Promise.resolve({ paymentId: payment }) });
+it("serves the same-tenant receipt with no-store, but not outside location or tenant", async () => {
+  const owner = f.context();
+  request.context.mockResolvedValue({ ...owner, permissions: new Set(["invoices.read"]) });
+  const success = await call();
+  expect(success.status).toBe(200);
+  expect(success.headers.get("content-type")).toBe("application/pdf");
+  expect(success.headers.get("cache-control")).toBe("private, no-store");
+  const manager = f.context(f.managerId, "manager");
+  request.context.mockResolvedValue({ ...manager, permissions: new Set(["invoices.read"]) });
+  const outside = await call();
+  expect(outside.status).toBe(404);
+  expect(outside.headers.get("cache-control")).toBe("private, no-store");
+  request.context.mockResolvedValue({ ...owner, tenantId: f.otherTenant, permissions: new Set(["invoices.read"]) });
+  const foreign = await call();
+  expect(foreign.status).toBe(404);
+  expect(foreign.headers.get("cache-control")).toBe("private, no-store");
+});

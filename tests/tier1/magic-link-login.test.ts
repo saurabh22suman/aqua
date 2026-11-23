@@ -7,7 +7,6 @@ import { withTenant } from "@/db/tenant";
 import { withPlatform } from "@/db/scope";
 import { tenantMemberships } from "@/db/schema/memberships";
 import { locations } from "@/db/schema/locations";
-import { inviteLinkUses } from "@/db/schema/invite-link-uses";
 import { persons } from "@/db/schema/people";
 import { staff } from "@/db/schema/staff";
 import { seedRoleTemplates } from "@/lib/services/roles";
@@ -25,7 +24,6 @@ import {
 } from "@/lib/services/invite-link";
 import { signParentLinkToken } from "@/lib/services/parent-link";
 import { asTenantId, asUserId, type TenantId, type UserId } from "@/lib/ids";
-import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 
 // Staff magic-link login: single-use, membership-bound invite and
 // re-login links (architecture §6.1). Pure token properties need no
@@ -37,11 +35,12 @@ import { deleteAuditRowsForTenant } from "../helpers/audit-log-cleanup";
 const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 
 const RUN = Date.now().toString(36);
-const RUN_NUM = Date.now() % 1000000;
+const RUN_NUM = String(BigInt("0x" + uuidv7().replaceAll("-", "").slice(-12)) % 10_000_000n).padStart(7,"0");
 const TZ = "Asia/Kolkata";
-const phone = (suffix: string) => `+91986${RUN_NUM}${suffix}`;
+const phone = (suffix: string) => `+919${RUN_NUM}${suffix}`;
 
-const SYSTEM_USER: UserId = asUserId("00000000-0000-0000-0000-000000000000");
+const ACTOR: UserId = asUserId(uuidv7());
+const ownerMembershipId = uuidv7();
 
 let tenantId: TenantId = asTenantId("");
 // One membership per redeem test -- each test owns its invite ->
@@ -112,12 +111,8 @@ describe("invite-link issue/preview/redeem (database)", () => {
       await tx.insert(locations).values({ tenantId, name: "Main", isPrimary: true });
     });
     await seedRoleTemplates(tenantId);
-    // E-02 — audit_log.actor_id FKs to users(id); the SYSTEM_USER
-    // sentinel needs a real row before an audited mutation runs.
-    await admin.query(
-      "insert into users (id, phone) values ($1, $2) on conflict do nothing",
-      [SYSTEM_USER, `system-link-${RUN}`],
-    );
+    await admin.query("insert into users(id,phone) values($1,$2)",[ACTOR,phone("00")]);
+    await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'",[ownerMembershipId,tenantId,ACTOR]);
     for (const [test, suffix] of [
       ["issue", "01"],
       ["preview", "02"],
@@ -127,7 +122,7 @@ describe("invite-link issue/preview/redeem (database)", () => {
       ["audit", "06"],
     ] as const) {
       const invited = await inviteStaff(
-        { tenantId, userId: SYSTEM_USER },
+        { tenantId, userId: ACTOR },
         { phone: phone(suffix), fullName: "Link Coach", roleKey: "coach", locationIds: [] },
       );
       if (invited.kind !== "ok") throw new Error(`setup invite failed: ${invited.kind}`);
@@ -137,28 +132,28 @@ describe("invite-link issue/preview/redeem (database)", () => {
 
   afterAll(async () => {
     if (tenantId) {
+      await admin.query("delete from invite_link_uses where tenant_id = $1", [tenantId]);
       await withTenant(tenantId, async (tx) => {
         // inviteStaff now also creates persons + staff rows for
         // coach invites; the cleanup must delete them first.
-        await tx.delete(inviteLinkUses).where(eq(inviteLinkUses.tenantId, tenantId));
         await tx.delete(staff).where(eq(staff.tenantId, tenantId));
         await tx.delete(persons).where(eq(persons.tenantId, tenantId));
         await tx.delete(tenantMemberships).where(eq(tenantMemberships.tenantId, tenantId));
         await tx.delete(locations).where(eq(locations.tenantId, tenantId));
       });
       await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+      await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
       await admin.query("delete from roles where tenant_id = $1", [tenantId]);
       await admin.query("delete from tenants where id = $1", [tenantId]);
-      // E-02 — redeem writes membership.activate rows whose actor is
-      // the invited user; drop the trail before the users below.
-      await deleteAuditRowsForTenant(admin, tenantId);
+      // Audit rows remain; referenced users are retained below.
     }
     for (const suffix of ["01", "02", "03", "04", "05", "06"]) {
       const p = phone(suffix);
       await admin.query("delete from ba_session where user_id in (select id from ba_user where phone_number = $1)", [p]);
       await admin.query("delete from ba_user where phone_number = $1", [p]);
-      await admin.query("delete from users where phone = $1", [p]);
+      await admin.query("delete from users where phone = $1 and not exists (select 1 from audit_log where actor_id=users.id)", [p]);
     }
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)",[ACTOR]);
     await admin.end();
   });
 

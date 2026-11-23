@@ -34,12 +34,15 @@ describe("accessible names (FE-08)", () => {
 describe("tap targets (FE-08)", () => {
   it("the staff directory header links carry the 44px floor", () => {
     const src = source("app/(owner)/owner/staff/page.tsx");
-    const links = src.match(/className="inline-flex min-h-11 items-center rounded-pill px-4 py-2/g);
-    expect(links?.length).toBe(3);
+    expect(src).toMatch(/aria-label="Staff shortcuts"/);
+    expect(src).toMatch(/href: "\/owner\/staff\/roster"/);
+    expect(src).toMatch(/href: "\/owner\/staff\/invitations"/);
+    expect(src).toMatch(/href: "\/owner\/staff\/leave"/);
+    expect(src).toMatch(/className="flex min-h-11 flex-col items-center/);
   });
 
   it("Confirm reversal carries the 44px floor", () => {
-    const src = source("components/member-detail/invoice-expanded.tsx");
+    const src = source("components/member-detail/invoice-reversal-form.tsx");
     expect(src).toMatch(
       /inline-flex min-h-11 items-center justify-center rounded-pill px-3\.5 py-1\.5 text-\[12px\] font-semibold/,
     );

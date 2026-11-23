@@ -5,6 +5,13 @@ are defects to track, not an instruction to silently redesign every route.
 DESIGN.md owns visual tokens and approved compositions; this file owns behavioral
 acceptance and evidence. Do not duplicate token values here.
 
+## Current preset acceptance — 14 November 2026
+
+The approved Mint Garden, Lavender Club and Slate & Amber presets share the same
+layout and keyboard order. This supersedes historical two-preset wording below.
+Compare measured geometry across all three; use semantic status text as well as
+colour and verify rendered contrast in each preset.
+
 ## Shared shell and scrolling
 
 - Owner desktop shell has a viewport-bound sidebar that stays visible while the
@@ -20,9 +27,10 @@ acceptance and evidence. Do not duplicate token values here.
   baseline and header height come from shared shell/components, not route-local
   copies. Active child routes highlight the right parent; permission-limited
   roles see only authorized destinations and can still sign out.
-- Mobile uses the approved four-item navigation, safe-area clearance, accessible
-  search/account routes and no desktop sidebar. Check transition around the
-  actual installed breakpoint on both sides; do not infer it from screenshots.
+- Owner mobile uses the Courtside tab order in DESIGN.md. Verify safe-area
+  clearance, accessible search/account routes and the hidden desktop sidebar.
+  Check the actual installed shell breakpoint on both sides and inventory
+  authorized destinations before and after a navigation change.
 - Short screens must retain access to every navigation item and exit control.
   At 200% zoom, reflow or provide usable navigation; never clip it to fit.
 - Route navigation restores the intended main-page position; browser Back and
@@ -51,7 +59,39 @@ acceptance and evidence. Do not duplicate token values here.
   are deliberate. Reduced motion is respected. Do not silently replace mobile
   charts with tables unless this behavior is approved and documented.
 
+## Workspace redesign behaviors — 20 November 2026
+
+Use the scenarios for the role and scope being changed. The latest visual
+composition and implementation sequence are in the design and handoff.
+[Current design](../DESIGN.md#approved-workspace-direction--20-november-2026)
+· [Implementation handoff](handoffs/workspace-redesign-2026-11-20.md)
+
+| Flow | Evidence to collect |
+| --- | --- |
+| Owner Home → Fees → Back | Finance and a viable next action fit on the first 390×844 view with typical data. Verify truthful day and current balances, overdue as a subset, correct drill-down and return scope, plus quiet day, unavailable read and no-finance states. |
+| All facilities → one facility | Verify the owner's site totals, the manager's assigned subset, forbidden-site recovery and real access to the chosen report. Include a single-site fixture and a second sport preset with the same structure and valid terminology. |
+| Enquiry conversion | Supersede a slow guardian search with a new query. Clear the earlier selection, show the currently selected guardian at review and persist the confirmed link exactly once. |
+| Reception invoice and booking | Fail lookup with a selected member and retry in place. A lookup failure is distinct from zero invoices. Test a lost response after recording a payment and verify the server outcome before retry. After cancellation, show the resulting booking and payment-eligibility states and verify mutation rejection where appropriate. |
+| Coach attendance | Exercise offline controls only where enabled. Distinguish state saved on device, synced, rejected and retryable. Verify reconnect, reload and scoped replay when applicable. A disabled workflow gives the reason and returns to a usable state on reconnect. |
+| Family announcements and receipts | Switch children and verify each view follows the authorized child and audience. Exercise the existing legacy receipt route with allowed and denied fixtures. Confirm zero-JS and the private, no-store response policy for the relevant artifacts. |
+
+For changed mobile flows, check 320px and 390px widths, keyboard focus after
+navigation/dialogs, spoken status and error announcements, readable contrast,
+and reduced motion. Use a visible single-pointer control for every swipe or
+drag action. Preserve the 44px hit-target standard and test text and state
+without depending on color. Treat standalone mock checks as design evidence.
+Use the running app for implementation evidence. For Owner Today, check the
+actual fonts rendered for the title, priority, ledger amount and regular body
+copy. Include Latin coverage beyond the sample title, INR symbols, and at least
+one long real-shaped name in the fixture. Record loaded faces and font bytes.
+A screenshot with fallback glyphs does not pass the approved typography check.
+
 ## Required browser proof for UI changes
+
+For Floodlit Owner Today, run the reference comparison against the built Owner
+route and review both captures with matching fixtures. A failed artwork,
+typography or geometry check is **CHANGES REQUIRED** for the visual review.
+[Reference and command](design/floodlit-owner-2026-11-20/README.md)
 
 For owner changes inspect 1280×900, 1024×768, 390×844 and a short desktop
 1280×600 for shell work. Add widths immediately below/above the shell breakpoint
@@ -81,11 +121,11 @@ and 200% zoom for shell changes. Do not let viewport emulation leak to user tabs
    returns PASS / CHANGES REQUIRED / BLOCKED; “modern/polished” is not established
    by typecheck, screenshots without inspection, or the builder's own claim.
 
-## Approved owner direction — Lavender Club Option B (27 October 2026)
+## Historical owner direction — Lavender Club Option B (27 October 2026)
 
-The human approved a specific owner palette and composition. The
-reference-direction section below is superseded for the OWNER HOME and
-the OWNER SHELL only; everything else in this contract still applies.
+The 20 November workspace direction governs Owner Home composition. Read the
+following approval as context for the Lavender preset and compatible shell
+and accessibility behaviors.
 
 - **One markup, two presets.** Lavender Club (Option B) and Mint Garden
   render the SAME owner home and the SAME owner shell. No theme branch,

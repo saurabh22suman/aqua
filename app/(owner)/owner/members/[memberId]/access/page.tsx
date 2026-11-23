@@ -1,0 +1,80 @@
+import { resolveRequestedFacility } from "@/lib/facility";
+import { notFound } from "next/navigation";
+import { MemberEnrollmentForm } from "@/components/member-detail/member-enrollment-form";
+import { hasPermission } from "@/lib/auth/permission";
+import { isFacilityScopedRoleKey } from "@/lib/services/facility-scope";
+import { MemberAccessPanel } from "@/components/member-detail/member-access-panel";
+import { OwnerSectionLinks } from "@/components/owner-ui/owner-section-links";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
+import { BackLink } from "@/components/ui/BackLink";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { requireOwner, requirePagePermission } from "@/lib/auth/surface-guard";
+import { requireUuidParam } from "@/lib/params";
+import {
+  readMemberAccessLinks,
+  type MemberAccessRead,
+} from "@/lib/services/member-link-readmodel";
+
+// The page guards the surface and link-confirm permission. The read model
+// rechecks live facility authority; enrollment also requires members.write.
+export default async function MemberAccessPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ memberId: string }>;
+  searchParams?: Promise<{ facility?: string }>;
+}) {
+  const ctx = await requireOwner();
+  requirePagePermission(ctx, "members.link.confirm");
+  const { memberId } = await params;
+  requireUuidParam(memberId);
+  const scope = resolveRequestedFacility(searchParams ? await searchParams : {});
+  if (!scope.valid) {
+    return <OwnerPage workflow="record" className="max-w-3xl">
+      <BackLink href={`/owner/members/${memberId}?facility=all`} label="Member details" />
+      <PageHeader title="Facility unavailable" purpose="Choose an available facility to continue." />
+    </OwnerPage>;
+  }
+  const memberHref = `/owner/members/${memberId}?facility=${scope.facilityId ?? "all"}`;
+
+  let read: MemberAccessRead | null = null;
+  let failed = false;
+  try {
+    read = await readMemberAccessLinks(ctx, memberId);
+  } catch {
+    // A read that could not be made is not an empty list. The panel says
+    // so and offers a retry.
+    failed = true;
+  }
+  // A member that is missing and a member the actor may not see are the
+  // same answer.
+  if (!failed && read === null) notFound();
+  const canSetup = hasPermission(ctx, "members.write") && (ctx.roleKey === "owner" || isFacilityScopedRoleKey(ctx.roleKey));
+
+  return (
+    <OwnerPage workflow="record" className="max-w-3xl">
+      <BackLink href={memberHref} label="Member details" />
+      <PageHeader className="mt-2" title="Member and family access" />
+      {read ? <OwnerSectionLinks label="Access sections" className="mt-3" sections={[
+        ...(canSetup ? [{ id: "member-access-setup", label: "Set up sign-in" }] : []),
+        { id: "member-sign-in-links", label: "Sign-in links" },
+        ...(read.guardianChoices?.length ? [{ id: "member-family-authorizations", label: "Family authorizations" }] : []),
+      ]} /> : null}
+      {read ? (
+        <section aria-label="Member identity" className="owner-work-panel mt-3">
+          <p className="break-words text-[17px] font-semibold text-ink">{read.memberName}</p>
+          <p className="mt-1 break-words text-[13px] text-ink-2">{read.memberCode} · {read.facilityName}</p>
+        </section>
+      ) : null}
+      {read && canSetup ? (
+        <details id="member-access-setup" className="mt-4 rounded-card border border-line bg-paper p-3">
+          <summary className="min-h-11 cursor-pointer content-center px-1 text-[14px] font-semibold text-ink">Set up a new sign-in</summary>
+          <MemberEnrollmentForm key={read.memberId} read={read} />
+        </details>
+      ) : null}
+      <div className="mt-4" id="member-sign-in-links" tabIndex={-1}>
+        <MemberAccessPanel read={read} failed={failed} showIdentity={false} />
+      </div>
+    </OwnerPage>
+  );
+}

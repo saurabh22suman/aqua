@@ -12,7 +12,6 @@ const ROOT = process.cwd();
 const PAGES = [
   "app/(owner)/owner/members/[memberId]/page.tsx",
   "app/(owner)/owner/enquiries/[enquiryId]/page.tsx",
-  "app/(owner)/owner/sessions/page.tsx",
   "app/(coach)/coach/members/[memberId]/page.tsx",
   "app/(reception)/reception/enquiries/[enquiryId]/page.tsx",
   "app/(owner)/owner/settings/branding/page.tsx",
@@ -20,6 +19,12 @@ const PAGES = [
 ];
 
 describe("BackLink wiring (F13)", () => {
+  it("routes the schedule list back to the scoped calendar", () => {
+    const src = readFileSync(join(ROOT, "app/(owner)/owner/sessions/page.tsx"), "utf8");
+    expect(src).toContain("<ScheduleSurfaceSwitch");
+    expect(src).toContain("calendarHref={calendarHref}");
+  });
+
   it("every listed page imports and renders BackLink", () => {
     const missing: string[] = [];
     for (const rel of PAGES) {

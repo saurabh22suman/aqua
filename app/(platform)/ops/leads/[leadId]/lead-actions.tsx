@@ -5,34 +5,56 @@ import { useRouter } from "next/navigation";
 import {
   convertLeadAction,
   transitionLeadAction,
+  completeLeadAction,
 } from "@/lib/actions/platform-leads";
 import type { ConvertLeadResult } from "@/db/platform-lead-conversion";
 import type { LeadMutationResult } from "@/db/platform-leads";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { OpsCard, OpsPanel } from "@/components/ops/ops-primitives";
+import { ProvisioningReview } from "@/components/ops/console/provisioning-review";
+import { OpsWriteGate } from "@/components/ops/ops-display";
 
 // O-10 — lifecycle + conversion island on the lead detail page.
-
-const inputClass =
-  "w-full rounded-ctl border border-line bg-paper px-3 py-2 text-[14px] text-ink focus:border-[var(--accent-strong)] outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]";
+//
+// Ops redesign (28 October 2026): every control is the SHARED control,
+// and the write permission is resolved on the server from the session
+// role — a viewer sees the pipeline's state and the reason it cannot
+// be moved, never a control that would fail on submit.
 
 export function LeadActions({
   leadId,
+  businessName,
   currentStatus,
+  hasLinkedTenant = false,
+  linkedTenantId,
   defaultSlug,
   defaultLocationName,
   defaultPreset,
   presetOptions,
+  canWrite,
 }: {
   leadId: string;
+  businessName: string;
   currentStatus: string;
+  hasLinkedTenant?: boolean;
+  linkedTenantId?: string | null;
   defaultSlug: string;
   defaultLocationName: string;
   defaultPreset: string;
   presetOptions: ReadonlyArray<{ key: string; name: string }>;
+  /** Resolved on the server from the session role. */
+  canWrite: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [lostReason, setLostReason] = useState("");
+  const [completionReason, setCompletionReason] = useState("");
+  const [slug, setSlug] = useState(defaultSlug);
+  const [locationName, setLocationName] = useState(defaultLocationName);
+  const [selectedPreset, setSelectedPreset] = useState(defaultPreset);
   const [convertResult, setConvertResult] = useState<ConvertLeadResult | null>(
     null,
   );
@@ -43,6 +65,7 @@ export function LeadActions({
       const result: LeadMutationResult = await transitionLeadAction(leadId, {
         status,
         ...(reason ? { lostReason: reason } : {}),
+        ...(status === "trial" && linkedTenantId ? { trialTenantId: linkedTenantId } : {}),
       });
       if (result.kind !== "ok") setError(result.message);
       router.refresh();
@@ -58,125 +81,181 @@ export function LeadActions({
     });
   }
 
+  function complete() {
+    if (!linkedTenantId) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await completeLeadAction(leadId, linkedTenantId, completionReason);
+      if (result.kind !== "ok") setError(result.message);
+      router.refresh();
+    });
+  }
+
   const finished =
     currentStatus === "converted" || currentStatus === "lost";
+  const showProvisionForm = currentStatus !== "converted" && !hasLinkedTenant;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {!finished ? (
-        <section className="rounded-card bg-paper border border-line p-5 space-y-3">
+        <OpsCard className="p-5">
           <h2 className="font-display text-[16px] font-semibold text-ink">
             Pipeline
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {["qualified", "demo_booked", "lapsed"].map((status) => (
-              <button
-                key={status}
+          <OpsWriteGate
+            canWrite={canWrite}
+            note={
+              <>
+                Read-only: this account can browse, not change, platform data.
+                The lead is in the {currentStatus.replace("_", " ")} stage.
+              </>
+            }
+          >
+            <div className="mt-3 flex flex-wrap gap-2">
+              {["qualified", "demo_booked", "lapsed"].map((status) => (
+                <Button
+                  key={status}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={pending || currentStatus === status}
+                  onClick={() => move(status)}
+                >
+                  Mark {status.replace("_", " ")}
+                </Button>
+              ))}
+              {linkedTenantId && currentStatus !== "trial" ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => move("trial")}
+                >
+                  Resume trial
+                </Button>
+              ) : null}
+            </div>
+            <div className="mt-4 flex flex-wrap items-end gap-2">
+              <label className="block min-w-0 grow">
+                <span className="mb-1 block text-[12px] font-medium text-ink-2">
+                  Lost reason (required to mark lost)
+                </span>
+                <Input
+                  value={lostReason}
+                  onChange={(e) => setLostReason(e.target.value)}
+                />
+              </label>
+              <Button
                 type="button"
-                disabled={pending || currentStatus === status}
-                onClick={() => move(status)}
-                className="rounded-pill border border-line px-4 py-1.5 text-[12px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
+                variant="destructive"
+                size="sm"
+                disabled={pending || lostReason.trim().length === 0}
+                onClick={() => move("lost", lostReason.trim())}
               >
-                Mark {status.replace("_", " ")}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="block grow">
-              <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                Lost reason (required to mark lost)
-              </span>
-              <input
-                value={lostReason}
-                onChange={(e) => setLostReason(e.target.value)}
-                className={inputClass}
-              />
-            </label>
-            <button
-              type="button"
-              disabled={pending || lostReason.trim().length === 0}
-              onClick={() => move("lost", lostReason.trim())}
-              className="rounded-pill border border-line px-4 py-2 text-[12px] font-medium text-ink-2 hover:text-ink disabled:opacity-50"
-            >
-              Mark lost
-            </button>
-          </div>
-        </section>
+                Mark lost
+              </Button>
+            </div>
+            {currentStatus === "trial" && linkedTenantId ? (
+              <div className="mt-4 space-y-2">
+                <p className="text-[13px] text-ink-2">Provisioning created a trial tenant. Completing business conversion is a separate audited decision.</p>
+                <label className="block"><span className="mb-1 block text-[12px] font-medium text-ink-2">Conversion reason (required)</span><Input value={completionReason} onChange={(e) => setCompletionReason(e.target.value)} maxLength={500} /></label>
+                <Button type="button" variant="secondary" disabled={pending || !completionReason.trim()} onClick={complete}>Mark business conversion complete</Button>
+              </div>
+            ) : null}
+          </OpsWriteGate>
+        </OpsCard>
       ) : null}
 
-      {currentStatus !== "converted" ? (
-        <section className="rounded-card bg-paper border border-line p-5 space-y-4">
-          <h2 className="font-display text-[16px] font-semibold text-ink">
-            Provision trial tenant
-          </h2>
-          <p className="text-[12px] text-ink-3">
-            Creates the tenant, applies the preset chosen from the
-            qualification answers, creates the additional locations and
-            moves this lead to trial. Revenue settings (fee model, GST,
-            collections) land with the money module and stay on the lead
-            until then.
-          </p>
-          <form action={convert} className="space-y-3">
-            <input type="hidden" name="leadId" value={leadId} />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="block">
-                <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                  Tenant slug
-                </span>
-                <input
-                  name="slug"
-                  required
-                  defaultValue={defaultSlug}
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                  Primary location name
-                </span>
-                <input
-                  name="locationName"
-                  required
-                  defaultValue={defaultLocationName}
-                  className={inputClass}
-                />
-              </label>
-            </div>
-            <label className="block">
-              <span className="block text-[12px] font-medium text-ink-2 mb-1">
-                Preset
-              </span>
-              <select
-                name="preset"
-                defaultValue={defaultPreset}
-                className={inputClass}
-              >
-                {presetOptions.map((preset) => (
-                  <option key={preset.key} value={preset.key}>
-                    {preset.name} ({preset.key})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-pill px-6 py-2.5 text-[14px] font-semibold text-paper bg-[var(--accent-strong)] hover:opacity-90 disabled:opacity-60"
+      {showProvisionForm || convertResult ? (
+        <OpsCard className="p-5">
+          {showProvisionForm ? (
+            <>
+              <h2 className="font-display text-[16px] font-semibold text-ink">
+                Provision trial tenant
+              </h2>
+              <p className="mt-1 text-[13px] text-ink-3">
+                Creates the tenant, applies the preset chosen from the
+                qualification answers, creates the additional locations and
+                moves this lead to trial. Fee model, GST registration, collection
+                mode and coach count are recorded for setup, not applied automatically.
+              </p>
+              <OpsWriteGate
+                canWrite={canWrite}
+                note={
+                  <>
+                    Read-only: this account can browse, not change, platform data.
+                    An administrator provisions the trial tenant.
+                </>
+              }
             >
-              {pending ? "Provisioning…" : "Provision trial tenant"}
-            </button>
-          </form>
+              <form action={convert} className="mt-4 space-y-3">
+                <input type="hidden" name="leadId" value={leadId} />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-medium text-ink-2">
+                      Tenant slug
+                    </span>
+                    <Input name="slug" required value={slug} onChange={(event) => setSlug(event.target.value)} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1 block text-[12px] font-medium text-ink-2">
+                      Primary location name
+                    </span>
+                    <Input
+                      name="locationName"
+                      required
+                      value={locationName}
+                      onChange={(event) => setLocationName(event.target.value)}
+                    />
+                  </label>
+                </div>
+                <label className="block">
+                  <span className="mb-1 block text-[12px] font-medium text-ink-2">
+                    Preset
+                  </span>
+                  <Select name="preset" value={selectedPreset} onChange={(event) => setSelectedPreset(event.target.value)}>
+                    {presetOptions.map((preset) => (
+                      <option key={preset.key} value={preset.key}>
+                        {preset.name} ({preset.key})
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <ProvisioningReview
+                  title="Review business setup"
+                  fields={[
+                    { label: "Business account", value: businessName },
+                    { label: "Tenant URL slug", value: slug.trim() || "Enter a slug" },
+                    { label: "Primary club", value: locationName.trim() || "Enter a club name" },
+                    { label: "Preset", value: presetOptions.find((preset) => preset.key === selectedPreset)?.name ?? "Qualification-based preset" },
+                  ]}
+                >
+                  Starts a 14-day trial. Invite the owner from the tenant workspace after provisioning.
+                </ProvisioningReview>
+                <Button type="submit" variant="primary" disabled={pending}>
+                  {pending ? "Provisioning…" : "Provision trial tenant"}
+                </Button>
+              </form>
+            </OpsWriteGate>
+            </>
+          ) : null}
           {convertResult ? (
-            <p
-              role="status"
-              className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2"
+            <OpsPanel
+              tone={convertResult.kind === "error" ? "error" : convertResult.presetApplied ? "info" : "warn"}
+              role={convertResult.kind === "error" ? "alert" : "status"}
+              className="mt-4"
+              title="Provisioning result"
             >
               {convertResult.kind === "ok" ? (
                 <>
-                  Tenant provisioned with preset{" "}
-                  <span className="font-medium">{convertResult.preset}</span>{" "}
-                  and {convertResult.locationsCreated} location
+                  Trial tenant created with {convertResult.locationsCreated} location
                   {convertResult.locationsCreated === 1 ? "" : "s"}.{" "}
+                  {convertResult.presetApplied ? (
+                    <>Preset <span className="font-medium">{convertResult.preset}</span> was applied. </>
+                  ) : (
+                    <>The preset was not applied; setup needs attention. </>
+                  )}
                   <a
                     href={`/ops/tenants/${convertResult.tenantId}`}
                     className="text-[var(--accent-ink)] underline underline-offset-2"
@@ -190,17 +269,17 @@ export function LeadActions({
                   ) : null}
                 </>
               ) : (
-                convertResult.message
+                <>{convertResult.message}{convertResult.tenantId ? <> <a href={`/ops/tenants/${convertResult.tenantId}`} className="underline">Open linked tenant</a></> : null}</>
               )}
-            </p>
+            </OpsPanel>
           ) : null}
-        </section>
+        </OpsCard>
       ) : null}
 
       {error ? (
-        <p role="alert" className="rounded-ctl border border-line bg-deck px-3 py-2 text-[13px] text-ink-2">
+        <OpsPanel tone="error" title="The change was not saved">
           {error}
-        </p>
+        </OpsPanel>
       ) : null}
     </div>
   );

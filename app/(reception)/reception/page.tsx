@@ -1,145 +1,192 @@
+import { StaffWorkdayLink } from "@/components/staff-ui/staff-workday-link";
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import { getTodayAction } from "@/lib/actions/coach";
 import { getTerminologyAction } from "@/lib/actions/terminology";
-import { resolveTerm, titleCase } from "@/lib/terminology/keys";
+import { resolveTerm } from "@/lib/terminology/keys";
+import { staffTerminology } from "@/lib/terminology/staff-terms";
 import { listStaffAttendanceDayAction } from "@/lib/actions/staff-attendance";
 import { ReceptionCheckIns } from "@/components/reception-check-ins";
 import { StaffAttendanceBoard } from "@/components/staff-attendance-board";
 import { CountChip } from "@/components/ui/CountChip";
+import { OptionalWorkspaceGuide } from "@/components/onboarding/optional-workspace-guide";
+import { guidePreferenceKey } from "@/components/onboarding/guide-preference-key";
 import { requireReception } from "@/lib/auth/surface-guard";
 import { hasFeature, hasPermission } from "@/lib/auth/permission";
-import { todayInZone } from "@/lib/time/tz";
+import { formatFullDateIST, todayInZone } from "@/lib/time/tz";
+import {
+  StaffNavCard,
+  StaffPage,
+  StaffPageHeader,
+  StaffSection,
+} from "@/components/staff-ui/staff-page";
+import { OwnerIcon } from "@/components/owner-ui/owner-icon";
+import { buttonClasses } from "@/components/ui/Button";
 
+// Reception's Today surface. The first card answers the counter's first
+// job — find the right member or invoice — and keeps dues one tap away.
+// The day's check-ins follow, then the authorised counter tools. Every
+// entry is gated by grant AND entitlement so a tap never lands on a
+// refused action.
 export default async function ReceptionTodayPage() {
   const ctx = await requireReception();
-  const [{ sessions }, terminology] = await Promise.all([
-    getTodayAction(),
-    getTerminologyAction(),
-  ]);
-  // U-08 — the receptionist role carries attendance.mark
-  // (lib/services/roles.ts), so the panel is interactive. If a future
-  // role reaches this surface without it, the panel degrades to
-  // read-only rather than offering a tap that would fail.
   const canMark = hasPermission(ctx, "attendance.mark");
-  // V-24 — the staff-attendance half U-08 deferred. Reception carries
-  // staff.attendance; a role without it sees no board rather than a
-  // tap that would be refused.
   const canMarkStaff = hasPermission(ctx, "staff.attendance");
-  // C03 — module entries follow grant + entitlement, never surface
-  // alone: a card is only shown when its action would be allowed
-  // (payments.record/invoices.read) and the tenant's plan includes the
-  // module the action's requirePermission checks. Otherwise the tap
-  // would land on a refused action.
   const canCollect = hasPermission(ctx, "payments.record") && hasFeature(ctx, "billing");
   const canCloseDay = canCollect;
   const canSeeDues = hasPermission(ctx, "invoices.read") && hasFeature(ctx, "billing");
   const canUseCafe = hasPermission(ctx, "payments.record") && hasFeature(ctx, "cafe.pos");
   const today = todayInZone("Asia/Kolkata");
-  const staffRows = canMarkStaff
-    ? await listStaffAttendanceDayAction({ date: today })
-    : [];
+  const retryHref = "/reception";
+  const [checkIns, terminology, staffRows] = await Promise.all([
+    getTodayAction().catch(() => null),
+    getTerminologyAction().then(staffTerminology),
+    canMarkStaff ? listStaffAttendanceDayAction({ date: today }).catch(() => null) : Promise.resolve([]),
+  ]);
+
+  const sessions = checkIns?.sessions;
+  const memberNoun = resolveTerm(terminology, "member", 1);
+  const checkedInSessions = sessions?.filter((session) => session.total > 0 && session.marked > 0).length;
 
   return (
-    <main className="px-5 pt-10">
-      <div className="flex items-center gap-2.5">
-        <h1 className="font-display text-[22px] font-semibold text-marine">Today</h1>
-        <CountChip
-          count={sessions.length}
-          label={sessions.length === 1 ? "session" : "sessions"}
-        />
-      </div>
+    <StaffPage>
+      <StaffPageHeader
+        title="Today"
+        meta={formatFullDateIST(today)}
+        action={sessions ? (
+          <CountChip
+            count={sessions.length}
+            label={sessions.length === 1 ? "session" : "sessions"}
+            tone={sessions.length === 0 ? "neutral" : "warn"}
+          />
+        ) : null}
+      />
 
-      {canCollect ? (
-        <Link
-          href="/reception/collect-payment"
-          className="mt-6 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="collect-payment-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Collect payment</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Find an invoice and record cash or UPI; verify the payment at the
-              counter.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      {canCloseDay ? (
-        <Link
-          href="/reception/close"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="close-day-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Close day</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Count today&apos;s cash and close your counter.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      {canSeeDues ? (
-        <Link
-          href="/reception/dues"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="dues-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Dues</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Pending fee payments, overdue first — for follow-up calls.
-            </p>
-          </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
-      ) : null}
-
-      <Link
-        href="/reception/members"
-        className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-        data-testid="member-search-link"
+      <section
+        className="mt-5 overflow-hidden rounded-2xl border border-line bg-paper"
+        aria-labelledby="reception-brief-title"
+        data-testid="reception-home-brief"
       >
-        <div className="min-w-0 flex-1">
-          <p className="text-[14px] font-medium leading-tight">
-            Find a {titleCase(resolveTerm(terminology, "member", 1)).toLowerCase()}
-          </p>
-          <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-            Search by name, phone or member code.
-          </p>
+        <div className="p-4">
+          <h2
+            id="reception-brief-title"
+            className="mt-1 text-[20px] font-medium leading-tight tracking-[-0.01em] text-ink"
+          >
+            At the counter
+          </h2>
+          <nav aria-label="Counter shortcuts" className="mt-3 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,7.5rem),1fr))]">
+            <Link
+              href="/reception/members"
+              className={buttonClasses({
+                variant: "primary",
+                size: "sm",
+                className: "w-full min-w-0 text-center [&>svg]:shrink-0",
+              })}
+              data-testid="member-search-link"
+            >
+              <OwnerIcon name="search" size={18} />
+              Find a {memberNoun}
+            </Link>
+            {canCollect ? (
+              <Link href="/reception/collect-payment" data-testid="collect-payment-link"
+                aria-label="Collect payment"
+                className={buttonClasses({ variant: "secondary", size: "sm", className: "w-full [&>svg]:shrink-0" })}>
+                <OwnerIcon name="money" size={17} />
+                Collect
+              </Link>
+            ) : null}
+            {canSeeDues ? (
+              <Link
+                href="/reception/dues"
+                className={buttonClasses({
+                  variant: "secondary",
+                  size: "sm",
+                  className: "w-full",
+                })}
+                data-testid="dues-link"
+              >
+                Dues
+              </Link>
+            ) : null}
+          </nav>
         </div>
-        <ChevronRight size={18} className="text-ink-3 flex-none" />
-      </Link>
+        {sessions ? <div className="border-t border-line px-4 py-2.5">
+          <p className="text-[12px] leading-snug text-ink-3">
+            {sessions.length === 0
+              ? "No sessions on today's check-in list."
+              : `${checkedInSessions} of ${sessions.length} ${
+                  sessions.length === 1 ? "session has" : "sessions have"
+                } a mark recorded.`}
+          </p>
+        </div> : null}
+      </section>
 
-      {canUseCafe ? (
-        <Link
-          href="/reception/cafe"
-          className="mt-3 flex items-center gap-3 bg-paper border border-line rounded-card px-4 min-h-[56px] py-3"
-          data-testid="cafe-link"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium leading-tight">Café</p>
-            <p className="mt-0.5 text-[12px] text-ink-3 leading-tight">
-              Take a counter order and settle it.
-            </p>
+      {sessions ? <ReceptionCheckIns sessions={sessions} canMark={canMark} /> : (
+        <StaffSection title="Today's check-ins">
+          <div className="mt-2 rounded-card border border-line bg-paper p-4">
+            <p role="alert" className="text-[13px] text-ink-2">Could not load today&apos;s check-ins.</p>
+            <a href={retryHref} className={buttonClasses({ variant: "secondary", size: "sm", className: "mt-2" })}>
+              Retry today&apos;s check-ins
+            </a>
           </div>
-          <ChevronRight size={18} className="text-ink-3 flex-none" />
-        </Link>
+        </StaffSection>
+      )}
+
+      <StaffWorkdayLink ctx={ctx} href="/reception/workday" />
+
+      {canCloseDay || canUseCafe ? (
+        <StaffSection
+          title="Counter tools"
+        >
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {canCloseDay ? (
+              <StaffNavCard
+                href="/reception/close"
+                icon="check"
+                label="Close day"
+                description="Count cash"
+                testId="close-day-link"
+              />
+            ) : null}
+
+            {canUseCafe ? (
+              <StaffNavCard
+                href="/reception/cafe"
+                icon="booking"
+                label="Café"
+                description="Take orders"
+                testId="cafe-link"
+              />
+            ) : null}
+          </div>
+        </StaffSection>
       ) : null}
 
-      <ReceptionCheckIns sessions={sessions} canMark={canMark} />
-
-      {canMarkStaff ? (
-        <StaffAttendanceBoard
-          date={today}
-          rows={staffRows}
-          canMark={canMarkStaff}
-        />
+      {canMarkStaff ? staffRows ? (
+        <StaffAttendanceBoard date={today} rows={staffRows} canMark />
+      ) : (
+        <StaffSection title="Staff attendance">
+          <p role="alert" className="mt-2 text-[13px] text-ink-2">Could not load staff attendance.</p>
+          <a href={retryHref} className={buttonClasses({ variant: "secondary", size: "sm", className: "mt-2" })}>
+            Retry staff attendance
+          </a>
+        </StaffSection>
       ) : null}
-    </main>
+
+
+      <OptionalWorkspaceGuide
+        key={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
+        startCollapsed
+        preferenceKey={guidePreferenceKey(ctx.tenantId, ctx.userId, ctx.roleKey)}
+        title="A look around reception"
+        intro="Explore the areas shown here at your own pace. This guide makes no changes."
+        regionLabel="Optional reception guide"
+        itemLabel="Reception area"
+        items={[
+          { key: "members", title: "Find a member", detail: "The member card opens the member search." },
+          { key: "checkins", title: "Today's check-ins", detail: "The check-ins panel shows today's sessions." },
+          ...(canMarkStaff ? [{ key: "staff", title: "Staff attendance", detail: "The staff attendance panel is shown below." }] : []),
+        ]}
+      />
+    </StaffPage>
   );
 }

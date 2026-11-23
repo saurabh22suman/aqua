@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Owner Home — the insights section under a facility filter.
+// Scoped insight read models and retained report components under a facility filter.
 //
 // The negative test this file exists for: a facility-scoped read must
 // return — and the section must RENDER — only that facility's numbers.
@@ -53,6 +53,8 @@ vi.mock("@/components/charts/owner-chart-island", () => ({
 }));
 
 import { OwnerDashboard } from "@/components/owner-dashboard";
+import { AttendanceResults } from "@/components/reports/owner-approved/attendance-results";
+import { OwnerInsightsHome } from "@/components/owner-insights-home/owner-insights-home";
 import type { OwnerDashboardData } from "@/lib/services/dashboard";
 import type { BrandingData } from "@/lib/services/branding";
 
@@ -177,6 +179,8 @@ beforeAll(async () => {
   const { startIsolatedDb } = await import("@/tests/helpers/isolated-db");
   db = await startIsolatedDb();
   admin = db.admin;
+  const { seedPlatformCatalogue } = await import("@/db/seed-platform");
+  await seedPlatformCatalogue(db.adminUri);
   process.env.DATABASE_URL = db.appUri;
   process.env.APP_LOGIN_PASSWORD = "isolated-test-pw";
   vi.resetModules();
@@ -190,6 +194,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, timezone, status) values ($1, $2, 'Insights Home', $3, 'active')",
     [tenantId, `insights-home-${RUN}`, TZ],
   );
+  const roleId = randomUUID();
+  await admin.query("insert into users (id, phone) values ($1, $2)", [owner.userId, `synthetic-${randomUUID()}`]);
+  await admin.query("insert into roles (id, tenant_id, key, name, home_path, home_ordinal) values ($1, $2, 'owner', 'Owner', '/owner', 0)", [roleId, tenantId]);
+  await admin.query("insert into role_permissions (tenant_id, role_id, permission_key) values ($1,$2,'reports.operational'),($1,$2,'enquiries.read'),($1,$2,'settings.manage')", [tenantId, roleId]);
+  await admin.query("insert into tenant_memberships (id, tenant_id, user_id, role_id, status, all_locations) values ($1, $2, $3, $4, 'active', true)", [randomUUID(), tenantId, owner.userId, roleId]);
   await admin.query(
     "insert into tenant_features (tenant_id, feature_key, enabled) values ($1, 'reports', true)",
     [tenantId],
@@ -263,7 +272,7 @@ const DASHBOARD = {
   },
 } as OwnerDashboardData;
 
-describe("owner Home — the insights section under a facility filter", () => {
+describe("insight read models and retained components under a facility filter", () => {
   it("reads both sites when the caller is not narrowed", async () => {
     const attendance = await getAttendanceByBatch(owner, WINDOW);
     const enquiries = await getEnquiryStageBreakdown(owner, WINDOW);
@@ -289,6 +298,11 @@ describe("owner Home — the insights section under a facility filter", () => {
     expect(attendance.rows.map((row) => row.batchName)).toEqual(["Alpha Squad"]);
     expect(enquiries.total).toBe(1);
 
+    const attendanceView = render(<AttendanceResults data={attendance} />);
+    expect(attendanceView.container.textContent).toContain("Alpha Squad");
+    expect(attendanceView.container.textContent).not.toContain("Beta Squad");
+    attendanceView.unmount();
+
     render(
       <OwnerDashboard
         data={DASHBOARD}
@@ -302,16 +316,13 @@ describe("owner Home — the insights section under a facility filter", () => {
           viewSchedule: true,
           readEnquiries: true,
         }}
-        insights={{ ...WINDOW, attendance, enquiries }}
+        insights={{ ...WINDOW, enquiries }}
         facility={poolLocationId}
       />,
     );
 
-    const text = document.body.textContent ?? "";
-    // The selected site's batch is on screen…
-    expect(text).toContain("Alpha Squad");
-    // …and the other site's batch is not.
-    expect(text).not.toContain("Beta Squad");
+    const enquiryView = render(<OwnerInsightsHome data={{ ...WINDOW, enquiries }} facility={poolLocationId} canOpenEnquiries />);
+    const text = enquiryView.container.textContent ?? "";
     // The other site's enquiry is not counted either: one created, and
     // it is the "new" one, not the converted one.
     expect(text).toMatch(/1 created/i);

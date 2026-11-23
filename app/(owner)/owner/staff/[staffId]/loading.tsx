@@ -1,10 +1,12 @@
-import { SkeletonCard } from "@/components/skeleton";
+import { SkeletonCard, SkeletonStatus } from "@/components/skeleton";
+import { OwnerPage } from "@/components/owner-ui/owner-page";
 
 export default function Loading() {
   return (
-    <main className="px-5 pt-6 pb-8">
+    <OwnerPage>
+      <SkeletonStatus>Loading staff details…</SkeletonStatus>
       <SkeletonCard className="mb-3" />
       <SkeletonCard />
-    </main>
+    </OwnerPage>
   );
 }

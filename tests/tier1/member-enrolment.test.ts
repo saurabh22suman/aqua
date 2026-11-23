@@ -2,11 +2,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { batches, locations, programs } from "@/db/schema";
 import { createMember, enrolMember } from "@/lib/services/register";
 import { listMemberEnrolments } from "@/lib/services/enrolment";
-import { asTenantId, type TenantId, type UserId } from "@/lib/ids";
+import { asTenantId, type TenantId } from "@/lib/ids";
 
 // B3 — a member created via reception's add-member form, or produced by
 // converting an enquiry with no prior trial booking, had no batch and
@@ -19,6 +21,8 @@ const admin = new Pool({ connectionString: env.MIGRATION_DATABASE_URL });
 const RUN = Date.now().toString(36);
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] });
 let batchId = "";
 let programName = "";
 let mainLocationId = "";
@@ -35,6 +39,11 @@ beforeAll(async () => {
   );
 
   programName = `Read Program ${RUN}`;
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
+
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -61,7 +70,7 @@ beforeAll(async () => {
   });
 
   const created = await createMember(
-    { tenantId, userId: undefined as unknown as UserId },
+    actor(),
     {
       fullName: "Enrolment Read Member",
       dateOfBirth: "1990-01-01",
@@ -86,22 +95,26 @@ afterAll(async () => {
     await admin.query("delete from guardianships where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
 
 describe("listMemberEnrolments", () => {
   it("returns an empty array for a member enrolled in nothing", async () => {
-    const rows = await listMemberEnrolments({ tenantId }, memberId);
+    const rows = await listMemberEnrolments(actor(), memberId);
     expect(rows).toEqual([]);
   });
 
   it("returns the batch and program name after enrolling", async () => {
-    const result = await enrolMember({ tenantId }, { memberId, batchId });
+    const result = await enrolMember(actor(), { memberId, batchId });
     expect(result.ok).toBe(true);
 
-    const rows = await listMemberEnrolments({ tenantId }, memberId);
+    const rows = await listMemberEnrolments(actor(), memberId);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       batchId,

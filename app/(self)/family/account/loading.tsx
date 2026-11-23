@@ -1,0 +1,5 @@
+import { SelfScreenLoading } from "../../self-route";
+
+export default function Loading() {
+  return <SelfScreenLoading label="Loading your family account…" variant="account" />;
+}

@@ -3,6 +3,8 @@ import { Pool } from "pg";
 import { v7 as uuidv7 } from "uuid";
 import { eq } from "drizzle-orm";
 import { env } from "@/lib/env";
+import { seedRoleTemplates } from "@/lib/services/roles";
+import { asUserId } from "@/lib/ids";
 import { withTenant } from "@/db/tenant";
 import { locations, members, memberStatusTransitions } from "@/db/schema";
 import { createMember } from "@/lib/services/register";
@@ -23,6 +25,8 @@ const RUN = Date.now().toString(36);
 const TZ = "Asia/Kolkata";
 
 let tenantId: TenantId = asTenantId("");
+const actorId = asUserId(uuidv7());
+const actor = () => ({ tenantId, userId: actorId, roleKey: "owner", allLocations: true, locationIds: [] as string[] });
 let locationId = "";
 
 beforeAll(async () => {
@@ -34,6 +38,11 @@ beforeAll(async () => {
     "insert into tenants (id, slug, name, plan_id, timezone) values ($1, $2, 'Member Status', $3, $4)",
     [tenantId, `member-status-${RUN}`, plan.rows[0]?.id ?? null, TZ],
   );
+  await seedRoleTemplates(tenantId);
+  const phone = `+9198${String(BigInt(`0x${uuidv7().replaceAll("-", "").slice(-12)}`) % 100_000_000n).padStart(8, "0")}`;
+  await admin.query("insert into users(id,phone) values($1,$2)", [actorId, phone]);
+  await admin.query("insert into tenant_memberships(id,tenant_id,user_id,role_id,status,all_locations) select $1,$2,$3,id,'active',true from roles where tenant_id=$2 and key='owner'", [uuidv7(), tenantId, actorId]);
+
   await withTenant(tenantId, async (tx) => {
     const [loc] = await tx
       .insert(locations)
@@ -50,14 +59,18 @@ afterAll(async () => {
     await admin.query("delete from members where tenant_id = $1", [tenantId]);
     await admin.query("delete from persons where tenant_id = $1", [tenantId]);
     await admin.query("delete from locations where tenant_id = $1", [tenantId]);
+    await admin.query("delete from tenant_memberships where tenant_id = $1", [tenantId]);
+    await admin.query("delete from role_permissions where tenant_id = $1", [tenantId]);
+    await admin.query("delete from roles where tenant_id = $1", [tenantId]);
     await admin.query("delete from tenants where id = $1", [tenantId]);
+    await admin.query("delete from users where id=$1 and not exists (select 1 from audit_log where actor_id=users.id)", [actorId]);
   }
   await admin.end();
 });
 
 async function newMember(label: string) {
   const created = await createMember(
-    { tenantId, userId: undefined },
+    actor(),
     {
       fullName: `Status Subject ${label}`,
       dateOfBirth: "1990-01-01",
@@ -83,7 +96,7 @@ describe("transitionMemberStatus", () => {
   it("moves a member from active to paused with a reason, and records history", async () => {
     const memberId = await newMember("pause-history");
     const result = await transitionMemberStatus(
-      { tenantId, userId: undefined },
+      actor(),
       { memberId, toStatus: "paused", reason: "injury break" },
     );
     expect(result.ok).toBe(true);
@@ -106,7 +119,7 @@ describe("transitionMemberStatus", () => {
     // trial -> ... isn't reachable from active directly; going straight
     // to trial from active is not a real-world move and must be refused.
     const result = await transitionMemberStatus(
-      { tenantId, userId: undefined },
+      actor(),
       { memberId, toStatus: "trial", reason: "testing" },
     );
     expect(result.ok).toBe(false);
@@ -116,7 +129,7 @@ describe("transitionMemberStatus", () => {
   it("rejects a transition with no reason", async () => {
     const memberId = await newMember("no-reason");
     const result = await transitionMemberStatus(
-      { tenantId, userId: undefined },
+      actor(),
       { memberId, toStatus: "paused", reason: "" },
     );
     expect(result.ok).toBe(false);
@@ -124,9 +137,9 @@ describe("transitionMemberStatus", () => {
 
   it("is reversible: paused -> active -> paused both leave a trail", async () => {
     const memberId = await newMember("reversible");
-    await transitionMemberStatus({ tenantId, userId: undefined }, { memberId, toStatus: "paused", reason: "a" });
-    await transitionMemberStatus({ tenantId, userId: undefined }, { memberId, toStatus: "active", reason: "b" });
-    await transitionMemberStatus({ tenantId, userId: undefined }, { memberId, toStatus: "paused", reason: "c" });
+    await transitionMemberStatus(actor(), { memberId, toStatus: "paused", reason: "a" });
+    await transitionMemberStatus(actor(), { memberId, toStatus: "active", reason: "b" });
+    await transitionMemberStatus(actor(), { memberId, toStatus: "paused", reason: "c" });
 
     expect(await statusOf(memberId)).toBe("paused");
     const rows = await withTenant(tenantId, (tx) =>
@@ -142,12 +155,12 @@ describe("transitionMemberStatus", () => {
   it("left is not a dead end -- can transition back to active", async () => {
     const memberId = await newMember("left-and-back");
     const left = await transitionMemberStatus(
-      { tenantId, userId: undefined },
+      actor(),
       { memberId, toStatus: "left", reason: "moved city" },
     );
     expect(left.ok).toBe(true);
     const rejoin = await transitionMemberStatus(
-      { tenantId, userId: undefined },
+      actor(),
       { memberId, toStatus: "active", reason: "moved back" },
     );
     expect(rejoin.ok).toBe(true);
@@ -158,18 +171,18 @@ describe("transitionMemberStatus", () => {
 describe("pauseMember / resumeMember", () => {
   it("pauseMember pauses an active member and resumeMember resumes it", async () => {
     const memberId = await newMember("pause-resume");
-    const paused = await pauseMember({ tenantId, userId: undefined }, memberId, "family trip");
+    const paused = await pauseMember(actor(), memberId, "family trip");
     expect(paused.ok).toBe(true);
     expect(await statusOf(memberId)).toBe("paused");
 
-    const resumed = await resumeMember({ tenantId, userId: undefined }, memberId, "back from trip");
+    const resumed = await resumeMember(actor(), memberId, "back from trip");
     expect(resumed.ok).toBe(true);
     expect(await statusOf(memberId)).toBe("active");
   });
 
   it("resumeMember refuses a member that isn't paused", async () => {
     const memberId = await newMember("resume-not-paused");
-    const result = await resumeMember({ tenantId, userId: undefined }, memberId, "why not");
+    const result = await resumeMember(actor(), memberId, "why not");
     expect(result.ok).toBe(false);
     expect(await statusOf(memberId)).toBe("active");
   });

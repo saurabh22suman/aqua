@@ -10,6 +10,8 @@ import {
 import type { OptedFacilityRow } from "@/lib/services/facility-optins";
 import type { LocationOption } from "@/lib/services/people";
 import { formatDateIST } from "@/lib/time/tz";
+import { Select } from "@/components/ui/Select";
+import { Button } from "@/components/ui/Button";
 
 // Wave 2 (docs/role-surfaces-plan.md) — owner-side facility opt-ins on
 // the member detail page. The home facility (members.location_id) is
@@ -97,27 +99,35 @@ export function MemberFacilitiesPanel({
 
       {canWrite && available.length > 0 ? (
         <div className="mt-2 flex gap-2">
-          <select
-            value={pick}
-            onChange={(e) => setPick(e.target.value)}
-            aria-label="Facility"
-            className="min-h-11 min-w-0 flex-1 rounded-ctl border border-line bg-paper px-3 py-2 text-[16px]"
-            data-testid="facility-add-picker"
-          >
-            {available.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-          <button
+          {/* P2 (independent review) — the shared `Select` renders its
+              own `relative block` wrapper, so the flex sizing belongs on
+              a LANE-OWNED wrapper around the primitive, not on the
+              primitive's inner select. */}
+          <div className="min-w-0 flex-1">
+            <Select
+              value={pick}
+              onChange={(e) => setPick(e.target.value)}
+              aria-label="Facility"
+              data-testid="facility-add-picker"
+            >
+              {available.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Button
             type="button"
+            variant="primary"
+            size="md"
+            data-testid="facility-add"
             onClick={() => run(() => addMemberFacilityAction({ memberId, locationId: pick }))}
             disabled={busy || !pick}
-            className="flex-none rounded-ctl bg-[var(--accent-strong)] px-4 min-h-[44px] text-[13px] font-medium text-white disabled:opacity-50"
+            className="flex-none"
           >
             Add
-          </button>
+          </Button>
         </div>
       ) : null}
 

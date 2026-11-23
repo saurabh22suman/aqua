@@ -1,37 +1,86 @@
 import Link from "next/link";
 import { MessageCircle } from "lucide-react";
+import { buttonClasses } from "@/components/ui/Button";
 
-// W1-3 (docs/role-surfaces-plan.md) — /parent used to render a bare
-// `<h1>Parent</h1>`. Parents do not have accounts (scope §3.3: no app,
-// no install); their real surface is the signed /p/[token] link the
-// club shares on WhatsApp. 2026-09-13 audit P-D3: the gate's
-// notFound() fell through to the global "we couldn't find that page"
-// 404, which knows nothing about parents. Both the page and the
-// group not-found boundary now render this, so a parent who lands
-// on /parent without a link gets the club-link explanation.
+// Shared by the legacy /parent page and its missing-page fallback.
 export function ParentLinkExplainer() {
   return (
-    <main className="px-5 pt-16 max-w-md mx-auto">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-water-soft text-water">
+    <main className="mx-auto max-w-md px-5 pt-16">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-deck text-ink-3">
         <MessageCircle size={22} aria-hidden="true" />
       </div>
       <h1 className="mt-4 font-display text-[19px] font-semibold">
-        Parents get their link from the club
+        Two ways to open your child&apos;s page
       </h1>
-      <p className="mt-2 text-[13.5px] text-ink-3 leading-snug">
-        Your academy shares a private link on WhatsApp — it opens your
-        child&apos;s attendance, next session and updates. No app, no
-        password, no account needed.
+      <p className="mt-2 text-[13.5px] leading-snug text-ink-3">
+        Use the sign-in or private link your club gave you.
       </p>
-      <p className="mt-4 text-[13px] text-ink-3 leading-snug">
-        Don&apos;t have it yet? Ask your academy to send it again.
-      </p>
-      <Link
-        href="/login"
-        className="mt-6 inline-flex items-center justify-center rounded-pill min-h-[44px] px-5 py-3 text-[14px] font-semibold text-paper bg-[var(--accent-strong)]"
+
+      <section
+        aria-label="Family account"
+        className="mt-5 rounded-card border border-line bg-paper p-4"
       >
-        Staff sign in
-      </Link>
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
+          Family account
+        </p>
+        <h2 className="mt-1 text-[14px] font-medium text-ink">
+          Sign in with your mobile number and PIN
+        </h2>
+        <p className="mt-1 text-[13px] leading-snug text-ink-3">
+          If your club set up an Aqua account for your family, use the mobile
+          number linked to your child&apos;s membership.
+        </p>
+        <Link
+          href="/family/sign-in"
+          className={buttonClasses({
+            variant: "secondary",
+            size: "md",
+            className: "mt-3",
+          })}
+        >
+          Family sign in
+        </Link>
+      </section>
+
+      <section
+        aria-label="Club link"
+        className="mt-3 rounded-card border border-line bg-paper p-4"
+      >
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
+          Club link
+        </p>
+        <h2 className="mt-1 text-[14px] font-medium text-ink">
+          Open the private link from your club
+        </h2>
+        <p className="mt-1 text-[13px] leading-snug text-ink-3">
+          Look for your club&apos;s WhatsApp message or ask the club to resend
+          the link. It opens directly on your phone without a sign-in.
+        </p>
+      </section>
+
+      <p className="mt-4 text-[12.5px] leading-snug text-ink-3">
+        Anyone who has the link can open the page until it expires. Keep it
+        within your family.
+      </p>
+
+      <section
+        aria-label="Club staff"
+        className="mt-6 border-t border-line pt-4"
+      >
+        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">
+          Club staff
+        </p>
+        <Link
+          href="/login"
+          className={buttonClasses({
+            variant: "secondary",
+            size: "md",
+            className: "mt-2",
+          })}
+        >
+          Staff sign in
+        </Link>
+      </section>
     </main>
   );
 }

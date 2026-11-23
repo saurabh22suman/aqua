@@ -1,37 +1,53 @@
-import { Skeleton } from "@/components/skeleton";
+import { Skeleton, SkeletonStatus } from "@/components/skeleton";
+import { StaffPage } from "@/components/staff-ui/staff-page";
 
-// Coach home cold-load. The page calls getCoachHomeAction (one DB
-// read over the coach's batches, sessions and marking progress)
-// plus a date lookup; without this file the user sees a blank
-// document for the 2–7s cold-load window. Next.js streams this
-// skeleton instead so the coach sees "Today" + a card-shaped list
-// while the data resolves.
-//
-// Shape mirrors app/(coach)/coach/page.tsx: a "Today" display
-// heading followed by 2 register-link cards (each a heading row
-// + a lane strip bar).
-
+// Coach home cold-load. Shape mirrors the operational brief: page
+// header, the next register card, then today's register rows.
 export default function Loading() {
   return (
-    <main className="px-5 pt-10 pb-8">
-      {/* "Today" heading */}
-      <Skeleton w={14} h={6} />
+    <StaffPage>
+      <SkeletonStatus>Loading your coaching workspace…</SkeletonStatus>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <Skeleton w={14} h={7} />
+          <Skeleton w={26} h={3} className="mt-2" />
+        </div>
+        <Skeleton w={20} h={7} rounded="rounded-pill" />
+      </div>
 
-      {/* 2 register-link cards */}
-      <ul className="mt-6 space-y-4">
-        {[0, 1].map((i) => (
-          <li
-            key={i}
-            className="bg-paper rounded-card border border-line p-4"
-          >
-            <div className="flex justify-between items-baseline mb-2">
-              <Skeleton w={40} h={4} />
-              <Skeleton w={10} h={4} />
+      <div className="mt-5 rounded-2xl border border-line bg-paper p-4">
+        <Skeleton w={18} h={3} />
+        <Skeleton w={56} h={6} className="mt-2" />
+        <Skeleton w={32} h={3} className="mt-2" />
+        <Skeleton w={80} h={1.5} rounded="rounded-pill" className="mt-4" />
+        <Skeleton w={28} h={3} className="mt-2" />
+        <Skeleton w={80} h={12} rounded="rounded-ctl" className="mt-3" />
+      </div>
+
+      <div className="mt-6">
+        <div className="flex items-baseline justify-between gap-3">
+          <Skeleton w={30} h={4} />
+          <Skeleton w={24} h={3} />
+        </div>
+        <div className="mt-2 overflow-hidden rounded-2xl border border-line bg-paper">
+          {[0, 1].map((i) => (
+            <div
+              key={i}
+              className={`px-4 py-3.5 ${i > 0 ? "border-t border-line" : ""}`}
+            >
+              <div className="mb-2 flex items-baseline justify-between gap-2.5">
+                <Skeleton w={40} h={4} />
+                <Skeleton w={10} h={3} />
+              </div>
+              <Skeleton w={80} h={1.5} rounded="rounded-pill" />
+              <div className="mt-2.5 flex justify-between">
+                <Skeleton w={16} h={3} />
+                <Skeleton w={12} h={3} />
+              </div>
             </div>
-            <Skeleton w={80} h={1.5} rounded="rounded-pill" />
-          </li>
-        ))}
-      </ul>
-    </main>
+          ))}
+        </div>
+      </div>
+    </StaffPage>
   );
 }

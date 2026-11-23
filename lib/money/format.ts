@@ -18,12 +18,16 @@ const RUPEE_FORMATTER = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+function rupeesFromPaise(paise: bigint): bigint {
+  return paise / 100n;
+}
+
 export function formatINR(paise: number | bigint): string {
   if ((typeof paise === "number" && !Number.isSafeInteger(paise)) || paise < 0) {
     throw new Error(`formatINR expects a non-negative integer paise value, got ${paise}`);
   }
   const exact = BigInt(paise);
-  return RUPEE_FORMATTER.formatToParts(exact / 100n).map(part =>
+  return RUPEE_FORMATTER.formatToParts(rupeesFromPaise(exact)).map(part =>
     part.type === "fraction" ? String(exact % 100n).padStart(2, "0") : part.value).join("");
 }
 
@@ -35,6 +39,34 @@ export function formatINR(paise: number | bigint): string {
 export function formatINRCompact(paise: number | bigint): string {
   const exact = formatINR(paise);
   return exact.endsWith(".00") ? exact.slice(0, -3) : exact;
+}
+
+const WHOLE_RUPEE_FORMATTER = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+/**
+ * Whole-rupee money for Owner Home summaries and its collection readouts.
+ *
+ * The underlying value stays integer paise. The display rounds HALF-UP to
+ * the nearest rupee, so 50 paise is ₹1 and 149 paise is ₹1. A positive
+ * amount below 50 paise is stated as "Under ₹1" instead of being rounded
+ * down to a false zero. Zero is a real ₹0. Indian digit grouping comes from
+ * the same en-IN formatter family as formatINR.
+ *
+ * This is display only: invoices, receipts, ledgers and reports keep using
+ * formatINR / formatINRCompact so their exact paise never move.
+ */
+export function formatINRWhole(paise: number | bigint): string {
+  if ((typeof paise === "number" && !Number.isSafeInteger(paise)) || paise < 0) {
+    throw new Error(`formatINRWhole expects a non-negative integer paise value, got ${paise}`);
+  }
+  const exact = BigInt(paise);
+  if (exact > 0n && exact < 50n) return "Under ₹1";
+  return WHOLE_RUPEE_FORMATTER.format(rupeesFromPaise(exact + 50n));
 }
 
 export function parsePaise(formatted: string): number {

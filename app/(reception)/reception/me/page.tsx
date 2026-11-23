@@ -1,62 +1,44 @@
+import { StaffWorkdayLink } from "@/components/staff-ui/staff-workday-link";
+import { StaffInboxLink } from "@/components/announcements/staff-inbox-link";
 import { requireDefaultCtx } from "@/lib/auth/context";
 import { requirePermission } from "@/lib/auth/permission";
 import { getCurrentStaffIdentity } from "@/lib/services/staff";
 import { TenantSignOut } from "@/components/tenant-sign-out";
+import { readStaffWorkspaceRoles } from "@/lib/auth/workspace-roles";
+import { WorkspaceRoleSwitch } from "@/components/settings/workspace-role-switch";
 import { requireReception } from "@/lib/auth/surface-guard";
-import { formatPhoneIN } from "@/lib/phone";
-import { listMyShiftsAction } from "@/lib/actions/shifts";
-import { getMyAttendanceAction } from "@/lib/actions/staff-attendance";
 import {
-  listLeaveTypesAction,
-  listMyLeaveAction,
-} from "@/lib/actions/leave";
-import { MyShiftsCard } from "@/components/my-shifts-card";
-import { MyAttendanceCard } from "@/components/my-attendance-card";
-import { MyLeaveCard } from "@/components/my-leave-card";
-import { addDays, todayInZone } from "@/lib/time/tz";
+  StaffIdentity,
+  StaffPage,
+  StaffPageHeader,
+} from "@/components/staff-ui/staff-page";
+import { StaffAppearance } from "@/components/staff-ui/staff-appearance";
+import { StaffAccountLinks } from "@/components/staff-ui/staff-account-links";
 
-// K2 — reception's account surface. Mirrors /coach/me: name, phone,
-// sign-out. Reception's bottom nav had three tabs (Today / Add
-// member / Enquiries) — K2 adds a fourth "Me" tab so this page is
-// reachable without burying a sign-out link inside Today.
 export default async function ReceptionMePage() {
   await requireReception();
   const ctx = await requireDefaultCtx();
   requirePermission(ctx, "members.read");
-  const identity = await getCurrentStaffIdentity(ctx);
-
-  // V-23..V-26 — same self-service cards as /coach/me; every read is
-  // staff.self and returns only the caller's own rows.
-  const today = todayInZone("Asia/Kolkata");
-  const [shifts, attendance, leaveTypes, myLeave] = await Promise.all([
-    listMyShiftsAction({ fromDate: today, toDate: addDays(today, 13) }),
-    getMyAttendanceAction({ date: today }),
-    listLeaveTypesAction(),
-    listMyLeaveAction({ year: Number(today.slice(0, 4)) }),
+  const [identity, roleOptions] = await Promise.all([
+    getCurrentStaffIdentity(ctx).catch(() => null),
+    readStaffWorkspaceRoles(ctx).catch(() => undefined),
   ]);
 
   return (
-    <main className="px-5 pt-6 pb-8">
-      <h1 className="font-display text-[19px] font-semibold">Me</h1>
+    <StaffPage>
+      <StaffPageHeader title="Me" />
 
-      <section className="mt-5 rounded-card border border-line bg-paper p-4">
-        <p className="font-display text-[15px] font-semibold">
-          {identity?.fullName ?? "Signed in"}
-        </p>
-        <p className="mt-1 text-[13px] text-ink-3 font-mono">
-          {identity?.phone ? formatPhoneIN(identity.phone) : "No phone on file"}
-        </p>
-      </section>
+      <StaffIdentity name={identity?.fullName} phone={identity?.phone} />
 
-      <MyShiftsCard shifts={shifts} />
-      <MyAttendanceCard attendance={attendance} />
-      <MyLeaveCard
-        types={leaveTypes}
-        balances={myLeave.balances}
-        requests={myLeave.requests}
-      />
+      <StaffWorkdayLink ctx={ctx} href="/reception/workday" />
 
-      <TenantSignOut />
-    </main>
+      <StaffInboxLink href="/reception/announcements" />
+
+      <StaffAppearance />
+
+      <StaffAccountLinks tenantId={ctx.tenantId} guideHref={ctx.roleKey === "receptionist" ? "/reception" : undefined} />
+      <WorkspaceRoleSwitch options={roleOptions} settingsHref="/reception/me" className="mt-4" />
+      <TenantSignOut showClubSwitch={roleOptions?.showBusinessSwitch ?? false} />
+    </StaffPage>
   );
 }
