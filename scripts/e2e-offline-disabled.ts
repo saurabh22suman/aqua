@@ -42,9 +42,9 @@ async function assertPortFree(port: number): Promise<void> {
 // The counterpart to e2e-offline.ts: this is the default state every
 // tenant ships in (offline_sync_enabled = false, issue #4 postmortem's
 // kill switch). Confirms the online happy path is unaffected, the
-// offline banner is proactive (appears the instant connectivity drops,
-// not only after a failed tap), and a tap made while offline is
-// refused outright — no DOM update, no DB row — never silently queued.
+// offline banner is proactive (appears the instant connectivity drops),
+// and the disabled attendance control refuses pointer activation without
+// updating the register, writing a DB row, or queuing a mark for later.
 //
 // Note on env var: PR #6 added OFFLINE_SYNC_ENABLED (lib/feature-flags.ts)
 // as a hard global default-off. We don't need to set it explicitly here —
@@ -128,33 +128,31 @@ async function main() {
     }
 
     // ============================================================
-    // VERIFY C — a tap made while offline is refused: no DOM update,
-    // no DB row. Never silently queued.
+    // VERIFY C — the disabled control refuses activation. Verify that
+    // the attempted mark stays absent from the view and server after
+    // the connection comes back.
     // ============================================================
     const offlineMember = fixture.memberIds[1];
-    await page.locator(`li[data-member-id="${offlineMember}"] button[aria-label="Present"]`).click();
-    await page.waitForTimeout(1_500);
-    const domAfterOfflineTap = await page
-      .locator(`li[data-member-id="${offlineMember}"]`)
-      .getAttribute("data-status");
+    const offlineRow = page.locator(`li[data-member-id="${offlineMember}"]`);
+    const offlinePresent = offlineRow.getByRole("button", { name: "Present", exact: true });
+    const controlDisabled = await offlinePresent.isDisabled();
+
+    // Bypass Playwright's enabled-state check, leaving the browser's
+    // native disabled-button behaviour in place.
+    await offlinePresent.click({ force: true });
+    await context.setOffline(false);
+    await page.waitForFunction(() => navigator.onLine);
+    const domAfterOfflineTap = await offlineRow.getAttribute("data-status");
     const rowsAfterOfflineTap = await attendanceRows(admin, fixture.sessionId);
     const offlineRowExists = rowsAfterOfflineTap.some((r) => r.memberId === offlineMember);
+    const refused = controlDisabled && domAfterOfflineTap !== "present" && !offlineRowExists;
 
-    if (domAfterOfflineTap !== "present" && !offlineRowExists) {
-      record(
-        "VERIFY C: a tap while offline is refused, not silently accepted",
-        "PASS",
-        `DOM status=${JSON.stringify(domAfterOfflineTap)}, no server row`,
-      );
-    } else {
-      record(
-        "VERIFY C: a tap while offline is refused, not silently accepted",
-        "FAIL",
-        `DOM status=${JSON.stringify(domAfterOfflineTap)}, row exists=${offlineRowExists}`,
-      );
-    }
+    record(
+      "VERIFY C: a disabled attendance control refuses an offline tap",
+      refused ? "PASS" : "FAIL",
+      `disabled=${controlDisabled}, DOM status=${JSON.stringify(domAfterOfflineTap)}, server row exists=${offlineRowExists}`,
+    );
 
-    await context.setOffline(false);
     await context.close();
   } catch (err) {
     console.error("FATAL:", err);
