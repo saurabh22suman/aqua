@@ -6,7 +6,7 @@ import { Skeleton, SkeletonStatus } from "@/components/skeleton";
 export default function Loading() {
   return (
     <OwnerPage>
-      <SkeletonStatus>Loading the batch…</SkeletonStatus>
+      <SkeletonStatus>Loading group details…</SkeletonStatus>
       <Skeleton w={24} h={4} />
       <Skeleton w={48} h={6} className="mt-3" />
       <Skeleton w={56} h={3} className="mt-2" />

@@ -12,7 +12,7 @@ import { OwnerPage } from "@/components/owner-ui/owner-page";
 export default function Loading() {
   return (
     <OwnerPage workflow="record">
-      <SkeletonStatus>Loading member details…</SkeletonStatus>
+      <SkeletonStatus>Loading profile details…</SkeletonStatus>
       <div aria-hidden="true">
         <Skeleton w={20} h={4} />
         <div className="mt-2 rounded-card border border-line bg-paper p-4">
